@@ -23,6 +23,7 @@ use entity_access::domain::{
     models::{AccessError, EntityAccessReceipt, MemberTeamRole},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use filter_ast::Expr;
 use futures::{
     future::BoxFuture,
@@ -45,7 +46,6 @@ use item_filters::ast::{
     project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_pagination::SimpleSortMethod;
 use models_soup::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
 use rootcause::{

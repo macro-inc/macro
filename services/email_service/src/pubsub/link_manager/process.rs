@@ -10,7 +10,7 @@ use email_api_client_core::models::AccessToken;
 #[cfg(test)]
 use email_api_client_core::models::EmailApiError;
 use email_db_client::links::delete::PurgePacing;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};

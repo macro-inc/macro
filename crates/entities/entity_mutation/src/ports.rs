@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use model_entity::Entity;
+use entity_kind::Entity;
 use rootcause::report;
 
 use crate::{

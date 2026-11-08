@@ -5,8 +5,8 @@ use notification::domain::models::{Notification, request::NotificationCategory};
 
 use super::*;
 
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use model_entity::EntityType;
 use models_pagination::CreatedAt;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};

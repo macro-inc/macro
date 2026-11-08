@@ -39,7 +39,7 @@ outbound = [
   "ports",
 ]
 ports = [
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:model_notifications",
   "dep:notification",
   "dep:tokio",
@@ -93,7 +93,7 @@ model_user = { workspace = true }
 utoipa = { workspace = true, optional = true }
 
 # Notification dependencies (for ports)
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, optional = true }
 

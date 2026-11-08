@@ -11,9 +11,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use entity_access::domain::models::EntityPermission;
+use entity_kind::EntityType;
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use shared_types::document::DocumentPermissionsToken;
 

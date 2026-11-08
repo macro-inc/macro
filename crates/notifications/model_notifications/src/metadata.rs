@@ -7,14 +7,14 @@ pub use access_request::{
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
+use entity_kind::Entity;
+use entity_kind::EntityType;
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
-use model_entity::Entity;
-use model_entity::EntityType;
 use model_owner::Owner;
 pub use notification::domain::models::NotificationTitle;
 use notification::domain::models::{
@@ -2049,7 +2049,7 @@ pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};
 #[serde(rename_all = "camelCase")]
 pub struct ExternalChatMessageMetadata {
     /// The messaging service the chat lives in.
-    pub provider: model_entity::ExternalChatProvider,
+    pub provider: entity_kind::ExternalChatProvider,
     /// The chat's name.
     pub chat_name: String,
     /// Stable message id; retries use it as their notification id.

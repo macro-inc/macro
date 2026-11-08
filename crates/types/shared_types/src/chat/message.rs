@@ -1,7 +1,7 @@
 use super::NewAttachment;
 use chat_message::{ChatMessageContent, Role};
 use chrono::{DateTime, Utc};
-use model_entity::Entity;
+use entity_kind::Entity;
 use serde::{self, Deserialize, Serialize};
 use utoipa::ToSchema;
 

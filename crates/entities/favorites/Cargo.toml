@@ -33,7 +33,7 @@ cow_str = { workspace = true }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

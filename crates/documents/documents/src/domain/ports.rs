@@ -38,7 +38,7 @@ use super::skill_description::SkillDescription;
 
 use shared_types::sync_service::SyncServiceVersionID;
 
-use model_entity::Entity;
+use entity_kind::Entity;
 
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,

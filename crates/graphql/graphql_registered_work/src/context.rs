@@ -6,9 +6,9 @@ use agent_session::domain::{
     work_registration::{WorkRegistration, WorkRegistrationChanges, WorkRegistrations},
 };
 use chrono::{DateTime, Utc};
+use entity_kind::Entity;
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
 use tokio::sync::mpsc::Receiver;
 

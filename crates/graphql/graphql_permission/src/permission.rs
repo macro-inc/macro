@@ -5,9 +5,9 @@ use entity_access::domain::{
     models::{AccessError, AccessLevel, EntityPermission, ParticipantRole, TeamRole},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, OwnedEntity};
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
 
 /// Item access level resolved for the current viewer.

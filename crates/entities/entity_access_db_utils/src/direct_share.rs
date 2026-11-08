@@ -1,6 +1,6 @@
 //! Transactional facts and direct user grants for the shared access workflow.
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::{
     share_permission::access_level::AccessLevel,

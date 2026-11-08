@@ -7,7 +7,7 @@ fn work_request<'a>(
     filter: &'a EntityFilterAst,
     sources: &'a [SourceId],
     own_work: bool,
-    only: Option<&'a [model_entity::Entity<'static>]>,
+    only: Option<&'a [entity_kind::Entity<'static>]>,
 ) -> AttentionCandidateRequest<'a> {
     AttentionCandidateRequest {
         user_id: MacroUserIdStr::parse_from_str(USER_1).unwrap(),

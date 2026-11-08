@@ -20,7 +20,7 @@ impl AggregateFrecencyStorage for PanicFrecencyStorage {
     async fn get_aggregate_for_user_entities<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
-        _entities: &'a [model_entity::Entity<'a>],
+        _entities: &'a [entity_kind::Entity<'a>],
     ) -> Result<Vec<AggregateFrecency>, Self::Err> {
         panic!("frecency by-id lookup should not run")
     }

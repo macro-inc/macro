@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = ["outbound"]
-attachment = ["dep:futures", "dep:attachment", "dep:model_entity"]
+attachment = ["dep:futures", "dep:attachment", "dep:entity_kind"]
 outbound = ["dep:reqwest"]
 
 [dependencies]
@@ -20,7 +20,7 @@ macro_user_id = { workspace = true }
 # Attachment
 attachment = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 non_empty = { workspace = true }
 
 # Outbound

@@ -13,10 +13,10 @@ use entity_access::domain::{
     models::{BotAccessScope, EditAccessLevel},
     ports::EntityAccessService,
 };
+use entity_kind::EntityType;
 use favorites::domain::ports::{FavoriteView, FavoritesService};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest, SetPropertyValue};
 use models_properties::service::property_option::PropertyOptionValue;

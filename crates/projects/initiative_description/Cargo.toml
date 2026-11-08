@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 collab_surface = { workspace = true, features = ["ports"] }
 project = { workspace = true, features = ["ports"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

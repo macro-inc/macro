@@ -5,13 +5,13 @@ mod test;
 
 use std::{collections::HashSet, ops::Deref};
 
+use entity_kind::EntityType;
 use macro_user_id::{
     cow_str::CowLike,
     email::{EmailStr, ReadEmailParts},
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 use rootcause::compat::boxed_error::IntoBoxedError;
 

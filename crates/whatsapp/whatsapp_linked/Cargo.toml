@@ -42,7 +42,7 @@ entity_registry_db_utils = { workspace = true, optional = true }
 external_chat = { workspace = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
 macro_user_id = { workspace = true, optional = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true, optional = true }
 nom = { workspace = true }
 rootcause = { workspace = true, optional = true }

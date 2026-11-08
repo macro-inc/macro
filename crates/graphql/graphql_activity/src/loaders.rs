@@ -34,7 +34,7 @@ pub fn parse_activity_edge_limit(limit: Option<i32>) -> async_graphql::Result<u3
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ActivityEdgeKey {
     /// The entity whose activity is requested.
-    pub entity: model_entity::Entity<'static>,
+    pub entity: entity_kind::Entity<'static>,
     /// How many rows to return, newest first.
     pub limit: u32,
 }

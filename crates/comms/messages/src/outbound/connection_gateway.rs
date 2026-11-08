@@ -1,6 +1,6 @@
 use crate::domain::{delivery::MessageRealtime, models::MessageParent, ports::MessageEvent};
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use std::collections::HashSet;
 
 /// Shared event transport targeting individually authorized users.

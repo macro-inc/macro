@@ -6,12 +6,12 @@ use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
+use entity_kind::Entity;
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
     RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use model_entity::Entity;
 
 use super::models::FormError;
 use super::ports::{

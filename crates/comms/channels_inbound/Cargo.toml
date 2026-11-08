@@ -17,7 +17,7 @@ attachment = [
   "channels/attachment",
   "dep:attachment",
   "dep:futures",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:non_empty",
 ]
 # The channel-message HTTP routes.
@@ -52,7 +52,7 @@ frecency_core = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 kafka_util = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
 non_empty = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }

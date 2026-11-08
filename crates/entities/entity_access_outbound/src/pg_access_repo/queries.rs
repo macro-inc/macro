@@ -7,12 +7,12 @@ use cached::proc_macro::cached;
 
 use anyhow::Context;
 use bot_id::BotIdStr;
+use entity_kind::EntityType;
 use macro_user_id::{
     cow_str::CowLike,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model_entity::EntityType;
 use sqlx::{Pool, Postgres};
 
 #[cfg(feature = "explain_binary")]

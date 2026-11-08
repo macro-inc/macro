@@ -1,6 +1,6 @@
 //! Edit share permissions for a chat.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };

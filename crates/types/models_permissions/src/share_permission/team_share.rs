@@ -5,8 +5,8 @@
 //! must reload and compare **all** expected facts under the shared transaction guard
 //! before changing canonical state or grants. These types are internal, not wire models.
 
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_owner::Owner;
 use uuid::Uuid;
 

@@ -6,7 +6,7 @@ use crate::model::websocket::{ToWebsocketMessage, TrackEntityMessage};
 use connection_gateway_models::{
     BatchSendMessageBody, MessageReceipt, SendMessageBody, SendMessageResponse,
 };
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_bulk_upload::UploadFolderStatusUpdate;
 use shared_types::response::{GenericErrorResponse, StringIDResponse};
 use stream::domain::{StreamEvent, StreamItem};

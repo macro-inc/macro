@@ -47,8 +47,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType as GatewayEntityType;
 use macro_uuid::Uuid;
-use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 

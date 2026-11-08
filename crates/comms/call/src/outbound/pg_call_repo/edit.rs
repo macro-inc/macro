@@ -1,7 +1,7 @@
 //! SQL operations for editing call-record share permissions.
 
 use entity_access_db_utils::AccessLevel;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use sqlx::{Postgres, QueryBuilder, Transaction};

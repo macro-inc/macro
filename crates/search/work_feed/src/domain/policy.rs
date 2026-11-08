@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use document_sub_type::DocumentSubType;
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
@@ -22,7 +23,6 @@ use item_filters::{
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 use super::models::{WorkFeedItemType, WorkFeedScope};
 

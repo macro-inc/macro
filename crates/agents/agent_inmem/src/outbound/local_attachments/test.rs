@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use attachment::{AttachmentError, ResolutionError};
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 

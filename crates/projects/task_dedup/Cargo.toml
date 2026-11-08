@@ -43,7 +43,7 @@ connection_gateway_client = { workspace = true }
 embedding = { workspace = true }
 futures = { workspace = true }
 lexical_client = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

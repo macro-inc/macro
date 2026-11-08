@@ -212,7 +212,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             &self.db,
             user_ids,
             &macro_uuid::string_to_uuid(task_id).unwrap(),
-            model_entity::EntityType::Document,
+            entity_kind::EntityType::Document,
             AccessLevel::Edit,
         )
         .await?;

@@ -46,7 +46,7 @@ impl<
                     ));
                 }
             };
-            let notification_entity = model_entity::EntityType::from(event.entity.entity_type)
+            let notification_entity = entity_kind::EntityType::from(event.entity.entity_type)
                 .with_entity_string(event.entity.entity_id.to_string());
             match request.status {
                 RequestStatus::Pending => {

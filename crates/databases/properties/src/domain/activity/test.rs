@@ -1,7 +1,7 @@
 use ::activity::{Action, Actor};
 use chrono::Utc;
+use entity_kind::EntityType as ActivityEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType as ActivityEntityType;
 use uuid::Uuid;
 
 use macro_event_broker::Event;

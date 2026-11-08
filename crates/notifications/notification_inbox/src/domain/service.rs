@@ -15,7 +15,7 @@ use attention_feed::domain::{
     reader::FeedReader,
 };
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use rootcause::Report;
 use uuid::Uuid;
 

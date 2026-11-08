@@ -2,7 +2,7 @@
 
 use entity_access_db_utils::project_grants::{drop_project_grants, inherit_project_grants};
 use entity_access_db_utils::team_share;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

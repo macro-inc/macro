@@ -44,13 +44,13 @@ type TestEdges = SoupEdges<
     NoOpActivityReader,
 >;
 
-fn entity(id: u128) -> model_entity::Entity<'static> {
+fn entity(id: u128) -> entity_kind::Entity<'static> {
     ModelEntityType::Document.with_entity_string(Uuid::from_u128(id).to_string())
 }
 
 async fn subscription_responses(
     soup: CountingSoupService,
-    patches: Vec<Patch<model_entity::Entity<'static>>>,
+    patches: Vec<Patch<entity_kind::Entity<'static>>>,
 ) -> Vec<async_graphql::Response> {
     subscription_responses_from(soup.clone(), soup, patches).await
 }
@@ -59,7 +59,7 @@ async fn subscription_responses(
 async fn subscription_responses_from(
     replica: CountingSoupService,
     primary: CountingSoupService,
-    patches: Vec<Patch<model_entity::Entity<'static>>>,
+    patches: Vec<Patch<entity_kind::Entity<'static>>>,
 ) -> Vec<async_graphql::Response> {
     let (sender, receiver) = tokio::sync::mpsc::channel(16);
     for patch in patches {

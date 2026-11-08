@@ -2,12 +2,12 @@ use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_event_broker::{
     EventBrokerError, EventPublisher, MacroEvent, MacroEventBrokerService, Spawner,
 };
 use macro_event_topics::Topic;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 use super::*;
 use notification::domain::models::websocket_notification_event::NotificationTopicEvent;

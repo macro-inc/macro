@@ -3,7 +3,7 @@
 
 pub mod fanout;
 
-use model_entity::Entity;
+use entity_kind::Entity;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

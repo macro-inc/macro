@@ -29,6 +29,7 @@ use entity_access::domain::{
     models::{AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
     EntityMutationEffect, EntityMutationErrorCode, EntityMutationService, EntityMutationSuccess,
@@ -38,7 +39,6 @@ use entity_mutation::{
 };
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
 use tracing::Instrument;

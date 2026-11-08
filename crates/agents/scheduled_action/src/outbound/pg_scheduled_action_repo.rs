@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
+use entity_kind::EntityType;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{
     InsertOutcome, NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType, WriteOutcome,
@@ -8,7 +9,6 @@ use entity_registry_db_utils::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;

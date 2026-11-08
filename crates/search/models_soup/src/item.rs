@@ -14,7 +14,7 @@ use crate::{
     comms::{SoupChannel, SoupChannelThread},
 };
 use chrono::{DateTime, Utc};
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
 use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};

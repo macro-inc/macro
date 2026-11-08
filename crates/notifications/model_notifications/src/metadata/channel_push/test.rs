@@ -1,5 +1,5 @@
 use crate::metadata::{ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use notification::domain::models::{NotificationExtIos, apple::PushNotificationData};
 use serde_json::json;
 use uuid::Uuid;

@@ -90,14 +90,14 @@ impl MessageParent {
     }
 
     /// Entity type whose permissions govern messages on this parent.
-    pub fn access_entity_type(&self) -> model_entity::EntityType {
+    pub fn access_entity_type(&self) -> entity_kind::EntityType {
         match self {
-            Self::Channel(_) => model_entity::EntityType::Channel,
-            Self::Document(_) => model_entity::EntityType::Document,
-            Self::Initiative(_) => model_entity::EntityType::Initiative,
-            Self::CrmCompany(_) => model_entity::EntityType::CrmCompany,
-            Self::CrmContact(_) => model_entity::EntityType::CrmContact,
-            Self::Call(_) => model_entity::EntityType::Call,
+            Self::Channel(_) => entity_kind::EntityType::Channel,
+            Self::Document(_) => entity_kind::EntityType::Document,
+            Self::Initiative(_) => entity_kind::EntityType::Initiative,
+            Self::CrmCompany(_) => entity_kind::EntityType::CrmCompany,
+            Self::CrmContact(_) => entity_kind::EntityType::CrmContact,
+            Self::Call(_) => entity_kind::EntityType::Call,
         }
     }
 }

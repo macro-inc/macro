@@ -21,11 +21,11 @@ struct DeleteWriter;
 impl EntityPropertyWriter for DeleteWriter {
     async fn delete_entity_property(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         entity_property_id: Uuid,
     ) -> Result<(), rootcause::Report> {
-        assert_eq!(entity_type, model_entity::EntityType::Initiative);
+        assert_eq!(entity_type, entity_kind::EntityType::Initiative);
         assert_eq!(entity_id, "initiative-1");
         if entity_property_id != Uuid::from_u128(1) {
             return Err(rootcause::report!("required property cannot be deleted"));
@@ -35,7 +35,7 @@ impl EntityPropertyWriter for DeleteWriter {
 
     async fn set_entity_property(
         &self,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
@@ -45,7 +45,7 @@ impl EntityPropertyWriter for DeleteWriter {
 
     async fn update_entity_property_options(
         &self,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _entity_id: String,
         _updates: Vec<EntityPropertyOptionDelta>,
     ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {

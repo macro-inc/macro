@@ -7,7 +7,7 @@
 //! each owning service exposes to callers that remove an owner.
 //!
 //! ```
-//! use model_entity::EntityType;
+//! use entity_kind::EntityType;
 //! use model_owner::OwnerType;
 //! use shared_entity_registry::{NewEntityRecord, Owner, RegisteredEntityType};
 //! use uuid::Uuid;
@@ -22,7 +22,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

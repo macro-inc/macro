@@ -1,6 +1,6 @@
 //! SQL operations for editing document metadata and share permissions.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;

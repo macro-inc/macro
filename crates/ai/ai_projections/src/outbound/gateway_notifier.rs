@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use connection_gateway_client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::{
     model::{TargetType, UserAiProjection},

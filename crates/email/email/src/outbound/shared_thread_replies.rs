@@ -4,8 +4,8 @@ use entity_access::domain::{
     models::{AccessError, EditAccessLevel},
     ports::EntityAccessService,
 };
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

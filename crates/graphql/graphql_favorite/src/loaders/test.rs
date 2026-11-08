@@ -1,6 +1,6 @@
 use super::*;
 use async_graphql::dataloader::Loader;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 struct FailingFavoriteReader;
 

@@ -3,6 +3,7 @@ use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 use async_graphql::{
     Context, Enum, ErrorExtensions, ID, InputObject, MaybeUndefined, Object, SimpleObject, Union,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DuplicateEntityRequest, EntityMutationActor, EntityMutationEffect, EntityMutationErrorCode,
     EntityMutationService, EntityMutationSuccess, MoveEntityRequest, MutateEntitiesResult,
@@ -11,7 +12,6 @@ use entity_mutation::{
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},

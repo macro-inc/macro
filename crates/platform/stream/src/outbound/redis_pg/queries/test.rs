@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::PgPool;
 
 fn stream_id(entity_id: &str, stream: &str) -> StreamId {

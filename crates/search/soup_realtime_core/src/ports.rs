@@ -2,8 +2,8 @@
 
 use std::future::Future;
 
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use rootcause::Report;
 
 use super::models::{Patch, SoupRealtimeMessage, SoupRealtimePatch};

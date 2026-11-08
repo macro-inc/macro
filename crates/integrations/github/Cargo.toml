@@ -35,7 +35,7 @@ sync = [
   "dep:documents",
   "dep:entity_access",
   "dep:foreign_entity",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:model_notifications",
   "dep:notification",
   "dep:reqwest",
@@ -71,7 +71,7 @@ macro_env_var = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }
 regex = { workspace = true }

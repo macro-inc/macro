@@ -56,7 +56,7 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_databases = { workspace = true }
 models_forms = { workspace = true }
 models_permissions = { workspace = true }

@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -165,7 +165,7 @@ async fn insert_call(pool: &PgPool, channel_id: Option<Uuid>) -> Uuid {
 fn edit(
     source_event: u128,
     subject: &str,
-    entity_type: model_entity::EntityType,
+    entity_type: entity_kind::EntityType,
     entity_id: impl ToString,
     seconds: i64,
 ) -> Activity {
@@ -190,7 +190,7 @@ fn entity_ids(page: &ActivityFeedPage) -> Vec<String> {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn teammate_feed_shows_teammates_rows_on_entities_shared_with_the_viewer(pool: PgPool) {
-    use model_entity::EntityType as E;
+    use entity_kind::EntityType as E;
 
     for id in [VIEWER, ALICE, BOB, OUTSIDER, LONER] {
         insert_user(&pool, id).await;
@@ -341,7 +341,7 @@ async fn teammate_feed_pages_past_capped_scans_without_skipping_rows(pool: PgPoo
             edit(
                 n,
                 subject,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
                 entity,
                 n as i64,
             )

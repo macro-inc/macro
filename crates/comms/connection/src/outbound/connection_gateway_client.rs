@@ -37,7 +37,7 @@ impl ConnectionGateway for ConnectionGatewayImpl {
         let message = serde_json::to_value(&invalidation_event)?;
         let entities = users
             .iter()
-            .map(|u| model_entity::EntityType::User.with_entity_str(u.as_ref()))
+            .map(|u| entity_kind::EntityType::User.with_entity_str(u.as_ref()))
             .collect();
 
         // Transform the users to a list of connection gateway entities
@@ -60,7 +60,7 @@ impl ConnectionGateway for ConnectionGatewayImpl {
     ) -> Result<(), Self::Err> {
         let entities = users
             .iter()
-            .map(|u| model_entity::EntityType::User.with_entity_str(u.as_ref()))
+            .map(|u| entity_kind::EntityType::User.with_entity_str(u.as_ref()))
             .collect();
 
         let result = self

@@ -31,7 +31,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 mockall = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 models_email = { workspace = true }
 models_permissions = { workspace = true }

@@ -11,12 +11,12 @@ use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
 };
+use entity_kind::EntityType;
 use futures::Stream;
 use graphql_common::{extract_part, require_authorized_user};
 use graphql_email::EmailThreadMutationOutput;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::build_grouped_response, ports::SoupService};
 use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
@@ -228,7 +228,7 @@ where
 pub async fn resolve_soup_entity<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
-    entity: model_entity::Entity<'static>,
+    entity: entity_kind::Entity<'static>,
 ) -> async_graphql::Result<Option<GraphqlSoupEntity<Edges>>>
 where
     Edges: SoupEntityEdges,

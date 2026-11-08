@@ -21,7 +21,7 @@ use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLin
 use shared_types::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};

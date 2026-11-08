@@ -29,7 +29,7 @@ depended-on crates in the backend.
 
 ## Boundaries
 
-- Depends on: `model_entity`, `model_owner`, `models_entity_access_management`,
+- Depends on: `entity_kind`, `model_owner`, `models_entity_access_management`,
   `models_permissions`, `macro_user_id`, `bot_id`.
 - Used by: nearly every domain crate that authorizes a request (`documents`,
   `chat`, `projects`, `crm`, `forms`, `databases`, `channels`, `agent_session`,

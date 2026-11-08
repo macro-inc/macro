@@ -6,10 +6,10 @@ mod test;
 use attachment::{Attachable, AttachmentService, FormattedParts};
 use chat_id::ChatId;
 use chat_message::ChatMessageContent;
+use entity_kind::{Entity, EntityType};
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 use shared_types::chat::{AttachmentType, NewChatMessage};
 

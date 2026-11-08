@@ -11,11 +11,11 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, EntityMutationActor, EntityMutationEffect,
     EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
 };
-use model_entity::{Entity, EntityType};
 use projects_hex::domain::ports::ProjectContentCopier;
 
 use super::{EntityLifecycleService, access_failure};

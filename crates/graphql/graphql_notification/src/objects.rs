@@ -130,7 +130,7 @@ impl GraphqlNotification {
 /// [`EntityNotificationsLoader`] stored in the GraphQL context.
 pub async fn load_entity_notifications<'a, R>(
     ctx: &'a Context<'a>,
-    entity: model_entity::Entity<'static>,
+    entity: entity_kind::Entity<'static>,
     filter: Option<GraphqlNotificationFilter>,
     limit: Option<i32>,
 ) -> async_graphql::Result<Vec<GraphqlNotification>>

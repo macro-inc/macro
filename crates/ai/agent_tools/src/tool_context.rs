@@ -1652,7 +1652,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &folder.to_string(),
-                model_entity::EntityType::Project,
+                entity_kind::EntityType::Project,
             )
             .await
             .map_err(|error| anyhow::anyhow!("no edit access to folder {folder}: {error:?}"))?;
@@ -1821,7 +1821,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &document_id,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
             )
             .await
         {

@@ -6,7 +6,7 @@
 mod test;
 
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use serde::Serialize;
 
 use crate::domain::models::FormId;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{DeletedUserDraft, UserProvider};
+use entity_kind::EntityType;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use std::sync::Mutex;
 use uuid::Uuid;
 

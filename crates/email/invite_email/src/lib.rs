@@ -16,12 +16,12 @@ mod colleague_joined;
 pub use colleague_joined::ColleagueJoinedMacro;
 
 use askama::Template;
+use entity_kind::Entity;
 use macro_env::Environment;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::email::EmailStr;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtEmail, NotificationExtIos, NotificationTitle,
     RateLimitConfig, RateLimitKey,

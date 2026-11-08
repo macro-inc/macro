@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use collab_surface::domain::models::{CollabSurface, SurfaceState};
-use model_entity::Entity;
+use entity_kind::Entity;
 use uuid::Uuid;
 
 use super::*;

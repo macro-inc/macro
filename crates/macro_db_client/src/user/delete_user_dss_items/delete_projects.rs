@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 /// Deletes all projects for a user
 /// Does not commit the transaction

@@ -10,7 +10,7 @@ schema = ["dep:utoipa", "document_id/schema"]
 
 [dependencies]
 document_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

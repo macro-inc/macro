@@ -69,9 +69,9 @@ use agent_session::domain::events::{
     WaitingForInputMetadata,
 };
 use agent_session::domain::model::{SessionSource, TurnId};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::{Entity, EntityType};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
     AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,

@@ -37,7 +37,7 @@ entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }

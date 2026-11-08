@@ -6,9 +6,9 @@ use attachment::{
     AttachmentContent, AttachmentError, AttachmentPart, AttachmentService, Attachments,
     ResolutionError, image::ImageData,
 };
+use entity_kind::{Entity, EntityType};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 
 use crate::domain::ports::StaticFileRepo;

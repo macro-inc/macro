@@ -9,7 +9,7 @@ mod test;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_notifications::{RoutineRunFinishedMetadata, RoutineRunOutcome};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;

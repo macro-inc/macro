@@ -137,7 +137,7 @@ mcp_select = { workspace = true }
 memory = { workspace = true }
 messages = { workspace = true, features = ["broker", "delivery", "outbound"] }
 shared_types = { workspace = true, features = ["axum"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }

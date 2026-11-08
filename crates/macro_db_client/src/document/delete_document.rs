@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
 
 /// Hard deletes a document from the database.

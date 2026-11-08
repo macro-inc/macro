@@ -1,7 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 /// Authenticated actor performing an entity mutation.

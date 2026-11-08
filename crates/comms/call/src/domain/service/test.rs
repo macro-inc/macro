@@ -2819,7 +2819,7 @@ async fn delete_entity_permanently_publishes_one_deleted_event() {
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());
     let entity =
-        model_entity::EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string());
+        entity_kind::EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string());
 
     service
         .delete_entity_permanently(entity, authenticated_mutation_receipt())

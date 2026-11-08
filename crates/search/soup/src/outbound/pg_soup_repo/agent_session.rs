@@ -5,12 +5,12 @@
 //! (no `agent_session_filter` in its AST) gets none.
 
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::ast::{
     agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};

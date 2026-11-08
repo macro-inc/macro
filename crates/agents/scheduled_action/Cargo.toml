@@ -65,7 +65,7 @@ tracing = { workspace = true }
 axum = { workspace = true }
 connection_gateway_client = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 entity_registry = { workspace = true, features = ["axum"] }
 entity_registry_db_utils = { workspace = true }

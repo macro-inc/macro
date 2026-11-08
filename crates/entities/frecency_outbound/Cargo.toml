@@ -16,7 +16,7 @@ frecency_core = { workspace = true, features = ["ports"] }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 recursion = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }

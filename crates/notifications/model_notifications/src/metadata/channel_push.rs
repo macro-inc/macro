@@ -1,6 +1,6 @@
 use super::{NotificationTitle, alert_apns};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use notification::domain::models::apple::{
     APNSPushNotification, PushNotificationData, PushNotificationNavigation,
 };

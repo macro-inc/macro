@@ -12,8 +12,8 @@ mod test;
 
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_databases::position::PositionError;
 use sqlx::PgPool;
 use uuid::Uuid;

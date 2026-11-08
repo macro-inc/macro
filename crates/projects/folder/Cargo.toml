@@ -69,7 +69,7 @@ macro_event_topics = { workspace = true }
 entity_mutation = { workspace = true }
 macro_user_id = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 models_bulk_upload = { workspace = true }
 models_permissions = { workspace = true }

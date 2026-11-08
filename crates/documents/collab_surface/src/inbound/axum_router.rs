@@ -13,11 +13,11 @@ use entity_access::domain::{
     models::{AccessError, AnyEntityPermission, EntityAccessReceipt},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

@@ -10,8 +10,8 @@ use crate::domain::{
 };
 use entity_access::domain::models::EntityAccessReceipt;
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use entity_kind::EntityType;
 use macro_event_broker::MacroEventBroker;
-use model_entity::EntityType;
 use model_owner::Owner;
 use rootcause::{Report, prelude::*};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};

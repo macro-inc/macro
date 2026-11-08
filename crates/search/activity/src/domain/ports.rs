@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use uuid::Uuid;
 
 use super::{

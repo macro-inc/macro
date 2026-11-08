@@ -25,7 +25,7 @@ depending on `attachment` directly.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `non_empty`; optional `attachment`,
-  `model_entity` (feature `attachment`), `reqwest` (feature `outbound`).
+  `entity_kind` (feature `attachment`), `reqwest` (feature `outbound`).
 - Used by: `crates/ai/agent_tools`, `crates/agents/agent_trigger`, `services/agent_harness_service`,
   `services/agent_trigger_service`, `services/agent_harness_service`.
 

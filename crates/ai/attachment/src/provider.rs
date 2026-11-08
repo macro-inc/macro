@@ -1,8 +1,8 @@
 //! Attachment provider — routes [`Entity`] references to the correct
 //! [`AttachmentService`] by [`EntityType`].
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 
 use crate::{AttachmentContent, AttachmentService, Attachments, ResolutionError};

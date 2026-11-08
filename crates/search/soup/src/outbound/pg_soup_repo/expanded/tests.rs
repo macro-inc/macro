@@ -11,6 +11,7 @@ use crate::{
         populate_properties,
     },
 };
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::{
     PropertyFilter,
@@ -21,7 +22,6 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use models_pagination::Identify;
 use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;

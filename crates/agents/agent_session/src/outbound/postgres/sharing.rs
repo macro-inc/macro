@@ -8,8 +8,8 @@ use crate::domain::{
 };
 use anyhow::Context;
 use entity_access_db_utils::update_entity_access_channel_share_permissions;
+use entity_kind::EntityType;
 use entity_registry::BotFacts;
-use model_entity::EntityType;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,

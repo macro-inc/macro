@@ -13,7 +13,7 @@ delivery = [
   "dep:properties",
   "dep:models_properties",
   "dep:connection_gateway_client",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:model_notifications",
   "dep:model_owner",
   "dep:notification",
@@ -58,7 +58,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
 shared_types = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 model_owner = { workspace = true, optional = true }
 models_pagination = { workspace = true }

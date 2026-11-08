@@ -2,7 +2,7 @@
 //! web app see them, whatever the provider.
 
 use chrono::{DateTime, Utc};
-pub use model_entity::{ExternalChatKind, ExternalChatProvider};
+pub use entity_kind::{ExternalChatKind, ExternalChatProvider};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

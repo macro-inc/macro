@@ -1,7 +1,7 @@
 use cow_str::CowLike;
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

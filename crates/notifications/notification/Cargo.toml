@@ -25,7 +25,7 @@ itertools = { workspace = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_pagination = { workspace = true }
 notification_state = { workspace = true }
 rate_limit = { workspace = true }

@@ -15,6 +15,7 @@ use crm::domain::auth::CrmTeamReceipt;
 use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::PreviewView;
 use entity_access::domain::models::MemberTeamRole;
+use entity_kind::{Entity, EntityType};
 use foreign_entity::domain::models::SourceId;
 use frecency_core::models::{AggregateFrecency, FrecencyQueryErr};
 use github_pull_requests::domain::models::GithubPullRequestError;
@@ -23,7 +24,6 @@ use item_filters::{
     ast::{EntityFilterAst, ExpandErr},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_grouping::GroupingConfig;
 use models_pagination::{
     CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,

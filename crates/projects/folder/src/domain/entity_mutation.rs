@@ -4,13 +4,13 @@ use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
     RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
     capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use project_id::ProjectId;
 use shared_types::project::{BasicProject, request::PatchProjectRequestV2};

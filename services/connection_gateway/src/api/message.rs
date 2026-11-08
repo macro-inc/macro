@@ -12,9 +12,9 @@ use axum::{
 use connection_gateway_models::{
     BatchSendMessageBody, BatchSendUniqueMessagesBody, SendMessageBody, SendMessageResponse,
 };
+use entity_kind::Entity;
 use futures::future::try_join_all;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model_entity::Entity;
 
 pub fn router<S>(state: AppState) -> Router<S>
 where

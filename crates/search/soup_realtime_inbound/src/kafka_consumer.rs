@@ -20,6 +20,7 @@ use channels::domain::{
 };
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use entity_kind::{Entity, EntityType};
 use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use github_pull_requests::broker::{GithubPullRequestMacroEvent, GithubPullRequestTopicEvent};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
@@ -28,7 +29,6 @@ use macro_event_broker::{
 };
 use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
-use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
 use models_properties::service::property_value::PropertyValue;
 use project::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};

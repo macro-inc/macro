@@ -29,6 +29,7 @@ use email::domain::{
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_kind::{Entity, EntityType};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
@@ -52,7 +53,6 @@ use item_filters::ast::{
     github_pull_request::GithubPullRequestLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_pagination::{
     Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, NotifiedAt, Paginate,
     PaginateOn, Paginated, Query, SimpleSortMethod, SortOn, TouchedByMe,

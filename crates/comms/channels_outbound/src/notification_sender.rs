@@ -204,7 +204,7 @@ async fn send_invite_notifications(
     let _ = tokio::try_join!(
         ingress.send_notification(
             SendNotificationRequestBuilder {
-                notification_entity: model_entity::EntityType::Channel
+                notification_entity: entity_kind::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
                 secondary_notification_entity: None,
                 notification: notification.clone(),
@@ -225,7 +225,7 @@ async fn send_invite_notifications(
                 if let Err(error) = ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity: None,
                             notification: email_notification,
@@ -251,9 +251,9 @@ async fn send_invite_notifications(
 
 fn secondary_channel_thread_entity(
     thread_id: Option<Uuid>,
-) -> Option<model_entity::Entity<'static>> {
+) -> Option<entity_kind::Entity<'static>> {
     thread_id.map(|thread_id| {
-        model_entity::EntityType::ChannelMessage.with_entity_string(thread_id.to_string())
+        entity_kind::EntityType::ChannelMessage.with_entity_string(thread_id.to_string())
     })
 }
 
@@ -297,7 +297,7 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity,
                             notification: to_channel_mention_metadata(mention),
@@ -328,7 +328,7 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity,
                             notification: DocumentMentionMetadata {
@@ -371,10 +371,10 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity: Some(
-                                model_entity::EntityType::ChannelMessage
+                                entity_kind::EntityType::ChannelMessage
                                     .with_entity_string(thread_id.to_string()),
                             ),
                             notification: ChannelReplyMetadata {
@@ -411,7 +411,7 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity: None,
                             notification: ChannelMessageSendMetadata {
@@ -447,7 +447,7 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             secondary_notification_entity: secondary_channel_thread_entity(Some(
                                 thread_id.unwrap_or(message_id),
@@ -506,7 +506,7 @@ where
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
-                            notification_entity: model_entity::EntityType::Channel
+                            notification_entity: entity_kind::EntityType::Channel
                                 .with_entity_string(request.channel_id.to_string()),
                             secondary_notification_entity: None,
                             notification: ChannelAccessRequestedMetadata {

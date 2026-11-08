@@ -10,7 +10,7 @@ chrono = { workspace = true }
 filter_ast = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 rootcause = { workspace = true }
 thiserror = { workspace = true }

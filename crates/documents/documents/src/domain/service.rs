@@ -7,7 +7,7 @@ mod tests;
 
 use crate::domain::ports::sync::DocumentSyncPort;
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
     authorize_team_share,
@@ -1329,7 +1329,7 @@ impl<
     async fn get_project_children(
         &self,
         project_id: &str,
-    ) -> Result<Vec<model_entity::Entity<'static>>, DocumentError> {
+    ) -> Result<Vec<entity_kind::Entity<'static>>, DocumentError> {
         self.repo
             .get_project_children(project_id)
             .await

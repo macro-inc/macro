@@ -14,7 +14,7 @@ chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 models_pagination = { workspace = true }
 models_properties = { workspace = true }

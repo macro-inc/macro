@@ -29,7 +29,7 @@ macro_sync_service_jwt = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }

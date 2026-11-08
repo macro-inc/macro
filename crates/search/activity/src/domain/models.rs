@@ -102,7 +102,7 @@ impl From<&CreationPrincipal> for Attribution {
 
 /// The entity-kind vocabulary activities are recorded against (re-exported
 /// for domain mappings).
-pub use model_entity::EntityType;
+pub use entity_kind::EntityType;
 
 /// Namespace for deriving deterministic activity ids from source event ids.
 static ACTIVITY_ID_NAMESPACE: LazyLock<Uuid> =

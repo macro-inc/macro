@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::Utc;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use rootcause::Report;
 use uuid::Uuid;
 

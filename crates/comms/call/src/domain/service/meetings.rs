@@ -77,7 +77,7 @@ impl<
         self.notification_ingress
             .send_notification(
                 SendNotificationRequestBuilder {
-                    notification_entity: model_entity::EntityType::User
+                    notification_entity: entity_kind::EntityType::User
                         .with_entity_string(actor.to_string()),
                     secondary_notification_entity: None,
                     notification: invite_email::CallInvite {

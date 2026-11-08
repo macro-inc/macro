@@ -37,7 +37,7 @@ chat_message = { workspace = true, features = ["schema"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 non_empty = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }

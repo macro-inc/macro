@@ -4,12 +4,12 @@ use std::sync::{Arc, Mutex};
 use axum::http::header;
 use chrono::{TimeZone, Utc};
 use entity_access::domain::ports::NoOpEntityAccessService;
+use entity_kind::Entity;
 use http_body_util::BodyExt;
 use macro_authorization::{
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_user::UserContext;
 use rootcause::Report;
 use tower::ServiceExt;

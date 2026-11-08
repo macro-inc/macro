@@ -219,7 +219,7 @@ impl SeedDb {
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
             &macro_uuid::string_to_uuid(item_id).unwrap(),
-            model_entity::EntityType::from_str(item_type).unwrap(),
+            entity_kind::EntityType::from_str(item_type).unwrap(),
             &channel_id.to_string(),
             entity_access_db_utils::EntityAccessSourceType::Channel,
             AccessLevel::View,
@@ -529,7 +529,7 @@ impl SeedDb {
         // dropped; readers derive `shareWithTeam` from this state.
         share_permission_db_utils::team_share::initialize(
             &mut transaction,
-            &model_entity::EntityType::Call.with_entity_string(args.call_id.to_string()),
+            &entity_kind::EntityType::Call.with_entity_string(args.call_id.to_string()),
             if args.share_with_team {
                 TeamShareCreation::Call
             } else {

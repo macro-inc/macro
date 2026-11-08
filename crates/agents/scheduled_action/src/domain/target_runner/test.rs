@@ -27,8 +27,8 @@ use crate::domain::{
     program_runner::{ProgramRunner, test as program},
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 use routine_program::RoutineProgram;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 

@@ -11,8 +11,8 @@ accounts are linked and its messages reach Macro is in
 | Concept | Where |
 | --- | --- |
 | Entity | `EntityType::ExternalChat` (wire `external_chat`, GraphQL `EXTERNAL_CHAT`) |
-| Provider | `model_entity::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
-| Kind | `model_entity::ExternalChatKind` (`group`, `direct`) |
+| Provider | `entity_kind::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
+| Kind | `entity_kind::ExternalChatKind` (`group`, `direct`) |
 | Chat | `external_chat`: `provider`, `remote_id` (the provider's id; WhatsApp: a JID), `kind`, name, owner, `state`, history import (`backfill_*`) |
 | People | `external_chat_person` (display name, verified Macro user) |
 | Messages | `external_chat_message`: one row per `(chat, person, source id)`; `origin` is `remote`, `macro` or `history`; `kind` `message` or `system`; structured `rich` content and `mentions` (provider ids) |

@@ -148,7 +148,7 @@ mobile_welcome_email_db_client = { workspace = true }
 models_email = { workspace = true }
 mockall = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_permissions = { workspace = true }
 native_app_service = { workspace = true }
 non_empty = { workspace = true }

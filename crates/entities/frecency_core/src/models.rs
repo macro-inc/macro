@@ -1,9 +1,9 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
 use cow_str::CowLike;
+use entity_kind::Entity;
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
-use model_entity::Entity;
 use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};

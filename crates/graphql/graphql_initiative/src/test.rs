@@ -2,10 +2,10 @@ use crate::context::{ApiFuture, InitiativeApi};
 use crate::*;
 use async_graphql::{Context, EmptySubscription, ID, Object, Request, Schema, SimpleObject};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType};
+use entity_kind::Entity;
 use graphql_common::require_authenticated_user;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShareState, SharePermissionV2, access_level::AccessLevel,
 };
@@ -104,7 +104,7 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailThreadEdges { available: true }
     }
 
-    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+    fn crm_record_edges(_record: entity_kind::Entity<'static>) -> Self::CrmRecordEdges {
         TestEmailThreadEdges { available: true }
     }
 

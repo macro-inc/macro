@@ -28,7 +28,7 @@ entity_access = { workspace = true, features = ["ports", "sqlx"] }
 futures = { workspace = true }
 macro_entrypoint = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_entity_access_management = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }

@@ -1,9 +1,9 @@
 //! Ports (trait contracts) for the collab-surface domain.
 
 use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
+use entity_kind::Entity;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use uuid::Uuid;
 
 #[cfg(doc)]

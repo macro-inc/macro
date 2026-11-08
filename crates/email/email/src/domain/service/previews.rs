@@ -9,6 +9,7 @@ use crate::domain::{
     },
     ports::EmailRepo,
 };
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use frecency_core::{
     models::{AggregateId, FrecencyByIdsRequest, FrecencyData},
@@ -17,7 +18,6 @@ use frecency_core::{
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, Query, SimpleSortMethod};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,7 +33,7 @@ async fn get_frecency_scores<U: FrecencyQueryService>(
     service: &U,
     include_frecency: bool,
     user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ids: &[model_entity::Entity<'_>],
+    ids: &[entity_kind::Entity<'_>],
 ) -> Result<HashMap<AggregateId<'static>, FrecencyData>, frecency_core::models::FrecencyQueryErr> {
     if include_frecency {
         service

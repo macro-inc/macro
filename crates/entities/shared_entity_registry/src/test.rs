@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_owner::OwnerType;
 use uuid::Uuid;
 

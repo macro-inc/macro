@@ -6,7 +6,7 @@ use crate::model::{
 use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashMap;
-use model_entity::Entity;
+use entity_kind::Entity;
 use std::{
     sync::{Arc, atomic::AtomicUsize},
     time::{SystemTime, UNIX_EPOCH},

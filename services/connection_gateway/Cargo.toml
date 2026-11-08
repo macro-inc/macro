@@ -65,7 +65,7 @@ macro_env_var = { workspace = true }
 macro_tower_layers = { workspace = true }
 postcard = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_bulk_upload = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 redis = { workspace = true, features = [

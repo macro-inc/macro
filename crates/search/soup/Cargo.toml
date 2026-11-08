@@ -69,7 +69,7 @@ indexmap = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
 models_grouping = { workspace = true }

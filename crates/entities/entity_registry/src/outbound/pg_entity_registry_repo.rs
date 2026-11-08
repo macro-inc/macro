@@ -4,7 +4,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_owner::{Owner, OwnerType};
 use rootcause::Report;
 use rootcause::prelude::*;

@@ -4,7 +4,7 @@
 mod test;
 
 use entity_access_db_utils::SimpleEntity;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 

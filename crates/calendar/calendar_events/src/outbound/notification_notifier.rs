@@ -3,8 +3,8 @@
 
 use std::collections::HashSet;
 
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;

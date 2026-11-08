@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::image::ImageData;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use non_empty::NonEmpty;
 use thiserror::Error;
 

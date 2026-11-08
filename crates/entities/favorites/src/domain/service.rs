@@ -6,8 +6,8 @@ mod test;
 use std::collections::HashSet;
 
 use entity_access::domain::models::EntityAccessReceipt;
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 
 use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};
 use crate::domain::ports::{FavoriteView, FavoritesRepo, FavoritesService};

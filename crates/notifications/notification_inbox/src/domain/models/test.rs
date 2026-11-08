@@ -1,5 +1,5 @@
 use attention_feed::test_support::uuid;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use super::*;
 

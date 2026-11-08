@@ -7,12 +7,12 @@
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode, MoveEntity, RenameEntity,
     TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest, project_refs,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use shared_types::document::DocumentBasic;

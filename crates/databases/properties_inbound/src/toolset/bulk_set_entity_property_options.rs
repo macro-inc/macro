@@ -150,7 +150,7 @@ where
         let mut granted_indices: Vec<usize> = Vec::new();
 
         for (index, entity) in self.entities.iter().enumerate() {
-            let entity_type = model_entity::EntityType::from(entity.entity_type);
+            let entity_type = entity_kind::EntityType::from(entity.entity_type);
             match service_context
                 .entity_access_service
                 .generate_bot_entity_access_receipt::<EditAccessLevel>(

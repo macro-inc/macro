@@ -7,7 +7,7 @@ use crate::pg_access_repo::queries::list_entity_access_grants;
 use entity_access::domain::models::AccessGrant;
 use entity_access::domain::models::AccessLevel;
 #[cfg(feature = "explain_binary")]
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::PgPool;
 use std::collections::BTreeMap;
 use std::str::FromStr;

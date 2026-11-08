@@ -55,7 +55,7 @@ fn test_apns_targets_deserializes_with_per_user_endpoints() {
 #[test]
 fn test_ingress_queue_message_round_trip() {
     use crate::domain::models::SendNotificationRequestBuilder;
-    use model_entity::EntityType;
+    use entity_kind::EntityType;
     use std::collections::HashSet;
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

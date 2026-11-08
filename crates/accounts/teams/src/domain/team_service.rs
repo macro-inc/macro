@@ -25,7 +25,7 @@ use roles_and_permissions::domain::{model::RoleId, port::UserRolesAndPermissions
 use team_id::TeamId;
 
 #[cfg(feature = "ports")]
-use model_entity::EntityType;
+use entity_kind::EntityType;
 #[cfg(feature = "ports")]
 use model_notifications::{InviteToTeamMetadata, InviteePlan};
 #[cfg(feature = "ports")]

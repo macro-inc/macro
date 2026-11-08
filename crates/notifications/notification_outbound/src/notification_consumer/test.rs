@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_event_broker::{
     EventBrokerError, MacroEventCollection as _, MessageParts, MessageWrapper,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use uuid::Uuid;
 
 use super::DeclaredMacroEvent;

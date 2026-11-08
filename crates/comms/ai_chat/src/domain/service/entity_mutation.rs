@@ -3,13 +3,13 @@
 use entity_access::domain::models::{
     AccessError, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode,
     MoveEntity, RenameEntity, RestoreEntity, TrashEntity, UpdateEntitySharePolicy,
     capability::MoveEntityRequest, project_refs,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use crate::domain::{

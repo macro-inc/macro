@@ -19,7 +19,7 @@ pub fn gateway_import_notify(gateway: Arc<ConnectionGatewayClient>) -> ImportNot
     Arc::new(move |user| {
         let gateway = gateway.clone();
         Box::pin(async move {
-            let entity = model_entity::EntityType::User.with_entity_str(user.as_ref());
+            let entity = entity_kind::EntityType::User.with_entity_str(user.as_ref());
             let payload = serde_json::json!({ "type": IMPORT_UPDATED_MESSAGE_TYPE });
             if let Err(e) = gateway
                 .send_message(entity, IMPORT_UPDATED_MESSAGE_TYPE.to_string(), payload)

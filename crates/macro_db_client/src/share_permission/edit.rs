@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 

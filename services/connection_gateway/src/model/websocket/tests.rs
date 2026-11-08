@@ -1,5 +1,5 @@
 use cool_asserts::assert_matches;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use serde_json::{Value, json};
 
 use crate::model::tracking::TrackAction;

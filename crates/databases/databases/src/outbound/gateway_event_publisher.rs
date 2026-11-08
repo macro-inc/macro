@@ -3,8 +3,8 @@
 
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use serde::Serialize;
 
 use crate::domain::models::{Awareness, DatabaseId, TableId, TableVersion};

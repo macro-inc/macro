@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_file_type = { workspace = true }
 model_owner = { workspace = true }
 schemars = { workspace = true }

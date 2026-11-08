@@ -9,6 +9,7 @@ use crate::api::context::{AuthorizationService, EntityAccessService, Notificatio
 use async_trait::async_trait;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::domain::ports::EntityAccessService as _;
+use entity_kind::EntityType;
 use external_chat::{
     domain::{
         effects::EffectsService,
@@ -25,7 +26,6 @@ use external_chat::{
     signals::{self, Change, ChangeSignal, trace_context},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;

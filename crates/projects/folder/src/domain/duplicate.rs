@@ -18,10 +18,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode};
 use futures::stream::{self, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_owner::{CreationPrincipal, Owner};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
 use shared_types::project::request::CreateProjectRequest;

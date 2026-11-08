@@ -8,8 +8,8 @@
 
 use std::{collections::HashMap, str::FromStr};
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use sqlx::PgPool;
 

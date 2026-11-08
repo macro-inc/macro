@@ -152,7 +152,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 system_skills = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_permissions = { workspace = true }
 models_properties = { workspace = true }
 rootcause = { workspace = true }

@@ -1,5 +1,5 @@
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use shared_types::annotations::AnnotationIncrementalUpdate;
 
 #[tracing::instrument(skip(client))]

@@ -290,10 +290,10 @@ async fn a_database_receipt_is_not_a_form_receipt() {
 #[cfg(feature = "entity_mutation")]
 #[tokio::test]
 async fn moving_a_form_files_it_names_both_folders_and_leaves_its_database() {
+    use entity_kind::EntityType;
     use entity_mutation::{
         EntityMutationEffect, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
     };
-    use model_entity::EntityType;
 
     let world = world();
     seed_rsvp(&world, Audience::Members);

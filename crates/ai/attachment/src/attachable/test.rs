@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use non_empty::NonEmpty;
 
 fn to_text(parts: FormattedParts) -> String {

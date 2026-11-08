@@ -47,7 +47,7 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
             parent: self
                 .0
                 .company_id
-                .map(|company_id| graphql_entity(model_entity::EntityType::CrmCompany, company_id)),
+                .map(|company_id| graphql_entity(entity_kind::EntityType::CrmCompany, company_id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|value| value.to_rfc3339()),
@@ -124,7 +124,7 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     #[graphql(flatten)]
     pub(super) async fn crm_record_edges(&self) -> E::CrmRecordEdges {
         E::crm_record_edges(
-            model_entity::EntityType::CrmContact.with_entity_string(self.0.id.to_string()),
+            entity_kind::EntityType::CrmContact.with_entity_string(self.0.id.to_string()),
         )
     }
     /// Optional viewer frecency score.

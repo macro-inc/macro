@@ -2,7 +2,7 @@ use super::*;
 use entity_access::domain::models::{AccessError, AccessLevel, Entity};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn receipt(key: &model_entity::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {
+fn receipt(key: &entity_kind::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::try_new_authenticated_user(
         MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
         Entity {
@@ -19,10 +19,10 @@ fn receipt(key: &model_entity::Entity<'static>) -> EntityAccessReceipt<ViewAcces
 #[tokio::test]
 async fn retains_only_authorized_property_targets() {
     let keys = [
-        model_entity::EntityType::DatabaseRow.with_entity_string("allowed".into()),
-        model_entity::EntityType::DatabaseRow.with_entity_string("denied".into()),
-        model_entity::EntityType::Team.with_entity_string("unsupported".into()),
-        model_entity::EntityType::Document.with_entity_string("document".into()),
+        entity_kind::EntityType::DatabaseRow.with_entity_string("allowed".into()),
+        entity_kind::EntityType::DatabaseRow.with_entity_string("denied".into()),
+        entity_kind::EntityType::Team.with_entity_string("unsupported".into()),
+        entity_kind::EntityType::Document.with_entity_string("document".into()),
     ];
     let calls = AtomicUsize::new(0);
     let receipts = load_view_receipts(&keys, |key| {
@@ -48,7 +48,7 @@ async fn retains_only_authorized_property_targets() {
 #[tokio::test]
 async fn authorizes_concurrently_with_a_bounded_number_of_checks() {
     let keys = (0..18)
-        .map(|index| model_entity::EntityType::DatabaseRow.with_entity_string(index.to_string()))
+        .map(|index| entity_kind::EntityType::DatabaseRow.with_entity_string(index.to_string()))
         .collect::<Vec<_>>();
     let active = AtomicUsize::new(0);
     let maximum = AtomicUsize::new(0);

@@ -8,11 +8,11 @@ use entity_access::domain::models::{
     AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, RequiredPermission,
 };
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DuplicateEntity, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

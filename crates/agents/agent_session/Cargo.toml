@@ -32,7 +32,7 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:entity_registry",
   "dep:entity_registry_db_utils",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:reqwest",
   "dep:macro_tower_layers",
   "dep:macro_authorization",
@@ -80,7 +80,7 @@ entity_access_db_utils = { workspace = true, optional = true }
 entity_registry = { workspace = true, optional = true }
 entity_registry_db_utils = { workspace = true, optional = true }
 genai_telemetry = { workspace = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_owner = { workspace = true }
 models_permissions = { workspace = true }
 share_permission_db_utils = { workspace = true, optional = true }

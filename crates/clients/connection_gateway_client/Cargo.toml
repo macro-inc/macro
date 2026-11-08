@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 connection_gateway_models = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 macro_tower_layers = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

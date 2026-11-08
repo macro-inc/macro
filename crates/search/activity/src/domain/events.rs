@@ -12,9 +12,9 @@
 mod test;
 
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroActivityTopic;
-use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;

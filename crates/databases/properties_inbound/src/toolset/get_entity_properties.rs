@@ -74,7 +74,7 @@ pub enum ToolPropertyTargetEntityType {
     Company,
 }
 
-impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
+impl From<ToolPropertyTargetEntityType> for entity_kind::EntityType {
     fn from(value: ToolPropertyTargetEntityType) -> Self {
         match value {
             ToolPropertyTargetEntityType::Document => Self::Document,
@@ -174,7 +174,7 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "Get entity properties");
 
-        let entity_type = model_entity::EntityType::from(self.entity_type);
+        let entity_type = entity_kind::EntityType::from(self.entity_type);
 
         // Prove the requesting user can view the entity before reading anything.
         let entity_access_receipt = service_context

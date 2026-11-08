@@ -12,10 +12,10 @@ use entity_access::domain::{
     models::{EntityAccessReceipt, ViewAccessLevel},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use futures::future::join_all;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_file_type::{FileAssociation, FileType};
 use non_empty::NonEmpty;
 use shared_types::document::DocumentBasic;

@@ -167,7 +167,7 @@ impl NotificationRepository for MockRepo {
     async fn get_notification_ids_for_entities(
         &self,
         _: MacroUserIdStr<'_>,
-        _: &[model_entity::Entity<'_>],
+        _: &[entity_kind::Entity<'_>],
         _: &notification::domain::models::request::NotificationStatus,
     ) -> Result<Vec<uuid::Uuid>, Report> {
         unimplemented!()
@@ -207,11 +207,11 @@ impl NotificationRepository for MockRepo {
     async fn get_entity_notifications_batch(
         &self,
         _: MacroUserIdStr<'_>,
-        entity_refs: Vec<model_entity::Entity<'static>>,
+        entity_refs: Vec<entity_kind::Entity<'static>>,
         _query: notification::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<
         std::collections::HashMap<
-            model_entity::Entity<'static>,
+            entity_kind::Entity<'static>,
             Vec<notification::domain::models::UserNotificationRow<serde_json::Value>>,
         >,
         Report,

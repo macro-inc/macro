@@ -83,7 +83,7 @@ impl RequestRepository for PgRequestRepository {
             entity_access_db_utils::team_share::acquire_guard(&mut tx).await?;
         }
         // Stable PostgreSQL hash: serialize first creation as well as existing rows.
-        let kind = model_entity::EntityType::from(entity.entity_type);
+        let kind = entity_kind::EntityType::from(entity.entity_type);
         let lock_key = format!("access-request:{}:{}", kind.as_ref(), entity.entity_id);
         sqlx::query!(
             "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
@@ -126,7 +126,7 @@ impl PgRequestTransaction {
         user: Option<&str>,
         id: Option<Uuid>,
     ) -> Result<Option<AccessRequest>, RequestError> {
-        let kind = model_entity::EntityType::from(self.entity.entity_type);
+        let kind = entity_kind::EntityType::from(self.entity.entity_type);
         let row = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after
             FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND ($3::text IS NULL OR requester_id = $3) AND ($4::uuid IS NULL OR id = $4) LIMIT 1"#,
             kind.as_ref(), self.entity.entity_id, user, id).fetch_optional(self.tx.as_mut()).await?;
@@ -151,7 +151,7 @@ impl RequestTransaction for PgRequestTransaction {
         offset: u32,
         limit: u32,
     ) -> Result<(Vec<AccessRequest>, i64), RequestError> {
-        let kind = model_entity::EntityType::from(self.entity.entity_type);
+        let kind = entity_kind::EntityType::from(self.entity.entity_type);
         let total = sqlx::query_scalar!("SELECT count(*) AS \"count!\" FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND status = 'pending'", kind.as_ref(), self.entity.entity_id).fetch_one(self.tx.as_mut()).await?;
         let rows = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after
             FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND status = 'pending' ORDER BY created_at, id LIMIT $3 OFFSET $4"#,
@@ -164,7 +164,7 @@ impl RequestTransaction for PgRequestTransaction {
         ))
     }
     async fn save(&mut self, r: &AccessRequest) -> Result<(), RequestError> {
-        let kind = model_entity::EntityType::from(self.entity.entity_type);
+        let kind = entity_kind::EntityType::from(self.entity.entity_type);
         let status = match r.status {
             RequestStatus::Pending => "pending",
             RequestStatus::Granted => "granted",

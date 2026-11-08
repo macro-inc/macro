@@ -7,9 +7,9 @@ use email::domain::{
     mailbox::{DatabaseFailure, MailboxError, MailboxKey, projection::*},
     models::calendar_invitation::CalendarInvitation,
 };
+use entity_kind::EntityType;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
 use models_email::{
     api::refresh::RefreshEmailEvent,

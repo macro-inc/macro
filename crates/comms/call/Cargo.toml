@@ -78,7 +78,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 feature_flags = { workspace = true, optional = true }
 messages = { workspace = true, features = ["ports"], optional = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }

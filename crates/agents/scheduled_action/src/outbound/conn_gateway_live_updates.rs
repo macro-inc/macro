@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::models::{SCHEDULED_ACTION_UPDATE_MESSAGE_TYPE, ScheduledActionUpdate};
 use crate::domain::ports::ScheduledActionLiveUpdate;

@@ -5,6 +5,7 @@
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode,
     MoveEntity, RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest,
@@ -12,7 +13,6 @@ use entity_mutation::{
 };
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 
 use super::{
     duplicate::{DatabaseDuplicateRepo, DatabaseDuplicateService},

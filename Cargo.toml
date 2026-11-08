@@ -740,6 +740,7 @@ entity_access_db_utils = { path = "crates/entities/entity_access_db_utils" }
 entity_access_management = { path = "crates/entities/entity_access_management", default-features = false }
 entity_access_outbound = { path = "crates/entities/entity_access_outbound" }
 entity_basic_types = { path = "crates/types/entity_basic_types" }
+entity_kind = { path = "crates/types/entity_kind" }
 entity_mutation = { path = "crates/entities/entity_mutation" }
 entity_registry = { path = "crates/entities/entity_registry" }
 entity_registry_db_utils = { path = "crates/entities/entity_registry_db_utils" }
@@ -846,7 +847,6 @@ message_id = { path = "crates/types/message_id" }
 message_parent = { path = "crates/types/message_parent" }
 messages = { path = "crates/comms/messages" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
-model_entity = { path = "crates/types/model_entity" }
 model_error_response = { path = "crates/types/model_error_response" }
 model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }

@@ -1,8 +1,8 @@
 //! This module defines all of the ports that the frecency domain requires
 
 use chrono::{DateTime, Utc};
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 
 use crate::models::{
     AggregateFrecency, AggregateId, EventAggregationStats, EventRecord, EventRecordWithId,

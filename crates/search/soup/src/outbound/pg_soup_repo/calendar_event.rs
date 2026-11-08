@@ -1,11 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::ast::{
     calendar_event::CalendarEventLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::{SoupCalendarEvent, SoupCalendarEventTime},

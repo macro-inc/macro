@@ -7,8 +7,8 @@ use std::{
 };
 
 use entity_access::domain::models::AccessError;
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 
 use super::{Admission, EntityGrants, EntityViewAccess, viewable};
 use crate::model::tracking::TrackAction;

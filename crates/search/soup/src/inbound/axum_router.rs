@@ -30,6 +30,7 @@ use entity_access::{
     },
     inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
 };
+use entity_kind::Entity;
 use filter_ast::{Expr, ExprFrame};
 use item_filters::{
     EntityFilters,
@@ -54,7 +55,6 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use models_grouping::{GroupByField, GroupingConfig};
 pub use models_grouping::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};

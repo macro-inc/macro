@@ -30,13 +30,13 @@ use channels::domain::{
     models::{ChannelType, CreateChannelRequest},
     ports::ChannelService,
 };
+use entity_kind::EntityType;
 use favorites::domain::ports::FavoritesService;
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::{
     email::{Email, ReadEmailParts},
     user_id::MacroUserIdStr,
 };
-use model_entity::EntityType;
 use shared_types::authentication::webhooks::{
     FusionAuthUserWebhook, User as FusionAuthWebhookUser,
 };

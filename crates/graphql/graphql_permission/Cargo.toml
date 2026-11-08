@@ -11,7 +11,7 @@ entity_access = { workspace = true, features = [
 ] }
 futures = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

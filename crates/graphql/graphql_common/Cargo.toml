@@ -15,7 +15,7 @@ macro_authorization = { workspace = true, features = [
   "axum",
 ] }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 models_properties = { workspace = true }
 rootcause = { workspace = true }

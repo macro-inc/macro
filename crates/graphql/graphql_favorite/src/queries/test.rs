@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, value};
 use chrono::{TimeZone, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use super::*;
 

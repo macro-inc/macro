@@ -233,7 +233,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 user,
                 None,
                 &folder.to_string(),
-                model_entity::EntityType::Project,
+                entity_kind::EntityType::Project,
             )
             .await
         else {
@@ -311,7 +311,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                         user,
                         None,
                         &folder.to_string(),
-                        model_entity::EntityType::Project,
+                        entity_kind::EntityType::Project,
                     )
                     .await
                     .map_err(|error| {
@@ -346,7 +346,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                         user,
                         None,
                         &document.to_string(),
-                        model_entity::EntityType::Document,
+                        entity_kind::EntityType::Document,
                     )
                     .await
                     .map_err(|error| {
@@ -367,7 +367,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                         user,
                         None,
                         &database.to_string(),
-                        model_entity::EntityType::Database,
+                        entity_kind::EntityType::Database,
                     )
                     .await
                     .map_err(|error| {

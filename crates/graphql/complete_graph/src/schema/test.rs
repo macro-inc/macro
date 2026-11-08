@@ -18,6 +18,7 @@ use entity_access::domain::models::{
     EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
     ViewAccessLevel,
 };
+use entity_kind::EntityType as ModelEntityType;
 use graphql_common::GraphqlRequestParts;
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
@@ -28,7 +29,6 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model_entity::EntityType as ModelEntityType;
 use model_owner::Owner;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
@@ -68,7 +68,7 @@ const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
 #[derive(Clone)]
 struct TestRealtimeSubscriptionService {
-    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>>>>>,
+    receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Patch<entity_kind::Entity<'static>>>>>>,
     subscribed_user: Arc<Mutex<Option<MacroUserIdStr<'static>>>>,
 }
 
@@ -76,7 +76,7 @@ impl SoupRealtimeSubscriptionService for TestRealtimeSubscriptionService {
     fn subscribe(
         &self,
         user_id: MacroUserIdStr<'static>,
-    ) -> tokio::sync::mpsc::Receiver<Patch<model_entity::Entity<'static>>> {
+    ) -> tokio::sync::mpsc::Receiver<Patch<entity_kind::Entity<'static>>> {
         *self.subscribed_user.lock().expect("subscribed user lock") = Some(user_id);
         self.receiver
             .lock()

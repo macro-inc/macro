@@ -1,6 +1,6 @@
 use super::ConnectionGatewayClient;
 use connection_gateway_models::MessageReceipt;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 impl ConnectionGatewayClient {
     /// Trigger refresh of the user's calendar views.

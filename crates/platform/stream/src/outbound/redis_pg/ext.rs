@@ -1,5 +1,5 @@
 use crate::domain::{StreamId, StreamServiceError};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use std::str::FromStr;
 
 impl From<redis::RedisError> for StreamServiceError {

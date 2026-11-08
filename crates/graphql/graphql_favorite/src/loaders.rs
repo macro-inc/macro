@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::{Context, dataloader::DataLoader};
+use entity_kind::{Entity, OwnedEntity};
 use favorites::domain::ports::FavoritesService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
 
 #[cfg(test)]

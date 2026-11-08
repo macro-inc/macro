@@ -25,7 +25,7 @@ postgres = [
   "dep:sqlx",
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
-  "dep:model_entity",
+  "dep:entity_kind",
   "outbound",
 ]
 
@@ -47,7 +47,7 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }

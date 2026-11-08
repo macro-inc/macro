@@ -44,8 +44,8 @@ impl RemindersService for FakeRemindersService {
     }
 }
 use entity_access::domain::models::EntityAccessReceipt;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 #[cfg(feature = "postgres")]
 mod email_collection;

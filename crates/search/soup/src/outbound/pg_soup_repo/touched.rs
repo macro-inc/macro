@@ -7,7 +7,7 @@
 //! genuinely means the feed is exhausted.
 
 use activity::VIEW_ACTION_TAGS;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 

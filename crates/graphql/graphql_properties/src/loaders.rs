@@ -16,8 +16,8 @@ use uuid::Uuid;
 use crate::definitions::GraphqlPropertyDefinitionScope;
 
 /// Whether the canonical entity type supports property targets.
-fn is_property_target(entity_type: model_entity::EntityType) -> bool {
-    use model_entity::EntityType;
+fn is_property_target(entity_type: entity_kind::EntityType) -> bool {
+    use entity_kind::EntityType;
     matches!(
         entity_type,
         EntityType::Document
@@ -55,10 +55,10 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
     fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: &[model_entity::Entity<'static>],
+        keys: &[entity_kind::Entity<'static>],
     ) -> impl Future<
         Output = Result<
-            HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+            HashMap<entity_kind::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
             rootcause::Report,
         >,
     > + Send;
@@ -89,9 +89,9 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
     async fn get_properties(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-        keys: &[model_entity::Entity<'static>],
+        keys: &[entity_kind::Entity<'static>],
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+        HashMap<entity_kind::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
         rootcause::Report,
     > {
         Ok(keys.iter().cloned().map(|key| (key, Vec::new())).collect())
@@ -136,7 +136,7 @@ impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
             user_id.clone(),
             entity_access::domain::models::Entity {
                 entity_id: team.team_id.to_string(),
-                entity_type: model_entity::EntityType::Team,
+                entity_type: entity_kind::EntityType::Team,
             },
             EntityPermission::TeamRole { role: team.role },
         )
@@ -192,9 +192,9 @@ where
     async fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        keys: &[model_entity::Entity<'static>],
+        keys: &[entity_kind::Entity<'static>],
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+        HashMap<entity_kind::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
         rootcause::Report,
     > {
         let mut result = keys
@@ -209,7 +209,7 @@ where
             let (row_keys, other_keys): (Vec<_>, Vec<_>) = keys
                 .iter()
                 .cloned()
-                .partition(|key| key.entity_type == model_entity::EntityType::DatabaseRow);
+                .partition(|key| key.entity_type == entity_kind::EntityType::DatabaseRow);
             let row_ids = row_keys
                 .iter()
                 .map(|key| key.entity_id.to_string())
@@ -313,7 +313,7 @@ impl<R: EntityPropertyReader> Loader<Uuid> for EntityPropertiesLoader<R> {
     }
 }
 
-impl<R> Loader<model_entity::OwnedEntity> for EntityPropertiesLoader<R>
+impl<R> Loader<entity_kind::OwnedEntity> for EntityPropertiesLoader<R>
 where
     R: EntityPropertyReader,
 {
@@ -322,8 +322,8 @@ where
 
     async fn load(
         &self,
-        keys: &[model_entity::OwnedEntity],
-    ) -> Result<HashMap<model_entity::OwnedEntity, Self::Value>, Self::Error> {
+        keys: &[entity_kind::OwnedEntity],
+    ) -> Result<HashMap<entity_kind::OwnedEntity, Self::Value>, Self::Error> {
         let entities = keys
             .iter()
             .map(|key| key.as_entity().clone())
@@ -363,8 +363,8 @@ const PROPERTY_ACCESS_CONCURRENCY: usize = 16;
 
 /// Mint a receipt for each supported target, retaining only authorized entities.
 async fn load_view_receipts<'a, F>(
-    keys: &'a [model_entity::Entity<'static>],
-    authorize: impl Fn(&'a model_entity::Entity<'static>) -> F,
+    keys: &'a [entity_kind::Entity<'static>],
+    authorize: impl Fn(&'a entity_kind::Entity<'static>) -> F,
 ) -> Vec<EntityAccessReceipt<ViewAccessLevel>>
 where
     F: Future<

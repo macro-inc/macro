@@ -29,7 +29,7 @@ use properties::domain::database_definition_writer::{
 use sqlx::{PgPool, Postgres, Transaction};
 
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::models::{
     CardPosition, Column, ColumnId, ColumnReplacement, CreateDatabase, Database, DatabaseId,

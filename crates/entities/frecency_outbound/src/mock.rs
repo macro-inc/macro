@@ -1,8 +1,8 @@
 //! This module provides an [mockall::mock] concrete struct [MockFrecencyStorage] which can be used for testing
+use entity_kind::Entity;
 use frecency_core::{models::FrecencyPageRequest, ports::AggregateFrecencyStorage};
 use macro_user_id::user_id::MacroUserIdStr;
 use mockall::mock;
-use model_entity::Entity;
 use std::convert::Infallible;
 
 mock! {

@@ -10,9 +10,9 @@ mod test;
 
 use std::str::FromStr;
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};

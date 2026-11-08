@@ -45,9 +45,9 @@ type EdgeReaders<NR, PR, ER, FR, AR, AcR> = PhantomData<fn() -> (NR, PR, ER, FR,
 /// does not know which cross-domain fields are attached to its objects.
 pub struct SoupEdges<NR, PR, ER, FR, AR, AcR> {
     /// Entity whose cross-domain fields are being resolved.
-    entity: model_entity::Entity<'static>,
+    entity: entity_kind::Entity<'static>,
     /// Entity whose access determines the viewer permission for this object.
-    permission_entity: model_entity::Entity<'static>,
+    permission_entity: entity_kind::Entity<'static>,
     /// Associates the edge with its configured reader types.
     _readers: EdgeReaders<NR, PR, ER, FR, AR, AcR>,
 }
@@ -80,7 +80,7 @@ where
     type InitiativeEdges = SoupInitiativeEdges;
     type CrmRecordEdges = SoupCrmRecordEdges;
 
-    fn from_entity(entity: model_entity::Entity<'static>) -> Self {
+    fn from_entity(entity: entity_kind::Entity<'static>) -> Self {
         Self {
             permission_entity: entity.clone(),
             entity,
@@ -90,9 +90,9 @@ where
 
     fn from_channel_message(message_id: Uuid, channel_id: Uuid) -> Self {
         Self {
-            entity: model_entity::EntityType::ChannelMessage
+            entity: entity_kind::EntityType::ChannelMessage
                 .with_entity_string(message_id.to_string()),
-            permission_entity: model_entity::EntityType::Channel
+            permission_entity: entity_kind::EntityType::Channel
                 .with_entity_string(channel_id.to_string()),
             _readers: PhantomData,
         }
@@ -139,12 +139,12 @@ where
         SoupInitiativeEdges { initiative_id }
     }
 
-    fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+    fn crm_record_edges(record: entity_kind::Entity<'static>) -> Self::CrmRecordEdges {
         let id = record.entity_id.parse().ok();
         SoupCrmRecordEdges {
             record: match record.entity_type {
-                model_entity::EntityType::CrmCompany => id.map(CrmRecord::Company),
-                model_entity::EntityType::CrmContact => id.map(CrmRecord::Contact),
+                entity_kind::EntityType::CrmCompany => id.map(CrmRecord::Company),
+                entity_kind::EntityType::CrmContact => id.map(CrmRecord::Contact),
                 _ => None,
             },
         }

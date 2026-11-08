@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 use async_graphql::{
     Context, EmptySubscription, MaybeUndefined, Object, Request, Schema, SimpleObject, value,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     EntityMutationActor, EntityMutationEffect, UnavailableEntityMutationService,
 };
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
 use tracing::{
     field::{Field, Visit},
@@ -63,7 +63,7 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailThreadEdges { available: true }
     }
 
-    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+    fn crm_record_edges(_record: entity_kind::Entity<'static>) -> Self::CrmRecordEdges {
         TestEmailThreadEdges { available: true }
     }
 

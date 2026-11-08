@@ -276,7 +276,7 @@ impl TimelineRepository for PgExternalChatRepository {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let result = share_permission_db_utils::team_share::load_facts(
             &mut tx,
-            &model_entity::EntityType::ExternalChat.with_entity_string(chat.to_string()),
+            &entity_kind::EntityType::ExternalChat.with_entity_string(chat.to_string()),
         )
         .await
         .map_err(helper_failure)?;

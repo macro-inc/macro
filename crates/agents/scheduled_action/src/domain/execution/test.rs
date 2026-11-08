@@ -5,9 +5,9 @@ use crate::domain::event_runs::{
 use crate::domain::event_trigger::{EventName, EventReference};
 use crate::domain::models::{ActionKind, ExecutionResourceType, RunVisibility};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::json;
 use std::sync::{

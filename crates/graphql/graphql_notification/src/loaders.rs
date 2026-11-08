@@ -16,11 +16,11 @@ pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
     fn get_notifications<'a>(
         &'a self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<model_entity::Entity<'static>>,
+        keys: Vec<entity_kind::Entity<'static>>,
         query: EntityNotificationQuery,
     ) -> impl Future<
         Output = Result<
-            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
+            HashMap<entity_kind::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
             rootcause::Report,
         >,
     > + Send
@@ -34,11 +34,11 @@ where
     fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
-        keys: Vec<model_entity::Entity<'static>>,
+        keys: Vec<entity_kind::Entity<'static>>,
         query: EntityNotificationQuery,
     ) -> impl Future<
         Output = Result<
-            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
+            HashMap<entity_kind::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
             rootcause::Report,
         >,
     > + Send {
@@ -54,10 +54,10 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
     async fn get_notifications(
         &self,
         _user_id: MacroUserIdStr<'static>,
-        keys: Vec<model_entity::Entity<'static>>,
+        keys: Vec<entity_kind::Entity<'static>>,
         _query: EntityNotificationQuery,
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
+        HashMap<entity_kind::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
         rootcause::Report,
     > {
         Ok(keys.iter().map(|key| (key.clone(), Vec::new())).collect())
@@ -68,7 +68,7 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityNotificationsKey {
     /// Canonical entity being read.
-    pub entity: model_entity::OwnedEntity,
+    pub entity: entity_kind::OwnedEntity,
     /// States, event names, and per-entity limit.
     pub query: EntityNotificationQuery,
 }

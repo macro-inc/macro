@@ -4,8 +4,8 @@ use axum::Json;
 use axum::extract::State;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::EntityType;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use shared_types::response::{GenericErrorResponse, GenericResponse};
 

@@ -5,7 +5,7 @@ use attention_feed::domain::models::{
     DoneReceipt, FeedKey, FeedNotification, FeedPosition, FeedRevision, counts_as_unseen,
 };
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]

@@ -5,8 +5,8 @@ mod test;
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use entity_kind::{Entity, EntityType};
 use macro_event_broker::{
     EventBrokerError, EventPublisher, GlobalSpawner, MacroEvent, MacroEventBrokerService, Topic,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 
 use super::*;
 use soup_realtime_core::models::Patch;

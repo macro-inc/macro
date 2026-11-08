@@ -95,7 +95,7 @@ impl Events for Realtime {
                 serde_json::json!({"agentSessionId": preview.agent_session_id}),
                 viewers
                     .iter()
-                    .map(|user| model_entity::EntityType::User.with_entity_str(user.as_ref()))
+                    .map(|user| entity_kind::EntityType::User.with_entity_str(user.as_ref()))
                     .collect(),
             )
             .await

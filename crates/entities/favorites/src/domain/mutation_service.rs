@@ -5,8 +5,8 @@ mod test;
 
 use std::sync::Arc;
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 
 use crate::domain::{
     models::{Favorite, FavoriteFilter, FavoritesError, FavoritesMutationActor, SetFavoriteResult},

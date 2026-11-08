@@ -1,14 +1,14 @@
+use entity_kind::EntityType;
 use futures::StreamExt;
-use model_entity::EntityType;
 use tokio::sync::mpsc;
 
 use super::*;
 
-fn doc() -> model_entity::Entity<'static> {
+fn doc() -> entity_kind::Entity<'static> {
     EntityType::Document.with_entity_string("d".to_string())
 }
 
-fn chat() -> model_entity::Entity<'static> {
+fn chat() -> entity_kind::Entity<'static> {
     EntityType::Chat.with_entity_string("c".to_string())
 }
 

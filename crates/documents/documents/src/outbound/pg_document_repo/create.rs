@@ -469,7 +469,7 @@ pub async fn insert_new_document<B: BotFacts>(
 
     if share_with_team {
         let document_id_string = document_id.to_string();
-        let entity = model_entity::EntityType::Document.with_entity_str(&document_id_string);
+        let entity = entity_kind::EntityType::Document.with_entity_str(&document_id_string);
         team_share::initialize(transaction, &entity, TeamShareCreation::ExplicitTask)
             .await
             .map_err(|error| match error.current_context() {

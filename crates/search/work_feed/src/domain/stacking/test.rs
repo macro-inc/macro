@@ -1,6 +1,6 @@
 use super::*;
 use attention_feed::test_support::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use notification::domain::models::NotificationState;
 
 const CHANNEL: u128 = 0xC0;

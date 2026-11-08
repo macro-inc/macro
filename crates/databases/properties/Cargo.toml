@@ -12,7 +12,7 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:futures",
   "dep:macro_uuid",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:model_notifications",
   "dep:models_permissions",
   "dep:notification",
@@ -39,7 +39,7 @@ macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 model_owner = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 models_permissions = { workspace = true, optional = true }
 models_properties = { workspace = true }

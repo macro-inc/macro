@@ -4,7 +4,7 @@
 //! folder or any folder above it, marked with `granted_from_project_id`.
 //! Callers hold [`crate::team_share::acquire_guard`] in the same transaction.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_entity_access_management::EntityAccessSourceType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Postgres, QueryBuilder, Transaction};

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use collab_surface::domain::models::{CollabSurfaceError, SurfaceUpdate};
 use collab_surface::domain::ports::{FormIds, OwnedSurfaceService};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use uuid::Uuid;
 
 use crate::domain::drafts::{FormDraftError, FormDraftStore};

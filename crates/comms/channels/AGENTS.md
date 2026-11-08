@@ -29,7 +29,7 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Boundaries
 
-- Depends on: `entity_access` (ports), `messages`, `model_entity`. Features
+- Depends on: `entity_access` (ports), `messages`, `entity_kind`. Features
   `schema`, `sqlx` and `agent_tools` add the utoipa, sqlx and JsonSchema derives
   the adapter crates need.
 - Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime_inbound`,

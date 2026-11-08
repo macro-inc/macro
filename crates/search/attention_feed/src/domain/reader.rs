@@ -9,7 +9,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use rootcause::Report;
 
 use super::{

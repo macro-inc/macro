@@ -1,7 +1,7 @@
 //! Domain models for collab surfaces.
 
 use chrono::{DateTime, Utc};
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

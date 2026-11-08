@@ -6,8 +6,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use entity_kind::EntityType;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model_entity::EntityType;
 use notification::domain::item_preferences::ItemNotificationPreferenceError;
 use serde::Deserialize;
 use shared_types::response::{EmptyResponse, ErrorResponse};

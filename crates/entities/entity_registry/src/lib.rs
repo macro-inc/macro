@@ -9,11 +9,11 @@
 //!
 //! [`RegisteredEntityType`] is the table CHECK as a type. Use
 //! [`NewEntityRecord::try_new`] when the caller holds a wide
-//! [`model_entity::EntityType`].
+//! [`entity_kind::EntityType`].
 //!
 //! ```
 //! use entity_registry::{NewEntityRecord, Owner, RegisteredEntityType};
-//! use model_entity::EntityType;
+//! use entity_kind::EntityType;
 //! use model_owner::OwnerType;
 //! use uuid::Uuid;
 //!

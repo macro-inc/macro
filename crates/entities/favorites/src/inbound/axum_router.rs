@@ -16,10 +16,10 @@ use axum_extra::extract::Query;
 use entity_access::{
     domain::ports::EntityAccessService, inbound::axum_extractors::EntityBodyAccessLevelExtractor,
 };
+use entity_kind::EntityType;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
-use model_entity::EntityType;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 

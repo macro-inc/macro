@@ -2,7 +2,7 @@
 use super::*;
 use crate::domain::ports::{Adopted, AdoptionRecord, AdoptionRepository};
 use async_trait::async_trait;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_owner::Owner;
 #[async_trait]
 impl AdoptionRepository for PgWhatsAppRepository {

@@ -1,7 +1,7 @@
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 use super::*;
 use crate::domain::event_runs::EventExecutionResult;

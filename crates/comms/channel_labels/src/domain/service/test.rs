@@ -485,7 +485,7 @@ fn cannot_use_another_users_team_receipt() {
         entity_access::domain::models::EntityAccessReceipt::dangerously_assert_authenticated_user(
             other,
             &Uuid::now_v7().to_string(),
-            model_entity::EntityType::Team,
+            entity_kind::EntityType::Team,
         );
     assert!(matches!(
         ChannelLabelsReceipt::from_access(actor, Some(access), None),
@@ -605,7 +605,7 @@ fn explicit_scope_requires_verified_team_membership() {
         entity_access::domain::models::EntityAccessReceipt::dangerously_assert_authenticated_user(
             actor.clone(),
             &Uuid::now_v7().to_string(),
-            model_entity::EntityType::Team,
+            entity_kind::EntityType::Team,
         );
     let personal = ChannelLabelsReceipt::from_access(
         actor.clone(),

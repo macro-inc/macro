@@ -8,7 +8,7 @@ impl FavoriteReader for ViewerFavorites {
         &'a self,
         user: &'a MacroUserIdStr<'_>,
     ) -> std::pin::Pin<
-        Box<dyn Future<Output = Result<Vec<model_entity::Entity<'static>>, SoupErr>> + Send + 'a>,
+        Box<dyn Future<Output = Result<Vec<entity_kind::Entity<'static>>, SoupErr>> + Send + 'a>,
     > {
         assert_eq!(user.as_ref(), "macro|test@example.com");
         Box::pin(async {

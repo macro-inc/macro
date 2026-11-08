@@ -32,9 +32,9 @@ use crate::domain::service::{
     NotificationReaderService, PlatformArnConfig,
 };
 use chrono::Utc;
+use entity_kind::{Entity, EntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use rate_limit::domain::models::RateLimitOk;
 use rootcause::{Report, report};
 use serde::de::DeserializeOwned;
@@ -64,14 +64,14 @@ impl Notification for TestNotification {
 impl NotificationExtIos for TestNotification {
     type NotifData = TestNotification;
 
-    fn collapse_key(&self, _entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+    fn collapse_key(&self, _entity: &entity_kind::Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new("test")
     }
 
     fn as_apns<'a>(
         &self,
         _sender: Option<MacroUserIdStr<'a>>,
-        _entity: &model_entity::Entity<'_>,
+        _entity: &entity_kind::Entity<'_>,
         _notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         Some(APNSPushNotification {
@@ -386,7 +386,7 @@ impl NotificationRepository for MockRepository {
     async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entities: &[model_entity::Entity<'_>],
+        entities: &[entity_kind::Entity<'_>],
         status: &NotificationStatus,
     ) -> Result<Vec<Uuid>, Report> {
         let (states, include_unviewed) = status.entity_update_filter();
@@ -656,7 +656,7 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     async fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
-        entities: &[model_entity::Entity<'_>],
+        entities: &[entity_kind::Entity<'_>],
         status: &NotificationStatus,
     ) -> Result<Vec<Uuid>, Report> {
         (**self)
@@ -2957,7 +2957,7 @@ async fn test_sqs_notification_ingress_publishes_to_queue() {
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
-        notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        notification_entity: entity_kind::EntityType::Document.with_entity_str("entity_1"),
         secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello via queue".to_string(),
@@ -2987,7 +2987,7 @@ async fn test_process_from_queue_with_value_types() {
 
     // Build a typed request, then type-erase it through IngressQueueMessage
     let typed_request = SendNotificationRequestBuilder {
-        notification_entity: model_entity::EntityType::Document.with_entity_str("entity_1"),
+        notification_entity: entity_kind::EntityType::Document.with_entity_str("entity_1"),
         secondary_notification_entity: None,
         notification: TestNotification {
             message: "Hello from queue".to_string(),

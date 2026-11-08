@@ -23,7 +23,7 @@ and read the top entities. The Postgres storage is
 
 ## Boundaries
 
-- Depends on: `item_filters`, `model_entity`, `macro_user_id`. Ports and
+- Depends on: `item_filters`, `entity_kind`, `macro_user_id`. Ports and
   services are behind the `ports` feature; `mock` adds mockall mocks.
 - Used by: `channels`, `email`, `soup` (models and ports only), the adapter
   crates, and through the `frecency` facade the composition roots and

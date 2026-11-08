@@ -81,7 +81,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 models_databases = { workspace = true }
 models_properties = { workspace = true }

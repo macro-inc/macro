@@ -137,7 +137,7 @@ async fn test_late_join_multiple_streams_same_entity() {
     // Create a second stream for the same entity
     let stream_id_2 = StreamId {
         entity_id: entity_id.into(),
-        entity_type: model_entity::EntityType::Chat,
+        entity_type: entity_kind::EntityType::Chat,
         stream_id: format!("{}_stream_2", entity_id),
     };
     guard.add_stream_id(stream_id_2.clone());
@@ -521,7 +521,7 @@ async fn test_stream_exhausted_load() {
         let id = format!("exaust_load_{}", i);
         let stream_id = StreamId {
             entity_id: id.clone(),
-            entity_type: model_entity::EntityType::Chat,
+            entity_type: entity_kind::EntityType::Chat,
             stream_id: id.clone(),
         };
         guard.add_stream_id(stream_id.clone());

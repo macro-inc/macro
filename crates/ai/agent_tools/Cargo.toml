@@ -86,7 +86,7 @@ mcp_select = { workspace = true }
 pipedream_mcp = { workspace = true }
 url = { workspace = true }
 shared_types = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 models_databases = { workspace = true }
 models_pagination = { workspace = true }

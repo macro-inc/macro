@@ -248,7 +248,7 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!("Set entity property");
 
-        let entity_type = model_entity::EntityType::from(self.entity_type);
+        let entity_type = entity_kind::EntityType::from(self.entity_type);
         let set_value = self.to_set_property_value().map_err(|e| ToolCallError {
             description: e.to_string(),
             internal_error: e.into(),

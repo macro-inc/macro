@@ -1,6 +1,6 @@
 use super::ConnectionGatewayClient;
 use connection_gateway_models::MessageReceipt;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 const REFRESH_EMAIL: &str = "refresh_email";
 

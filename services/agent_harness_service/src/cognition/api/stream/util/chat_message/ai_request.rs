@@ -5,7 +5,7 @@ use crate::cognition::model::chats::ChatResponse;
 use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use anyhow::Result;
 use attachment::{AttachmentContent, AttachmentPart, Attachments, FormattedParts, TextOrImage};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use non_empty::NonEmpty;
 
 #[tracing::instrument(skip(chat, incoming_message, resolved_parts), err)]

@@ -25,7 +25,7 @@ types.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`, `mention_utils`, `model_entity`, `model_owner`,
+- Depends on: `macro_user_id`, `mention_utils`, `entity_kind`, `model_owner`,
   `models_pagination`, `notification`, `invite_email`.
 - Used by: `agent_harness`, `agent_tools`, `attention_feed`, `authentication_service`,
   `calendar_events`, `channels`, `complete_graph`, `document_cognition_service`,

@@ -290,7 +290,7 @@ async fn a_ping_for_an_entity_with_no_entry_recreates_it() {
 
     manager
         .refresh_connection_entity(
-            model_entity::EntityType::Document
+            entity_kind::EntityType::Document
                 .with_entity_str("document-id")
                 .with_connection_str("connection-id")
                 .with_user_str("macro|viewer@example.com"),

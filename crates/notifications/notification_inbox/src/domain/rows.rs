@@ -31,8 +31,8 @@ use attention_feed::domain::models::{
     FeedKey, FeedNotification, MailFacts, counts_as_unseen, sort_newest_first,
 };
 use chrono::{DateTime, Days, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{
     AgentSessionNotificationRef, CalendarEventReminderMetadata, CrmDiscussionReason,
     GithubPrCheckRunState, InitiativeDiscussionReason, NotifEvent,

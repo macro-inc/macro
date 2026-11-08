@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use entity_access::domain::models::{
     AnyEntityPermission, EntityAccessReceipt, EntityPermission, ParticipantRole,
 };
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::*;

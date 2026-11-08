@@ -34,7 +34,7 @@
 
 use activity::Action;
 use cow_str::CowLike;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 

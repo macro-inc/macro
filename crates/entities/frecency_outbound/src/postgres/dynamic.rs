@@ -1,5 +1,6 @@
 //! This module provides dynamic query building for frecency queries with filters
 
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use frecency_core::models::{AggregateFrecency, AggregateId, FrecencyData, TimestampWeight};
 use item_filters::ast::{
@@ -12,7 +13,6 @@ use item_filters::ast::{
     properties::{PropertiesLiteral, PropertyMatchValue},
 };
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, postgres::PgRow, prelude::FromRow};
 use std::collections::VecDeque;

@@ -5,6 +5,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
+use entity_kind::EntityType;
 use futures::{
     TryFutureExt,
     future::{join_all, try_join_all},
@@ -15,7 +16,6 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use model_entity::EntityType;
 use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use sha2::{Digest, Sha256};
 use shared_types::{

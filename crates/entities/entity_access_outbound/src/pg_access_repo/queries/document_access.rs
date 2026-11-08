@@ -9,9 +9,9 @@ use crate::pg_access_repo::queries::list_entity_access_grants;
 #[cfg(feature = "explain_binary")]
 use entity_access::domain::models::AccessGrant;
 use entity_access::domain::models::AccessLevel;
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
-use model_entity::EntityType;
+use entity_kind::EntityType;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use std::str::FromStr;
 

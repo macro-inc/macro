@@ -6,8 +6,8 @@ mod test;
 use std::future::Future;
 
 use entity_access::domain::{models::AccessError, ports::EntityAccessService};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use soup_realtime_core::ports::UserAccessExpander;

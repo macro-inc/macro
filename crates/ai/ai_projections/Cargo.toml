@@ -17,7 +17,7 @@ outbound = [
   "dep:sqlx",
   "dep:sqs_client",
   "dep:connection_gateway_client",
-  "dep:model_entity",
+  "dep:entity_kind",
   "ports",
 ]
 ports = ["dep:tokio"]
@@ -58,7 +58,7 @@ sqs_client = { workspace = true, features = [
   "ai_projection",
 ], optional = true }
 connection_gateway_client = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 
 # Worker (inbound SQS poller) dependencies
 sqs_worker = { workspace = true, optional = true }

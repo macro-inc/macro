@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, schema::generate_validated_input_schema,
 };
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use uuid::Uuid;
 
 use super::{FavoritableEntityType, FavoritesToolContext, SetFavorite};

@@ -1,8 +1,8 @@
 use super::*;
 use crate::ChannelMentionMetadata;
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use notification::domain::models::{Notification, NotificationState, UserNotificationRow};
 use std::sync::Arc;
 
