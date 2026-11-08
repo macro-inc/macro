@@ -594,6 +594,8 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Same editor release, equivalent dense range updates; see vendor/loro-editor/README.md.
+loro-internal = { path = "vendor/loro-editor/loro-internal" }
 # Legacy ECMAScript case folding; see vendor/regress/README-MACRO.md.
 regress = { path = "vendor/regress" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
@@ -670,6 +672,18 @@ opt-level = 2
 # trace bytes. Keep the measured byte-hashing hot path optimized in tests while
 # preserving debug/overflow checks and every production profile.
 [profile.test.package.xxhash-rust]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+# Both encoder releases execute measured native rich-text tracking in tests.
+# Keep debug assertions and overflow checks enabled.
+[profile.test.package."loro-internal@1.16.2"]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+[profile.test.package."loro-internal@1.17.1"]
 opt-level = 2
 debug-assertions = true
 overflow-checks = true
