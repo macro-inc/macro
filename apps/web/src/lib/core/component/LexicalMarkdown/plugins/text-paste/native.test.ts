@@ -111,3 +111,45 @@ test('disposed paste transport never submits a late lookup result', async () => 
     fixture.close();
   }
 });
+
+test('cached PR paste normalizes the hostname and inserts immediately without lookup', async () => {
+  const fixture = nativeSurface();
+  fixture.port.setState(
+    JSON.stringify({
+      root: {
+        type: 'root',
+        version: 1,
+        children: [{ type: 'paragraph', version: 1, children: [] }],
+      },
+    })
+  );
+  const paragraph = fixture.root.firstElementChild;
+  if (!paragraph) throw new Error('Missing paragraph');
+  fixture.root.focus();
+  document.getSelection()?.setBaseAndExtent(paragraph, 0, paragraph, 0);
+  registerMacroDecoratorViews(fixture.view.registry, {
+    'pr-mention': () => null,
+  });
+  cached.mockReturnValue({ id: 'fixture-pr' });
+  lookup.mockClear();
+  const release = registerNativeTextPaste(fixture.view);
+  try {
+    const before = fixture.counters.admissions;
+    await fixture.view.clipboard.paste(
+      transfer('https://GITHUB.COM/example/repository/pull/12/files')
+    );
+    expect(cached).toHaveBeenLastCalledWith('example/repository/pull/12');
+    expect(lookup).not.toHaveBeenCalled();
+    expect(fixture.counters.admissions - before).toBe(1);
+    const mention = [...fixture.view.mirror.values()].find(
+      (node) => node.type === 'pr-mention'
+    );
+    expect(mention?.props()).toMatchObject({
+      id: 'fixture-pr',
+      url: 'https://github.com/example/repository/pull/12',
+    });
+  } finally {
+    release();
+    fixture.close();
+  }
+});

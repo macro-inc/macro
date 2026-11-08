@@ -96,7 +96,7 @@ pub(in crate::plugins_group_b) fn parse_app(
     ID.find(id)?;
     let params = url
         .query_pairs()
-        .filter(|(key, _)| key != "referral_code")
+        .filter(|(key, _)| key != "referral_code" && key != "__proto__")
         .map(|(key, value)| (key.into_owned(), value.into_owned()))
         .collect();
     Some(AppLink {

@@ -1,7 +1,4 @@
-import {
-  parseGithubPrUrl,
-  toGithubKey,
-} from '@app/features/block-pr/util/prKey';
+import { toGithubKey } from '@app/features/block-pr/util/prKey';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
@@ -11,6 +8,7 @@ import {
   getCachedPullRequestByGithubKey,
 } from '@queries/storage/pr-mention';
 import { dispatchApplicationCommand } from '../group-b/command';
+import { parsePastedGithubPrUrl } from './pastedPrUrl';
 import type { MentionLinkResolver } from './textPastePlugin';
 
 /** Host/cache facts and lookup transport only; native paste policy chooses the action. */
@@ -21,7 +19,7 @@ export function registerNativeTextPaste(
   let active = true;
   const releaseFacts = view.clipboard.registerFacts((clipboard) => {
     const text = clipboard.getData('text/plain');
-    const ref = parseGithubPrUrl(text);
+    const ref = parsePastedGithubPrUrl(text);
     const githubKey = ref ? toGithubKey(ref) : undefined;
     const cached = githubKey
       ? getCachedPullRequestByGithubKey(githubKey)
