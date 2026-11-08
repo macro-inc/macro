@@ -11,6 +11,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Read `last_output` to encode committed effects without processing another input.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
+- Use `EditorSurface::view_diff` for a cold repaint without resetting sync/history.
 - Surface imports queue view effects in the same output as their sync input.
 - Use the supplied editor factory for live editors and headless comment forks.
   Application registry/policy wiring belongs to macro_document_model (WP-28/29).

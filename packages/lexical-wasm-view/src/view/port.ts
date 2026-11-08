@@ -1,6 +1,9 @@
 import type {
   EditorInputMsg,
   IViewEffectMsg,
+  IClipboardMsg,
+  IQueryMsg,
+  IQueryReplyMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
 
@@ -20,6 +23,7 @@ export interface ViewSink {
     effects: IViewEffectMsg[]
   ): void;
   acknowledgeText(input: TextFromView): void;
+  acknowledgeSelection(selection: ViewSelection): void;
   text(key: NodeKey): string | null;
 }
 /** Model boundary shared by production sessions and the development shim. */
@@ -27,11 +31,21 @@ export interface EditorPort {
   types(): readonly TypeRow[];
   listeners(): ReadonlyMap<string, number>;
   textFromView(input: TextFromView): void;
+  debugInsertion(
+    selection: ViewSelection,
+    format: number,
+    style: string,
+    text: string,
+    facts: number
+  ): boolean | undefined;
   selectionFromView(selection: ViewSelection): void;
-  command(code: number, a?: number, b?: number, text?: string): void;
-  keyDown(code: number, mods: number, routed: number, key: string): void;
+  command(code: number, a?: number, b?: number, text?: string): boolean | undefined;
+  keyDown(code: number, mods: number, routed: number, key: string, selection: ViewSelection): boolean | undefined;
   input(input: EditorInputMsg): void;
   setState(json: string): void;
+  initialize(): void;
+  clipboard(kind: number): IClipboardMsg;
+  query(query: IQueryMsg): IQueryReplyMsg;
   composition(
     kind: number,
     key: NodeKey,
