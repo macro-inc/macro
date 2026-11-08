@@ -93,13 +93,28 @@ impl Editor {
         &mut self,
         json: &SerializedEditorState,
     ) -> Result<EditorState, Error> {
+        let report = self.parse_editor_state_report(json)?;
+        if let Some(error) = report.error {
+            return Err(error);
+        }
+        Ok(report.state)
+    }
+    /// Parse without publishing, retaining the partial state alongside its import diagnostic.
+    /// Hosts with a logging error handler may inspect this report; the ordinary parser remains strict.
+    pub fn parse_editor_state_report(
+        &mut self,
+        json: &SerializedEditorState,
+    ) -> Result<ParsedEditorState, Error> {
         if json.root.get("type").and_then(Value::as_str) != Some("root") {
             return Err(Error::ExpectedSerializedRoot);
         }
         let mut tx = self.transaction();
         tx.pending = EditorState::empty(tx.pending.registry.clone())?;
-        tx.import_node(&json.root)?;
-        Ok(tx.pending.clone())
+        let error = tx.import_node(&json.root).err();
+        Ok(ParsedEditorState {
+            state: tx.pending.clone(),
+            error,
+        })
     }
     /// Parse a JSON document string without modifying the committed state.
     pub fn parse_editor_state_str(&mut self, json: &str) -> Result<EditorState, Error> {
@@ -208,3 +223,11 @@ fn write_json(value: &Value, output: &mut String) {
 }
 #[cfg(test)]
 mod test;
+
+/// Non-publishing parse result for a host that handles import diagnostics explicitly.
+pub struct ParsedEditorState {
+    /// Complete state on success, or the state reached before the first import error.
+    pub state: EditorState,
+    /// First import failure, if the parse stopped early.
+    pub error: Option<Error>,
+}

@@ -22,6 +22,11 @@ classification. EditorCore consumes explicit inputs and returns commits, structu
 and host effects, including DOM-first text suppression. Diffs encode the versioned
 11-opcode word/UTF-8 ABI without wire derives on model inputs.
 
+`lexical_loro` incrementally projects editor commits into Loro 1.17.1 and native
+events back into raw editor changes, with schema-compatible container inference,
+durable-id matching, UTF-16 awareness cursors and consistency checks. Application
+sync policy and session orchestration remain outside the projection.
+
 `lexical_conformance` interprets the recorder's schema-2 fixtures against this
 model. It checks call results, versioned identities, strict core key allocation,
 commits and final snapshots. Its exact expected-failure ledger keeps later work

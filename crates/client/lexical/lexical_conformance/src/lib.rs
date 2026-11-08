@@ -7,3 +7,5 @@ pub mod replay;
 mod snapshot;
 pub mod source;
 pub mod test_nodes;
+
+mod config;

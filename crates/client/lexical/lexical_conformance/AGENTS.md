@@ -7,9 +7,11 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Start here
 
 - `src/fixture.rs`: recorder wire schema.
+- `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/snapshot.rs`: full observable-state comparison.
+- `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.
 - `tests/flat_diff.rs` and `tests/flat_diff/decoder.ts`: native Rust producer versus the independent Bun/TypeScript consumer of the flat ABI.
 
@@ -22,10 +24,22 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; Macro fixtures use the source-ordered Macro transformer lists and list indent 2.
 - Table node fixtures and the core table-caret case use concrete table payloads; keep their grid and selection observations strict.
+- Apply legacy codeHighlight projection to JSON and code positions only. For fixtures registering Prism, use the named d6_collapse_code_highlight projection described in README.md; replay real code-indentation handlers and never create syntax-highlight nodes.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
+- Route multiple editors by recorded identity, keeping commit indices and selection slots per editor.
+- Preserve shared allocation generations, internal dirty keys and captured node record identities.
+- Marshal own undefined properties separately from JSON snapshots; keep every comparison strict.
 - Register Macro classes through the shared source catalog; honor recorded mode, named replacements, namespace entropy and update callbacks.
 - Dispatch adapters contain no node or transformer policy.
-- Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
+- Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
+- Decode inline markdown transformer objects with their real regexes and checked callback tapes; nullable import matchers disable import matching.
+- Route TabIndentation and Prism registration through rich-node tab/code handlers, preserving critical indent priority over code and rich text; leave tokenization to the view.
+- Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
+
+- Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.
+- Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail. Live Prism tokenization uses the S4 `d6-highlight` reason; all 452 Macro cases pass without ledger entries. Keep interpreter coverage gaps distinct from native incompatibilities.
+- Preserve caret range/point/slice object identities, slice distances, lazy iterator consumption and post-commit snapshot identities. Never synthesize a private cache from computed content.
+- Keep nondiscrete updates batched across intervening clock/log observations; only recorded boundaries publish transitions.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 
 ## Checks
@@ -36,6 +50,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance --all-targets -j4 -- -D warnings`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
+
+- `just lexical-replay`: complete native run plus fingerprinted per-case evidence; failures retain a nonzero exit status.
 
 ## Gotchas
 

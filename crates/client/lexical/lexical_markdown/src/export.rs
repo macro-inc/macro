@@ -1,6 +1,19 @@
 //! Read-only markdown traversal with upstream format-stack sharing.
 use crate::{state::*, util::*, *};
 use lexical_model::*;
+/// Optional raw decorator text when the host language can return undefined.
+/// A missing value joins as an empty entry in the Markdown child array.
+pub trait MarkdownText {
+    /// Raw getTextContent result before JavaScript array joining.
+    fn markdown_text(&self) -> Option<&str>;
+}
+fn decorator_text(state: StateRef<'_>, key: NodeKey) -> std::borrow::Cow<'_, str> {
+    if let Some(node) = state.get_dyn::<dyn MarkdownText>(key) {
+        node.markdown_text().unwrap_or_default().into()
+    } else {
+        state.text_content(key)
+    }
+}
 #[derive(Clone)]
 struct OpenTag {
     format: TextFormat,
@@ -98,7 +111,7 @@ impl<'a> ExportCx<'a> {
             let (markdown, sub) = self.children_fresh(node)?;
             Ok((Some(markdown), include || sub))
         } else if self.state.is_decorator(node) {
-            Ok((Some(self.state.text_content(node).into_owned()), include))
+            Ok((Some(decorator_text(self.state, node).into_owned()), include))
         } else {
             Ok((None, include))
         }
@@ -167,7 +180,7 @@ impl<'a> ExportCx<'a> {
                     any = true;
                 }
             } else if self.state.is_decorator(child) && include {
-                output.push_str(&self.state.text_content(child));
+                output.push_str(&decorator_text(self.state, child));
                 any = true;
             }
         }
@@ -276,6 +289,16 @@ pub fn convert_to_markdown_string(
         None,
     )
 }
+/// Export an explicit ordered block list without cloning or changing the document.
+/// This is equivalent to those blocks being the only children of an export root.
+pub fn convert_nodes_to_markdown_string(
+    state: &impl Read,
+    transformers: &Transformers,
+    nodes: &[NodeKey],
+    opts: &MarkdownOptions,
+) -> Result<String> {
+    export_nodes(state.view(), transformers, nodes, opts, None)
+}
 /// Export an explicit selection; absent/collapsed selections produce no markdown.
 pub fn convert_selection_to_markdown_string(
     state: &impl Read,
@@ -296,6 +319,16 @@ fn export(
     opts: &MarkdownOptions,
     selection: Option<&Selection>,
 ) -> Result<String> {
+    let children = state.children_keys(root)?;
+    export_nodes(state, transformers, &children, opts, selection)
+}
+fn export_nodes(
+    state: StateRef<'_>,
+    transformers: &Transformers,
+    children: &[NodeKey],
+    opts: &MarkdownOptions,
+    selection: Option<&Selection>,
+) -> Result<String> {
     opts.validate()?;
     let mut cx = ExportCx {
         state,
@@ -306,7 +339,6 @@ fn export(
         unclosable: Vec::new(),
         in_text_match: false,
     };
-    let children = state.children_keys(root)?;
     let mut output = Vec::new();
     for (i, &child) in children.iter().enumerate() {
         let (result, include) = cx.top(child)?;

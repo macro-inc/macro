@@ -1,5 +1,6 @@
 //! Markdown metadata stored on model-owned nodes.
-use crate::{Result, util::*};
+use crate::Result;
+use crate::util::is_js_whitespace_unit;
 use lexical_model::*;
 use serde_json::Value;
 /// Original unordered list marker; reset when copying a list.

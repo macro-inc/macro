@@ -188,3 +188,25 @@ fn imported_null_and_absent_values_share_parent_setter_state() -> Result<()> {
     }
     Ok(())
 }
+#[test]
+fn splitting_raw_text_in_list_dispatches_parent_splice() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let item = create_list_item_node(&mut tx, None)?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    let text = tx.create_text(" ab")?;
+    tx.insert_before(item, text, true)?;
+    let parts = tx.text(text)?.split_text(&[Utf16Offset(1)])?;
+    assert_eq!(parts.len(), 2);
+    let children = tx.children_keys(list)?;
+    assert_eq!(children.len(), 2);
+    assert!(tx.is::<ListItemNode>(children[0]));
+    assert!(tx.is::<ListItemNode>(children[1]));
+    assert_eq!(tx.text_content(children[0]), " ");
+    assert_eq!(tx.text_content(children[1]), "ab");
+    Ok(())
+}

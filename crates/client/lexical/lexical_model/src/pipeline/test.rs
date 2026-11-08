@@ -82,7 +82,7 @@ fn non_converging_transform_rolls_back_after_one_hundred_passes() -> Result<(), 
     Ok(())
 }
 #[test]
-fn normalization_merges_asymmetrically_and_collects_detached_subtrees() -> Result<(), Error> {
+fn normalization_preserves_neighbor_state_and_collects_detached_subtrees() -> Result<(), Error> {
     static LABEL: StateKey<String> = StateKey::new("label", |value| {
         value
             .and_then(serde_json::Value::as_str)
@@ -106,19 +106,18 @@ fn normalization_merges_asymmetrically_and_collects_detached_subtrees() -> Resul
     })?;
     assert_eq!(
         commit.next.view().children(p).collect::<Vec<_>>(),
-        vec![first.key()]
+        vec![first.key(), second.key()]
     );
-    assert_eq!(commit.next.view().text_content(first), "leftright");
+    assert_eq!(commit.next.view().text_content(first), "left");
+    assert_eq!(commit.next.view().text_content(second), "right");
+    assert_eq!(commit.next.view().get_state(second, &LABEL)?, "right state");
     assert_eq!(commit.next.view().get_state(first, &LABEL)?, "");
-    assert!(commit.next.view().node(second).is_none());
+    assert!(commit.next.view().node(second).is_some());
     assert!(commit.next.view().node(orphan).is_none());
     assert!(commit.next.view().node(orphan_child).is_none());
     assert!(commit.changes.dirty_leaves.contains(&orphan_child.key()));
     assert!(!commit.changes.dirty_elements.contains_key(&orphan.key()));
-    assert_eq!(
-        commit.normalized.iter().copied().collect::<Vec<_>>(),
-        vec![first.key(), second.key()]
-    );
+    assert!(commit.normalized.is_empty());
     Ok(())
 }
 #[test]
@@ -174,6 +173,7 @@ fn flush_queue_options_and_commit_tag_carry() -> Result<(), Error> {
         },
         |tx| {
             tx.set_selection(Some(Selection::Range(RangeSelection {
+                cached_direction: None,
                 dirty: false,
                 anchor: Point::element(NodeKey::ROOT, ChildIndex(0)),
                 focus: Point::element(NodeKey::ROOT, ChildIndex(0)),
@@ -204,6 +204,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     tx.append(p, &[first.key(), second.key()])?;
     tx.append(NodeKey::ROOT, &[p.key()])?;
     let mut range = RangeSelection {
+        cached_direction: None,
         dirty: false,
         anchor: Point::element(p, ChildIndex(0)),
         focus: Point::element(p, ChildIndex(2)),
@@ -214,6 +215,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     assert_eq!(range.anchor, Point::text(first, Utf16Offset(0)));
     assert_eq!(range.focus, Point::text(second, Utf16Offset(1)));
     let slot = tx.detach_selection(Selection::Range(RangeSelection {
+        cached_direction: None,
         dirty: false,
         anchor: Point::element(p, ChildIndex(2)),
         focus: Point::element(p, ChildIndex(0)),
@@ -402,6 +404,7 @@ fn missing_text_endpoint_fails_before_gc_and_empty_node_selection_clears() -> Re
     });
     let result = editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(missing, Utf16Offset(0)),
             focus: Point::text(missing, Utf16Offset(0)),

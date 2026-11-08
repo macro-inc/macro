@@ -6,6 +6,7 @@ exclude = ["vendor"]
 members = [
   "crates/client/mention_date",
   "crates/client/lexical/macro_document_model",
+  "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
   "crates/client/lexical/lexical_conformance",

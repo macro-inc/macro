@@ -18,6 +18,9 @@ jobs:
       pull-requests: write
       statuses: write
     outputs:
+      lexical: ${{ steps.filter.outputs.lexical }}
+      document_session: ${{ steps.filter.outputs.document_session }}
+      loro_pair: ${{ steps.filter.outputs.loro_pair }}
       cargo_deny: ${{ steps.filter.outputs.cargo_deny }}
       workspace_dependencies: ${{ steps.filter.outputs.workspace_dependencies }}
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
@@ -474,6 +477,60 @@ jobs:
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
         filters: |
+          lexical:
+            - 'crates/client/lexical/**'
+            - 'packages/lexical-wasm-shim/**'
+            - 'packages/lexical-conformance/**'
+            - 'packages/lexical-core/**'
+            - 'packages/loro-mirror/**'
+            - 'static_assets/markdown-golden.1.bin'
+            - 'crates/slack_integration/tests/fixtures/native-message-links.json'
+            - 'apps/web/src/lib/core/component/LexicalMarkdown/**'
+            - 'apps/web/patches/@lexical*'
+            - 'services/lexical-service/**'
+            - 'docs/design/lexical-port/**'
+            - 'tooling/xtask/crates/xtask_workflows/**'
+            - '.github/workflows/lexical_*.yml'
+            - 'vendor/**'
+            - '.cargo/**'
+            - 'rust-toolchain.toml'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'justfile'
+            - 'flake.nix'
+            - 'flake.lock'
+          document_session:
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/document_session*/**'
+            - 'crates/sync_protocol/**'
+            - 'packages/collaboration/**'
+            - 'tooling/sync-sim/**'
+            - 'apps/web/justfile'
+            - 'apps/web/vite.base.ts'
+            - 'nix/tauri-desktop.nix'
+            - 'packages/lexical-conformance/coverage/**'
+            - 'tooling/xtask/crates/xtask_workflows/**'
+            - '.github/workflows/document_session.yml'
+            - '.github/workflows/lexical_nightly.yml'
+            - 'vendor/**'
+            - '.cargo/**'
+            - 'rust-toolchain.toml'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'justfile'
+            - 'flake.nix'
+            - 'flake.lock'
+          loro_pair:
+            - 'crates/client/lexical/**'
+            - 'packages/loro-mirror/**'
+            - 'packages/lexical-core/markdown-loro-schema.ts'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'package.json'
+            - 'bun.lock'
+            - 'services/sync-service/package-lock.json'
+            - '.github/workflows/loro-pair.yml'
+            - 'tooling/xtask/crates/xtask_workflows/src/workflows/loro_pair.rs'
           cargo_deny:
             - 'Cargo.toml'
             - 'crates/**/Cargo.toml'
@@ -534,6 +591,27 @@ jobs:
           macrod_update:
             - 'crates/coding_agent_worker/**'
             - '.github/workflows/test_macrod_update.yml'
+  lexical:
+    needs:
+    - start
+    if: needs.start.outputs.lexical == 'true'
+    name: Lexical
+    uses: ./.github/workflows/lexical_conformance.yml
+    secrets: inherit
+  document-session:
+    needs:
+    - start
+    if: needs.start.outputs.document_session == 'true'
+    name: Document session
+    uses: ./.github/workflows/document_session.yml
+    secrets: inherit
+  loro-pair:
+    needs:
+    - start
+    if: needs.start.outputs.loro_pair == 'true'
+    name: Loro compatibility
+    uses: ./.github/workflows/loro-pair.yml
+    secrets: inherit
   cloud-storage:
     needs:
     - start
@@ -617,6 +695,9 @@ jobs:
   gate:
     needs:
     - start
+    - lexical
+    - document-session
+    - loro-pair
     - cloud-storage
     - web-app
     - infra

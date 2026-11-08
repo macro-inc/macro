@@ -104,6 +104,7 @@ impl Transaction<'_> {
                 range.dirty = resolution_dirty;
                 // DOM reads create a clean selection unless resolution changed it.
                 self.guard_write()?;
+                range.invalidate_changed_direction();
                 self.pending.selection = Some(Selection::Range(range));
                 self.dirty_since_flush = true;
                 Ok(())
@@ -277,6 +278,7 @@ impl Transaction<'_> {
             range.dirty = true;
         }
         // Reading an unchanged DOM range must not manufacture a selection-only commit.
+        range.invalidate_changed_direction();
         self.pending.selection = Some(Selection::Range(range));
         self.dirty_since_flush = true;
         Ok(())

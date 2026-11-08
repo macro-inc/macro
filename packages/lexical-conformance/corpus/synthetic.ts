@@ -289,6 +289,56 @@ const nodeState = {
   taskListView: { filters: { status: ['todo'], extra: 'kept' } },
 };
 const output: Case[] = [];
+const ownUndefined: Record<string, string[]> = {};
+const classTypes = Object.fromEntries(
+  SupportedNodeTypes.map((klass) => [klass.name, klass.getType()])
+);
+const classReferences: Record<string, string> = {};
+for (const [preset, classes] of Object.entries(RegisteredNodesByType)) {
+  classes.forEach((klass, index) => {
+    classReferences[
+      `@macro-inc/lexical-core/node-list.RegisteredNodesByType.${preset}.${index}`
+    ] = klass.getType();
+  });
+}
+for (const klass of SupportedNodeTypes) {
+  classReferences[`@macro-inc/lexical-core/nodes/${klass.name}.${klass.name}`] =
+    klass.getType();
+}
+const sourceTransformers = await import(
+  root + '/packages/lexical-core/transformers/index.ts'
+);
+const customTransformers = await import(
+  root + '/packages/lexical-core/transformers/customTransformers.ts'
+);
+const directTransformers = await import(
+  root + '/packages/lexical-core/transformers/transformers.ts'
+);
+for (const [prefix, objects] of [
+  ['@macro-inc/lexical-core/transformers', sourceTransformers],
+  [
+    '@macro-inc/lexical-core/transformers/customTransformers',
+    customTransformers,
+  ],
+  ['@macro-inc/lexical-core/transformers/transformers', directTransformers],
+] as const) {
+  for (const [name, value] of Object.entries(objects)) {
+    const entries = Array.isArray(value)
+      ? value.map((entry, index) => [String(index), entry] as const)
+      : [['', value] as const];
+    for (const [index, entry] of entries) {
+      if (!entry || typeof entry !== 'object' || !('dependencies' in entry))
+        continue;
+      for (const [dependencyIndex, klass] of (
+        entry.dependencies ?? []
+      ).entries()) {
+        classReferences[
+          `${prefix}.${name}${index ? '.' + index : ''}.dependencies.${dependencyIndex}`
+        ] = klass.getType();
+      }
+    }
+  }
+}
 for (const klass of SupportedNodeTypes) {
   const type = klass.getType();
   if (!(type in samples)) continue;
@@ -420,6 +470,17 @@ for (const klass of SupportedNodeTypes) {
       });
       try {
         const state = editor.parseEditorState(JSON.stringify(input));
+        state.read(() => {
+          for (const node of state._nodeMap.values()) {
+            const exported = node.exportJSON();
+            const fields = Object.keys(exported).filter(
+              (field) => exported[field] === undefined
+            );
+            ownUndefined[node.getType()] = [
+              ...new Set([...(ownUndefined[node.getType()] ?? []), ...fields]),
+            ];
+          }
+        });
         output.push({
           name: `${type}:${name}:${profile}`,
           type,
@@ -503,6 +564,34 @@ persist(
   'nodes.jsonl',
   output.map((row) => JSON.stringify(row)).join('\n') + '\n'
 );
+// Constructor exports expose optional own properties that JSON import defaults fill.
+const constructorEditor = createHeadlessEditor({
+  nodes: SupportedNodeTypes,
+  onError(error) {
+    throw error;
+  },
+});
+constructorEditor.update(
+  () => {
+    for (const klass of SupportedNodeTypes) {
+      for (const args of [[], [{}]]) {
+        try {
+          const node = Reflect.construct(klass, args);
+          const exported = node.exportJSON();
+          const fields = Object.keys(exported).filter(
+            (field) => exported[field] === undefined
+          );
+          ownUndefined[node.getType()] = [
+            ...new Set([...(ownUndefined[node.getType()] ?? []), ...fields]),
+          ];
+        } catch {
+          /* A constructor can require validated data; imported cases cover it. */
+        }
+      }
+    }
+  },
+  { discrete: true }
+);
 const configurations = [
   ['export', SupportedNodeTypes],
   ['headless', [...SupportedNodeTypes, ...NodeReplacements]],
@@ -533,6 +622,10 @@ const registries = configurations.map(([name, nodes]) => {
   return { name, types: Array.from(editor._nodes.keys()).sort(), replacements };
 });
 persist('registries.json', JSON.stringify(registries, null, 2) + '\n');
+persist(
+  'wire-properties.json',
+  JSON.stringify({ classTypes, ownUndefined, classReferences }, null, 2) + '\n'
+);
 console.log(
   `Checked ${output.length} JSON cases for ${new Set(output.map((row) => row.type)).size} registered nodes (41 custom)`
 );

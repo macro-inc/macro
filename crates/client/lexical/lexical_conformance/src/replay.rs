@@ -1,8 +1,14 @@
 //! Strict interpreter: every operation, return value and snapshot is checked.
+use crate::config::validate_config;
 use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+mod editors;
+mod host;
+pub(crate) mod protocol;
+use protocol::validate_operation;
+mod initial;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +25,9 @@ pub enum ReplayError {
     /// A markdown operation failed.
     #[error(transparent)]
     Markdown(#[from] lexical_markdown::Error),
+    /// A Macro document operation failed.
+    #[error(transparent)]
+    Macro(#[from] macro_document_model::Error),
     /// An operation requires the upstream ambient editor callback.
     #[error(
         "Unable to find an active editor. This method can only be used synchronously during the callback of editor.update(), editor.read(), or editor.getEditorState().read(..., {{editor}}). Detected on the page: 1 compatible editor(s) with version \"0.45.0+git\""
@@ -53,14 +62,35 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) tab_indent: Option<Option<u32>>,
+    pub(crate) code_highlight: bool,
+    pub(crate) d6_collapse_code_highlight: bool,
+    pub(crate) code_prism_registered: bool,
+    pub(crate) d6_handle_keys: HashMap<String, String>,
+    pub(crate) d6_oracle_max_key: u32,
+    pub(crate) d6_model_body: std::collections::HashSet<NodeKey>,
+    pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
+    pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
+    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
+    pub(crate) caret_origins: HashMap<usize, Value>,
+    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
+    pub(crate) next_record: u64,
     pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
     pub(crate) version: u64,
-    pub(crate) states: HashMap<u64, EditorState>,
+    pub(crate) record_version: u64,
+    pub(crate) states: HashMap<(u64, u64), EditorState>,
+    pub(crate) editor_id: u64,
+    pub(crate) key_counter: SharedKeyCounter,
+    host_tape: std::sync::Arc<std::sync::Mutex<host::HostTape>>,
     pub(crate) saved_states: Vec<EditorState>,
+    pub(crate) saved_editor_states: HashMap<(u64, u64), usize>,
+    pub(crate) committed_version: u64,
+    pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
+    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
     pub(crate) selections: Vec<SelectionSlot>,
     pub(crate) selection_values: Vec<Option<Selection>>,
@@ -87,30 +117,41 @@ impl Replayer {
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
         if fixture.schema != 2
-            || fixture.partial
             || fixture.tier != "A-rec"
-            || fixture.initial["editorState"] != Value::Null
-            || fixture.initial["selection"] != Value::Null
+            || (!fixture.partial
+                && (fixture.initial["editorState"] != Value::Null
+                    || fixture.initial["selection"] != Value::Null))
         {
             return Err(fail("unsupported fixture initialization"));
         }
-        self.list_indent = if fixture.source.file.starts_with("packages/lexical-core/")
-            && fixture.normalize == ["listIndent: 2"]
-        {
-            Some(2)
-        } else {
-            None
-        };
-        if !fixture.normalize.is_empty() && self.list_indent.is_none() {
-            return Err(fail(format!(
-                "unimplemented declared normalization: {:?}",
-                fixture.normalize
-            )));
+        self.list_indent = fixture
+            .normalize
+            .iter()
+            .any(|n| n == "listIndent: 2")
+            .then_some(2);
+        self.d6_collapse_code_highlight = fixture.source.repo == "lexical"
+            && fixture.source.file
+                == "packages/lexical-code-prism/src/__tests__/unit/LexicalCodeNodeTabs.test.ts"
+            && fixture.trace.iter().any(|op| {
+                op["op"] == "plugin" && op["name"] == "@lexical/code-prism.registerCodeHighlighting"
+            });
+        for normalization in &fixture.normalize {
+            match normalization.as_str() {
+                "listIndent: 2" => self.markdown_options.list_indent = 2,
+                "codeHighlight" => self.code_highlight = true,
+                "d6_collapse_code_highlight" if self.d6_collapse_code_highlight => {}
+                _ => {
+                    return Err(fail(format!(
+                        "unimplemented declared normalization: {normalization}"
+                    )));
+                }
+            }
         }
-        if fixture
-            .initial
-            .as_object()
-            .is_none_or(|initial| initial.len() != 2)
+        if !fixture.partial
+            && fixture
+                .initial
+                .as_object()
+                .is_none_or(|initial| initial.len() != 2)
         {
             return Err(fail("unsupported initial fields"));
         }
@@ -140,26 +181,48 @@ impl Replayer {
         self.tapes = fixture.tapes.clone();
         self.tape_positions = vec![0; fixture.tapes.len()];
         let mut editor = None;
-        let clock = self.node_clock.clone();
+        let mut editors = HashMap::new();
+        let mut sessions = HashMap::new();
+        let mut last_created = None;
         let mut scratch = test_nodes::builder()
-            .extension_state(macro_document_model::NodeClock(std::sync::Arc::new(
-                move || clock.load(std::sync::atomic::Ordering::Relaxed),
-            )))
+            .key_source(KeySource::Shared(self.key_counter.clone()))
+            .extension_state(self.model_clock())
+            .extension_state(self.document_context().random)
             .build()
             .map_err(|e| fail(e.to_string()))?;
         let mut i = 0;
         while i < fixture.trace.len() {
             let op = &fixture.trace[i];
             validate_operation(op)?;
+            if let Some(id) = self.operation_editor(op)?
+                && id != self.editor_id
+            {
+                if op["op"] != "createEditor" && !editors.contains_key(&id) {
+                    return Err(fail(format!("unknown editor id {id}")));
+                }
+                if let Some(previous) = editor.take() {
+                    editors.insert(self.editor_id, previous);
+                    sessions.insert(self.editor_id, self.take_editor_session());
+                }
+                editor = editors.remove(&id);
+                let session = sessions.remove(&id).unwrap_or_default();
+                self.install_editor_session(session);
+                self.editor_id = id;
+            }
             let kind = string(&op["op"])?;
+            let host_end = if kind == "update" {
+                None
+            } else {
+                self.prepare_host_call(&fixture.trace, i)?
+            };
             let result = match kind {
                 "entropy" | "clock" | "tick" => {
                     let mut tx = scratch.transaction();
                     self.execute(op, &mut tx)
                 }
                 "createEditor" => {
-                    if editor.is_some() || op["id"] != 0 {
-                        return Err(fail("unimplemented multiple editors"));
+                    if editor.is_some() {
+                        return Err(fail("duplicate editor id"));
                     }
                     validate_config(&op["config"])?;
                     self.attached = op["config"]["rootElement"] == true;
@@ -178,12 +241,7 @@ impl Replayer {
                         .iter()
                         .map(|node| string(node).map(str::to_owned))
                         .collect::<Result<Vec<_>>>()?;
-                    let mut builder = test_nodes::configured_builder(
-                        &nodes,
-                        op["config"]["headless"]
-                            .as_bool()
-                            .map_or(self.attached, |headless| !headless),
-                    )?;
+                    let mut builder = test_nodes::configured_builder(&nodes, self.attached)?;
                     for replacement in op["config"]["replacements"]
                         .as_array()
                         .ok_or_else(|| fail("replacement array"))?
@@ -194,15 +252,18 @@ impl Replayer {
                             _ => return Err(fail("unimplemented configured replacement/plugin")),
                         };
                     }
-                    let clock = self.node_clock.clone();
-                    let ed = builder
-                        .extension_state(macro_document_model::NodeClock(std::sync::Arc::new(
-                            move || clock.load(std::sync::atomic::Ordering::Relaxed),
-                        )))
+                    let mut ed = builder
+                        .key_source(KeySource::Shared(self.key_counter.clone()))
+                        .extension_state(self.model_clock())
+                        .extension_state(self.document_context().random)
                         .build()
                         .map_err(|e| fail(e.to_string()))?;
                     if let Some(ret) = op.get("ret") {
-                        self.compare(ret, &json!({"$editor":0}))?;
+                        self.compare(ret, &json!({"$editor":self.editor_id}))?;
+                    }
+                    last_created = Some(self.editor_id);
+                    if fixture.partial {
+                        self.restore_initial(&mut ed, &fixture.initial)?;
                     }
                     editor = Some(ed);
                     Ok(())
@@ -227,7 +288,9 @@ impl Replayer {
                             return Err(fail("unexpected state-install update"));
                         }
                         self.updates.push(op["id"].clone());
-                        self.causes.push(op["cause"].clone());
+                        if !self.causes.contains(&op["cause"]) {
+                            self.causes.push(op["cause"].clone());
+                        }
                         Ok(())
                     } else {
                         let commit = self
@@ -236,12 +299,15 @@ impl Replayer {
                             .ok_or_else(|| fail("state install commit"))?;
                         self.pending_command = false;
                         self.version += 1;
+                        self.record_version = self.version;
                         self.compare(&op["updates"], &json!(self.updates))?;
                         self.compare(&op["causes"], &json!(self.causes))?;
                         if op["index"] != self.version {
                             return Err(fail("state install commit index"));
                         }
-                        self.states.insert(self.version, commit.next.clone());
+                        self.committed_version = self.version;
+                        self.states
+                            .insert((self.editor_id, self.version), commit.next.clone());
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
                         self.updates.clear();
                         self.causes.clear();
@@ -254,6 +320,7 @@ impl Replayer {
                     }
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     self.version += 1;
+                    self.record_version = self.version;
                     let mut tx = ed.transaction();
                     self.begin_slots(&mut tx, true);
                     self.pending_writes = false;
@@ -272,7 +339,9 @@ impl Replayer {
                             if pending["index"] != self.version {
                                 return Err(fail("commit index mismatch"));
                             }
-                            self.states.insert(self.version, commit.next.clone());
+                            self.committed_version = self.version;
+                            self.states
+                                .insert((self.editor_id, self.version), commit.next.clone());
                             snapshot::compare(
                                 self,
                                 &pending["snapshot"],
@@ -283,8 +352,17 @@ impl Replayer {
                             self.causes.clear();
                             break;
                         }
+                        let host_end = if pending["op"] == "update" {
+                            self.prepare_host_call(&fixture.trace, i)?
+                        } else {
+                            None
+                        };
                         self.execute(pending, &mut tx)
                             .map_err(|e| fail(format!("op {i}: {e}")))?;
+                        if let Some(end) = host_end {
+                            self.finish_host_call()?;
+                            i = end - 1;
+                        }
                         if pending["op"] == "update"
                             && pending["opts"]["discrete"] == true
                             && self.pending_writes
@@ -298,7 +376,20 @@ impl Replayer {
                                 ));
                             }
                         }
-                        if pending["op"] == "update" && !self.pending_writes {
+                        let next_update = fixture
+                            .trace
+                            .get(i + 1..)
+                            .and_then(|tail| {
+                                tail.iter().find(|next| {
+                                    !matches!(next["op"].as_str(), Some("clock" | "log"))
+                                })
+                            })
+                            .is_some_and(|next| next["op"] == "update");
+                        if pending["op"] == "update"
+                            && !self.pending_writes
+                            && (pending["opts"]["discrete"] == true || !next_update)
+                            && self.on_update.is_empty()
+                        {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
                             self.microtasks.extend(self.on_update.drain(..));
@@ -335,11 +426,27 @@ impl Replayer {
                     self.pending_command = true;
                     Ok(())
                 }
+                "plugin"
+                    if op["name"]
+                        == "@lexical/react/LexicalTabIndentationPlugin.registerTabIndentation" =>
+                {
+                    crate::api::tab::register(self, &op["args"])
+                }
+                "plugin" if op["name"] == "@lexical/code-prism.registerCodeHighlighting" => {
+                    if op["args"] != json!([{"$ed":0}]) {
+                        return Err(fail("Prism plugin arguments"));
+                    }
+                    self.code_prism_registered = true;
+                    Ok(())
+                }
                 "plugin" => {
                     if op["name"] != "@lexical/rich-text.registerRichText"
                         || op["args"] != json!([{"$ed":0}])
                     {
-                        return Err(fail("unmapped plugin registration"));
+                        return Err(fail(format!(
+                            "unmapped plugin registration: {}",
+                            op["name"]
+                        )));
                     }
                     self.rich_text_registered = true;
                     Ok(())
@@ -348,6 +455,7 @@ impl Replayer {
                     let ed = editor.as_mut().unwrap_or(&mut scratch);
                     // resetRandomKey can precede editor construction.
                     if kind == "call" && op["fn"] == "lexical/LexicalUtils.resetRandomKey" {
+                        self.key_counter.reset()?;
                         self.compare(&op["ret"], &undefined())
                     } else {
                         let mut tx = ed.transaction();
@@ -358,12 +466,29 @@ impl Replayer {
                 _ => Err(fail(format!("unmapped operation: {kind}"))),
             };
             result.map_err(|e| fail(format!("op {i} {kind}: {e}")))?;
-            i += 1;
+            if let Some(end) = host_end {
+                self.finish_host_call()?;
+                i = end;
+            } else {
+                i += 1;
+            }
         }
-        if let Some(ed) = editor {
+        if let Some(last) = last_created {
+            let ed = if last == self.editor_id {
+                editor.as_ref()
+            } else {
+                editors.get(&last)
+            }
+            .ok_or_else(|| fail("missing final editor"))?;
             snapshot::compare(self, &fixture.r#final, ed.state(), None)?;
         } else {
             self.compare(&fixture.r#final, &Value::Null)?;
+        }
+        if sessions
+            .values()
+            .any(protocol::EditorSession::has_pending_work)
+        {
+            return Err(fail("unconsumed secondary-editor work"));
         }
         if !self.on_update.is_empty() {
             return Err(fail("unconsumed update callbacks"));
@@ -425,64 +550,6 @@ impl Replayer {
             }
             _ => return Err(fail("invalid host input")),
         }
-        Ok(())
-    }
-    fn editor_call(&mut self, op: &Value, editor: &mut Editor) -> Result<()> {
-        let args = self.decode(&op["args"])?;
-        let actual = if op["fn"] == "LexicalEditor.parseEditorState" {
-            let mut value = args[0].clone();
-            materialize_keys(&mut value)?;
-            let state = if let Some(text) = value.as_str() {
-                editor.parse_editor_state_str(text)?
-            } else {
-                editor.parse_editor_state(&serde_json::from_value(value)?)?
-            };
-            let id = self.saved_states.len();
-            self.saved_states.push(state);
-            json!({"$snapshot":id})
-        } else {
-            let id = integer(&args[0]["$snapshot"])? as usize;
-            let state = self
-                .saved_states
-                .get(id)
-                .ok_or_else(|| fail("state handle"))?
-                .clone();
-            let mut tags = TagSet::default();
-            if let Some(tag) = args[1]["tag"].as_str() {
-                tags.insert(tag.parse().map_err(|_| fail("tag"))?);
-            }
-            self.pending_install = Some(editor.set_editor_state(state, tags)?);
-            self.active_selection = None;
-            undefined()
-        };
-        self.compare(op.get("ret").unwrap_or(&undefined()), &actual)
-    }
-    fn begin_slots(&mut self, tx: &mut Transaction<'_>, clone_active: bool) {
-        let previous_active = self.active_selection;
-        if clone_active {
-            self.active_selection = None;
-        }
-        self.selections = self
-            .selection_values
-            .iter()
-            .enumerate()
-            .map(|(id, s)| {
-                if !clone_active && previous_active == Some(id) {
-                    SelectionSlot::Active
-                } else {
-                    s.clone()
-                        .map(|s| tx.detach_selection(s))
-                        .unwrap_or(SelectionSlot::Active)
-                }
-            })
-            .collect();
-    }
-    fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
-        self.selection_values = self
-            .selections
-            .iter()
-            .map(|slot| tx.selection_at(*slot).map(|s| s.cloned()))
-            .collect::<std::result::Result<_, _>>()?;
         Ok(())
     }
     pub(crate) fn execute(&mut self, op: &Value, tx: &mut Transaction<'_>) -> Result<()> {
@@ -547,6 +614,9 @@ impl Replayer {
                 }
 
                 let result = self.execute_calls(&op["calls"], tx).and_then(|()| {
+                    if self.code_prism_registered {
+                        crate::api::tab::initialize_code_language(tx)?;
+                    }
                     self.pending_writes |= tx.has_dirty_nodes()
                         || tx.selection() != tx.committed_state().selection()
                         || tx.selection().is_some_and(Selection::is_dirty);
@@ -627,20 +697,24 @@ impl Replayer {
         result
     }
     fn execute_callback_calls(&mut self, calls: &Value, tx: &mut Transaction<'_>) -> Result<()> {
-        for (i, call) in calls
-            .as_array()
-            .ok_or_else(|| fail("expected calls"))?
-            .iter()
-            .enumerate()
-        {
-            self.execute(call, tx)
-                .map_err(|e| fail(format!("call {i}: {e}")))?;
+        let calls = calls.as_array().ok_or_else(|| fail("expected calls"))?;
+        let mut index = 0;
+        while index < calls.len() {
+            let end = self.prepare_host_call(calls, index)?;
+            self.execute(&calls[index], tx)
+                .map_err(|error| fail(format!("call {index}: {error}")))?;
+            if let Some(end) = end {
+                self.finish_host_call()?;
+                index = end;
+            } else {
+                index += 1;
+            }
         }
         Ok(())
     }
     pub(crate) fn decode(&self, value: &Value) -> Result<Value> {
         if let Some(object) = value.as_object() {
-            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret"] {
+            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
                         .handles
@@ -655,7 +729,7 @@ impl Replayer {
                     .keys
                     .get(string(&object["raw"])?)
                     .ok_or_else(|| fail("unknown key"))?;
-                return Ok(json!({"$nodeKey":key.index()}));
+                return Ok(json!({"$nodeKey":key_wire(*key)}));
             }
             let mut decoded = serde_json::Map::new();
             for (key, value) in object {
@@ -677,6 +751,7 @@ impl Replayer {
                 ("$sel", "$selection"),
                 ("$pt", "$point"),
                 ("$caret", "$caretValue"),
+                ("$iterator", "$iteratorValue"),
             ] {
                 if let Some(id) = object.get(tag) {
                     if actual.get(actual_tag).is_none() {
@@ -699,6 +774,11 @@ impl Replayer {
                             if let Some(origin) = object.get("origin") {
                                 self.compare(origin, &actual["origin"])?;
                             }
+                            for field in ["caret", "distance"] {
+                                if let Some(expected) = object.get(field) {
+                                    self.compare(expected, &actual[field])?;
+                                }
+                            }
                         }
                         if tag == "$sel" && object.get("kind") != actual.get("kind") {
                             return Err(fail("selection kind mismatch"));
@@ -712,6 +792,11 @@ impl Replayer {
                             }
                             if let Some(typ) = object.get("type")
                                 && typ != &actual["type"]
+                                && !(self.d6_collapse_code_highlight
+                                    && self.code_prism_registered
+                                    && typ == "code-highlight"
+                                    && actual["type"] == "text"
+                                    && self.d6_model_leaves.contains(&node_key(actual)?))
                             {
                                 return Err(fail(format!(
                                     "node type: {typ} != {}",
@@ -728,6 +813,10 @@ impl Replayer {
                             }
                             if let Some(raw) = object.get("key") {
                                 self.bind_key(string(raw)?, node_key(actual)?)?;
+                                if self.d6_collapse_code_highlight && self.code_prism_registered {
+                                    self.d6_handle_keys
+                                        .insert(binding.clone(), string(raw)?.to_owned());
+                                }
                             }
                         }
                         if self
@@ -819,12 +908,18 @@ impl Replayer {
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
         let node = view.node_or_err(key)?;
         let pointer = std::ptr::from_ref(node.base()) as usize;
-        let next = self.records.len() as u64;
-        let (version, identity) = *self
-            .records
-            .entry((key, pointer))
-            .or_insert((self.version, next));
-        Ok(json!({"$node":key.index(),"identity":identity,"ver":version,"type":node.type_name()}))
+        let (version, identity) = if let Some(record) = self.records.get(&(key, pointer)) {
+            *record
+        } else {
+            let identity = self.next_record;
+            self.next_record += 1;
+            let record = (self.record_version, identity);
+            self.records.insert((key, pointer), record);
+            record
+        };
+        Ok(
+            json!({"$node":key_wire(key),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
+        )
     }
     pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Value {
         if tx.selection().is_none() {
@@ -840,105 +935,18 @@ impl Replayer {
         json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}})
     }
 }
+pub(crate) fn key_wire(key: NodeKey) -> u64 {
+    (u64::from(key.generation()) << 32) | u64::from(key.index())
+}
 pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
+    let encoded = integer(value)?;
     Ok(NodeKey::from_parts(KeyParts {
-        generation: 0,
-        index: u32::try_from(integer(value)?).map_err(|_| fail("key overflow"))?,
+        generation: (encoded >> 32) as u32,
+        index: (encoded & u64::from(u32::MAX)) as u32,
     }))
 }
 pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
     key_index(&value["$node"])
-}
-
-fn validate_config(config: &Value) -> Result<()> {
-    let object = config
-        .as_object()
-        .ok_or_else(|| fail("missing editor config"))?;
-    for key in object.keys() {
-        if ![
-            "namespace",
-            "namespaceGenerated",
-            "nodeClasses",
-            "headless",
-            "nodes",
-            "replacements",
-            "plugins",
-            "theme",
-            "editable",
-            "rootElement",
-        ]
-        .contains(&key.as_str())
-        {
-            return Err(fail(format!("unsupported config field {key}")));
-        }
-    }
-    string(&config["namespace"])?;
-    if !config["editable"].is_boolean() || !config["rootElement"].is_boolean() {
-        return Err(fail("invalid editor host config"));
-    }
-    if !config["plugins"].as_array().is_some_and(Vec::is_empty) {
-        return Err(fail("unimplemented configured plugin"));
-    }
-    for replacement in config["replacements"]
-        .as_array()
-        .ok_or_else(|| fail("replacement array"))?
-    {
-        let index = match (
-            replacement["replace"]["$klass"].as_str(),
-            replacement["withKlass"]["$klass"].as_str(),
-        ) {
-            (Some("code"), Some("custom-code")) => 0,
-            (Some("list"), Some("task-list")) => 1,
-            _ => return Err(fail("unimplemented configured replacement/plugin")),
-        };
-        if replacement["with"]["$fn"]
-            != format!("@macro-inc/lexical-core/node-list.NodeReplacements.{index}.with")
-        {
-            return Err(fail("unmapped replacement factory"));
-        }
-    }
-    for node in config["nodes"]
-        .as_array()
-        .ok_or_else(|| fail("missing configured nodes"))?
-    {
-        if ![
-            "root",
-            "text",
-            "linebreak",
-            "tab",
-            "paragraph",
-            "artificial",
-            "heading",
-            "list",
-            "listitem",
-            "quote",
-            "code",
-            "table",
-            "tablecell",
-            "tablerow",
-            "hashtag",
-            "code-highlight",
-            "autolink",
-            "link",
-            "overflow",
-            "test_block",
-            "test_segmented",
-            "test_exclude_from_copy_block",
-            "test_decorator",
-            "test_inline_block",
-            "test_shadow_root",
-            "test_text",
-            "mark",
-        ]
-        .contains(&string(node)?)
-            && !macro_document_model::is_supported_node_type(string(node)?)
-        {
-            return Err(fail(format!("unimplemented configured class {node}")));
-        }
-    }
-    // Theme, namespace, editability and root attachment are host inputs. The
-    // interpreter executes no DOM path; view APIs fail rather than using a fake.
-    Ok(())
 }
 
 #[cfg(test)]
@@ -954,38 +962,6 @@ fn materialize_keys(value: &mut Value) -> Result<()> {
     } else if let Some(array) = value.as_array_mut() {
         for child in array {
             materialize_keys(child)?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_operation(op: &Value) -> Result<()> {
-    if let Some(editor) = op.get("editor")
-        && editor != 0
-    {
-        return Err(fail("unsupported operation editor id"));
-    }
-    if op.get("parent").is_some() {
-        return Err(fail("unimplemented nested update parent"));
-    }
-    if op["op"] == "update" {
-        let options = op["opts"]
-            .as_object()
-            .ok_or_else(|| fail("missing update options"))?;
-        for (key, value) in options {
-            match key.as_str() {
-                "tag"
-                    if value.is_string()
-                        || value
-                            .as_array()
-                            .is_some_and(|tags| tags.iter().all(Value::is_string)) => {}
-                "discrete" | "skipTransforms" if value.is_boolean() => {}
-                "onUpdate"
-                    if value.as_object().is_some_and(|object| {
-                        object.len() == 1 && object.get("$tape").is_some_and(Value::is_u64)
-                    }) => {}
-                _ => return Err(fail(format!("unsupported update option: {key}"))),
-            }
         }
     }
     Ok(())

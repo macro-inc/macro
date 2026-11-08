@@ -30,10 +30,15 @@ impl Caret {
                 (key, Kind::Child)
             }
             Point::Element { key, offset } => {
-                let child = view
-                    .child_at_index(key, ChildIndex(offset.0 - 1))
-                    .ok_or(Error::SpliceOutOfRange)?;
-                (child, Kind::Sibling)
+                let offset = offset.0.min(view.element_data(key)?.children_size());
+                if offset == 0 {
+                    (key, Kind::Child)
+                } else {
+                    let child = view
+                        .child_at_index(key, ChildIndex(offset - 1))
+                        .ok_or(Error::SpliceOutOfRange)?;
+                    (child, Kind::Sibling)
+                }
             }
         };
         Ok(Self {
@@ -315,7 +320,16 @@ impl Transaction<'_> {
             .and_then(|(a, f)| self.caret_merge_targets(a, f, &seen))
         {
             let children = self.children_keys(last)?;
-            self.append(first, &children)?;
+            self.caret_splice(
+                ChildCaret {
+                    origin: first,
+                    direction: CaretDirection::Previous,
+                }
+                .into(),
+                0,
+                &children,
+                CaretDirection::Next,
+            )?;
             let mut parent = self.parent(last);
             self.remove(last, true)?;
             while let Some(key) = parent.filter(|key| self.is_empty(*key)) {

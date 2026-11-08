@@ -415,3 +415,53 @@ fn inserting_list_before_item_text_merges_tail_into_inner_item() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn no_view_backspace_after_line_break_does_not_collapse_list_item() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+    let item = tx.create(ListItemNode::default())?;
+    let line = tx.create(LineBreak::default())?;
+    let text = tx.create_text("text")?;
+    tx.append(item, &[line.key(), text.key()])?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![list.key()]);
+    assert_eq!(tx.children_keys(item)?, vec![line.key(), text.key()]);
+    Ok(())
+}
+
+#[test]
+fn element_point_typing_inserts_before_list_child_without_list_splice() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = tx.create(ListNode::new(ListType::Check, 1))?;
+    let first = tx.create(ListItemNode::default())?;
+    let last = tx.create(ListItemNode::default())?;
+    tx.append(list, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(list, ChildIndex(1)),
+    ))))?;
+    tx.insert_text("x")?;
+    let children = tx.children_keys(list)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], first.key());
+    assert!(tx.is_text(children[1]));
+    assert_eq!(tx.text_content(children[1]), "x");
+    assert_eq!(children[2], last.key());
+    let line = tx.create(LineBreak::default())?;
+    tx.replace(children[1], line, false)?;
+    assert_eq!(
+        tx.children_keys(list)?,
+        vec![first.key(), line.key(), last.key()]
+    );
+    Ok(())
+}

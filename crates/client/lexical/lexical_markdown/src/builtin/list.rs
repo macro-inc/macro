@@ -1,4 +1,5 @@
 //! Shared list import/export with configurable indentation.
+use crate::util::js_trim;
 use crate::{matcher::*, patterns, state::*, util::*, *};
 use lexical_model::*;
 use lexical_rich_nodes::list::{item::*, node::*};

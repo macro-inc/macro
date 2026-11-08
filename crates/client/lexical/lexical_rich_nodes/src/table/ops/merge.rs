@@ -68,7 +68,16 @@ pub fn merge_cells(
 }
 /// Unmerge the anchor cell of a range or table selection.
 pub fn unmerge_cell(tx: &mut Transaction<'_>) -> Result<()> {
-    let (cell, _, _) = selection_cells(tx)?;
+    let (anchor, _) =
+        tx.selection()
+            .and_then(Selection::start_end_points)
+            .ok_or(Error::Invariant(
+                "Expected a RangeSelection or TableSelection",
+            ))?;
+    let cell = tx
+        .find_matching_parent(anchor.key(), |state, key| state.is::<TableCellNode>(key))
+        .and_then(|key| tx.view().cast::<TableCellNode>(key))
+        .ok_or(Error::Invariant("Expected to find a parent TableCellNode"))?;
     unmerge_cell_node(tx, cell)
 }
 /// Expand a merged cell, inheriting only header bits shared across the corresponding axes.

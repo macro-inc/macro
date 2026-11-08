@@ -31,6 +31,18 @@ pub(crate) fn call(
     a: &[Value],
 ) -> Result<Value> {
     match name {
+        "@lexical/link.$createAutoLinkNode" => {
+            let attrs = a.get(1).unwrap_or(&Value::Null);
+            let node = create_auto_link_node(
+                tx,
+                str_arg(a, 0)?,
+                AutoLinkAttributes {
+                    link: attributes(attrs)?,
+                    is_unlinked: attrs.get("isUnlinked").and_then(Value::as_bool),
+                },
+            )?;
+            r.node(tx.view(), node.key())
+        }
         "@lexical/link.$createLinkNode" => {
             let attrs = attributes(a.get(1).unwrap_or(&Value::Null))?;
             let key =
@@ -42,7 +54,12 @@ pub(crate) fn call(
                 .filter(|v| v.get("$node").is_some())
                 .map(node_key)
                 .transpose()?
-                .is_some_and(|key| tx.is::<LinkNode>(key))
+                .is_some_and(|key| r
+                    .read_state
+                    .as_ref()
+                    .map(EditorState::view)
+                    .unwrap_or(tx.view())
+                    .is::<LinkNode>(key))
         )),
         "@lexical/link.formatUrl" => Ok(json!(format_url(str_arg(a, 0)?))),
         "@lexical/link.$toggleLink" => {
