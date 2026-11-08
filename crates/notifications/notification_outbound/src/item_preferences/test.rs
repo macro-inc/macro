@@ -1,7 +1,7 @@
 use super::*;
 use crate::repository::NotificationDbOps;
 use chrono::Duration;
-use cow_str::CowLike;
+use cowlike::CowLike;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {

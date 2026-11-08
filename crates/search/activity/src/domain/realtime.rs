@@ -12,7 +12,7 @@ mod test;
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
 use broadcast::{BroadcastManager, GlobalSpawner};
-use macro_user_id::cow_str::CowLike as _;
+use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::{Report, ResultExt as _};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};

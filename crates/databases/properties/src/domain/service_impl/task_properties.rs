@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use bot_id::BotIdStr;
 use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use properties_types::EntityType;
 use properties_types::api::requests::SetPropertyValue;

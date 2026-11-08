@@ -7,7 +7,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use entity_access_management_types::EntityAccessSourceType;
 use entity_kind::EntityType;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 

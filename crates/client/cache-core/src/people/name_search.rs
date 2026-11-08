@@ -1,7 +1,7 @@
 //! Shared matching and durable sort-key semantics for the name-first people path.
 //! The active menu reader is switched only with its storage/host integration.
 use super::PeopleError;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use subsequence_match::{
     MAX_QUERY_BYTES,
     names::{NameMatch, NameQuery},

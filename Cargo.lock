@@ -2458,7 +2458,7 @@ dependencies = [
  "async-stream",
  "base64 0.22.1",
  "chrono",
- "cow_str",
+ "cowlike",
  "email",
  "email_thread_id",
  "entity_access",
@@ -3933,7 +3933,7 @@ dependencies = [
 name = "bot_id"
 version = "0.1.0"
 dependencies = [
- "cow_str",
+ "cowlike",
  "nom 8.0.0",
  "serde",
  "sqlx",
@@ -4704,7 +4704,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
- "cow_str",
+ "cowlike",
  "entity_access",
  "entity_kind",
  "macro_authorization",
@@ -5565,7 +5565,7 @@ dependencies = [
  "connection_gateway_client",
  "connection_gateway_models",
  "cool_asserts",
- "cow_str",
+ "cowlike",
  "dashmap",
  "doppler-config",
  "ensure_exists",
@@ -5992,7 +5992,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
-name = "cow_str"
+name = "cowlike"
 version = "0.1.0"
 dependencies = [
  "either",
@@ -8849,7 +8849,7 @@ dependencies = [
 name = "entity_kind"
 version = "0.1.0"
 dependencies = [
- "cow_str",
+ "cowlike",
  "emojis",
  "schemars 1.2.1",
  "serde",
@@ -9171,7 +9171,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
- "cow_str",
+ "cowlike",
  "entity_access",
  "entity_kind",
  "http-body-util",
@@ -9710,7 +9710,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "cool_asserts",
- "cow_str",
+ "cowlike",
  "entity_kind",
  "item_filters",
  "macro_user_id",
@@ -10203,7 +10203,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "connection_gateway_client",
- "cow_str",
+ "cowlike",
  "document_sub_type",
  "documents",
  "entity_access",
@@ -14170,7 +14170,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
- "cow_str",
+ "cowlike",
  "doppleganger",
  "nom 8.0.0",
  "serde",
@@ -15231,7 +15231,7 @@ dependencies = [
  "aquamarine",
  "broadcast",
  "chrono",
- "cow_str",
+ "cowlike",
  "either",
  "entity_kind",
  "futures",
@@ -15290,7 +15290,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "cow_str",
+ "cowlike",
  "entity_kind",
  "hmac 0.12.1",
  "http-body-util",
@@ -15349,7 +15349,7 @@ dependencies = [
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "chrono",
- "cow_str",
+ "cowlike",
  "entity_kind",
  "futures",
  "hmac 0.12.1",
@@ -20584,7 +20584,7 @@ dependencies = [
  "axum",
  "chrono",
  "cognition",
- "cow_str",
+ "cowlike",
  "document_sub_type",
  "documents",
  "email",
@@ -20795,7 +20795,7 @@ dependencies = [
  "channels",
  "chrono",
  "cool_asserts",
- "cow_str",
+ "cowlike",
  "crm",
  "document_sub_type",
  "either",

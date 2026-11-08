@@ -18,7 +18,7 @@ pub use harnessd_protocol::AgentProvider;
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_owner::Owner;

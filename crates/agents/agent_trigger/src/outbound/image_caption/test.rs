@@ -1,6 +1,6 @@
 use super::*;
 use chrono::Utc;
-use macro_user_id::cow_str::CowLike as _;
+use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::sync::Mutex;

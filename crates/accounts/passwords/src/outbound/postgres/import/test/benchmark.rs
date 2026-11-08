@@ -180,7 +180,7 @@ async fn import_performance() {
         }))
         .init();
     let (repository, actor, team) = if let Ok(team) = std::env::var("PWCONC_TEAM") {
-        use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+        use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
         (
             PgRepository::new(pool.clone()).expect("repository"),
             Actor {

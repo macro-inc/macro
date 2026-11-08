@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use entity_kind::EntityType;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::SharePermissionV2;
 use permissions_types::share_permission::access_level::AccessLevel;

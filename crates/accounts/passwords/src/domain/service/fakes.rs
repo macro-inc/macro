@@ -385,7 +385,7 @@ impl Repository for FakeRepository {
             {
                 None => crate::domain::ports::IntentOrigin::Human,
                 Some((agent, action)) => crate::domain::ports::IntentOrigin::Agent {
-                    agent: macro_user_id::cow_str::CowLike::into_owned(
+                    agent: macro_user_id::cowlike::CowLike::into_owned(
                         macro_user_id::user_id::MacroUserIdStr::parse_from_str(agent)
                             .expect("fixture agent"),
                     ),

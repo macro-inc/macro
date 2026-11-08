@@ -16,7 +16,7 @@ use crate::domain::{
 use channel_id::ChannelId;
 use chrono::Utc;
 use entity_access::domain::models::{ParticipantRole as AccessRole, TeamRole};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},

@@ -82,7 +82,7 @@ fn flagged_app(
     let provider = Arc::new(FakeProvider::new());
     let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
     for user in ["macro|synthetic@example.test", "macro|agent@example.test"] {
-        use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+        use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
         flags.set(
             MacroUserIdStr::parse_from_str(user).unwrap().into_owned(),
             actor_result.clone(),
@@ -303,7 +303,7 @@ impl Availability for Enabled {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgPool) {
     use crate::domain::ports::Repository;
-    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
     async fn finish_lease_rollbacks(pool: &sqlx::PgPool) {
         // SQLx queues rollback on transaction Drop. Check out every connection so
         // the next independent request cannot race the preceding lease's release.

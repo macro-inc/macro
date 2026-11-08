@@ -3,7 +3,7 @@ use crate::{
     domain::{ports::Repository, service::PasswordService},
     outbound::postgres::PgRepository,
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},

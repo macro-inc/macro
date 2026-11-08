@@ -38,7 +38,7 @@ axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
 connection_gateway_client = { workspace = true }
 connection_gateway_models = { workspace = true }
-cow_str = { workspace = true }
+cowlike = { workspace = true }
 dashmap = { workspace = true }
 ensure_exists = { workspace = true, features = ["dynamodb"] }
 entity_access = { workspace = true }

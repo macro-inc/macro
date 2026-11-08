@@ -4,7 +4,7 @@
 //! changed. Running it again changes nothing.
 
 use anyhow::Context as _;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
 use sqlx::PgPool;

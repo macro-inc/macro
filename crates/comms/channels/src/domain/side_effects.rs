@@ -19,7 +19,7 @@ use crate::domain::{
 };
 use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use std::collections::HashSet;
 use thread_id::ThreadId;

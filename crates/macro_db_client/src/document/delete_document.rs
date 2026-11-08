@@ -215,7 +215,7 @@ pub async fn get_shas_for_deletion(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use macro_user_id::cow_str::CowLike;
+    use macro_user_id::cowlike::CowLike;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("docx_example")))]

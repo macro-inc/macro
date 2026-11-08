@@ -2,7 +2,7 @@ use super::*;
 use ai_billing::domain::{Entitlement, PayerScope};
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use hosted_runtimes::domain::rollout::{ComputerRollout, ENABLE_MACRO_COMPUTERS};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
 use teams::domain::model::SeatPlan;
 

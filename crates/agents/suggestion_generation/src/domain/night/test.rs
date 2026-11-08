@@ -1,7 +1,7 @@
 use chrono::TimeZone;
 use chrono_tz::Asia::Tokyo;
 
-use macro_user_id::cow_str::CowLike as _;
+use macro_user_id::cowlike::CowLike as _;
 
 use super::*;
 

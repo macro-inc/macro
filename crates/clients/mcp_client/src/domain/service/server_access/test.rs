@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::MacroUserIdStr;
 use crate::outbound::guarded_http::{AddressPolicy, McpHttp};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use rmcp::transport::auth::OAuthTokenResponse;
 
 /// A store nothing here should ever reach: every case below is answered

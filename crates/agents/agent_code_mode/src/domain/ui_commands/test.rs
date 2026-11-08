@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::ExecutionRecord;
 use agent_session::domain::model::PrompterKind;
 use entity_access::domain::models::EntityType;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::collections::HashMap;
 use std::sync::Mutex;
 

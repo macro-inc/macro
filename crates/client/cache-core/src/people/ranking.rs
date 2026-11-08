@@ -1,7 +1,7 @@
  use super::cursor::{Cursor, Position, fingerprint};
  use super::*;
  use crate::value::{CacheValue, Record};
- use macro_user_id::{cow_str::CowLike, email::ReadEmailParts};
+ use macro_user_id::{cowlike::CowLike, email::ReadEmailParts};
  use std::{
      cmp::Ordering,
      collections::{BinaryHeap, HashSet},

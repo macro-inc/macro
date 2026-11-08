@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Deliberately implements only the per-user port: no service identity is needed.

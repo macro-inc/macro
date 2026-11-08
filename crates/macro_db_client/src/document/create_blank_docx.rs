@@ -1,4 +1,4 @@
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::SharePermissionV2;
 use shared_types::document::FileType;

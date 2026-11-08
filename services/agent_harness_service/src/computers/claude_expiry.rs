@@ -14,7 +14,7 @@ use entity_kind::EntityType;
 use hosted_runtimes::domain::claude_sign_in::{
     ClaudeSignInNotices, ClaudeSignInStage, SignInExpiry,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{AgentProvider, AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 use notification::domain::models::SendNotificationRequestBuilder;

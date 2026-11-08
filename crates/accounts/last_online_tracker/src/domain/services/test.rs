@@ -1,6 +1,6 @@
 use super::*;
 use chrono::TimeZone;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::sync::Mutex;

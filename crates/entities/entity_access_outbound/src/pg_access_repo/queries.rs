@@ -9,7 +9,7 @@ use anyhow::Context;
 use bot_id::BotIdStr;
 use entity_kind::EntityType;
 use macro_user_id::{
-    cow_str::CowLike,
+    cowlike::CowLike,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
 use agent_loop::{Message, PredefinedModel};
 use agent_session::domain::model::AgentSession;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::Deserialize;
 use serde_json::json;
 

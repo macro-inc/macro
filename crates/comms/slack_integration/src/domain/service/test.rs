@@ -3,7 +3,7 @@ use chrono::Utc;
 use entity_access::domain::models::{
     BotIdStr, BotReceiptScope, Entity, EntityAccessAuth, EntityPermission, TeamRole,
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashMap,
     sync::{

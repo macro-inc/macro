@@ -9,7 +9,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use import::{domain::models::ImportTargetKey, outbound::pg_import_repo::targets};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use slack_integration::domain::{
     importer::targets::{TargetAccess, TargetFacts, TargetKind, authorize_target},
     models::*,

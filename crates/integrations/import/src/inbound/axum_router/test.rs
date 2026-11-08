@@ -2,7 +2,7 @@ use super::*;
 use ai_billing::{AiAdmissionError, DenyReason};
 use axum::{body::Body, http::Request};
 use macro_authorization::{InternalIdentityClaims, MacroAuthorizationError};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use rootcause::Report;

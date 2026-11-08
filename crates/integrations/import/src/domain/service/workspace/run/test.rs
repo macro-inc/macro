@@ -18,7 +18,7 @@ use import_notion::domain::model::{
 };
 use import_notion::domain::ports::{NotionApi, NotionError};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use sqlx::{PgConnection, PgPool};
 use tokio::sync::Notify;
 use tokio_util::task::TaskTracker;

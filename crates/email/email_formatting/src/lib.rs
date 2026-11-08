@@ -2,7 +2,7 @@ use askama::Template;
 use chrono::{DateTime, Utc};
 use hmac::Hmac;
 use macro_env::Environment;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use model_notifications::NotifEvent;
 use notification::domain::models::{
     Notification, NotificationExtEmail, NotificationTitle, RateLimitConfig, RateLimitKey,

@@ -201,7 +201,7 @@ fn decode(
     Ok(Record {
         metadata: serde_json::from_value(metadata).map_err(|_| Error::Unavailable)?,
         user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user_id)
-            .map(macro_user_id::cow_str::CowLike::into_owned)
+            .map(macro_user_id::cowlike::CowLike::into_owned)
             .map_err(|_| Error::Unavailable)?,
         grants: serde_json::from_value(grants).map_err(|_| Error::Unavailable)?,
         deleting,
@@ -485,7 +485,7 @@ impl Repository for PgRepository {
         Ok(Some(match (row.agent_user_id, row.agent_action) {
             (None, _) => IntentOrigin::Human,
             (Some(agent), Some(action)) => IntentOrigin::Agent {
-                agent: macro_user_id::cow_str::CowLike::into_owned(
+                agent: macro_user_id::cowlike::CowLike::into_owned(
                     macro_user_id::user_id::MacroUserIdStr::parse_from_str(&agent)
                         .map_err(|_| Error::Unavailable)?,
                 ),

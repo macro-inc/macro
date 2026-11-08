@@ -363,7 +363,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
         domain::{ports::Repository, service::PasswordService},
         outbound::postgres::PgRepository,
     };
-    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
     let address =
         std::env::var("PASSWORDS_TEST_OPENBAO_ADDRESS").expect("explicit disposable address");
     let key_path =

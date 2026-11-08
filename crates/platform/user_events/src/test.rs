@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 #[test]
 fn picture_changed_is_keyed_by_user_and_tagged() {

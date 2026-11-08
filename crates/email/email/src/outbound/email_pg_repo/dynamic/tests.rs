@@ -5,7 +5,7 @@ use super::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use uuid::Uuid;
 

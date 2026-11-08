@@ -5,7 +5,7 @@ use item_filters::NotificationState;
 use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{AttachmentKind, Email, SubjectQuery};
 use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use pagination_types::{Query, SimpleSortMethod};
 use sqlx::Execute;

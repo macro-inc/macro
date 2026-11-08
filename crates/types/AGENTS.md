@@ -25,7 +25,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`computer_id`](computer_id/AGENTS.md) | Shared computer UUID identity, independent of the runtime and harness domains. |
 | [`computer_types`](computer_types/AGENTS.md) | Macro computers: values shared by the control plane (`hosted_runtimes`) and the Firecracker host agent's contract (`firecracker_host_api`): `EnrollmentGeneration` … |
 | `connection_gateway_models` |  |
-| `cow_str` |  |
+| `cowlike` |  |
 | [`database_id`](database_id/AGENTS.md) | Shared types for Databases: the ids of a database and its parts (`DatabaseId`, `TableId`, `ColumnId`, `RowId`, `OptionId`, `ViewId`, `QueryId`, `PropertyId`), each a … |
 | [`databases_types`](databases_types/AGENTS.md) | Part of Macro Databases. |
 | `dcs_types` |  |
