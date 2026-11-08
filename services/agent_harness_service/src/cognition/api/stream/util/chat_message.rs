@@ -5,9 +5,9 @@ use chat_id::ChatId;
 
 use agent_loop::types::Role;
 use agent_loop::types::{ChatMessage, ChatMessageContent};
+use ai_chat::domain::models::ResolvedMessageContent;
+use ai_chat::domain::ports::MessageService;
 use anyhow::{Context, Result};
-use chat::domain::models::ResolvedMessageContent;
-use chat::domain::ports::MessageService;
 use model::chat::{AttachmentType, NewAttachment, NewChatMessage};
 use model_entity::EntityType;
 use std::sync::Arc;

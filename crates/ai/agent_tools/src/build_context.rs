@@ -115,7 +115,7 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
     let client = cognition::outbound::CognitionClient::new(
         document_cognition_service_url::DocumentCognitionServiceUrl::new()?.as_ref(),
         &macro_auth::InternalApiKey::new()?,
-        chat::domain::models::FREE_MODEL,
+        ai_chat::domain::models::FREE_MODEL,
     )
     .map_err(rootcause::Report::into_anyhow)?;
     Ok(crate::ToolCognitionToolContext {
@@ -516,8 +516,9 @@ pub async fn build_tool_service_context_from_env(
     let notification_tool_context =
         notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
-    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
-    let chat_service = chat::domain::service::ChatServiceImpl::new(
+    let chat_repo =
+        ai_chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
+    let chat_service = ai_chat::domain::service::ChatServiceImpl::new(
         chat_repo,
         Arc::new(ai_toolset::AsyncToolCollection::new()),
         (),
@@ -525,7 +526,7 @@ pub async fn build_tool_service_context_from_env(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
     );
-    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+    let chat_tool_context = ai_chat::inbound::toolset::ChatToolContext::new(
         chat_service,
         (*entity_access_service).clone(),
     );

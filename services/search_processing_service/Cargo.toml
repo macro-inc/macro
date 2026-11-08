@@ -10,7 +10,7 @@ default = ["processing", "service", "pdf"]
 processing = [
   "dep:call",
   "dep:channels",
-  "dep:chat",
+  "dep:ai_chat",
   "dep:documents",
   "dep:email",
   "dep:kafka_util",
@@ -59,7 +59,7 @@ axum = { workspace = true }
 call = { workspace = true, optional = true }
 channels = { workspace = true, optional = true }
 messages = { workspace = true, features = ["broker"] }
-chat = { workspace = true, optional = true }
+ai_chat = { workspace = true, optional = true }
 chrono = { workspace = true }
 comms_db_client = { workspace = true }
 email = { workspace = true, optional = true }

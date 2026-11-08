@@ -642,6 +642,7 @@ agent_tools = { path = "crates/ai/agent_tools" }
 agent_trigger = { path = "crates/agents/agent_trigger" }
 ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/billing/ai_billing" }
+ai_chat = { path = "crates/comms/ai_chat", default-features = false }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
 ai_projections = { path = "crates/ai/ai_projections" }
 ai_toolset = { path = "crates/ai/ai_toolset" }
@@ -672,7 +673,6 @@ channel_sender = { path = "crates/types/channel_sender" }
 channels = { path = "crates/comms/channels" }
 channels_inbound = { path = "crates/comms/channels_inbound", default-features = false }
 channels_outbound = { path = "crates/comms/channels_outbound" }
-chat = { path = "crates/comms/chat", default-features = false }
 chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }
 claude_fold = { path = "crates/agents/claude_fold" }

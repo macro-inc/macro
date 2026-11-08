@@ -4,12 +4,12 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
-use channels::domain::models::ChannelSender;
-use chat::domain::events::{
+use ai_chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
     ChatUpdatedMetadata,
 };
+use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
+use channels::domain::models::ChannelSender;
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,

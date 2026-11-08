@@ -1,9 +1,9 @@
 use crate::cognition::api::context::ApiContext;
 use agent_loop::PredefinedModel;
+use ai_chat::domain::models::PatchChatRepoArgs;
+use ai_chat::domain::ports::ChatRepo;
+use ai_chat::outbound::postgres::PgChatRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use chat::domain::models::PatchChatRepoArgs;
-use chat::domain::ports::ChatRepo;
-use chat::outbound::postgres::PgChatRepo;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;

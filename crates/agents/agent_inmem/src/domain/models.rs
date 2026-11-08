@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use chat::domain::models::CHAT_MODELS;
+use ai_chat::domain::models::CHAT_MODELS;
 
 /// Picker entry that lets Macro choose the model. Turns run on
 /// [`AUTO_TARGET`]; [`resolve`] maps it before routing.

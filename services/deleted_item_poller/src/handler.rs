@@ -2,9 +2,9 @@
 mod test;
 
 use crate::context::{self};
+use ai_chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
-use chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
 use folder::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 use futures::future::join_all;

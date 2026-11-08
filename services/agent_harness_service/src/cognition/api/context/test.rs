@@ -447,9 +447,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
-    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
-        chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar.clone()),
+    let chat_tool_context = ai_chat::inbound::toolset::ChatToolContext::new(
+        ai_chat::domain::service::ChatServiceImpl::new(
+            ai_chat::outbound::postgres::PgChatRepo::new(
+                pool.clone(),
+                owned_entity_registrar.clone(),
+            ),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -807,8 +810,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools_prompt,
         entity_access_service: entity_access_service.clone(),
         message_service: Arc::new(
-            chat::domain::service::MessageServiceImpl::new(
-                chat::outbound::postgres::PgChatRepo::new(
+            ai_chat::domain::service::MessageServiceImpl::new(
+                ai_chat::outbound::postgres::PgChatRepo::new(
                     pool.clone(),
                     owned_entity_registrar.clone(),
                 ),
@@ -822,8 +825,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                         email_service_for_tools.clone(),
                         entity_access_service.clone(),
                     ),
-                    chat: chat::inbound::attachment::ChatAttachmentService::new(
-                        Arc::new(chat::outbound::postgres::PgChatRepo::new(
+                    chat: ai_chat::inbound::attachment::ChatAttachmentService::new(
+                        Arc::new(ai_chat::outbound::postgres::PgChatRepo::new(
                             pool.clone(),
                             owned_entity_registrar.clone(),
                         )),

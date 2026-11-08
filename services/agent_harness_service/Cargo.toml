@@ -68,7 +68,7 @@ call = { workspace = true, features = ["outbound", "ports"] }
 channels = { workspace = true, features = ["ports"] }
 channels_inbound = { workspace = true, features = ["attachment"] }
 channels_outbound = { workspace = true, features = ["attachment"] }
-chat = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound"] }
+ai_chat = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound"] }
 chrono = { workspace = true }
 codex_cloud_agents = { workspace = true }
 codex_connection = { workspace = true }

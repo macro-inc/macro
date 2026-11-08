@@ -33,7 +33,7 @@ plus the owner-grant policy for what access that owner implies.
   `macro_authorization` (feature `axum`), `bot_id`.
 - Used by: `crates/ai/memory`, `crates/ai/agent_tools`, `crates/projects/folder`,
   `crates/agents/agent_harness`, `crates/accounts/teams`, `crates/agents/agent_session`,
-  `crates/comms/chat`, `crates/documents/documents`, `crates/agents/bots`,
+  `crates/comms/ai_chat`, `crates/documents/documents`, `crates/agents/bots`,
   `crates/clients/document_storage_service_client`, and most services that create
   owned entities.
 

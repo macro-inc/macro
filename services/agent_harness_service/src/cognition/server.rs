@@ -415,8 +415,8 @@ pub async fn build(
             email_service_for_tools.clone(),
             entity_access_service.clone(),
         ),
-        chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(
+        chat: ai_chat::inbound::attachment::ChatAttachmentService::new(
+            Arc::new(ai_chat::outbound::postgres::PgChatRepo::new(
                 db.clone(),
                 owned_entity_registrar.clone(),
             )),
@@ -431,8 +431,11 @@ pub async fn build(
         )),
     };
     let message_service = Arc::new(
-        chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
+        ai_chat::domain::service::MessageServiceImpl::new(
+            ai_chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
             attachment_provider,
         )
         .with_event_broker(macro_event_broker.clone()),
@@ -503,9 +506,12 @@ pub async fn build(
 
     tracing::info!("initialized call tool context");
 
-    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
-        chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
+    let chat_tool_context = ai_chat::inbound::toolset::ChatToolContext::new(
+        ai_chat::domain::service::ChatServiceImpl::new(
+            ai_chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(

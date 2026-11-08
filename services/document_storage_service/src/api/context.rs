@@ -601,8 +601,8 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Chat service used by the unified entity mutation adapter.
-pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+pub(crate) type DssChatMutationService = ai_chat::domain::service::ChatServiceImpl<
+    ai_chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
 >;
@@ -610,8 +610,8 @@ pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
 /// Chat service for owner-checked permanent deletes. Unlike
 /// [`DssChatMutationService`] it publishes chat events, which is how search
 /// and activity learn a chat is gone.
-pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+pub(crate) type DssChatPurgeService = ai_chat::domain::service::ChatServiceImpl<
+    ai_chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
     DssEventBroker,

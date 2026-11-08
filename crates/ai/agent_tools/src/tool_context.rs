@@ -1,3 +1,6 @@
+use ai_chat::domain::service::ChatServiceImpl;
+use ai_chat::inbound::toolset::ChatToolContext;
+use ai_chat::outbound::postgres::PgChatRepo;
 use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
 use bots::{
@@ -23,9 +26,6 @@ use channels_outbound::{
     pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
     pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
 };
-use chat::domain::service::ChatServiceImpl;
-use chat::inbound::toolset::ChatToolContext;
-use chat::outbound::postgres::PgChatRepo;
 pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;

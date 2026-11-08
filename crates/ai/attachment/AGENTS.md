@@ -21,7 +21,7 @@ dependency on any domain crate.
 - Owns: the `AttachmentService`/`Attachable` trait contracts and shared formatting
   types used to turn entities into AI context.
 - Not here: resolving a specific entity type — each domain crate implements
-  `AttachmentService` in its own `inbound/attachment/` module (e.g. `crates/comms/chat`,
+  `AttachmentService` in its own `inbound/attachment/` module (e.g. `crates/comms/ai_chat`,
   `crates/comms/channels`, `crates/documents/documents`, `crates/email/email`).
 
 ## Boundaries

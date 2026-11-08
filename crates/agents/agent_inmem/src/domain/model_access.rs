@@ -1,8 +1,8 @@
 //! Plan-based model access for the in-memory runtime only.
 
 use agent_api_keys::domain::ModelProvider;
+use ai_chat::domain::models::FREE_MODEL;
 use async_trait::async_trait;
-use chat::domain::models::FREE_MODEL;
 use model_owner::Owner;
 use roles_and_permissions::domain::{model::PermissionId, port::UserRolesAndPermissionsService};
 

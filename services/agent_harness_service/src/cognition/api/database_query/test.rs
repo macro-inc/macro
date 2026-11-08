@@ -30,7 +30,7 @@ async fn admission_rejects_before_database_discovery_or_model_calls(pool: sqlx::
             .oneshot(authorized_request(
                 "/database-query",
                 json!({
-                    "model": chat::domain::models::FREE_MODEL, "prompt": "Count books",
+                    "model": ai_chat::domain::models::FREE_MODEL, "prompt": "Count books",
                     "sql": "", "schema": {"name": "Automatic", "tables": []}
                 }),
             ))

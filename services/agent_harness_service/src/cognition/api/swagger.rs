@@ -41,8 +41,8 @@ use crate::cognition::api::preview::get_batch_preview::{
     GetBatchPreviewRequest, GetBatchPreviewResponse,
 };
 
-use chat::domain::models::{ChatResponse, FreeTierModel, GetChatResponse, WebCitation};
-use chat::inbound::http::router::{
+use ai_chat::domain::models::{ChatResponse, FreeTierModel, GetChatResponse, WebCitation};
+use ai_chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
     UpdateToolResponseRequest,

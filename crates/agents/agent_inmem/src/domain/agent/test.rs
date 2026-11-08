@@ -671,7 +671,7 @@ async fn new_session_advertises_the_engine_supported_models() {
         vec![
             ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
             ("other-model", "other-model"),
-            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
+            (ai_chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
         ]
     );
 
@@ -1646,7 +1646,7 @@ async fn a_conversation_longer_than_one_summary_call_reads_is_summarized_in_part
         // Gemini's window: a summary starts at 629,145 tokens, and covers
         // the three messages before the fourth, past the 400,000 one summary
         // call reads.
-        use_model(&state, chat::domain::models::FREE_MODEL);
+        use_model(&state, ai_chat::domain::models::FREE_MODEL);
         for _ in 0..4 {
             prompt(&connection, &session, &big(610_000)).await;
         }
@@ -2777,7 +2777,7 @@ async fn effort_is_validated_and_model_changes_return_complete_options() {
 #[tokio::test]
 async fn free_session_defaults_to_gemini_and_rejects_paid_model_changes() {
     use crate::domain::model_access::ModelAccess;
-    use chat::domain::models::FREE_MODEL;
+    use ai_chat::domain::models::FREE_MODEL;
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
     let access = Arc::new(crate::testing::TestModelAccess::new(ModelAccess::Free));
     let (_, config, ()) = with_model_access(
@@ -2871,7 +2871,10 @@ async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
                         .block_task()
                         .await
                         .unwrap();
-                    assert_eq!(engine.requests()[0].model, chat::domain::models::FREE_MODEL);
+                    assert_eq!(
+                        engine.requests()[0].model,
+                        ai_chat::domain::models::FREE_MODEL
+                    );
                 }
             },
         )

@@ -9,7 +9,7 @@ fn admission_request(chat_id: Option<String>) -> HttpSendChatMessageRequest {
         speed: agent_loop::ModelSpeed::Standard,
         content: "hello".into(),
         chat_id,
-        model: chat::domain::models::FREE_MODEL.into(),
+        model: ai_chat::domain::models::FREE_MODEL.into(),
         additional_instructions: None,
         attachments: None,
         toolset: ToolSet::None,

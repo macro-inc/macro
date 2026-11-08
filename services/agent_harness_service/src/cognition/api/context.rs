@@ -5,14 +5,14 @@ use agent_tools::{
     ToolEmailToolContext, ToolEntityAccessService, ToolPropertiesToolContext, ToolServiceContext,
     ToolSoupService,
 };
+use ai_chat::domain::service::MessageServiceImpl;
+use ai_chat::inbound::attachment::ChatAttachmentService;
+use ai_chat::outbound::postgres::PgChatRepo;
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels_inbound::attachment::ChannelAttachmentService;
 use channels_outbound::pg_channels_repo::PgChannelsRepo;
-use chat::domain::service::MessageServiceImpl;
-use chat::inbound::attachment::ChatAttachmentService;
-use chat::outbound::postgres::PgChatRepo;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
@@ -60,7 +60,7 @@ pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
 >;
 
 /// Type alias for the chat model entitlement extractor wired to DCS services.
-pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
+pub type DcsChatModelAccess = ai_chat::inbound::http::extractors::ChatModelAccess<
     DcsAuthorizationService,
     DcsUserPermissionsService,
 >;
@@ -196,10 +196,10 @@ pub struct ApiContext {
 }
 
 impl FromRef<ApiContext>
-    for chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
+    for ai_chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
 {
     fn from_ref(state: &ApiContext) -> Self {
-        chat::inbound::http::extractors::UserPermissionsState(
+        ai_chat::inbound::http::extractors::UserPermissionsState(
             state.user_permissions_service.clone(),
         )
     }

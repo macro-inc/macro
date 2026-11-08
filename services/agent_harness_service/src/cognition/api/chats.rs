@@ -2,6 +2,11 @@ pub mod chat_history;
 pub mod chat_history_batch_messages;
 
 use super::context::{ApiContext, DcsAuthorizationService};
+use ai_chat::domain::service::ChatServiceImpl;
+use ai_chat::inbound::http::router::{
+    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
+};
+use ai_chat::outbound::postgres::PgChatRepo;
 use axum::{
     Router,
     extract::Request,
@@ -10,11 +15,6 @@ use axum::{
     routing::{get, post},
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use chat::domain::service::ChatServiceImpl;
-use chat::inbound::http::router::{
-    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
-};
-use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;

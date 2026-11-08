@@ -19,9 +19,9 @@
 
 use std::{future::Future, sync::Arc};
 
+use ai_chat::domain::ports::ChatService;
 use call::domain::ports::CallService;
 use channels::domain::ports::ChannelService;
-use chat::domain::ports::ChatService;
 use databases::domain::ports::DatabasesService;
 use documents_hex::domain::ports::DocumentService;
 use email::domain::ports::EmailService;

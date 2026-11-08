@@ -12,12 +12,12 @@ mod test;
 
 use std::{future::Future, time::Duration};
 
+use ai_chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use channels::domain::{
     broker_events::{ChannelMacroEvent, ChannelTopicEvent},
     models::ReferencedShareItemType,
 };
-use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
 use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
