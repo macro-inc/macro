@@ -3,6 +3,33 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn absent_node_keys_return_null_like_the_upstream_map_lookup()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let mut replay = Replayer::default();
+    for args in [
+        json!(["missing"]),
+        json!([]),
+        json!([null]),
+        json!([7]),
+        json!([{"$undef":true}]),
+    ] {
+        assert_eq!(
+            api::lexical::call(
+                &mut replay,
+                &mut tx,
+                &json!({"fn":"lexical.$getNodeByKey", "args":args})
+            )?,
+            serde_json::Value::Null
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn indexed_calls_mutate_the_same_model_and_keep_captured_records()
 -> Result<(), crate::replay::ReplayError> {
     let mut editor = Editor::builder(EditorMode::Headless)

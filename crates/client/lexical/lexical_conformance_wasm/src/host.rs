@@ -85,7 +85,9 @@ pub(super) fn from_js(value: JsValue) -> Result<Value, JsError> {
 pub(super) fn to_js(value: Value) -> Result<JsValue, JsError> {
     let result = serde::Serialize::serialize(
         &value,
-        &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
+        &serde_wasm_bindgen::Serializer::new()
+            .serialize_maps_as_objects(true)
+            .serialize_missing_as_null(true),
     )
     .map_err(debug::error)?;
     debug::json_payload(&value);

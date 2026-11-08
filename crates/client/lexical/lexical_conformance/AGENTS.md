@@ -77,3 +77,7 @@ indexed dispatch; it validates the exact active editor and pending update first.
 Session application listeners reuse the model priority pipeline; command dispatch
 requires an explicit pending update. JS identity and opaque values belong to the
 development WASM adapter, not the portable shared API value encoding.
+
+$getNodeByKey follows the upstream Map lookup for absent or non-key arguments:
+return null instead of failing raw-key binding resolution. The WASM host retains
+JSON null distinctly from the fixture encoding for undefined.
