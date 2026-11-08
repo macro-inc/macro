@@ -51,6 +51,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
 - Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
+- Runtime command registration deduplicates callback identity at each command/priority and snapshots each priority when reached; runtime transforms snapshot per type for each pipeline pass and follow build-time transforms. Unregister updates listener priorities immediately.
 - Clone hooks run before projected mutable access. Invalid native parent fields from infallible clones reject flush and publication; snapshots retain their previous values.
 
 - Accepted text splices acquire writable records even for unchanged content; equal set_text_content remains a no-op.
