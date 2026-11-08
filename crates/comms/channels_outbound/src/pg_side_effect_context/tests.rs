@@ -2,6 +2,7 @@ use crate::pg_side_effect_context::PgChannelSideEffectContext;
 use channels::domain::ports::ChannelSideEffectContext;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
+use thread_id::ThreadId;
 use uuid::Uuid;
 
 const USER_A: &str = "macro|user-a@test.com";
@@ -21,7 +22,9 @@ async fn thread_notification_context_excludes_departed_senders(
     // ch3 thread parent (msg id 0x..31) was authored by an active participant,
     // while its only reply was authored by a participant who has since left.
     let parent = Uuid::from_u128(0x00000000_0000_0000_0000_000000000031);
-    let context = ctx.get_thread_notification_context(parent).await?;
+    let context = ctx
+        .get_thread_notification_context(ThreadId::from_uuid(parent))
+        .await?;
 
     let ids: Vec<&str> = context.participants.iter().map(|p| p.as_ref()).collect();
     assert!(
@@ -48,7 +51,9 @@ async fn thread_notification_context_excludes_deleted_messages(
     // user-b that @-mentioned them (whose mention row still exists). Neither may
     // keep notifying user-e about later replies.
     let parent = Uuid::from_u128(0x00000000_0000_0000_0000_000000000041);
-    let context = ctx.get_thread_notification_context(parent).await?;
+    let context = ctx
+        .get_thread_notification_context(ThreadId::from_uuid(parent))
+        .await?;
 
     let ids: Vec<&str> = context.participants.iter().map(|p| p.as_ref()).collect();
     assert!(
