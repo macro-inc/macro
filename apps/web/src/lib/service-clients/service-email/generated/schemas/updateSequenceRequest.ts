@@ -24,8 +24,6 @@ export interface UpdateSequenceRequest {
   status?: UpdateSequenceRequestStatus;
   /** New steps. */
   steps?: UpdateSequenceRequestSteps;
-  /** The version the caller last read. */
-  version: number;
   /** Whether steps skip weekends. */
   weekdaysOnly?: UpdateSequenceRequestWeekdaysOnly;
 }

@@ -4,9 +4,8 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::models::{
-    ContactEnrollment, CrmPerson, EnrollResult, EnrollmentAction, EnrollmentDetail, EnrollmentRow,
-    EnrollmentSummary, HistoryRow, Owner, Sequence, SequenceError, SequenceSummary, Step,
-    UnsubscribeToken,
+    ContactEnrollment, CrmPerson, EnrollResult, EnrollmentAction, EnrollmentRow, EnrollmentSummary,
+    HistoryRow, Owner, Sequence, SequenceError, SequenceSummary, Step, UnsubscribeToken,
 };
 use super::service::{EnrollRequest, SequencePatch};
 
@@ -22,7 +21,7 @@ pub struct NewSequence {
     /// Footer line.
     #[serde(default)]
     pub footer: String,
-    /// Step templates.
+    /// Its emails.
     #[serde(default)]
     pub steps: Vec<Step>,
 }
@@ -34,16 +33,12 @@ pub struct NewEnrollment<'a> {
     pub sequence_id: Uuid,
     /// The team.
     pub team_id: Uuid,
-    /// Sending inbox, the sequence's at enrollment.
-    pub link_id: Option<Uuid>,
     /// The CRM person.
     pub crm_contact_id: Uuid,
     /// Normalized address.
     pub email: &'a str,
     /// Display name.
     pub contact_name: Option<&'a str>,
-    /// Rendered steps.
-    pub steps: &'a [Step],
     /// When the first step is due.
     pub due_at: DateTime<Utc>,
     /// IANA time zone.
@@ -61,19 +56,6 @@ pub struct RecipientState {
     pub unsubscribed: bool,
 }
 
-/// An enrollment no step has been created for yet.
-#[derive(Debug, Clone)]
-pub struct UnstartedEnrollment {
-    /// Enrollment id.
-    pub id: Uuid,
-    /// Enrolled address.
-    pub email: String,
-    /// Name at enrollment.
-    pub contact_name: Option<String>,
-    /// The address's unsubscribe token.
-    pub token: UnsubscribeToken,
-}
-
 /// An enrollment due for its next step.
 #[derive(Debug, Clone)]
 pub struct DueEnrollment {
@@ -81,12 +63,16 @@ pub struct DueEnrollment {
     pub id: Uuid,
     /// When it came due.
     pub due_at: DateTime<Utc>,
-    /// Its inbox.
-    pub link_id: Option<Uuid>,
+    /// The inbox it sends from.
+    pub link_id: Uuid,
+    /// The sequence's owner.
+    pub owner_id: String,
+    /// The team it belongs to.
+    pub team_id: Uuid,
+    /// The CRM person; `None` once they are deleted from the CRM.
+    pub crm_contact_id: Option<Uuid>,
     /// Enrolled address.
     pub email: String,
-    /// Name at enrollment.
-    pub contact_name: Option<String>,
 }
 
 /// What a sent step recorded.
@@ -169,7 +155,7 @@ pub trait SequenceRepo: Send + Sync + 'static {
         id: Uuid,
         share: bool,
     ) -> impl Future<Output = Result<Option<Sequence>, Self::Err>> + Send;
-    /// Write a sequence's fields and status, bumping its version.
+    /// Write a sequence's fields and status.
     fn save_sequence(
         &self,
         tx: &mut Self::Tx,
@@ -181,28 +167,19 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Lock a sequence's live enrollments in id order. The rows come without
-    /// their rendered steps, which pause and delete don't read.
+    /// Lock a sequence's live enrollments in id order.
     fn lock_live_enrollments(
         &self,
         tx: &mut Self::Tx,
         sequence_id: Uuid,
     ) -> impl Future<Output = Result<Vec<EnrollmentRow>, Self::Err>> + Send;
-
-    /// Lock a sequence's live enrollments that no step has been created for,
-    /// in id order.
-    fn lock_unstarted_enrollments(
+    /// A sequence as it is now, read without a lock: the sweep and owner
+    /// actions hold an enrollment lock, which comes after the sequence's.
+    fn current_sequence(
         &self,
         tx: &mut Self::Tx,
-        sequence_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<UnstartedEnrollment>, Self::Err>> + Send;
-    /// Replace enrollments' rendered steps and give them the inbox.
-    fn restage_enrollments(
-        &self,
-        tx: &mut Self::Tx,
-        link_id: Option<Uuid>,
-        steps: &[(Uuid, Vec<Step>)],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Sequence>, Self::Err>> + Send;
 
     // Enrollments.
 
@@ -212,12 +189,6 @@ pub trait SequenceRepo: Send + Sync + 'static {
         owner: &Owner,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<EnrollmentSummary>, Self::Err>> + Send;
-    /// One of the owner's enrollments with its steps.
-    fn enrollment_detail(
-        &self,
-        owner: &Owner,
-        id: Uuid,
-    ) -> impl Future<Output = Result<Option<EnrollmentDetail>, Self::Err>> + Send;
     /// Lock an enrollment (`FOR UPDATE`, never its sequence). `skip_locked`
     /// returns `None` when another transaction holds it.
     fn lock_enrollment(
@@ -243,7 +214,7 @@ pub trait SequenceRepo: Send + Sync + 'static {
         &self,
         tx: &mut Self::Tx,
         enrollment_id: Uuid,
-        step: i16,
+        step_id: Uuid,
         message_id: Uuid,
         scheduled_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -252,7 +223,7 @@ pub trait SequenceRepo: Send + Sync + 'static {
         &self,
         tx: &mut Self::Tx,
         enrollment_id: Uuid,
-        step: i16,
+        step_id: Uuid,
         sent: &SentStep,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Mark a step unknown: it may have been sent and is never resent.
@@ -260,14 +231,14 @@ pub trait SequenceRepo: Send + Sync + 'static {
         &self,
         tx: &mut Self::Tx,
         enrollment_id: Uuid,
-        step: i16,
+        step_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Forget a withdrawn step so it can be created again.
     fn delete_step(
         &self,
         tx: &mut Self::Tx,
         enrollment_id: Uuid,
-        step: i16,
+        step_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     // Enrolling and unsubscribing.
@@ -316,7 +287,6 @@ pub trait SequenceRepo: Send + Sync + 'static {
         &self,
         team_id: Uuid,
         email: &str,
-        viewer: &str,
     ) -> impl Future<Output = Result<Vec<ContactEnrollment>, Self::Err>> + Send;
 
     // Sweep.
@@ -335,12 +305,13 @@ pub trait SequenceRepo: Send + Sync + 'static {
         limit: i64,
         skip_inboxes: &[Uuid],
     ) -> impl Future<Output = Result<Vec<DueEnrollment>, Self::Err>> + Send;
-    /// Give active enrollments with neither a due time nor an unsent step a
-    /// due time, so none waits forever. Returns how many.
-    fn heal_stranded(
+    /// Take the inbox's send-slot lock for the rest of the transaction, so
+    /// two steps from one inbox are never spaced against the same slot.
+    fn lock_send_slot(
         &self,
-        due_at: DateTime<Utc>,
-    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Steps scheduled from the inbox after `since`, sent or not. Read under
     /// the inbox's send-slot lock, so the count can't race a new step.
     fn steps_since(
@@ -349,17 +320,6 @@ pub trait SequenceRepo: Send + Sync + 'static {
         link_id: Uuid,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
-    /// Push an enrollment's due time back after a failed attempt to create its step.
-    fn defer(
-        &self,
-        enrollment_id: Uuid,
-        due_at: DateTime<Utc>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Which of these messages are some enrollment's step.
-    fn known_steps(
-        &self,
-        message_ids: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
     /// Whether the inbox has any live enrollment.
     fn has_live_enrollments(
         &self,
@@ -431,12 +391,6 @@ pub trait SequencesApi: Send + Sync + 'static {
         id: Uuid,
         request: EnrollRequest,
     ) -> impl Future<Output = Result<Vec<EnrollResult>, SequenceError>> + Send;
-    /// An enrollment with its steps.
-    fn enrollment(
-        &self,
-        user_id: &str,
-        id: Uuid,
-    ) -> impl Future<Output = Result<EnrollmentDetail, SequenceError>> + Send;
     /// Act on an enrollment.
     fn act(
         &self,

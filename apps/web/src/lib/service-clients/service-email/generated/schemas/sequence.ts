@@ -24,12 +24,10 @@ export interface Sequence {
   name: string;
   /** Lifecycle status. */
   status: SequenceStatus;
-  /** Step templates. */
+  /** Its emails, in order. */
   steps: Step[];
   /** When it last changed. */
   updatedAt: string;
-  /** Incremented by every change; edits must name the version they saw. */
-  version: number;
   /** Steps never go out on a Saturday or Sunday in the time zone people
 were added in; they go the Monday after. */
   weekdaysOnly: boolean;

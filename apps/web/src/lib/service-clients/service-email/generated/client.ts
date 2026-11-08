@@ -31,7 +31,6 @@ import type {
   EmlFile,
   EmptyResponse,
   EnrollmentActionRequest,
-  EnrollmentDetail,
   EnrollmentSummary,
   EnrollRequest,
   EnrollResponse,
@@ -3246,53 +3245,6 @@ export const contactEnrollments = async (
 };
 
 /**
- * @summary An enrollment with its rendered steps and what happened to each.
- */
-export type getEnrollmentResponse200 = {
-  data: EnrollmentDetail;
-  status: 200;
-};
-
-export type getEnrollmentResponse404 = {
-  data: SequenceErrorResponse;
-  status: 404;
-};
-
-export type getEnrollmentResponseSuccess = getEnrollmentResponse200 & {
-  headers: Headers;
-};
-export type getEnrollmentResponseError = getEnrollmentResponse404 & {
-  headers: Headers;
-};
-
-export type getEnrollmentResponse =
-  | getEnrollmentResponseSuccess
-  | getEnrollmentResponseError;
-
-export const getGetEnrollmentUrl = (id: string) => {
-  return `/email/sequences/enrollments/${id}`;
-};
-
-export const getEnrollment = async (
-  id: string,
-  options?: RequestInit
-): Promise<getEnrollmentResponse> => {
-  const res = await fetch(getGetEnrollmentUrl(id), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getEnrollmentResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getEnrollmentResponse;
-};
-
-/**
  * @summary Pause, resume, stop or unsubscribe an enrollment.
  */
 export type updateEnrollmentResponse200 = {
@@ -3445,7 +3397,7 @@ export const deleteSequence = async (
 };
 
 /**
- * @summary Edit a draft or paused sequence, or change its status.
+ * @summary Edit a sequence or change its status.
  */
 export type updateSequenceResponse200 = {
   data: Sequence;

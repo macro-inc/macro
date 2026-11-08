@@ -4,7 +4,7 @@ import { ActionDialogShell, Button, Checkbox, Dialog, Input } from '@ui';
 import { createUniqueId, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { Person } from '../context/sequences-context';
 import { DAILY_SENDS, SEQUENCE_LIMITS } from '../core/sequence';
-import { skipMessage } from './failure-message';
+import { skipMessage } from './failure';
 
 /** People the server skipped, after the rest were enrolled. */
 export type EnrollOutcome = {

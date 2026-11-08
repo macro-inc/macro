@@ -249,7 +249,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('./use-crm', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: true,
-    data: { team: { id: 'team', crm_enabled: false } },
+    data: { team: { id: 'team', crm_enabled: true } },
   }),
   useCrmLists: () => ({
     lists: () => [

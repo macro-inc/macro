@@ -208,7 +208,6 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       hasAttachments: false,
       scheduledSendTime: null,
       scheduledSendStatus: null,
-      scheduledSendSource: null,
       from: { email: 'sender@example.com', name: null, photoUrl: null },
       to: [{ email: 'recipient@example.com', name: null, photoUrl: null }],
       cc: [],

@@ -17,6 +17,6 @@ export interface SequenceInput {
   linkId?: SequenceInputLinkId;
   /** Display name. */
   name: string;
-  /** Step templates. */
+  /** Its emails. */
   steps?: Step[];
 }

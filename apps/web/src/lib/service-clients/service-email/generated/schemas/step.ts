@@ -6,8 +6,7 @@
  */
 
 /**
- * One email of a sequence. A sequence holds templates; an enrollment holds
-them rendered for its contact.
+ * One email of a sequence, rendered for each person when it is created.
  */
 export interface Step {
   /** Send as a reply in the previous email's thread. */
@@ -21,6 +20,9 @@ Monday after.
    * @minimum 0
    */
   delayDays: number;
-  /** Subject line; a reply step uses its thread's subject instead. */
+  /** Stable across edits; step history is keyed by it. New steps bring a
+fresh UUIDv7. */
+  id: string;
+  /** Subject line; a reply step uses its thread's instead. */
   subject: string;
 }

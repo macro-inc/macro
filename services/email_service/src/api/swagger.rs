@@ -129,7 +129,6 @@ use utoipa::OpenApi;
         email_sequences::inbound::axum_router::update_sequence,
         email_sequences::inbound::axum_router::delete_sequence,
         email_sequences::inbound::axum_router::enroll_contacts,
-        email_sequences::inbound::axum_router::get_enrollment,
         email_sequences::inbound::axum_router::update_enrollment,
         email_sequences::inbound::axum_router::contact_enrollments,
     ),
@@ -216,7 +215,6 @@ use utoipa::OpenApi;
             service::message::Message,
             PatchSettingsRequest,
             PatchSettingsResponse,
-            // Sequences
             email_sequences::inbound::axum_router::ListSequencesResponse,
             email_sequences::inbound::axum_router::SequenceDetailResponse,
             email_sequences::inbound::axum_router::EnrollResponse,

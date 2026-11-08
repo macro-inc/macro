@@ -36,7 +36,6 @@ import type {
   CreateDraftRequest,
   CreateDraftResponse,
   EnrollmentActionRequest,
-  EnrollmentDetail,
   EnrollmentSummary,
   EnrollRequest,
   EnrollResponse,
@@ -1072,7 +1071,7 @@ export const emailClient = {
       { method: 'GET' }
     );
   },
-  /** Edits and status changes; `version` is the one the caller last saw. */
+  /** Edits and status changes; each field given replaces the stored one. */
   async updateSequence(sequenceId: string, request: UpdateSequenceRequest) {
     return sequenceFetch<Sequence>(`/email/sequences/${sequenceId}`, {
       method: 'PATCH',
@@ -1091,13 +1090,6 @@ export const emailClient = {
       { method: 'POST', body: JSON.stringify(request) }
     );
   },
-  /** One enrollment with its frozen steps and their history. */
-  async getEnrollment(enrollmentId: string) {
-    return sequenceFetch<EnrollmentDetail>(
-      `/email/sequences/enrollments/${enrollmentId}`,
-      { method: 'GET' }
-    );
-  },
   async updateEnrollment(
     enrollmentId: string,
     request: EnrollmentActionRequest
@@ -1107,7 +1099,7 @@ export const emailClient = {
       { method: 'PATCH', body: JSON.stringify(request) }
     );
   },
-  /** A CRM contact's enrollments across the team, without step content. */
+  /** A CRM contact's enrollments across the team. */
   async contactEnrollments(crmContactId: string) {
     return sequenceFetch<ContactEnrollmentsResponse>(
       `/email/sequences/contacts/${crmContactId}`,

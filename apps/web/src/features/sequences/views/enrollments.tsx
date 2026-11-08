@@ -1,4 +1,3 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type {
@@ -7,58 +6,25 @@ import type {
   SequenceStatus,
 } from '@service-email/generated/schemas';
 import { ConfirmDialog, EmptyStatePanel } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
-import { EnrollmentRow, EnrollmentSteps } from '../components/enrollment-row';
-import { failureMessage } from '../components/failure-message';
-import { InlineFailure } from '../components/inline-failure';
+import { createSignal, For, Show } from 'solid-js';
+import { EnrollmentRow } from '../components/enrollment-row';
+import { failureMessage } from '../components/failure';
 import { useSequences } from '../context/sequences-context';
-import { enrollmentActions, isRetry, shownStatus } from '../core/sequence';
+import { enrollmentActions, shownStatus } from '../core/sequence';
 
 const SURFACE = 'sequences.enrollments';
-
-/** Fetched when its row opens, so the list stays a page of summaries. */
-function EnrollmentStepsView(props: { enrollmentId: string }) {
-  const source = useSequences().createEnrollment(() => props.enrollmentId);
-  return (
-    <Switch>
-      <Match when={source.detail()}>
-        {(detail) => <EnrollmentSteps steps={detail().steps} />}
-      </Match>
-      <Match when={source.failed()}>
-        <InlineFailure
-          message={t('sequences.stepsLoadFailed')}
-          retryable
-          onRetry={() => fireAndForget(source.refresh(), SURFACE)}
-        />
-      </Match>
-      <Match when={source.pending()}>
-        <ListSkeleton.Root label={t('sequences.loadingSteps')}>
-          <ListSkeleton.Row>
-            <ListSkeleton.Bar class="h-3 w-2/3" />
-          </ListSkeleton.Row>
-        </ListSkeleton.Root>
-      </Match>
-    </Switch>
-  );
-}
 
 export function EnrollmentsView(props: {
   sequenceId: string;
   sequenceStatus: SequenceStatus;
+  stepCount: number;
   enrollments: readonly EnrollmentSummary[];
   onEnroll: () => void;
   onOpenContact: (contactId: string) => void;
 }) {
   const context = useSequences();
   const commands = context.createEnrollmentCommands(() => props.sequenceId);
-  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
   const [unsubscribing, setUnsubscribing] = createSignal<EnrollmentSummary>();
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
   async function run(enrollment: EnrollmentSummary, action: EnrollmentAction) {
     const result = await commands.run(enrollment, action);
     if (result.isErr()) context.feedback.failure(failureMessage(result.error));
@@ -97,11 +63,9 @@ export function EnrollmentsView(props: {
                 enrollment,
                 props.sequenceStatus !== 'active'
               )}
+              stepCount={props.stepCount}
               actions={enrollmentActions(enrollment, props.sequenceStatus)}
-              retry={isRetry(enrollment)}
               busy={commands.pending(enrollment.id)}
-              expanded={expanded().has(enrollment.id)}
-              onToggle={() => toggle(enrollment.id)}
               onAction={(action) =>
                 action === 'unsubscribe'
                   ? setUnsubscribing(enrollment)
@@ -112,9 +76,7 @@ export function EnrollmentsView(props: {
                   ? () => props.onOpenContact(enrollment.crmContactId!)
                   : undefined
               }
-            >
-              <EnrollmentStepsView enrollmentId={enrollment.id} />
-            </EnrollmentRow>
+            />
           )}
         </For>
       </Show>

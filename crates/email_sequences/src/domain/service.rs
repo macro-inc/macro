@@ -3,38 +3,35 @@
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
     models::{ContactInfo, UserProvider},
-    sequence_steps::{CancelExpectation, CancelOutcome, SendingInbox, SequenceStepStore},
+    sequence_steps::{CancelOutcome, SendingInbox, SequenceStepStore},
 };
 use macro_user_id::email::EmailStr;
 use uuid::Uuid;
 
 use super::{
     models::{
-        ContactEnrollment, EnrollResult, EnrollSkip, EnrollmentAction, EnrollmentDetail,
-        EnrollmentReason, EnrollmentRow, EnrollmentStatus, EnrollmentSummary, HistoryRow, Owner,
-        Recipient, Sequence, SequenceError, SequenceStatus, SequenceSummary, Step, StepStatus,
-        normalize_email,
+        ContactEnrollment, EnrollResult, EnrollSkip, EnrollmentAction, EnrollmentReason,
+        EnrollmentRow, EnrollmentStatus, EnrollmentSummary, HistoryRow, Owner, Sequence,
+        SequenceError, SequenceStatus, SequenceSummary, Step, StepStatus, normalize_email,
     },
     ports::{NewEnrollment, NewSequence, OwnerAccess, SentStep, SequenceRepo},
     render::{self, InvalidSequence, Problem},
     timing,
 };
 
-/// A step this far past its send time and still unsent needs attention.
+/// A step this far past its send time and still unsent needs attention. The
+/// pipeline reconciles an uncertain send every 5 minutes and retries a failed
+/// preparation every minute, so by then it isn't resolving itself.
 pub(super) const STUCK_AFTER: Duration = Duration::minutes(30);
 
 /// Most contacts one enroll request may add.
-pub const MAX_ENROLL: usize = 50;
-/// How far ahead an enrollment may start.
-const MAX_START_AHEAD: Duration = Duration::days(366);
+const MAX_ENROLL: usize = 50;
 
 /// Changes to a sequence; `None` leaves a field as it is.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema), schema(as = UpdateSequenceRequest))]
 #[serde(rename_all = "camelCase")]
 pub struct SequencePatch {
-    /// The version the caller last read.
-    pub version: i32,
     /// New status.
     pub status: Option<SequenceStatus>,
     /// New name.
@@ -80,24 +77,35 @@ fn invalid(problem: Problem) -> SequenceError {
     SequenceError::Invalid(InvalidSequence::new(problem, None))
 }
 
-/// Steps as stored: text without control characters, and no wait before the
-/// first, which goes at each enrollment's start.
+/// Steps as stored: clean text, one id each, and a first step that neither
+/// waits nor replies, since it goes at each enrollment's start.
 fn clean_steps(steps: Vec<Step>) -> Vec<Step> {
+    let mut ids = std::collections::HashSet::new();
     steps
         .into_iter()
         .enumerate()
         .map(|(index, step)| Step {
-            subject: render::clean_text(&step.subject),
-            body: render::clean_text(&step.body),
+            id: if ids.insert(step.id) {
+                step.id
+            } else {
+                macro_uuid::generate_uuid_v7()
+            },
             delay_days: if index == 0 { 0 } else { step.delay_days },
-            ..step
+            subject: render::clean_subject(&step.subject),
+            body: render::clean_text(&step.body),
+            as_reply: index > 0 && step.as_reply,
         })
         .collect()
 }
 
-/// Whether steps can go out from `inbox` for `owner_id`: it is their own Gmail.
-fn sends_for(inbox: &SendingInbox, owner_id: &str) -> bool {
-    inbox.provider == UserProvider::Gmail && inbox.macro_id == owner_id
+/// What decides when each step is due.
+fn timing_of(sequence: &Sequence) -> (Vec<(Uuid, u16)>, bool) {
+    let steps = sequence
+        .steps
+        .iter()
+        .map(|step| (step.id, step.delay_days))
+        .collect();
+    (steps, sequence.weekdays_only)
 }
 
 /// The step still waiting to send, if any.
@@ -105,6 +113,43 @@ pub(super) fn in_flight(history: &[HistoryRow]) -> Option<&HistoryRow> {
     history
         .iter()
         .find(|step| step.status == StepStatus::Scheduled)
+}
+
+/// The step an enrollment sends next and its position: the one after the last
+/// step it reached that is still in the sequence, or the first when it reached
+/// none of them. `None` once it is past the last.
+pub(super) fn next_step<'a>(
+    steps: &'a [Step],
+    history: &[HistoryRow],
+) -> Option<(usize, &'a Step)> {
+    let reached = steps
+        .iter()
+        .rposition(|step| history.iter().any(|row| row.step_id == step.id));
+    let index = reached.map_or(0, |at| at + 1);
+    steps.get(index).map(|step| (index, step))
+}
+
+/// When `next` is due: by the timing rule from the last email the enrollment
+/// sent or skipped, or, before its first, at its planned start.
+pub(super) fn next_due(
+    row: &EnrollmentRow,
+    history: &[HistoryRow],
+    next: &Step,
+    now: DateTime<Utc>,
+) -> DateTime<Utc> {
+    match history
+        .iter()
+        .filter(|step| step.status != StepStatus::Scheduled)
+        .max_by_key(|step| step.scheduled_at)
+    {
+        Some(last) => timing::next_due(last.scheduled_at, next.delay_days, row.clock, now),
+        None => timing::first_due(row.due_at.unwrap_or(now), row.clock, now),
+    }
+}
+
+/// Whether steps can go out from `inbox` for `owner_id`: their own Gmail.
+fn sends_for(inbox: &SendingInbox, owner_id: &str) -> bool {
+    inbox.healthy && inbox.provider == UserProvider::Gmail && inbox.macro_id == owner_id
 }
 
 impl<R, S, A> Sequences<R, S, A>
@@ -134,14 +179,46 @@ where
             .team_of(user_id)
             .await
             .map_err(internal)?
-            .ok_or(SequenceError::NoTeam)?;
+            .ok_or(SequenceError::CrmUnavailable)?;
         if !self.access.crm_enabled(team_id).await.map_err(internal)? {
-            return Err(SequenceError::CrmDisabled);
+            return Err(SequenceError::CrmUnavailable);
         }
         Ok(Owner {
             user_id: user_id.to_owned(),
             team_id,
         })
+    }
+
+    /// The inbox a step may go out from now: the owner's own healthy Gmail.
+    pub(super) async fn usable_inbox(
+        &self,
+        tx: &mut R::Tx,
+        link_id: Uuid,
+        owner_id: &str,
+    ) -> Result<Option<SendingInbox>, SequenceError> {
+        Ok(self
+            .steps
+            .sending_inbox(R::conn(tx), link_id)
+            .await
+            .map_err(internal)?
+            .filter(|inbox| sends_for(inbox, owner_id)))
+    }
+
+    async fn check_sender(
+        &self,
+        tx: &mut R::Tx,
+        owner: &Owner,
+        link_id: Option<Uuid>,
+    ) -> Result<(), SequenceError> {
+        let link_id = link_id.ok_or_else(|| invalid(Problem::SenderUnavailable))?;
+        match self.usable_inbox(tx, link_id, &owner.user_id).await? {
+            Some(_) => Ok(()),
+            None => Err(invalid(Problem::SenderUnavailable)),
+        }
+    }
+
+    pub(super) fn unsubscribe_url(&self, token: &str) -> String {
+        format!("{}/{token}", self.unsubscribe_base)
     }
 
     /// Withdraw every in-flight step; active enrollments keep their place and
@@ -166,81 +243,33 @@ where
         Ok(())
     }
 
-    /// Give everyone no step has gone out to yet the sequence's current
-    /// emails and inbox.
-    async fn restage(&self, tx: &mut R::Tx, sequence: &Sequence) -> Result<(), SequenceError> {
-        let staged: Vec<(Uuid, Vec<Step>)> = self
+    /// Re-time everyone waiting for their next email, after the steps' delays
+    /// or order, or `weekdays_only`, changed.
+    async fn replan(&self, tx: &mut R::Tx, sequence: &Sequence) -> Result<(), SequenceError> {
+        let now = Utc::now();
+        for mut row in self
             .repo
-            .lock_unstarted_enrollments(tx, sequence.id)
+            .lock_live_enrollments(tx, sequence.id)
             .await
             .map_err(internal)?
-            .into_iter()
-            .map(|row| {
-                let steps = render::render_steps(
-                    &sequence.steps,
-                    &sequence.footer,
-                    &Recipient {
-                        email: row.email,
-                        name: row.contact_name,
-                    },
-                    &self.unsubscribe_url(row.token.as_str()),
-                );
-                (row.id, steps)
-            })
-            .collect();
-        if staged.is_empty() {
-            return Ok(());
+        {
+            if row.status != EnrollmentStatus::Active || row.due_at.is_none() {
+                continue;
+            }
+            let history = self.repo.history(tx, row.id).await.map_err(internal)?;
+            let Some((_, next)) = next_step(&sequence.steps, &history) else {
+                continue;
+            };
+            let due_at = Some(next_due(&row, &history, next, now));
+            if due_at != row.due_at {
+                row.due_at = due_at;
+                self.repo
+                    .update_enrollment(tx, &row)
+                    .await
+                    .map_err(internal)?;
+            }
         }
-        self.repo
-            .restage_enrollments(tx, sequence.link_id, &staged)
-            .await
-            .map_err(internal)
-    }
-
-    /// The sender must be the owner's own connected Gmail inbox.
-    async fn check_sender(
-        &self,
-        tx: &mut R::Tx,
-        owner: &Owner,
-        link_id: Option<Uuid>,
-        require_healthy: bool,
-    ) -> Result<(), SequenceError> {
-        let link_id = link_id.ok_or_else(|| invalid(Problem::SenderRequired))?;
-        let inbox = self
-            .steps
-            .sending_inbox(R::conn(tx), link_id)
-            .await
-            .map_err(internal)?;
-        let usable = inbox.is_some_and(|inbox| {
-            sends_for(&inbox, &owner.user_id) && (inbox.healthy || !require_healthy)
-        });
-        if usable {
-            Ok(())
-        } else {
-            Err(invalid(Problem::SenderUnavailable))
-        }
-    }
-
-    /// The inbox a step may go out from now: the owner's own healthy Gmail.
-    pub(super) async fn usable_inbox(
-        &self,
-        tx: &mut R::Tx,
-        link_id: Option<Uuid>,
-        owner_id: &str,
-    ) -> Result<Option<SendingInbox>, SequenceError> {
-        let Some(link_id) = link_id else {
-            return Ok(None);
-        };
-        Ok(self
-            .steps
-            .sending_inbox(R::conn(tx), link_id)
-            .await
-            .map_err(internal)?
-            .filter(|inbox| inbox.healthy && sends_for(inbox, owner_id)))
-    }
-
-    pub(super) fn unsubscribe_url(&self, token: &str) -> String {
-        format!("{}/{token}", self.unsubscribe_base)
+        Ok(())
     }
 
     async fn pause(&self, tx: &mut R::Tx, row: &mut EnrollmentRow) -> Result<(), SequenceError> {
@@ -256,24 +285,23 @@ where
             row.due_at = Some(due_at);
         }
         row.status = EnrollmentStatus::Paused;
-        row.reason = None;
         self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
 
-    /// Continue an enrollment. A step still in flight is withdrawn and created
-    /// again; one that may have gone out is marked unknown and skipped.
+    /// Continue an enrollment. An email that didn't go out is withdrawn and
+    /// created again; one that may have gone out is marked unknown and skipped.
     async fn resume(&self, tx: &mut R::Tx, row: &mut EnrollmentRow) -> Result<(), SequenceError> {
         let now = Utc::now();
         let resumable = match row.status {
             EnrollmentStatus::Paused | EnrollmentStatus::NeedsAttention => true,
-            // A stop the server may have misread, or access that may be back
-            // (it is checked again before the next step).
+            // A reply or bounce the server may have misread, or a person who
+            // may be back in the CRM (checked again before the next step).
             EnrollmentStatus::Stopped => matches!(
                 row.reason,
                 Some(
                     EnrollmentReason::Replied
                         | EnrollmentReason::Bounced
-                        | EnrollmentReason::AccessLost
+                        | EnrollmentReason::ContactRemoved
                 )
             ),
             EnrollmentStatus::Active | EnrollmentStatus::Completed => false,
@@ -283,54 +311,49 @@ where
         }
         let mut history = self.repo.history(tx, row.id).await.map_err(internal)?;
         if let Some(step) = in_flight(&history).cloned() {
-            // Takes back a draft the owner restored; never their own send.
-            match self
-                .withdraw(tx, row, &step, CancelExpectation::Draft)
-                .await?
-            {
+            match self.withdraw(tx, row, &step).await? {
                 CancelOutcome::Cancelled => {}
                 // Gmail may have it: never resent, the sequence moves past it.
-                CancelOutcome::DeliveryStarted
-                    if row.reason == Some(EnrollmentReason::StepStuck)
-                        || now > step.scheduled_at + STUCK_AFTER =>
-                {
-                    self.mark_unknown(tx, row, &step).await?;
-                }
-                CancelOutcome::Gone => self.mark_unknown(tx, row, &step).await?,
-                // The owner scheduled or sent it from Mail: it is theirs until
-                // they send or delete it.
-                CancelOutcome::Changed => return Err(SequenceError::StepTakenOver),
+                CancelOutcome::DeliveryStarted if now > step.scheduled_at + STUCK_AFTER => self
+                    .repo
+                    .mark_unknown(tx, row.id, step.step_id)
+                    .await
+                    .map_err(internal)?,
+                CancelOutcome::Gone => self
+                    .repo
+                    .mark_unknown(tx, row.id, step.step_id)
+                    .await
+                    .map_err(internal)?,
+                // The sweep records it in a moment.
                 CancelOutcome::DeliveryStarted | CancelOutcome::Sent => {
-                    return Err(SequenceError::StepInDelivery);
+                    return Err(SequenceError::ActionUnavailable);
                 }
             }
             history = self.repo.history(tx, row.id).await.map_err(internal)?;
         }
         // The reply or bounce that stopped it no longer counts.
-        if row.status == EnrollmentStatus::Stopped
-            && matches!(
-                row.reason,
-                Some(EnrollmentReason::Replied | EnrollmentReason::Bounced)
-            )
-        {
+        if matches!(
+            row.reason,
+            Some(EnrollmentReason::Replied | EnrollmentReason::Bounced)
+        ) {
             row.replies_after = Some(now);
         }
-        if row.link_id.is_none() {
-            row.link_id = row.sequence_link_id;
-        }
-        // Its inbox was disconnected and the sequence has no other.
-        if row.link_id.is_none() {
-            return Err(invalid(Problem::SenderUnavailable));
-        }
-        row.attempts = 0;
+        let sequence = self
+            .repo
+            .current_sequence(tx, row.sequence_id)
+            .await
+            .map_err(internal)?
+            .ok_or(SequenceError::NotFound)?;
         row.reason = None;
-        let next = usize::try_from(row.next_step).unwrap_or_default();
-        if next >= row.steps.len() {
-            row.status = EnrollmentStatus::Completed;
-            row.due_at = None;
-        } else {
-            row.status = EnrollmentStatus::Active;
-            row.due_at = Some(next_due(row, &history, next, now));
+        match next_step(&sequence.steps, &history) {
+            Some((_, next)) => {
+                row.status = EnrollmentStatus::Active;
+                row.due_at = Some(next_due(row, &history, next, now));
+            }
+            None => {
+                row.status = EnrollmentStatus::Completed;
+                row.due_at = None;
+            }
         }
         self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
@@ -376,30 +399,29 @@ where
     // Changes shared by owner actions, the reply hook and the sweep. Each runs
     // in a transaction that holds the enrollment's lock.
 
-    /// Withdraw a step's email; forget the step when it is gone for good.
+    /// Withdraw a step's email; forget the step so it can be created again.
     pub(super) async fn withdraw(
         &self,
         tx: &mut R::Tx,
         row: &EnrollmentRow,
         step: &HistoryRow,
-        expect: CancelExpectation,
     ) -> Result<CancelOutcome, SequenceError> {
         let outcome = self
             .steps
-            .cancel_step(R::conn(tx), step.message_id, expect)
+            .cancel_step(R::conn(tx), step.message_id)
             .await
             .map_err(internal)?;
         if outcome == CancelOutcome::Cancelled {
             self.repo
-                .delete_step(tx, row.id, step.step)
+                .delete_step(tx, row.id, step.step_id)
                 .await
                 .map_err(internal)?;
         }
         Ok(outcome)
     }
 
-    /// Withdraw the enrollment's unsent step, unless the owner took it over or
-    /// it is already sending. Returns when the withdrawn step was due.
+    /// Withdraw the enrollment's unsent step unless it is already sending.
+    /// Returns when the withdrawn step was due.
     async fn withdraw_unsent(
         &self,
         tx: &mut R::Tx,
@@ -409,9 +431,7 @@ where
         let Some(step) = in_flight(&history) else {
             return Ok(None);
         };
-        let outcome = self
-            .withdraw(tx, row, step, CancelExpectation::Scheduled)
-            .await?;
+        let outcome = self.withdraw(tx, row, step).await?;
         Ok((outcome == CancelOutcome::Cancelled).then_some(step.scheduled_at))
     }
 
@@ -429,8 +449,8 @@ where
         self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
 
-    /// Record that a step was sent and move the enrollment on. Only an active
-    /// or attention enrollment schedules its next step; a paused one waits.
+    /// Record that a step was sent and move the enrollment on. A paused one
+    /// waits for its owner; a stopped one stays stopped.
     pub(super) async fn record_sent(
         &self,
         tx: &mut R::Tx,
@@ -441,100 +461,52 @@ where
         now: DateTime<Utc>,
     ) -> Result<(), SequenceError> {
         self.repo
-            .mark_sent(tx, row.id, step.step, sent)
+            .mark_sent(tx, row.id, step.step_id, sent)
             .await
             .map_err(internal)?;
-        row.next_step = row.next_step.max(step.step + 1);
         row.replies_after = row
             .replies_after
             .or(Some(submitted_at.unwrap_or(sent.sent_at)));
-        row.attempts = 0;
-        let next = usize::try_from(row.next_step).unwrap_or_default();
-        let finished = next >= row.steps.len();
-        match row.status {
-            EnrollmentStatus::Active | EnrollmentStatus::NeedsAttention => {
-                row.reason = None;
-                if finished {
+        if row.status.is_live() {
+            let sequence = self
+                .repo
+                .current_sequence(tx, row.sequence_id)
+                .await
+                .map_err(internal)?
+                .ok_or(SequenceError::NotFound)?;
+            let history = self.repo.history(tx, row.id).await.map_err(internal)?;
+            match next_step(&sequence.steps, &history) {
+                None => {
                     row.status = EnrollmentStatus::Completed;
                     row.due_at = None;
-                } else {
+                }
+                Some(_) if row.status == EnrollmentStatus::Paused => {}
+                Some((_, next)) => {
                     row.status = EnrollmentStatus::Active;
                     row.due_at = Some(timing::next_due(
                         step.scheduled_at,
-                        row.steps.get(next).map_or(0, |step| step.delay_days),
+                        next.delay_days,
                         row.clock,
                         now,
                     ));
                 }
             }
-            EnrollmentStatus::Paused if finished => {
-                row.status = EnrollmentStatus::Completed;
-            }
-            EnrollmentStatus::Paused | EnrollmentStatus::Stopped | EnrollmentStatus::Completed => {}
         }
         self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
 
-    /// Record that a step's email disappeared: it is never sent again.
-    pub(super) async fn mark_unknown(
-        &self,
-        tx: &mut R::Tx,
-        row: &mut EnrollmentRow,
-        step: &HistoryRow,
-    ) -> Result<(), SequenceError> {
-        self.repo
-            .mark_unknown(tx, row.id, step.step)
-            .await
-            .map_err(internal)?;
-        row.next_step = row.next_step.max(step.step + 1);
-        self.repo.update_enrollment(tx, row).await.map_err(internal)
-    }
-
-    /// Flag an active or attention enrollment for its owner.
+    /// Flag an active enrollment whose email didn't go out.
     pub(super) async fn needs_attention(
         &self,
         tx: &mut R::Tx,
         row: &mut EnrollmentRow,
-        reason: EnrollmentReason,
     ) -> Result<(), SequenceError> {
-        if matches!(
-            row.status,
-            EnrollmentStatus::Active | EnrollmentStatus::NeedsAttention
-        ) && row.reason != Some(reason)
-        {
-            row.status = EnrollmentStatus::NeedsAttention;
-            row.reason = Some(reason);
-            row.due_at = None;
-            self.repo
-                .update_enrollment(tx, row)
-                .await
-                .map_err(internal)?;
+        if row.status != EnrollmentStatus::Active {
+            return Ok(());
         }
-        Ok(())
-    }
-}
-
-/// When step `next` is due: by the timing rule from the last recorded step,
-/// or, when nothing was recorded, when it was planned (its start) and no
-/// sooner than allowed.
-pub(super) fn next_due(
-    row: &EnrollmentRow,
-    history: &[HistoryRow],
-    next: usize,
-    now: DateTime<Utc>,
-) -> DateTime<Utc> {
-    match history
-        .iter()
-        .filter(|step| step.status != StepStatus::Scheduled)
-        .max_by_key(|step| step.step)
-    {
-        Some(last) => timing::next_due(
-            last.scheduled_at,
-            row.steps.get(next).map_or(0, |step| step.delay_days),
-            row.clock,
-            now,
-        ),
-        None => timing::first_due(row.due_at.unwrap_or(now), row.clock, now),
+        row.status = EnrollmentStatus::NeedsAttention;
+        row.due_at = None;
+        self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
 }
 
@@ -553,12 +525,11 @@ where
     S: SequenceStepStore<Conn = R::Conn>,
     A: OwnerAccess,
 {
-    /// The owner's sequences.
     async fn list(&self, user_id: &str) -> Result<Vec<SequenceSummary>, SequenceError> {
         let owner = self.owner(user_id).await?;
         self.repo.list_sequences(&owner).await.map_err(internal)
     }
-    /// Create a draft sequence.
+
     async fn create(&self, user_id: &str, input: NewSequence) -> Result<Sequence, SequenceError> {
         let owner = self.owner(user_id).await?;
         let input = NewSequence {
@@ -570,15 +541,14 @@ where
         render::check_limits(&input.name, &input.footer, &input.steps)?;
         if input.link_id.is_some() {
             let mut tx = self.repo.begin().await.map_err(internal)?;
-            self.check_sender(&mut tx, &owner, input.link_id, false)
-                .await?;
+            self.check_sender(&mut tx, &owner, input.link_id).await?;
         }
         self.repo
             .insert_sequence(&owner, &input)
             .await
             .map_err(internal)
     }
-    /// A sequence with its enrollments.
+
     async fn get(
         &self,
         user_id: &str,
@@ -594,8 +564,9 @@ where
         let enrollments = self.repo.enrollments(id).await.map_err(internal)?;
         Ok((sequence, enrollments))
     }
-    /// Edit a draft or paused sequence, or change its status. Edits reach
-    /// everyone no email has gone out to yet.
+
+    /// Edit a sequence or change its status. Edits reach every email not yet
+    /// created; one that is sending must stay complete.
     #[tracing::instrument(skip_all, fields(sequence_id = %id), err)]
     async fn update(
         &self,
@@ -611,14 +582,7 @@ where
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
-        if sequence.version != patch.version {
-            return Err(SequenceError::VersionConflict);
-        }
-        let rerender = patch.link_id.is_some() || patch.footer.is_some() || patch.steps.is_some();
-        let edits = rerender || patch.name.is_some() || patch.weekdays_only.is_some();
-        if edits && sequence.status == SequenceStatus::Active {
-            return Err(SequenceError::InvalidTransition);
-        }
+        let timing_before = timing_of(&sequence);
         if let Some(name) = patch.name {
             sequence.name = render::clean_text(&name);
         }
@@ -633,36 +597,37 @@ where
         }
         render::check_limits(&sequence.name, &sequence.footer, &sequence.steps)?;
         if let Some(link_id) = patch.link_id {
-            self.check_sender(&mut tx, &owner, Some(link_id), false)
-                .await?;
+            self.check_sender(&mut tx, &owner, Some(link_id)).await?;
             sequence.link_id = Some(link_id);
         }
         match (sequence.status, patch.status) {
             (_, None) => {}
             (current, Some(target)) if current == target => {}
             (SequenceStatus::Draft | SequenceStatus::Paused, Some(SequenceStatus::Active)) => {
-                render::check_complete(&sequence.name, &sequence.footer, &sequence.steps)?;
-                self.check_sender(&mut tx, &owner, sequence.link_id, true)
-                    .await?;
+                self.check_sender(&mut tx, &owner, sequence.link_id).await?;
                 sequence.status = SequenceStatus::Active;
             }
             (SequenceStatus::Active, Some(SequenceStatus::Paused)) => {
                 self.pause_sequence(&mut tx, sequence.id).await?;
                 sequence.status = SequenceStatus::Paused;
             }
-            _ => return Err(SequenceError::InvalidTransition),
+            _ => return Err(SequenceError::ActionUnavailable),
         }
-        if rerender {
-            self.restage(&mut tx, &sequence).await?;
+        if sequence.status == SequenceStatus::Active {
+            render::check_complete(&sequence.name, &sequence.footer, &sequence.steps)?;
         }
         let saved = self
             .repo
             .save_sequence(&mut tx, &sequence)
             .await
             .map_err(internal)?;
+        if timing_of(&saved) != timing_before {
+            self.replan(&mut tx, &saved).await?;
+        }
         self.repo.commit(tx).await.map_err(internal)?;
         Ok(saved)
     }
+
     /// Delete a sequence, withdrawing its in-flight steps.
     #[tracing::instrument(skip_all, fields(sequence_id = %id), err)]
     async fn delete(&self, user_id: &str, id: Uuid) -> Result<(), SequenceError> {
@@ -687,6 +652,7 @@ where
             .map_err(internal)?;
         self.repo.commit(tx).await.map_err(internal)
     }
+
     /// Enroll CRM people. A draft or paused sequence holds them until it is
     /// active.
     #[tracing::instrument(skip_all, fields(sequence_id = %id, contacts = request.crm_contact_ids.len()), err)]
@@ -698,16 +664,12 @@ where
     ) -> Result<Vec<EnrollResult>, SequenceError> {
         let owner = self.owner(user_id).await?;
         if request.crm_contact_ids.len() > MAX_ENROLL {
-            return Err(SequenceError::TooManyContacts);
+            return Err(SequenceError::InvalidRequest("too many contacts"));
         }
         let timezone: chrono_tz::Tz = request
             .timezone
             .parse()
-            .map_err(|_| SequenceError::InvalidTimezone)?;
-        let now = Utc::now();
-        if request.start > now + MAX_START_AHEAD {
-            return Err(SequenceError::InvalidStart);
-        }
+            .map_err(|_| SequenceError::InvalidRequest("unknown time zone"))?;
         let people = self
             .access
             .people(user_id, &request.crm_contact_ids)
@@ -721,10 +683,6 @@ where
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
-        // Its inbox was disconnected: nothing could send.
-        if sequence.status == SequenceStatus::Active && sequence.link_id.is_none() {
-            return Err(invalid(Problem::SenderUnavailable));
-        }
 
         let mut results = Vec::with_capacity(request.crm_contact_ids.len());
         let mut accepted: Vec<(Uuid, String, Option<String>)> = Vec::new();
@@ -753,10 +711,8 @@ where
                 .as_deref()
                 .map(normalize_email)
                 .unwrap_or_default();
-            if email.is_empty() {
+            if EmailStr::parse_from_str(&email).is_err() {
                 results.push(skip(EnrollSkip::NoEmail));
-            } else if EmailStr::parse_from_str(&email).is_err() {
-                results.push(skip(EnrollSkip::InvalidEmail));
             } else if accepted.iter().any(|(_, other, _)| *other == email) {
                 results.push(skip(EnrollSkip::AlreadyEnrolled));
             } else {
@@ -775,15 +731,15 @@ where
             .upsert_recipients(&mut tx, owner.team_id, &emails)
             .await
             .map_err(internal)?;
+        let now = Utc::now();
         let clock = timing::send_clock(request.start, timezone, sequence.weekdays_only);
         let due_at = timing::first_due(request.start, clock, now);
-        let timezone_name = timezone.name();
         for (crm_contact_id, email, name) in accepted {
-            let Some((_, recipient)) = recipients.iter().find(|(address, _)| *address == email)
-            else {
-                return Err(internal(std::io::Error::other("recipient row missing")));
-            };
-            if recipient.unsubscribed {
+            let unsubscribed = recipients
+                .iter()
+                .find(|(address, _)| *address == email)
+                .is_some_and(|(_, recipient)| recipient.unsubscribed);
+            if unsubscribed {
                 results.push(EnrollResult {
                     crm_contact_id,
                     enrollment_id: None,
@@ -791,15 +747,6 @@ where
                 });
                 continue;
             }
-            let steps = render::render_steps(
-                &sequence.steps,
-                &sequence.footer,
-                &Recipient {
-                    email: email.clone(),
-                    name: name.clone(),
-                },
-                &self.unsubscribe_url(recipient.token.as_str()),
-            );
             let enrollment_id = self
                 .repo
                 .insert_enrollment(
@@ -807,13 +754,11 @@ where
                     &NewEnrollment {
                         sequence_id: sequence.id,
                         team_id: owner.team_id,
-                        link_id: sequence.link_id,
                         crm_contact_id,
                         email: &email,
                         contact_name: name.as_deref(),
-                        steps: &steps,
                         due_at,
-                        timezone: timezone_name,
+                        timezone: timezone.name(),
                         send_time: clock.send_time,
                     },
                 )
@@ -830,15 +775,7 @@ where
         self.repo.commit(tx).await.map_err(internal)?;
         Ok(results)
     }
-    /// One of the owner's enrollments with its rendered steps.
-    async fn enrollment(&self, user_id: &str, id: Uuid) -> Result<EnrollmentDetail, SequenceError> {
-        let owner = self.owner(user_id).await?;
-        self.repo
-            .enrollment_detail(&owner, id)
-            .await
-            .map_err(internal)?
-            .ok_or(SequenceError::NotFound)
-    }
+
     /// Pause, resume, stop or unsubscribe one of the owner's enrollments.
     #[tracing::instrument(skip_all, fields(enrollment_id = %id, action = <&'static str>::from(action)), err)]
     async fn act(
@@ -892,6 +829,7 @@ where
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)
     }
+
     /// A CRM person's enrollments, as any teammate sees them.
     async fn contact_enrollments(
         &self,
@@ -912,10 +850,11 @@ where
             return Ok(Vec::new());
         };
         self.repo
-            .contact_enrollments(owner.team_id, &email, user_id)
+            .contact_enrollments(owner.team_id, &email)
             .await
             .map_err(internal)
     }
+
     /// Record a one-click unsubscribe. `false` for a token that isn't ours.
     #[tracing::instrument(skip_all, err)]
     async fn unsubscribe(&self, token: &str) -> Result<bool, SequenceError> {

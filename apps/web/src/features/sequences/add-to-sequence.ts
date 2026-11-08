@@ -30,11 +30,7 @@ export function openAddToSequence(entities: readonly EntityData[]) {
   if (!canAddToSequence(entities)) return;
   lock.acquire();
   setRequest({
-    people: entities.filter(isCrmContactEntity).map((entity) => ({
-      id: entity.id,
-      name: entity.name,
-      email: entity.email,
-    })),
+    people: entities.filter(isCrmContactEntity),
     companyIds: entities.filter(isCrmCompanyEntity).map((entity) => entity.id),
   });
 }

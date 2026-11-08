@@ -1,7 +1,6 @@
 import type {
   ContactEnrollment,
   EnrollmentAction,
-  EnrollmentDetail,
   EnrollmentSummary,
   EnrollRequest,
   EnrollResult,
@@ -11,17 +10,11 @@ import type {
   UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
 import type { Result } from 'neverthrow';
-import {
-  type Accessor,
-  createContext,
-  type ParentProps,
-  useContext,
-} from 'solid-js';
+import { type Accessor, createContext, useContext } from 'solid-js';
 import type { SequenceFailure } from '../core/errors';
 
 type Outcome<T> = Promise<Result<T, SequenceFailure>>;
 
-/** The owner's sequences, for the list and the Customers sidebar count. */
 export type SequenceListSource = {
   sequences: Accessor<readonly SequenceSummary[]>;
   pending: Accessor<boolean>;
@@ -40,17 +33,8 @@ export type SequenceSource = {
   failure: Accessor<SequenceFailure | undefined>;
   refresh(): Promise<unknown>;
   update(request: UpdateSequenceRequest): Outcome<Sequence>;
-  updating: Accessor<boolean>;
   remove(): Outcome<void>;
   removing: Accessor<boolean>;
-};
-
-/** One enrollment's frozen steps and what happened to each. */
-export type EnrollmentSource = {
-  detail: Accessor<EnrollmentDetail | undefined>;
-  pending: Accessor<boolean>;
-  failed: Accessor<boolean>;
-  refresh(): Promise<unknown>;
 };
 
 export type EnrollmentCommands = {
@@ -62,7 +46,6 @@ export type EnrollmentCommands = {
   pending(enrollmentId: string): boolean;
 };
 
-/** A CRM person who can be enrolled. */
 /** A CRM person; the CRM may have no address for them. */
 export type Person = { id: string; name: string; email?: string | null };
 
@@ -85,10 +68,8 @@ export type SendersSource = {
   pending: Accessor<boolean>;
 };
 
-/** A contact's enrollments across the team, without step content. */
 export type ContactEnrollmentsSource = {
   enrollments: Accessor<readonly ContactEnrollment[]>;
-  pending: Accessor<boolean>;
   failure: Accessor<SequenceFailure | undefined>;
   refresh(): Promise<unknown>;
 };
@@ -96,7 +77,6 @@ export type ContactEnrollmentsSource = {
 export type SequencesContext = {
   createSequenceList(): SequenceListSource;
   createSequence(sequenceId: Accessor<string>): SequenceSource;
-  createEnrollment(enrollmentId: Accessor<string>): EnrollmentSource;
   createEnrollmentCommands(sequenceId: Accessor<string>): EnrollmentCommands;
   createPeople(search: Accessor<string>): PeopleSource;
   /** People at the companies, past the batch limit so a cut can be shown. */
@@ -106,6 +86,7 @@ export type SequencesContext = {
   createContactEnrollments(
     crmContactId: Accessor<string>
   ): ContactEnrollmentsSource;
+  userId: Accessor<string | undefined>;
   /** A teammate's display name, for the owner on a contact's card. */
   userName(userId: string): string;
   feedback: { success(message: string): void; failure(message: string): void };
@@ -113,13 +94,7 @@ export type SequencesContext = {
 
 const Context = createContext<SequencesContext>();
 
-export function SequencesProvider(
-  props: ParentProps<{ value: SequencesContext }>
-) {
-  return (
-    <Context.Provider value={props.value}>{props.children}</Context.Provider>
-  );
-}
+export const SequencesProvider = Context.Provider;
 
 export function useSequences(): SequencesContext {
   const context = useContext(Context);

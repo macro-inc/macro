@@ -13,18 +13,10 @@ export type Problem = (typeof Problem)[keyof typeof Problem];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const Problem = {
   name_required: 'name_required',
-  name_too_long: 'name_too_long',
-  footer_too_long: 'footer_too_long',
   steps_required: 'steps_required',
-  too_many_steps: 'too_many_steps',
-  first_step_is_reply: 'first_step_is_reply',
   subject_required: 'subject_required',
-  subject_single_line: 'subject_single_line',
-  subject_too_long: 'subject_too_long',
   body_required: 'body_required',
-  body_too_long: 'body_too_long',
-  delay_range: 'delay_range',
+  over_limit: 'over_limit',
   unknown_token: 'unknown_token',
-  sender_required: 'sender_required',
   sender_unavailable: 'sender_unavailable',
 } as const;

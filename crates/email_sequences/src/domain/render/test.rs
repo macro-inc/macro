@@ -2,6 +2,7 @@ use super::*;
 
 fn step(subject: &str, body: &str, as_reply: bool) -> Step {
     Step {
+        id: uuid::Uuid::now_v7(),
         delay_days: 0,
         subject: subject.to_owned(),
         body: body.to_owned(),
@@ -49,25 +50,23 @@ fn personalization_table() {
 }
 
 #[test]
-fn rendered_steps_carry_subjects_footer_and_unsubscribe_link() {
+fn a_step_renders_with_its_thread_subject_footer_and_unsubscribe_link() {
     let steps = [
         step("Hello {{firstName}}", "Body one", false),
         step("ignored", "Body two", true),
         step("Re: Second thread", "Body three", false),
         step("", "Body four", true),
     ];
-    let rendered = render_steps(
-        &steps,
-        "Sent by {{name}}",
-        &recipient(Some("Ada\r\nLovelace")),
-        "https://u/x",
-    );
-    let subjects: Vec<&str> = rendered.iter().map(|s| s.subject.as_str()).collect();
+    let ada = recipient(Some("Ada\r\nLovelace"));
+    let rendered: Vec<Rendered> = (0..steps.len())
+        .map(|index| render(&steps, index, "Sent by {{name}}", &ada, "https://u/x"))
+        .collect();
+    let subjects: Vec<&str> = rendered.iter().map(|r| r.subject.as_str()).collect();
     assert_eq!(
         subjects,
         [
             "Hello Ada Lovelace",
-            "Re: Hello Ada Lovelace",
+            "Hello Ada Lovelace",
             "Re: Second thread",
             "Re: Second thread"
         ]
@@ -76,18 +75,11 @@ fn rendered_steps_carry_subjects_footer_and_unsubscribe_link() {
         rendered[1].body,
         "Body two\n\nSent by Ada\r\nLovelace\nUnsubscribe: https://u/x"
     );
-    assert!(rendered[1].as_reply && !rendered[2].as_reply);
-
-    let bare = render_steps(&steps[..1], "  ", &recipient(None), "https://u/x");
-    assert_eq!(bare[0].body, "Body one\n\nUnsubscribe: https://u/x");
-}
-
-#[test]
-fn subjects_with_and_without_a_thread() {
+    let bare = render(&steps, 0, "  ", &recipient(None), "https://u/x");
+    assert_eq!(bare.body, "Body one\n\nUnsubscribe: https://u/x");
+    // A reply sent in the thread answers what went out.
     assert_eq!(reply_subject("Hello"), "Re: Hello");
     assert_eq!(reply_subject("RE: Hello"), "RE: Hello");
-    assert_eq!(standalone_subject("Re:  Hello"), "Hello");
-    assert_eq!(standalone_subject("Résumé"), "Résumé");
 }
 
 #[test]
@@ -111,31 +103,19 @@ fn validation_table() {
             "too many steps",
             "Name",
             vec![step("Hi", "Body", false); MAX_STEPS + 1],
-            Some((Problem::TooManySteps, None)),
-        ),
-        (
-            "first step replies",
-            "Name",
-            with(|s| s[0].as_reply = true),
-            Some((Problem::FirstStepIsReply, Some(1))),
-        ),
-        (
-            "two-line subject",
-            "Name",
-            with(|s| s[0].subject = "a\nb".into()),
-            Some((Problem::SubjectSingleLine, Some(1))),
+            Some((Problem::OverLimit, None)),
         ),
         (
             "long subject",
             "Name",
             with(|s| s[0].subject = "s".repeat(MAX_SUBJECT + 1)),
-            Some((Problem::SubjectTooLong, Some(1))),
+            Some((Problem::OverLimit, Some(1))),
         ),
         (
             "long body",
             "Name",
             with(|s| s[1].body = "b".repeat(MAX_BODY + 1)),
-            Some((Problem::BodyTooLong, Some(2))),
+            Some((Problem::OverLimit, Some(2))),
         ),
         (
             "missing subject",
@@ -148,18 +128,6 @@ fn validation_table() {
             "Name",
             with(|s| s[1].body = "\n".into()),
             Some((Problem::BodyRequired, Some(2))),
-        ),
-        (
-            "delay out of range",
-            "Name",
-            with(|s| s[1].delay_days = MAX_DELAY_DAYS + 1),
-            Some((Problem::DelayRange, Some(2))),
-        ),
-        (
-            "personalization would grow the body past the limit",
-            "Name",
-            with(|s| s[1].body = "{{email}} ".repeat(400)),
-            Some((Problem::BodyTooLong, Some(2))),
         ),
         (
             "unknown token",
@@ -215,6 +183,7 @@ fn names_are_sanitized_before_personalization() {
 }
 
 #[test]
-fn stored_text_keeps_only_line_breaks_and_tabs() {
+fn stored_text_keeps_only_line_breaks_and_tabs_and_subjects_one_line() {
     assert_eq!(clean_text("a\u{0}b\r\n\tc\u{7}"), "ab\r\n\tc");
+    assert_eq!(clean_subject("a\r\nb\u{0}"), "a b");
 }

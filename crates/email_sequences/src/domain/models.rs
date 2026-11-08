@@ -48,7 +48,8 @@ pub enum EnrollmentStatus {
     Active,
     /// Paused by the owner.
     Paused,
-    /// Stopped sending until the owner acts; see the reason.
+    /// An email didn't go out; nothing more sends until the owner resumes,
+    /// or that email is sent from Mail.
     NeedsAttention,
     /// Ended before the last step; see the reason.
     Stopped,
@@ -66,7 +67,7 @@ impl EnrollmentStatus {
     }
 }
 
-/// Why an enrollment stopped or needs attention.
+/// Why an enrollment stopped.
 #[derive(
     Debug,
     Clone,
@@ -90,40 +91,14 @@ pub enum EnrollmentReason {
     Bounced,
     /// The address unsubscribed from the team's sequences.
     Unsubscribed,
-    /// The owner left the team or the team turned CRM off.
-    AccessLost,
-    /// The person was deleted from the CRM.
+    /// The owner can no longer see the person in the CRM.
     ContactRemoved,
-    /// The sending inbox is disconnected or needs reauthorization.
-    InboxUnavailable,
-    /// Gmail refused a step and automatic retries ran out.
-    StepFailed,
-    /// A step was taken out of the schedule outside the sequence.
-    StepWithdrawn,
-    /// A step's email disappeared; it may have been sent.
-    StepUnknown,
-    /// A step is well past its send time and still unsent.
-    StepStuck,
 }
 
 /// State of one step's email.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum StepStatus {
-    /// Not created yet.
-    Pending,
     /// Scheduled in the sender's inbox and not sent yet.
     Scheduled,
     /// Sent.
@@ -132,17 +107,19 @@ pub enum StepStatus {
     Unknown,
 }
 
-/// One email of a sequence. A sequence holds templates; an enrollment holds
-/// them rendered for its contact.
+/// One email of a sequence, rendered for each person when it is created.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
+    /// Stable across edits; step history is keyed by it. New steps bring a
+    /// fresh UUIDv7.
+    pub id: Uuid,
     /// Calendar days after the previous step, at the enrollment's send time.
     /// In a weekdays-only sequence, a step that lands on a weekend goes the
     /// Monday after.
     pub delay_days: u16,
-    /// Subject line; a reply step uses its thread's subject instead.
+    /// Subject line; a reply step uses its thread's instead.
     pub subject: String,
     /// Plain-text body.
     pub body: String,
@@ -169,10 +146,8 @@ pub struct Sequence {
     pub weekdays_only: bool,
     /// Lifecycle status.
     pub status: SequenceStatus,
-    /// Step templates.
+    /// Its emails, in order.
     pub steps: Vec<Step>,
-    /// Incremented by every change; edits must name the version they saw.
-    pub version: i32,
     /// When it was created.
     pub created_at: DateTime<Utc>,
     /// When it last changed.
@@ -188,7 +163,7 @@ pub struct EnrollmentCounts {
     pub active: i64,
     /// Paused by the owner.
     pub paused: i64,
-    /// Waiting on the owner.
+    /// An email didn't go out.
     pub needs_attention: i64,
     /// Ended early.
     pub stopped: i64,
@@ -226,50 +201,20 @@ pub struct EnrollmentSummary {
     pub crm_contact_id: Option<Uuid>,
     /// Address the steps go to.
     pub email: String,
-    /// Name at enrollment.
+    /// The CRM name its last email used.
     pub contact_name: Option<String>,
     /// Status.
     pub status: EnrollmentStatus,
-    /// Why it stopped or needs attention.
+    /// Why it stopped.
     pub reason: Option<EnrollmentReason>,
-    /// Index of the next step to send.
-    pub next_step: i16,
-    /// Number of steps.
-    pub step_count: i32,
+    /// Emails sent, or skipped because they may have gone out.
+    pub steps_sent: i64,
     /// When the last step was sent.
     pub last_sent_at: Option<DateTime<Utc>>,
     /// When the next step is scheduled or due.
     pub next_send_at: Option<DateTime<Utc>>,
     /// When it was enrolled.
     pub created_at: DateTime<Utc>,
-}
-
-/// One rendered step of an enrollment with what happened to it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct EnrollmentStep {
-    /// The step as rendered for this contact.
-    #[serde(flatten)]
-    pub step: Step,
-    /// What happened to its email.
-    pub status: StepStatus,
-    /// When it was scheduled to send.
-    pub scheduled_at: Option<DateTime<Utc>>,
-    /// When it was sent.
-    pub sent_at: Option<DateTime<Utc>>,
-}
-
-/// An enrollment with its rendered steps.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct EnrollmentDetail {
-    /// The enrollment.
-    #[serde(flatten)]
-    pub enrollment: EnrollmentSummary,
-    /// Its steps in order.
-    pub steps: Vec<EnrollmentStep>,
 }
 
 /// A contact's enrollment as any teammate sees it: never step content.
@@ -283,11 +228,9 @@ pub struct ContactEnrollment {
     pub sequence_name: String,
     /// Macro user id of the sequence's owner.
     pub owner_id: String,
-    /// Whether the viewer owns the sequence.
-    pub is_owner: bool,
     /// Enrollment status.
     pub status: EnrollmentStatus,
-    /// Why it stopped or needs attention.
+    /// Why it stopped.
     pub reason: Option<EnrollmentReason>,
     /// Whether the sequence isn't sending: a draft or paused.
     pub sequence_paused: bool,
@@ -297,12 +240,12 @@ pub struct ContactEnrollment {
     pub next_send_at: Option<DateTime<Utc>>,
 }
 
-/// The address a sequence writes to, as enrolled.
+/// The person an email is rendered for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recipient {
     /// Trimmed, lowercased address.
     pub email: String,
-    /// Display name, if the CRM has one.
+    /// The CRM name, sanitized, if it has one.
     pub name: Option<String>,
 }
 
@@ -331,34 +274,26 @@ pub struct Owner {
 pub struct EnrollmentRow {
     /// Enrollment id.
     pub id: Uuid,
+    /// Its sequence.
+    pub sequence_id: Uuid,
     /// The sequence's owner.
     pub owner_id: String,
     /// The team it belongs to.
     pub team_id: Uuid,
-    /// The sequence's status.
-    pub sequence_status: SequenceStatus,
-    /// The sequence's current sender.
-    pub sequence_link_id: Option<Uuid>,
-    /// The inbox this enrollment sends from.
+    /// The inbox its first email went from; until then, the sequence's.
     pub link_id: Option<Uuid>,
     /// Enrolled address, normalized.
     pub email: String,
     /// The CRM person enrolled; `None` once they are deleted from the CRM.
     pub crm_contact_id: Option<Uuid>,
-    /// Name at enrollment.
+    /// The CRM name its last email used.
     pub contact_name: Option<String>,
-    /// Rendered steps.
-    pub steps: Vec<Step>,
     /// Status.
     pub status: EnrollmentStatus,
-    /// Why it stopped or needs attention.
+    /// Why it stopped.
     pub reason: Option<EnrollmentReason>,
-    /// Index of the next step to create.
-    pub next_step: i16,
     /// When the next step is due, while active.
     pub due_at: Option<DateTime<Utc>>,
-    /// Automatic retries of the current step.
-    pub attempts: i16,
     /// Local send clock.
     pub clock: SendClock,
     /// Incoming mail after this can stop it.
@@ -368,8 +303,8 @@ pub struct EnrollmentRow {
 /// One step's email, as recorded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryRow {
-    /// Step index.
-    pub step: i16,
+    /// The sequence step; it may since have been removed.
+    pub step_id: Uuid,
     /// Local message id of the step's email.
     pub message_id: Uuid,
     /// Message-ID minted for the send.
@@ -447,8 +382,8 @@ pub fn normalize_email(email: &str) -> String {
 pub enum EnrollmentAction {
     /// Stop sending until resumed.
     Pause,
-    /// Continue; withdraws a stuck or failed step first and never resends one
-    /// that may have gone out.
+    /// Continue; withdraws an email that didn't go out and creates it again,
+    /// and never resends one that may have gone out.
     Resume,
     /// End it.
     Stop,
@@ -464,10 +399,8 @@ pub enum EnrollmentAction {
 pub enum EnrollSkip {
     /// Not a CRM person the owner can see in their team.
     NotFound,
-    /// The person has no address.
+    /// The person has no address email can be sent to.
     NoEmail,
-    /// The address isn't one email can be sent to.
-    InvalidEmail,
     /// The address unsubscribed from the team's sequences.
     Unsubscribed,
     /// The address is already in this sequence.
@@ -493,40 +426,19 @@ pub enum SequenceError {
     /// No such sequence or enrollment belongs to the caller.
     #[error("not found")]
     NotFound,
-    /// The sequence changed since the caller read it.
-    #[error("the sequence changed since it was loaded")]
-    VersionConflict,
-    /// The status change isn't allowed from the current status.
-    #[error("that status change isn't allowed")]
-    InvalidTransition,
     /// The sequence is invalid.
     #[error(transparent)]
     Invalid(#[from] super::render::InvalidSequence),
-    /// Too many contacts in one request.
-    #[error("too many contacts")]
-    TooManyContacts,
-    /// The start time isn't usable.
-    #[error("invalid start time")]
-    InvalidStart,
-    /// The time zone isn't an IANA zone.
-    #[error("invalid time zone")]
-    InvalidTimezone,
-    /// The action doesn't apply to the enrollment's status.
-    #[error("that action isn't available")]
+    /// The request is malformed in a way the client should have prevented.
+    #[error("invalid request: {0}")]
+    InvalidRequest(&'static str),
+    /// The change doesn't apply to the current status, or an email is being
+    /// delivered right now.
+    #[error("that isn't available now")]
     ActionUnavailable,
-    /// A step is being delivered and can't be withdrawn yet.
-    #[error("a step is being delivered")]
-    StepInDelivery,
-    /// The owner scheduled or sent the step's email from Mail; it is theirs
-    /// until they send or delete it.
-    #[error("the step's email was taken over in Mail")]
-    StepTakenOver,
-    /// The caller isn't in a team.
-    #[error("not in a team")]
-    NoTeam,
-    /// The caller's team has CRM turned off.
-    #[error("CRM is off for the team")]
-    CrmDisabled,
+    /// The caller isn't in a team with CRM on.
+    #[error("sequences need a team with CRM on")]
+    CrmUnavailable,
     /// Anything else.
     #[error("internal sequences error: {0:?}")]
     Internal(rootcause::Report),

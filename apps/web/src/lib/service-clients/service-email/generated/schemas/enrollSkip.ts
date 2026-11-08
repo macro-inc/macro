@@ -14,7 +14,6 @@ export type EnrollSkip = (typeof EnrollSkip)[keyof typeof EnrollSkip];
 export const EnrollSkip = {
   not_found: 'not_found',
   no_email: 'no_email',
-  invalid_email: 'invalid_email',
   unsubscribed: 'unsubscribed',
   already_enrolled: 'already_enrolled',
 } as const;

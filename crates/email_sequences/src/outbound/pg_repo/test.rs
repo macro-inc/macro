@@ -11,7 +11,7 @@ use crate::domain::{
 use email::outbound::PgSequenceSteps;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -23,11 +23,13 @@ const MATE_LINK: Uuid = uuid::uuid!("11111111-0000-0000-0000-000000000002");
 const ADA: Uuid = uuid::uuid!("cc000000-0000-0000-0000-000000000001");
 const BOB: Uuid = uuid::uuid!("cc000000-0000-0000-0000-000000000002");
 
-/// Team membership and CRM state the test can flip.
+/// Team membership, CRM state and CRM people the test can change.
 #[derive(Clone)]
 struct Access {
     member: Arc<AtomicBool>,
     crm_on: Arc<AtomicBool>,
+    bob_in_crm: Arc<AtomicBool>,
+    ada_name: Arc<Mutex<&'static str>>,
 }
 
 impl OwnerAccess for Access {
@@ -42,12 +44,14 @@ impl OwnerAccess for Access {
     }
 
     async fn people(&self, _: &str, ids: &[Uuid]) -> Result<Vec<CrmPerson>, Self::Err> {
+        let ada_name = *self.ada_name.lock().unwrap();
         Ok([
-            (ADA, "Ada@Example.com", "Ada Lovelace"),
+            (ADA, "Ada@Example.com", ada_name),
             (BOB, "bob@example.com", "Bob"),
         ]
         .into_iter()
         .filter(|(id, _, _)| ids.contains(id))
+        .filter(|(id, _, _)| *id != BOB || self.bob_in_crm.load(Ordering::SeqCst))
         .map(|(id, email, name)| CrmPerson {
             id,
             team_id: TEAM,
@@ -64,6 +68,8 @@ fn service(pool: &PgPool) -> (Svc, Access) {
     let access = Access {
         member: Arc::new(AtomicBool::new(true)),
         crm_on: Arc::new(AtomicBool::new(true)),
+        bob_in_crm: Arc::new(AtomicBool::new(true)),
+        ada_name: Arc::new(Mutex::new("Ada Lovelace")),
     };
     let service = Sequences::new(
         PgSequenceRepo::new(pool.clone()),
@@ -76,7 +82,8 @@ fn service(pool: &PgPool) -> (Svc, Access) {
 
 fn step(subject: &str, body: &str, as_reply: bool) -> Step {
     Step {
-        delay_days: 0,
+        id: Uuid::now_v7(),
+        delay_days: 1,
         subject: subject.to_owned(),
         body: body.to_owned(),
         as_reply,
@@ -107,7 +114,6 @@ async fn active_sequence(svc: &Svc, user: &str, link: Uuid, steps: Vec<Step>) ->
         user,
         created.id,
         SequencePatch {
-            version: created.version,
             status: Some(SequenceStatus::Active),
             // Tests send on any day of the week.
             weekdays_only: Some(false),
@@ -145,15 +151,19 @@ async fn make_due(pool: &PgPool, enrollment: Uuid) {
     .unwrap();
 }
 
-async fn status(pool: &PgPool, enrollment: Uuid) -> (String, Option<String>, i16) {
+/// Status, reason, and how many steps were sent or skipped.
+async fn status(pool: &PgPool, enrollment: Uuid) -> (String, Option<String>, i64) {
     let row = sqlx::query!(
-        "SELECT status, reason, next_step FROM email_sequence_enrollments WHERE id = $1",
+        r#"SELECT status, reason,
+                  (SELECT count(*) FROM email_sequence_steps h
+                   WHERE h.enrollment_id = e.id AND h.status <> 'scheduled') AS "sent!"
+           FROM email_sequence_enrollments e WHERE id = $1"#,
         enrollment
     )
     .fetch_one(pool)
     .await
     .unwrap();
-    (row.status, row.reason, row.next_step)
+    (row.status, row.reason, row.sent)
 }
 
 async fn in_flight(pool: &PgPool, enrollment: Uuid) -> Option<Uuid> {
@@ -168,7 +178,7 @@ async fn in_flight(pool: &PgPool, enrollment: Uuid) -> Option<Uuid> {
 
 async fn pending_schedules(pool: &PgPool) -> i64 {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM email_scheduled_messages WHERE source IS NOT NULL AND NOT sent"#
+        r#"SELECT count(*) AS "count!" FROM email_scheduled_messages WHERE NOT sent"#
     )
     .fetch_one(pool)
     .await
@@ -256,15 +266,41 @@ async fn incoming(
     message
 }
 
-/// Create step 0 and record it sent.
+/// Create the first step and record it sent.
 async fn first_step_sent(svc: &Svc, pool: &PgPool, enrollment: Uuid) -> Uuid {
     make_due(pool, enrollment).await;
     svc.sweep(Utc::now()).await;
     let message = in_flight(pool, enrollment).await.unwrap();
     deliver(pool, message).await;
     svc.sweep(Utc::now()).await;
-    assert_eq!(status(pool, enrollment).await.2, 1, "step 0 recorded sent");
+    assert_eq!(
+        status(pool, enrollment).await.2,
+        1,
+        "first step recorded sent"
+    );
     message
+}
+
+/// Free the inbox's send slot, as time passing would.
+async fn free_slot(pool: &PgPool, message: Uuid) {
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET send_time = now() - interval '1 minute' WHERE message_id = $1",
+        message
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn body(pool: &PgPool, message: Uuid) -> (Option<String>, Option<String>) {
+    let row = sqlx::query!(
+        "SELECT subject, body_text FROM email_messages WHERE id = $1",
+        message
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (row.subject, row.body_text)
 }
 
 #[sqlx::test(
@@ -284,13 +320,12 @@ async fn i1_one_unsent_step_even_when_two_sweeps_race(pool: PgPool) {
     assert_eq!(pending_schedules(&pool).await, 1);
     let message = in_flight(&pool, enrollment).await.unwrap();
     let schedule = sqlx::query!(
-        "SELECT source, list_unsubscribe_url, send_time > now() AS \"future!\" FROM email_scheduled_messages WHERE message_id = $1",
+        "SELECT list_unsubscribe_url, send_time > now() AS \"future!\" FROM email_scheduled_messages WHERE message_id = $1",
         message
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(schedule.source.as_deref(), Some("sequence"));
     assert!(
         schedule
             .list_unsubscribe_url
@@ -299,8 +334,9 @@ async fn i1_one_unsent_step_even_when_two_sweeps_race(pool: PgPool) {
     assert!(schedule.future);
     // The database refuses a second unsent step outright.
     let second = sqlx::query!(
-        "INSERT INTO email_sequence_steps (enrollment_id, step, message_id, status, scheduled_at) VALUES ($1, 1, $2, 'scheduled', now())",
+        "INSERT INTO email_sequence_steps (enrollment_id, step_id, message_id, status, scheduled_at) VALUES ($1, $2, $3, 'scheduled', now())",
         enrollment,
+        Uuid::now_v7(),
         Uuid::now_v7(),
     )
     .execute(&pool)
@@ -312,13 +348,10 @@ async fn i1_one_unsent_step_even_when_two_sweeps_race(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("sequences"))
 )]
-async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
+async fn i2_every_check_stops_or_waits_instead_of_sending(pool: PgPool) {
     let (svc, access) = service(&pool);
-    let mut enrollments = Vec::new();
-    for _ in 0..5 {
-        let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
-        enrollments.push(enroll(&svc, OWNER, sequence, ADA).await);
-    }
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
     let check = |enrollment| {
         let svc = &svc;
         let pool = &pool;
@@ -329,29 +362,16 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
             status(pool, enrollment).await
         }
     };
+    let waiting = ("active".to_owned(), None, 0);
 
+    // Nothing goes while the owner lacks access or the inbox can't send; the
+    // enrollment waits and carries on once it can.
     access.crm_on.store(false, Ordering::SeqCst);
-    assert_eq!(
-        check(enrollments[0]).await,
-        ("stopped".into(), Some("access_lost".into()), 0)
-    );
+    assert_eq!(check(ada).await, waiting);
     access.crm_on.store(true, Ordering::SeqCst);
-    // Access back: resuming picks up where it stopped.
-    svc.act(OWNER, enrollments[0], EnrollmentAction::Resume)
-        .await
-        .unwrap();
-    assert_eq!(
-        status(&pool, enrollments[0]).await,
-        ("active".into(), None, 0)
-    );
-
     access.member.store(false, Ordering::SeqCst);
-    assert_eq!(
-        check(enrollments[1]).await,
-        ("stopped".into(), Some("access_lost".into()), 0)
-    );
+    assert_eq!(check(ada).await, waiting);
     access.member.store(true, Ordering::SeqCst);
-
     sqlx::query!(
         "UPDATE email_links SET needs_reauth = true WHERE id = $1",
         OWNER_LINK
@@ -359,14 +379,7 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        check(enrollments[2]).await,
-        (
-            "needs_attention".into(),
-            Some("inbox_unavailable".into()),
-            0
-        )
-    );
+    assert_eq!(check(ada).await, waiting);
     sqlx::query!(
         "UPDATE email_links SET needs_reauth = false WHERE id = $1",
         OWNER_LINK
@@ -374,28 +387,26 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-
     // Someone else's inbox (a delegated one) is never a sender.
     sqlx::query!(
         "UPDATE email_sequence_enrollments SET link_id = $2 WHERE id = $1",
-        enrollments[3],
+        ada,
         MATE_LINK
     )
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        check(enrollments[3]).await,
-        (
-            "needs_attention".into(),
-            Some("inbox_unavailable".into()),
-            0
-        )
-    );
+    assert_eq!(check(ada).await, waiting);
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET link_id = NULL WHERE id = $1",
+        ada
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // A reply the hook never saw is found before the next step.
-    let reply_enrollment = enrollments[4];
-    first_step_sent(&svc, &pool, reply_enrollment).await;
+    first_step_sent(&svc, &pool, ada).await;
     incoming(
         &pool,
         OWNER_LINK,
@@ -405,34 +416,22 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
     )
     .await;
     assert_eq!(
-        check(reply_enrollment).await,
+        check(ada).await,
         ("stopped".into(), Some("replied".into()), 1)
     );
 
-    // Deleting the CRM person withdraws a queued step and stops for good.
-    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
-    let removed = enroll(&svc, OWNER, sequence, BOB).await;
-    make_due(&pool, removed).await;
-    svc.sweep(Utc::now()).await;
-    assert!(in_flight(&pool, removed).await.is_some());
-    sqlx::query!("DELETE FROM crm_contacts WHERE id = $1", BOB)
-        .execute(&pool)
-        .await
-        .unwrap();
-    svc.sweep(Utc::now()).await;
-    assert_eq!(in_flight(&pool, removed).await, None);
+    // A person no longer in the CRM gets nothing until they are back.
+    let bob = enroll(&svc, OWNER, sequence, BOB).await;
+    access.bob_in_crm.store(false, Ordering::SeqCst);
     assert_eq!(
-        status(&pool, removed).await,
+        check(bob).await,
         ("stopped".into(), Some("contact_removed".into()), 0)
     );
-    assert!(matches!(
-        svc.act(OWNER, removed, EnrollmentAction::Resume).await,
-        Err(SequenceError::ActionUnavailable)
-    ));
+    access.bob_in_crm.store(true, Ordering::SeqCst);
+    svc.act(OWNER, bob, EnrollmentAction::Resume).await.unwrap();
+    assert_eq!(status(&pool, bob).await, waiting);
 
     // An unsubscribed address gets nothing more from any sequence.
-    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
-    let unsubscribed = enroll(&svc, OWNER, sequence, ADA).await;
     sqlx::query!(
         "UPDATE email_sequence_recipients SET unsubscribed_at = now(), source = 'manual' WHERE team_id = $1",
         TEAM
@@ -441,7 +440,7 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        check(unsubscribed).await,
+        check(bob).await,
         ("stopped".into(), Some("unsubscribed".into()), 0)
     );
     assert_eq!(pending_schedules(&pool).await, 0);
@@ -459,7 +458,7 @@ async fn i3_sends_advance_once_and_a_withdrawn_step_is_created_again(pool: PgPoo
         OWNER_LINK,
         vec![
             step("Hello", "First", false),
-            step("", "Second", true),
+            step("Ignored", "Second", true),
             step("Last", "Third", false),
         ],
     )
@@ -469,21 +468,31 @@ async fn i3_sends_advance_once_and_a_withdrawn_step_is_created_again(pool: PgPoo
     svc.sweep(Utc::now()).await;
     assert_eq!(status(&pool, enrollment).await, ("active".into(), None, 1));
 
-    // The reply step threads under the sent step.
+    // The reply step threads under the sent email, with its subject.
+    sqlx::query!(
+        "UPDATE email_messages SET subject = 'Hello, as sent' WHERE id = $1",
+        first
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     make_due(&pool, enrollment).await;
     svc.sweep(Utc::now()).await;
     let reply = in_flight(&pool, enrollment).await.unwrap();
-    let row = sqlx::query!(
-        "SELECT subject, replying_to_id FROM email_messages WHERE id = $1",
+    let replying_to = sqlx::query_scalar!(
+        "SELECT replying_to_id FROM email_messages WHERE id = $1",
         reply
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(row.replying_to_id, Some(first));
-    assert_eq!(row.subject.as_deref(), Some("Re: Hello"));
+    assert_eq!(replying_to, Some(first));
+    assert_eq!(
+        body(&pool, reply).await.0.as_deref(),
+        Some("Re: Hello, as sent")
+    );
 
-    // Pause withdraws it entirely; resume creates step 1 again.
+    // Pause withdraws it entirely; resume creates it again.
     svc.act(OWNER, enrollment, EnrollmentAction::Pause)
         .await
         .unwrap();
@@ -569,68 +578,38 @@ async fn i4_stop_withdraws_a_new_step_and_records_one_already_sending(pool: PgPo
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("sequences"))
 )]
-async fn i5_every_in_flight_step_is_resolved(pool: PgPool) {
+async fn i5_every_email_that_did_not_go_out_needs_attention(pool: PgPool) {
     let (svc, _) = service(&pool);
     let mut enrollments = Vec::new();
-    for _ in 0..3 {
+    for _ in 0..2 {
         let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
         enrollments.push(enroll(&svc, OWNER, sequence, ADA).await);
         enrollments.push(enroll(&svc, OWNER, sequence, BOB).await);
     }
     // One inbox sends 30 s apart and steps are created only when their slot is
     // near, so create them one sweep at a time, freeing the slot after each.
+    let mut steps = Vec::new();
     for enrollment in &enrollments {
         make_due(&pool, *enrollment).await;
         svc.sweep(Utc::now()).await;
-        sqlx::query!(
-            "UPDATE email_scheduled_messages SET send_time = now() - interval '1 minute' WHERE message_id = $1",
-            in_flight(&pool, *enrollment).await.unwrap()
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        let message = in_flight(&pool, *enrollment).await.unwrap();
+        free_slot(&pool, message).await;
+        steps.push(message);
     }
-    let step = |at: usize| {
-        let pool = &pool;
-        let enrollment = enrollments[at];
-        async move { in_flight(pool, enrollment).await.unwrap() }
+    let [refused, cancelled, gone, stuck] = steps[..] else {
+        panic!("four steps");
     };
-    let (refused, refused_again, withdrawn, gone, stuck) = (
-        step(0).await,
-        step(1).await,
-        step(2).await,
-        step(3).await,
-        step(4).await,
-    );
-
-    // Gmail refused it: retried automatically, then handed to the owner.
-    for message in [refused, refused_again] {
-        sqlx::query!(
-            "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
-            message
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
     sqlx::query!(
-        "UPDATE email_sequence_enrollments SET attempts = 3 WHERE id = $1",
-        enrollments[1]
+        "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
+        refused
     )
     .execute(&pool)
     .await
     .unwrap();
-    // Removed from the schedule and discarded outside the sequence.
+    // The owner cancels it in Mail.
     sqlx::query!(
         "DELETE FROM email_scheduled_messages WHERE message_id = $1",
-        withdrawn
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        r#"UPDATE email_messages SET mailbox_state = '{"provider_missing": true}' WHERE id = $1"#,
-        withdrawn
+        cancelled
     )
     .execute(&pool)
     .await
@@ -640,7 +619,6 @@ async fn i5_every_in_flight_step_is_resolved(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    // Still unsent well past its time.
     sqlx::query!(
         "UPDATE email_scheduled_messages SET send_time = now() - interval '31 minutes' WHERE message_id = $1",
         stuck
@@ -650,70 +628,39 @@ async fn i5_every_in_flight_step_is_resolved(pool: PgPool) {
     .unwrap();
 
     svc.sweep(Utc::now()).await;
-
-    let (state, _, _) = status(&pool, enrollments[0]).await;
-    assert_eq!(state, "active");
-    assert_eq!(
-        in_flight(&pool, enrollments[0]).await,
-        None,
-        "retry withdrew it"
+    for (enrollment, sent) in enrollments.iter().zip([0, 0, 1, 0]) {
+        assert_eq!(
+            status(&pool, *enrollment).await,
+            ("needs_attention".into(), None, sent)
+        );
+    }
+    assert!(
+        message_exists(&pool, refused).await,
+        "a refused email stays in Mail"
     );
+
+    // Resume creates an email that didn't go out again, and never resends one
+    // that may have.
+    for enrollment in &enrollments[..3] {
+        svc.act(OWNER, *enrollment, EnrollmentAction::Resume)
+            .await
+            .unwrap();
+    }
     assert!(!message_exists(&pool, refused).await);
-    let retry = sqlx::query!(
-        "SELECT attempts, due_at > now() + interval '4 minutes' AS \"later!\" FROM email_sequence_enrollments WHERE id = $1",
-        enrollments[0]
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!((retry.attempts, retry.later), (1, true));
-
     assert_eq!(
-        status(&pool, enrollments[1]).await,
-        ("needs_attention".into(), Some("step_failed".into()), 0)
+        status(&pool, enrollments[0]).await,
+        ("active".into(), None, 0)
     );
-    assert_eq!(in_flight(&pool, enrollments[1]).await, Some(refused_again));
-
     assert_eq!(
         status(&pool, enrollments[2]).await,
-        ("needs_attention".into(), Some("step_withdrawn".into()), 0)
-    );
-    assert_eq!(in_flight(&pool, enrollments[2]).await, None);
-    assert!(!message_exists(&pool, withdrawn).await);
-
-    assert_eq!(
-        status(&pool, enrollments[3]).await,
-        ("needs_attention".into(), Some("step_unknown".into()), 1)
-    );
-    let unknown = sqlx::query_scalar!(
-        "SELECT status FROM email_sequence_steps WHERE message_id = $1",
-        gone
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(unknown, "unknown");
-
-    assert_eq!(
-        status(&pool, enrollments[4]).await,
-        ("needs_attention".into(), Some("step_stuck".into()), 0)
-    );
-    assert_eq!(in_flight(&pool, enrollments[4]).await, Some(stuck));
-
-    // Resume never resends a step that may have gone out.
-    svc.act(OWNER, enrollments[3], EnrollmentAction::Resume)
-        .await
-        .unwrap();
-    assert_eq!(
-        status(&pool, enrollments[3]).await,
         ("active".into(), None, 1)
     );
 
-    // A stuck step that sends after all moves the enrollment on.
+    // A late email that goes out after all moves its enrollment on.
     deliver(&pool, stuck).await;
     svc.sweep(Utc::now()).await;
     assert_eq!(
-        status(&pool, enrollments[4]).await,
+        status(&pool, enrollments[3]).await,
         ("active".into(), None, 1)
     );
 }
@@ -731,7 +678,7 @@ async fn reply_rules_each_stop_the_enrollment(pool: PgPool) {
         let sent = first_step_sent(&svc, &pool, enrollment).await;
         cases.push((enrollment, sent));
     }
-    // Step 1 is in flight when the rule-3 reply lands; the stop withdraws it.
+    // The second step is in flight when the rule-3 reply lands; the stop withdraws it.
     make_due(&pool, cases[2].0).await;
     svc.sweep(Utc::now()).await;
     let pending_reply = in_flight(&pool, cases[2].0).await.unwrap();
@@ -796,7 +743,7 @@ async fn reply_rules_each_stop_the_enrollment(pool: PgPool) {
     }
     assert!(
         !message_exists(&pool, pending_reply).await,
-        "the stop withdrew step 1"
+        "the stop withdrew the second step"
     );
 
     // Rule 3 on its own, on a new enrollment.
@@ -830,78 +777,6 @@ async fn reply_rules_each_stop_the_enrollment(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(unsubscribed().await, 1);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("sequences"))
-)]
-async fn a_step_the_owner_takes_over_in_mail_stays_theirs(pool: PgPool) {
-    let (svc, _) = service(&pool);
-    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
-    let enrollment = enroll(&svc, OWNER, sequence, ADA).await;
-    make_due(&pool, enrollment).await;
-    svc.sweep(Utc::now()).await;
-    let step = in_flight(&pool, enrollment).await.unwrap();
-    sqlx::query!(
-        "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
-        step
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "UPDATE email_sequence_enrollments SET attempts = 3 WHERE id = $1",
-        enrollment
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    svc.sweep(Utc::now()).await;
-    assert_eq!(
-        status(&pool, enrollment).await.1.as_deref(),
-        Some("step_failed")
-    );
-
-    // The owner restores the failed draft in Mail to fix it.
-    sqlx::query!(
-        "DELETE FROM email_scheduled_messages WHERE message_id = $1",
-        step
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    svc.sweep(Utc::now()).await;
-    svc.act(OWNER, enrollment, EnrollmentAction::Pause)
-        .await
-        .unwrap();
-    assert!(
-        message_exists(&pool, step).await,
-        "pause leaves their draft"
-    );
-
-    // Then schedules it themselves; the sweep leaves their send alone.
-    sqlx::query!(
-        r#"INSERT INTO email_scheduled_messages (link_id, message_id, send_time)
-           VALUES ($1, $2, now() + interval '10 seconds')"#,
-        OWNER_LINK,
-        step
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    svc.sweep(Utc::now()).await;
-    assert!(message_exists(&pool, step).await);
-    assert_eq!(in_flight(&pool, enrollment).await, Some(step));
-    assert!(matches!(
-        svc.act(OWNER, enrollment, EnrollmentAction::Resume).await,
-        Err(SequenceError::StepTakenOver)
-    ));
-
-    // Once it is sent, it counts as the sequence's step.
-    deliver(&pool, step).await;
-    svc.sweep(Utc::now()).await;
-    assert_eq!(status(&pool, enrollment).await, ("paused".into(), None, 1));
 }
 
 #[sqlx::test(
@@ -980,97 +855,116 @@ async fn unsubscribe_link_is_idempotent_and_stops_every_owner(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("sequences"))
 )]
-async fn edits_reach_people_until_their_first_email_goes_out(pool: PgPool) {
-    let (svc, _) = service(&pool);
-    let emails = |subject: &str| {
-        vec![
-            step(subject, "Welcome", false),
-            Step {
-                delay_days: 2,
-                ..step("", "Following up", true)
-            },
-        ]
+async fn edits_reach_every_email_not_yet_created(pool: PgPool) {
+    let (svc, access) = service(&pool);
+    let first = step("Hi {{firstName}}", "Welcome", false);
+    let follow_up = Step {
+        delay_days: 3,
+        ..step("", "Following up, {{firstName}}", true)
     };
-    let first_subject = async |enrollment: Uuid| {
+    let last = Step {
+        delay_days: 1,
+        ..step("Last", "Bye", false)
+    };
+    let sequence = active_sequence(
+        &svc,
+        OWNER,
+        OWNER_LINK,
+        vec![first.clone(), follow_up.clone(), last],
+    )
+    .await;
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    let sent = first_step_sent(&svc, &pool, ada).await;
+    assert_eq!(body(&pool, sent).await.0.as_deref(), Some("Hi Ada"));
+    let due = async || {
         sqlx::query_scalar!(
-            "SELECT steps->0->>'subject' FROM email_sequence_enrollments WHERE id = $1",
-            enrollment
+            "SELECT due_at FROM email_sequence_enrollments WHERE id = $1",
+            ada
         )
         .fetch_one(&pool)
         .await
         .unwrap()
+        .unwrap()
     };
+    let three_days_out = due().await;
 
-    // A draft with no inbox yet takes people and sends nothing.
-    let draft = svc
-        .create(
-            OWNER,
-            NewSequence {
-                name: "Intro".to_owned(),
-                link_id: None,
-                footer: String::new(),
-                steps: vec![step("", "", false)],
-            },
-        )
-        .await
-        .unwrap();
-    let edit = async |version: i32, patch: SequencePatch| {
-        svc.update(OWNER, draft.id, SequencePatch { version, ..patch })
-            .await
-            .unwrap()
-            .version
+    // While it sends: a new follow-up a day out goes first, the last email
+    // goes, and the CRM name in use changes.
+    let inserted = Step {
+        delay_days: 1,
+        ..step("", "Quick note, {{firstName}}", true)
     };
-    let ada = enroll(&svc, OWNER, draft.id, ADA).await;
+    svc.update(
+        OWNER,
+        sequence,
+        SequencePatch {
+            steps: Some(vec![first.clone(), inserted.clone(), follow_up.clone()]),
+            ..SequencePatch::default()
+        },
+    )
+    .await
+    .unwrap();
+    // Two days sooner, give or take a daylight-saving change.
+    assert!((47..=49).contains(&(three_days_out - due().await).num_hours()));
+    *access.ada_name.lock().unwrap() = "Augusta King";
     make_due(&pool, ada).await;
     svc.sweep(Utc::now()).await;
-    assert_eq!(in_flight(&pool, ada).await, None);
+    let note = in_flight(&pool, ada).await.unwrap();
+    assert_eq!(
+        body(&pool, note).await.1.unwrap().lines().next(),
+        Some("Quick note, Augusta")
+    );
 
-    // Activating sends the latest emails from the inbox chosen since.
-    let version = edit(
-        draft.version,
+    // An email already created goes as it is.
+    let edited = Step {
+        body: "Edited".to_owned(),
+        ..inserted.clone()
+    };
+    svc.update(
+        OWNER,
+        sequence,
         SequencePatch {
-            link_id: Some(OWNER_LINK),
-            steps: Some(emails("Hi {{firstName}}")),
-            weekdays_only: Some(false),
+            steps: Some(vec![first.clone(), edited, follow_up.clone()]),
             ..SequencePatch::default()
         },
     )
-    .await;
-    let version = edit(
-        version,
-        SequencePatch {
-            status: Some(SequenceStatus::Active),
-            ..SequencePatch::default()
-        },
-    )
-    .await;
-    let sent = first_step_sent(&svc, &pool, ada).await;
-    let subject = sqlx::query_scalar!("SELECT subject FROM email_messages WHERE id = $1", sent)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(subject.as_deref(), Some("Hi Ada"));
+    .await
+    .unwrap();
+    assert_eq!(
+        body(&pool, note).await.1.unwrap().lines().next(),
+        Some("Quick note, Augusta")
+    );
 
-    // Once paused, edits reach people added since, not Ada, who was sent one.
-    let version = edit(
-        version,
-        SequencePatch {
-            status: Some(SequenceStatus::Paused),
-            ..SequencePatch::default()
-        },
-    )
-    .await;
-    let bob = enroll(&svc, OWNER, draft.id, BOB).await;
-    edit(
-        version,
-        SequencePatch {
-            steps: Some(emails("Hello {{firstName}}")),
-            ..SequencePatch::default()
-        },
-    )
-    .await;
-    assert_eq!(first_subject(ada).await.as_deref(), Some("Hi Ada"));
-    assert_eq!(first_subject(bob).await.as_deref(), Some("Hello Bob"));
+    deliver(&pool, note).await;
+    svc.sweep(Utc::now()).await;
+    make_due(&pool, ada).await;
+    svc.sweep(Utc::now()).await;
+    let last_email = in_flight(&pool, ada).await.unwrap();
+    assert_eq!(
+        body(&pool, last_email).await.1.unwrap().lines().next(),
+        Some("Following up, Augusta")
+    );
+    deliver(&pool, last_email).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(status(&pool, ada).await, ("completed".into(), None, 3));
+
+    // A sending sequence must stay complete.
+    let emptied = Step {
+        body: String::new(),
+        ..follow_up
+    };
+    assert!(matches!(
+        svc.update(
+            OWNER,
+            sequence,
+            SequencePatch {
+                steps: Some(vec![first, emptied]),
+                ..SequencePatch::default()
+            },
+        )
+        .await,
+        Err(SequenceError::Invalid(_))
+    ));
 }
 
 #[sqlx::test(
@@ -1083,17 +977,18 @@ async fn an_inbox_sends_at_most_its_daily_limit(pool: PgPool) {
     // Bob's finished enrollment stands in for a day of sends from the inbox.
     let bob = enroll(&svc, OWNER, sequence, BOB).await;
     sqlx::query!(
-        "UPDATE email_sequence_enrollments SET status = 'completed', due_at = NULL WHERE id = $1",
-        bob
+        "UPDATE email_sequence_enrollments SET status = 'completed', due_at = NULL, link_id = $2 WHERE id = $1",
+        bob,
+        OWNER_LINK,
     )
     .execute(&pool)
     .await
     .unwrap();
     let sent: Vec<Uuid> = (0..DAILY_LIMIT).map(|_| Uuid::now_v7()).collect();
     sqlx::query!(
-        r#"INSERT INTO email_sequence_steps (enrollment_id, step, message_id, status, scheduled_at, sent_at)
-           SELECT $1, (n - 1)::smallint, id, 'sent', now() - interval '23 hours', now() - interval '23 hours'
-           FROM unnest($2::uuid[]) WITH ORDINALITY AS t(id, n)"#,
+        r#"INSERT INTO email_sequence_steps (enrollment_id, step_id, message_id, status, scheduled_at, sent_at)
+           SELECT $1, id, id, 'sent', now() - interval '23 hours', now() - interval '23 hours'
+           FROM unnest($2::uuid[]) AS t(id)"#,
         bob,
         &sent,
     )
@@ -1103,20 +998,18 @@ async fn an_inbox_sends_at_most_its_daily_limit(pool: PgPool) {
     let ada = enroll(&svc, OWNER, sequence, ADA).await;
     make_due(&pool, ada).await;
 
-    let report = svc.sweep(Utc::now()).await;
-    assert_eq!(report.limited, 1);
+    svc.sweep(Utc::now()).await;
     assert_eq!(in_flight(&pool, ada).await, None);
     assert_eq!(status(&pool, ada).await.0, "active");
 
     // Once the earliest of them is a day old, Ada's step goes.
     sqlx::query!(
-        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '25 hours' WHERE enrollment_id = $1 AND step = 0",
-        bob
+        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '25 hours' WHERE message_id = $1",
+        sent[0]
     )
     .execute(&pool)
     .await
     .unwrap();
-    let report = svc.sweep(Utc::now()).await;
-    assert_eq!(report.limited, 0);
+    svc.sweep(Utc::now()).await;
     assert!(in_flight(&pool, ada).await.is_some());
 }

@@ -14,16 +14,9 @@ export type SequenceErrorCode =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SequenceErrorCode = {
   not_found: 'not_found',
-  version_conflict: 'version_conflict',
-  invalid_transition: 'invalid_transition',
   invalid_sequence: 'invalid_sequence',
-  too_many_contacts: 'too_many_contacts',
-  invalid_start: 'invalid_start',
-  invalid_timezone: 'invalid_timezone',
+  invalid_request: 'invalid_request',
   action_unavailable: 'action_unavailable',
-  step_in_delivery: 'step_in_delivery',
-  step_taken_over: 'step_taken_over',
-  no_team: 'no_team',
-  crm_disabled: 'crm_disabled',
+  crm_unavailable: 'crm_unavailable',
   internal: 'internal',
 } as const;

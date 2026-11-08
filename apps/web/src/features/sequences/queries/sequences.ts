@@ -8,7 +8,6 @@ import { queryClient } from '@queries/client';
 import { emailClient, type SequenceRequestError } from '@service-email/client';
 import {
   type EnrollmentAction,
-  type EnrollmentDetail,
   type EnrollmentSummary,
   type EnrollRequest,
   type EnrollResult,
@@ -32,7 +31,6 @@ import {
   expectedState,
   withDetailStatus,
   withEnrollment,
-  withEnrollmentSummary,
   withListStatus,
   withoutSummary,
   withSequence,
@@ -40,7 +38,7 @@ import {
 } from './cache';
 import { ENROLLMENT_ACTION_MUTATION_KEY, sequenceKeys } from './keys';
 
-/** Steps send on the server; an open sequence follows them about once a minute. */
+/** Emails send on the server; an open sequence follows them about once a minute. */
 const PROGRESS_INTERVAL = 60_000;
 
 function isRefusal(error: ResultError): error is SequenceRequestError {
@@ -78,28 +76,13 @@ const SEQUENCE_READ_OPTIONS = {
   refetchOnWindowFocus: 'always',
 } as const;
 
-/** The part of a query a polling policy reads. */
-type Polled<T> = { state: { data?: T } };
-
-/** A draft has no enrollments yet, so it has no progress to follow. */
-export function sequenceRefetchInterval({
+/** A draft sends nothing, so it has no progress to follow. */
+function sequenceRefetchInterval({
   state,
-}: Polled<SequenceDetailResponse>) {
+}: {
+  state: { data?: SequenceDetailResponse };
+}) {
   return state.data?.sequence.status === 'draft' ? false : PROGRESS_INTERVAL;
-}
-
-/**
- * An enrollment moves on its own only while it sends or needs attention, or
- * while a step it scheduled is still out.
- */
-export function enrollmentRefetchInterval({ state }: Polled<EnrollmentDetail>) {
-  const enrollment = state.data;
-  const settled =
-    !!enrollment &&
-    enrollment.status !== 'active' &&
-    enrollment.status !== 'needs_attention' &&
-    !enrollment.steps.some((step) => step.status === 'scheduled');
-  return settled ? false : PROGRESS_INTERVAL;
 }
 
 async function fetchSequences() {
@@ -124,15 +107,6 @@ export function sequenceQueryOptions(sequenceId: string) {
     reconcile: 'id',
     ...SEQUENCE_READ_OPTIONS,
     refetchInterval: sequenceRefetchInterval,
-  });
-}
-
-export function enrollmentQueryOptions(enrollmentId: string) {
-  return queryOptions({
-    queryKey: sequenceKeys.enrollment(enrollmentId).queryKey,
-    queryFn: () => throwOnErr(() => emailClient.getEnrollment(enrollmentId)),
-    retry: retrySequenceRead,
-    refetchInterval: enrollmentRefetchInterval,
   });
 }
 
@@ -215,13 +189,14 @@ export function useUpdateSequenceMutation() {
     mutationFn: ({ sequenceId, request }) =>
       throwOnErr(() => emailClient.updateSequence(sequenceId, request)),
     onMutate: async ({ sequenceId, request }) => {
+      const detailKey = sequenceKeys.detail(sequenceId).queryKey;
+      // A poll already running would land after the save with the old copy.
+      await queryClient.cancelQueries({ queryKey: detailKey });
       const { status } = request;
       if (!status) return;
-      const detailKey = sequenceKeys.detail(sequenceId).queryKey;
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: detailKey }),
-        queryClient.cancelQueries({ queryKey: sequenceKeys.list.queryKey }),
-      ]);
+      await queryClient.cancelQueries({
+        queryKey: sequenceKeys.list.queryKey,
+      });
       const previous =
         queryClient.getQueryData<SequenceDetailResponse>(detailKey)?.sequence
           .status ??
@@ -300,10 +275,6 @@ type EnrollmentRollback = { previous: EnrollmentSummary } | undefined;
 
 function setEnrollment(sequenceId: string, enrollment: EnrollmentSummary) {
   setDetail(sequenceId, (detail) => withEnrollment(detail, enrollment));
-  queryClient.setQueryData<EnrollmentDetail>(
-    sequenceKeys.enrollment(enrollment.id).queryKey,
-    (detail) => withEnrollmentSummary(detail, enrollment)
-  );
 }
 
 /**
@@ -324,12 +295,7 @@ export function useEnrollmentActionMutation() {
       const expected = expectedState(action);
       if (!expected) return;
       const detailKey = sequenceKeys.detail(sequenceId).queryKey;
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: detailKey }),
-        queryClient.cancelQueries({
-          queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
-        }),
-      ]);
+      await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = enrollmentSnapshot(
         queryClient.getQueryData<SequenceDetailResponse>(detailKey),
         enrollment.id
@@ -350,9 +316,6 @@ export function useEnrollmentActionMutation() {
               queryKey: sequenceKeys.detail._def,
             })
           : invalidateDetail(sequenceId),
-        queryClient.invalidateQueries({
-          queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
-        }),
         invalidateList(),
         action === 'unsubscribe'
           ? invalidateContactCards()

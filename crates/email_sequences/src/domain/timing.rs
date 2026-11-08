@@ -10,10 +10,6 @@ use chrono::{
     DateTime, Datelike, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc, Weekday,
 };
 
-/// The earliest a step may come due, so its schedule is always in the future
-/// by the time the sweep creates it.
-pub const LEAD_TIME: Duration = Duration::minutes(2);
-
 /// The send clock an enrollment started at `start` in `timezone` keeps.
 pub fn send_clock(start: DateTime<Utc>, timezone: chrono_tz::Tz, weekdays_only: bool) -> SendClock {
     SendClock {
@@ -27,9 +23,10 @@ pub fn send_clock(start: DateTime<Utc>, timezone: chrono_tz::Tz, weekdays_only: 
     }
 }
 
-/// When an enrollment's first step comes due.
+/// When an enrollment's first step comes due: its start, or now if that
+/// passed, moved to Monday when that is a weekend the sequence skips.
 pub fn first_due(start: DateTime<Utc>, clock: SendClock, now: DateTime<Utc>) -> DateTime<Utc> {
-    on_weekday(start.max(now + LEAD_TIME), clock)
+    on_weekday(start.max(now), clock)
 }
 
 /// `at`, or in a weekdays-only sequence when that falls on a weekend in the
@@ -51,7 +48,7 @@ pub fn on_weekday(at: DateTime<Utc>, clock: SendClock) -> DateTime<Utc> {
 }
 
 /// How far past its send time a step's slot can fall and still count as sent
-/// on the day it was due: the lead time plus spacing behind a batch.
+/// on the day it was due: the sweep's lead plus spacing behind a batch.
 const SLIP: Duration = Duration::hours(1);
 
 /// When the step after one scheduled at `previous` comes due: its calendar
@@ -67,7 +64,7 @@ pub fn next_due(
 
 /// `previous`'s local date plus `delay_days`, at the enrollment's send time.
 /// A step due late in the evening whose slot slipped past midnight keeps its
-/// day. A step that would be due before `now + LEAD_TIME` is due then instead.
+/// day. A step that would be due in the past is due now.
 fn calendar_due(
     previous: DateTime<Utc>,
     delay_days: u16,
@@ -84,7 +81,7 @@ fn calendar_due(
         }
     }
     let date = day + Duration::days(i64::from(delay_days));
-    local_instant(clock.timezone, date.and_time(clock.send_time)).max(now + LEAD_TIME)
+    local_instant(clock.timezone, date.and_time(clock.send_time)).max(now)
 }
 
 /// The instant a wall-clock time names. A time skipped by a daylight-saving

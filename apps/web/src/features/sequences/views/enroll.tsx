@@ -9,11 +9,9 @@ import type {
 import { format, isValid } from 'date-fns';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
-import { failureMessage } from '../components/failure-message';
-import { InlineFailure } from '../components/inline-failure';
+import { failureMessage, InlineFailure } from '../components/failure';
 import { OptionSelect } from '../components/option-select';
 import { type Person, useSequences } from '../context/sequences-context';
-import { isRetryable } from '../core/errors';
 import { defaultStart, SEQUENCE_LIMITS } from '../core/sequence';
 
 const SURFACE = 'sequences.enroll';
@@ -23,7 +21,6 @@ function uniqueById(people: readonly Person[]) {
   return people.filter((person) => !seen.has(person.id) && seen.add(person.id));
 }
 
-/** Choose one of the owner's sequences. */
 function SequencePicker(props: {
   value: string | undefined;
   onChange: (sequence: SequenceSummary) => void;
@@ -34,8 +31,7 @@ function SequencePicker(props: {
       <Match when={list.failure()}>
         {(failure) => (
           <InlineFailure
-            message={failureMessage(failure())}
-            retryable={isRetryable(failure())}
+            failure={failure()}
             onRetry={() => fireAndForget(list.refresh(), SURFACE)}
           />
         )}
@@ -86,11 +82,13 @@ export function EnrollView(props: {
     props.initial ?? []
   );
   // Company people stay selected until unchecked.
-  const [dropped, setDropped] = createSignal<ReadonlySet<string>>(new Set());
+  const [dropped, setDropped] = createSignal<readonly string[]>([]);
   const candidates = createMemo(() =>
     uniqueById([
       ...chosen(),
-      ...companyPeople.people().filter((person) => !dropped().has(person.id)),
+      ...companyPeople
+        .people()
+        .filter((person) => !dropped().includes(person.id)),
     ])
   );
   const selected = () => candidates().slice(0, SEQUENCE_LIMITS.contacts);
@@ -106,12 +104,10 @@ export function EnrollView(props: {
       ...current.filter((item) => item.id !== person.id),
       ...(checked ? [person] : []),
     ]);
-    setDropped((current) => {
-      const next = new Set(current);
-      if (checked) next.delete(person.id);
-      else next.add(person.id);
-      return next;
-    });
+    setDropped((current) => [
+      ...current.filter((id) => id !== person.id),
+      ...(checked ? [] : [person.id]),
+    ]);
   };
 
   async function enroll() {
@@ -119,7 +115,7 @@ export function EnrollView(props: {
     const startAt = new Date(start());
     if (!id) return;
     if (!isValid(startAt)) {
-      setError(t('sequences.errorInvalidStart'));
+      setError(t('sequences.invalidStart'));
       return;
     }
     const batch = selected();

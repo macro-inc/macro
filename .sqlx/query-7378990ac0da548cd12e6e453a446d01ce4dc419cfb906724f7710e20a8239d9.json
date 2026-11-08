@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_enrollments\n               SET link_id = $2, contact_name = $3, status = $4, reason = $5, due_at = $6,\n                   replies_after = $7, updated_at = now()\n               WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7378990ac0da548cd12e6e453a446d01ce4dc419cfb906724f7710e20a8239d9"
+}

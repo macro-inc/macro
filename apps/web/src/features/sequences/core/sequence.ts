@@ -18,6 +18,7 @@ import {
   setHours,
   startOfDay,
 } from 'date-fns';
+import { v7 as uuidv7 } from 'uuid';
 
 /** Limits the server enforces; the editor stops at them. */
 export const SEQUENCE_LIMITS = {
@@ -79,15 +80,14 @@ export function insertToken(
   };
 }
 
-/** What the editor changes: everything but status and version. */
 export type SequenceDraft = Pick<
   Sequence,
   'name' | 'linkId' | 'footer' | 'weekdaysOnly' | 'steps'
 >;
 
-/** A sequence changes only while it is not sending. */
-export function isEditable(status: SequenceStatus) {
-  return status !== 'active';
+/** A blank follow-up. The server keys each step's history by its id. */
+export function blankStep(): Step {
+  return { id: uuidv7(), delayDays: 2, subject: '', body: '', asReply: true };
 }
 
 /** A follow-up that replies in its thread; the first email never does. */
@@ -104,7 +104,10 @@ export function stepSubject(steps: readonly Step[], index: number) {
   return `Re: ${subject}`;
 }
 
-/** A plain copy of what the editor changes, as the server stores it. */
+/**
+ * A plain copy of what the editor changes, as the server stores it. The copy
+ * matters: the query store updates a cached sequence in place.
+ */
 export function toDraft(sequence: SequenceDraft): SequenceDraft {
   return {
     name: sequence.name,
@@ -115,12 +118,10 @@ export function toDraft(sequence: SequenceDraft): SequenceDraft {
   };
 }
 
-/**
- * Steps as the server stores them: the first is never a reply and never
- * waits, since it goes out at the enrollment's start.
- */
+/** The first step goes out at the enrollment's start: no wait, no reply. */
 function normalizeSteps(steps: readonly Step[]): Step[] {
   return steps.map((step, index) => ({
+    id: step.id,
     delayDays: index === 0 ? 0 : step.delayDays,
     subject: step.subject,
     body: step.body,
@@ -132,10 +133,10 @@ function normalizeSteps(steps: readonly Step[]): Step[] {
 export function draftChanges(
   saved: SequenceDraft,
   draft: SequenceDraft
-): Omit<UpdateSequenceRequest, 'version'> | undefined {
+): UpdateSequenceRequest | undefined {
   const base = toDraft(saved);
   const steps = normalizeSteps(draft.steps);
-  const changes: Omit<UpdateSequenceRequest, 'version'> = {
+  const changes: UpdateSequenceRequest = {
     ...(draft.name !== base.name && { name: draft.name }),
     ...((draft.linkId ?? null) !== base.linkId && { linkId: draft.linkId }),
     ...(draft.footer !== base.footer && { footer: draft.footer }),
@@ -147,36 +148,16 @@ export function draftChanges(
   return Object.keys(changes).length ? changes : undefined;
 }
 
-const LIVE_STATUSES: readonly EnrollmentStatus[] = [
-  'active',
-  'paused',
-  'needs_attention',
-];
-/**
- * A stop that a resume can undo: the server may have misread a reply or
- * bounce, or access may be back (the server checks it again before sending).
- */
+/** The server may have misread a reply or bounce, or the person may be back. */
 const RESUMABLE_STOPS: readonly EnrollmentReason[] = [
   'replied',
   'bounced',
-  'access_lost',
-];
-/** A step that never went out, so resuming sends it again. */
-const RETRY_REASONS: readonly EnrollmentReason[] = [
-  'step_failed',
-  'step_withdrawn',
+  'contact_removed',
 ];
 
 type EnrollmentState = Pick<EnrollmentSummary, 'status' | 'reason'>;
 
-function isLive(status: EnrollmentStatus) {
-  return LIVE_STATUSES.includes(status);
-}
-
-/**
- * What an enrollment shows: a sequence that isn't sending (a draft or paused)
- * holds its active enrollments.
- */
+/** A sequence that isn't sending holds its active enrollments. */
 export function shownStatus(
   enrollment: Pick<EnrollmentSummary, 'status'>,
   sequenceHeld: boolean
@@ -188,34 +169,30 @@ export function shownStatus(
 
 /**
  * The owner actions an enrollment offers, in display order. Pause and resume
- * wait for a sending sequence, which is what resumes a paused one's people.
- * Anyone not already opted out can be unsubscribed, even after a reply.
+ * wait for a sending sequence: resuming the sequence is what moves its
+ * people. Anyone not opted out can be unsubscribed, even after a reply.
  */
 export function enrollmentActions(
-  enrollment: EnrollmentState,
+  { status, reason }: EnrollmentState,
   sequenceStatus: SequenceStatus
 ): EnrollmentAction[] {
-  const { status, reason } = enrollment;
   const sending = sequenceStatus === 'active';
-  const actions: EnrollmentAction[] = [];
+  const live =
+    status === 'active' || status === 'paused' || status === 'needs_attention';
   const resumable =
     status === 'paused' ||
     status === 'needs_attention' ||
     (status === 'stopped' && !!reason && RESUMABLE_STOPS.includes(reason));
+  const actions: EnrollmentAction[] = [];
   if (sending && resumable) actions.push('resume');
   if (sending && (status === 'active' || status === 'needs_attention'))
     actions.push('pause');
-  if (isLive(status)) actions.push('stop');
+  if (live) actions.push('stop');
   if (reason !== 'unsubscribed') actions.push('unsubscribe');
   return actions;
 }
 
-/** Resuming resends a step that never went out: the action reads Retry. */
-export function isRetry(enrollment: EnrollmentState) {
-  return !!enrollment.reason && RETRY_REASONS.includes(enrollment.reason);
-}
-
-/** Enrollments that need the owner across sequences: the sidebar count. */
+/** Enrollments whose email didn't go out, across sequences: the sidebar count. */
 export function needsAttentionTotal(sequences: readonly SequenceSummary[]) {
   return sequences.reduce(
     (total, sequence) => total + sequence.counts.needsAttention,

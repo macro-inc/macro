@@ -16,7 +16,7 @@ import type { EnrollmentSummaryReason } from './enrollmentSummaryReason';
  * One contact's progress through a sequence.
  */
 export interface EnrollmentSummary {
-  /** Name at enrollment. */
+  /** The CRM name its last email used. */
   contactName?: EnrollmentSummaryContactName;
   /** When it was enrolled. */
   createdAt: string;
@@ -30,11 +30,9 @@ export interface EnrollmentSummary {
   lastSentAt?: EnrollmentSummaryLastSentAt;
   /** When the next step is scheduled or due. */
   nextSendAt?: EnrollmentSummaryNextSendAt;
-  /** Index of the next step to send. */
-  nextStep: number;
   reason?: EnrollmentSummaryReason;
   /** Status. */
   status: EnrollmentStatus;
-  /** Number of steps. */
-  stepCount: number;
+  /** Emails sent, or skipped because they may have gone out. */
+  stepsSent: number;
 }

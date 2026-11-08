@@ -10,6 +10,7 @@ import { Button, Checkbox, ComposerSurface, Dropdown, Input } from '@ui';
 import { For, Index, Show } from 'solid-js';
 import type { Sender } from '../context/sequences-context';
 import {
+  blankStep,
   insertToken,
   isReplyStep,
   PERSONALIZATION_TOKENS,
@@ -37,7 +38,6 @@ function clampDelay(value: number) {
 function StepTiming(props: {
   step: Step;
   position: number;
-  disabled: boolean;
   onChange: (patch: Partial<Step>) => void;
 }) {
   return (
@@ -52,7 +52,6 @@ function StepTiming(props: {
           size="xs"
           class="w-14"
           value={props.step.delayDays}
-          disabled={props.disabled}
           onInput={(event) =>
             props.onChange({
               delayDays: clampDelay(event.currentTarget.valueAsNumber),
@@ -64,7 +63,6 @@ function StepTiming(props: {
       <Checkbox
         class="flex items-center gap-2 text-xs"
         checked={props.step.asReply === true}
-        disabled={props.disabled}
         onChange={(checked: boolean) => props.onChange({ asReply: checked })}
       >
         <Checkbox.Control />
@@ -77,7 +75,6 @@ function StepTiming(props: {
 function StepCard(props: {
   steps: readonly Step[];
   index: number;
-  disabled: boolean;
   onChange: (patch: Partial<Step>) => void;
   onMoveUp: () => void;
   onRemove: () => void;
@@ -127,66 +124,64 @@ function StepCard(props: {
               {t('sequences.sendDay', { day: day() })}
             </span>
           </h3>
-          <Show when={!props.disabled}>
-            <div class="flex items-center gap-1">
-              <Dropdown placement="bottom-end">
-                <Dropdown.Trigger
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t('sequences.insertInto', {
-                    position: position(),
-                  })}
-                >
-                  <BracesIcon class="size-4" aria-hidden="true" />
-                  {t('sequences.insert')}
-                </Dropdown.Trigger>
-                <Dropdown.Content
-                  class="min-w-40"
-                  onCloseAutoFocus={(event: Event) => {
-                    if (!inserted) return;
-                    inserted = false;
-                    event.preventDefault();
-                  }}
-                >
-                  <Dropdown.Group>
-                    <For each={PERSONALIZATION_TOKENS}>
-                      {(token) => (
-                        <Dropdown.Item onSelect={() => insert(token)}>
-                          {t(TOKEN_LABELS[token])}
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.Group>
-                </Dropdown.Content>
-              </Dropdown>
-              <Button
-                type="button"
+          <div class="flex items-center gap-1">
+            <Dropdown placement="bottom-end">
+              <Dropdown.Trigger
                 variant="ghost"
-                size="icon-sm"
-                aria-label={t('sequences.moveEmailUp', {
+                size="sm"
+                aria-label={t('sequences.insertInto', {
                   position: position(),
                 })}
-                tooltip={t('sequences.moveUp')}
-                disabled={props.index === 0}
-                onClick={() => props.onMoveUp()}
               >
-                <ArrowUpIcon class="size-4" aria-hidden="true" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('sequences.removeEmail', {
-                  position: position(),
-                })}
-                tooltip={t('sequences.remove')}
-                disabled={props.steps.length === 1}
-                onClick={() => props.onRemove()}
+                <BracesIcon class="size-4" aria-hidden="true" />
+                {t('sequences.insert')}
+              </Dropdown.Trigger>
+              <Dropdown.Content
+                class="min-w-40"
+                onCloseAutoFocus={(event: Event) => {
+                  if (!inserted) return;
+                  inserted = false;
+                  event.preventDefault();
+                }}
               >
-                <XIcon class="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-          </Show>
+                <Dropdown.Group>
+                  <For each={PERSONALIZATION_TOKENS}>
+                    {(token) => (
+                      <Dropdown.Item onSelect={() => insert(token)}>
+                        {t(TOKEN_LABELS[token])}
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('sequences.moveEmailUp', {
+                position: position(),
+              })}
+              tooltip={t('sequences.moveUp')}
+              disabled={props.index === 0}
+              onClick={() => props.onMoveUp()}
+            >
+              <ArrowUpIcon class="size-4" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('sequences.removeEmail', {
+                position: position(),
+              })}
+              tooltip={t('sequences.remove')}
+              disabled={props.steps.length === 1}
+              onClick={() => props.onRemove()}
+            >
+              <XIcon class="size-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
         <div class="px-4 pb-3">
           <ComposeFieldRow label={t('sequences.subject')}>
@@ -205,7 +200,6 @@ function StepCard(props: {
                 class="ph-no-capture w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
                 maxLength={SEQUENCE_LIMITS.subject}
                 value={step()?.subject ?? ''}
-                disabled={props.disabled}
                 onFocus={() => (lastField = 'subject')}
                 onInput={(event) =>
                   props.onChange({
@@ -224,7 +218,6 @@ function StepCard(props: {
             })}
             maxLength={SEQUENCE_LIMITS.body}
             value={step()?.body ?? ''}
-            disabled={props.disabled}
             onFocus={() => (lastField = 'body')}
             onInput={(event) =>
               props.onChange({ body: event.currentTarget.value })
@@ -239,7 +232,6 @@ function StepCard(props: {
 export function SequenceEditor(props: {
   draft: SequenceDraft;
   senders: readonly Sender[];
-  disabled: boolean;
   onChange: (draft: SequenceDraft) => void;
 }) {
   const change = (patch: Partial<SequenceDraft>) =>
@@ -266,7 +258,6 @@ export function SequenceEditor(props: {
               ? t('sequences.chooseInbox')
               : t('sequences.noInbox')
           }
-          disabled={props.disabled}
           personal
           options={props.senders.map((sender) => ({
             value: sender.id,
@@ -286,14 +277,12 @@ export function SequenceEditor(props: {
                 <StepTiming
                   step={step()}
                   position={index + 1}
-                  disabled={props.disabled}
                   onChange={(patch) => changeStep(index, patch)}
                 />
               </Show>
               <StepCard
                 steps={props.draft.steps}
                 index={index}
-                disabled={props.disabled}
                 onChange={(patch) => changeStep(index, patch)}
                 onMoveUp={() => moveUp(index)}
                 onRemove={() =>
@@ -306,25 +295,16 @@ export function SequenceEditor(props: {
           )}
         </Index>
       </div>
-      <Show when={!props.disabled}>
-        <Button
-          type="button"
-          variant="secondary"
-          class="mt-4"
-          disabled={props.draft.steps.length >= SEQUENCE_LIMITS.steps}
-          onClick={() =>
-            change({
-              steps: [
-                ...props.draft.steps,
-                { delayDays: 2, subject: '', body: '', asReply: true },
-              ],
-            })
-          }
-        >
-          <PlusIcon class="size-4" aria-hidden="true" />
-          {t('sequences.addEmail')}
-        </Button>
-      </Show>
+      <Button
+        type="button"
+        variant="secondary"
+        class="mt-4"
+        disabled={props.draft.steps.length >= SEQUENCE_LIMITS.steps}
+        onClick={() => change({ steps: [...props.draft.steps, blankStep()] })}
+      >
+        <PlusIcon class="size-4" aria-hidden="true" />
+        {t('sequences.addEmail')}
+      </Button>
       <div class="mt-6">
         <ComposeFieldRow label={t('sequences.footer')}>
           <input
@@ -333,7 +313,6 @@ export function SequenceEditor(props: {
             class="ph-no-capture w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
             value={props.draft.footer}
             maxLength={SEQUENCE_LIMITS.footer}
-            disabled={props.disabled}
             placeholder={t('sequences.footerPlaceholder')}
             onInput={(event) => change({ footer: event.currentTarget.value })}
           />
@@ -341,7 +320,6 @@ export function SequenceEditor(props: {
         <Checkbox
           class="mt-3 flex items-center gap-2 px-1 text-xs text-ink-muted"
           checked={props.draft.weekdaysOnly}
-          disabled={props.disabled}
           onChange={(checked: boolean) => change({ weekdaysOnly: checked })}
         >
           <Checkbox.Control />

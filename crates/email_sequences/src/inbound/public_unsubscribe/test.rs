@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::{
     models::{
-        ContactEnrollment, EnrollResult, EnrollmentAction, EnrollmentDetail, EnrollmentSummary,
-        Sequence, SequenceError, SequenceSummary,
+        ContactEnrollment, EnrollResult, EnrollmentAction, EnrollmentSummary, Sequence,
+        SequenceError, SequenceSummary,
     },
     ports::NewSequence,
     service::{EnrollRequest, SequencePatch},
@@ -42,9 +42,6 @@ impl SequencesApi for Recorder {
         _: Uuid,
         _: EnrollRequest,
     ) -> Result<Vec<EnrollResult>, SequenceError> {
-        unimplemented!()
-    }
-    async fn enrollment(&self, _: &str, _: Uuid) -> Result<EnrollmentDetail, SequenceError> {
         unimplemented!()
     }
     async fn act(

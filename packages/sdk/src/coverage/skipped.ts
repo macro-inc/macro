@@ -240,7 +240,6 @@ export const emailExcluded = [
   'enrollContacts',
   'getBackfillGmail',
   'getBackfillGmailActive',
-  'getEnrollment',
   'getMessagesBatch',
   'getReadReceiptPixel',
   'getSequence',

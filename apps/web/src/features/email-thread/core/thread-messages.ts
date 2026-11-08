@@ -74,24 +74,10 @@ function messageTime(message: EmailMessage) {
   );
 }
 
-/**
- * A sequence step waiting to send. It is not the user's mail: it
- * stays out of the thread, and never takes the reply slot of the email it
- * answers. A failed step is a draft the user can fix.
- */
-function isPendingSequenceStep(message: EmailMessage) {
-  return (
-    message.is_draft &&
-    message.scheduled_send_source != null &&
-    message.scheduled_send_status !== 'failed'
-  );
-}
-
 /** Select chronological messages and reply drafts without mutating the source. */
 export function selectThreadMessages(thread: EmailThread) {
   const messages = thread.messages.filter(
-    (message) =>
-      message.operation?.state !== 'DELETED' && !isPendingSequenceStep(message)
+    (message) => message.operation?.state !== 'DELETED'
   );
   // Sort all messages by recency
   messages.sort((a, b) => {

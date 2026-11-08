@@ -1,7 +1,8 @@
 //! Sequence steps: the scheduled sends the `email_sequences` crate creates,
-//! watches and withdraws. Every method runs on the caller's connection, so a
-//! sequence can create or cancel a step inside the transaction that holds its
-//! enrollment's lock. Nothing here waits on a sequence lock.
+//! watches and withdraws. A step is an ordinary scheduled send. Every method
+//! runs on the caller's connection, so a sequence can create or cancel a step
+//! inside the transaction that holds its enrollment's lock. Nothing here waits
+//! on a sequence lock.
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -46,23 +47,11 @@ pub struct NewStep<'a> {
     pub list_unsubscribe_url: &'a str,
 }
 
-/// How much of a step a cancel may withdraw. A send the owner scheduled
-/// themselves from Mail is never withdrawn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CancelExpectation {
-    /// Only while the sequence's own schedule is on it.
-    Scheduled,
-    /// Also an unscheduled draft: one the owner restored, or one discarded.
-    Draft,
-}
-
 /// What cancelling a step did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CancelOutcome {
-    /// The schedule and its draft are gone.
+    /// Its draft, and its schedule if it had one, are gone.
     Cancelled,
-    /// It no longer matched the expectation; nothing changed.
-    Changed,
     /// Delivery started or its outcome is uncertain; it can't be withdrawn.
     DeliveryStarted,
     /// It was already sent.
@@ -87,18 +76,15 @@ pub enum StepState {
         /// Message-ID of the synced sent copy.
         global_id: Option<String>,
     },
-    /// Still on the sequence's schedule.
+    /// Scheduled and not sent yet.
     Scheduled {
         /// When it is due.
         send_time: DateTime<Utc>,
         /// Delivery state.
         status: ScheduledSendStatus,
     },
-    /// The owner took it over in Mail: restored it to edit, or scheduled or
-    /// sent it themselves. It is theirs until it is sent or discarded.
-    TakenOver,
-    /// Off the schedule and in Trash, or deleted at the provider.
-    Discarded,
+    /// A draft with no schedule: the owner cancelled or trashed it in Mail.
+    Unscheduled,
 }
 
 /// An incoming message, as a sequence reads it to find replies and bounces.
@@ -131,15 +117,6 @@ pub struct ReplySearch<'a> {
     pub since: DateTime<Utc>,
 }
 
-/// An unsent sequence schedule.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PendingStep {
-    /// Inbox.
-    pub link_id: Uuid,
-    /// Draft message.
-    pub message_id: Uuid,
-}
-
 /// Persistence for sequence steps, on a connection the caller owns.
 pub trait SequenceStepStore: Send + Sync + 'static {
     /// The connection type every method runs on.
@@ -164,29 +141,28 @@ pub trait SequenceStepStore: Send + Sync + 'static {
         to: &ContactInfo,
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
-    /// Create the step's draft and its schedule (`source = 'sequence'`).
-    /// Returns the draft's message id.
+    /// Create the step's draft and its schedule. Returns the draft's message id.
     fn create_step(
         &self,
         conn: &mut Self::Conn,
         step: &NewStep<'_>,
     ) -> impl Future<Output = Result<Uuid, Self::Err>> + Send;
 
-    /// Withdraw an unsent step: delete its schedule and its draft.
+    /// Withdraw an unsent step: delete its draft and any schedule whose
+    /// delivery hasn't started.
     fn cancel_step(
         &self,
         conn: &mut Self::Conn,
         message_id: Uuid,
-        expect: CancelExpectation,
     ) -> impl Future<Output = Result<CancelOutcome, Self::Err>> + Send;
 
-    /// Whether the message is a sent message in the inbox.
-    fn is_sent_in(
+    /// The subject of a sent message in the inbox.
+    fn sent_subject(
         &self,
         conn: &mut Self::Conn,
         link_id: Uuid,
         message_id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
     /// Where the step's email is.
     fn step_state(
@@ -195,12 +171,13 @@ pub trait SequenceStepStore: Send + Sync + 'static {
         message_id: Uuid,
     ) -> impl Future<Output = Result<StepState, Self::Err>> + Send;
 
-    /// Take the inbox's sequence send-slot lock for the rest of the
-    /// transaction and return its latest unsent sequence send time.
-    fn lock_send_slot(
+    /// The latest send time of the inbox's unsent scheduled sends due from
+    /// now until `until`.
+    fn latest_send_until(
         &self,
         conn: &mut Self::Conn,
         link_id: Uuid,
+        until: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
 
     /// An incoming message: `None` if missing, sent, or a draft.
@@ -229,13 +206,4 @@ pub trait SequenceStepStore: Send + Sync + 'static {
         conn: &mut Self::Conn,
         search: ReplySearch<'_>,
     ) -> impl Future<Output = Result<Vec<InboundMessage>, Self::Err>> + Send;
-
-    /// Unsent sequence schedules that can still be withdrawn, after `after`
-    /// in message id order.
-    fn pending_steps(
-        &self,
-        conn: &mut Self::Conn,
-        after: Option<Uuid>,
-        limit: i64,
-    ) -> impl Future<Output = Result<Vec<PendingStep>, Self::Err>> + Send;
 }
