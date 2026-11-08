@@ -13,7 +13,7 @@ import type { MacroClient } from '../../utils/client';
  *
  * List-sourced only - there is no per-action GET, only the queue snapshot -
  * so this wraps whatever DTO the caller already has, the same shape
- * `CrmComment` wraps a list-sourced record, rather than `MacroEntity`'s
+ * `DiscussionComment` wraps a list-sourced record, rather than `MacroEntity`'s
  * lazy-fetch-by-id.
  *
  * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.

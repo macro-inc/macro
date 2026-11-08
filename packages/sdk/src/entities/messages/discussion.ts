@@ -10,33 +10,33 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
 
-/** The CRM record a discussion hangs off. */
-export interface CrmCommentParent {
-  type: 'crm_company' | 'crm_contact';
+/** The CRM record or initiative a discussion hangs off. */
+export interface DiscussionParent {
+  type: 'crm_company' | 'crm_contact' | 'initiative';
   id: string;
 }
 
-/** One of a CRM record's comment threads: its state and its comments. */
-export interface CrmCommentThread {
+/** One of a discussion's comment threads: its state and its comments. */
+export interface DiscussionThread {
   /** The thread state: root id, resolved flag, owner, timestamps. */
   thread: ThreadState;
   /** The thread's comments, root first, then replies oldest first. */
-  comments: CrmComment[];
+  comments: DiscussionComment[];
 }
 
 /** Thread reads in flight at once while a record's roots are expanded. */
 const THREAD_FETCH_CONCURRENCY = 8;
 
 /**
- * A comment on a CRM company or contact: a message whose parent is the
- * record, addressed by the record and the message UUID. Its record and
- * mutations are the ones document comments and channel messages use.
+ * A comment on a CRM company, CRM contact or initiative: a message whose
+ * parent is that record, addressed by the record and the message UUID. Its
+ * record and mutations are the ones document comments and channel messages use.
  */
-export class CrmComment extends MacroEntity<MessageRecord> {
+export class DiscussionComment extends MacroEntity<MessageRecord> {
   private constructor(
     client: MacroClient,
-    /** The company or contact this comment belongs to. */
-    readonly parent: CrmCommentParent,
+    /** The company, contact or initiative this comment belongs to. */
+    readonly parent: DiscussionParent,
     id: string,
     seed?: MessageRecord,
   ) {
@@ -60,19 +60,19 @@ export class CrmComment extends MacroEntity<MessageRecord> {
   /** A handle to a comment by id. Fields load on first access. */
   static byId(
     client: MacroClient,
-    parent: CrmCommentParent,
+    parent: DiscussionParent,
     id: string,
-  ): CrmComment {
-    return new CrmComment(client, parent, id);
+  ): DiscussionComment {
+    return new DiscussionComment(client, parent, id);
   }
 
   /** Build a comment from a message record (pre-seeded, no fetch). */
   static from(
     client: MacroClient,
-    parent: CrmCommentParent,
+    parent: DiscussionParent,
     record: MessageRecord,
-  ): CrmComment {
-    return new CrmComment(client, parent, record.id, record);
+  ): DiscussionComment {
+    return new DiscussionComment(client, parent, record.id, record);
   }
 
   /** The comment's text (markdown). */
@@ -110,8 +110,8 @@ export class CrmComment extends MacroEntity<MessageRecord> {
    *
    * @write
    */
-  async reply(body: string | RichMessage): Promise<CrmComment> {
-    return postCrmComment(this.client, this.parent, body, {
+  async reply(body: string | RichMessage): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.parent, body, {
       threadId: await this.threadId(),
     });
   }
@@ -148,11 +148,11 @@ export class CrmComment extends MacroEntity<MessageRecord> {
   }
 }
 
-/** A CRM record's live comment threads, each with its comments, newest thread first. */
-export async function listCrmCommentThreads(
+/** A discussion's live comment threads, each with its comments, newest thread first. */
+export async function listDiscussionThreads(
   client: MacroClient,
-  parent: CrmCommentParent,
-): Promise<CrmCommentThread[]> {
+  parent: DiscussionParent,
+): Promise<DiscussionThread[]> {
   const path = { parent_type: parent.type, parent_id: parent.id };
   const roots = paginate<MessageListItem, MessageCursor>(async (cursor) => {
     const page = unwrap(
@@ -174,27 +174,27 @@ export async function listCrmCommentThreads(
     return {
       thread: state,
       comments: [root, ...replies].map((comment) =>
-        CrmComment.from(client, parent, comment),
+        DiscussionComment.from(client, parent, comment),
       ),
     };
   });
 }
 
 /**
- * Post a comment on a CRM record: a new thread, or a reply when `threadId`
+ * Post a comment in a discussion: a new thread, or a reply when `threadId`
  * (the thread's root comment id) is given.
  */
-export async function postCrmComment(
+export async function postDiscussionComment(
   client: MacroClient,
-  parent: CrmCommentParent,
+  parent: DiscussionParent,
   body: string | RichMessage,
   opts?: { threadId?: string },
-): Promise<CrmComment> {
+): Promise<DiscussionComment> {
   const created = unwrap(
     await client.storage.entityMessageCreate({
       path: { parent_type: parent.type, parent_id: parent.id },
       body: { ...toBody(body), thread_id: opts?.threadId ?? null },
     }),
   );
-  return CrmComment.from(client, parent, created);
+  return DiscussionComment.from(client, parent, created);
 }

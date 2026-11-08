@@ -2460,8 +2460,8 @@
             },
             "thinking": {
               "enum": [
-                "default",
-                "low"
+                "low",
+                "default"
               ]
             },
             "toolset": {
@@ -13183,7 +13183,7 @@
           "type": "string"
         },
         "selection": {
-          "$ref": "#/$defs/TimelineOptions_CrmComment"
+          "$ref": "#/$defs/TimelineOptions_DiscussionComment"
         }
       },
       "required": [
@@ -13191,13 +13191,14 @@
       ],
       "additionalProperties": false,
       "$defs": {
-        "CrmCommentParent": {
+        "DiscussionParent": {
           "type": "object",
           "properties": {
             "type": {
               "enum": [
                 "crm_company",
-                "crm_contact"
+                "crm_contact",
+                "initiative"
               ]
             },
             "id": {
@@ -13226,7 +13227,7 @@
           ],
           "additionalProperties": false
         },
-        "TimelineOptions_CrmComment": {
+        "TimelineOptions_DiscussionComment": {
           "type": "object",
           "properties": {
             "cursor": {
@@ -13243,7 +13244,7 @@
               "type": "object",
               "properties": {
                 "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
+                  "$ref": "#/$defs/DiscussionParent"
                 },
                 "id": {
                   "type": "string"
@@ -13261,7 +13262,7 @@
                 "type": "object",
                 "properties": {
                   "parent": {
-                    "$ref": "#/$defs/CrmCommentParent"
+                    "$ref": "#/$defs/DiscussionParent"
                   },
                   "id": {
                     "type": "string"
@@ -13617,7 +13618,7 @@
           "type": "string"
         },
         "selection": {
-          "$ref": "#/$defs/TimelineOptions_CrmComment"
+          "$ref": "#/$defs/TimelineOptions_DiscussionComment"
         }
       },
       "required": [
@@ -13625,13 +13626,14 @@
       ],
       "additionalProperties": false,
       "$defs": {
-        "CrmCommentParent": {
+        "DiscussionParent": {
           "type": "object",
           "properties": {
             "type": {
               "enum": [
                 "crm_company",
-                "crm_contact"
+                "crm_contact",
+                "initiative"
               ]
             },
             "id": {
@@ -13660,7 +13662,7 @@
           ],
           "additionalProperties": false
         },
-        "TimelineOptions_CrmComment": {
+        "TimelineOptions_DiscussionComment": {
           "type": "object",
           "properties": {
             "cursor": {
@@ -13677,7 +13679,7 @@
               "type": "object",
               "properties": {
                 "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
+                  "$ref": "#/$defs/DiscussionParent"
                 },
                 "id": {
                   "type": "string"
@@ -13695,7 +13697,7 @@
                 "type": "object",
                 "properties": {
                   "parent": {
-                    "$ref": "#/$defs/CrmCommentParent"
+                    "$ref": "#/$defs/DiscussionParent"
                   },
                   "id": {
                     "type": "string"
@@ -14285,383 +14287,6 @@
             },
             "team_views": {}
           },
-          "additionalProperties": false
-        }
-      }
-    }
-  },
-  {
-    "name": "crm_comment-author",
-    "title": "CrmComment.author",
-    "annotations": {
-      "title": "CrmComment.author",
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "crmComment": {
-          "type": "object",
-          "properties": {
-            "parent": {
-              "$ref": "#/$defs/CrmCommentParent"
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "parent",
-            "id"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "crmComment"
-      ],
-      "additionalProperties": false,
-      "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        }
-      }
-    }
-  },
-  {
-    "name": "crm_comment-delete",
-    "title": "CrmComment.delete",
-    "annotations": {
-      "title": "CrmComment.delete",
-      "readOnlyHint": false,
-      "destructiveHint": true,
-      "idempotentHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "crmComment": {
-          "type": "object",
-          "properties": {
-            "parent": {
-              "$ref": "#/$defs/CrmCommentParent"
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "parent",
-            "id"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "crmComment"
-      ],
-      "additionalProperties": false,
-      "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        }
-      }
-    }
-  },
-  {
-    "name": "crm_comment-edit",
-    "title": "CrmComment.edit",
-    "annotations": {
-      "title": "CrmComment.edit",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "crmComment": {
-          "type": "object",
-          "properties": {
-            "parent": {
-              "$ref": "#/$defs/CrmCommentParent"
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "parent",
-            "id"
-          ],
-          "additionalProperties": false
-        },
-        "body": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "$ref": "#/$defs/RichMessage"
-            }
-          ]
-        }
-      },
-      "required": [
-        "crmComment",
-        "body"
-      ],
-      "additionalProperties": false,
-      "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        },
-        "RichMessage": {
-          "type": "object",
-          "properties": {
-            "content": {
-              "type": "string"
-            },
-            "mentions": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SimpleMention"
-              }
-            }
-          },
-          "required": [
-            "content",
-            "mentions"
-          ],
-          "additionalProperties": false
-        },
-        "SimpleMention": {
-          "type": "object",
-          "properties": {
-            "entity_id": {
-              "type": "string"
-            },
-            "entity_type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "entity_id",
-            "entity_type"
-          ],
-          "additionalProperties": false
-        }
-      }
-    }
-  },
-  {
-    "name": "crm_comment-reply",
-    "title": "CrmComment.reply",
-    "annotations": {
-      "title": "CrmComment.reply",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "crmComment": {
-          "type": "object",
-          "properties": {
-            "parent": {
-              "$ref": "#/$defs/CrmCommentParent"
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "parent",
-            "id"
-          ],
-          "additionalProperties": false
-        },
-        "body": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "$ref": "#/$defs/RichMessage"
-            }
-          ]
-        }
-      },
-      "required": [
-        "crmComment",
-        "body"
-      ],
-      "additionalProperties": false,
-      "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        },
-        "RichMessage": {
-          "type": "object",
-          "properties": {
-            "content": {
-              "type": "string"
-            },
-            "mentions": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SimpleMention"
-              }
-            }
-          },
-          "required": [
-            "content",
-            "mentions"
-          ],
-          "additionalProperties": false
-        },
-        "SimpleMention": {
-          "type": "object",
-          "properties": {
-            "entity_id": {
-              "type": "string"
-            },
-            "entity_type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "entity_id",
-            "entity_type"
-          ],
-          "additionalProperties": false
-        }
-      }
-    }
-  },
-  {
-    "name": "crm_comment-thread_id",
-    "title": "CrmComment.threadId",
-    "annotations": {
-      "title": "CrmComment.threadId",
-      "readOnlyHint": true,
-      "destructiveHint": false,
-      "idempotentHint": true,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "crmComment": {
-          "type": "object",
-          "properties": {
-            "parent": {
-              "$ref": "#/$defs/CrmCommentParent"
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "parent",
-            "id"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "crmComment"
-      ],
-      "additionalProperties": false,
-      "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
           "additionalProperties": false
         }
       }
@@ -22530,6 +22155,388 @@
         "databaseView"
       ],
       "additionalProperties": false
+    }
+  },
+  {
+    "name": "discussion_comment-author",
+    "title": "DiscussionComment.author",
+    "annotations": {
+      "title": "DiscussionComment.author",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "discussionComment": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "$ref": "#/$defs/DiscussionParent"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "parent",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "discussionComment"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "discussion_comment-delete",
+    "title": "DiscussionComment.delete",
+    "annotations": {
+      "title": "DiscussionComment.delete",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "discussionComment": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "$ref": "#/$defs/DiscussionParent"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "parent",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "discussionComment"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "discussion_comment-edit",
+    "title": "DiscussionComment.edit",
+    "annotations": {
+      "title": "DiscussionComment.edit",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "discussionComment": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "$ref": "#/$defs/DiscussionParent"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "parent",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/RichMessage"
+            }
+          ]
+        }
+      },
+      "required": [
+        "discussionComment",
+        "body"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "RichMessage": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SimpleMention"
+              }
+            }
+          },
+          "required": [
+            "content",
+            "mentions"
+          ],
+          "additionalProperties": false
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "discussion_comment-reply",
+    "title": "DiscussionComment.reply",
+    "annotations": {
+      "title": "DiscussionComment.reply",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "discussionComment": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "$ref": "#/$defs/DiscussionParent"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "parent",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/RichMessage"
+            }
+          ]
+        }
+      },
+      "required": [
+        "discussionComment",
+        "body"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "RichMessage": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SimpleMention"
+              }
+            }
+          },
+          "required": [
+            "content",
+            "mentions"
+          ],
+          "additionalProperties": false
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "discussion_comment-thread_id",
+    "title": "DiscussionComment.threadId",
+    "annotations": {
+      "title": "DiscussionComment.threadId",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "discussionComment": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "$ref": "#/$defs/DiscussionParent"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "parent",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "discussionComment"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
     }
   },
   {
@@ -46628,6 +46635,100 @@
     }
   },
   {
+    "name": "initiative-comment",
+    "title": "Initiative.comment",
+    "annotations": {
+      "title": "Initiative.comment",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "initiative": {
+          "type": "string"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/RichMessage"
+            }
+          ]
+        }
+      },
+      "required": [
+        "initiative",
+        "body"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "RichMessage": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SimpleMention"
+              }
+            }
+          },
+          "required": [
+            "content",
+            "mentions"
+          ],
+          "additionalProperties": false
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "initiative-comments",
+    "title": "Initiative.comments",
+    "annotations": {
+      "title": "Initiative.comments",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "initiative": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "initiative"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "initiative-delete",
     "title": "Initiative.delete",
     "annotations": {
@@ -46648,6 +46749,165 @@
         "initiative"
       ],
       "additionalProperties": false
+    }
+  },
+  {
+    "name": "initiative-description",
+    "title": "Initiative.description",
+    "annotations": {
+      "title": "Initiative.description",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "initiative": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "initiative"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "initiative-timeline_page",
+    "title": "Initiative.timelinePage",
+    "annotations": {
+      "title": "Initiative.timelinePage",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "initiative": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/TimelineOptions_DiscussionComment"
+        }
+      },
+      "required": [
+        "initiative"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "MessageCursor": {
+          "type": "object",
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "created_at",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "TimelineOptions_DiscussionComment": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/MessageCursor"
+                }
+              ]
+            },
+            "around": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "messages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "parent": {
+                    "$ref": "#/$defs/DiscussionParent"
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "parent",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "activityAfter": {
+              "type": "string"
+            },
+            "activityBefore": {
+              "type": "string"
+            },
+            "anchored": {
+              "type": "boolean"
+            },
+            "direction": {
+              "enum": [
+                "older",
+                "newer"
+              ]
+            },
+            "includeDeletedThreads": {
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
     }
   },
   {
@@ -47142,8 +47402,69 @@
     },
     "inputSchema": {
       "type": "object",
-      "properties": {},
-      "additionalProperties": false
+      "properties": {
+        "options": {
+          "$ref": "#/$defs/InitiativeListOptions"
+        },
+        "maxItems": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "additionalProperties": false,
+      "$defs": {
+        "InitiativeListOptions": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "not_started",
+                "in_progress",
+                "in_review",
+                "completed",
+                "canceled"
+              ]
+            },
+            "priority": {
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "assignee": {
+              "type": "string"
+            },
+            "dueAfter": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "dueBefore": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "sort": {
+              "enum": [
+                "name",
+                "updated",
+                "due"
+              ]
+            },
+            "descending": {
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
     }
   },
   {
@@ -48312,6 +48633,22 @@
               "type": "object",
               "properties": {
                 "type": {
+                  "const": "initiative"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
                   "const": "call"
                 },
                 "entity": {
@@ -48435,6 +48772,22 @@
               "properties": {
                 "type": {
                   "const": "crm_contact"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "initiative"
                 },
                 "entity": {
                   "type": "string"
@@ -55661,9 +56014,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -55706,9 +56059,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -55751,9 +56104,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -55796,9 +56149,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",

@@ -2537,8 +2537,8 @@
             },
             "thinking": {
               "enum": [
-                "default",
-                "low"
+                "low",
+                "default"
               ]
             },
             "toolset": {
@@ -11357,6 +11357,8 @@
             "AccountManagerGrant.managed",
             "AccountManagerGrant.manager",
             "accountManagers.list",
+            "DiscussionComment.author",
+            "DiscussionComment.threadId",
             "macro.myPrincipalId"
           ]
         }
@@ -11414,6 +11416,66 @@
         },
         {
           "type": "object",
+          "title": "DiscussionComment.author",
+          "properties": {
+            "op": {
+              "const": "DiscussionComment.author"
+            },
+            "discussionComment": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "discussionComment"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "DiscussionComment.threadId",
+          "properties": {
+            "op": {
+              "const": "DiscussionComment.threadId"
+            },
+            "discussionComment": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "discussionComment"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "macro.myPrincipalId",
           "properties": {
             "op": {
@@ -11425,7 +11487,29 @@
           ],
           "additionalProperties": false
         }
-      ]
+      ],
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      }
     }
   },
   {
@@ -11446,6 +11530,8 @@
           "enum": [
             "accountManagers.askToBeManagedBy",
             "accountManagers.askToManage",
+            "DiscussionComment.edit",
+            "DiscussionComment.reply",
             "MessageThread.update"
           ]
         }
@@ -11485,6 +11571,88 @@
           "required": [
             "op",
             "user"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "DiscussionComment.edit",
+          "properties": {
+            "op": {
+              "const": "DiscussionComment.edit"
+            },
+            "discussionComment": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/RichMessage"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "discussionComment",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "DiscussionComment.reply",
+          "properties": {
+            "op": {
+              "const": "DiscussionComment.reply"
+            },
+            "discussionComment": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/RichMessage"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "discussionComment",
+            "body"
           ],
           "additionalProperties": false
         },
@@ -11536,6 +11704,26 @@
         }
       ],
       "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
         "MessageParent": {
           "anyOf": [
             {
@@ -11606,6 +11794,22 @@
               "type": "object",
               "properties": {
                 "type": {
+                  "const": "initiative"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
                   "const": "call"
                 },
                 "entity": {
@@ -11619,6 +11823,41 @@
               "additionalProperties": false
             }
           ]
+        },
+        "RichMessage": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SimpleMention"
+              }
+            }
+          },
+          "required": [
+            "content",
+            "mentions"
+          ],
+          "additionalProperties": false
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
+          "additionalProperties": false
         }
       }
     }
@@ -11643,6 +11882,7 @@
             "AccountManagerGrant.claimToken",
             "AccountManagerGrant.decline",
             "AccountManagerGrant.revoke",
+            "DiscussionComment.delete",
             "MessageThread.delete"
           ]
         }
@@ -11721,6 +11961,36 @@
         },
         {
           "type": "object",
+          "title": "DiscussionComment.delete",
+          "properties": {
+            "op": {
+              "const": "DiscussionComment.delete"
+            },
+            "discussionComment": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "discussionComment"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "MessageThread.delete",
           "properties": {
             "op": {
@@ -11754,6 +12024,26 @@
         }
       ],
       "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
         "MessageParent": {
           "anyOf": [
             {
@@ -11824,6 +12114,22 @@
               "type": "object",
               "properties": {
                 "type": {
+                  "const": "initiative"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
                   "const": "call"
                 },
                 "entity": {
@@ -11874,8 +12180,6 @@
             "crm.searchCompanies",
             "crm.searchContacts",
             "crm.settings",
-            "CrmComment.author",
-            "CrmComment.threadId",
             "CrmPipeline.queryRows",
             "CrmPipeline.rows",
             "CrmPipeline.sharePermissions",
@@ -12028,7 +12332,7 @@
               "type": "string"
             },
             "selection": {
-              "$ref": "#/$defs/TimelineOptions_CrmComment"
+              "$ref": "#/$defs/TimelineOptions_DiscussionComment"
             }
           },
           "required": [
@@ -12082,7 +12386,7 @@
               "type": "string"
             },
             "selection": {
-              "$ref": "#/$defs/TimelineOptions_CrmComment"
+              "$ref": "#/$defs/TimelineOptions_DiscussionComment"
             }
           },
           "required": [
@@ -12192,66 +12496,6 @@
           },
           "required": [
             "op"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "CrmComment.author",
-          "properties": {
-            "op": {
-              "const": "CrmComment.author"
-            },
-            "crmComment": {
-              "type": "object",
-              "properties": {
-                "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
-                },
-                "id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "parent",
-                "id"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "op",
-            "crmComment"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "CrmComment.threadId",
-          "properties": {
-            "op": {
-              "const": "CrmComment.threadId"
-            },
-            "crmComment": {
-              "type": "object",
-              "properties": {
-                "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
-                },
-                "id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "parent",
-                "id"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "op",
-            "crmComment"
           ],
           "additionalProperties": false
         },
@@ -12416,25 +12660,6 @@
             "or"
           ]
         },
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        },
         "DateOperator": {
           "enum": [
             "before",
@@ -12452,6 +12677,26 @@
             "startsAfter",
             "startsOnOrBefore"
           ]
+        },
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
         },
         "FilterGroup": {
           "type": "object",
@@ -12798,7 +13043,7 @@
             "endsWith"
           ]
         },
-        "TimelineOptions_CrmComment": {
+        "TimelineOptions_DiscussionComment": {
           "type": "object",
           "properties": {
             "cursor": {
@@ -12815,7 +13060,7 @@
               "type": "object",
               "properties": {
                 "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
+                  "$ref": "#/$defs/DiscussionParent"
                 },
                 "id": {
                   "type": "string"
@@ -12833,7 +13078,7 @@
                 "type": "object",
                 "properties": {
                   "parent": {
-                    "$ref": "#/$defs/CrmCommentParent"
+                    "$ref": "#/$defs/DiscussionParent"
                   },
                   "id": {
                     "type": "string"
@@ -12936,8 +13181,6 @@
             "crm.pipelines.create",
             "crm.unblockDomain",
             "crm.updateSettings",
-            "CrmComment.edit",
-            "CrmComment.reply",
             "CrmPipeline.rename",
             "CrmPipeline.setSharing",
             "CrmPipeline.updateSharePermissions"
@@ -13593,88 +13836,6 @@
         },
         {
           "type": "object",
-          "title": "CrmComment.edit",
-          "properties": {
-            "op": {
-              "const": "CrmComment.edit"
-            },
-            "crmComment": {
-              "type": "object",
-              "properties": {
-                "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
-                },
-                "id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "parent",
-                "id"
-              ],
-              "additionalProperties": false
-            },
-            "body": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/$defs/RichMessage"
-                }
-              ]
-            }
-          },
-          "required": [
-            "op",
-            "crmComment",
-            "body"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "CrmComment.reply",
-          "properties": {
-            "op": {
-              "const": "CrmComment.reply"
-            },
-            "crmComment": {
-              "type": "object",
-              "properties": {
-                "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
-                },
-                "id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "parent",
-                "id"
-              ],
-              "additionalProperties": false
-            },
-            "body": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/$defs/RichMessage"
-                }
-              ]
-            }
-          },
-          "required": [
-            "op",
-            "crmComment",
-            "body"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
           "title": "CrmPipeline.rename",
           "properties": {
             "op": {
@@ -13813,25 +13974,6 @@
           },
           "required": [
             "name"
-          ],
-          "additionalProperties": false
-        },
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
           ],
           "additionalProperties": false
         },
@@ -14121,7 +14263,6 @@
             "crm.blockDomain",
             "crm.resetStages",
             "crm.setStages",
-            "CrmComment.delete",
             "CrmPipeline.setTrashed"
           ]
         }
@@ -14200,36 +14341,6 @@
         },
         {
           "type": "object",
-          "title": "CrmComment.delete",
-          "properties": {
-            "op": {
-              "const": "CrmComment.delete"
-            },
-            "crmComment": {
-              "type": "object",
-              "properties": {
-                "parent": {
-                  "$ref": "#/$defs/CrmCommentParent"
-                },
-                "id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "parent",
-                "id"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "op",
-            "crmComment"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
           "title": "CrmPipeline.setTrashed",
           "properties": {
             "op": {
@@ -14251,25 +14362,6 @@
         }
       ],
       "$defs": {
-        "CrmCommentParent": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "enum": [
-                "crm_company",
-                "crm_contact"
-              ]
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "id"
-          ],
-          "additionalProperties": false
-        },
         "CrmStageInput": {
           "type": "object",
           "properties": {
@@ -28574,9 +28666,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -28619,9 +28711,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -28664,9 +28756,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -28709,9 +28801,9 @@
               "anyOf": [
                 {
                   "enum": [
+                    "medium",
                     "reset",
                     "thin",
-                    "medium",
                     "thick",
                     "double",
                     "dotted",
@@ -38725,6 +38817,9 @@
           "enum": [
             "Initiative.access.direct",
             "Initiative.access.state",
+            "Initiative.comments",
+            "Initiative.description",
+            "Initiative.timelinePage",
             "Initiative.webUrl",
             "initiatives.list",
             "initiatives.summaries"
@@ -38774,6 +38869,60 @@
         },
         {
           "type": "object",
+          "title": "Initiative.comments",
+          "properties": {
+            "op": {
+              "const": "Initiative.comments"
+            },
+            "initiative": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "initiative"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Initiative.description",
+          "properties": {
+            "op": {
+              "const": "Initiative.description"
+            },
+            "initiative": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "initiative"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Initiative.timelinePage",
+          "properties": {
+            "op": {
+              "const": "Initiative.timelinePage"
+            },
+            "initiative": {
+              "type": "string"
+            },
+            "selection": {
+              "$ref": "#/$defs/TimelineOptions_DiscussionComment"
+            }
+          },
+          "required": [
+            "op",
+            "initiative"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Initiative.webUrl",
           "properties": {
             "op": {
@@ -38795,6 +38944,14 @@
           "properties": {
             "op": {
               "const": "initiatives.list"
+            },
+            "options": {
+              "$ref": "#/$defs/InitiativeListOptions"
+            },
+            "maxItems": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
             }
           },
           "required": [
@@ -38815,7 +38972,167 @@
           ],
           "additionalProperties": false
         }
-      ]
+      ],
+      "$defs": {
+        "DiscussionParent": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "crm_company",
+                "crm_contact",
+                "initiative"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "InitiativeListOptions": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "not_started",
+                "in_progress",
+                "in_review",
+                "completed",
+                "canceled"
+              ]
+            },
+            "priority": {
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            },
+            "assignee": {
+              "type": "string"
+            },
+            "dueAfter": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "dueBefore": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "sort": {
+              "enum": [
+                "name",
+                "updated",
+                "due"
+              ]
+            },
+            "descending": {
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "MessageCursor": {
+          "type": "object",
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "created_at",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "TimelineOptions_DiscussionComment": {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/MessageCursor"
+                }
+              ]
+            },
+            "around": {
+              "type": "object",
+              "properties": {
+                "parent": {
+                  "$ref": "#/$defs/DiscussionParent"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "parent",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "messages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "parent": {
+                    "$ref": "#/$defs/DiscussionParent"
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "parent",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "activityAfter": {
+              "type": "string"
+            },
+            "activityBefore": {
+              "type": "string"
+            },
+            "anchored": {
+              "type": "boolean"
+            },
+            "direction": {
+              "enum": [
+                "older",
+                "newer"
+              ]
+            },
+            "includeDeletedThreads": {
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
     }
   },
   {
@@ -38836,6 +39153,7 @@
           "enum": [
             "Initiative.access.request",
             "Initiative.access.submit",
+            "Initiative.comment",
             "Initiative.update",
             "initiatives.create"
           ]
@@ -38891,6 +39209,34 @@
             "op",
             "initiative",
             "requestedLevel"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Initiative.comment",
+          "properties": {
+            "op": {
+              "const": "Initiative.comment"
+            },
+            "initiative": {
+              "type": "string"
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/RichMessage"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "initiative",
+            "body"
           ],
           "additionalProperties": false
         },
@@ -39063,6 +39409,25 @@
           },
           "required": [
             "name"
+          ],
+          "additionalProperties": false
+        },
+        "RichMessage": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SimpleMention"
+              }
+            }
+          },
+          "required": [
+            "content",
+            "mentions"
           ],
           "additionalProperties": false
         },
@@ -39336,6 +39701,22 @@
               ]
             }
           },
+          "additionalProperties": false
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
           "additionalProperties": false
         },
         "UpdateOperation": {

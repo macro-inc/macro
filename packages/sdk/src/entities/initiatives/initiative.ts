@@ -2,9 +2,22 @@ import type {
   CreateInitiativeRequest,
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
+import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import {
+  DiscussionComment,
+  type DiscussionParent,
+  type DiscussionThread,
+  listDiscussionThreads,
+  postDiscussionComment,
+} from '../messages/discussion';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
@@ -90,6 +103,83 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
 
   /** Sharing configuration. */
   readonly sharePermissions = this.field('sharePermission');
+
+  /**
+   * The description as GitHub-flavored Markdown; empty while no one has opened
+   * or written it.
+   *
+   * @readonly
+   */
+  async description(): Promise<string> {
+    return unwrap(
+      await this.client.storage.getInitiativeDescription({
+        path: { initiative_id: this.id },
+      }),
+    ).markdown;
+  }
+
+  /** The initiative this discussion hangs off. */
+  private get commentParent(): DiscussionParent {
+    return { type: 'initiative', id: this.id };
+  }
+
+  /**
+   * The discussion's comment threads, each with its comments, newest thread first.
+   *
+   * @readonly
+   */
+  async comments(): Promise<DiscussionThread[]> {
+    return listDiscussionThreads(this.client, this.commentParent);
+  }
+
+  /**
+   * Start a new thread in the discussion; reply to a thread with
+   * {@link DiscussionComment.reply} on one of its comments.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
+   */
+  async comment(body: string | RichMessage): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.commentParent, body);
+  }
+
+  /**
+   * A handle to one of the discussion's comments by id.
+   *
+   * @readonly
+   */
+  commentById(id: string): DiscussionComment {
+    return DiscussionComment.byId(this.client, this.commentParent, id);
+  }
+
+  /**
+   * A discussion thread, to resolve or delete it.
+   *
+   * @readonly
+   */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'initiative', entity: this },
+      id,
+    );
+  }
+
+  /**
+   * A mixed page of discussion comments and activity.
+   *
+   * @readonly
+   */
+  timelinePage(selection?: TimelineOptions<DiscussionComment>) {
+    return timeline(
+      this.client,
+      { type: 'initiative', entity: this },
+      (record) =>
+        DiscussionComment.from(this.client, this.commentParent, record),
+      selection,
+    );
+  }
 
   /**
    * Update the name, membership or sharing configuration.
