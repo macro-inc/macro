@@ -21,7 +21,7 @@ macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
 shared_types = { workspace = true }
 entity_kind = { workspace = true }
-models_bulk_upload = { workspace = true }
+bulk_upload_types = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqs_client = { workspace = true, default-features = true }

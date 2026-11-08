@@ -1,4 +1,4 @@
-use models_bulk_upload::{MarkProjectUploadedRequest, MarkProjectUploadedResponse};
+use bulk_upload_types::{MarkProjectUploadedRequest, MarkProjectUploadedResponse};
 use shared_types::{
     folder::{FolderItem, UploadFolderRequest, UploadFolderResponseData},
     response::TypedSuccessResponse,

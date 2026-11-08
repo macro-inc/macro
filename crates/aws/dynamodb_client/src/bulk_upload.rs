@@ -3,7 +3,7 @@ use aws_sdk_dynamodb::{
     error::{DisplayErrorContext, SdkError},
     types::AttributeValue,
 };
-use models_bulk_upload::{
+use bulk_upload_types::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
     UploadFolderStatus,
 };

@@ -39,7 +39,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`model_owner`](model_owner/AGENTS.md) | Shared infrastructure used by nearly every domain crate with typed ownership. |
 | `model_user` |  |
 | `ai_projection_types` |  |
-| `models_bulk_upload` |  |
+| `bulk_upload_types` |  |
 | [`models_databases`](models_databases/AGENTS.md) | Part of Macro Databases. |
 | `models_dcs` |  |
 | [`models_email`](models_email/AGENTS.md) | Part of the Email feature. |

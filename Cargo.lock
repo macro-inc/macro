@@ -3863,6 +3863,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c0e531d93d39c34eef561e929e8a7f86d77a5af08aac4f6d6e39976c51858e9"
 
 [[package]]
+name = "bulk_upload_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "strum 0.27.2",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5292,6 +5302,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-secretsmanager",
  "axum",
+ "bulk_upload_types",
  "chrono",
  "connection_gateway_client",
  "connection_gateway_models",
@@ -5317,7 +5328,6 @@ dependencies = [
  "macro_env_var",
  "macro_tower_layers",
  "macro_user_id",
- "models_bulk_upload",
  "opentelemetry",
  "postcard",
  "redis",
@@ -7197,9 +7207,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bot_id",
+ "bulk_upload_types",
  "model_error_response",
  "model_owner",
- "models_bulk_upload",
  "models_permissions",
  "reqwest 0.13.4",
  "rootcause",
@@ -7578,9 +7588,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-dynamodb",
+ "bulk_upload_types",
  "chrono",
  "macro_aws_config",
- "models_bulk_upload",
  "s3_key",
  "tokio",
  "tracing",
@@ -8901,6 +8911,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bot_id",
+ "bulk_upload_types",
  "chrono",
  "document_sub_type",
  "documents",
@@ -8927,7 +8938,6 @@ dependencies = [
  "mockall",
  "model_owner",
  "model_user",
- "models_bulk_upload",
  "models_permissions",
  "project_id",
  "rdkafka",
@@ -14006,16 +14016,6 @@ dependencies = [
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_bulk_upload"
-version = "0.1.0"
-dependencies = [
- "serde",
- "strum 0.27.2",
- "utoipa",
  "workspace-hack",
 ]
 
@@ -19292,6 +19292,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bulk_upload_types",
  "chat_message",
  "chrono",
  "document_sub_type",
@@ -19302,7 +19303,6 @@ dependencies = [
  "model_file_type",
  "model_owner",
  "model_user",
- "models_bulk_upload",
  "models_pagination",
  "models_permissions",
  "schemars 1.2.1",
@@ -22236,6 +22236,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-s3",
  "aws_lambda_events",
+ "bulk_upload_types",
  "connection_gateway_client",
  "connection_gateway_url",
  "document_storage_service_client",
@@ -22246,7 +22247,6 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
- "models_bulk_upload",
  "serde_json",
  "sha2 0.10.9",
  "shared_types",
@@ -22268,13 +22268,13 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "aws_lambda_events",
+ "bulk_upload_types",
  "dynamodb_client",
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
  "macro_queues",
- "models_bulk_upload",
  "s3_key",
  "serde",
  "sqs_client",

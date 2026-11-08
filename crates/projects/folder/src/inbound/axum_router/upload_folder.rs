@@ -1,16 +1,16 @@
 //! Handlers for project folder uploads.
 
 use axum::{Json, extract::State};
+use bulk_upload_types::{
+    MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
+    UploadExtractFolderResponseData,
+};
 use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
-};
-use models_bulk_upload::{
-    MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
 };
 use project_id::ProjectId;
 use shared_types::{

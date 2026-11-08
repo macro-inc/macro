@@ -659,6 +659,7 @@ bearer_token = { path = "crates/types/bearer_token" }
 bot_id = { path = "crates/types/bot_id" }
 bots = { path = "crates/agents/bots", default-features = false }
 broadcast = { path = "crates/platform/broadcast" }
+bulk_upload_types = { path = "crates/types/bulk_upload_types" }
 cache-core = { path = "crates/client/cache-core" }
 cache-turso = { path = "crates/client/cache-turso" }
 calcom_webhooks = { path = "crates/calendar/calcom_webhooks" }
@@ -853,7 +854,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_bulk_upload = { path = "crates/types/models_bulk_upload" }
 models_databases = { path = "crates/types/models_databases" }
 models_dcs = { path = "crates/types/models_dcs" }
 models_email = { path = "crates/types/models_email" }

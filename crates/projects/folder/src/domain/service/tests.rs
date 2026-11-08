@@ -2,6 +2,10 @@ use project_id::ProjectId;
 use std::sync::{Arc, Mutex};
 
 use bot_id::{BotId, NonSystemBotId};
+use bulk_upload_types::{
+    BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
+    UploadExtractFolderRequest, UploadFolderStatus,
+};
 use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -12,10 +16,6 @@ use entity_mutation::{EntityMutationEffect, RestoreEntity};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::{CreationPrincipal, Owner};
-use models_bulk_upload::{
-    BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
-    UploadExtractFolderRequest, UploadFolderStatus,
-};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;

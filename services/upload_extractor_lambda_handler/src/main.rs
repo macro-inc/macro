@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use aws_lambda_events::{event::sqs::SqsEvent, sqs::SqsMessage};
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
+use bulk_upload_types::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -16,7 +17,6 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use sha2::{Digest, Sha256};
 use shared_types::{
     document::{FileType, FileTypeExt},

@@ -5,6 +5,10 @@
 
 use std::future::Future;
 
+use bulk_upload_types::{
+    BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
+    UploadExtractFolderResponseData,
+};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -12,10 +16,6 @@ use entity_kind::Entity;
 use entity_mutation::EntityMutationErrorCode;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::{CreationPrincipal, Owner};
-use models_bulk_upload::{
-    BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData,
-};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};

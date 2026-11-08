@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use bulk_upload_types::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -11,7 +12,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::{CreationPrincipal, Owner};
-use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
+use bulk_upload_types::UploadFolderStatus;
 use dynamodb_client::DynamodbClient;
 use lambda_runtime::{
     Error, LambdaEvent, run, service_fn,
@@ -9,7 +10,6 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use models_bulk_upload::UploadFolderStatus;
 use serde::{Deserialize, Serialize};
 
 // see: https://docs.aws.amazon.com/AmazonS3/latest/userguide/ev-events.html

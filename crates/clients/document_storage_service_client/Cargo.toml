@@ -8,7 +8,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 shared_types = { workspace = true }
 model_owner = { workspace = true }
-models_bulk_upload = { workspace = true }
+bulk_upload_types = { workspace = true }
 models_permissions = { workspace = true }
 reqwest = { workspace = true, features = ["query"] }
 rootcause = { workspace = true }

@@ -2,7 +2,7 @@ use macro_aws_config::SdkConfig;
 
 mod bulk_upload;
 
-use models_bulk_upload::{
+use bulk_upload_types::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadDocumentStatus, UploadFolderStatus,
 };
 
