@@ -18,7 +18,7 @@ export type HostCommitPacket = {
 export type HostNodeMutation<Node, Arg> = {
   /**  Index in the model-derived ForeignHook enum. */
   hook: number;
-  /**  Captured node handle encoded by the shared host identity store. */
+  /**  Captured node handle, or null for a static import factory without an instance. */
   node: Node;
   /**  Positional upstream method arguments encoded for the development host. */
   args: Arg[];

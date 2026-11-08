@@ -51,6 +51,14 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::rich::call(r, tx, name, a);
     }
     match name {
+        "lexical.$parseSerializedNode" => {
+            let json = a
+                .first()
+                .and_then(Value::as_object)
+                .ok_or_else(|| fail("serialized node must be an object"))?;
+            let key = tx.import_node(json)?;
+            r.node(tx.view(), key)
+        }
         "conformance.createForeignNode" => {
             let type_name = str_arg(a, 0)?;
             let fields = a
