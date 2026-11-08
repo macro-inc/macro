@@ -218,14 +218,14 @@ deny = [
     "workspace-hack",          # cargo-hakari generated crate
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
-    "agent",                     # GenAI span tests
+    "agent_loop",                # GenAI span tests
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
-    "coding_agent_worker",       # Standalone daemon logging setup
+    "macrod",                    # Standalone daemon logging setup
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
@@ -249,7 +249,7 @@ deny = [
     "notification_outbound",     # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
-    "projects",                  # Dev logging only
+    "folder",                    # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
