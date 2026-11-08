@@ -160,7 +160,7 @@ export class SessionPort implements EditorPort {
     selection: ViewSelection,
     change?: ISelectionChangeMsg
   ): void {
-    if (change || (selection.kind === 'range' && selection.dirty)) {
+    if (change || selection.kind !== 'range' || selection.dirty) {
       const editor = EditorInputMsg.fromEditorSelection({
         selection: selectionMessage(selection),
         change: change ?? {},
@@ -173,7 +173,8 @@ export class SessionPort implements EditorPort {
             Date.now()
           ),
         (flags) => {
-          if (flags === 0) this.view.acknowledgeSelection(selection);
+          if (flags === 0 && selection.kind !== 'keep')
+            this.view.acknowledgeSelection(selection);
         }
       );
     } else if (selection.kind === 'range') {
@@ -193,14 +194,9 @@ export class SessionPort implements EditorPort {
           if (flags === 0) this.view.acknowledgeSelection(selection);
         }
       );
-    } else
-      this.input(
-        EditorInputMsg.fromEditorSelection({
-          selection: selectionMessage(selection),
-          change: {},
-        })
-      );
+    }
   }
+
   command(code: number, a = 0, b = 0, text?: string): boolean | undefined {
     let handled: boolean | undefined;
     this.executor.run(

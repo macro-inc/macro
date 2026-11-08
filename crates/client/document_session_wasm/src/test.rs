@@ -414,7 +414,7 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer, None).unwrap();
+    output::encode(&output, false, &mut buffer, None, None).unwrap();
     let word = |i: usize| u32::from_le_bytes(buffer[i * 4..i * 4 + 4].try_into().unwrap());
     assert_eq!(word(6 + 4), 2, "both patches survive in one flat diff");
     let end = 24 + word(3) as usize * 4 + word(4) as usize;
@@ -529,7 +529,7 @@ fn closed_and_unsaved_reasons_survive_the_view_boundary() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer, None).unwrap();
+    output::encode(&output, false, &mut buffer, None, None).unwrap();
     let len = u32::from_le_bytes(buffer[36..40].try_into().unwrap()) as usize;
     let status = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).unwrap();
     assert_eq!(status.closed_reason, wire::ClosedReason::Unauthorized);
@@ -883,7 +883,7 @@ fn application_host_request_keeps_its_typed_payload_in_the_existing_effect_envel
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer, None).expect("effect bytes");
+    output::encode(&output, false, &mut buffer, None, None).expect("effect bytes");
     let len = u32::from_le_bytes(buffer[36..40].try_into().expect("length")) as usize;
     let effect = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).expect("effect");
     assert_eq!(effect.kind, 6);

@@ -296,7 +296,30 @@ export class EditorView implements ViewSink {
     return value;
   }
   acknowledgeSelection(selection: ViewSelection): void {
+    if (
+      selection.kind === 'keep' ||
+      sameSelection(this.selectionInfo.selection, selection)
+    )
+      return;
+    const previous = this.selectionInfo.selection;
     this.selectionInfo = { ...this.selectionInfo, selection };
+    if (selection.kind === 'table')
+      this.tables
+        .get(selection.table)
+        ?.select(selection.anchorCell, selection.focusCell);
+    else if (previous.kind === 'table')
+      this.tables.get(previous.table)?.clear();
+    this.notify(
+      {
+        mutations: new Map(),
+        children: new Set(),
+        properties: new Set(),
+        fullReconcile: false,
+        viewTextMatches: null,
+        opCount: 0,
+      },
+      true
+    );
   }
   acknowledgeText(input: TextFromView): void {
     const diff = this.mirror.acknowledgeText(input.key, input.text);
@@ -426,6 +449,10 @@ export class EditorView implements ViewSink {
         else this.tables.set(key, new TableObserver(this, key, dom));
       }
       let selectionChanged = false;
+      const skipDomSelection = effects.some(
+        (effect) =>
+          effect.kind === 11 && effect.keys.includes('skip-dom-selection')
+      );
       batch(() => {
         for (const effect of effects) {
           if (effect.kind !== 6) continue;
@@ -481,7 +508,7 @@ export class EditorView implements ViewSink {
                   ?.select(selection.anchorCell, selection.focusCell);
               else if (previousSelection.kind === 'table')
                 this.tables.get(previousSelection.table)?.clear();
-              writeSelection(this, selection);
+              if (!skipDomSelection) writeSelection(this, selection);
               break;
             }
             case 1:
