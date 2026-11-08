@@ -8,7 +8,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 ## Start here
 
 - `src/client/runtime.rs`: exclusive generic/session ownership; `src/client/resolve.rs`: live UTF-16 positions.
-- `src/world/editor.rs`: real session editor inputs and effects.
+- `src/world/editor.rs`: real session editor inputs and effects; `editor/input.rs`
+  lowers range edits and segmented backspace without resetting consecutive cursors.
 - `src/world.rs`: virtual event executor; `src/world/settle.rs`: healing and quiescence.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/storage_reference.rs`: independent flat-row IndexedDbModel and portable StorageCase/StorageContract suite.

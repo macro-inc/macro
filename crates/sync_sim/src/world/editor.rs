@@ -3,6 +3,7 @@ use super::*;
 use crate::client::{resolve::resolve, runtime::Runtime};
 use document_session::SessionInput;
 use lexical_model::{Command, Input as EditorInput, ViewSelection};
+mod input;
 
 impl Sim {
     pub(super) fn editor_edit(&mut self, name: &ClientName, op: EditorOp) -> Result<(), Failure> {
@@ -37,39 +38,25 @@ impl Sim {
         let input = match &op {
             EditorOp::Undo => EditorInput::Undo,
             EditorOp::Redo => EditorInput::Redo,
-            EditorOp::Type { at, text } => {
-                let Some(point) = resolve(session.surface().state(), *at) else {
+            EditorOp::Type { .. }
+            | EditorOp::Backspace { .. }
+            | EditorOp::DeleteRange { .. }
+            | EditorOp::SplitBlock { .. }
+            | EditorOp::Format { .. }
+            | EditorOp::Indent { .. }
+            | EditorOp::Outdent { .. } => {
+                let Some(input) = input::editing_input(
+                    session.surface().state(),
+                    &op,
+                    client.spec.kind == ClientKind::AiWorker,
+                ) else {
                     self.emit(Fact::OpSkipped {
                         client: name.clone(),
                         reason: "NoTarget".into(),
                     });
                     return Ok(());
                 };
-                let range = ViewSelection::Range {
-                    anchor: point,
-                    focus: point,
-                    resolution_dirty: false,
-                };
-                if client.spec.kind == ClientKind::AiWorker {
-                    EditorInput::Batch(vec![
-                        EditorInput::Command {
-                            command: Command::Extension(lexical_model::ExtensionCommand::new(
-                                &crate::client::commands::MODEL_SELECTION,
-                                lexical_model::RangeSelection::new(point, point),
-                            )),
-                            selection: ViewSelection::KeepModel,
-                        },
-                        EditorInput::Command {
-                            command: Command::InsertText(text.clone()),
-                            selection: ViewSelection::KeepModel,
-                        },
-                    ])
-                } else {
-                    EditorInput::Command {
-                        command: Command::InsertText(text.clone()),
-                        selection: range,
-                    }
-                }
+                input
             }
             EditorOp::Select { from, to } => {
                 let state = session.surface().state();
