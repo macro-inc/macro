@@ -54,6 +54,12 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
 fn root_text_changed(tx: &Transaction<'_>) -> bool {
     let previous = &tx.editor.state;
     let next = &tx.pending;
+    let next_view = tx.view();
+    let previous_view = StateRef {
+        #[cfg(feature = "foreign-nodes")]
+        foreign_origin: next_view.foreign_origin,
+        ..previous.view()
+    };
     let unchanged_elements = !tx.full_reconcile
         && previous.opaque_text_count == 0
         && next.opaque_text_count == 0
@@ -87,8 +93,11 @@ fn root_text_changed(tx: &Transaction<'_>) -> bool {
             && a.links.prev == b.links.prev
             && a.links.next == b.links.next
         {
-            return previous.view().text_content(*key) != next.view().text_content(*key);
+            return previous_view.text_content(*key) != next_view.text_content(*key);
         }
     }
-    next.root_text_content() != previous.root_text_content()
+    next_view.cached_root_text_content() != previous_view.cached_root_text_content()
 }
+
+#[cfg(all(test, feature = "foreign-nodes"))]
+mod test;

@@ -69,6 +69,12 @@ impl<'state> TextView<'state> {
     }
 }
 impl<'state> StateRef<'state> {
+    pub(crate) fn cached_root_text_content(self) -> std::sync::Arc<str> {
+        self.state
+            .root_text
+            .get_or_init(|| std::sync::Arc::from(self.text_content(NodeKey::ROOT).as_ref()))
+            .clone()
+    }
     pub(crate) fn slot(self, key: NodeKey) -> Option<&'state NodeSlot> {
         self.state.nodes.get(&key).map(AsRef::as_ref)
     }

@@ -1,7 +1,7 @@
-//! Weak editor-owned metadata for independent mutable host callback frames.
+//! Weak editor-owned metadata for mutable calls and captured raw-field reads.
 use super::*;
 use crate::replay::{Bindings, CaretBindings, RecordIdentities, SelectionBindings};
-use lexical_model::{ForeignEditorIdentity, ForeignUpdateIdentity};
+use lexical_model::{ForeignEditorIdentity, ForeignReadSnapshot, ForeignUpdateIdentity};
 use std::sync::{Arc, Mutex, Weak};
 
 pub(super) struct Frames {
@@ -24,7 +24,8 @@ struct ActiveUpdate {
 
 /// Weak dispatch capability retained by development host callback owners.
 ///
-/// Each call needs the current mutable model-hook reborrow. This retains no
+/// Indexed calls need the current mutable model-hook reborrow; raw-field reads
+/// accept an owned snapshot of that update. This retains no
 /// editor, transaction, dispatcher, registry or pinned state, and does not grant
 /// pure callbacks permission to borrow their invoking transaction.
 #[derive(Clone)]
@@ -96,13 +97,16 @@ impl Frames {
         self.active(tx).map(|_| ())
     }
 
-    fn active(&self, tx: &Transaction<'_>) -> Result<ActiveUpdate> {
-        let active = self
-            .current
+    fn current(&self) -> Result<ActiveUpdate> {
+        self.current
             .lock()
             .map_err(|_| fail("callback frame store poisoned"))?
             .clone()
-            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)
+    }
+
+    fn active(&self, tx: &Transaction<'_>) -> Result<ActiveUpdate> {
+        let active = self.current()?;
         if !active.mutable {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
@@ -113,6 +117,37 @@ impl Frames {
             return Err(fail("callback transaction belongs to another update"));
         }
         Ok(active)
+    }
+
+    fn captured(&self, snapshot: &ForeignReadSnapshot) -> Result<ActiveUpdate> {
+        let active = self.current()?;
+        if !snapshot.matches_origin(&active.owner, &active.update) {
+            return Err(fail("callback capture belongs to another editor or update"));
+        }
+        Ok(active)
+    }
+
+    fn context(self: &Arc<Self>, active: &ActiveUpdate) -> Result<Context> {
+        let committed = self
+            .bindings
+            .state(&active.committed_version)?
+            .ok_or_else(|| fail("callback committed state was released"))?;
+        Ok(Context {
+            replay: Replayer {
+                bindings: self.bindings.clone(),
+                record_ids: self.records.clone(),
+                selections: self.selections.clone(),
+                carets: self.carets.clone(),
+                version: active.version,
+                committed_version: active.committed_version,
+                record_owner: Some((active.committed_version, committed)),
+                in_callback: true,
+                ..Replayer::default()
+            },
+            frames: self.clone(),
+            scope: Scope::Updating,
+            previous_selections: Vec::new(),
+        })
     }
 }
 
@@ -135,26 +170,37 @@ impl CallbackContext {
             .upgrade()
             .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
         let active = frames.active(tx)?;
-        let committed = frames
-            .bindings
-            .state(&active.committed_version)?
-            .ok_or_else(|| fail("callback committed state was released"))?;
-        let mut context = Context {
-            replay: Replayer {
-                bindings: frames.bindings.clone(),
-                record_ids: frames.records.clone(),
-                selections: frames.selections.clone(),
-                carets: frames.carets.clone(),
-                version: active.version,
-                committed_version: active.committed_version,
-                record_owner: Some((active.committed_version, committed)),
-                in_callback: true,
-                ..Replayer::default()
-            },
-            frames,
-            scope: Scope::Updating,
-            previous_selections: Vec::new(),
-        };
-        context.call(tx, id, args, receiver)
+        frames.context(&active)?.call(tx, id, args, receiver)
+    }
+
+    /// Read a captured node's raw fields from an independently owned pure snapshot.
+    /// The capture must belong to the current exact update, including its publication
+    /// phase. This grants neither indexed API dispatch nor access to the source
+    /// transaction; editor-state captures without update provenance are rejected.
+    pub fn read_field(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        handle: u32,
+        field: &str,
+    ) -> Result<Value> {
+        let frames = self
+            .0
+            .upgrade()
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+        let active = frames.captured(snapshot)?;
+        let mut context = frames.context(&active)?;
+        let committed = context
+            .replay
+            .record_owner
+            .as_ref()
+            .ok_or_else(|| fail("callback committed state was released"))?
+            .1
+            .clone();
+        snapshot.with_read_transaction(&committed, |peer| {
+            context.read_captured_field(peer, handle, field)
+        })?
     }
 }
+
+#[cfg(test)]
+mod test;

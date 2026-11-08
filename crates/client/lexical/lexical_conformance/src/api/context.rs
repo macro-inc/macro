@@ -153,6 +153,15 @@ impl Context {
         } else {
             self.frames.validate(tx)?;
         }
+        self.read_captured_field(tx, handle, field)
+    }
+
+    fn read_captured_field(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        handle: u32,
+        field: &str,
+    ) -> Result<Value> {
         let receiver = self.replay.decode(&json!({"$h":handle}))?;
         let value = super::properties::get(&mut self.replay, tx, &receiver, field)?;
         self.encode(value)
