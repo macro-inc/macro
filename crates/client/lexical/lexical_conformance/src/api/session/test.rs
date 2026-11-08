@@ -174,3 +174,102 @@ fn commit_transform_failure_rolls_back_writes_and_invalidates_only_pending_handl
     assert_eq!(host.state().root_text_content().as_ref(), "after");
     Ok(())
 }
+
+#[test]
+fn configured_context_transform_reenters_the_owned_session_and_commits_once() -> Result<()> {
+    struct Transform {
+        callback: crate::api::CallbackContext,
+    }
+    impl ForeignTransform for Transform {
+        fn transform(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+        ) -> std::result::Result<(), Error> {
+            let result = (|| -> Result<()> {
+                let get = super::super::index()
+                    .binary_search(&"lexical.$getNodeByKey")
+                    .expect("get") as u32;
+                let content = super::super::index()
+                    .binary_search(&"LexicalNode.getTextContent")
+                    .expect("content") as u32;
+                let set = super::super::index()
+                    .binary_search(&"LexicalNode.setTextContent")
+                    .expect("set") as u32;
+                let node = self
+                    .callback
+                    .call(tx, get, json!([key.to_string()]), None)?;
+                if self
+                    .callback
+                    .call(tx, content, json!([]), Some(node.clone()))?
+                    == "a"
+                {
+                    self.callback.call(tx, set, json!(["b"]), Some(node))?;
+                }
+                Ok(())
+            })();
+            result.map_err(|error| Error::invariant(error.to_string()))
+        }
+    }
+    let context = Context::default();
+    let callback = context.callbacks();
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.register_foreign_transform("text", std::sync::Arc::new(Transform { callback }))?;
+    let mut host = Session::with_context(editor, context)?;
+    let create = super::super::index()
+        .binary_search(&"lexical.$createTextNode")
+        .expect("text") as u32;
+    let paragraph = super::super::index()
+        .binary_search(&"lexical.$createParagraphNode")
+        .expect("paragraph") as u32;
+    let root = super::super::index()
+        .binary_search(&"lexical.$getRoot")
+        .expect("root") as u32;
+    let append = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    host.begin_update(TagSet::default())?;
+    let text = host.call(create, json!(["a"]), None)?;
+    assert_eq!(text, json!({"$h":0,"key":"1","type":"text","ver":1}));
+    let paragraph = host.call(paragraph, json!([]), None)?;
+    host.call(append, json!([text]), Some(paragraph.clone()))?;
+    let root = host.call(root, json!([]), None)?;
+    host.call(append, json!([paragraph]), Some(root))?;
+    assert_eq!(host.state().root_text_content().as_ref(), "");
+    host.flush()?;
+    assert_eq!(host.state().root_text_content().as_ref(), "");
+    assert_eq!(host.read_field(0, "__text")?, "b");
+    let commit = host.commit()?;
+    assert_eq!(commit.id, CommitId(1));
+    assert_eq!(commit.next.root_text_content().as_ref(), "b");
+    assert_eq!(host.state().root_text_content().as_ref(), "b");
+    Ok(())
+}
+
+#[test]
+fn configured_session_rejects_active_contexts_and_another_editor_binding() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let other = editor.create_conformance_peer(EditorMode::Headless)?;
+    let mut context = Context::default();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    drop(tx);
+    context.discard_update()?;
+    match Session::with_context(other, context) {
+        Ok(_) => panic!("bound context must reject another editor"),
+        Err(error) => assert_eq!(error.to_string(), "API context belongs to another editor"),
+    }
+    let mut context = Context::default();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    drop(tx);
+    match Session::with_context(editor, context) {
+        Ok(_) => panic!("active context must reject attachment"),
+        Err(error) => assert_eq!(error.to_string(), "an API update is already active"),
+    }
+    Ok(())
+}
