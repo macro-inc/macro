@@ -64,13 +64,9 @@ operations and tool-call mutations emit nothing. Message update operations
 and tool events (for example `chat.tool_called` and `chat.tool_rejected`) are
 not yet produced; they can be added later as new enum variants.
 
-The AI auto-rename flow
-(`services/agent_harness_service/src/cognition/service/chat_renamer.rs`) patches
-via `PgChatRepo` directly and does not emit `chat.updated`.
-
-Only the document cognition service (DCS) HTTP chat router, the DCS
-stream-side implicit chat creation, and the DCS `MessageServiceImpl` publish
-to Kafka. The `ChatServiceImpl` instances in mcp_service, memory, and
+Only the document cognition service (DCS) HTTP chat router and entity
+mutations publish to Kafka. Legacy chats are read-only, so nothing produces
+`chat.created` anymore; the variant stays for existing consumers. The `ChatServiceImpl` instances in mcp_service, memory, and
 ai_tools agent contexts and in the DCS chat tool context use the
 `NoopMacroEventBroker` default and do not publish.
 

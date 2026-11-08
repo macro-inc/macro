@@ -11921,24 +11921,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "load-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "http 1.4.0",
- "macro_env_var",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "tungstenite 0.28.0",
- "workspace-hack",
-]
-
-[[package]]
 name = "local_e2e_integration_tests"
 version = "0.1.0"
 dependencies = [
@@ -20858,7 +20840,6 @@ dependencies = [
  "rustls-pki-types",
  "sha1 0.10.6",
  "thiserror 2.0.18",
- "url",
  "utf-8",
 ]
 
@@ -23140,7 +23121,6 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "triomphe",
- "tungstenite 0.28.0",
  "twox-hash",
  "typenum",
  "url",

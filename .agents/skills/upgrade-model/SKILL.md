@@ -25,9 +25,7 @@ These are separate choices; the application no longer has a two-entry
   `CHAT_MODELS`, `PAID_DEFAULT_MODEL`, and `FREE_MODEL`. Change the relevant
   catalog/default and preserve the intended plan restrictions.
 
-The harness chat handler in
-`services/agent_harness_service/src/cognition/api/stream/chat_message.rs`
-validates and forwards `request.model`; it does not select an enum variant.
+Legacy chats are read-only, so no harness chat handler selects a model.
 There is no cognition `core/model.rs` or `api/ws/chat_message/mod.rs` to update.
 
 ## Frontend and persisted selections

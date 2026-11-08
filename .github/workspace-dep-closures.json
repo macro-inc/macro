@@ -10230,11 +10230,6 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
-    "load-test": [
-      "crates/macro_env_var",
-      "crates/workspace-hack",
-      "services/agent_harness_service/load-test"
-    ],
     "local_e2e_integration_tests": [
       "crates/integration_tests/local_e2e",
       "crates/workspace-hack"

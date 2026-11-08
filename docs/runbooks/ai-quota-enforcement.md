@@ -265,10 +265,10 @@ The [common HTTP body](../../crates/ai_billing/src/inbound/admission.rs) is
 reports are logged server-side, not serialized. A `Retry-After` header is not
 promised by this mapping.
 
-Cognition chat retains its existing `ChatMessageError` body, including
-`stream_id: null` on admission failure and the optional `code` field. Structured
-completion retains `StructuredCompletionError` (`error`, optional `code`). Both
-return before stream/provider work; chat also checks before creating chat/messages.
+Legacy cognition chats are read-only: `POST /stream/chat/message` answers 410
+`chat_read_only` before admission. Structured completion retains
+`StructuredCompletionError` (`error`, optional `code`) and returns before
+provider work.
 Structured completion's agent and final formatting phases are one admitted
 operation. Imports, session create/control, and manual scheduled execution use
 the shared 402/503 body for synchronous admission errors. Session control also
@@ -306,7 +306,7 @@ inspect the content type and code rather than assuming every 503 is billing.
   are terminal bookkeeping, not automatic replay. Agent targets delegate funding
   decisions to the session/harness service. A 503 describes a retryable cause, not
   a promise that a scheduler or broker will redeliver the same run.
-- Optional chat/session naming is independently admitted as ChatRename, an exempt
+- Optional session naming is independently admitted as ChatRename, an exempt
   feature, so the gate does no quota billing I/O and never charges the user; a
   refusal retains the existing/default title without failing successful primary work.
   Post-turn session retitling (the Jev check and the Haiku retitle) is admitted the
@@ -346,9 +346,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 
 | Surface / feature | Admission boundary | Production recorder / composition | Regression tests |
 | --- | --- | --- | --- |
-| Cognition chat / Chat | [chat handler](../../services/agent_harness_service/src/cognition/api/stream/chat_message.rs) | [DCS main](../../services/agent_harness_service/src/cognition/main.rs): configured `UsageServiceImpl` inside `SettlingUsageRecorder`, wrapped with `with_tracking` | [pre-creation refusal and permission precedence](../../services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs) |
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
-| Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
 | Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
