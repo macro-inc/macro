@@ -136,3 +136,132 @@ fn title_removes_extra_lines_and_unwraps_nested_paragraph_content() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn enter_splits_heading_into_a_paragraph_and_preserves_the_suffix() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let heading = tx.create(HeadingNode::default())?;
+        let text = tx.create_text("beforeafter")?;
+        tx.append(heading, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[heading.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(text, Utf16Offset(6)),
+        ))))
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Key {
+        command: KeyCommand::Enter,
+        event: Some(KeyEvent {
+            key: "Enter".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    let state = editor.state().view();
+    let blocks = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(blocks.len(), 2);
+    assert!(state.is::<HeadingNode>(blocks[0]));
+    assert!(state.is::<Paragraph>(blocks[1]));
+    assert_eq!(state.text_content(blocks[0]), "before");
+    assert_eq!(state.text_content(blocks[1]), "after");
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor.offset(), 0);
+    assert_eq!(
+        state.top_level_element(range.anchor.key())?,
+        Some(blocks[1])
+    );
+    Ok(())
+}
+
+#[test]
+fn enter_at_heading_start_keeps_the_heading_and_caret_below_a_new_paragraph() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (text, _) = editor.update(|tx| {
+        let heading = tx.create(HeadingNode::default())?;
+        let text = tx.create_text("heading")?;
+        tx.append(heading, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[heading.key()])?;
+        tx.select_start(text)?;
+        Ok(text.key())
+    })?;
+    editor.dispatch(&Command::Key {
+        command: KeyCommand::Enter,
+        event: Some(KeyEvent {
+            key: "Enter".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    let state = editor.state().view();
+    let blocks = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(blocks.len(), 2);
+    assert!(state.is::<Paragraph>(blocks[0]));
+    assert!(state.is::<HeadingNode>(blocks[1]));
+    assert_eq!(state.text_content(blocks[1]), "heading");
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::text(text, Utf16Offset(0))
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_quote_enter_exits_to_paragraph() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let quote = tx.create(lexical_rich_nodes::quote::QuoteNode::default())?;
+        tx.append(NodeKey::ROOT, &[quote.key()])?;
+        tx.select_start(quote)?;
+        Ok(())
+    })?;
+    editor.dispatch(&Command::Key {
+        command: KeyCommand::Enter,
+        event: Some(KeyEvent {
+            key: "Enter".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    let state = editor.state().view();
+    let blocks = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(blocks.len(), 1);
+    assert!(state.is::<Paragraph>(blocks[0]));
+    Ok(())
+}
+
+#[test]
+fn block_indent_stops_one_level_beyond_previous_sibling() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (second, _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let second = tx.create(Paragraph::default())?;
+        let text = tx.create_text("indent")?;
+        tx.append(second, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), second.key()])?;
+        tx.select_start(text)?;
+        Ok(second.key())
+    })?;
+    editor.dispatch(&Command::IndentContent)?;
+    editor.dispatch(&Command::IndentContent)?;
+    assert_eq!(editor.state().view().indent(second), 1);
+    Ok(())
+}
