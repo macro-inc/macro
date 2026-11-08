@@ -16,6 +16,8 @@ the Durable Object adapter and native simulation.
 - `src/domain/connection.rs`: persisted metadata and explicit-time grant policy.
 - `src/domain/migration.rs`: persisted migration states.
 
+- `src/comment_gate.rs`: optional shared in-process CommentGate implementation; no HTML feature or runtime dependency.
+
 ## Boundaries
 
 - Depends on pure domain types and Loro; no Worker, Tokio, sockets or environment.

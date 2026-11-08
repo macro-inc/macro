@@ -6,6 +6,8 @@ Portable Macro node payloads, model hooks and exact export/headless/web registri
 Server prompt/reply composers live in crates/macro_document_composers.
 The transformer layer uses the shared lexical_markdown engine; route adapters are separate.
 
+- Sync gate adapters supply explicit clock/entropy through is_comment_only_root_change_with_context so constructor defaults preserve service behavior without ambient host calls.
+
 ## Boundaries
 
 - Keep HTML opt-in; parse template fragments with logos starts and nom lexical modes before serializing owned nodes.

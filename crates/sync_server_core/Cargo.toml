@@ -5,9 +5,11 @@ edition = "2024"
 publish = false
 
 [features]
+in-process-gate = ["dep:macro_document_model"]
 openapi = ["dep:utoipa"]
 
 [dependencies]
+macro_document_model = { workspace = true, optional = true, default-features = false }
 loro.workspace = true
 sync_protocol.workspace = true
 lazy-regex.workspace = true
@@ -20,4 +22,5 @@ uuid-types.workspace = true
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
+sha2.workspace = true
 futures.workspace = true
