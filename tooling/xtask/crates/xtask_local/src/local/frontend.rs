@@ -422,16 +422,10 @@ pub fn start(
     }
     let port = instance.port(Port::Frontend);
     // A successful connect means something is already listening — almost
-    // certainly a stale dev server from a previous run. (A bind probe is
-    // unreliable: std's TcpListener sets SO_REUSEADDR, so it binds right
-    // alongside the squatter.) Bail clearly rather than spawn a bun that can't
+    // certainly a stale dev server from a previous run. (A bind probe can miss
+    // it; see `accepting`.) Bail clearly rather than spawn a bun that can't
     // bind and dies with a confusing late "exited (status 1)".
-    if std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(300),
-    )
-    .is_ok()
-    {
+    if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
         anyhow::bail!(
             "frontend port {port} is already in use — likely a stale dev server from a \
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
@@ -492,7 +486,6 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
     // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
-    let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
         let deadline = std::time::Instant::now() + STARTUP_TIMEOUT;
         while std::time::Instant::now() < deadline {
@@ -507,9 +500,7 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
-            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300))
-                .is_ok()
-            {
+            if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
                 return Ok(());
             }
         }
