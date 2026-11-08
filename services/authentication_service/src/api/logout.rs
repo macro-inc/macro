@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::EmptyResponse;
+use shared_types::response::EmptyResponse;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
 pub fn router() -> Router<ApiContext> {

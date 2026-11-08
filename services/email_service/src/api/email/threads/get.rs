@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::{Json, extract};
 use email::domain::message_reads::{ThreadMessagesRequest, ThreadReadError};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 use strum_macros::AsRefStr;
 use thiserror::Error;

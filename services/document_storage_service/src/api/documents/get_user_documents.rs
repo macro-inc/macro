@@ -10,7 +10,7 @@ use axum::{
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::document::get_user_documents;
-use model::response::{GenericErrorResponse, GenericResponse};
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
 
 /// Gets the users documents to populate their recent document list

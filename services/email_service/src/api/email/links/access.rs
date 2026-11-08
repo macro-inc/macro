@@ -2,7 +2,7 @@ use crate::outbound::persistence_error::InboxPersistenceError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use email::domain::mailbox::catalog::InboxAccessError;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use thiserror::Error;
 
 /// Error shared by the per-inbox action handlers (delete, resync). Carries

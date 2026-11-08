@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use model::document::FileType;
 use models_properties::EntityType;
+use shared_types::document::FileType;
 use sqlx::PgPool;
 use sqs_client::search::{
     SearchQueueMessage, calendar_event::UpsertCalendarEvent, call::CallRecordMessage,

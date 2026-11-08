@@ -1,7 +1,7 @@
 use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 
-use model::project::BasicProject;
+use shared_types::project::BasicProject;
 
 #[tracing::instrument(skip(db))]
 pub async fn get_basic_project(

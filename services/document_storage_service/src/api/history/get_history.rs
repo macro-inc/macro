@@ -3,8 +3,8 @@ use crate::model::response::history::GetUserHistoryResponse;
 use axum::extract::State;
 use axum::{Extension, http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{GenericErrorResponse, GenericResponse};
-use model::version::ApiVersionEnum;
+use shared_types::response::{GenericErrorResponse, GenericResponse};
+use shared_types::version::ApiVersionEnum;
 
 /// Gets the users history
 #[utoipa::path(

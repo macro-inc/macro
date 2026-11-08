@@ -6,7 +6,7 @@ mod test;
 
 use std::{collections::BTreeMap, time::Duration};
 
-use model::document::SaveBomPart;
+use shared_types::document::SaveBomPart;
 
 #[derive(Clone)]
 pub struct Redis {

@@ -12,13 +12,13 @@ use axum::{
 };
 use futures::StreamExt;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::{
+use s3_key::{build_docx_to_pdf_converted_document_key, build_temp_docx_key};
+use shared_types::{
     convert::ConvertQueueMessage,
     document::{BomPart, BomPartWithContent, DocumentMetadata},
     request::pagination::{Pagination, PaginationQueryParams},
     response::ErrorResponse,
 };
-use s3_key::{build_docx_to_pdf_converted_document_key, build_temp_docx_key};
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

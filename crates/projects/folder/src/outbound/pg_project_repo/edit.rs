@@ -1,4 +1,4 @@
-use model::project::Project;
+use shared_types::project::Project;
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::EditProjectArgs;

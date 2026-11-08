@@ -32,13 +32,13 @@ use messages::domain::{
     ports::MessageError,
     service::MessageView,
 };
-use model::document::DocumentBasic;
 use models_properties::service::{
     property_option::PropertyOptionValue, property_value::PropertyValue,
 };
 use properties::{EntityPropertyInfo, PropertiesService};
 use rootcause::{Report, compat::IntoRootcause};
 use serde_json::{Map, Value, json};
+use shared_types::document::DocumentBasic;
 use trigger_context::RoutineEvent;
 
 use crate::domain::{

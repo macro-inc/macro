@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 
 use super::{PaidPlan, StripeOperationError};
 use crate::api::context::{ApiContext, AuthorizationService};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Tracking metadata for conversion attribution
 #[derive(Debug, Default, Deserialize, ToSchema)]

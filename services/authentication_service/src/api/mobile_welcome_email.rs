@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use thiserror::Error;
 use tower::ServiceBuilder;
 use tracing::Level;

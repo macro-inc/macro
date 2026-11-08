@@ -7,9 +7,9 @@ use entity_access::domain::ports::EntityAccessService;
 use futures::future::join_all;
 use lexical_client::types::NewMdNode;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::DocumentBasic;
 use model_entity::EntityType;
 use non_empty::NonEmpty;
+use shared_types::document::DocumentBasic;
 
 use crate::domain::ports::DocumentService;
 

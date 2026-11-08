@@ -7,11 +7,11 @@ use async_trait::async_trait;
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_mutation::{DuplicateEntity, MoveEntity};
-use model::project::request::CreateProjectRequest;
 use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::project::request::CreateProjectRequest;
 
 use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 use crate::domain::models::ProjectError;

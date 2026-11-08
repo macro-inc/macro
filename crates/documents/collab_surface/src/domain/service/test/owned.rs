@@ -102,7 +102,7 @@ async fn the_public_api_mints_tokens_for_an_owned_surface() {
         .mint_token(&user("macro|a@b.c"), initiative_receipt(id), id)
         .await
         .unwrap();
-    let claims: model::document::DocumentPermissionsToken =
+    let claims: shared_types::document::DocumentPermissionsToken =
         macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
     assert_eq!(claims.document_id, id.to_string());
     assert_eq!(claims.access_level, AccessLevel::Edit);

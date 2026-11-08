@@ -30,9 +30,9 @@ pub struct PutCursorApiKeyRequest {
     request_body = PutCursorApiKeyRequest,
     responses(
         (status = 200, body = CursorApiKeyStatus),
-        (status = 400, body = model::response::ErrorResponse),
+        (status = 400, body = shared_types::response::ErrorResponse),
         (status = 401, body = String),
-        (status = 403, body = model::response::ErrorResponse),
+        (status = 403, body = shared_types::response::ErrorResponse),
     )
 )]
 // `req` is skipped: it is the key itself, and an instrumented span field would

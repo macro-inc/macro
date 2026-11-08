@@ -5,10 +5,10 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_db_client::notification::get_basic_cloud_storage_documents_metadata;
-use model::document_storage_service_internal::{
+use shared_types::document_storage_service_internal::{
     DocumentMetadata, GetDocumentsMetadataRequest, GetDocumentsMetadataResponse,
 };
-use model::response::GenericResponse;
+use shared_types::response::GenericResponse;
 
 #[tracing::instrument(skip(ctx, _auth), fields(document_count = ?request.document_ids.len()))]
 pub async fn handler(

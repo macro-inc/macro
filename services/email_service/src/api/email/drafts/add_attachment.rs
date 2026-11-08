@@ -10,7 +10,7 @@ use email::{
     domain::draft_attachments::DraftAttachmentUpload, inbound::axum::axum_impls::EmailLinkExtractor,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use utoipa::IntoParams;
 use utoipa::ToSchema;
 use uuid::Uuid;

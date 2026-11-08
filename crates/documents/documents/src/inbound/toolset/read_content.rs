@@ -15,10 +15,10 @@ use entity_access::domain::{
     models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
-use model::document::DocumentBasic;
 use model_file_type::{FileAssociation, FileType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::document::DocumentBasic;
 use uuid::Uuid;
 
 use super::DocumentToolContext;

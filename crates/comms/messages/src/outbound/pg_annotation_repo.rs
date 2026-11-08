@@ -2,7 +2,7 @@ use crate::domain::{
     annotations::{AnnotationMutation, AnnotationRepository, AnnotationTarget, DeletedAnnotation},
     ports::MessageError,
 };
-use model::annotations::{
+use shared_types::annotations::{
     delete::DeleteUnthreadedAnchorRequest,
     edit::{EditAnchorRequest, EditAnchorResponse},
 };

@@ -6,7 +6,7 @@ use crate::{
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{GenericErrorResponse, GenericResponse};
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 
 /// Gets the users pinned items
 #[utoipa::path(

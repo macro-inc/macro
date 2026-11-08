@@ -1,7 +1,7 @@
 use macro_event_broker::{Event, MacroEvent as _, TopicEvent};
-use model::document::FileType;
 use model_owner::Owner;
 use serde_json::{Value, json};
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 use super::{

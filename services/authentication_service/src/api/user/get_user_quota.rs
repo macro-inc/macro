@@ -10,7 +10,7 @@ use user_quota::UserQuota;
 
 use crate::api::{context::ApiContext, permissions_extractor::DbPermissionsExtractor};
 
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Retrieves the users quota.
 /// Returns NO_CONTENT if the user is a premium user with no quota.

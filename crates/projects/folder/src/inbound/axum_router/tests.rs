@@ -27,15 +27,6 @@ use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use model::{
-    folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData},
-    item::ItemWithUserAccessLevel,
-    project::{
-        BasicProject, PendingProject, Project, ProjectPreview,
-        request::{CreateProjectRequest, PatchProjectRequestV2},
-        response::GetProjectResponseData,
-    },
-};
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
 use models_bulk_upload::{
@@ -47,6 +38,15 @@ use models_permissions::share_permission::{
 };
 use rootcause::Report;
 use serde_json::{Value, json};
+use shared_types::{
+    folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData},
+    item::ItemWithUserAccessLevel,
+    project::{
+        BasicProject, PendingProject, Project, ProjectPreview,
+        request::{CreateProjectRequest, PatchProjectRequestV2},
+        response::GetProjectResponseData,
+    },
+};
 use tokio::sync::{Notify, oneshot};
 use tower::ServiceExt;
 use uuid::Uuid;

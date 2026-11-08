@@ -9,8 +9,8 @@ use macro_db_client::user::get_user_name::get_user_names;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
-use model::response::ErrorResponse;
-use model::user::UserNames;
+use shared_types::response::ErrorResponse;
+use shared_types::user::UserNames;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct PostGetNamesRequestBody {

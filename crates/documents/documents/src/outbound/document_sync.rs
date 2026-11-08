@@ -1,6 +1,6 @@
 //! Sync-service implementation of the collaborative document storage port.
 
-use model::sync_service::SyncServiceVersionID;
+use shared_types::sync_service::SyncServiceVersionID;
 use sync_service_client::SyncServiceClient;
 
 use crate::domain::ports::sync::DocumentSyncPort;

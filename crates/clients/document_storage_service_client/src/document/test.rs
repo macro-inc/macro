@@ -1,5 +1,5 @@
-use model::document::response::{CreateDocumentRequest, EMAIL_ATTACHMENT_NOT_FOUND_CODE};
 use serde_json::json;
+use shared_types::document::response::{CreateDocumentRequest, EMAIL_ATTACHMENT_NOT_FOUND_CODE};
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},

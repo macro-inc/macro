@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 pub(in crate::api::oauth2) async fn handler(
     ctx: &ApiContext,

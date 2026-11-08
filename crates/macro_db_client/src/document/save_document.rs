@@ -1,9 +1,9 @@
 use document_sub_type::DocumentSubType;
-use model::document::{
+use model_owner::Owner;
+use shared_types::document::{
     BomPart, DocumentBasic, DocumentMetadata, FileType, SaveBomPart, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha, VersionIDWithTimeStampsOptionalSha,
 };
-use model_owner::Owner;
 use sqlx::{PgPool, Postgres, Transaction};
 
 /// Inserts the bom parts into the database for a docx document

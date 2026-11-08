@@ -5,9 +5,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use model::response::ErrorResponse;
 use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
+use shared_types::response::ErrorResponse;
 
 pub(in crate::api) mod filter;
 pub(in crate::api) mod simple_calendar_event;

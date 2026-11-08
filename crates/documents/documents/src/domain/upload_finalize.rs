@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use model::document::{DocumentBasic, FileType, FileTypeExt};
+use shared_types::document::{DocumentBasic, FileType, FileTypeExt};
 
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::DocumentError;

@@ -27,8 +27,8 @@ use messages::{
     },
     inbound::axum_router::sender_attribution,
 };
-use model::document::DocumentBasic;
 use model_error_response::ErrorResponse;
+use shared_types::document::DocumentBasic;
 
 /// A comment on a quoted passage.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]

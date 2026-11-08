@@ -3,7 +3,7 @@ use cached::proc_macro::cached;
 
 use std::sync::{Arc, LazyLock};
 
-use model::item::UserAccessibleItem;
+use shared_types::item::UserAccessibleItem;
 use single_flight::{DatabaseKey, SingleFlight};
 use sqlx::{PgConnection, Pool, Postgres};
 

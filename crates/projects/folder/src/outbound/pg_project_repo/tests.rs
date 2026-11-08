@@ -4,14 +4,14 @@ use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model::document::FileType;
-use model::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
-use model::item::Item;
-use model::project::ProjectPreviewV2;
 use model_owner::Owner;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
+use shared_types::document::FileType;
+use shared_types::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
+use shared_types::item::Item;
+use shared_types::project::ProjectPreviewV2;
 use sqlx::{PgPool, Pool, Postgres, Row};
 
 use super::PgProjectRepo;

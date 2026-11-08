@@ -8,8 +8,8 @@ use axum::{
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use serde_utils::urlencode::UrlEncoded;
+use shared_types::response::ErrorResponse;
 use url::Url;
 
 use crate::api::{

@@ -12,7 +12,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
     is_program_run,
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 #[cfg(test)]
 mod test;

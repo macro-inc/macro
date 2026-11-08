@@ -8,7 +8,7 @@ use axum::{
 use email::domain::{models::EmailErr, ports::EmailService};
 use email::inbound::axum::api_types::DraftEditPrecondition;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]

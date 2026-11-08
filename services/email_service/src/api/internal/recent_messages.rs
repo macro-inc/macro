@@ -13,9 +13,9 @@ use email::domain::{
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use models_email::email::service::message::RecentInboxMessagesResponse;
 use serde::Deserialize;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

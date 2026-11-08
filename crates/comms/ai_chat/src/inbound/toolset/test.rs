@@ -63,7 +63,7 @@ mod self_read_guard {
             _entity_access_receipt: EntityAccessReceipt<
                 entity_access::domain::models::ViewAccessLevel,
             >,
-        ) -> Result<model::chat::Chat> {
+        ) -> Result<shared_types::chat::Chat> {
             unreachable!("guard should short-circuit before calling the chat service")
         }
 
@@ -291,10 +291,10 @@ mod self_read_guard {
             entity_access_receipt: EntityAccessReceipt<
                 entity_access::domain::models::ViewAccessLevel,
             >,
-        ) -> Result<model::chat::Chat> {
+        ) -> Result<shared_types::chat::Chat> {
             #[allow(deprecated)]
             let chat_id = entity_access_receipt.entity().entity_id.clone();
-            Ok(model::chat::Chat {
+            Ok(shared_types::chat::Chat {
                 id: chat_id.to_string(),
                 name: "Other Chat".to_string(),
                 user_id: model_owner::Owner::from_principal_str("macro|test@example.com").unwrap(),

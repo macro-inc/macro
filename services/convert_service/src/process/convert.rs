@@ -6,7 +6,7 @@ use rs_libreoffice_bindings::Office;
 use std::{borrow::Cow, fs::File, io::Write, path::Path, thread, time::Duration};
 
 use anyhow::Context;
-use model::convert::ConvertQueueMessage;
+use shared_types::convert::ConvertQueueMessage;
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},

@@ -11,8 +11,8 @@ use clap::{Args, Subcommand};
 use comms_db_client::messages::create_message::CreateMessageOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
-use model::item::ShareableItemType;
 use serde::Deserialize;
+use shared_types::item::ShareableItemType;
 use uuid::Uuid;
 
 use crate::config::SeedCliContext;

@@ -5,8 +5,8 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use model::chat::ChatBasic;
 use serde::Deserialize;
+use shared_types::chat::ChatBasic;
 use sqlx::{PgPool, Pool, Postgres};
 
 #[derive(Deserialize)]

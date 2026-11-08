@@ -1,6 +1,6 @@
 use utoipa::ToSchema;
 
-use model::pin::PinnedItem;
+use shared_types::pin::PinnedItem;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema)]
 pub struct UserPinsResponse {

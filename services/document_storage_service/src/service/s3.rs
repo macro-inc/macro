@@ -23,8 +23,8 @@ pub use MockS3Client as S3;
 pub use S3Client as S3;
 use tokio::sync::Semaphore;
 
-use model::document::{ContentType, FileType};
 use model_owner::Owner;
+use shared_types::document::{ContentType, FileType};
 
 #[derive(Clone, Debug)]
 pub struct S3Client {

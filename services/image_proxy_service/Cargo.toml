@@ -34,7 +34,7 @@ macro_middleware = { workspace = true, features = [
   "tracking",
 ] }
 macro_tower_layers = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
 lazy-regex = { workspace = true }

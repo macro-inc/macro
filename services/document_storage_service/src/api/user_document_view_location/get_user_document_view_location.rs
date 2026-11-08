@@ -8,9 +8,9 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{GenericErrorResponse, GenericResponse};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 
 #[derive(Deserialize)]
 pub struct Params {

@@ -11,7 +11,7 @@ use crate::api::{
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 
-use model::{
+use shared_types::{
     authentication::login::request::AppleLoginRequest,
     response::{EmptyResponse, ErrorResponse},
 };

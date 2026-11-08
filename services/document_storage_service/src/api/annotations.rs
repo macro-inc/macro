@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get},
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use tower::ServiceBuilder;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {

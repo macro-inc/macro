@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use model::project::BasicProject;
+use shared_types::project::BasicProject;
 use uuid::Uuid;
 
 use super::super::tests::{

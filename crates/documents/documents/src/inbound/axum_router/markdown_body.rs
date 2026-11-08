@@ -23,7 +23,7 @@ use entity_access::{
     inbound::axum_extractors::DocumentAccessExtractor,
 };
 use macro_authorization::MacroAuthorizationService;
-use model::document::DocumentBasic;
+use shared_types::document::DocumentBasic;
 
 /// The body to write and the revision it was written against.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]

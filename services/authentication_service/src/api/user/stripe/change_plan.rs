@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 
 use super::{PaidPlan, StripeOperationError};
 use crate::api::context::{ApiContext, AuthorizationService};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Request body for switching plans
 #[derive(Debug, Deserialize, ToSchema)]

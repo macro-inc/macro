@@ -5,7 +5,7 @@ use crate::{
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::{
+use shared_types::{
     document::response::GetDocumentListResult,
     response::{GenericErrorResponse, GenericResponse},
 };

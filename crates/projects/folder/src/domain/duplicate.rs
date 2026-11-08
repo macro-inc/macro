@@ -21,10 +21,10 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use entity_mutation::{DuplicateEntity, EntityMutationEffect, EntityMutationErrorCode};
 use futures::stream::{self, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::project::request::CreateProjectRequest;
 use model_entity::{Entity, EntityType};
 use model_owner::{CreationPrincipal, Owner};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
+use shared_types::project::request::CreateProjectRequest;
 use tracing::Instrument;
 use uuid::Uuid;
 

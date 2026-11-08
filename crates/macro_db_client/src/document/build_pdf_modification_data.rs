@@ -1,4 +1,4 @@
-use model::{
+use shared_types::{
     annotations::HighlightType,
     document::modification_data::{
         AllowableEdits, Color, Comment, Highlight, HighlightRect, Payload, PdfModificationData,

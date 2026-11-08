@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
-use model::item::{
+use shared_types::item::{
     Item,
     map_item::{map_chat_item, map_document_item, map_project_item},
 };

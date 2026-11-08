@@ -7,8 +7,8 @@ use axum::{
 use fusionauth::FusionAuthClient;
 use fusionauth::error::FusionAuthClientError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::authentication::google_token::GoogleAccessToken;
-use model::response::ErrorResponse;
+use shared_types::authentication::google_token::GoogleAccessToken;
+use shared_types::response::ErrorResponse;
 use std::sync::Arc;
 
 use crate::api::context::AuthorizationService;

@@ -7,10 +7,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
 use model_entity::EntityType;
 use notification::domain::item_preferences::ItemNotificationPreferenceError;
 use serde::Deserialize;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use utoipa::ToSchema;
 
 use crate::api::context::{ApiContext, AuthorizationService};

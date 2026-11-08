@@ -164,7 +164,7 @@ impl IntoResponse for DocumentError {
             return (
                 StatusCode::NOT_FOUND,
                 Json(CodedErrorResponse {
-                    code: model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+                    code: shared_types::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE,
                     message: "email attachment not found",
                 }),
             )
@@ -600,7 +600,7 @@ pub struct DocumentIdPathParams {
     pub document_id: String,
 }
 
-/// Middleware that loads [`DocumentBasic`](model::document::DocumentBasic) into request extensions.
+/// Middleware that loads [`DocumentBasic`](shared_types::document::DocumentBasic) into request extensions.
 ///
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.

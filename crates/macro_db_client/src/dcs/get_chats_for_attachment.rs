@@ -1,6 +1,6 @@
 use anyhow::Result;
-use model::chat::Chat;
 use model_owner::Owner;
+use shared_types::chat::Chat;
 use sqlx::Postgres;
 
 pub async fn get_latest_single_attachment_chat(

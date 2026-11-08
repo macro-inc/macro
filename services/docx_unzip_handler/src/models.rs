@@ -2,9 +2,9 @@ use std::borrow::Cow;
 
 use anyhow::Context;
 use lambda_runtime::tracing;
-use model::document::SaveBomPart;
 use model_owner::Owner;
 use s3_key::build_docx_staging_bucket_document_key;
+use shared_types::document::SaveBomPart;
 
 /// The parts of a DOCX staging bucket key: `{owner}/{document_id}/{document_bom_id}.docx`.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]

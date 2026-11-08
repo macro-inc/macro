@@ -19,7 +19,7 @@ entity_registry_db_utils = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_dcs = { workspace = true }

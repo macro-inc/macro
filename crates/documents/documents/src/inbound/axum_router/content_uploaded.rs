@@ -8,8 +8,8 @@ use axum::{
 use document_id::DocumentId;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService};
-use model::document::FileType;
 use serde::Deserialize;
+use shared_types::document::FileType;
 
 use super::{DocumentRouterState, Params};
 use crate::domain::{models::DocumentError, ports::DocumentContentEventService};

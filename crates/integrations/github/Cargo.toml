@@ -113,7 +113,7 @@ github_pull_requests = { workspace = true, features = [
 ] }
 macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_owner = { workspace = true }
 model_user = { workspace = true }
 models_permissions = { workspace = true }

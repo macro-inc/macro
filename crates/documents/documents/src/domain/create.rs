@@ -12,9 +12,9 @@ pub mod upload;
 
 use anyhow::Context;
 use base64::Engine;
-use model::document::FileType;
 use model_owner::CreationPrincipal;
 use sha2::{Digest, Sha256};
+use shared_types::document::FileType;
 
 use models_permissions::share_permission::LinkShareState;
 

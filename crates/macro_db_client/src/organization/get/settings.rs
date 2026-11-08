@@ -1,4 +1,4 @@
-use model::organization::OrganizationSettings;
+use shared_types::organization::OrganizationSettings;
 
 /// Gets the settings for an organization
 #[tracing::instrument(skip(db))]

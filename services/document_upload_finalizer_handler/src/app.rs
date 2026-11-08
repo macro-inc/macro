@@ -3,8 +3,8 @@ use documents::domain::legacy_office_upgrade::{
 };
 use documents::domain::ports::markdown::MarkdownInitializationPort;
 use documents::domain::upload_finalize::{UploadFinalizeDocumentPort, UploadedDocumentFinalizer};
-use model::document::FileType;
 use s3_key::{DocumentKey, UpgradedOfficeFormat};
+use shared_types::document::FileType;
 
 use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
 

@@ -1,8 +1,8 @@
 //! Fetch all messages for a chat with their attachments.
 
 use chat_message::{ChatMessageContent, Role};
-use model::chat::ChatMessageWithAttachments;
 use model_entity::{Entity, EntityType};
+use shared_types::chat::ChatMessageWithAttachments;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize, Debug)]

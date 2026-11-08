@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::document_storage_service_internal::GetItemIDsResponse;
+use shared_types::document_storage_service_internal::GetItemIDsResponse;
 
 #[derive(serde::Deserialize)]
 pub struct Params {

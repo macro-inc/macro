@@ -14,7 +14,7 @@ use crate::api::{
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 
-use model::response::{ErrorResponse, UserTokensResponse};
+use shared_types::response::{ErrorResponse, UserTokensResponse};
 
 #[cfg(test)]
 mod test;

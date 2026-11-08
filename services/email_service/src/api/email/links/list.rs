@@ -4,8 +4,8 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use models_email::api;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 
 use strum_macros::AsRefStr;

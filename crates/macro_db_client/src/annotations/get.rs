@@ -1,4 +1,4 @@
-use model::annotations::{
+use shared_types::annotations::{
     PdfAnchor, PdfHighlightAnchor, PdfHighlightRect, PdfPlaceableCommentAnchor,
 };
 use sqlx::{Pool, Postgres};

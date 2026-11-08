@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Params {

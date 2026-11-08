@@ -17,11 +17,11 @@ use comms_db_client::messages::create_message::CreateMessageOptions;
 use comms_db_client::messages::create_message_mentions::CreateMessageMentionOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
-use model::document::DocumentMetadata;
 use models_email::email::service;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareCreation;
+use shared_types::document::DocumentMetadata;
 use uuid::Uuid;
 
 /// Everything needed to seed one scenario user.

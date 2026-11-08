@@ -7,9 +7,9 @@ use axum::{
 };
 use email::domain::backfill_jobs::{BackfillJobAccess, BackfillLookupError};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use sqlx::types::Uuid;
 use strum_macros::AsRefStr;
 use thiserror::Error;

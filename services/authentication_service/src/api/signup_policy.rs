@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 const SIGNUP_FORBIDDEN_MESSAGE: &str = "signup is not allowed";
 

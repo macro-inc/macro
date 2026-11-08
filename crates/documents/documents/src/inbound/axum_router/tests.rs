@@ -27,15 +27,15 @@ use macro_authorization::{
     MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use model::{
-    document::{DocumentBasic, DocumentMetadata, FileType, response::DocumentResponseMetadata},
-    sync_service::SyncServiceVersionID,
-};
 use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
 use rootcause::Report;
 use serde_json::{Value, json};
+use shared_types::{
+    document::{DocumentBasic, DocumentMetadata, FileType, response::DocumentResponseMetadata},
+    sync_service::SyncServiceVersionID,
+};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
 use task_dedup::{
@@ -2292,7 +2292,7 @@ async fn missing_email_attachment_is_a_coded_not_found() {
     let body: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
         body["code"],
-        model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
+        shared_types::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
     );
 }
 

@@ -1,6 +1,6 @@
 use utoipa::ToSchema;
 
-use model::{document::DocumentMetadata, response::PresignedUrl};
+use shared_types::{document::DocumentMetadata, response::PresignedUrl};
 
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct CreateBulkDocumentResponse {

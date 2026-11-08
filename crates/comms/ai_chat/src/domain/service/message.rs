@@ -9,9 +9,9 @@ use chat_message::ChatMessageContent;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::{AttachmentType, NewChatMessage};
 use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
+use shared_types::chat::{AttachmentType, NewChatMessage};
 
 use crate::domain::events::{ChatMacroEvent, ChatMessageDeletedMetadata, ChatMessageSentMetadata};
 use crate::domain::models::{ChatErr, ResolvedMessageContent, Result};

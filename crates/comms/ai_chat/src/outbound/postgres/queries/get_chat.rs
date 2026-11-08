@@ -1,7 +1,7 @@
 //! Fetch a chat by ID.
 
-use model::chat::Chat;
 use model_owner::Owner;
+use shared_types::chat::Chat;
 use sqlx::PgPool;
 
 /// Fetch a single chat row by its ID.

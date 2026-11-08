@@ -1,7 +1,7 @@
 //! This module contains db queries to filter out a list of provided items and only return those
 //! matching the criteria
 
-use model::item::ShareableItemType;
+use shared_types::item::ShareableItemType;
 
 use crate::projects::get_project::get_sub_items::bulk_get_all_sub_project_ids;
 

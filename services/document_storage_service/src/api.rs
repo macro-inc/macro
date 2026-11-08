@@ -9,8 +9,8 @@ use axum::response::IntoResponse as _;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
-use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use search_service::SearchHandlerState;
+use shared_types::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
@@ -141,7 +141,7 @@ fn refuse_programs<S: Clone + Send + Sync + 'static>(
                     tracing::warn!("refused GraphQL to a program");
                     return (
                         axum::http::StatusCode::FORBIDDEN,
-                        axum::Json(model::response::ErrorResponse {
+                        axum::Json(shared_types::response::ErrorResponse {
                             message: "GraphQL is not available to programs; use the SDK's workspace and search methods.".into(),
                         }),
                     )

@@ -6,7 +6,7 @@ use axum::{
 };
 use email::domain::message_reads::InternalMessageReadError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

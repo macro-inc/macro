@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use model::user::{ProfilePictures, UserProfilePicture};
+use shared_types::user::{ProfilePictures, UserProfilePicture};
 
 #[tracing::instrument(skip(db))]
 pub async fn update_profile_picture(

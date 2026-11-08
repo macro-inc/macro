@@ -9,8 +9,8 @@ use macro_db_client::user::get_user_name::get_user_name;
 use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
-use model::user::UserName;
+use shared_types::response::ErrorResponse;
+use shared_types::user::UserName;
 
 /// Retrieves the name of a particular user.
 #[utoipa::path(

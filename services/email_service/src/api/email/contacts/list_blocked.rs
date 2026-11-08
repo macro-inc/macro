@@ -3,8 +3,8 @@ use axum::extract::State;
 use axum::response::Response;
 use axum::{Extension, Json};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use models_email::service::link::Link;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 
 /// Response containing list of blocked email addresses.

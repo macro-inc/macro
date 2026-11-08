@@ -1,7 +1,7 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
-use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
+use shared_types::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use sqlx::{Pool, Postgres};
 
 /// Given a list of shareable items, returns the subset that are accessible to the user,

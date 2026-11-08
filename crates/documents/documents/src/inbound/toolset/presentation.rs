@@ -15,10 +15,10 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
-use model::document::FileType;
 use pptx_engine::EditOp;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::document::FileType;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

@@ -7,9 +7,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 use serde::Serialize;
+use shared_types::response::ErrorResponse;
 use stripe::{ParseIdError, StripeError};
 use teams::domain::model::{CustomerError, SeatPrices, SetTeamMemberPlanError};
 use thiserror::Error;

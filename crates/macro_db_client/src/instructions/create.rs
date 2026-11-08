@@ -3,9 +3,9 @@ use crate::{
     instructions::get::get_instructions_document,
 };
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model::document::FileType;
 use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 use models_permissions::share_permission::SharePermissionV2;
+use shared_types::document::FileType;
 use tracing::instrument;
 
 #[derive(Debug, thiserror::Error)]

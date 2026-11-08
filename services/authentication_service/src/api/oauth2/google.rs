@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use calendar_events::domain::models::GoogleScopeSet;
-use model::response::ErrorResponse;
 use reqwest::StatusCode;
+use shared_types::response::ErrorResponse;
 use tower_cookies::Cookies;
 use uuid::Uuid;
 

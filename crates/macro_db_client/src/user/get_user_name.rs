@@ -3,8 +3,8 @@ mod tests;
 
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
-use model::user::UserName;
 use non_empty::NonEmpty;
+use shared_types::user::UserName;
 
 #[tracing::instrument(skip(db))]
 pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Result<UserName> {

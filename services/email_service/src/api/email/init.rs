@@ -11,7 +11,7 @@ use email::domain::mailbox::connection::{
 use email::domain::mailbox::initialization::InitializationError;
 use email_api_client_core::models::EmailApiError;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
