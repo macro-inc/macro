@@ -109,7 +109,7 @@ types are generated from Rust with `cargo run -p lexical_conformance_wasm --exam
 export_host_types -j4` (add `-- --check` for freshness). The decoder rejects truncated,
 overflowing, invalid-UTF8 and trailing data. Namespace/theme/editability and discrete
 scheduling belong to the JS host. The current constructor accepts only the core
-registry; foreign-class and command callbacks, pure indexed reads and the complete shim
+registry; foreign-class hooks, pure indexed reads and the complete shim
 hosting contract remain pending.
 
 The native host tests also execute real JS transforms through the normal model
@@ -117,3 +117,11 @@ fixpoint pipeline. Their scoped current-hook reborrows allow indexed API calls,
 raw fields and live transform registration without an ancestor transaction pointer.
 The tests cover nested editors, function identity, rollback and opaque exception
 identity. This is not yet the full foreign-class or shim scheduling surface.
+
+`listeners.test.ts` drives the development application's opaque command route.
+The Rust model still owns priority ordering, snapshots and propagation stopping;
+unrelated command identities are filtered before JS. Payloads can be cyclic
+objects or browser events and preserve identity. This explicit-update route
+retains the original exception value and leaves caught failures recoverable.
+The future shim must allocate command identities, schedule idle dispatch and
+propagate commands between parent editors. Tier A fixture codecs stay separate.

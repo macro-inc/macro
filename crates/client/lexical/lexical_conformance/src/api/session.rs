@@ -16,6 +16,26 @@ pub struct Session {
 }
 
 impl Session {
+    /// Register an application command callback without publishing pending writes.
+    pub fn register_listener(
+        &mut self,
+        registration: lexical_model::CommandRegistration,
+        callback: std::sync::Arc<dyn lexical_model::ForeignListener>,
+    ) -> lexical_model::ForeignListenerId {
+        self.editor
+            .register_foreign_listener(registration, callback)
+    }
+    /// Remove one application command callback.
+    pub fn unregister_listener(&mut self, id: lexical_model::ForeignListenerId) {
+        self.editor.unregister_foreign_listener(id);
+    }
+    /// Dispatch through the normal model priority pipeline in the pending update.
+    pub fn dispatch_command(
+        &mut self,
+        command: &lexical_model::Command,
+    ) -> Result<lexical_model::Handled> {
+        self.with_update(|_, tx| Ok(tx.dispatch(command)?))
+    }
     /// Add a development transform between model operations, including while suspended.
     pub fn register_transform(
         &mut self,

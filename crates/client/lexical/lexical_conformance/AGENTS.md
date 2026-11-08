@@ -73,3 +73,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 Session runtime transform registration operates on the owned editor even while its
 update is suspended. CallbackContext::node uses the same encoded identity store as
 indexed dispatch; it validates the exact active editor and pending update first.
+
+Session application listeners reuse the model priority pipeline; command dispatch
+requires an explicit pending update. JS identity and opaque values belong to the
+development WASM adapter, not the portable shared API value encoding.

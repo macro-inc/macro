@@ -7,7 +7,8 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms use scoped current-hook reborrows; foreign node classes, commands and read-only API scopes are not wired yet.
+- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners use scoped current-hook reborrows; foreign node classes and read-only API scopes are not wired yet.
+- `src/host_commands.rs`: opaque JS application-command envelope over the model extension pipeline, filtering identities before JS; the future shim supplies identity strings and handles parent-editor propagation.
 - `src/host_callbacks.rs`: single-threaded JS transform ownership, exact-owner scoped reborrows, callback identity dedup and opaque exception transport. Never recover an ancestor transaction pointer or hold a metadata lock over JS.
 - `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
 - `examples/export_host_types.rs`: generate/check the Specta packet declaration with the web formatter.
@@ -83,3 +84,13 @@ properties or use JS throw intrinsics that bypass Rust destructors. Registration
 dirties attached types in the current transaction, or queues that
 work for the next explicit begin_update when idle. Scheduling that update, nested
 editor.update queues and commit listeners still belong to the future shim.
+
+`register_listener` and `dispatch_command` host opaque JS application commands
+through the model's extension-command pipeline. The shim assigns unique identity
+strings to JS command objects; diagnostic command names are not identities.
+Payloads retain JS identity and never pass through JSON or property inspection.
+Only the explicit pending-update, single-editor route is implemented here; the
+shim still owns automatic updates and parent-editor command propagation.
+Builtin native commands and Tier A indexed fixture dispatch keep their existing
+codecs. No production codec carries opaque JS values. Opaque reference transfers
+count four logical bytes; listener results cross as a truthiness boolean.

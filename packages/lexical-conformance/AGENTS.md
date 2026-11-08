@@ -11,6 +11,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/membrane.ts`: attribution, identity, callback tapes and commit capture.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
+- `diff/listeners.test.ts`: real JS command priority snapshots, identity, truthiness, live registration and caught opaque exceptions.
 - `diff/host.test.ts`: real indexed EditorHandle lifecycle, native fields, packet decoding and JS transforms with current-hook reentry, identity and rollback.
 - `diff/host-packet.generated.ts`: Specta declaration; regenerate with the conformance_wasm export_host_types example.
 - `diff/debug.test.ts`: actual optimized export crossings, allocator/free traps and editor-facade lifetimes.

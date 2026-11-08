@@ -38,7 +38,8 @@ pub struct EditorHandle {
     callbacks: CallbackContext,
     owner: Arc<()>,
     errors: super::host_callbacks::Errors,
-    transforms: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_callbacks::Transform>)>>,
+    transforms: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_callbacks::Callback>)>>,
+    listeners: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_commands::Listener>)>>,
     _lifetime: debug::LiveEditor,
 }
 
@@ -133,6 +134,7 @@ impl EditorHandle {
             owner: Arc::new(()),
             errors: super::host_callbacks::Errors::default(),
             transforms: RefCell::default(),
+            listeners: RefCell::default(),
             _lifetime: debug::LiveEditor::new(),
         }))
     }
@@ -210,7 +212,7 @@ impl EditorHandle {
             .find_map(|(_, callback)| callback.matches(&dispatch).then(|| callback.clone()));
         let callback = match existing {
             Some(callback) => callback,
-            None => Arc::new(super::host_callbacks::Transform::new(
+            None => Arc::new(super::host_callbacks::Callback::new(
                 dispatch,
                 self.callbacks.clone(),
                 self.owner.clone(),
@@ -232,7 +234,7 @@ impl EditorHandle {
             .insert(id.get(), (id, callback));
         Ok(debug::returned_handle(id.get()))
     }
-    /// Remove a registered transform; repeated calls are harmless.
+    /// Remove a registered transform or listener; repeated calls are harmless.
     pub fn unregister(&self, id: u32) -> Result<(), JsValue> {
         let registered = self
             .transforms
@@ -251,7 +253,73 @@ impl EditorHandle {
             }
             self.transforms.borrow_mut().remove(&id);
         }
+        let listener = self
+            .listeners
+            .borrow()
+            .get(&id)
+            .map(|(registered, _)| *registered);
+        if let Some(listener) = listener {
+            let available = self.session.borrow().is_some();
+            if available {
+                self.with_session(|session| {
+                    session.unregister_listener(listener);
+                    Ok(())
+                })?;
+            } else {
+                super::host_callbacks::unlisten(&self.owner, listener)?;
+            }
+            self.listeners.borrow_mut().remove(&id);
+        }
         Ok(())
+    }
+    /// Register one JS command identity at a model priority, preserving callback identity.
+    pub fn register_listener(
+        &self,
+        command: &str,
+        priority: u32,
+        dispatch: js_sys::Function,
+    ) -> Result<u32, JsValue> {
+        let registration = super::host_commands::registration(priority)?;
+        let existing = self.listeners.borrow().values().find_map(|(_, listener)| {
+            listener
+                .matches(command, &dispatch)
+                .then(|| listener.clone())
+        });
+        let listener = match existing {
+            Some(listener) => listener,
+            None => Arc::new(super::host_commands::Listener::new(
+                command,
+                Arc::new(super::host_callbacks::Callback::new(
+                    dispatch,
+                    self.callbacks.clone(),
+                    self.owner.clone(),
+                    self.errors.clone(),
+                )?),
+            )),
+        };
+        let available = self.session.borrow().is_some();
+        let id = if available {
+            self.with_session(|session| {
+                Ok(session.register_listener(registration, listener.clone()))
+            })?
+        } else {
+            super::host_callbacks::listen(&self.owner, registration, listener.clone())?
+        };
+        self.listeners.borrow_mut().insert(id.get(), (id, listener));
+        Ok(debug::returned_handle(id.get()))
+    }
+    /// Dispatch an opaque JS payload through model listeners in the current update.
+    pub fn dispatch_command(&self, command: &str, payload: JsValue) -> Result<bool, JsValue> {
+        let command = super::host_commands::command(command, payload);
+        let available = self.session.borrow().is_some();
+        let handled = if available {
+            self.with_callback_session(|session| session.dispatch_command(&command))?
+        } else {
+            super::host_callbacks::command(&self.owner, &command)?
+        };
+        let result = handled == Handled::Yes;
+        debug::json_payload(&Value::Bool(result));
+        Ok(result)
     }
     /// Release state-owned handles after JS state collection; versions are decimal strings.
     pub fn release_version(&self, version: &str) -> Result<(), JsError> {
