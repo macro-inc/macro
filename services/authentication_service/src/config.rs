@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use crate::account_link_state::AccountLinkStateKey;
 use crate::service::signup_policy::SignupPolicy;
 use anyhow::Context;
-use database_env_vars::{DatabaseUrl, RedisUri};
+use datastore_env_vars::{DatabaseUrl, RedisUri};
 use gtm_invite::domain::models::{GtmInviteConfig, PromoCode};
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;

@@ -13,7 +13,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | --- | --- |
 | [`agent_correlation`](agent_correlation/AGENTS.md) | Attribution of work to the code-mode invocation (agent session) and/or the routine run that caused it. |
 | `broadcast` |  |
-| `database_env_vars` |  |
+| `datastore_env_vars` |  |
 | `decode_jwt` |  |
 | `ensure_exists` |  |
 | [`feature_flags`](feature_flags/AGENTS.md) | Shared infrastructure for cross-feature rollout gating: async flag loading for the authenticated Macro user, where one load returns a stable `FlagSnapshot`, read … |

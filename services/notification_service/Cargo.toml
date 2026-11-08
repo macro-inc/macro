@@ -31,7 +31,7 @@ aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 email_formatting = { workspace = true }
 hmac = { workspace = true }
 http-body-util = { workspace = true }

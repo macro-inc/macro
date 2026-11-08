@@ -11,7 +11,7 @@ channel_sender = { workspace = true }
 channels = { workspace = true }
 channels_outbound = { workspace = true }
 chrono = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 entity_access = { workspace = true }
 entity_access_outbound = { workspace = true }
 import = { workspace = true }

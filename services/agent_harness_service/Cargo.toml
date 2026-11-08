@@ -79,7 +79,7 @@ contacts = { workspace = true, default-features = true }
 crm = { workspace = true, default-features = true, features = ["lookup", "ports"] }
 cursor_api_key = { workspace = true }
 cursor_cloud_agents = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 databases = { workspace = true, features = ["ai_tools", "gateway", "postgres"] }
 database_sql_runner = { workspace = true, features = ["ai_tools"] }
 document_storage_service_client = { workspace = true }

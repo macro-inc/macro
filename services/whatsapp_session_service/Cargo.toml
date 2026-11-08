@@ -19,7 +19,7 @@ aws-sdk-kms = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 doppler-config = { workspace = true }
 macro_aws_config = { workspace = true }
 macro_config = { workspace = true }

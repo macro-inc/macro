@@ -202,7 +202,7 @@ uuid = { workspace = true }
 zeroize = { workspace = true }
 doppler-config = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 agent_harness_service_url = { workspace = true }
 app_service_url = { workspace = true }
 connection_gateway_url = { workspace = true }

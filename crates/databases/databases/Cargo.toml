@@ -24,7 +24,7 @@ ai_tools = [
 # The one-off backfill of formula columns' stored cells.
 backfill_binary = [
   "dep:clap",
-  "dep:database_env_vars",
+  "dep:datastore_env_vars",
   "dep:macro_entrypoint",
   "postgres",
   "tokio/macros",
@@ -71,7 +71,7 @@ clap = { workspace = true, optional = true }
 bot_id = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 connection_gateway_client = { workspace = true, optional = true }
-database_env_vars = { workspace = true, optional = true }
+datastore_env_vars = { workspace = true, optional = true }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 entity_access_db_utils = { workspace = true, optional = true }
 entity_mutation = { workspace = true, optional = true }
