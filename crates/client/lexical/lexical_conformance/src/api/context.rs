@@ -83,6 +83,16 @@ impl Context {
                 .bindings
                 .pin_state(self.replay.committed_version, tx.committed_state().clone())?;
         }
+        // Register the committed object before taking the rollback backup. A
+        // first capture during this update still belongs to the committed state.
+        if let Some(slot) = tx.detach_previous_foreign_selection()? {
+            let value = self.replay.selection_at(tx, slot)?;
+            self.replay.selections.save_value(
+                integer(&value["$selection"])? as usize,
+                tx.selection_at(slot)?
+                    .map(Selection::snapshot_for_foreign_read),
+            )?;
+        }
         self.previous_selections = self.replay.selections.values()?;
         self.replay.record_owner =
             Some((self.replay.committed_version, tx.committed_state().clone()));
@@ -324,6 +334,27 @@ impl Context {
             let owner = match raw_tag {
                 "$node" => integer(&value["ver"])?,
                 "$snapshot" => self.replay.committed_version,
+                "$selection" | "$point" => {
+                    let id = if raw_tag == "$selection" {
+                        integer(&value[raw_tag])?
+                    } else {
+                        integer(&value[raw_tag]["selection"])?
+                    } as usize;
+                    let token = self.replay.selections.identity(id)?;
+                    let committed = self.replay.bindings.state(&self.replay.committed_version)?;
+                    let is_committed = match (token, committed) {
+                        (Some(token), Some(state)) => state
+                            .view()
+                            .snapshot_for_foreign_read()?
+                            .contains_selection_identity(&token),
+                        _ => false,
+                    };
+                    if is_committed {
+                        self.replay.committed_version
+                    } else {
+                        self.replay.version
+                    }
+                }
                 _ => self.replay.version,
             };
             let (id, fresh) = self

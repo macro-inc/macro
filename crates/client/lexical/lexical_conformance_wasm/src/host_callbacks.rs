@@ -472,6 +472,29 @@ impl Callback {
             .returned_node(tx, &result)
             .map_err(|error| Error::invariant(error.to_string()))
     }
+    pub(super) fn selection_transform(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+    ) -> Result<(), Error> {
+        let hook = lexical_model::ForeignHook::SelectionTransform;
+        let original = self
+            .context
+            .original_arguments(tx, key, hook)
+            .map_err(|error| Error::invariant(error.to_string()))?;
+        let args = match original {
+            Some(args) => args,
+            None => {
+                let previous = match tx.detach_previous_foreign_selection()? {
+                    Some(slot) => self.selection(tx, slot)?,
+                    None => Value::Null,
+                };
+                let next = self.selection(tx, lexical_model::SelectionSlot::Active)?;
+                vec![previous, next]
+            }
+        };
+        self.node_mutation(tx, key, hook, args)
+    }
     fn node_message(
         &self,
         tx: &Transaction<'_>,

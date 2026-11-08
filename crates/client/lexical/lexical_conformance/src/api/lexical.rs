@@ -369,6 +369,10 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$getRoot" => r.node(view, NodeKey::ROOT),
         "lexical.$getSelection" => r.selection(tx),
+        "lexical.$getPreviousSelection" => match tx.detach_previous_foreign_selection()? {
+            Some(slot) => r.selection_at(tx, slot),
+            None => Ok(Value::Null),
+        },
         "lexical.$createRangeSelection" | "lexical.$createNodeSelection" => {
             let selection = if short == "$createRangeSelection" {
                 Selection::Range(RangeSelection::at_root())

@@ -55,3 +55,5 @@ Node-returning overrides (`replace`, `insertAfter`, `insertBefore`, `createParen
 Selection-bearing `insertNewAfter` and `collapseAtStart` hooks retain active/detached slot identities. Static `transform` callbacks run in the dirty loop. Optional node results accept null; undefined is invalid. The JS facade still needs to invoke a class transform factory and its returned node function.
 
 The internal `$parseSerializedNode` entry uses the model import algorithm. Static `importJSON` dispatches with a null node receiver and validates the returned captured handle; child imports and virtual append run after the factory. Native-super import construction and the full static-class facade remain unfinished.
+
+Mutable `selectionTransform` hooks receive the existing previous committed and current active selection handles; the pipeline follows focus movement made by the anchor hook. `$getPreviousSelection` and its point handles retain committed ownership through later update rollback. The full class facade and ordinary selection freezing remain unfinished.

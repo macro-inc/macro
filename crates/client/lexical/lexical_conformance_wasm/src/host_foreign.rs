@@ -38,7 +38,8 @@ impl ForeignNode {
             | ForeignHook::InsertNewAfter.bit()
             | ForeignHook::CollapseAtStart.bit()
             | ForeignHook::StaticTransform.bit()
-            | ForeignHook::Import.bit();
+            | ForeignHook::Import.bit()
+            | ForeignHook::SelectionTransform.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -131,6 +132,20 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn selection_transform(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+    ) -> Override<Result<(), Error>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::SelectionTransform.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => callback.selection_transform(tx, key),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
     fn import(
         &self,
         tx: &mut Transaction<'_>,

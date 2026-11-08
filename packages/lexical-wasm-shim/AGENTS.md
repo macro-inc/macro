@@ -61,6 +61,8 @@ Use installForeign/setForeignMask for the wired mutable text and structural hook
 
 Structural hosting covers append, splice, remove, setIndent, updateFromJSON and resetOnCopyNodeFrom. Preserve variadic append versus nested splice arrays, and encode model-triggered node arguments with the same callback identity store. Node-returning replace/insertAfter/insertBefore/createParentElementNode hooks validate results through the shared captured identity store; unit hooks ignore arbitrary returns. Pure hooks still require their own adapters.
 
-Mutable insertNewAfter/collapseAtStart callbacks receive the existing selection slot handle; static transform callbacks run through the same exact transaction frame. Optional node returns accept null and reject undefined; collapse results use JS truthiness. Full selection-transform, pure and lifecycle hosting remain unfinished.
+Mutable insertNewAfter/collapseAtStart callbacks receive the existing selection slot handle; static transform callbacks run through the same exact transaction frame. Optional node returns accept null and reject undefined; collapse results use JS truthiness. Full pure and clone hosting and class construction remain unfinished.
 
 Use hosting-import.test.ts for the actual WASM static importJSON bridge: null receiver, serialized argument, recursive child import/append, inherited factory fallback and invalid/opaque result recovery. This does not replace full class construction or explicit native-super import acceptance.
+
+Use hosting-selection-transform.test.ts for previous/current identity, anchor-to-focus movement, native-super and opaque recovery over the actual WASM artifact. Previous selection/point handles first captured in a later aborted update belong to their committed version.

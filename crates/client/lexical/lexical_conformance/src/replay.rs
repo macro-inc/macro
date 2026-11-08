@@ -500,14 +500,16 @@ impl Replayer {
                     Ok(Some(SelectionSlot::Active))
                 } else {
                     match s {
-                        Some(value) => Ok(Some(
-                            tx.detach_foreign_selection(
-                                value,
-                                self.selections
-                                    .identity(id)?
-                                    .ok_or_else(|| fail("selection identity"))?,
-                            ),
-                        )),
+                        Some(value) => {
+                            let identity = self
+                                .selections
+                                .identity(id)?
+                                .ok_or_else(|| fail("selection identity"))?;
+                            Ok(Some(match tx.foreign_selection_slot(&identity) {
+                                Some(slot) => slot,
+                                None => tx.detach_foreign_selection(value, identity),
+                            }))
+                        }
                         None => Ok(None),
                     }
                 }
