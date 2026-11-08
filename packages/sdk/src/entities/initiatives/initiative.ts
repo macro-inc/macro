@@ -42,6 +42,9 @@ export interface InitiativeOptions {
 
 /** A group of tasks and members working toward an outcome. */
 export class Initiative extends MacroEntity<InitiativeDetail> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'initiative';
+
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'initiative', this);
 
