@@ -13,6 +13,7 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::{BTreeMap, BTreeSet};
 use sync_server_sim::transcript::ServerInput;
 
+pub mod external;
 mod inputs;
 mod outputs;
 mod router;
@@ -28,6 +29,7 @@ pub struct Sim {
     servers: BTreeMap<DocIx, SimServer>,
     profiles: BTreeMap<ProfileName, SimStorage>,
     clients: BTreeMap<ClientName, SimClient>,
+    external: BTreeMap<ClientName, external::ExternalPeer>,
     routers: BTreeMap<ProfileName, router::Host>,
     events: Vec<Event>,
     server_ports: Vec<ServerPort>,
@@ -55,6 +57,7 @@ impl Sim {
             servers: BTreeMap::new(),
             profiles: BTreeMap::new(),
             clients: BTreeMap::new(),
+            external: BTreeMap::new(),
             routers: BTreeMap::new(),
             events: Vec::new(),
             server_ports: Vec::new(),
@@ -149,6 +152,7 @@ impl Sim {
             trace_hash,
             stats: self.stats,
             per_step_failures: self.failures,
+            external_clients: self.external.keys().cloned().collect(),
             pending_adapters: vec![
                 "document_session / lexical_model / lexical_loro editor projection and undo".into(),
                 "macro_document_model comment-only gate and lexical-service parity".into(),

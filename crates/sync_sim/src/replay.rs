@@ -8,6 +8,11 @@ impl Outcome {
     }
     /// Re-run and compare observations, raw server port bytes and both final states.
     pub fn check_replay(&self) -> Result<(), Failure> {
+        if !self.external_clients.is_empty() {
+            return Err(self.replay_failure(
+                "external peers require the caller-owned command/report transcript",
+            ));
+        }
         self.compare_replay(&self.replay())
     }
     /// Seed, complete configuration and debug script for a failed run.
