@@ -255,12 +255,12 @@ pub fn insert_table_column_at_node(
     }
     if let Some(mut widths) = tx
         .get::<TableNode>(table)
-        .and_then(|t| t.col_widths.clone())
+        .and_then(|t| t.col_widths.as_ref().cloned())
     {
         let index = boundary.max(0) as usize;
         let value = widths.get(index).copied().flatten();
         widths.insert(index.min(widths.len()), value);
-        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths);
+        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths).into();
     }
     Ok(first)
 }
@@ -431,12 +431,12 @@ pub fn move_table_column(
     }
     if let Some(mut widths) = tx
         .get::<TableNode>(table)
-        .and_then(|t| t.col_widths.clone())
+        .and_then(|t| t.col_widths.as_ref().cloned())
         && widths.len() == columns as usize
     {
         let width = widths.remove(origin as usize);
         widths.insert(target as usize, width);
-        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths);
+        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths).into();
     }
     Ok(())
 }

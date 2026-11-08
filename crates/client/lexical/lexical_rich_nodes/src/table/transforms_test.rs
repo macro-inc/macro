@@ -11,7 +11,7 @@ fn upstream_empty_widths_are_removed() -> Result<()> {
     .expect("registry");
     let (table, _) = editor.update(|tx| {
         let table = create_table_node_with_dimensions(tx, 2, 2, IncludeHeaders::All(false))?;
-        tx.get_mut::<TableNode>(table)?.col_widths = Some(vec![]);
+        tx.get_mut::<TableNode>(table)?.col_widths = Some(vec![]).into();
         tx.append(NodeKey::ROOT, &[table.key()])?;
         Ok(table)
     })?;
@@ -21,7 +21,9 @@ fn upstream_empty_widths_are_removed() -> Result<()> {
             .view()
             .get::<TableNode>(table)
             .expect("table")
-            .col_widths,
+            .col_widths
+            .as_ref()
+            .cloned(),
         None
     );
     Ok(())
@@ -38,7 +40,7 @@ fn upstream_short_widths_repeat_the_last_value() -> Result<()> {
     let (table, _) = editor.update(|tx| {
         let table = create_table_node_with_dimensions(tx, 2, 3, IncludeHeaders::All(false))?;
         tx.get_mut::<TableNode>(table)?.col_widths =
-            Some(vec![Some(JsNumber(10.0)), Some(JsNumber(20.0))]);
+            Some(vec![Some(JsNumber(10.0)), Some(JsNumber(20.0))]).into();
         tx.append(NodeKey::ROOT, &[table.key()])?;
         Ok(table)
     })?;
@@ -48,7 +50,9 @@ fn upstream_short_widths_repeat_the_last_value() -> Result<()> {
             .view()
             .get::<TableNode>(table)
             .expect("table")
-            .col_widths,
+            .col_widths
+            .as_ref()
+            .cloned(),
         Some(vec![
             Some(JsNumber(10.0)),
             Some(JsNumber(20.0)),
@@ -72,7 +76,8 @@ fn upstream_excess_widths_are_truncated() -> Result<()> {
             Some(JsNumber(10.0)),
             Some(JsNumber(20.0)),
             Some(JsNumber(30.0)),
-        ]);
+        ])
+        .into();
         tx.append(NodeKey::ROOT, &[table.key()])?;
         Ok(table)
     })?;
@@ -82,7 +87,9 @@ fn upstream_excess_widths_are_truncated() -> Result<()> {
             .view()
             .get::<TableNode>(table)
             .expect("table")
-            .col_widths,
+            .col_widths
+            .as_ref()
+            .cloned(),
         Some(vec![Some(JsNumber(10.0)), Some(JsNumber(20.0))])
     );
     Ok(())

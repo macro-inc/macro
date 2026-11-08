@@ -1,5 +1,35 @@
 use super::*;
 
+// LexicalTableNode.updateFromJSON/exportJSON preserve null, but omit undefined.
+#[test]
+fn table_column_widths_distinguish_missing_null_empty_and_values() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<TableNode>()
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    for (input, expected) in [
+        (serde_json::json!({"type":"table"}), serde_json::json!({})),
+        (
+            serde_json::json!({"type":"table","colWidths":null}),
+            serde_json::json!({"colWidths":null}),
+        ),
+        (
+            serde_json::json!({"type":"table","colWidths":[]}),
+            serde_json::json!({"colWidths":[]}),
+        ),
+        (
+            serde_json::json!({"type":"table","colWidths":[120,92.5,null]}),
+            serde_json::json!({"colWidths":[120,92.5,null]}),
+        ),
+    ] {
+        let table = tx.import_node(input.as_object().expect("table"))?;
+        let exported = tx.view().export_json(table)?;
+        assert_eq!(exported.get("colWidths"), expected.get("colWidths"));
+    }
+    Ok(())
+}
+
 // LexicalTableCellNode.test.ts: creation, header flags and serialization.
 #[test]
 fn cell_headers_use_masking_and_upstream_arithmetic_toggle() {
