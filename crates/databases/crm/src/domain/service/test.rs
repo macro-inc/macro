@@ -160,7 +160,7 @@ impl CompaniesRepository for StubRepo {
     async fn activity_property_edges(
         &self,
         scope: CrmContactListScope<'_>,
-        _entity_types: &[models_properties::EntityType],
+        _entity_types: &[properties_types::EntityType],
     ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
         self.resolve_activity(scope).await.map(|_| Vec::new())
     }
@@ -885,7 +885,7 @@ async fn association_uses_the_viewer_scope_and_reports_invisible_records() {
 
 #[tokio::test]
 async fn activity_edges_use_the_scope_resolve_association_uses() {
-    use models_properties::EntityType;
+    use properties_types::EntityType;
     let found = service();
     let types = [EntityType::Task];
     found

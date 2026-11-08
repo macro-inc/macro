@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn entries_list_referencing_rows_from_visible_live_pipelines(pool: PgPool) {
     use databases::domain::storage::DatabaseStorageService;
-    use models_properties::service::property_value::PropertyValue;
+    use properties_types::service::property_value::PropertyValue;
     let (s, db, a, team, company) = fixture(&pool).await;
     // Source ids are cached per user across this binary's parallel tests, so
     // a teammate shared with other tests could see another test's teams.

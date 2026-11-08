@@ -1,4 +1,3 @@
-use models_properties::api;
 use properties_inbound::axum_router::{
     definitions::{ListPropertiesQuery, PropertyDefinitionResponse},
     entities::{
@@ -13,6 +12,7 @@ use properties_inbound::axum_router::{
         TagScope, TagSetResponse,
     },
 };
+use properties_types::api;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -68,15 +68,15 @@ use utoipa::OpenApi;
             BulkEntityOptionUpdateResult,
             BulkEntityOptionUpdateStatus,
             api::SetPropertyValue,
-            models_properties::EntityReference,
+            properties_types::EntityReference,
             api::AddPropertyOptionRequest,
             api::AddStringOptionRequest,
             api::AddNumberOptionRequest,
             api::UpdatePropertyOptionRequest,
             api::PropertyDefinitionDetailResponse,
             api::PropertyOptionResponse,
-            models_properties::EntityType,
-            models_properties::DataType,
+            properties_types::EntityType,
+            properties_types::DataType,
             api::EntityPropertyWithDefinitionResponse,
             api::PropertyValue,
             TagScope,

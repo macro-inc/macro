@@ -80,7 +80,7 @@ fn describing_an_entity_column_preserves_the_actual_entity_kind() {
     let mut database = detail(AccessLevel::Owner);
     let definition = &mut database.tables[0].columns[0].definition.definition;
     definition.data_type = DataType::Entity;
-    definition.specific_entity_type = Some(models_properties::shared::EntityType::User);
+    definition.specific_entity_type = Some(properties_types::shared::EntityType::User);
     let json = serde_json::to_value(ToolDatabaseSchema::from(database)).unwrap();
     assert_eq!(
         json["tables"][0]["columns"][0]["specificEntityType"],

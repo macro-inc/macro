@@ -2,7 +2,7 @@
 
 use super::models::{DatabaseError, DatabaseId, PropertyDefinitionId, Table, Viewer};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

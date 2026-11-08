@@ -13,12 +13,12 @@ use database_sql_engine::catalog::Catalog;
 use database_sql_engine::fold::Bin;
 use database_sql_engine::run::{OpsSink, Outcome};
 use databases_types::{DatabaseId, DatabaseOp, OpResult, OptionId, RowId, TableId};
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::shared::{DataType, EntityReference, PropertyOwner};
 use models_soup::database_row::SoupDatabaseRow;
 use models_soup::properties::SoupProperty;
 use pagination_types::{Base64Str, Cursor, CursorVal, Paginated};
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::shared::{DataType, EntityReference, PropertyOwner};
 use serde::Deserialize;
 use soup::domain::models::grouping::ItemGroupingInfo;
 use soup::domain::models::{EnrichedSoupItem, IntoSoupReqAst, SoupErr};
@@ -124,7 +124,7 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                         Cell::Bool(checked) => PropertyValue::Bool(*checked),
                         Cell::Date(date) => PropertyValue::Date(*date),
                         Cell::DateRange(range) => PropertyValue::DateRange(
-                            models_properties::shared::DateRange::new(range.start, range.end)
+                            properties_types::shared::DateRange::new(range.start, range.end)
                                 .unwrap(),
                         ),
                         Cell::Options(ids) => PropertyValue::SelectOption(
@@ -134,7 +134,7 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                             ids.iter()
                                 .map(|id| EntityReference {
                                     entity_id: id.clone(),
-                                    entity_type: models_properties::EntityType::DatabaseRow,
+                                    entity_type: properties_types::EntityType::DatabaseRow,
                                     specific_message_id: None,
                                 })
                                 .collect(),

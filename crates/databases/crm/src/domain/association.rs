@@ -49,7 +49,7 @@ impl CrmRecordAssociation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmActivityEdge {
     /// The kind of item holding the property.
-    pub entity_type: models_properties::EntityType,
+    pub entity_type: properties_types::EntityType,
     /// The item's id, as stored on the property row.
     pub entity_id: String,
 }

@@ -1,6 +1,6 @@
 //! Property edges for CRM associated-item queries.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

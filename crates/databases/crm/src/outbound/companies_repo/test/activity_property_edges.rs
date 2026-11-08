@@ -6,7 +6,7 @@ use crate::domain::{
 };
 use crate::outbound::companies_repo::CompaniesRepositoryImpl;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_properties::EntityType;
+use properties_types::EntityType;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use system_properties::SystemPropertyKey;

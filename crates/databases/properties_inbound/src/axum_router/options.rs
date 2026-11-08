@@ -8,8 +8,8 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use models_properties::api::{AddPropertyOptionRequest, UpdatePropertyOptionRequest};
-use models_properties::service::property_option::PropertyOption;
+use properties_types::api::{AddPropertyOptionRequest, UpdatePropertyOptionRequest};
+use properties_types::service::property_option::PropertyOption;
 use thiserror::Error;
 use uuid::Uuid;
 

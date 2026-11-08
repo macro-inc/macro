@@ -37,7 +37,7 @@ macro_authorization = { workspace = true, features = [
 ], optional = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 properties = { workspace = true, features = ["ports"] }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

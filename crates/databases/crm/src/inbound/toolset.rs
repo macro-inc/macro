@@ -28,11 +28,11 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
-use models_properties::DataType;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
 use properties::PropertiesService;
+use properties_types::DataType;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
 use schemars::JsonSchema;
 use serde::Serialize;
 use system_properties::{StageOption, SystemPropertyKey};

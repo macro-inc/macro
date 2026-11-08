@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use database_sql_engine::catalog::{Column, ColumnKind, Table, TableSource};
 use databases_types::{ColumnId, DatabaseId, Formula, Operator, TableId};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::Derivation;

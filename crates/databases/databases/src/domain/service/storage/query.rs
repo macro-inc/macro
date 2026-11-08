@@ -9,7 +9,7 @@ use databases_types::{
     DateRange, OptionId, RowId, ViewId,
     views::{DatabaseView, ViewLayout},
 };
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use std::collections::HashMap;
 
 pub(super) fn row(row: &RowRef, cells: &HashMap<uuid::Uuid, PropertyValue>) -> Row {

@@ -4,8 +4,8 @@ use databases::domain::{
     models::{ColumnId, ColumnProtection},
     provisioning::ProvisionedColumn,
 };
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::{DataType, EntityType as PropertyEntityType};
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::{DataType, EntityType as PropertyEntityType};
 
 use super::PipelineRecordType;
 

@@ -41,12 +41,12 @@ use github_pull_requests::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
-use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
 };
 use permissions_types::share_permission::access_level::AccessLevel;
+use properties_types::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use shared_types::document::{DocumentBasic, DocumentMetadata};
 
 use super::*;

@@ -3,8 +3,8 @@ use document_sub_type::DocumentSubType;
 use email::domain::models::ParsedLabel;
 use messages::domain::models::{BotSenderProfile, MessageParent};
 use model_owner::Owner;
-use models_properties::{DataType, PropertyOwner};
 use properties::PropertyOptionInfo;
+use properties_types::{DataType, PropertyOwner};
 
 use super::*;
 

@@ -12,7 +12,7 @@ entity_access = { workspace = true }
 graphql_common = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 properties = { workspace = true, features = [
   "ports",
 ] }

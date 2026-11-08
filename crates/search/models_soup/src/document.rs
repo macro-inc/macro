@@ -1,7 +1,7 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use model_owner::Owner;
-use models_properties::EntityType;
+use properties_types::EntityType;
 use uuid::Uuid;
 
 /// Sub type of a document with associated properties encoded in each variant.

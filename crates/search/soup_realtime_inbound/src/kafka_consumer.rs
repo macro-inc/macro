@@ -29,10 +29,10 @@ use macro_event_broker::{
 };
 use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
-use models_properties::EntityType as PropertyEntityType;
-use models_properties::service::property_value::PropertyValue;
 use project::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
+use properties_types::EntityType as PropertyEntityType;
+use properties_types::service::property_value::PropertyValue;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};

@@ -6,10 +6,10 @@ use chrono::{TimeZone, Utc};
 use databases::domain::models::{
     Column, ColumnDetail, Database, DatabaseDetail, Table, TableDetail, TableVersion,
 };
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::shared::PropertyOwner;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::shared::PropertyOwner;
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -20,8 +20,8 @@ use databases_types::{
     OptionRef, RowChanges, RowId, RowsChange, RowsResult, TableId,
 };
 use entity_access::domain::models::AccessLevel;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::DataType;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::DataType;
 use uuid::Uuid;
 
 use super::*;

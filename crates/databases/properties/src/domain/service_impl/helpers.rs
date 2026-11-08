@@ -1,9 +1,9 @@
 //! Helper functions for property service implementation.
 
 use entity_access::domain::models::EntityAccessAuth;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityType, PropertyOwner};
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityType, PropertyOwner};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 

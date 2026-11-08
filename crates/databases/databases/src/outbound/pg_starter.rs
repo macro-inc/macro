@@ -5,14 +5,14 @@
 mod test;
 use databases_types::position::{PositionError, keys_between};
 use databases_types::{ColumnId, DatabaseId, OptionId, RowId};
-use models_properties::DataType;
-use models_properties::EntityReference;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
 use properties::domain::database_cell_writer::DatabaseCellWriter;
 use properties::domain::database_definition_writer::{
     DatabaseDefinitionWriter, NewDatabaseDefinition,
 };
+use properties_types::DataType;
+use properties_types::EntityReference;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::journal::{CellImage, JournalActor, cell_value, created_table};
@@ -212,7 +212,7 @@ where
             .await?;
             let row = EntityReference {
                 entity_id: row_id.to_string(),
-                entity_type: models_properties::EntityType::DatabaseRow,
+                entity_type: properties_types::EntityType::DatabaseRow,
                 specific_message_id: None,
             };
             for (column_id, definition_id, value) in [

@@ -64,7 +64,7 @@ logically-combinable query form.
   deserialization rejects anything else. `Attachment` kinds serialize as
   `pdf`, `image`, `document`.
 - Represent DATE presence as `DateRange` with both bounds open and absence as its negation; `start` is inclusive and `end` exclusive.
-- Export filter intervals as `PropertyDateFilterRange` in schemas to distinguish half-open optional bounds from stored, inclusive `models_properties::DateRange` values.
+- Export filter intervals as `PropertyDateFilterRange` in schemas to distinguish half-open optional bounds from stored, inclusive `properties_types::DateRange` values.
 - Keep DATE evaluation in Soup/OpenSearch; call, email, and frecency treat date literals as false and preserve ordinary boolean negation.
 
 ## Related

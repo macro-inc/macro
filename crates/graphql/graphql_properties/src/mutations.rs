@@ -3,11 +3,11 @@ use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use graphql_common::{GraphqlCacheDeletion, GraphqlPropertyEntityType, parse_id};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::api::requests::SetPropertyValue;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::shared::{DateRange, EntityReference};
 use properties::PropertiesService;
 use properties::domain::model::EntityPropertyOptionUpdate;
+use properties_types::api::requests::SetPropertyValue;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::shared::{DateRange, EntityReference};
 use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
@@ -632,28 +632,28 @@ mod tests {
             write: Arc::default(),
             options_write: Arc::default(),
             property: EntityPropertyWithDefinition {
-                property: models_properties::service::entity_property::EntityProperty {
+                property: properties_types::service::entity_property::EntityProperty {
                     id: property_assignment_id,
                     entity_id: "task-1".to_owned(),
-                    entity_type: models_properties::EntityType::Task,
+                    entity_type: properties_types::EntityType::Task,
                     property_definition_id,
                     created_at: now,
                     updated_at: now,
                 },
-                definition: models_properties::service::property_definition::PropertyDefinition {
+                definition: properties_types::service::property_definition::PropertyDefinition {
                     id: property_definition_id,
-                    owner: models_properties::PropertyOwner::System,
+                    owner: properties_types::PropertyOwner::System,
                     display_name: "Status".to_owned(),
-                    data_type: models_properties::DataType::SelectString,
+                    data_type: properties_types::DataType::SelectString,
                     is_multi_select: false,
-                    specific_entity_type: Some(models_properties::EntityType::Task),
+                    specific_entity_type: Some(properties_types::EntityType::Task),
                     created_at: now,
                     updated_at: now,
                     is_system: true,
                     is_metadata: false,
                 },
                 value: Some(
-                    models_properties::service::property_value::PropertyValue::SelectOption(vec![
+                    properties_types::service::property_value::PropertyValue::SelectOption(vec![
                         option_id,
                     ]),
                 ),
@@ -737,21 +737,21 @@ mod tests {
     ) -> EntityPropertyWithDefinition {
         let now = chrono::Utc::now();
         EntityPropertyWithDefinition {
-            property: models_properties::service::entity_property::EntityProperty {
+            property: properties_types::service::entity_property::EntityProperty {
                 id: property_assignment_id,
                 entity_id: "doc-1".to_owned(),
-                entity_type: models_properties::EntityType::Document,
+                entity_type: properties_types::EntityType::Document,
                 property_definition_id,
                 created_at: now,
                 updated_at: now,
             },
-            definition: models_properties::service::property_definition::PropertyDefinition {
+            definition: properties_types::service::property_definition::PropertyDefinition {
                 id: property_definition_id,
-                owner: models_properties::PropertyOwner::User {
+                owner: properties_types::PropertyOwner::User {
                     user_id: "macro|austin@macro.com".to_owned(),
                 },
                 display_name: "Tags".to_owned(),
-                data_type: models_properties::DataType::Tag,
+                data_type: properties_types::DataType::Tag,
                 is_multi_select: true,
                 specific_entity_type: None,
                 created_at: now,
@@ -760,7 +760,7 @@ mod tests {
                 is_metadata: false,
             },
             value: Some(
-                models_properties::service::property_value::PropertyValue::SelectOption(option_ids),
+                properties_types::service::property_value::PropertyValue::SelectOption(option_ids),
             ),
             options: None,
         }

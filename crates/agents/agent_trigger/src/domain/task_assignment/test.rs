@@ -3,8 +3,8 @@ use crate::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use chrono::Utc;
 use macro_event_broker::{Event, MacroEvent, MacroEventCollection};
 use messages::domain::ports::MessageError;
-use models_properties::EntityReference;
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
+use properties_types::EntityReference;
 
 fn brief() -> TaskBrief {
     TaskBrief {

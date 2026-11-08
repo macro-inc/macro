@@ -32,10 +32,10 @@ use messages::domain::{
     ports::MessageError,
     service::MessageView,
 };
-use models_properties::service::{
+use properties::{EntityPropertyInfo, PropertiesService};
+use properties_types::service::{
     property_option::PropertyOptionValue, property_value::PropertyValue,
 };
-use properties::{EntityPropertyInfo, PropertiesService};
 use rootcause::{Report, compat::IntoRootcause};
 use serde_json::{Map, Value, json};
 use shared_types::document::DocumentBasic;

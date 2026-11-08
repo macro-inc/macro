@@ -1,5 +1,5 @@
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 

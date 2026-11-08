@@ -4,13 +4,13 @@
 #[cfg(test)]
 mod test;
 
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::{DataType, EntityType};
 use properties::domain::database_definition_writer::{
     DatabaseDefinitionWriter, NewDatabaseDefinition,
 };
 use properties::domain::ports::PropertiesRepo;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::{DataType, EntityType};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{DatabaseId, OptionId, PropertyDefinitionId, Viewer};

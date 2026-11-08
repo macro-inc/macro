@@ -17,21 +17,21 @@ use entity_access::domain::models::{
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::DataType;
-use models_properties::api::requests::SetPropertyValue;
-use models_properties::api::{
+use properties_types::DataType;
+use properties_types::api::requests::SetPropertyValue;
+use properties_types::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, CreatePropertyScope,
     PropertyDataType, UpdatePropertyOptionRequest, is_valid_hex_color,
 };
-use models_properties::convert_set_property_value_to_property_value;
-use models_properties::service::entity_property::EntityProperty;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
+use properties_types::convert_set_property_value_to_property_value;
+use properties_types::service::entity_property::EntityProperty;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 

@@ -3,7 +3,7 @@
 //! reads name one table.
 
 use databases_types::{CellValue, CellWrite, DatabaseOp, RowsChange};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::apply_ops::{edit, guests, service, viewer};

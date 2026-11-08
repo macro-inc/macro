@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use models_properties::EntityType;
+use properties_types::EntityType;
 use serde::{Deserialize, Serialize};
 use sqs_client::search::SearchQueueMessage;
 use thiserror::Error;

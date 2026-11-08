@@ -5,9 +5,9 @@
 //! Promotion keeps the option id (so nothing else has to change), while a merge
 //! retargets entities onto an option the team already has.
 
-use models_properties::EntityType;
-use models_properties::db;
-use models_properties::service::property_option::PropertyOption;
+use properties_types::EntityType;
+use properties_types::db;
+use properties_types::service::property_option::PropertyOption;
 use sqlx::{Pool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -43,10 +43,10 @@ pub async fn promote_tag_option(
         anyhow::bail!("tag option {option_id} is not owned by definition {source_definition_id}");
     };
     let source_value = match &source.value {
-        models_properties::service::property_option::PropertyOptionValue::String(value) => {
+        properties_types::service::property_option::PropertyOptionValue::String(value) => {
             value.clone()
         }
-        models_properties::service::property_option::PropertyOptionValue::Number(_) => {
+        properties_types::service::property_option::PropertyOptionValue::Number(_) => {
             anyhow::bail!("tag option {option_id} does not hold a string value")
         }
     };

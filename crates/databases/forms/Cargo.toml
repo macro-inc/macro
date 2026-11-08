@@ -75,7 +75,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 bot_id = { workspace = true, features = ["test-utils"] }
 entity_access = { workspace = true }
 macro_db_migrator = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 tower = { workspace = true }

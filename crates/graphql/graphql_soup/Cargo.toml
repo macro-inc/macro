@@ -48,4 +48,4 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 model_owner = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }

@@ -68,7 +68,7 @@ async fn backfill_preserves_reserved_fields_and_explicit_currency(pool: PgPool) 
         .await
         .unwrap();
     assert!(
-        matches!(old_row[0].cells.get(&old_outcome), Some(models_properties::service::property_value::PropertyValue::SelectOption(values)) if values.len() == 1)
+        matches!(old_row[0].cells.get(&old_outcome), Some(properties_types::service::property_value::PropertyValue::SelectOption(values)) if values.len() == 1)
     );
 
     let currency = upgraded.commercial_fields.money[0].currency;
@@ -100,7 +100,7 @@ async fn backfill_preserves_reserved_fields_and_explicit_currency(pool: PgPool) 
         .id;
     assert_eq!(
         reloaded[0].cells.get(&currency),
-        Some(&models_properties::service::property_value::PropertyValue::SelectOption(vec![eur]))
+        Some(&properties_types::service::property_value::PropertyValue::SelectOption(vec![eur]))
     );
 }
 
@@ -221,7 +221,7 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
     assert_eq!(rows.rows[0].row_id, row_id);
     assert_eq!(
         rows.rows[0].cells.get(&revenue),
-        Some(&models_properties::service::property_value::PropertyValue::Num(1234.567))
+        Some(&properties_types::service::property_value::PropertyValue::Num(1234.567))
     );
     let outcome = upgraded.commercial_fields.outcome.unwrap();
     let won = table
@@ -237,7 +237,7 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
         .id;
     assert_eq!(
         rows.rows[0].cells.get(&outcome),
-        Some(&models_properties::service::property_value::PropertyValue::SelectOption(vec![won]))
+        Some(&properties_types::service::property_value::PropertyValue::SelectOption(vec![won]))
     );
     assert_eq!(upgraded.commercial_fields.money[0].amount, revenue);
     let currency = upgraded.commercial_fields.money[0].currency;
@@ -254,7 +254,7 @@ async fn commercial_backfill_preserves_amounts_stages_and_row_identity(pool: PgP
         .id;
     assert_eq!(
         rows.rows[0].cells.get(&currency),
-        Some(&models_properties::service::property_value::PropertyValue::SelectOption(vec![usd]))
+        Some(&properties_types::service::property_value::PropertyValue::SelectOption(vec![usd]))
     );
 }
 
@@ -298,7 +298,7 @@ async fn board_moves_cannot_clear_system_fields_even_after_regrouping(pool: PgPo
             .await
             .unwrap();
         assert!(
-            matches!(reloaded[0].cells.get(&system), Some(models_properties::service::property_value::PropertyValue::SelectOption(values)) if values.len() == 1)
+            matches!(reloaded[0].cells.get(&system), Some(properties_types::service::property_value::PropertyValue::SelectOption(values)) if values.len() == 1)
         );
     }
 }

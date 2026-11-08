@@ -96,14 +96,11 @@ impl<I: InitiativeParentReader, P: properties::domain::service::PropertiesServic
             .get_system_property_value(&access, system_properties::SystemPropertyKey::Assignees)
             .await?
         {
-            Some(models_properties::service::property_value::PropertyValue::EntityRef(refs)) => {
-                refs.into_iter()
-                    .filter(|reference| {
-                        reference.entity_type == models_properties::EntityType::User
-                    })
-                    .map(|reference| reference.entity_id)
-                    .collect()
-            }
+            Some(properties_types::service::property_value::PropertyValue::EntityRef(refs)) => refs
+                .into_iter()
+                .filter(|reference| reference.entity_type == properties_types::EntityType::User)
+                .map(|reference| reference.entity_id)
+                .collect(),
             _ => vec![],
         };
         Ok(DiscussionContext {
@@ -165,12 +162,13 @@ impl<I: InitiativeParentReader, P: properties::domain::service::PropertiesServic
                 )
                 .await?
             {
-                Some(models_properties::service::property_value::PropertyValue::EntityRef(
-                    refs,
-                )) => refs
-                    .into_iter()
-                    .find(|reference| reference.entity_type == models_properties::EntityType::User)
-                    .map(|reference| reference.entity_id),
+                Some(properties_types::service::property_value::PropertyValue::EntityRef(refs)) => {
+                    refs.into_iter()
+                        .find(|reference| {
+                            reference.entity_type == properties_types::EntityType::User
+                        })
+                        .map(|reference| reference.entity_id)
+                }
                 _ => None,
             },
         )

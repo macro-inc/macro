@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::{EntityType, db};
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::{EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 

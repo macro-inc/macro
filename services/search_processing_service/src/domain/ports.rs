@@ -16,7 +16,7 @@
 
 use std::future::Future;
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use sqs_client::search::SearchQueueMessage;
 
 use super::models::{

@@ -1,4 +1,4 @@
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use sqlx::{Postgres, Transaction};
 
 use super::properties_pg_repo::PropertiesPgRepo;

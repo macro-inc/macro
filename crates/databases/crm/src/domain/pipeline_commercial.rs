@@ -10,7 +10,7 @@ use databases_types::{
     CellValue, CellWrite, ColumnChange, DatabaseOp, OptionRef, RowChanges, RowsChange, ViewChange,
     views::RequestedLayout,
 };
-use models_properties::{DataType, service::property_option::PropertyOptionValue};
+use properties_types::{DataType, service::property_option::PropertyOptionValue};
 use serde::{Deserialize, Serialize};
 
 use super::pipelines::PipelineError;

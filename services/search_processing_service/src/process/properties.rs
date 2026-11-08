@@ -1,5 +1,4 @@
 use anyhow::Context;
-use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient,
     upsert::properties::{IndexedProperty, PropertyUpdate},
@@ -7,6 +6,7 @@ use opensearch_client::{
 use properties::outbound::entity_properties_get_query::{
     IndexedEntityProperty, get_entity_properties_for_index,
 };
+use properties_types::EntityType;
 
 /// What refreshing an entity's indexed properties did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

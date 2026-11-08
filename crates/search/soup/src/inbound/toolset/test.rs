@@ -340,11 +340,11 @@ fn test_tags_arg_deserializes_and_documents_match_modes() {
     assert!(tags[0].scope.is_none());
     assert_eq!(
         tags[1].scope,
-        Some(models_properties::service::tag_sets::TagScope::Team)
+        Some(properties_types::service::tag_sets::TagScope::Team)
     );
     assert_eq!(
         list.tags_match,
-        models_properties::service::tag_sets::TagMatch::Any,
+        properties_types::service::tag_sets::TagMatch::Any,
         "tagsMatch defaults to any"
     );
 
@@ -355,7 +355,7 @@ fn test_tags_arg_deserializes_and_documents_match_modes() {
     .unwrap();
     assert_eq!(
         list.tags_match,
-        models_properties::service::tag_sets::TagMatch::All
+        properties_types::service::tag_sets::TagMatch::All
     );
 }
 
@@ -402,12 +402,12 @@ fn test_tag_filter_expr_ands_with_existing_propf() {
 fn test_from_soup_item_resolves_tags_via_caller_map() {
     use crate::domain::models::SoupPropertiesField;
     use model_owner::Owner;
-    use models_properties::service::property_definition::PropertyDefinition;
-    use models_properties::service::property_value::PropertyValue;
-    use models_properties::service::tag_sets::{AppliedTag, TagScope};
-    use models_properties::{DataType, PropertyOwner};
     use models_soup::SoupProperty;
     use models_soup::document::SoupDocument;
+    use properties_types::service::property_definition::PropertyDefinition;
+    use properties_types::service::property_value::PropertyValue;
+    use properties_types::service::tag_sets::{AppliedTag, TagScope};
+    use properties_types::{DataType, PropertyOwner};
     use std::collections::HashMap;
 
     let known_option = Uuid::new_v4();

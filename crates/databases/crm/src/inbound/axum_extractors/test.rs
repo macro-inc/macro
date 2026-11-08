@@ -310,7 +310,7 @@ impl CrmService for FakeCrmService {
         _access: Option<
             &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
         >,
-        _entity_types: &[models_properties::EntityType],
+        _entity_types: &[properties_types::EntityType],
     ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
         panic!("unexpected activity_property_edges call")
     }

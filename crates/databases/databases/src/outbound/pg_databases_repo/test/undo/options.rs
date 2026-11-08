@@ -3,10 +3,10 @@
 use super::super::apply_ops::version;
 use super::*;
 use databases_types::{NewOption, OptionId};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
 use properties::domain::database_cell_writer::DatabaseCellWriter;
 use properties::domain::database_option_writer::{DatabaseOptionWriter, DeleteUnusedOptionOutcome};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use std::time::Duration;
 use uuid::Uuid;
 

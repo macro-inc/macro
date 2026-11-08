@@ -1,7 +1,6 @@
 use anyhow::Context;
 use chrono::Utc;
 use email_types::service::{label::system_labels, message::ParsedSearchMessage};
-use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,
     upsert::properties::IndexedProperty,
@@ -9,6 +8,7 @@ use opensearch_client::{
 use properties::outbound::entity_properties_get_query::{
     get_entity_properties_for_index, get_entity_properties_for_index_batch,
 };
+use properties_types::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

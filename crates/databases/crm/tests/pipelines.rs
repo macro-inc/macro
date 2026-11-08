@@ -664,7 +664,7 @@ async fn custom_columns_use_core_validation_and_preserve_values(pool: PgPool) {
             .definition
             .definition
             .data_type,
-        models_properties::DataType::String
+        properties_types::DataType::String
     );
     // A consumer cannot bind another resource's property definition to bypass access.
     assert!(matches!(write(&s, &a, &p, vec![op(json!({
@@ -1027,7 +1027,7 @@ async fn http_creation_listing_schema_and_records_use_pipeline_access(pool: PgPo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn queried_rows_filter_and_sort_before_paging_and_retain_hidden_records(pool: PgPool) {
     use databases::domain::storage::StorageRowsQuery;
-    use models_properties::service::property_value::PropertyValue;
+    use properties_types::service::property_value::PropertyValue;
     let (service, _, access_service, team, company) = fixture(&pool).await;
     let pipeline = create(&service, team, PipelineRecordType::Company).await;
     let schema = service

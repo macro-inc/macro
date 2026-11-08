@@ -3,10 +3,10 @@
 use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::{DataType, EntityType, db};
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::{DataType, EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
@@ -267,7 +267,7 @@ async fn read_property_definitions_with_options(
     let mut property_map: HashMap<Uuid, PropertyDefinitionWithOptions> = HashMap::new();
 
     for row in rows {
-        let owner = models_properties::PropertyOwner::from_optional_ids(
+        let owner = properties_types::PropertyOwner::from_optional_ids(
             row.team_id,
             row.user_id.clone(),
             row.database_id,
@@ -305,7 +305,7 @@ async fn read_property_definitions_with_options(
                 (None, Some(str)) => PropertyOptionValue::String(str.clone()),
                 (Some(_), Some(_)) => {
                     return Err(
-                        models_properties::db::DbConversionError::PropertyOptionBothValuesSet {
+                        properties_types::db::DbConversionError::PropertyOptionBothValuesSet {
                             id: option_id,
                         }
                         .into(),
@@ -313,7 +313,7 @@ async fn read_property_definitions_with_options(
                 }
                 (None, None) => {
                     return Err(
-                        models_properties::db::DbConversionError::PropertyOptionNoValueSet {
+                        properties_types::db::DbConversionError::PropertyOptionNoValueSet {
                             id: option_id,
                         }
                         .into(),
@@ -754,7 +754,7 @@ pub async fn get_caller_tag_definitions_with_options(
     let mut property_map: HashMap<Uuid, PropertyDefinitionWithOptions> = HashMap::new();
 
     for row in rows {
-        let owner = models_properties::PropertyOwner::from_optional_ids(
+        let owner = properties_types::PropertyOwner::from_optional_ids(
             row.team_id,
             row.user_id.clone(),
             row.database_id,
@@ -790,7 +790,7 @@ pub async fn get_caller_tag_definitions_with_options(
                 (None, Some(str)) => PropertyOptionValue::String(str.clone()),
                 (Some(_), Some(_)) => {
                     return Err(
-                        models_properties::db::DbConversionError::PropertyOptionBothValuesSet {
+                        properties_types::db::DbConversionError::PropertyOptionBothValuesSet {
                             id: option_id,
                         }
                         .into(),
@@ -798,7 +798,7 @@ pub async fn get_caller_tag_definitions_with_options(
                 }
                 (None, None) => {
                     return Err(
-                        models_properties::db::DbConversionError::PropertyOptionNoValueSet {
+                        properties_types::db::DbConversionError::PropertyOptionNoValueSet {
                             id: option_id,
                         }
                         .into(),

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::ports::InitiativeAssigneeService;
-use models_properties::EntityReference;
-use models_properties::api::requests::SetPropertyValue;
+use properties_types::EntityReference;
+use properties_types::api::requests::SetPropertyValue;
 use std::pin::Pin;
 
 #[derive(Debug, Default)]
@@ -306,7 +306,7 @@ async fn required_properties_can_be_cleared_but_not_detached() {
             });
         repo.expect_lookup_entity_property().return_once(move |_| {
             Box::pin(async move {
-                Ok(Some(models_properties::EntityPropertyReference {
+                Ok(Some(properties_types::EntityPropertyReference {
                     entity_id: "initiative1".into(),
                     entity_type: EntityType::Initiative,
                     property_definition_id: key.uuid(),

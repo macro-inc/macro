@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use shared_types::document::FileType;
 use sqlx::PgPool;
 use sqs_client::search::{
