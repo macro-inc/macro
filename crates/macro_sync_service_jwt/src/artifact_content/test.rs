@@ -15,15 +15,34 @@ fn now_secs() -> u64 {
 
 fn artifact_token() -> String {
     encode_artifact_content(
-        &ArtifactContentClaims::new(
-            DOCUMENT_ID.to_string(),
-            Some("macro|alice@artifacts.test".to_string()),
-            None,
-            now_secs(),
-        ),
+        &ArtifactContentClaims::new(DOCUMENT_ID.to_string(), now_secs()),
         SECRET,
     )
     .unwrap()
+}
+
+/// The page can decode its own token, so it carries no claim beyond these.
+#[test]
+fn an_artifact_content_token_names_no_viewer() {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[expect(dead_code, reason = "deserialized only to reject unknown claims")]
+    struct OnlyTheseClaims {
+        document_id: String,
+        exp: u64,
+        iss: String,
+        aud: String,
+    }
+
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+    validation.set_issuer(&[ARTIFACT_CONTENT_ISSUER]);
+    validation.set_audience(&[ARTIFACT_CONTENT_AUDIENCE]);
+    jsonwebtoken::decode::<OnlyTheseClaims>(
+        &artifact_token(),
+        &jsonwebtoken::DecodingKey::from_secret(SECRET.as_bytes()),
+        &validation,
+    )
+    .unwrap();
 }
 
 #[test]

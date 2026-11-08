@@ -249,15 +249,6 @@ pub struct Publisher {
     pub agent: Option<String>,
 }
 
-/// Who views: the identity a view token is minted for.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Viewer {
-    /// The viewing user, absent for anonymous public-link viewers.
-    pub user_id: Option<String>,
-    /// The bot viewing for them.
-    pub actor: Option<String>,
-}
-
 /// Color scheme the page is asked to render in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {

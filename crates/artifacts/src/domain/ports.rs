@@ -10,7 +10,7 @@ use model_owner::CreationPrincipal;
 use super::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, ContentRequest,
     ContentResponse, CreateArtifact, Manifest, MintedToken, ObjectBody, PublishVersion, Publisher,
-    Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
+    Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest,
 };
 
 /// A version to insert.
@@ -151,8 +151,9 @@ pub struct VerifiedToken {
 /// Signed view tokens for the content origin. A page can read its own URL,
 /// so a view token grants reading that artifact's files and nothing else.
 pub trait ViewTokens: Send + Sync + 'static {
-    /// Mint a token for a viewer whose view access was checked.
-    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError>;
+    /// Mint a token for a viewer whose view access was checked. It names
+    /// only the document: the page can decode it, so it carries no identity.
+    fn mint(&self, document_id: &str) -> Result<MintedToken, ArtifactError>;
 
     /// Verify a token's signature and expiry. `None` when it does not verify.
     fn verify(&self, token: &str) -> Option<VerifiedToken>;
@@ -227,7 +228,6 @@ pub trait ArtifactService: Send + Sync + 'static {
     fn view_url(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        viewer: &Viewer,
         request: ViewUrlRequest,
     ) -> impl Future<Output = Result<ViewUrl, ArtifactError>> + Send;
 
