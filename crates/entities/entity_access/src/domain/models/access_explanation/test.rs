@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::{
     AccessLevel, EmailAttachmentReason, Entity, EntityPermission, EntityType, ParticipantRole,
 };
-use models_entity_access_management::EntityAccessSourceType;
+use entity_access_management_types::EntityAccessSourceType;
 use uuid::Uuid;
 
 fn user() -> MacroUserIdStr<'static> {

@@ -18,7 +18,7 @@ use sqlx::{Pool, Postgres};
 #[cfg(feature = "explain_binary")]
 use entity_access::domain::models::{AccessGrant, AccessLevel};
 #[cfg(feature = "explain_binary")]
-use models_entity_access_management::EntityAccessSourceType;
+use entity_access_management_types::EntityAccessSourceType;
 
 pub mod agent_session_access;
 pub mod call_access;

@@ -35,7 +35,7 @@ bot_id = { workspace = true }
 rootcause = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_entity_access_management = { workspace = true, default-features = true }
+entity_access_management_types = { workspace = true, default-features = true }
 models_permissions = { workspace = true }
 
 # Async runtime (for ports)

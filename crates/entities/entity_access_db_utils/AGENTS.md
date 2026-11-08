@@ -30,7 +30,7 @@ top of it.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `entity_kind`, `model_owner`,
-  `models_entity_access_management`, `models_permissions`.
+  `entity_access_management_types`, `models_permissions`.
 - Used by: `crates/entities/entity_access_management`, `crates/entities/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,

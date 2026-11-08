@@ -9,7 +9,7 @@ default = ["outbound", "ports"]
 outbound = [
   "dep:entity_access_db_utils",
   "dep:sqlx",
-  "models_entity_access_management/db",
+  "entity_access_management_types/db",
   "ports",
 ]
 ports = []
@@ -21,7 +21,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 entity_kind = { workspace = true }
-models_entity_access_management = { workspace = true }
+entity_access_management_types = { workspace = true }
 models_permissions = { workspace = true }
 
 # Database

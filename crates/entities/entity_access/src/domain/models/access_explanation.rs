@@ -3,8 +3,8 @@ mod test;
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
+use entity_access_management_types::EntityAccessSourceType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_entity_access_management::EntityAccessSourceType;
 use serde::Serialize;
 use uuid::Uuid;
 

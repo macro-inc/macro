@@ -29,7 +29,7 @@ futures = { workspace = true }
 macro_entrypoint = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_entity_access_management = { workspace = true, default-features = true }
+entity_access_management_types = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

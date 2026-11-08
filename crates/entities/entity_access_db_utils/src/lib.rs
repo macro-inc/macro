@@ -12,10 +12,10 @@ pub mod source_grants;
 pub mod team_share;
 
 pub use channel_share::get_direct_channel_grants;
+pub use entity_access_management_types::EntityAccessSourceType;
 pub use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,

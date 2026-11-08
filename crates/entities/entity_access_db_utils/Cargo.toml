@@ -14,7 +14,7 @@ tracing = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
-models_entity_access_management = { workspace = true, default-features = true, features = [
+entity_access_management_types = { workspace = true, default-features = true, features = [
   "db",
 ] }
 models_permissions = { workspace = true }

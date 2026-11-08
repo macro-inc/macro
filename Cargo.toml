@@ -743,6 +743,7 @@ ensure_exists = { path = "crates/platform/ensure_exists" }
 entity_access = { path = "crates/entities/entity_access", default-features = false }
 entity_access_db_utils = { path = "crates/entities/entity_access_db_utils" }
 entity_access_management = { path = "crates/entities/entity_access_management", default-features = false }
+entity_access_management_types = { path = "crates/types/entity_access_management_types", default-features = false }
 entity_access_outbound = { path = "crates/entities/entity_access_outbound" }
 entity_basic_types = { path = "crates/types/entity_basic_types" }
 entity_kind = { path = "crates/types/entity_kind" }
@@ -857,7 +858,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_entity_access_management = { path = "crates/types/models_entity_access_management", default-features = false }
 models_forms = { path = "crates/types/models_forms" }
 models_grouping = { path = "crates/types/models_grouping" }
 models_opensearch = { path = "crates/types/models_opensearch" }

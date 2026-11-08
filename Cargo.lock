@@ -8338,6 +8338,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bot_id",
+ "entity_access_management_types",
  "entity_basic_types",
  "entity_kind",
  "futures",
@@ -8347,7 +8348,6 @@ dependencies = [
  "model_error_response",
  "model_owner",
  "model_user",
- "models_entity_access_management",
  "models_permissions",
  "rootcause",
  "serde",
@@ -8367,12 +8367,12 @@ name = "entity_access_db_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "entity_access_management_types",
  "entity_kind",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "model_owner",
- "models_entity_access_management",
  "models_permissions",
  "sqlx",
  "tracing",
@@ -8385,14 +8385,23 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "entity_access_db_utils",
+ "entity_access_management_types",
  "entity_kind",
  "macro_db_migrator",
- "models_entity_access_management",
  "models_permissions",
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "entity_access_management_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
  "workspace-hack",
 ]
 
@@ -8406,12 +8415,12 @@ dependencies = [
  "clap",
  "datastore_env_vars",
  "entity_access",
+ "entity_access_management_types",
  "entity_kind",
  "futures",
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_user_id",
- "models_entity_access_management",
  "rootcause",
  "serde_json",
  "sqlx",
@@ -14066,15 +14075,6 @@ dependencies = [
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_entity_access_management"
-version = "0.1.0"
-dependencies = [
- "serde",
- "sqlx",
  "workspace-hack",
 ]
 

@@ -6,8 +6,8 @@ use entity_access::domain::{
     },
     ports::ExplainAccessRepository,
 };
+use entity_access_management_types::EntityAccessSourceType;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;
 use uuid::Uuid;
 
