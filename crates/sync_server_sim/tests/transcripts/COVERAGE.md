@@ -31,7 +31,7 @@ Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone
 | H6 | [hibernation.test/H6_restores_DOCUMENT_ID_after_eviction.jsonl](hibernation.test/H6_restores_DOCUMENT_ID_after_eviction.jsonl) |
 | H7 | [hibernation.test/H7_reconstructs_storage_with_the_original_room_identity.jsonl](hibernation.test/H7_reconstructs_storage_with_the_original_room_identity.jsonl) |
 | H8 | [hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl](hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl) |
-| H9 | [hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl](hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl) |
+| H9 | [hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl](hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl) |
 | H10 | [hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl](hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl) |
 | M1 | [surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl](surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl) |
 | M2 | [transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl](transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl) |
@@ -57,7 +57,7 @@ Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone
 | A1 | [hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl](hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl) |
 | A2 | [surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl](surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl) |
 | A3 | [transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl](transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl) |
-| A4 | [transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl](transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl) |
+| A4 | [transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl](transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl) |
 | A5 | [transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl](transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl) |
 | A6 | [document_sync.test/document_sync_tests_document_state_persists_after_15_second_timeout.jsonl](document_sync.test/document_sync_tests_document_state_persists_after_15_second_timeout.jsonl) |
 | A7 | [document_api.test/document_api_tests_should_properly_initialize_the_document.jsonl](document_api.test/document_api_tests_should_properly_initialize_the_document.jsonl) |
@@ -86,7 +86,7 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 
 | ID | Quirk | Representative transcript |
 | --- | --- | --- |
-| Q1 | exists/initialize reset the operation log | [hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl](hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl) |
+| Q1 | Fixed: exists/initialize retain the operation log for the same key | [hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl](hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl) |
 | Q2 | load errors produce 500 | [transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl](transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl) |
 | Q3 | awareness broadcasts the full state | [awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl](awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl) |
 | Q4 | socket errors keep awareness | [transcript_boundaries.test/E7_websocket_errors_retain_existing_awareness.jsonl](transcript_boundaries.test/E7_websocket_errors_retain_existing_awareness.jsonl) |
@@ -96,7 +96,7 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 | Q8 | monotonic save comparisons, including equal readings when observed | [document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl](document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl) |
 | Q9 | snapshot loader frontiers logging is ignored by comparison | [hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl](hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl) |
 | Q10 | ping requires restored document identity | [transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl](transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl) |
-| Q11 | pending imports disappear at compaction | [transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl](transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl) |
+| Q11 | Fixed by WP-44: pending imports survive compaction until dependencies resolve | [transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl](transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl) |
 | Q12 | eviction loses pending blame | [transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl](transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl) |
 
 The corpus lives in `sync_server_sim`; record it from `services/sync-service` with
@@ -108,3 +108,111 @@ callback replay starts with C8.
 The C4 expired-during-connect capture shows a server-closed socket still present
 in the runtime list. SimPorts retains it until `RuntimeCloses`; it does not infer
 immediate removal from the call to `close`.
+
+## Native replay during callback extraction
+
+C8 enables `document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl`
+through the real `Room` connect/close callbacks (plus its teardown heartbeat).
+The native projection compares ordered storage and connection calls, sends,
+scheduling calls and the final transactional/snapshot dump. Snapshot backend
+SQL and fallback reads are projected to the typed snapshot port; unknown
+operations fail closed. The real-runtime re-record comparison continues to
+check those adapter SQL calls verbatim. This fixture has no configured external
+notification destination, so its observable publication is the scheduling call;
+core fake tests separately assert FirstJoin/LastLeave payload selection.
+The four C8 invariant tests live in `sync_server_core::domain::room::test`.
+Other callbacks remain explicitly unsupported until their extraction commits.
+
+C9 additionally enables the websocket ping and initial-sync import fixtures.
+`SimRoom::step` dispatches text and binary messages to `Room::on_frame`;
+callback IDs identify replay groups independently of timestamp equality. The
+core's frame invariant tests cover persistence/D1/ACK order and failures, viewer
+refusal, commenter and editor comment-gate refusal, exact RequestSince VV bytes,
+broadcast sender exclusion and continuation, and ping's identity requirement.
+Fixtures that also contain alarms or HTTP initialization remain disabled until
+those callbacks are extracted; their complete Worker re-records are compared
+after every commit.
+
+C10 enables `transcript_boundaries.test/M12_echoes_the_exact_request_version_vector.jsonl`
+through registration, update persistence, exact VV echo and alarm compaction.
+Replay consumes the recorded clock kinds/values in order, compares D1 claim and
+insert-missing effects, and checks the final attribution tables and alarm. The
+opaque isolate keepalive timer has no captured Worker port boundary; its native
+effect is checked by the core alarm tests and the real Worker recording.
+Alarm invariants, including `pending_import_survives_compaction`, live in
+`sync_server_core::domain::room::test::alarm`. The room test modules now split
+connection, frame and alarm cases while sharing hand-written fake capabilities.
+
+C11 native replay adds the complete missing-document `/raw` fixture, comparing
+its status, headers, body, ordered snapshot preparation/existence effects and
+final durable state. Core fake tests cover initialization order, delayed sync,
+read failures and `same_millisecond_operations_across_exists_survive_eviction`.
+`server_doc_never_shallow` pins full-snapshot initialization, reload and alarms;
+`initialize_accepts_shallow_quirk` separately pins acceptance of shallow input.
+The latter is a preserved server-history quirk for a later behavior-changing fix.
+
+C9a uses Loro 1.16.2 presence bytes with an injected wall clock. Re-recording
+ignores only tagged `presence` clock rows; ordinary read order/counts stay strict.
+Native awareness comparison includes tombstones and exact timestamps. C0 did not
+record internal presence reads; absent reads use the callback's simulated clock.
+The parity test checks vendored-vs-Loro bytes at matching timestamps and expiry
+boundary tests advance explicit time. No dependency version upgrade is included.
+The complete `awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl`
+fixture now replays natively, including disconnect tombstones. For C0 close
+callbacks, the harness recovers only otherwise unobservable clock inputs from
+wire tombstone timestamps; the Room computes deletion and delivery itself.
+Runtime enumeration order is supplied as a port input and checked against the
+actual live socket membership before use. Ordered calls and deliveries stay strict.
+
+C12 retains R9 Worker fixtures and zero-diff re-recording. Room fake tests drive
+the real atomic use case: every active socket receives the update after durable
+archive, service writers map to system after broadcast, viewers fail before
+storage, and invalid deltas leave document and delivery state unchanged.
+
+C13 enables complete native replay of idempotent deletion for a never-created
+session. Ordered projection validates the attribution-delete SQL batch and
+fallback-before-primary deletion; status, headers, body and final storage match.
+The Room test pins close-before-delete and mapped-writing-peer retention. The
+full Worker R10 fixtures cover initialized rooms and external fallback cleanup.
+
+C14 moves all four existing surface recovery unit cases into core. New Room
+tests cover persisted revocation before close, cold expired-grant closure,
+failed initialization recovery, ready reads and snapshot exports. Full S1–S6
+Worker fixtures are re-recorded byte-identically under the normalizer.
+
+C15 drives real Room migration methods over SimPorts through source claim,
+export, freeze, thaw, seal and retirement faults, plus target claim, snapshot,
+verification, activation and ready faults. Cold retries preserve receipts and
+original snapshots. Worker S7–S8 re-recording and the migration-hook suites
+cover live pending-log drains, forged proofs and recovery across runtime aborts.
+
+C16 adds complete native replay of A4's acknowledged-pending-import compaction
+and H1, H2, H5, H8, H9 and H10 eviction scenarios. Callback record positions
+separate restarted counters. Manual alarm invocations retain scheduled alarms;
+final runtime flushes consume them. H10's intentional truncated-frame failure
+pins its exact input and diagnostic, then compares all emitted effects; other
+callback errors still fail replay.
+
+The native comparison ruling for S6 §4.3 (2026-11-07) permits Loro export
+lengths and chunk boundaries to differ after reassembly. Both logical envelopes
+must be canonical; non-Loro fields and effect ordering remain exact. The native
+revision comparator decodes generated VVs as maps, including `/update`, `/state`
+and stored `LAST_VERSION_VECTOR` metadata. Client VV echoes stay byte-exact.
+The real-workerd re-record comparison has no additional exceptions.
+
+Complete atomic compact-state and surface-isolation fixtures now replay natively.
+The receipt ruling applies the same principle to SHA-256 digests over snapshot
+bytes. Replay verifies each recorded/native digest against its own snapshot,
+compares state, VV and frontiers, and keeps every other proof field exact.
+Only complete validated receipt/snapshot references translate in later native
+requests and persisted migration metadata; altered proofs or snapshots are never
+repaired. The complete source freeze/restart/import/activation/retirement/revoke
+fixture and isolated-initialization fixture now replay, for 18 complete enabled
+fixtures. Tests reject forged digests, changed proof fields and different content.
+
+The additional export-derived values are generated `/state` and
+`LAST_VERSION_VECTOR` VV encodings, freeze receipt digest fields and their later
+control-request/storage references. These have no exception in the real-workerd
+diff. The runtime projection separately maps JS undefined/omitted optional
+migration source IDs to typed None, and records migration-export SQL constructor
+and direct chunk-read effects; native policy and ordering remain strict.

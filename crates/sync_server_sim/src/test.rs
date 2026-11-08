@@ -221,8 +221,7 @@ fn actual_operation_log_uses_the_memory_ports_in_order() {
     assert!(block_on(ports.has(&key())).unwrap());
 }
 #[test]
-fn all_golden_fixtures_load_but_none_claim_native_callback_parity_yet() {
-    assert!(ENABLED.is_empty());
+fn all_golden_fixtures_load_and_enabled_callbacks_replay() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts");
     let paths = fixtures(&root).unwrap();
     assert_eq!(paths.len(), 155);
@@ -230,17 +229,21 @@ fn all_golden_fixtures_load_but_none_claim_native_callback_parity_yet() {
         let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
         let transcript = Transcript::load(&path, name).unwrap();
         assert!(!transcript.inputs().unwrap().is_empty(), "{name}");
-        assert!(matches!(
-            replay(&transcript),
-            Err(ReplayError::NotEnabled(_))
-        ));
+        if ENABLED.contains(&name) {
+            replay(&transcript).unwrap();
+        } else {
+            assert!(matches!(
+                replay(&transcript),
+                Err(ReplayError::NotEnabled(_))
+            ));
+        }
     }
 }
 #[test]
 fn unsupported_callback_cannot_silently_replay_as_success() {
     let mut room = SimRoom::new(SimPorts::new());
     assert!(matches!(
-        room.step(SimNow::default(), ServerInput::AlarmFired),
+        room.step(SimNow::default(), ServerInput::SocketError(socket())),
         Err(ReplayError::Unsupported(_))
     ));
 }
@@ -250,11 +253,54 @@ fn new_object_discards_volatile_memory_and_keeps_durable_ports() {
     block_on(ports.put_session_key(&key())).unwrap();
     ports.accept(&socket()).unwrap();
     let mut room = SimRoom::new(ports.clone());
-    room.room_mut().memory_mut().session_key = Some(key());
-    room.room_mut()
-        .memory_mut()
-        .mapped_writing_peers
-        .insert(PeerId(5));
+    block_on(async {
+        use bebop::{Record, SliceWrapper};
+        use sync_server_core::domain::{
+            connection::ConnectionMetadata, permissions::AccessLevel, room::InboundFrame,
+        };
+        ports
+            .put_connection(
+                &socket(),
+                &ConnectionMetadata {
+                    user_id: Some("test-user".into()),
+                    actor: None,
+                    access_level: AccessLevel::Edit,
+                    peer_ids: [5].into(),
+                    session_kind: SessionKind::Document,
+                    expires_at: None,
+                    agent_correlation_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        let writer = loro::LoroDoc::new();
+        writer.set_peer_id(5).unwrap();
+        writer
+            .get_text("content")
+            .push_str("before eviction")
+            .unwrap();
+        writer.commit();
+        let update = writer.export(loro::ExportMode::all_updates()).unwrap();
+        let mut bytes = Vec::new();
+        sync_protocol::FromPeer::PeerUpdate {
+            updates: vec![SliceWrapper::Raw(&update)],
+            id: "before-eviction",
+        }
+        .serialize(&mut bytes)
+        .unwrap();
+        let frame = sync_protocol::framing::into_frames(&bytes, 1_000_000).remove(0);
+        room.room_mut()
+            .on_frame(&socket(), InboundFrame::Binary(frame))
+            .await
+            .unwrap();
+        assert!(room.room().memory_view().session_key.is_some());
+        assert!(
+            room.room()
+                .memory_view()
+                .mapped_writing_peers
+                .contains(&PeerId(5))
+        );
+    });
     room.step(SimNow::default(), ServerInput::NewObject)
         .unwrap();
     assert!(room.room().memory_view().session_key.is_none());
@@ -443,4 +489,176 @@ fn closing_socket_rejects_sends_while_it_is_still_listed() {
     );
     ports.runtime_closes(&socket());
     assert!(ports.send_text(&socket(), "after removal").is_err());
+}
+
+#[test]
+fn golden_replay_rejects_reordered_writes_and_changed_final_storage() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts");
+    let original = Transcript::load(&root.join(ENABLED[0]), ENABLED[0]).unwrap();
+    let mut reordered = Transcript {
+        name: original.name.clone(),
+        records: original.records.clone(),
+    };
+    let puts: Vec<_> = reordered
+        .records
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r["port"] == "storage.put")
+        .map(|(i, _)| i)
+        .collect();
+    reordered.records.swap(puts[0], puts[1]);
+    assert!(matches!(replay(&reordered), Err(ReplayError::Mismatch(_))));
+    let mut changed = original;
+    let dump = changed
+        .records
+        .iter_mut()
+        .find(|r| r["out"] == "dump")
+        .unwrap();
+    dump["kv"][0][1] = serde_json::json!("another-document");
+    assert!(matches!(replay(&changed), Err(ReplayError::Mismatch(_))));
+}
+
+#[test]
+fn room_step_preserves_synchronous_crash_effects() {
+    use sync_server_core::domain::permissions::{AccessLevel, AuthToken};
+    let ports = SimPorts::new();
+    ports.set_faults([(("connections.accept".into(), 0), Fault::Crash)].into());
+    let mut room = SimRoom::new(ports);
+    let result = room
+        .step(
+            SimNow::default(),
+            ServerInput::Connect {
+                grant: AuthToken::new(
+                    "document".into(),
+                    AccessLevel::Edit,
+                    SessionKind::Document,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                key: key(),
+            },
+        )
+        .unwrap();
+    let StepResult::Crashed(effects) = result else {
+        panic!("crash reported as completion")
+    };
+    assert_eq!(effects.last().unwrap().operation, "connections.accept");
+    assert!(!effects.iter().any(|effect| {
+        effect.operation == "storage.put"
+            && effect.value["key"]
+                .as_str()
+                .is_some_and(|key| key.starts_with("ws_id"))
+    }));
+}
+
+#[test]
+fn native_awareness_comparison_rejects_changed_timestamps() {
+    use bebop::SliceWrapper;
+    use sync_protocol::{FromRemote, presence::EphemeralStore, time::UnixMillis};
+    let left = EphemeralStore::new(5_000);
+    let right = EphemeralStore::new(5_000);
+    left.set("cursor", 42, UnixMillis(100));
+    right.set("cursor", 42, UnixMillis(101));
+    let left_bytes = left.encode_all(UnixMillis(101));
+    let right_bytes = right.encode_all(UnixMillis(101));
+    use bebop::Record;
+    let mut left = Vec::new();
+    FromRemote::RemoteAwareness {
+        awareness: SliceWrapper::Raw(&left_bytes),
+    }
+    .serialize(&mut left)
+    .expect("encode");
+    let mut right = Vec::new();
+    FromRemote::RemoteAwareness {
+        awareness: SliceWrapper::Raw(&right_bytes),
+    }
+    .serialize(&mut right)
+    .expect("encode");
+    let left = sync_protocol::framing::into_frames(&left, 1_000_000);
+    let right = sync_protocol::framing::into_frames(&right, 1_000_000);
+    assert_ne!(left_bytes, right_bytes);
+    // The full frame comparator exercises the same timestamp-sensitive path as replay.
+    assert!(!crate::transcript::equivalent_remote_frames(&left, &right).expect("compare"));
+}
+
+#[test]
+fn cold_debug_preparation_restores_identity_without_loading_or_mutating_content() {
+    block_on(async {
+        let ports = SimPorts::new();
+        let mut room = SimRoom::new(ports.clone());
+        assert!(room.room_mut().prepare_debug_storage().await.is_err());
+        ports.put_session_key(&key()).await.unwrap();
+        room.room_mut().prepare_debug_storage().await.unwrap();
+        assert!(room.room().memory_view().document.is_none());
+        assert_eq!(room.room().memory_view().session_key, Some(&key()));
+        let effects = ports.take_effects();
+        assert_eq!(
+            effects
+                .iter()
+                .filter(|effect| effect.operation == "snapshot.prepare")
+                .count(),
+            1
+        );
+        room.room_mut().prepare_debug_storage().await.unwrap();
+        assert!(ports.take_effects().is_empty());
+    });
+}
+
+#[test]
+fn native_loro_envelopes_allow_export_chunks_but_keep_other_fields_exact() {
+    use bebop::{Record, SliceWrapper};
+    use serde_json::json;
+    use sync_protocol::{FromRemote, framing::into_frames};
+    let doc = loro::LoroDoc::new();
+    doc.set_peer_id(42).unwrap();
+    doc.get_text("content").insert(0, "snapshot").unwrap();
+    doc.commit();
+    let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+    let mut bytes = Vec::new();
+    FromRemote::RemoteSnapshot {
+        snapshot: SliceWrapper::Raw(&snapshot),
+    }
+    .serialize(&mut bytes)
+    .unwrap();
+    let small = into_frames(&bytes, 7);
+    let large = into_frames(&bytes, 900_000);
+    assert!(equivalent_remote_frames(&small, &large).unwrap());
+    let effects = |frames: &[Vec<u8>]| {
+        frames
+            .iter()
+            .flat_map(|frame| {
+                ["connections.send_binary", "send"].map(|operation| Effect {
+                    operation: operation.into(),
+                    value: json!({"socket":"ws_idtest","frame":frame}),
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    compare_effects(&effects(&small), &effects(&large)).unwrap();
+    let mut malformed = bytes.clone();
+    malformed.push(0);
+    assert!(!equivalent_remote_frames(&small, &into_frames(&malformed, 900_000)).unwrap());
+    let mut malformed = small.clone();
+    malformed[0][0] = 1;
+    assert!(!equivalent_remote_frames(&malformed, &large).unwrap());
+    bytes.clear();
+    FromRemote::RemoteUpdate {
+        update: SliceWrapper::Raw(&snapshot),
+    }
+    .serialize(&mut bytes)
+    .unwrap();
+    assert!(
+        !equivalent_remote_frames(&into_frames(&bytes, 7), &into_frames(&bytes, 900_000)).unwrap()
+    );
+    let mut extra = effects(&small);
+    extra.insert(
+        1,
+        Effect {
+            operation: "storage.delete".into(),
+            value: json!("metadata"),
+        },
+    );
+    assert!(compare_effects(&extra, &effects(&large)).is_err());
 }

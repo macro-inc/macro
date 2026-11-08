@@ -3,14 +3,42 @@ use crate::error::ResultExt;
 use std::time::Duration;
 use sync_server_core::domain::ports::{Clock, UnixMillis};
 
+use std::cell::Cell;
+use web_time::Instant;
+thread_local! {
+    static MONOTONIC_ORIGIN: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+pub(crate) fn monotonic() -> Duration {
+    let instant = Instant::now();
+    #[cfg(feature = "transcript")]
+    let instant = crate::transcript::instant("state_instant", instant);
+    MONOTONIC_ORIGIN.with(|origin| {
+        let first = origin.get().unwrap_or(instant);
+        origin.set(Some(first));
+        instant.duration_since(first)
+    })
+}
+
 /// The existing worker clocks, read only when the core requests them.
 pub struct WorkerClock;
 impl Clock for WorkerClock {
     fn monotonic(&self) -> Duration {
-        crate::state::monotonic()
+        monotonic()
     }
     fn unix_time(&self) -> UnixMillis {
-        UnixMillis(worker::Date::now().as_millis() as i64)
+        let now = worker::Date::now().as_millis();
+        #[cfg(feature = "transcript")]
+        crate::transcript::clock("presence", now);
+        UnixMillis(now as i64)
+    }
+    fn unix_time_for(&self, purpose: sync_server_core::domain::ports::WallClock) -> UnixMillis {
+        let now = worker::Date::now().as_millis();
+        #[cfg(feature = "transcript")]
+        crate::transcript::clock(purpose.tag(), now);
+        #[cfg(not(feature = "transcript"))]
+        let _ = purpose;
+        UnixMillis(now as i64)
     }
     fn unix_nanos(&self) -> u128 {
         let nanos = web_time::SystemTime::now()
@@ -51,7 +79,6 @@ pub struct WorkerConnections {
     accepted_client: RefCell<Option<WebSocket>>,
 }
 impl WorkerConnections {
-    #[expect(dead_code, reason = "used when connect moves into Room in C8")]
     pub fn take_accepted_client(&self) -> Option<WebSocket> {
         self.accepted_client.borrow_mut().take()
     }
@@ -154,12 +181,12 @@ impl PeerDirectory for WorkerPeers {
         document: &SessionKey,
         peer: PeerId,
     ) -> worker::Result<Option<String>> {
-        self.env
-            .d1(crate::constants::USER_PEER_D1_BINDING)?
-            .prepare("SELECT user_id FROM peer_user_map WHERE document_id = ? AND peer_id = ?;")
-            .bind(&[document.as_str().into(), peer.0.to_string().into()])?
-            .first(Some("user_id"))
-            .await
+        crate::d1::get_user_id_from_peer_id(
+            self.env.d1(crate::constants::USER_PEER_D1_BINDING)?,
+            document.as_str(),
+            &peer.0,
+        )
+        .await
     }
     async fn peers(&self, document: &SessionKey) -> worker::Result<Vec<PeerWithUserId>> {
         crate::d1::get_peers_for_document_id(
@@ -196,9 +223,12 @@ pub struct WorkerCommentGate {
 impl CommentGate for WorkerCommentGate {
     type Error = worker::Error;
     async fn is_comment_only_change(&self, change: &RootChange) -> worker::Result<bool> {
-        crate::lexical_service::LexicalServiceClient::new(&self.env)
+        let started = web_time::Instant::now();
+        let result = crate::lexical_service::LexicalServiceClient::new(&self.env)
             .is_comment_only_change(change)
-            .await
+            .await;
+        tracing::Span::current().record("ms", started.elapsed().as_millis() as i64);
+        result
     }
 }
 
@@ -212,6 +242,7 @@ impl BackgroundEffects for WorkerBackground {
         let env = self.env.clone();
         self.state.wait_until(crate::background(async move {
             match publication {
+                DocumentPublication::Noop => {}
                 DocumentPublication::Snapshot {
                     document,
                     snapshot,
@@ -263,7 +294,6 @@ impl BackgroundEffects for WorkerBackground {
 
 /// Concrete worker capabilities; no IO is performed by construction.
 pub struct WorkerPorts {
-    pub(crate) session_storage: Option<Rc<crate::storage::SessionStorage>>,
     clock: WorkerClock,
     entropy: WorkerEntropy,
     connections: WorkerConnections,
@@ -277,7 +307,6 @@ pub struct WorkerPorts {
 impl WorkerPorts {
     pub fn new(state: Rc<State>, env: Env) -> Self {
         Self {
-            session_storage: None,
             clock: WorkerClock,
             entropy: WorkerEntropy,
             connections: WorkerConnections {

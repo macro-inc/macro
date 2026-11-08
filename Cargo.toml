@@ -272,7 +272,7 @@ document_id = { path = "crates/document_id" }
 uuid_value = { package = "uuid", version = "1.15.1", default-features = false }
 macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
 sync_server_core = { path = "crates/sync_server_core" }
-sync_protocol = { path = "crates/sync_protocol" }
+sync_protocol = { path = "crates/sync_protocol", default-features = false }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -401,6 +401,7 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "=1.17.1"
+loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }

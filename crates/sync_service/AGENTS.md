@@ -2,22 +2,20 @@
 
 ## What it is
 
-Part of the Documents (collaborative editing/sync) feature — a hex crate
-defining the sync service's domain ports and an axum router shim, used by
-`document_storage_service`'s in-process sync integration. Package name is
+DSS-side bulk wakeup contract and Axum router shim for document sync.
+`SyncWakeupService` dispatches wakeups without waiting for sync-service responses. Package name is
 `sync_service_hex` (not `sync_service`) — depend on it with
 `path = "../sync_service", package = "sync_service_hex"`.
 
 ## Start here
 
-- `src/domain/models.rs`, `src/domain/ports.rs`: the domain's document-state
-  port, implemented by the actual sync-service document store.
+- `src/domain/ports.rs`: `SyncWakeupService::bulk_wakeup`, implemented by the DSS-side wakeup adapter.
 - `src/inbound/axum_router.rs` (feature `inbound`): HTTP router shim.
 
 ## Scope
 
-- Owns: the port contract for document sync state used by
-  `services/document_storage_service`'s in-process sync integration.
+- Owns: the DSS-side bulk-wakeup port used by `services/document_storage_service`.
+- Room state, protocol and sync policy live in `sync_server_core` and `sync_protocol`.
 - Not here: the deployed Cloudflare Durable Object sync service itself →
   `services/sync-service`; calling it over HTTP → `crates/sync_service_client`.
 
