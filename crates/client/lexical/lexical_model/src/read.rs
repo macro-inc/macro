@@ -876,6 +876,11 @@ impl<'state> StateRef<'state> {
         if self.text_data(key)?.text.as_str() == text {
             return self.export_json(key);
         }
+        #[cfg(feature = "foreign-nodes")]
+        let mut record = self
+            .node_or_err(key)?
+            .to_owned_with_source(self.snapshot_for_foreign_read()?);
+        #[cfg(not(feature = "foreign-nodes"))]
         let mut record = self.node_or_err(key)?.to_owned();
         let BaseData::Text(data) = &mut record.slot.base else {
             return Err(Error::NodeTypeMismatch(key));
