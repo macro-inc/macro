@@ -23,6 +23,7 @@ Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
 Sync policy, authorization, history and retries remain in document_session/doc_sync_core.
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
+Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
 
 ## Checks
 

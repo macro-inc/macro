@@ -16,6 +16,10 @@ SessionExecutor executes effects; Rust owns retry, backoff, WAL and permission p
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
+Hold the source owner's lease during adoption and the shared snapshot lock while
+checking covers and moving WAL rows; reject changed selections without mutation.
+Prune only delivered rows covered by the current matching-owner snapshot, under
+that lock; TTL cleanup also holds the source lease so reopened owners remain live.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
 Keep wasm.generated.d.ts synchronized with wasm-pack; the build recipe copies it
 so clean checkouts can type-check before compiling the binary.
