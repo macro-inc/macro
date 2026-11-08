@@ -53,7 +53,7 @@ export type SessionOrigin =
       task: Task;
       project: Initiative;
     }
-  /** A person opened the session directly, from the composer. */
+  /** A person opened the session directly: from the composer, or by asking for a routine draft. */
   | { kind: 'requested'; by: User }
   /** A tool handed the agent work, under this user's authority. */
   | { kind: 'dispatched'; onBehalfOf: User }
