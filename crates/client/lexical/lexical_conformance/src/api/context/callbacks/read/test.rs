@@ -500,3 +500,59 @@ fn read_peer_encodes_source_records_and_consumes_exact_indexed_arguments() -> Re
     context.discard_update()?;
     Ok(())
 }
+
+#[test]
+fn native_selection_arguments_keep_distinct_shape_equal_host_objects() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut context = Context::default();
+    let callback = context.callbacks();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let text = tx.create_text("text")?.key();
+    let first_slot = tx.detach_selection(Selection::Range(RangeSelection::new(
+        Point::text(text, Utf16Offset(1)),
+        Point::text(text, Utf16Offset(3)),
+    )));
+    let second_slot = tx.detach_selection(
+        tx.selection_at(first_slot)?
+            .expect("first")
+            .snapshot_for_foreign_read(),
+    );
+    let first = callback.selection(&mut tx, first_slot)?;
+    let second = callback.selection(&mut tx, second_slot)?;
+    assert_ne!(first["$sel"], second["$sel"]);
+    let first_argument = tx
+        .capture_foreign_selection(first_slot)?
+        .expect("first argument");
+    let second_argument = tx
+        .capture_foreign_selection(second_slot)?
+        .expect("second argument");
+    let capture = tx
+        .view()
+        .with_foreign_selection_argument(&first_argument)
+        .snapshot_for_foreign_read()?;
+    callback.with_read_scope(&capture, |scope| {
+        assert_eq!(
+            scope.selection_argument(&first_argument)?["$sel"],
+            first["$sel"]
+        );
+        assert_eq!(
+            scope.selection_argument(&second_argument)?["$sel"],
+            second["$sel"]
+        );
+        let anchor = crate::api::index()
+            .binary_search(&"get:anchor")
+            .expect("anchor") as u32;
+        let offset = crate::api::index()
+            .binary_search(&"get:offset")
+            .expect("offset") as u32;
+        let point = scope.call(anchor, json!([]), Some(first.clone()))?;
+        assert_eq!(scope.call(offset, json!([]), Some(point))?, 1);
+        Ok(())
+    })?;
+    drop(tx);
+    context.discard_update()?;
+    Ok(())
+}

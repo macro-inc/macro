@@ -31,4 +31,4 @@ pub use state::{ForeignStateCodec, ForeignStateConfig};
 mod records;
 
 pub(crate) mod selections;
-pub use selections::ForeignSelectionIdentity;
+pub use selections::{ForeignSelectionCapture, ForeignSelectionIdentity};

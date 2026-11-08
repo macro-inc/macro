@@ -88,3 +88,5 @@ Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain origi
 Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and excludeFromCopy destinations. Scalar hooks require their declared primitive type; reject objects without getters/coercion, invalid u32 indents, and preserve opaque throws/recovery.
 
 Exercise clone staging, original-version reads, native copyNode fresh keys, read guards, opaque throws and retry in hosting-clone.test.ts. Class construction/opaque custom fields remain part of the full facade.
+
+Use hosting-extract.test.ts for child/selection/destination dispatch and native markdown extraction with selection identity, native super and opaque failure/retry. These backend literals do not replace full subclass acceptance.

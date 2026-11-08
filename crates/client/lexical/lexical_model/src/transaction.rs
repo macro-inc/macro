@@ -134,6 +134,8 @@ impl<'editor> Transaction<'editor> {
         };
         StateRef {
             #[cfg(feature = "foreign-nodes")]
+            foreign_selection_argument: None,
+            #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
             #[cfg(feature = "foreign-nodes")]
             foreign_projections: None,

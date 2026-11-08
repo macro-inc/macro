@@ -114,6 +114,26 @@ impl CallbackRead<'_, '_> {
         self.context.encode(value)
     }
 
+    /// Encode a captured ordinary selection argument through the shared identity store.
+    pub fn selection_argument(
+        &mut self,
+        argument: &lexical_model::ForeignSelectionCapture,
+    ) -> Result<Value> {
+        self.validate()?;
+        let identity = argument.identity().cloned().unwrap_or_default();
+        if argument.identity().is_some() && !self.snapshot.contains_selection_identity(&identity) {
+            return Err(fail("selection argument is absent from this read capture"));
+        }
+        let slot = match self.tx.foreign_selection_slot(&identity) {
+            Some(slot) => slot,
+            None => self
+                .tx
+                .detach_foreign_selection(argument.value().snapshot_for_foreign_read(), identity),
+        };
+        let value = self.context.replay.selection_at(self.tx, slot)?;
+        self.context.encode(value)
+    }
+
     /// Consume the invoking indexed method's arguments without borrowing its transaction.
     pub fn original_arguments(
         &self,

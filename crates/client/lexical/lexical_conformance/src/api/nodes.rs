@@ -17,21 +17,25 @@ pub(crate) fn call(
         "extractWithChild" => a.get(1),
         _ => None,
     };
-    let selection = selection_arg
+    let selection_capture = selection_arg
         .filter(|value| !value.is_null() && value.get("$undef").is_none())
         .map(|value| -> Result<_> {
             let slot = slot_arg(r, tx, value)?;
-            Ok(tx
-                .selection_at(slot)?
-                .map(Selection::snapshot_for_foreign_read))
+            Ok(tx.capture_foreign_selection(slot)?)
         })
         .transpose()?
         .flatten();
+    let selection = selection_capture
+        .as_ref()
+        .map(ForeignSelectionCapture::value);
     let snapshot = r.read_state.clone();
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
+    let view = selection_capture.as_ref().map_or(view, |argument| {
+        view.with_foreign_selection_argument(argument)
+    });
     if view
         .get::<lexical_rich_nodes::link::LinkNode>(key)
         .is_some()
@@ -153,7 +157,7 @@ pub(crate) fn call(
             )));
         }
         "isSelected" => {
-            return Ok(json!(view.is_selected(key, selection.as_ref())));
+            return Ok(json!(view.is_selected(key, selection)));
         }
         "excludeFromCopy" => {
             let destination = a
@@ -169,7 +173,7 @@ pub(crate) fn call(
             return Ok(json!(view.extract_with_child(
                 key,
                 child,
-                selection.as_ref(),
+                selection,
                 destination
             )));
         }

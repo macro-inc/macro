@@ -13,6 +13,8 @@ pub use structural::CommonAncestor;
 #[derive(Clone, Copy)]
 pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selection_argument: Option<&'state ForeignSelectionCapture>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_native_calls:
         Option<&'state std::sync::Arc<crate::foreign::native::NativeCalls>>,
     #[cfg(feature = "foreign-nodes")]
@@ -889,6 +891,8 @@ impl<'state> StateRef<'state> {
         let mut snapshot = self.state.clone();
         snapshot.nodes.insert(key, std::sync::Arc::new(record.slot));
         StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_argument: self.foreign_selection_argument,
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection,
             #[cfg(feature = "foreign-nodes")]
