@@ -232,7 +232,8 @@ impl IndexedDbModel {
                 from,
                 to,
                 first_seq,
-                ..
+                covers: expected_cover,
+                expected,
             } => {
                 if self.leased(doc, *from) {
                     return Err(StorageFailure::Other);
@@ -244,6 +245,9 @@ impl IndexedDbModel {
                     .filter(|(id, _)| WalOwner::Session(*id) == *from)
                     .map(|(_, seq)| seq)
                     .unwrap_or(WalSeq(0));
+                if cover != *expected_cover {
+                    return Err(StorageFailure::Other);
+                }
                 let mut selected = self
                     .rows
                     .iter()
@@ -255,6 +259,11 @@ impl IndexedDbModel {
                     .cloned()
                     .collect::<Vec<_>>();
                 selected.sort_by_key(|row| row.stored.record.seq);
+                if !selected.is_empty()
+                    && !selected.iter().map(|row| &row.stored).eq(expected.iter())
+                {
+                    return Err(StorageFailure::Other);
+                }
                 for (offset, row) in selected.iter_mut().enumerate() {
                     let seq = first_seq
                         .0

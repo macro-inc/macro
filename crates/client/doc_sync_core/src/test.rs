@@ -47,6 +47,7 @@ fn storage_ops_preserve_all_fields_in_postcard() {
             to: owner,
             first_seq: seq,
             covers: WalSeq(3),
+            expected: Vec::new(),
         },
         StorageOp::WalAdopt {
             doc: doc.clone(),
@@ -54,6 +55,7 @@ fn storage_ops_preserve_all_fields_in_postcard() {
             to: owner,
             first_seq: seq,
             covers: WalSeq(0),
+            expected: Vec::new(),
         },
         StorageOp::WalDropExpired {
             doc: doc.clone(),

@@ -292,7 +292,8 @@ impl SimStorage {
             from,
             to,
             first_seq,
-            ..
+            covers: expected_cover,
+            expected,
         } = op
         else {
             return None;
@@ -310,14 +311,24 @@ impl SimStorage {
             .filter(|(owner, _)| *from == WalOwner::Session(*owner))
             .map(|(_, seq)| seq)
             .unwrap_or(WalSeq(0));
-        let count = self
+        // The core reserved IDs and retained payloads from the loaded cover.
+        // A replacement snapshot can change selection in either direction.
+        if covers != *expected_cover {
+            return Some(StorageFailure::Other);
+        }
+        let selected = self
             .durable
             .entries
             .iter()
             .filter(|((row_doc, owner, seq), row)| {
                 row_doc == doc && owner == from && (!row.delivered || *seq > covers)
             })
-            .count();
+            .map(|(_, row)| row)
+            .collect::<Vec<_>>();
+        if !selected.is_empty() && !selected.iter().copied().eq(expected.iter()) {
+            return Some(StorageFailure::Other);
+        }
+        let count = selected.len();
         for offset in 0..count {
             let Ok(offset) = u64::try_from(offset) else {
                 return Some(StorageFailure::Other);
@@ -407,6 +418,7 @@ impl SimStorage {
                 to,
                 first_seq,
                 covers: _,
+                expected: _,
             } => {
                 let covers = self
                     .durable

@@ -98,3 +98,8 @@ oplog and server evidence for every required parent frontier, while Running outs
 reset/rebase and without an outstanding own push. Preserve batch eligibility until
 its ACK or timeout, then retry gap recovery. This disproves the earlier missing-store inference; it does not prove
 row delivery. Genuinely missing parents stay parked until TTL and never get pushed.
+
+Adoption rejects a changed snapshot-derived cover or exact source selection atomically: the loaded selection
+must match the core's reserved sequences and retained payload order. Reload after
+failed adoption/orphan reads through the ordinary retry timer; never reuse stale
+adoption payload reservations or change other owners' retained bytes.

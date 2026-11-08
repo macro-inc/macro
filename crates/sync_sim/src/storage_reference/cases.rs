@@ -56,7 +56,8 @@ pub fn storage_cases() -> Vec<StorageCase> {
         from: WalOwner::Session(one),
         to: two,
         first_seq: WalSeq(10),
-        covers: WalSeq(99),
+        covers: WalSeq(1),
+        expected: rows[1..].to_vec(),
     };
     let adopt = StorageCase {
         name: "SC-4 atomic adoption, preserved flags, lease and stale-winner protection",
@@ -201,15 +202,36 @@ pub fn storage_cases() -> Vec<StorageCase> {
                 from: WalOwner::Legacy,
                 to: two,
                 first_seq: WalSeq(1),
-                covers: WalSeq(99),
+                covers: WalSeq(0),
+                expected: rows.clone(),
             }),
             op(StorageOp::WalAdopt {
                 doc: doc.clone(),
                 from: WalOwner::Legacy,
                 to: three,
                 first_seq: WalSeq(1),
-                covers: WalSeq(99),
+                covers: WalSeq(0),
+                expected: rows.clone(),
             }),
+        ],
+    };
+    let stale_cover = StorageCase {
+        name: "SC-4 replaced snapshot rejects stale adoption selection atomically",
+        initial: initial.clone(),
+        retention,
+        actions: vec![
+            op(StorageOp::SnapshotSave {
+                doc: doc.clone(),
+                bytes: vec![9],
+                covers: Some((two, WalSeq(2))),
+            }),
+            op(adoption.clone()),
+            op(StorageOp::SnapshotSave {
+                doc: doc.clone(),
+                bytes: vec![8],
+                covers: Some((one, WalSeq(1))),
+            }),
+            op(adoption.clone()),
         ],
     };
     let mut users = initial.clone();
@@ -257,5 +279,14 @@ pub fn storage_cases() -> Vec<StorageCase> {
             }),
         ],
     };
-    vec![adopt, collision, overflow, prune, append, legacy, isolation]
+    vec![
+        adopt,
+        collision,
+        overflow,
+        prune,
+        append,
+        legacy,
+        stale_cover,
+        isolation,
+    ]
 }

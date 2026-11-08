@@ -668,3 +668,61 @@ fn failed_reset_preserves_pending_history_until_its_dependency_arrives() {
     assert!(!h.core.status().pending_import);
     assert_eq!(h.doc.loro.get_text("text").to_string(), "firstsecond");
 }
+
+#[test]
+fn failed_conditional_adoption_reloads_the_source_selection() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Durable);
+    h.settle();
+    let first = h.core.wal.next_seq;
+    let id = h.core.issue(
+        StorageOp::WalAdopt {
+            doc: h.core.config.doc.clone(),
+            from: WalOwner::Session(SessionId(uuid_value::Uuid::from_u128(99))),
+            to: h.core.config.session,
+            first_seq: first,
+            covers: WalSeq(1),
+            expected: Vec::new(),
+        },
+        StorageCompletion::Adopt {
+            first,
+            records: Vec::new(),
+        },
+        now(100),
+        &mut h.out,
+    );
+    h.at(
+        100,
+        SyncInput::Storage(StorageEvent::Adopted {
+            id,
+            result: Err(StorageFailure::Other),
+        }),
+    );
+    assert_eq!(h.core.load_retry, Some(Millis(2100)));
+    h.at(2099, SyncInput::Tick);
+    assert!(!h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::Load { .. },
+            ..
+        }
+    )));
+    h.at(2100, SyncInput::Tick);
+    assert!(h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::Load { .. },
+            ..
+        }
+    )));
+    let load = h.storage_id();
+    h.send(SyncInput::Storage(StorageEvent::Loaded {
+        id: load,
+        result: Ok(LocalState {
+            snapshot: None,
+            orphans: Vec::new(),
+            assist: Vec::new(),
+        }),
+    }));
+    assert_eq!(h.core.wal.health, StorageHealth::Ok);
+    assert_eq!(h.core.load_retry, None);
+}

@@ -292,6 +292,13 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
     sim.validate();
     assert!(sim.failures.is_empty());
     let store = sim.profiles.get_mut(&profile).unwrap();
+    let expected = store
+        .image()
+        .entries
+        .iter()
+        .filter(|((doc, owner, _), _)| doc == &first && *owner == WalOwner::Legacy)
+        .map(|(_, row)| row.clone())
+        .collect();
     let (token, at) = store.issue(
         PendingWrite {
             client: ClientName("a".into()),
@@ -303,6 +310,7 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
                 to: session,
                 first_seq: WalSeq(10),
                 covers: WalSeq(0),
+                expected,
             },
         },
         0,
@@ -311,6 +319,13 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
     let completion = store
         .complete(token, &profile, at, doc_sync_core::UnixMillis(100))
         .unwrap();
+    assert!(matches!(
+        completion.event,
+        doc_sync_core::StorageEvent::Adopted { result: Ok(1), .. }
+    ));
+    assert!(completion.facts.iter().any(
+        |fact| matches!(fact, Fact::WalAdopted { map, .. } if map == &[(WalSeq(1), WalSeq(10))])
+    ));
     store
         .durable
         .entries
