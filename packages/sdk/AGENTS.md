@@ -17,7 +17,7 @@ enforced by the ordinary backend APIs.
   `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
   native file type's route and falls back to `/app/md/` before detail loads.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
-  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `Spreadsheet` (`src/entities/spreadsheets/spreadsheet.ts`, its own code-mode entity) whose `read`,
   `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
   `edit(instructions)` overrides `Document.edit` with the worker's spreadsheet
   writer model; code mode hides `ReadSpreadsheet`, `CalculateSpreadsheet` and
