@@ -98,6 +98,7 @@ import {
   dateHeaderLabel,
   type InboxListItem,
   type InboxStackItemPlace,
+  inboxSectionEnds,
   isInboxNotification,
   isInboxRow,
   isInboxStackItem,
@@ -115,6 +116,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 /** Stepping through the list and moving on from a done row replace the entry. */
@@ -238,10 +240,10 @@ function ListStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The unified notifications list beside a preview of the chosen row: one card
+ * The unified notifications list beside a preview of the chosen row: one row
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
- * right arrow, unfolds them below the card, and each opens at its own location.
+ * right arrow, unfolds them below the row, and each opens at its own location.
  * All and Unread switch the list, and the choice is kept between visits.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list
@@ -253,54 +255,51 @@ export function NotificationsView(props: NotificationsViewProps) {
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
   const filters = createInboxFilters(context.filterStorage);
-  const feed = context.createFeed(() => ({ rowTypes: filters.rowTypes() }));
-  const inbox = createInboxList(
-    feed,
-    {
-      pushUndo: (entry) => pushUndo(entry),
-      announceDone: (count, undo) => {
-        const id = toast.success(
-          t('notificationsInbox.markedDone', { count }),
+  const feed = context.createFeed(filters.scope);
+  const inbox = createInboxList(feed, {
+    pushUndo: (entry) => pushUndo(entry),
+    announceDone: (count, undo) => {
+      const id = toast.success(t('notificationsInbox.markedDone', { count }), {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
           {
-            actions: [
-              {
-                label: t('notificationsInbox.undo'),
-                icon: ArrowCounterClockwise,
-                onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-              },
-            ],
-            duration: 3_000,
-            stack: true,
-            hideOnMobile: true,
-          }
-        );
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceCleared: (count, undo) => {
-        const id =
-          count === 0
-            ? toast.success(t('notificationsInbox.clearedNothing'))
-            : toast.success(t('notificationsInbox.cleared', { count }), {
-                actions: [
-                  {
-                    label: t('notificationsInbox.undo'),
-                    icon: ArrowCounterClockwise,
-                    onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-                  },
-                ],
-                duration: 8_000,
-                stack: true,
-              });
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceFailure: (message) => toast.failure(message),
+            label: t('notificationsInbox.undo'),
+            icon: ArrowCounterClockwise,
+            onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+          },
+        ],
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
     },
-    filters.includesRow
-  );
+    announceCleared: (count, undo) => {
+      const id =
+        count === 0
+          ? toast.success(t('notificationsInbox.clearedNothing'))
+          : toast.success(t('notificationsInbox.cleared', { count }), {
+              dismissStyle: 'icon',
+              actionLayout: 'inline',
+              actions: [
+                {
+                  label: t('notificationsInbox.undo'),
+                  icon: ArrowCounterClockwise,
+                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                },
+              ],
+              duration: 8_000,
+              stack: true,
+            });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
+    },
+    announceFailure: (message) => toast.failure(message),
+  });
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
@@ -333,6 +332,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   // and a stack stays open through it.
   const stacks = createDisclosureState();
   const listItems = createInboxListItems(rows, stacks.isExpanded);
+  const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
   const anyStackOpen = createMemo(() =>
     rows().some((row) => row.count > 1 && stacks.isExpanded(row.id))
   );
@@ -368,7 +368,6 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
-    filters.keepRead(row.id);
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 
@@ -706,6 +705,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
           highlighted={highlighted()}
+          endsSection={sectionEnds().has(card.row().id)}
           receded={
             anyStackOpen() &&
             !stacks.isExpanded(card.row().id) &&
@@ -766,6 +766,8 @@ export function NotificationsView(props: NotificationsViewProps) {
           text={item().text}
           time={formatTimestamp(item().at)}
           last={isLast()}
+          count={entry.row().count}
+          endsSection={sectionEnds().has(entry.place.id)}
           more={
             isLast()
               ? entry.row().count - entry.row().content.notifications.length
@@ -784,6 +786,11 @@ export function NotificationsView(props: NotificationsViewProps) {
             })
           }
           onDone={() => markNotificationDone(entry.row(), entry.notification())}
+          onToggleStack={() => {
+            // Hide leaves with the item; focus returns to its stack's row.
+            list.focus.set(entry.row().id, { reason: 'pointer' });
+            stacks.toggle(entry.row().id);
+          }}
         />
       </SwipeToDone>
     );
@@ -794,14 +801,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-3 touch:pt-(--mobile-content-inset-top)"
+          class="touch:pt-(--mobile-content-inset-top)"
         >
-          <div class="flex h-7 items-center px-[13px]">
+          <div class="flex h-7 items-center pr-4 pl-6 mobile:pl-7">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-3 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
+              <ListSkeleton.Row class="h-[81px] items-start gap-3 py-3 pr-4 pl-6 touch:h-[81px] mobile:h-[87px] mobile:pl-7">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/3" />
@@ -1067,18 +1074,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                         fallback={() => (
                           <Show
                             when={previewTarget()}
-                            fallback={
-                              <EmptyStatePanel
-                                centered
-                                graphic={EmptyStateInboxTrayGraphic}
-                                title={t(
-                                  'notificationsInbox.noneSelectedTitle'
-                                )}
-                                description={t(
-                                  'notificationsInbox.noneSelectedDescription'
-                                )}
-                              />
-                            }
+                            fallback={<NotificationsNoneSelected />}
                           >
                             <PreviewPanel
                               target={previewTarget()}

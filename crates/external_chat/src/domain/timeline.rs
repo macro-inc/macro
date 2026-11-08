@@ -89,6 +89,9 @@ pub struct ExternalChatParticipant {
     pub alternate_jid: Option<String>,
     /// Their name at the provider, untrusted.
     pub display_name: Option<String>,
+    /// What to call them: their provider name, else their phone number,
+    /// else a generic name.
+    pub name: String,
     /// Group admin.
     pub admin: bool,
 }
@@ -347,7 +350,7 @@ pub struct StoredMessage {
     /// Stable message id.
     pub id: Uuid,
     /// Sender.
-    pub sender: ExternalChatSender,
+    pub sender: view::StoredPerson,
     /// Plain text; empty once deleted.
     pub body: String,
     /// Message quoted by this one.

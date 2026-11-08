@@ -20,6 +20,9 @@ each run.
   AI") step through `target_runner.rs`. An old single-agent task runs as one
   agent step. Event trigger conditions are answered before a run starts
   (`event_runs/condition.rs`), not by the runner.
+  Each code step's credential says who it writes as (`CodeRun::acts_as`,
+  from the task's `dangerously_operate_as_user`) and carries the routine id;
+  the run records it as `run.code_acts_as`.
   `run_context` builds what code receives: the trigger's time (not the
   clock), the schedule's zone or else the owner's, and the previous run
   (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and
@@ -36,15 +39,38 @@ each run.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
-  boxes in the web editor). It admits the work as automation usage, writes
-  through the `DraftModel` port (the harness's `routine_drafts.rs`), checks
-  code steps together as saving does, and has the model fix failures up to
-  three times; what's left comes back on its step. Before writing code, the
-  model names the SDK symbols it will use from the entity indexes, and
-  `RoutineCode::symbol_references` adds their full reference (as code mode's
-  ReadCodeDocs reads it) and the types they name; without those, nearly
-  every first draft failed the type check. The caller sends the
-  names and ids the model may use (`Workspace`); saving checks every id.
+  boxes in the web editor). It runs the draft in an ordinary hidden agent
+  session (`RoutineSessions`) of the in-process Macro agent: the person's own
+  (source `user`, origin `requested`) but hidden, a background session
+  (`AgentSession::is_background`) that notifies nobody and only the scheduler
+  may delete, never counted as a routine's run. It runs as the person, with its usual
+  tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
+  the session admits and bills its turns as agent session usage. One
+  prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
+  the `@agent` text on `RoutineNamespace` every code-mode session reads, so
+  the rules for writing a routine live there, not here), the code-step guide,
+  and only what is particular to drafting: leave out an item it can't
+  match exactly, and hand the routine back by checking it with `macro.routines.check`
+  (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
+  saved), naming what it created. The draft's `created` merges what its
+  checks named with what its recorded activity shows (`SessionCreations`,
+  read `ACTIVITY_SETTLE` after the turn stops, since activity is written
+  asynchronously), each marked `used` when the routine references it, so the
+  review can show items made for nothing or the routine's work done early. A check from a draft's
+  session, found from the request's code-mode invocation (`RequestSessions`),
+  is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
+  session and the drafter may run on different replicas. The drafter reads
+  the session's turn status until it ends, or for `CHECKED_GRACE` after the
+  first passing check (all bounded by `DRAFT_TIMEOUT`), turns the last
+  passing check (else the last check) into the draft, then stops and deletes
+  the session and the row, also when the request is dropped mid-draft;
+  `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
+  older than `STALE_DRAFT`, from the rows alone. Saving checks every id
+  again. The `routine.draft` span records the session id, checks, items
+  created, the session's tool calls and turns, status reads and outcome
+  (`timeout` included), never the words; `routine.check` records
+  whether a check passed and kept a draft's answer. `DraftContext` still
+  accepts and ignores the `workspace` older web clients send.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
@@ -165,6 +191,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- An event stamped with a `routine_id` (a routine run's write, even one
+  operating as its owner) never starts a routine: `IncomingEvent::normalize`
+  rejects it as `RoutineWrite`, for any routine, so two can't trigger each
+  other. Mail received, internal hops and sync-service document edits carry
+  no stamp.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

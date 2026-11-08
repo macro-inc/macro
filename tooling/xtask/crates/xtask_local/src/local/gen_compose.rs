@@ -20,6 +20,7 @@ use docker_compose_types as dct;
 use indexmap::IndexMap;
 use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
+use sha2::{Digest, Sha256};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
@@ -37,7 +38,7 @@ const EGRESS_CONTAINER_PORT: u16 = 8102;
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
-pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
+const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
@@ -161,6 +162,9 @@ pub fn generate(
     if mode.spec().runs_local_infra && !instance.is_default() {
         set_external_networks_and_volumes(&mut value, instance);
     }
+    if !instance.is_default() {
+        set_external_project_networks(&mut value, instance);
+    }
 
     let yaml = serde_yaml::to_string(&value).context("rendering override yaml")?;
     let path = instance
@@ -204,17 +208,17 @@ fn add_sdk_webhook_relay(
     instance: &Instance,
 ) -> Result<()> {
     super::sdk_webhook::ensure_keys(instance)?;
+    let context = repo_root().join("infra/local/sdk-webhook-relay");
+    let dockerfile = std::fs::read(context.join("Dockerfile"))
+        .with_context(|| format!("reading {}/Dockerfile", context.display()))?;
     let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
-        context: repo_root()
-            .join("infra/local/sdk-webhook-relay")
-            .display()
-            .to_string(),
+        context: context.display().to_string(),
         ..Default::default()
     });
     services.insert(
         "sdk-webhook-relay".to_string(),
         Some(dct::Service {
-            image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
+            image: Some(sdk_webhook_relay_image(&dockerfile)),
             build_: Some(build),
             ports: dct::Ports::Short(vec![format!(
                 "127.0.0.1:{}:22",
@@ -232,6 +236,13 @@ fn add_sdk_webhook_relay(
         }),
     );
     Ok(())
+}
+
+/// The relay's image tag, keyed on its Dockerfile. Compose only builds a tag that
+/// is missing, so a fixed tag keeps serving an image older than the Dockerfile.
+fn sdk_webhook_relay_image(dockerfile: &[u8]) -> String {
+    let digest = format!("{:x}", Sha256::digest(dockerfile));
+    format!("{SDK_WEBHOOK_RELAY_IMAGE}:{}", &digest[..12])
 }
 
 /// LocalStack (S3/SQS/DynamoDB), reachable as `localstack` on both networks.
@@ -541,6 +552,30 @@ fn set_external_networks_and_volumes(value: &mut Value, instance: &Instance) {
             .collect(),
         ),
     );
+}
+
+/// Make the networks the base compose files define for each project external, so
+/// they sit on the instance's allocated subnet instead of drawing from Docker's
+/// small default pool. External also means an existing instance keeps the
+/// networks it has: Compose never compares or recreates them.
+fn set_external_project_networks(value: &mut Value, instance: &Instance) {
+    let root = value.as_mapping_mut().expect("compose root is a mapping");
+    let networks = root
+        .entry("networks".into())
+        .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()))
+        .as_mapping_mut()
+        .expect("compose networks is a mapping");
+    for (key, name) in [
+        ("services", instance.network_services()),
+        ("auth-internal", instance.network_auth_internal()),
+    ] {
+        let mut network = serde_yaml::Mapping::new();
+        // The base files' `driver: bridge` conflicts with `external`.
+        network.insert("driver".into(), reset_null());
+        network.insert("external".into(), true.into());
+        network.insert("name".into(), name.into());
+        networks.insert(key.into(), Value::Mapping(network));
+    }
 }
 
 /// `!reset null`.

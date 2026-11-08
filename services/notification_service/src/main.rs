@@ -233,7 +233,11 @@ pub async fn main() -> anyhow::Result<()> {
 
     let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
     let email_adapter = SignedUnsubscribeLinks::new(
-        EmailAdapter::new(ses_client, crate::env::SENDER_ADDRESS.clone()),
+        EmailAdapter::new(
+            ses_client,
+            crate::env::SENDER_ADDRESS.clone(),
+            config.ses_configuration_set.value().map(str::to_owned),
+        ),
         macro_service_urls::NotificationServiceUrl::new_for_environment(config.environment)?
             .parse_url()?,
         hmac_key.clone(),

@@ -42,10 +42,10 @@ async fn list(repo: &CompaniesRepositoryImpl, filter: Expr<Contact>) -> Vec<CrmC
 async fn combines_authorized_teams_before_collapsing_email(pool: PgPool) {
     let repo = CompaniesRepositoryImpl::new(pool);
     let rows = list(&repo, Expr::val(Contact::Include)).await;
-    assert_eq!(ids(&rows), [1011, 1005, 1004, 1010].map(id));
-    assert_eq!(rows[0].team_id, id(11));
+    assert_eq!(ids(&rows), [1009, 1011, 1005, 1004, 1010].map(id));
+    assert_eq!(rows[1].team_id, id(11));
     assert_eq!(
-        rows[0].company_name.as_deref().map(str::to_owned),
+        rows[1].company_name.as_deref().map(str::to_owned),
         Some("Company 101".to_owned())
     );
     assert!(
@@ -53,10 +53,9 @@ async fn combines_authorized_teams_before_collapsing_email(pool: PgPool) {
             .await
             .is_empty()
     );
-    assert!(
-        list(&repo, Expr::val(Contact::TeamId(id(13))))
-            .await
-            .is_empty()
+    assert_eq!(
+        ids(&list(&repo, Expr::val(Contact::TeamId(id(13)))).await),
+        [id(1009)]
     );
 }
 

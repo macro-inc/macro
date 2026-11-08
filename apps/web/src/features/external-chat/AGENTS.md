@@ -121,7 +121,9 @@ belong to `features/external-view`. Architecture:
   text send.
 - Macro users (senders and system-line people with a `userId`) show their
   Macro name and avatar; everyone else shows their provider name
-  (`imported_author`).
+  (`imported_author`). DSS names every sender and member (provider name,
+  else phone number, else a generic name); render `sender.name` and the
+  member's `name` as sent, without client-side fallbacks.
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

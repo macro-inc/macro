@@ -4,6 +4,7 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { TutorialPill } from '@app/features/video-tutorials';
 import { SplitRouter } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
@@ -262,6 +263,10 @@ function ChannelsViewRoot() {
                                           Choose a channel or person from the
                                           sidebar to open the conversation here.
                                         </p>
+                                        <TutorialPill
+                                          tutorial="chat"
+                                          class="mt-3 self-center"
+                                        />
                                       </div>
                                     </div>
                                   </>

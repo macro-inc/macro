@@ -1,0 +1,114 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_observability.rs
+name: Deploy Observability
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        required: true
+        default: true
+        description: Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes Grafana, Loki, Tempo and GoAlert down for several minutes.
+permissions:
+  contents: read
+jobs:
+  deploy:
+    name: Deploy observability
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
+    concurrency:
+      group: deploy-observability-prod
+      cancel-in-progress: false
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    timeout-minutes: 180
+    steps:
+    - name: Refuse branches other than main
+      run: |
+        if [ "$GITHUB_REF" != refs/heads/main ]; then
+          echo "::error::Deploy observability from main"
+          exit 1
+        fi
+      shell: bash
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: 1.3.13
+    - name: Install infra dependencies
+      run: bun install --frozen-lockfile
+      shell: bash
+      working-directory: infra
+    - name: Install Pulumi
+      uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
+    - name: Refuse a commit older than main's last stack change
+      run: bun deploy/release.ts latest
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      working-directory: infra/stacks/observability
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+    - id: find
+      name: Find this source's image
+      run: bun deploy/release.ts find
+      shell: bash
+      working-directory: infra/stacks/observability
+    - name: Build the NixOS image
+      if: steps.find.outputs.stage == 'build'
+      run: |
+        set -euo pipefail
+        if [ -e /dev/kvm ]; then
+          echo "KVM is available"
+        else
+          echo "::warning::No /dev/kvm: the image builds under QEMU emulation"
+        fi
+        features="$(nix config show system-features) kvm"
+        time nix build . --option system-features "$features" --print-build-logs --out-link result
+        du -shL result/*.vhd
+      shell: bash
+      working-directory: infra/stacks/observability
+    - id: publish
+      name: Publish the AMI
+      if: steps.find.outputs.stage == 'build'
+      run: bun deploy/release.ts publish
+      shell: bash
+      env:
+        NIX_SYSTEM: ${{ steps.find.outputs.system }}
+      working-directory: infra/stacks/observability
+    - name: Smoke-boot the AMI on a throwaway host
+      if: steps.find.outputs.stage != 'deploy'
+      run: bun deploy/release.ts smoke
+      shell: bash
+      env:
+        AMI: ${{ steps.publish.outputs.ami || steps.find.outputs.ami }}
+      working-directory: infra/stacks/observability
+    - name: Check the plan and roll out
+      run: bun deploy/release.ts deploy
+      shell: bash
+      env:
+        AMI: ${{ steps.publish.outputs.ami || steps.find.outputs.ami }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      working-directory: infra/stacks/observability
+    - name: Remove smoke resources a cancelled run left
+      if: always() && steps.find.outputs.stage != '' && steps.find.outputs.stage != 'deploy'
+      run: bun deploy/release.ts cleanup
+      shell: bash
+      working-directory: infra/stacks/observability
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix

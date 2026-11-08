@@ -5,10 +5,15 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { StepId } from './stepId';
 
+<<<<<<<< HEAD:apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/codeStepId.ts
+export type CodeStepId = null | StepId;
+========
 export type RoutineCatalogParams = {
   /**
    * IANA time zone, e.g. `America/New_York`.
    */
   timezone: string;
 };
+>>>>>>>> 131e9b72b8 (chore(routines): regenerate the scheduler clients for the catalog endpoint):apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineCatalogParams.ts

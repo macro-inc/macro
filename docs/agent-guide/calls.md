@@ -2,6 +2,8 @@
 
 ## Calls — `/app/calls`
 
+The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits below the touch inset, outside the virtualized rows.
+
 On desktop a collapsible sidebar starts with the shared outlined `New` button,
 with `Search calls` immediately left of collapse. Search reveals its field above
 New. The sidebar also holds
@@ -230,6 +232,10 @@ profile pictures; initials are the fallback when no photo is available.
 In-call participant tiles fill their grid cell but are never wider than 16:9,
 so a wide window centers them instead of cropping cameras; check a single remote
 participant in a wide window and at phone width.
+Participants with the LiveKit `macro.program` attribute show an **Agent** badge
+beside their name on video tiles, screen shares, and in the Participants list,
+including on phones.
+
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -348,6 +354,14 @@ or failed capture shows its reason under the call controls. Browsers
 and older desktop builds keep the browser's own picker. Verify on a Mac by
 sharing a display and a window, stopping, and cancelling the picker.
 
+### Programs in calls
+
+An agent account joins with its own API key through the SDK. Starting a channel
+call uses `POST /call/{channel_id}`; joining an existing call uses
+`POST /call/record/{call_id}/join`, which never starts one. Meeting joins use
+`POST /call/meetings/join/{token}`. When only programs have remained in a call
+for 60 seconds, the call ends automatically.
+
 ### Work in a call
 
 Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and
@@ -452,7 +466,8 @@ remains usable; Answer opens the call screen directly for microphone permission
 and retry errors. Verify allowed/denied full-screen access, missing microphone
 permission, cancellation/expiry and stale notification actions after a replacement
 call arrives. While Android 14+ blocks full-screen notifications, a toast
-offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
+offers **Allow** (system setting) or **Not now**; returning to Macro with access
+granted removes it. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
 

@@ -41,7 +41,7 @@ jobs:
       working-directory: packages/sdk
     - name: Validate SDK
       if: steps.resolve.outputs.release == 'true'
-      run: bun run check && bun test && bun run coverage && bun run build
+      run: bun run check && bun test && bun run coverage && bun run build && bun run check:pack
       working-directory: packages/sdk
     - name: Publish package
       if: steps.resolve.outputs.release == 'true'

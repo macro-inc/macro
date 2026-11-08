@@ -256,6 +256,95 @@ impl PgCallRepo {
 impl CallRepository for PgCallRepo {
     type Err = sqlx::Error;
 
+    async fn can_join_call(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"SELECT (
+                EXISTS (
+                    SELECT 1 FROM calls c
+                    JOIN comms_channel_participants p ON p.channel_id = c.channel_id
+                    WHERE c.id = $1 AND p.user_id = $2 AND p.left_at IS NULL
+                ) OR EXISTS (
+                    SELECT 1 FROM calls c
+                    JOIN call_meetings m ON m.id = c.meeting_id
+                    WHERE c.id = $1 AND c.channel_id IS NULL AND m.cancelled_at IS NULL
+                      AND (m.user_id = $2 OR EXISTS (
+                          SELECT 1 FROM call_participants p
+                          WHERE p.call_id = c.id AND p.user_id = $2
+                      ) OR EXISTS (
+                          SELECT 1 FROM call_invitees i
+                          WHERE i.call_id = c.id AND i.user_id = $2
+                      ))
+                )
+            ) AS "allowed!""#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    async fn list_joinable_calls(&self, user_id: &str) -> Result<Vec<Call>, Self::Err> {
+        sqlx::query_as!(
+            Call,
+            r#"
+            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id
+            FROM calls c
+            WHERE EXISTS (
+                SELECT 1 FROM comms_channel_participants p
+                WHERE p.channel_id = c.channel_id AND p.user_id = $1 AND p.left_at IS NULL
+            ) OR (c.channel_id IS NULL AND EXISTS (
+                SELECT 1 FROM call_meetings m
+                WHERE m.id = c.meeting_id AND m.cancelled_at IS NULL
+                  AND (m.user_id = $1 OR EXISTS (
+                      SELECT 1 FROM call_participants p WHERE p.call_id = c.id AND p.user_id = $1
+                  ) OR EXISTS (
+                      SELECT 1 FROM call_invitees i WHERE i.call_id = c.id AND i.user_id = $1
+                  ))
+            ))
+            ORDER BY c.created_at DESC
+        "#,
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    async fn is_agent_account(&self, user_id: &str) -> Result<bool, Self::Err> {
+        Ok(
+            sqlx::query_scalar!(r#"SELECT "isAgent" FROM "User" WHERE id = $1"#, user_id)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or(false),
+        )
+    }
+
+    async fn set_participant_client(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+        client: &str,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE call_participants SET client = $3 WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL",
+            call_id, user_id, client,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn archive_call_if_program_only(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<ArchivedCall>, CallError> {
+        self.archive_session(
+            call_id,
+            false,
+            Some(Utc::now() - chrono::TimeDelta::seconds(60)),
+        )
+        .await
+    }
+
     async fn insert_meeting_preparation(
         &self,
         actor: &str,
@@ -1043,7 +1132,7 @@ impl CallRepository for PgCallRepo {
     }
 
     async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
-        self.archive_session(call_id, false)
+        self.archive_session(call_id, false, None)
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
@@ -1051,7 +1140,7 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
     ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, true).await
+        self.archive_session(call_id, true, None).await
     }
 
     #[tracing::instrument(err, skip(self))]
