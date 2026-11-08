@@ -45,11 +45,15 @@ pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
 pub mod stage;
+pub mod staleness;
 pub mod status;
 pub mod summary;
 pub mod supervisor;
 pub mod tls;
 pub mod validate;
+
+#[cfg(test)]
+mod test_support;
 
 #[cfg(test)]
 mod test;
@@ -654,12 +658,13 @@ fn rebuild_and_reload(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
+    only: Option<&[&'static inventory::RustService]>,
 ) -> Result<Vec<String>> {
     if stage.is_verbose() {
         // Run each step on the parent stage so the build (per group) and the
         // reload each show their own `Done <elapsed>` — the build-vs-reload
         // split — rather than folding into one line.
-        run_rebuild(stage, mode, instance, env, target, build_aux_services)
+        run_rebuild(stage, mode, instance, env, target, build_aux_services, only)
     } else {
         let mut reloaded = Vec::new();
         stage.run_step("Rebuilding & reloading services", || {
@@ -670,6 +675,7 @@ fn rebuild_and_reload(
                 env,
                 target,
                 build_aux_services,
+                only,
             )?;
             Ok(())
         })?;
@@ -680,6 +686,9 @@ fn rebuild_and_reload(
 /// Rebuild, then restart only the services running an older binary than the one
 /// on disk. Runs on a quiet sub-stage when folded, or the parent stage under
 /// `--verbose` so each step times itself. Returns the reloaded service names.
+///
+/// `only` rebuilds just those services; the others keep their binaries, and
+/// [`staleness`] records which of them now run older code than the tree.
 fn run_rebuild(
     stage: &Stage,
     mode: Mode,
@@ -687,19 +696,17 @@ fn run_rebuild(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
+    only: Option<&[&'static inventory::RustService]>,
 ) -> Result<Vec<String>> {
+    let mark = staleness::BuildMark::now(&repo_root());
+    let options = build::BuildOptions {
+        no_build: false,
+        binaries_dir: None,
+        only: only.map(<[_]>::to_vec),
+    };
     if build_aux_services {
         std::thread::scope(|scope| {
-            let rust_build = scope.spawn(|| {
-                build::resolve(
-                    stage,
-                    target,
-                    &build::BuildOptions {
-                        no_build: false,
-                        binaries_dir: None,
-                    },
-                )
-            });
+            let rust_build = scope.spawn(|| build::resolve(stage, target, &options));
             let aux_build = scope.spawn(|| build_aux_service_images(stage, instance, env));
             let binaries = rust_build
                 .join()
@@ -711,19 +718,35 @@ fn run_rebuild(
             aux
         })?;
     } else {
-        build::resolve(
-            stage,
-            target,
-            &build::BuildOptions {
-                no_build: false,
-                binaries_dir: None,
-            },
-        )?;
+        build::resolve(stage, target, &options)?;
     }
     if build_aux_services {
         recreate_aux_service_containers(stage, instance, env)?;
     }
-    reload_changed_services(stage, mode, instance, env, target)
+    let reloaded = reload_changed_services(stage, mode, instance, env, target)?;
+    record_builds(instance, mode, mark, only);
+    Ok(reloaded)
+}
+
+/// Record what each service was just built from, for [`staleness`]. A failure
+/// only loses the stale list, so it is reported, not raised.
+fn record_builds(
+    instance: &Instance,
+    mode: Mode,
+    mark: Result<staleness::BuildMark>,
+    only: Option<&[&'static inventory::RustService]>,
+) {
+    let all: Vec<&inventory::RustService> = inventory::services_for_mode(mode).collect();
+    let recorded = mark.and_then(|mark| match only {
+        None => staleness::record_full(instance, &mark, all.iter().copied()),
+        Some(built) => {
+            staleness::record_partial(instance, &repo_root(), &mark, built, &all).map(|_| ())
+        }
+    });
+    if let Err(error) = recorded {
+        staleness::clear(instance);
+        eprintln!("could not record which services are on older code: {error:#}");
+    }
 }
 
 /// Recreate each service whose binary is newer than its container, and return
@@ -815,7 +838,15 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
+                let _ = rebuild_and_reload(
+                    stage,
+                    mode,
+                    instance,
+                    env,
+                    target,
+                    build_aux_services,
+                    None,
+                );
                 print_hotkeys(stage);
             }
             Ok(Key::Char('f' | 'F')) => {
@@ -887,14 +918,23 @@ fn prepare(
         // those services. Bake runs this in parallel with the service build.
         build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
     } else {
-        build::resolve(
+        let mark = staleness::BuildMark::now(&repo_root());
+        let binaries = build::resolve(
             stage,
             target,
             &build::BuildOptions {
                 no_build: args.build.no_build,
                 binaries_dir: args.build.binaries_dir.clone(),
+                only: None,
             },
-        )?
+        )?;
+        if args.build.no_build || args.build.binaries_dir.is_some() {
+            // Not built here, so nothing to compare a later partial rebuild to.
+            staleness::clear(instance);
+        } else {
+            record_builds(instance, mode, mark, None);
+        }
+        binaries
     };
 
     // Generate the override + the Caddyfile (the frontend reaches the services
@@ -1537,6 +1577,7 @@ pub fn build_services_only() -> Result<()> {
         &build::BuildOptions {
             no_build: false,
             binaries_dir: None,
+            only: None,
         },
     )?;
     stage.note(&format!("binaries at {}", binaries.host_dir().display()));

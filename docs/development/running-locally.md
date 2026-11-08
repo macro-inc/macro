@@ -336,6 +336,7 @@ just run_local --instance <name>                # returns once ready; nonzero na
 just run_local status --instance <name> --json  # phase, health, URLs, last job, containers
 just run_local wait --instance <name>           # block until a running bring-up or rebuild ends
 just run_local rebuild --instance <name>        # the `r` hotkey: rebuild changed services and reload them
+just run_local rebuild --services contacts_service --instance <name>  # rebuild and reload only these
 just run_local restart-frontend --instance <name>  # the `f` hotkey
 just run_local logs --instance <name>           # the last job's log
 just run_local logs --service frontend --instance <name>  # Vite; any compose service name works
@@ -528,6 +529,15 @@ Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only servic
 whose binary is newer than their container restart, so a build that failed partway
 still gets its finished services reloaded next time.
 
+To rebuild only the services you are working on, pass `--services` with compose or
+binary names, comma-separated: `just run_local rebuild --services contacts_service`
+or `just stack update --services contacts_service,email_service`. An edit to a crate
+most services share then rebuilds in seconds instead of minutes, but the other
+services keep running the code they were last built from. `status`, `status --json`
+(`stale_services`) and the rebuild output list every service whose crates changed
+since its own last build, with the command that rebuilds them all. A full rebuild
+(`r`, or either command without `--services`) clears the list.
+
 Three services have Docker-built images. They are not rebuilt by default:
 
 - `sync_service`
@@ -558,6 +568,7 @@ just stack up                  # wipe, bring everything up with a static fronten
 just stack status --json      # same as `just run_local status --json`
 just stack update             # same rebuild as `just run_local rebuild`, without the background job
 just stack update --frontend  # also rebuild the frontend bundle
+just stack update --services contacts_service  # rebuild and reload only these; status lists the rest if stale
 just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```
