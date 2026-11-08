@@ -1472,8 +1472,15 @@
             "description": "It changes or sends what other people see."
           },
           "code": {
-            "type": ["object", "null"],
-            "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineStep",
+                "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+              }
+            ]
           },
           "description": {
             "type": "string",

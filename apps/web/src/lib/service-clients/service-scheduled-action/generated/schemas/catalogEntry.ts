@@ -19,8 +19,6 @@ export interface CatalogEntry {
   action: string;
   /** It changes or sends what other people see. */
   affectsOthers: boolean;
-  /** Its code step, in the shape a routine's task holds it; absent where
-code can't be saved, or when it is an Ask AI routine. */
   code?: CatalogEntryCode;
   /** What it does, in a short line. */
   description: string;

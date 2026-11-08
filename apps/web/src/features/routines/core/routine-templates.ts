@@ -1,7 +1,7 @@
 import type { CatalogEntry } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft } from './draft';
 import { createEmptyDraft, withNewDraftSteps } from './routine-draft';
-import { agentStep, type StepDraft, stepsFromTask } from './routine-steps';
+import { agentStep, type StepDraft, stepsFromWire } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import { describeTrigger, type RoutineTriggerDraft } from './routine-triggers';
 
@@ -73,7 +73,7 @@ function templateSteps(
 ): StepDraft[] {
   const code =
     context.codeSteps && template.code
-      ? stepsFromTask({ steps: [template.code] })
+      ? stepsFromWire([template.code])
       : undefined;
   return code ?? [agentStep(context.target, template.instructions)];
 }

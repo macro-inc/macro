@@ -36,7 +36,6 @@ export * from './agentTaskModel';
 export * from './aiAdmissionErrorBody';
 export * from './catalogEntry';
 export * from './catalogEntryCode';
-export * from './catalogEntryCodeAnyOf';
 export * from './catalogEntryNamedKnobs';
 export * from './checkedStepProblems';
 export * from './checkRoutineRequest';

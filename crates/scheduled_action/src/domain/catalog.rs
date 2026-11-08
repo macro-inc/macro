@@ -36,7 +36,7 @@ pub struct CatalogEntry {
     pub trigger: ActionTrigger,
     /// Its code step, in the shape a routine's task holds it; absent where
     /// code can't be saved, or when it is an Ask AI routine.
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<routine_program::Step>)]
     pub code: Option<Value>,
     /// The code step's text knobs whose value names one of the owner's
     /// items (a tag, channel or label), by knob name.
