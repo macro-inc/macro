@@ -65,7 +65,7 @@ pub(crate) fn get(
     }
     if receiver.get("$node").is_some() {
         let key = node_key(receiver)?;
-        let state = r.states.get(&integer(&receiver["ver"])?).cloned();
+        let state = r.bindings.state(&integer(&receiver["ver"])?)?;
         let view = state
             .as_ref()
             .filter(|s| s.view().contains(key))
