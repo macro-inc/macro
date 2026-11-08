@@ -64,6 +64,7 @@ chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email = { path = "../../crates/email", default-features = false, optional = true }
 email_db_client = { path = "../../crates/email_db_client" }
+encoding_rs = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
