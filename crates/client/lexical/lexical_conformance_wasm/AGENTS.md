@@ -36,7 +36,7 @@ Never import them from production crates or bundles.
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance_wasm --target wasm32-unknown-unknown -j4`
 - `cargo tree --workspace -i lexical_conformance_wasm -e normal`: only itself.
 - `cargo x deps --check`, `just check`.
-- `STEPS=10000 bunx vitest run --config packages/lexical-conformance/diff/vitest.config.mts`
+- Run both differential configurations using [the differential guide](../../../../packages/lexical-conformance/diff/README.md); keep their module identities isolated.
 
 ## Gotchas
 
