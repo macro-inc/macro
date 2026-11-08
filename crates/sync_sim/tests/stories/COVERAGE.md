@@ -185,3 +185,11 @@ spans remain visible; repeated real projection recoveries exhaust the core budge
 Reopen restores strict projection checks and retained-history convergence.
 Negative mutations cover configuration-only, healthy peers, incarnation identity,
 missing fault receipts, unrelated import spans and unchanged convergence checks.
+
+The editor ReadOnly ruling is exercised by
+`editor_readonly::revoked_editor_retains_exact_private_rows_and_delivers_after_regrant`:
+private astral text remains durable and unsaved/access-revoked without a read-only
+push, then delivers automatically on write regrant. Missing, quarantined,
+already-delivered, unparked and foreign-user retention cannot exempt convergence;
+missing bytes cannot exempt edit loss. Own projection and acknowledged-edit
+checks remain strict.

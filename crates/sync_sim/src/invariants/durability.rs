@@ -45,6 +45,7 @@ fn retained_readonly_row(
         access,
         profile: scope,
         doc: row_doc,
+        user,
         ..
     } = &outcome.events[start].fact
     else {
@@ -81,6 +82,9 @@ fn retained_readonly_row(
                     key.as_str() == document_key(doc, &outcome.config)
                         && *row_owner == owner
                         && *row_seq == seq
+                        && row.record.user.0 == *user
+                        && !row.delivered
+                        && !row.record.quarantined
                         && loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true).is_ok()
                         && crate::document::spans(&row.record.bytes).is_ok_and(|retained| {
                             required.iter().all(|span| ranges_cover(&retained, span))
@@ -360,7 +364,8 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                     && peer.doc == doc
                     && peer.parked.iter().any(|(seq, reason)| {
                         rows.contains(&(WalOwner::Session(peer.session), *seq))
-                            && (peer.access != Access::Edit || (corruption && reason == "Poison"))
+                            && corruption
+                            && reason == "Poison"
                     })
             });
             // A stopped tab has no later Crashed fact, but a profile power loss
@@ -391,6 +396,7 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
         }) {
             for (seq, reason) in &peer.parked {
                 if reason == "ReadOnly"
+                    && !peer.delivered.contains(seq)
                     && let Some(retained) = peer.parked_spans.get(seq)
                 {
                     exempt.extend(retained.clone());
@@ -506,4 +512,81 @@ fn document_key(doc: DocIx, config: &SimConfig) -> String {
     } else {
         id
     }
+}
+
+// Read-only replicas can retain private history, but every operation outside the
+// server vector must be backed by exact checksum-valid ReadOnly parked rows.
+pub(super) fn readonly_private_history_retained(outcome: &Outcome, client: &ClientFinal) -> bool {
+    if client.access == Access::Edit {
+        return false;
+    }
+    let Some(server) = outcome.finals.servers.get(&client.doc) else {
+        return false;
+    };
+    if !server
+        .oplog_vv
+        .iter()
+        .all(|(peer, end)| client.oplog_vv.get(peer).copied().unwrap_or(0) >= *end)
+    {
+        return false;
+    }
+    let extra = client
+        .oplog_vv
+        .iter()
+        .filter_map(|(peer, end)| {
+            let start = server.oplog_vv.get(peer).copied().unwrap_or(0);
+            (*end > start).then_some(IdSpan {
+                peer: *peer,
+                start,
+                end: *end,
+            })
+        })
+        .collect::<Vec<_>>();
+    if extra.is_empty() {
+        return false;
+    }
+    let mut retained = Vec::new();
+    if let Some(store) = outcome.finals.profiles.get(&client.profile) {
+        for ((key, owner, seq), row) in &store.entries {
+            if key.as_str() != document_key(client.doc, &outcome.config)
+                || row.record.user.0 != client.user
+                || row.delivered
+                || row.record.quarantined
+            {
+                continue;
+            }
+            let WalOwner::Session(session) = owner else {
+                continue;
+            };
+            if !opened(outcome, *session)
+                .is_some_and(|(_, _, doc, user)| doc == client.doc && user == client.user)
+            {
+                continue;
+            }
+            let Ok(spans) = crate::document::spans(&row.record.bytes) else {
+                continue;
+            };
+            if retained_readonly_row(outcome, &client.profile, client.doc, *owner, *seq, &spans) {
+                retained.extend(spans);
+            }
+        }
+    }
+    for peer in outcome.finals.clients.values().filter(|peer| {
+        peer.alive
+            && peer.kind == ClientKind::AiWorker
+            && peer.access != Access::Edit
+            && peer.doc == client.doc
+            && peer.profile == client.profile
+            && peer.user == client.user
+    }) {
+        for (seq, reason) in &peer.parked {
+            if reason == "ReadOnly"
+                && !peer.delivered.contains(seq)
+                && let Some(spans) = peer.parked_spans.get(seq)
+            {
+                retained.extend(spans.iter().cloned());
+            }
+        }
+    }
+    extra.iter().all(|span| ranges_cover(&retained, span))
 }
