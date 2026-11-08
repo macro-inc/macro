@@ -51,6 +51,25 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::rich::call(r, tx, name, a);
     }
     match name {
+        "lexical.nodeStatesAreEquivalent" | "lexical/LexicalNodeState.nodeStatesAreEquivalent" => {
+            let state = |value: Option<&Value>| -> Result<Option<NodeState>> {
+                let Some(value) =
+                    value.filter(|value| !value.is_null() && value.get("$undef").is_none())
+                else {
+                    return Ok(None);
+                };
+                let record = value
+                    .get("$nodeState")
+                    .ok_or_else(|| fail("NodeState argument"))?;
+                let key = node_key(record)?;
+                let state = r.states.get(&integer(&record["ver"])?);
+                let view = state.map(EditorState::view).unwrap_or(tx.view());
+                Ok(view.node_or_err(key)?.node_state().cloned())
+            };
+            let left = state(a.first())?;
+            let right = state(a.get(1))?;
+            Ok(json!(NodeState::equivalent(left.as_ref(), right.as_ref())))
+        }
         "@lexical/overflow.$createOverflowNode" => {
             let key = tx.create(crate::test_nodes::OverflowNode::default())?.key();
             r.node(tx.view(), key)
