@@ -6,7 +6,7 @@ publish = false
 autotests = false
 
 [dependencies]
-document_session = { workspace = true, features = ["conformance"] }
+document_session = { workspace = true, features = ["conformance", "test-faults"] }
 lexical_model = { workspace = true, features = ["model-segmentation"] }
 lexical_loro.workspace = true
 lexical_markdown.workspace = true
@@ -32,6 +32,7 @@ rand_chacha.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
+tracing.workspace = true
 specta-serde.workspace = true
 specta-typescript.workspace = true
 macro_env_var = { path = "../macro_env_var" }

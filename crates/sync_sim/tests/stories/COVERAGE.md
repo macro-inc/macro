@@ -62,7 +62,6 @@ read-only and observes IDs before projection fixups, not inferred new op spans.
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
 Remaining application/editor producers:
-reset-budget closure driven by a faulty editor projection;
 comment-only gate verdict parity; editor generation
 and observed undo/backspace floors. Existing core unit
 reset-budget tests do not establish faulty-editor integration.
@@ -179,3 +178,10 @@ model follow-ups for each character of the S8 corpus. Heading/task-list/quote
 conversions and literal triple-backtick decline match the source web-plugin probe.
 Ordinary Type stays literal; the shipping AI host explicitly lacks this browser
 capability. Strict projection/editor/WAL/quiet checks and exact replay remain enabled.
+
+`editor_projection_fault`: a test-only local serialization producer emits actual
+canonical-but-incorrect node type changes. Receiver resync errors and imported
+spans remain visible; repeated real projection recoveries exhaust the core budget.
+Reopen restores strict projection checks and retained-history convergence.
+Negative mutations cover configuration-only, healthy peers, incarnation identity,
+missing fault receipts, unrelated import spans and unchanged convergence checks.

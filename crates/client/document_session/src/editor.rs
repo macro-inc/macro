@@ -63,6 +63,12 @@ pub struct EditorSurface {
     #[cfg(feature = "conformance")]
     pub(crate) undo_applied: Vec<crate::UndoObservation>,
     cursor: Option<lexical_loro::SelectionCursors>,
+    #[cfg(feature = "test-faults")]
+    pub(crate) wrong_next_type: bool,
+    #[cfg(feature = "test-faults")]
+    pub(crate) fault_quote: bool,
+    #[cfg(feature = "test-faults")]
+    pub(crate) projection_fault_writes: Vec<crate::ProjectionFaultWrite>,
     #[cfg(test)]
     pub(crate) fail_next_remote: bool,
 }
@@ -85,6 +91,12 @@ impl EditorSurface {
             #[cfg(feature = "conformance")]
             undo_applied: Vec::new(),
             cursor: None,
+            #[cfg(feature = "test-faults")]
+            wrong_next_type: false,
+            #[cfg(feature = "test-faults")]
+            fault_quote: false,
+            #[cfg(feature = "test-faults")]
+            projection_fault_writes: Vec::new(),
             #[cfg(test)]
             fail_next_remote: false,
         })
@@ -474,6 +486,12 @@ impl EditorSurface {
             Err(error) => &error.committed,
         };
         let count = self.group(commits, HistoryTime(now.mono.0))?;
+        #[cfg(feature = "test-faults")]
+        let fault = if std::mem::take(&mut self.wrong_next_type) {
+            self.prepare_projection_type_write(doc)?
+        } else {
+            None
+        };
         let changed = if access == Access::Edit && !commits.is_empty() && self.projection.is_some()
         {
             self.projection
@@ -484,6 +502,10 @@ impl EditorSurface {
         } else {
             false
         };
+        #[cfg(feature = "test-faults")]
+        if changed && let Some(fault) = fault {
+            self.inject_projection_type_write(doc, fault)?;
+        }
         if self.undo.as_ref().is_some_and(|u| u.undo_count() > count) {
             self.item_started = Some(HistoryTime(now.mono.0));
         }
