@@ -3,7 +3,7 @@ use crate::cognition::api::context::test::{
     ADMISSION_TEST_USER, TestAdmission, admission_errors, authorized_request, test_api_context,
 };
 use axum::Router;
-use jev::domain::{
+use jev_classifier::domain::{
     Probability, YesNoClassifier, YesNoQuestion,
     decisions::{DecisionService, DecisionServiceImpl},
 };

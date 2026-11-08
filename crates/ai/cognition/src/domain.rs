@@ -1,8 +1,10 @@
 //! Tool-free generation and classification for an authenticated user.
 
 use async_trait::async_trait;
-pub use jev::domain::batches::{Answer, BatchedDecision, BatchedOutcome, decide_in_batches};
-pub use jev::domain::{DecisionRequest, DecisionResponse, MAX_QUESTIONS};
+pub use jev_classifier::domain::batches::{
+    Answer, BatchedDecision, BatchedOutcome, decide_in_batches,
+};
+pub use jev_classifier::domain::{DecisionRequest, DecisionResponse, MAX_QUESTIONS};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use schemars::JsonSchema;

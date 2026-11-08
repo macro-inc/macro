@@ -220,7 +220,7 @@ impl FocusStandIns {
 
 /// The model: every question asked gets an answer, "yes" only to the Focus
 /// question about mail the scenario marked. The wire shape is the one
-/// `jev::outbound::SystemOneJev` speaks with TypeSafe.
+/// `jev_classifier::outbound::SystemOneJev` speaks with TypeSafe.
 async fn evaluate(
     State(classifier): State<FocusClassifier>,
     headers: HeaderMap,

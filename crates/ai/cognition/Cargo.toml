@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 ai_toolset = { workspace = true }
 async-trait = { workspace = true }
-jev = { workspace = true, features = ["batches"] }
+jev_classifier = { workspace = true, features = ["batches"] }
 macro_authorization = { workspace = true, features = ["axum"] }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }

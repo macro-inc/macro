@@ -16,7 +16,7 @@ use documents::domain::events::DocumentTopicEvent;
 use email::domain::events::EmailTopicEvent;
 use github::broker::GithubWebhookTopicEvent;
 use github::domain::models::GithubWebhookReceived;
-use jev::domain::YesNoQuestion;
+use jev_classifier::domain::YesNoQuestion;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::{

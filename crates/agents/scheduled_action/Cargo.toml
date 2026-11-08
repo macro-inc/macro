@@ -28,7 +28,7 @@ email = { workspace = true, features = ["outbound"] }
 github = { workspace = true, features = ["installation_claims"] }
 glob = { workspace = true }
 feature_flags = { workspace = true }
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 lexical_client = { workspace = true }
 mention_utils = { workspace = true }
 entity_access = { workspace = true, features = ["inbound"] }

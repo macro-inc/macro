@@ -5,8 +5,8 @@
 //! and `CLOUDFLARE_API_TOKEN` set it asks Clef Flash. It prints every rule's
 //! probability per piece, and fails when a piece is judged the wrong way.
 
-use jev::domain::{Evaluation, JevError, JevProvider, Probability};
-use jev::outbound::SystemOneJev;
+use jev_classifier::domain::{Evaluation, JevError, JevProvider, Probability};
+use jev_classifier::outbound::SystemOneJev;
 
 use super::*;
 

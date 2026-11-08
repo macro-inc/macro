@@ -15,7 +15,7 @@ ai_billing = { workspace = true }
 rootcause = { workspace = true }
 agent = { workspace = true }
 ai_usage = { workspace = true }
-jev = { workspace = true }
+jev_classifier = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
@@ -40,7 +40,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 
 [dev-dependencies]
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 macro_db_migrator = { workspace = true }
 model_user = { workspace = true }
 tower = { workspace = true, features = ["util"] }

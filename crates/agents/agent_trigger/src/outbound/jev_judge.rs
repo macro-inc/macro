@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use agent_session::domain::error::Result;
 use ai_usage::{AiFeature, UsageContext};
-use jev::domain::{YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{YesNoClassifier, YesNoQuestion};
 use messages::domain::events::MessagePostedMetadata;
 use serde_json::{Value, json};
 

@@ -57,13 +57,14 @@ impl YesNoClassifier for Classifier {
         usage: UsageContext,
         input: &serde_json::Value,
         questions: &[YesNoQuestion],
-    ) -> Result<Vec<jev::domain::Probability>, JevError> {
+    ) -> Result<Vec<jev_classifier::domain::Probability>, JevError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert_eq!(usage.feature, AiFeature::ChatRename);
         assert_eq!(input["current_title"], "Investigate Issue");
         assert_eq!(questions.len(), 1);
         Ok(vec![
-            jev::domain::Probability::new(self.probability).expect("a valid probability"),
+            jev_classifier::domain::Probability::new(self.probability)
+                .expect("a valid probability"),
         ])
     }
 }
