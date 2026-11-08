@@ -111,3 +111,43 @@ test('companion controls receive reduced-motion reactions over remote video', as
     });
   await expect(reaction).toHaveCount(0);
 });
+
+test('companion controls open reactions from the unchanged call popover header', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  await page.goto(
+    '/src/features/channel/Call/discussion/browser-test/call-overlay.html?surface=popover&count=2&media=on&work=off'
+  );
+  const popup = page.getByRole('dialog').first();
+  await expect(popup).toBeVisible();
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/L92-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+    });
+  const header = await popup.locator(':scope > div').first().boundingBox();
+  const controls = popup.locator('[data-call-controls]');
+  expect(
+    await controls
+      .locator(':scope > div')
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).gap))
+  ).toBeGreaterThanOrEqual(8);
+  await expect(
+    popup.getByRole('button', { name: 'Reactions', exact: true })
+  ).toBeVisible();
+  await popup.getByRole('button', { name: 'Reactions', exact: true }).click();
+  await page.getByRole('button', { name: '👍', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(popup).toBeVisible();
+  expect(await popup.locator(':scope > div').first().boundingBox()).toEqual(
+    header
+  );
+  const bounds = await popup.boundingBox();
+  for (const button of await controls.locator('button').all()) {
+    const box = await button.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(bounds!.x);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+  }
+});

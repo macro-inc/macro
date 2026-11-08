@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Hash from '@icon/system/regular/hash.svg';
@@ -13,12 +14,14 @@ import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
 import { CallParticipantsList } from './CallParticipantsList';
 import { CallQuickControls } from './CallQuickControls';
+import { createCallReactions } from './call-reactions';
 
 export function ActiveCallPopover(props: {
   onOpenCall: () => void;
   onShowPlayer?: () => void;
 }) {
   const call = useCallContext();
+  const reactions = createCallReactions(call.room);
   const quickCalls = useQuickCallsFlag();
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   return (
@@ -81,6 +84,9 @@ export function ActiveCallPopover(props: {
       <div class="border-t border-edge-muted">
         <CallQuickControls
           settings
+          onReaction={(emoji) =>
+            fireAndForget(reactions.send(emoji), 'active-call-popover')
+          }
           controls={['camera', 'screen', 'sharing']}
           channelName={
             record.isSuccess && record.data.discussion.kind === 'channel_thread'

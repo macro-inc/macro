@@ -377,7 +377,8 @@ controlled through More. Tracks stay mounted and audio continues.
 
 Desktop **Reactions** beside Team opens a one-row picker with arrow-key navigation.
 The picker stays open for repeated reactions; in compact call panes it moves into More.
-The floating player also offers this picker with a compact trigger, shows incoming
+The live-call popover and floating player offer the same compact reaction picker
+and 8px-spaced media controls; the popover header stays unchanged. The player shows incoming
 reactions at mini scale, and marks the local preview when the microphone is muted.
 Choosing an emoji sends a temporary reaction to the connected room, not
 chat history. The emoji pops in, rises gently with a slight sway and fades over 3.2 seconds;
