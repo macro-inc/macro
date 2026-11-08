@@ -139,7 +139,8 @@ async fn run() -> anyhow::Result<()> {
     let lexical = LexicalClient::new(
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
-    );
+    )
+    .with_route_modes(config.lexical_route_modes.clone());
     let recorder =
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     let admission = ai_billing::composition::pg_admission_service(

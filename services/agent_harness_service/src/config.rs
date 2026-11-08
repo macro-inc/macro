@@ -78,6 +78,8 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Validated lexical execution modes, loaded once at startup.
+    pub lexical_route_modes: lexical_client::RouteModes,
     /// Optional TypeSafe key for Command K classification and for routing
     /// unmentioned thread replies to agents.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,

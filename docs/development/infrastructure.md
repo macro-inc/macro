@@ -117,6 +117,10 @@ specifically:
   still do it, don't copy them. Use `secure:` config only for the few values that
   must live in Pulumi itself.
 - Never resolve `secretString` into a plaintext env var.
+- For legacy Lambda environment maps, project only validated nonsecret settings
+  from the service's existing Doppler-synced bundle; preserve its secret marking
+  and omit bundle content from errors. The upload finalizer's route policy uses
+  this pattern.
 
 ## Embedded build assets
 
