@@ -375,3 +375,63 @@ async fn local_tempo_route_trace() -> Result<()> {
     println!("local Tempo trace: {trace_id}");
     Ok(())
 }
+
+#[test]
+fn snapshot_shadow_reports_both_metrics_and_returns_http_bytes() -> Result<()> {
+    let buffer = TraceBuffer::default();
+    let writer = buffer.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .json()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_writer(move || writer.clone())
+        .finish();
+    let context = |seed| macro_document_model::DocumentContext {
+        random: macro_document_model::NodeRandom(std::sync::Arc::new(move |length| {
+            vec![seed; length]
+        })),
+        ..crate::in_process::context()
+    };
+    let http = macro_document_model::snapshot::markdown_to_loro_snapshot(
+        "private snapshot body",
+        &context(7),
+    )?;
+    let local = macro_document_model::snapshot::markdown_to_loro_snapshot(
+        "private snapshot body",
+        &context(9),
+    )?;
+    assert_ne!(http, local);
+    let expected = http.clone();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let returned = tracing::subscriber::with_default(subscriber, || {
+        runtime.block_on(dispatch_with_snapshot(
+            RouteMode::Shadow,
+            Route::SnapshotMarkdown,
+            None,
+            21,
+            async { Ok(http) },
+            async { Ok(local) },
+            Some(snapshot::SnapshotInput {
+                markdown: "private snapshot body".into(),
+                notion: None,
+            }),
+        ))
+    })?;
+    assert_eq!(returned, expected);
+    let output = String::from_utf8(buffer.0.lock().expect("trace buffer").clone())?;
+    assert!(!output.contains("private snapshot body"));
+    let records: Vec<serde_json::Value> = output
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<std::result::Result<_, _>>()?;
+    let shadow = records
+        .iter()
+        .find(|row| row["span"]["name"] == "lexical.shadow" && row["fields"]["message"] == "close")
+        .expect("snapshot shadow span");
+    assert_eq!(shadow["span"]["raw_equal"], false);
+    assert_eq!(shadow["span"]["structural_equal"], true);
+    assert_eq!(shadow["span"]["equal"], true);
+    assert_eq!(shadow["span"]["outcome"], "equal");
+    Ok(())
+}

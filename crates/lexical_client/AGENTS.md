@@ -12,6 +12,7 @@ read or render document content.
 - `src/routing.rs` (+ `src/routing/test.rs`): strict MacroConfig modes, execution
   policy, comparison and content-free route/shadow spans.
 - `src/lib.rs`: retained HTTP transport, internal-access header and local CA.
+- `routing/snapshot.rs`: separate raw and structural snapshot metrics with request-proven generated fields and ancestry/container checks.
 - `in_process.rs`: blocking model adapters with explicit clock and entropy.
 - `raw_document.rs`: live sync-source port and startup configuration.
 - `README.md`: route groups, provisioning and startup wiring.
