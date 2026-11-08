@@ -9,9 +9,11 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["js-nodes"]
-js-nodes = ["lexical_model/foreign-nodes", "dep:lexical_conformance", "dep:postcard", "dep:specta"]
+js-nodes = ["lexical_model/foreign-nodes", "dep:lexical_conformance", "dep:postcard", "dep:specta", "dep:scoped-tls-hkt", "dep:js-sys"]
 
 [dependencies]
+js-sys = { workspace = true, optional = true }
+scoped-tls-hkt = { workspace = true, optional = true }
 lexical_conformance = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
 specta = { workspace = true, optional = true }

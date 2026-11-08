@@ -69,3 +69,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Retain Context::callbacks weak capabilities in callback owners; pinned snapshots retain their node registry and callbacks, so strong binding references would form a cycle.
 - Defer host version collection until any update borrowing that committed or pending version ends.
 - Report pass/fail/ledger totals by source package; ledgered cases do not count toward the 50-fixture core gate.
+
+Session runtime transform registration operates on the owned editor even while its
+update is suspended. CallbackContext::node uses the same encoded identity store as
+indexed dispatch; it validates the exact active editor and pending update first.

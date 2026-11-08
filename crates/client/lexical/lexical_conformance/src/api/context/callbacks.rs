@@ -152,6 +152,18 @@ impl Frames {
 }
 
 impl CallbackContext {
+    /// Encode a callback's current model node in the shared host identity store.
+    pub fn node(&self, tx: &Transaction<'_>, key: lexical_model::NodeKey) -> Result<Value> {
+        let frames = self
+            .0
+            .upgrade()
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+        let active = frames.active(tx)?;
+        let mut context = frames.context(&active)?;
+        let value = context.replay.node(tx.view(), key)?;
+        context.encode(value)
+    }
+
     pub(super) fn new(frames: &Arc<Frames>) -> Self {
         Self(Arc::downgrade(frames))
     }
