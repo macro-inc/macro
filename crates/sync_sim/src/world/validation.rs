@@ -15,7 +15,9 @@ impl Sim {
                             .or_insert(*counter);
                     }
                 }
-                Fact::LocalCommit { spans, .. } | Fact::ServerCommit { spans, .. } => {
+                Fact::LocalCommit { spans, .. }
+                | Fact::ServerCommit { spans, .. }
+                | Fact::ExternalCommit { spans, .. } => {
                     for span in spans {
                         created
                             .entry(span.peer)
@@ -29,6 +31,16 @@ impl Sim {
         for (name, client) in &self.clients {
             if !client.alive {
                 continue;
+            }
+            match client.core.editor_final() {
+                Ok(Some(editor)) if editor.synced_json != editor.reconstructed => {
+                    failures.push(Failure::new(
+                        "projection_consistent",
+                        format!("{name:?}: live model differs from persisted reconstruction"),
+                    ))
+                }
+                Err(error) => failures.push(error),
+                _ => {}
             }
             let wal = client.core.wal();
             let mut previous = None;
@@ -47,7 +59,7 @@ impl Sim {
                     format!("{name:?}: delivered prefix exceeds allocated rows"),
                 ));
             }
-            for (peer, counter) in client.doc.loro.oplog_vv().iter() {
+            for (peer, counter) in client.core.version().iter() {
                 if *counter > created.get(peer).copied().unwrap_or(0) {
                     failures.push(Failure::new(
                         "no_future_vv",
@@ -55,17 +67,37 @@ impl Sim {
                     ));
                 }
             }
-            let final_state = match client.final_state() {
-                Ok(state) => state,
-                Err(error) => {
-                    failures.push(error);
-                    continue;
+            if let Some((_, rows)) = client.core.push_in_flight() {
+                let diagnostics = wal
+                    .entries
+                    .iter()
+                    .map(|row| FlightRow {
+                        seq: row.seq,
+                        bytes: row.bytes.len(),
+                        eligible: !row.superseded
+                            && !client.core.is_delivered(row.seq)
+                            && row.park.is_none_or(|reason| {
+                                reason == doc_sync_core::ParkReason::NeedsRebase
+                            }),
+                        writing: matches!(row.state, doc_sync_core::EntryState::Writing(_)),
+                    })
+                    .collect::<Vec<_>>();
+                if let Err(detail) = check_flight(rows, &diagnostics, wal.delivered_through) {
+                    failures.push(Failure::new(
+                        "wal_well_formed",
+                        format!("{name:?}: {detail}"),
+                    ));
                 }
-            };
+            }
+            let retained = wal
+                .entries
+                .iter()
+                .any(|row| !row.superseded && !client.core.is_delivered(row.seq));
             if client.core.status().save == SaveState::Saved
-                && (final_state.wal_total > 0
-                    || !final_state.parked.is_empty()
-                    || final_state.pending_import
+                && (retained
+                    || !client.core.parked().is_empty()
+                    || client.core.pending()
+                    || client.core.status().pending_import
                     || !matches!(wal.health, StorageHealth::Ok)
                     || client.core.busy() == Some(doc_sync_core::BusyReason::Rebasing))
             {
@@ -74,10 +106,10 @@ impl Sim {
                     format!("{name:?}: Saved with retained or unhealthy work"),
                 ));
             }
-            if !client.frozen
-                && client.core.status().connection == ConnectionStatus::Connected
-                && !self
-                    .net
+            let link_open = if client.routed {
+                self.routed_open(name)
+            } else {
+                self.net
                     .links
                     .iter()
                     .any(|((link_name, session, conn), link)| {
@@ -86,6 +118,10 @@ impl Sim {
                             && client.connection_id() == Some(ConnId(*conn))
                             && link.open
                     })
+            };
+            if !client.frozen
+                && client.core.status().connection == ConnectionStatus::Connected
+                && !link_open
             {
                 failures.push(Failure::new(
                     "status_truthful",
@@ -101,25 +137,80 @@ impl Sim {
                     .or_insert_with(Vec::new)
                     .push((*seq, row.delivered));
             }
-            for (owner, rows) in groups {
-                let prefix = rows
-                    .iter()
-                    .take_while(|(_, delivered)| *delivered)
-                    .last()
-                    .map(|(seq, _)| *seq);
-                if let (Some(old), Some(new)) = (self.prefixes.get(&owner), prefix)
-                    && new < *old
+            let owners = groups
+                .keys()
+                .chain(
+                    self.prefixes
+                        .keys()
+                        .filter(|(scope, _, _)| scope == profile),
+                )
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for owner in owners {
+                let prefix = groups.get(&owner).and_then(|rows| {
+                    rows.iter()
+                        .take_while(|(_, delivered)| *delivered)
+                        .last()
+                        .map(|(seq, _)| *seq)
+                });
+                if let Some(old) = self.prefixes.get(&owner).copied()
+                    && prefix.is_none_or(|new| new < old)
                 {
-                    failures.push(Failure::new(
-                        "durable_prefix_monotone",
-                        format!("{owner:?}: delivered prefix shrank"),
-                    ));
+                    let allowed = self.events[self.prefix_event..]
+                        .iter()
+                        .any(|event| match &event.fact {
+                            Fact::WalPruned {
+                                profile,
+                                doc,
+                                owner: session,
+                                seqs,
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && doc_sync_core::WalOwner::Session(*session) == owner.2
+                                    && seqs.contains(&old)
+                            }
+                            Fact::WalDeliveryLost {
+                                profile,
+                                doc,
+                                owner: lost_owner,
+                                seqs,
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && *lost_owner == owner.2
+                                    && seqs.contains(&old)
+                            }
+                            Fact::WalAdopted {
+                                profile,
+                                doc,
+                                from,
+                                removed,
+                                ..
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && *from == owner.2
+                                    && removed.contains(&old)
+                            }
+                            _ => false,
+                        });
+                    if !allowed {
+                        failures.push(Failure::new(
+                            "durable_prefix_monotone",
+                            format!("{owner:?}: prefix {old:?} regressed to {prefix:?}"),
+                        ));
+                        continue;
+                    }
                 }
                 if let Some(prefix) = prefix {
                     self.prefixes.insert(owner, prefix);
+                } else {
+                    self.prefixes.remove(&owner);
                 }
             }
         }
+        self.prefix_event = self.events.len();
         for failure in failures {
             self.fail(failure);
         }
@@ -185,8 +276,8 @@ impl Sim {
                 (
                     port.doc,
                     port.callback,
-                    port.effect.operation.clone(),
-                    canonical(port.effect.value.clone()),
+                    &port.effect.operation,
+                    Canonical(&port.effect.value),
                 )
             })
             .collect::<Vec<_>>();
@@ -204,7 +295,32 @@ impl Sim {
         }
     }
 }
-pub(super) fn canonical(value: serde_json::Value) -> serde_json::Value {
+// Serialize the same sorted tree without copying large raw-byte JSON arrays.
+struct Canonical<'a>(&'a serde_json::Value);
+impl serde::Serialize for Canonical<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeSeq};
+        match self.0 {
+            serde_json::Value::Object(values) => {
+                let ordered = values.iter().collect::<BTreeMap<_, _>>();
+                let mut map = serializer.serialize_map(Some(ordered.len()))?;
+                for (key, value) in ordered {
+                    map.serialize_entry(key, &Canonical(value))?;
+                }
+                map.end()
+            }
+            serde_json::Value::Array(values) => {
+                let mut seq = serializer.serialize_seq(Some(values.len()))?;
+                for value in values {
+                    seq.serialize_element(&Canonical(value))?;
+                }
+                seq.end()
+            }
+            value => value.serialize(serializer),
+        }
+    }
+}
+pub(crate) fn canonical(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
             let ordered = map
@@ -219,10 +335,49 @@ pub(super) fn canonical(value: serde_json::Value) -> serde_json::Value {
         other => other,
     }
 }
-fn canonical_finals(finals: &Finals) -> serde_json::Value {
-    let clients = finals.clients.iter().map(|(name, state)| serde_json::json!({ "name": name, "alive": state.alive, "terminal": state.terminal, "session": state.session, "profile": state.profile, "user": state.user, "doc": state.doc, "access": state.access, "kind": state.kind, "peer": state.peer, "vv": state.oplog_vv, "value": state.deep_value, "wal": state.wal_undelivered, "total": state.wal_total, "parked": state.parked, "status": format!("{:?}", state.status), "storage_healthy": state.storage_healthy, "pending": state.pending_import, "selection": state.selection, "presence_key": state.presence_key, "skew": state.skew })).collect::<Vec<_>>();
+pub(crate) fn canonical_finals(finals: &Finals) -> serde_json::Value {
+    let clients = finals.clients.iter().map(|(name, state)| serde_json::json!({ "name": name, "editor": state.editor, "alive": state.alive, "terminal": state.terminal, "session": state.session, "profile": state.profile, "user": state.user, "doc": state.doc, "access": state.access, "kind": state.kind, "peer": state.peer, "vv": state.oplog_vv, "value": state.deep_value, "wal": state.wal_undelivered, "total": state.wal_total, "delivered": state.delivered, "parked": state.parked, "parked_spans": state.parked_spans, "status": format!("{:?}", state.status), "storage_healthy": state.storage_healthy, "pending": state.pending_import, "selection": state.selection, "presence_key": state.presence_key, "skew": state.skew })).collect::<Vec<_>>();
     let profiles = finals.profiles.iter().map(|(name, store)| serde_json::json!({ "name": name, "rows": store.entries.iter().collect::<Vec<_>>(), "snapshots": store.snapshots })).collect::<Vec<_>>();
     canonical(
         serde_json::json!({ "clients": clients, "servers": finals.servers.iter().collect::<Vec<_>>(), "profiles": profiles, "presence": finals.presence.as_ref().map(|presence| presence.iter().collect::<Vec<_>>()) }),
     )
 }
+
+struct FlightRow {
+    seq: doc_sync_core::WalSeq,
+    bytes: usize,
+    eligible: bool,
+    writing: bool,
+}
+fn check_flight(
+    rows: &[doc_sync_core::WalSeq],
+    entries: &[FlightRow],
+    delivered: Option<doc_sync_core::WalSeq>,
+) -> Result<(), &'static str> {
+    if rows.is_empty() || rows.len() > 64 {
+        return Err("in-flight push is empty or exceeds64 rows");
+    }
+    if rows.windows(2).any(|pair| pair[0] >= pair[1])
+        || delivered.is_some_and(|through| rows[0] <= through)
+    {
+        return Err("in-flight rows are unordered or below the delivered prefix");
+    }
+    let last = rows[rows.len() - 1];
+    let expected = entries
+        .iter()
+        .filter(|row| row.eligible && row.seq <= last)
+        .collect::<Vec<_>>();
+    if expected.iter().map(|row| row.seq).collect::<Vec<_>>() != rows
+        || expected.iter().any(|row| row.writing)
+    {
+        return Err("in-flight range is not a contiguous pushable run");
+    }
+    // S7 W-1 / S8's large-paste story: one oversized row is sent alone.
+    if rows.len() > 1 && expected.iter().map(|row| row.bytes).sum::<usize>() > 256 * 1024 {
+        return Err("multi-row push exceeds256KiB");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

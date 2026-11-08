@@ -4,21 +4,14 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isDeepStrictEqual } from 'node:util';
+import divergenceLedger from '../../../../crates/client/lexical/macro_document_model/tests/corpus/gate-divergences.json';
 import { buildWasm, root } from '../build-wasm';
 
 buildWasm();
 const wasm = createRequire(import.meta.url)(
   '../../pkg/node/lexical_conformance_wasm.js'
 );
-const ledger = new Map(
-  JSON.parse(
-    readFileSync(
-      root +
-        '/crates/client/lexical/macro_document_model/tests/corpus/gate-divergences.json',
-      'utf8'
-    )
-  ).map((entry) => [entry.index, entry])
-);
+const ledger = new Map(divergenceLedger.map((entry) => [entry.index, entry]));
 const rows = readFileSync(
   root + '/target/lexical-conformance/gate-oracle.jsonl',
   'utf8'

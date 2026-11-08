@@ -381,13 +381,14 @@ impl Transaction<'_> {
         target: ModifyTarget,
         character_target: ModifyTarget,
     ) -> Result<(), Error> {
-        if self
-            .range_at(slot)?
-            .forward_deletion(self.view(), direction)?
-        {
-            return Ok(());
-        }
         if self.range_at(slot)?.is_collapsed() {
+            if granularity == Granularity::Word
+                && self
+                    .range_at(slot)?
+                    .forward_deletion(self.view(), direction)?
+            {
+                return Ok(());
+            }
             self.modify_selection_at(slot, Alter::Extend, direction, granularity, target)?;
         }
         if self.range_at(slot)?.is_collapsed() {

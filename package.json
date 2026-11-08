@@ -85,7 +85,8 @@
 			"services/lexical-service",
 			"packages/spreadsheet",
 			"vendor/ironcalc/pkg",
-			"packages/sdk-docs"
+			"packages/sdk-docs",
+			"tooling/sync-sim"
 		],
 		"catalog": {
 			"loro-crdt": "1.17.1"

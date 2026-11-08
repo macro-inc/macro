@@ -4,8 +4,6 @@ use lexical_model::*;
 pub fn is_js_whitespace_unit(c: u16) -> bool {
     matches!(c,0x9..=0xd|0x20|0xa0|0x1680|0x2000..=0x200a|0x2028|0x2029|0x202f|0x205f|0x3000|0xfeff)
 }
-/// Backwards-compatible name for the code-unit predicate.
-pub use is_js_whitespace_unit as is_js_whitespace;
 fn whitespace(c: char) -> bool {
     (c as u32) <= 0xffff && is_js_whitespace_unit(c as u16)
 }

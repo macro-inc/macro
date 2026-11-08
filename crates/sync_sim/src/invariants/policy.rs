@@ -19,6 +19,7 @@ pub fn quiet(outcome: &Outcome) -> Result<(), Failure> {
             | Fact::Status { .. }
             | Fact::Opened { .. }
             | Fact::Closed { .. }
+            | Fact::RouterSocket { .. }
             | Fact::SocketClose { .. } => true,
             _ => false,
         };

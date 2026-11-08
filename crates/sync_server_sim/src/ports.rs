@@ -1,6 +1,6 @@
 //! Deterministic in-memory implementations of every room capability.
 //! CS-60/CS-56: futures and errors stay on the calling thread, like Worker ports.
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::{
     cell::RefCell,
@@ -71,8 +71,8 @@ pub struct SimNow {
 
 #[derive(Clone, Default)]
 struct DurableData {
-    values: BTreeMap<String, Value>,
-    snapshots: BTreeMap<String, Vec<u8>>,
+    values: BTreeMap<String, Rc<Value>>,
+    snapshots: BTreeMap<String, Rc<[u8]>>,
     peers: BTreeMap<(String, String), (String, Option<String>)>,
     blame: BTreeMap<(String, String), (u64, i64)>,
     alarm: Option<UnixMillis>,
@@ -355,11 +355,23 @@ impl SimPorts {
     }
     /// Current visible key/value storage, including writes awaiting gate confirmation.
     pub fn storage_dump(&self) -> BTreeMap<String, Value> {
-        self.0.borrow().data.values.clone()
+        self.0
+            .borrow()
+            .data
+            .values
+            .iter()
+            .map(|(key, value)| (key.clone(), value.as_ref().clone()))
+            .collect()
     }
     /// Inspect logical snapshot bytes without emitting a simulated port call.
     pub fn snapshot_dump(&self) -> BTreeMap<String, Vec<u8>> {
-        self.0.borrow().data.snapshots.clone()
+        self.0
+            .borrow()
+            .data
+            .snapshots
+            .iter()
+            .map(|(key, value)| (key.clone(), value.to_vec()))
+            .collect()
     }
     async fn enter(&self, operation: &str, value: Value) -> Result<(), SimError> {
         let result = self.0.borrow_mut().call(operation, value);
@@ -374,15 +386,14 @@ impl SimPorts {
             .data
             .values
             .get(key)
-            .cloned()
-            .map(serde_json::from_value)
+            .map(|value| T::deserialize(value.as_ref()))
             .transpose()
             .map_err(|e| SimError::Failure(e.to_string()))
     }
     fn put(&self, key: &str, value: impl Serialize) -> Result<(), SimError> {
         let value = serde_json::to_value(value).map_err(|e| SimError::Failure(e.to_string()))?;
         let mut s = self.0.borrow_mut();
-        s.data.values.insert(key.into(), value.clone());
+        s.data.values.insert(key.into(), Rc::new(value.clone()));
         s.write();
         let generation = s.generation;
         s.completed_puts.push((key.into(), value, generation));
@@ -661,7 +672,7 @@ impl RoomStorage for SimPorts {
             .iter()
             .filter_map(|(key, value)| {
                 key.strip_prefix("o/").map(|id| {
-                    serde_json::from_value(value.clone())
+                    Vec::<u8>::deserialize(value.as_ref())
                         .map(|update| PendingOperation {
                             id: OperationId::new(id.into()),
                             update,
@@ -737,7 +748,7 @@ impl SnapshotStore for SimPorts {
             .data
             .snapshots
             .get(key.as_str())
-            .cloned()
+            .map(|snapshot| snapshot.to_vec())
             .ok_or(SnapshotReadError::Missing)
     }
     async fn put(&self, key: &SessionKey, snapshot: &[u8]) -> Result<(), SimError> {

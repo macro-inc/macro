@@ -84,10 +84,9 @@ export function convertText(
     });
   text = text.replace(/\r/g, '').replace(/[ \t\n]+/g, ' ');
   if (text.startsWith(' ')) {
-    let previous: Node | null = node;
     let start = true;
     for (
-      previous = findTextInLine(previous, false, ElementType);
+      let previous = findTextInLine(node, false, ElementType);
       previous;
       previous = findTextInLine(previous, false, ElementType)
     ) {
@@ -101,17 +100,17 @@ export function convertText(
     if (start) text = text.slice(1);
   }
   if (text.endsWith(' ')) {
-    let next: Node | null = node;
     let end = true;
     for (
-      next = findTextInLine(next, true, ElementType);
+      let next = findTextInLine(node, true, ElementType);
       next;
       next = findTextInLine(next, true, ElementType)
-    )
+    ) {
       if ((next.textContent ?? '').replace(/^( |\t|\r?\n)+/, '').length) {
         end = false;
         break;
       }
+    }
     if (end) text = text.slice(0, -1);
   }
   return text ? [textDraft(text, format)] : [];

@@ -43,6 +43,13 @@ fn context() -> DocumentContext {
 fn convert(route: &str, input: &Value) -> Result<Value, CorpusError> {
     let context = context();
     match route {
+        "html" => Ok(serde_json::to_value(
+            macro_document_model::html::markdown_to_html(
+                &field::<String>(input, "markdown")?,
+                &macro_document_model::html::MarkdownToHtmlOptions::default(),
+                &context,
+            )?,
+        )?),
         "snapshot/state" => Ok(
             json!({"snapshot": lexical_loro::snapshot::raw_state_to_loro_snapshot(input.get("state").ok_or(CorpusError::Input)?, Some(lexical_loro::golden::MARKDOWN_GOLDEN)).map_err(macro_document_model::Error::from)?}),
         ),

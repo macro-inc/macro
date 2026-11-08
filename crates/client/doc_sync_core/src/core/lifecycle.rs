@@ -7,6 +7,8 @@ impl SyncCore {
         {
             self.resume_reset(now, doc, out);
         }
+        self.replay_assistance(now, doc, out);
+        self.resume_server_backed_gaps(doc, out);
         self.push_rows(now, out);
         self.push_assist(now, out);
         self.advance_reset(now, out);
@@ -62,6 +64,7 @@ impl SyncCore {
             self.request_since(attempt, now, doc, out);
         }
         if self.rebase_due.is_some_and(|at| at <= now.mono)
+            && self.phase == Phase::Running
             && self.connection.synced()
             && self.push.is_none()
         {
@@ -200,13 +203,17 @@ impl SyncCore {
         }
     }
 
-    pub(super) fn is_delivered(&self, seq: WalSeq) -> bool {
+    /// Whether a retained WAL row has received an acknowledgement, including rows
+    /// above a prefix blocked by another parked row. Pruned rows are no longer retained.
+    pub fn is_delivered(&self, seq: WalSeq) -> bool {
         self.delivered.contains(&seq)
     }
     pub(super) fn park_reason(&self, entry: &WalEntry) -> Option<ParkReason> {
-        entry
-            .park
-            .or_else(|| (self.effective_access != Access::Edit).then_some(ParkReason::ReadOnly))
+        match entry.park {
+            Some(ParkReason::Poison | ParkReason::Gap) => entry.park,
+            _ if self.effective_access != Access::Edit => Some(ParkReason::ReadOnly),
+            reason => reason,
+        }
     }
 
     pub(super) fn update_status(&mut self, out: &mut SyncOutput) {
@@ -224,6 +231,11 @@ impl SyncCore {
             SaveState::Unsaved(UnsavedReason::Poison)
         } else if parked.iter().any(|(_, r)| *r == ParkReason::Gap) {
             SaveState::Unsaved(UnsavedReason::Gap)
+        } else if parked
+            .iter()
+            .any(|(_, reason)| *reason == ParkReason::ReadOnly)
+        {
+            SaveState::Unsaved(UnsavedReason::ReadOnly)
         } else if self.rebase_due.is_some()
             || self.rebase_active
             || parked.iter().any(|(_, r)| *r == ParkReason::NeedsRebase)
@@ -240,8 +252,9 @@ impl SyncCore {
             .any(|e| !self.is_delivered(e.seq) && !e.superseded)
             || self.wal.append_due.is_some()
             || self.pending_import
+            || !self.assist_replay.is_empty()
             || self.waiting_for_fresh_ack
-            || !self.assist.is_empty()
+            || (!self.assist.is_empty() && self.effective_access == Access::Edit)
         {
             if self.push.is_some()
                 || self
@@ -288,7 +301,9 @@ impl SyncCore {
             self.snapshot_due,
             self.load_retry,
             self.seed_wait_deadline,
-            self.rebase_due,
+            self.rebase_due.filter(|_| {
+                self.phase == Phase::Running && self.connection.synced() && self.push.is_none()
+            }),
         ];
         if self.presence.is_some() {
             deadlines.extend([
@@ -304,6 +319,12 @@ impl SyncCore {
                     }),
             ]);
         }
+        deadlines.extend(
+            self.since
+                .iter()
+                .filter(|request| !request.expired)
+                .map(|request| request.recovery_deadline),
+        );
         deadlines.extend(self.storage.values().map(|p| Some(p.deadline)));
         deadlines.extend(
             self.snapshots

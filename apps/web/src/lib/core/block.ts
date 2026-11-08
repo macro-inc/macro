@@ -2,6 +2,7 @@ import type { CalendarBlockProps } from '@block-calendar/types';
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
 import type { BlockMarkdownProps } from '@block-md/component/Block';
+import type { MarkdownConnection } from '@block-md/queries/markdown-connection';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type {
   InitialSync,
@@ -343,8 +344,9 @@ interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
   video: DocumentBlockData;
   md: DocumentBlockData &
     DssFileData & {
-      syncSource: LiveSyncSource;
-      doInitialSync: () => ResultAsync<InitialSync, SyncError>;
+      connection: MarkdownConnection;
+      syncSource?: LiveSyncSource;
+      doInitialSync?: () => ResultAsync<InitialSync, SyncError>;
     };
   code: DocumentBlockData;
   project: ProjectBlockData;

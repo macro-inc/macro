@@ -27,6 +27,7 @@ shares this view through EditorPort; it does not supply production model code.
 ## Checks
 
 - `bun run check`, `bun run test`, `bun run test:browser`
+- Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
 - Browser tests launch their own headless Chromium; never connect to a person's
   browser or the shared CDP instance. No existing-server reuse.
 - Isolate Vite and Playwright in a private user/network namespace with loopback
@@ -38,3 +39,7 @@ shares this view through EditorPort; it does not supply production model code.
 
 S12 section 1 in the port specs; packages/collaboration/src/session for execution
 and the generated ABI; packages/lexical-core for retained source node behavior.
+
+Pass the application loading span through ViewOptions.parentSpan; mount and the
+first native Initialize reconciliation stay under that span without ending it.
+Dispose DOM listeners before awaiting session close; continue terminal native I/O.

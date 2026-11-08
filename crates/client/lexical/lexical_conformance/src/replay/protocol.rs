@@ -128,7 +128,7 @@ pub(super) struct EditorSession {
     attached: bool,
     rich_text_registered: bool,
     pending_writes: bool,
-    active_selection: Option<usize>,
+    selections: SelectionBindings,
     pending_install: Option<Commit>,
     pending_command: bool,
     updates: Vec<Value>,
@@ -152,7 +152,7 @@ impl Replayer {
             attached: std::mem::take(&mut self.attached),
             rich_text_registered: std::mem::take(&mut self.rich_text_registered),
             pending_writes: std::mem::take(&mut self.pending_writes),
-            active_selection: std::mem::take(&mut self.active_selection),
+            selections: std::mem::take(&mut self.selections),
             pending_install: std::mem::take(&mut self.pending_install),
             pending_command: std::mem::take(&mut self.pending_command),
             updates: std::mem::take(&mut self.updates),
@@ -167,7 +167,7 @@ impl Replayer {
         self.attached = session.attached;
         self.rich_text_registered = session.rich_text_registered;
         self.pending_writes = session.pending_writes;
-        self.active_selection = session.active_selection;
+        self.selections = session.selections;
         self.pending_install = session.pending_install;
         self.pending_command = session.pending_command;
         self.updates = session.updates;
@@ -178,18 +178,14 @@ impl Replayer {
     pub(crate) fn captured_state(&self, receiver: &Value) -> Option<EditorState> {
         let key = node_key(receiver).ok()?;
         let identity = receiver["identity"].as_u64()?;
-        self.saved_states
-            .iter()
-            .chain(self.states.values())
-            .find(|state| {
-                state.view().node(key).is_some_and(|node| {
-                    let pointer = std::ptr::from_ref(node.base()) as usize;
-                    self.records
-                        .get(&(key, pointer))
-                        .is_some_and(|record| record.1 == identity)
-                })
+        self.bindings.snapshots().ok()?.into_iter().find(|state| {
+            state.view().node(key).is_some_and(|node| {
+                let pointer = std::ptr::from_ref(node.base()) as usize;
+                self.record_ids
+                    .matches(key, pointer, identity)
+                    .unwrap_or(false)
             })
-            .cloned()
+        })
     }
     pub(super) fn operation_editor(&self, op: &Value) -> Result<Option<u64>> {
         if op["op"] == "createEditor" {

@@ -1,7 +1,10 @@
 import { queryClient } from '@queries/client';
 import { fetchFileDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { createSyncServiceSource } from '@service-sync/source';
-import type { DocumentSyncAuthorization } from '@service-sync/source/authorization';
+import type {
+  DocumentSessionAuthorization,
+  DocumentSyncAuthorization,
+} from '@service-sync/source/authorization';
 import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -89,8 +92,9 @@ it('refreshes web access on reconnect and fences an old source after account cha
 
 it('uses the native grant and disables edits when fresh authorization is downgraded', async () => {
   let writable = true;
-  const captured: DocumentSyncAuthorization = {
+  const captured: DocumentSessionAuthorization = {
     getToken: async () => 'native-token',
+    currentAccess: () => (writable ? 'edit' : 'view'),
     canWrite: () => writable,
     isCurrent: () => true,
     onInvalidated: () => () => {},

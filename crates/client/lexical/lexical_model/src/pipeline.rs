@@ -74,10 +74,16 @@ impl Transaction<'_> {
     }
     /// Run queued updates, selection hooks, normalization, transforms, GC and validation.
     pub fn flush_with(&mut self, mode: FlushMode) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         if self.sealed {
             return Ok(());
         }
         let result = self.flush_inner(mode);
+        #[cfg(feature = "foreign-nodes")]
+        let result = result.and_then(|()| self.view().check_foreign_payloads());
         self.transform_iterations = 0;
         if result.is_ok() {
             self.dirty_since_flush = false;
@@ -175,6 +181,10 @@ impl Transaction<'_> {
         Ok(())
     }
     pub(crate) fn guard_write(&self) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         if self.sealed {
             return Err(Error::WriteAfterSetEditorState);
         }

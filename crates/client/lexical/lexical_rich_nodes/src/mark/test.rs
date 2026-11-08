@@ -135,3 +135,44 @@ fn typing_after_link_inside_mark_escapes_both_protected_parents() -> Result<(), 
     assert_eq!(tx.text_content(children[1]), "b");
     Ok(())
 }
+
+#[test]
+fn replacing_link_text_cleans_empty_link_before_escaping_mark() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<MarkNode>()
+        .node::<crate::link::LinkNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let prefix = tx.create_text("p")?;
+    let mark = tx.create(MarkNode {
+        ids: vec!["m".into()],
+    })?;
+    let link = crate::link::create_link_node(&mut tx, "/", Default::default())?;
+    let selected = tx.create_text("x")?;
+    let suffix = tx.create_text("y")?;
+    tx.append(link, &[selected.key()])?;
+    tx.append(mark, &[link.key(), suffix.key()])?;
+    tx.append(paragraph, &[prefix.key(), mark.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::text(selected, Utf16Offset(0)),
+        Point::text(selected, Utf16Offset(1)),
+    ))))?;
+    tx.insert_text("z")?;
+    tx.commit()?;
+    let state = editor.state();
+    assert_eq!(state.children_keys(paragraph)?, [prefix.key(), mark.key()]);
+    assert_eq!(state.children_keys(mark)?, [suffix.key()]);
+    assert_eq!(state.text_content(prefix).as_ref(), "pz");
+    assert_eq!(
+        state
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::text(prefix, Utf16Offset(2))
+    );
+    Ok(())
+}

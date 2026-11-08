@@ -64,3 +64,44 @@ test('matching reuse of a normalized transient identity fails', () => {
     'identity lifecycle'
   );
 });
+
+test('paired caret errors allow only empty recovery with atomic Rust rollback', () => {
+  const comparison = new Comparison();
+  comparison.compare(initial, initial);
+  const rejected: Snapshot = {
+    ...initial,
+    error: 'UTF-16 offset Utf16Offset(5) is out of range',
+  };
+  const recovered: Snapshot = {
+    ...rejected,
+    commit: {
+      dirtyLeaves: [],
+      dirtyElements: [],
+      normalized: [],
+      mutations: [],
+      tags: [],
+    },
+  };
+  comparison.compare(recovered, rejected);
+  expect(() =>
+    comparison.compare(
+      { ...recovered, text: 'changed' },
+      { ...rejected, text: 'changed' }
+    )
+  ).toThrow('atomic rollback');
+  expect(() =>
+    comparison.compare(
+      {
+        ...recovered,
+        commit: {
+          dirtyLeaves: [],
+          dirtyElements: [],
+          normalized: [],
+          mutations: [],
+          tags: ['changed'],
+        },
+      },
+      rejected
+    )
+  ).toThrow('commit presence');
+});

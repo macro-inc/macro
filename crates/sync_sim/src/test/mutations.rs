@@ -91,7 +91,7 @@ fn convergence_pending_quiet_and_presence_queries_reject_damaged_observations() 
     assert!(invariants::presence_converged(&outcome).is_err());
 }
 #[test]
-fn comment_and_undo_queries_reject_false_claims_without_editor_adapters() {
+fn comment_and_undo_queries_reject_false_claims_without_editor_clients() {
     let mut outcome = baseline();
     let at = outcome.events.last().unwrap().at;
     let client = ClientName("a".into());
@@ -127,8 +127,8 @@ fn comment_and_undo_queries_reject_false_claims_without_editor_adapters() {
         },
     });
     assert!(invariants::undo_reverts_only_own(&outcome).is_err());
-    assert!(invariants::editor_states_equal(&outcome).is_err());
-    assert!(invariants::projection_consistent(&outcome).is_err());
+    assert!(invariants::editor_states_equal(&outcome).is_ok());
+    assert!(invariants::projection_consistent(&outcome).is_ok());
 }
 #[test]
 fn unrelated_parked_row_does_not_exempt_a_lost_edit() {
@@ -237,4 +237,43 @@ fn hostile_registry_skips_liveness_but_keeps_durable_ack_safety() {
             .iter()
             .any(|failure| failure.invariant == "no_acked_edit_lost")
     );
+}
+
+#[test]
+fn wal_query_rejects_an_undrained_surface_orphan_with_a_recovery_session() {
+    let mut outcome = verify(
+        SimConfig {
+            surfaces: [DocIx(0)].into(),
+            ..SimConfig::calm(113)
+        },
+        &[Step::Open(OpenSpec::form("a", "one")), Step::Settle],
+    );
+    let client = &outcome.finals.clients[&ClientName("a".into())];
+    outcome
+        .finals
+        .profiles
+        .get_mut(&ProfileName("one".into()))
+        .unwrap()
+        .entries
+        .insert(
+            (
+                "surface:00000000-0000-7000-8000-000000000001"
+                    .parse()
+                    .unwrap(),
+                doc_sync_core::WalOwner::Legacy,
+                doc_sync_core::WalSeq(1),
+            ),
+            doc_sync_core::StoredWalRecord {
+                delivered: false,
+                record: doc_sync_core::WalRecord {
+                    seq: doc_sync_core::WalSeq(1),
+                    created_at: doc_sync_core::UnixMillis(100),
+                    user: doc_sync_core::UserKey(client.user.clone()),
+                    foreign: true,
+                    quarantined: false,
+                    bytes: vec![1],
+                },
+            },
+        );
+    assert!(invariants::all_wals_drained(&outcome).is_err());
 }

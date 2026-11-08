@@ -23,6 +23,71 @@ fn opened(
         _ => None,
     })
 }
+// A reopened client name must not erase an old user's retained read-only row.
+fn retained_readonly_row(
+    outcome: &Outcome,
+    profile: &ProfileName,
+    doc: DocIx,
+    owner: WalOwner,
+    seq: WalSeq,
+    required: &[IdSpan],
+) -> bool {
+    let WalOwner::Session(session) = owner else {
+        return false;
+    };
+    let Some(start) = outcome.events.iter().position(
+        |event| matches!(&event.fact, Fact::Opened { session: opened, .. } if *opened == session),
+    ) else {
+        return false;
+    };
+    let Fact::Opened {
+        client,
+        access,
+        profile: scope,
+        doc: row_doc,
+        ..
+    } = &outcome.events[start].fact
+    else {
+        return false;
+    };
+    if scope != profile || *row_doc != doc {
+        return false;
+    }
+    let mut access = *access;
+    let mut parked = false;
+    for event in outcome.events.iter().skip(start + 1).take_while(
+        |event| !matches!(&event.fact, Fact::Opened { client: name, .. } if name == client),
+    ) {
+        match &event.fact {
+            Fact::AccessChanged {
+                client: name,
+                access: current,
+            } if name == client => access = *current,
+            Fact::RowsParked { client: name, rows } if name == client => {
+                parked = rows
+                    .iter()
+                    .any(|(row, reason)| *row == seq && reason == "ReadOnly")
+            }
+            _ => {}
+        }
+    }
+    access != Access::Edit
+        && parked
+        && outcome.finals.profiles.get(profile).is_some_and(|store| {
+            store
+                .entries
+                .iter()
+                .any(|((key, row_owner, row_seq), row)| {
+                    key.as_str() == document_key(doc, &outcome.config)
+                        && *row_owner == owner
+                        && *row_seq == seq
+                        && loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true).is_ok()
+                        && crate::document::spans(&row.record.bytes).is_ok_and(|retained| {
+                            required.iter().all(|span| ranges_cover(&retained, span))
+                        })
+                })
+        })
+}
 fn spans_for_update(outcome: &Outcome, update: &str) -> Vec<IdSpan> {
     outcome
         .events
@@ -52,6 +117,7 @@ fn aliases(
     profile: &ProfileName,
     owner: WalOwner,
     seq: WalSeq,
+    doc: DocIx,
 ) -> BTreeSet<(WalOwner, WalSeq)> {
     let mut result = [(owner, seq)].into_iter().collect::<BTreeSet<_>>();
     for event in &outcome.events {
@@ -60,8 +126,11 @@ fn aliases(
             from,
             to,
             map,
+            doc: target,
+            ..
         } = &event.fact
             && scope == profile
+            && target.as_str() == document_key(doc, &outcome.config)
         {
             for (old, new) in map {
                 if result.contains(&(*from, *old)) {
@@ -72,8 +141,13 @@ fn aliases(
     }
     result
 }
-fn expired(outcome: &Outcome, profile: &ProfileName, rows: &BTreeSet<(WalOwner, WalSeq)>) -> bool {
-    outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { profile: scope, owner, seqs } if scope == profile && seqs.iter().any(|seq| rows.contains(&(*owner, *seq)))))
+fn expired(
+    outcome: &Outcome,
+    profile: &ProfileName,
+    rows: &BTreeSet<(WalOwner, WalSeq)>,
+    doc: DocIx,
+) -> bool {
+    outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { profile: scope, doc: target, owner, seqs } if scope == profile && target.as_str() == document_key(doc, &outcome.config) && seqs.iter().any(|seq| rows.contains(&(*owner, *seq)))))
 }
 /// Every received acknowledgment's exact operation ranges survive a cold server load and settled peers.
 pub fn no_acked_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
@@ -169,13 +243,35 @@ pub fn no_persisted_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
                             } if owner == session => Some(*access),
                             _ => None,
                         });
-                    identity && access == Some(Access::Edit)
+                    let durable = outcome.events.iter().any(|event| matches!(&event.fact,
+                        Fact::Opened { session: owner, kind: ClientKind::Tab, .. } if owner == session));
+                    identity && durable && access == Some(Access::Edit)
                 });
         if !recovery {
             continue;
         }
-        let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq);
-        if expired(outcome, profile, &rows) {
+        let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq, doc);
+        if expired(outcome, profile, &rows, doc) {
+            continue;
+        }
+        // Orchestrator corruption ruling: only the exact fault-damaged row,
+        // through its actual adoption aliases, may remain absent if retained
+        // quarantined and unacknowledged. Acknowledged-edit checks stay strict.
+        let key = document_key(doc, &outcome.config);
+        let corrupted = outcome.events.iter().any(|event| {
+            matches!(&event.fact,
+            Fact::WalCorrupted { profile: scope, doc: target, owner, seq }
+            if scope == profile && target.as_str() == key && rows.contains(&(*owner, *seq)))
+        });
+        let retained = outcome.finals.profiles.get(profile).is_some_and(|store| {
+            store.entries.iter().any(|((target, owner, seq), row)| {
+                target.as_str() == key
+                    && rows.contains(&(*owner, *seq))
+                    && row.record.quarantined
+                    && !row.delivered
+            })
+        });
+        if corrupted && retained {
             continue;
         }
         let spans = outcome
@@ -258,7 +354,7 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
             if row_doc != doc {
                 continue;
             }
-            let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq);
+            let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq, doc);
             let parked = outcome.finals.clients.values().any(|peer| {
                 peer.profile == *profile
                     && peer.doc == doc
@@ -267,8 +363,38 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                             && (peer.access != Access::Edit || (corruption && reason == "Poison"))
                     })
             });
-            if parked || expired(outcome, profile, &rows) {
+            // A stopped tab has no later Crashed fact, but a profile power loss
+            // can still roll back its exact recent durable row. Keep the join
+            // document/profile/owner/sequence scoped; ACK checks remain strict.
+            let rolled_back = outcome.events.iter().any(|event| {
+                matches!(&event.fact,
+                Fact::WalWriteLost { profile: scope, session, seq }
+                if scope == profile && rows.contains(&(WalOwner::Session(*session), *seq)))
+            });
+            if parked
+                || rolled_back
+                || rows.iter().any(|(owner, seq)| {
+                    retained_readonly_row(outcome, profile, doc, *owner, *seq, row_spans)
+                })
+                || expired(outcome, profile, &rows, doc)
+            {
                 exempt.extend(row_spans.clone());
+            }
+        }
+        // Memory AI has no browser WalAppendIssued record, but a live revoked
+        // worker can retain the same exact edit in its actual parked WAL.
+        for peer in outcome.finals.clients.values().filter(|peer| {
+            peer.alive
+                && peer.kind == ClientKind::AiWorker
+                && peer.doc == doc
+                && peer.access != Access::Edit
+        }) {
+            for (seq, reason) in &peer.parked {
+                if reason == "ReadOnly"
+                    && let Some(retained) = peer.parked_spans.get(seq)
+                {
+                    exempt.extend(retained.clone());
+                }
             }
         }
         let required = spans
@@ -322,25 +448,62 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
         }
     }
     for (profile, store) in &outcome.finals.profiles {
-        for ((doc, _, _), row) in &store.entries {
+        for ((doc, owner, seq), row) in &store.entries {
+            // Durable delivery is a contiguous prefix. A live owner can have an
+            // exact acknowledged row above a parked gap, without persisting a
+            // false prefix over that gap.
+            let confirmed = outcome.finals.clients.values().any(|client| {
+                client.alive
+                    && client.profile == *profile
+                    && *owner == WalOwner::Session(client.session)
+                    && client.delivered.contains(seq)
+                    && document_key(client.doc, &outcome.config) == doc.as_str()
+                    && loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true).is_ok()
+                    && crate::document::spans(&row.record.bytes).is_ok_and(|spans| {
+                        outcome
+                            .finals
+                            .servers
+                            .get(&client.doc)
+                            .is_some_and(|server| contains(&server.persisted_vv, &spans))
+                    })
+            });
             let writable = outcome.finals.clients.values().any(|client| {
                 client.alive
                     && client.terminal.is_none()
                     && client.profile == *profile
                     && client.user == row.record.user.0
+                    && client.kind == ClientKind::Tab
                     && client.access == Access::Edit
-                    && document_key(client.doc) == doc.to_string()
+                    && document_key(client.doc, &outcome.config) == doc.to_string()
             });
-            if writable && !row.delivered && !row.record.quarantined {
+            let parked = outcome.finals.clients.values().any(|client| {
+                client.alive
+                    && client.profile == *profile
+                    && *owner == WalOwner::Session(client.session)
+                    && document_key(client.doc, &outcome.config) == doc.as_str()
+                    && client.parked.iter().any(|(parked, reason)| {
+                        *parked == *seq
+                            && (reason == "Gap"
+                                || (reason == "ReadOnly" && client.access != Access::Edit))
+                    })
+            });
+            if writable && !row.delivered && !row.record.quarantined && !confirmed && !parked {
                 return Err(Failure::new(
                     "all_wals_drained",
-                    format!("{profile:?} has an undelivered orphan/foreign row"),
+                    format!(
+                        "{profile:?} {doc} {owner:?}/{seq:?} has an undelivered orphan/foreign row"
+                    ),
                 ));
             }
         }
     }
     Ok(())
 }
-pub(super) fn document_key(doc: DocIx) -> String {
-    format!("00000000-0000-7000-8000-{:012x}", u64::from(doc.0) + 1)
+fn document_key(doc: DocIx, config: &SimConfig) -> String {
+    let id = format!("00000000-0000-7000-8000-{:012x}", u64::from(doc.0) + 1);
+    if config.surfaces.contains(&doc) {
+        format!("surface:{id}")
+    } else {
+        id
+    }
 }

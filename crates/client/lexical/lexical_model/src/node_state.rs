@@ -206,20 +206,65 @@ impl<ValueType: StateValue> AnyStateKey for StateKey<ValueType> {
         value.downcast_ref::<ValueType>().map(StateValue::to_json)
     }
 }
+/// A declaration retains static native identity or a runtime key name.
+#[derive(Clone, Copy)]
+pub(crate) enum DeclaredStateKey {
+    Native(&'static dyn AnyStateKey),
+    #[cfg(feature = "foreign-nodes")]
+    Foreign(&'static str),
+}
+impl DeclaredStateKey {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Native(key) => key.name(),
+            #[cfg(feature = "foreign-nodes")]
+            Self::Foreign(name) => name,
+        }
+    }
+    pub(crate) fn identity(self) -> usize {
+        match self {
+            Self::Native(key) => key.identity(),
+            #[cfg(feature = "foreign-nodes")]
+            Self::Foreign(_) => 0,
+        }
+    }
+    fn native(self) -> Option<&'static dyn AnyStateKey> {
+        match self {
+            Self::Native(key) => Some(key),
+            #[cfg(feature = "foreign-nodes")]
+            Self::Foreign(_) => None,
+        }
+    }
+}
 /// A declared state key with nested or flat serialization.
 #[derive(Clone, Copy)]
 pub struct RequiredState {
-    pub(crate) key: &'static dyn AnyStateKey,
+    pub(crate) key: DeclaredStateKey,
     pub(crate) flat: bool,
 }
 impl RequiredState {
+    /// Declare a registered development state key, retaining its JSON until first read.
+    #[cfg(feature = "foreign-nodes")]
+    pub const fn foreign(name: &'static str, flat: bool) -> Self {
+        Self {
+            key: DeclaredStateKey::Foreign(name),
+            flat,
+        }
+    }
+
     /// Store under the `$` object.
     pub const fn nested<ValueType: StateValue>(key: &'static StateKey<ValueType>) -> Self {
-        Self { key, flat: false }
+        Self {
+            key: DeclaredStateKey::Native(key),
+            flat: false,
+        }
     }
     /// Store beside the node's base properties.
     pub const fn flat<ValueType: StateValue>(key: &'static StateKey<ValueType>) -> Self {
-        Self { key, flat: true }
+        Self {
+            key: DeclaredStateKey::Native(key),
+            flat: true,
+        }
     }
 }
 /// Validated state declarations inherited by a registered node.
@@ -230,8 +275,10 @@ pub struct StateLayout {
 /// Optional node state; known entries preserve insertion order and value identity.
 #[derive(Clone, Default)]
 pub struct NodeState {
-    known: Vec<(&'static dyn AnyStateKey, Arc<dyn Any + Send + Sync>)>,
-    unknown: Option<IndexMap<String, Arc<Value>>>,
+    pub(crate) known: Vec<(&'static dyn AnyStateKey, Arc<dyn Any + Send + Sync>)>,
+    pub(crate) unknown: Option<IndexMap<String, Arc<Value>>>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign: crate::foreign::state::ForeignBindings,
 }
 impl fmt::Debug for NodeState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -305,12 +352,19 @@ impl NodeState {
                 return false;
             }
         }
+        #[cfg(feature = "foreign-nodes")]
+        let Some(foreign) = crate::foreign::state::equivalent(left, right) else {
+            return false;
+        };
         left.unknown
             .iter()
             .flatten()
             .chain(right.unknown.iter().flatten())
             .all(|(name, _)| {
-                keys.contains_key(name.as_str())
+                let known = keys.contains_key(name.as_str());
+                #[cfg(feature = "foreign-nodes")]
+                let known = known || foreign.contains_key(name.as_str());
+                known
                     || left
                         .unknown
                         .as_ref()
@@ -376,13 +430,13 @@ impl NodeState {
         }
         let mut known = vec![];
         for entry in &layout.entries {
-            let value = unknown.shift_remove(entry.key.name());
+            let Some(key) = entry.key.native() else {
+                continue;
+            };
+            let value = unknown.shift_remove(key.name());
             known.push((
-                entry.key,
-                value.map_or_else(
-                    || entry.key.default_any(),
-                    |value| entry.key.parse_any(Some(&value)),
-                ),
+                key,
+                value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value))),
             ));
         }
         if let Some(previous) = previous {
@@ -416,6 +470,10 @@ impl NodeState {
         Some(Self {
             known,
             unknown: Some(unknown),
+            #[cfg(feature = "foreign-nodes")]
+            foreign: previous
+                .map(|state| state.foreign.clone())
+                .unwrap_or_default(),
         })
     }
     /// s2: NS-08
@@ -433,6 +491,8 @@ impl NodeState {
                 values.insert(key.name().to_owned(), v);
             }
         }
+        #[cfg(feature = "foreign-nodes")]
+        self.foreign.export(&mut values, layout, json);
         for entry in &layout.entries {
             if entry.flat
                 && let Some(value) = values.shift_remove(entry.key.name())

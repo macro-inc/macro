@@ -48,6 +48,8 @@ type CoerceFormatHook = fn(
 #[doc(hidden)]
 #[derive(Clone)]
 pub struct NodeVTable {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign: Option<Arc<ForeignNodeType>>,
     pub(crate) type_name: &'static str,
     pub(crate) class_name: &'static str,
     pub(crate) kind: NodeKind,
@@ -60,7 +62,11 @@ pub struct NodeVTable {
     pub(crate) per_instance: bool,
     pub(crate) project: fn(&dyn Any, TypeId) -> Option<&dyn Any>,
     pub(crate) project_mut: fn(&mut dyn Any, TypeId) -> Option<&mut dyn Any>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) decode: fn(&SerializedNode) -> Result<Arc<dyn AnyNodeData>, Error>,
     pub(crate) probe: fn() -> Option<Arc<dyn AnyNodeData>>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) default_data: fn() -> Option<Arc<dyn AnyNodeData>>,
     pub(crate) default_create: fn(&mut Transaction<'_>) -> Result<NodeKey, Error>,
     pub(crate) initial_base: fn(&dyn Any) -> Result<BaseData, Error>,
     pub(crate) import_exact: fn(&mut Transaction<'_>, &SerializedNode) -> Result<NodeKey, Error>,

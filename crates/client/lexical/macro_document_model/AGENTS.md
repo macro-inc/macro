@@ -10,10 +10,12 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Own unknown HTML node names in exporter errors; opaque type names borrow their snapshot.
+
 - Keep HTML opt-in; parse template fragments with logos starts and nom lexical modes before serializing owned nodes.
 - Keep the two S3 Q7 equation exceptions bound to exact source-row hashes and exact UTF-8 markup; compare Latin-1 exports directly.
 - Match list DOM exports and source attribute order byte-for-byte; never emit stored HTML directly.
-- Restore source own-undefined properties as null only at the snapshot storage boundary; ordinary editor JSON continues to omit them.
+- Restore source own-undefined properties as null at snapshot and live sync storage boundaries using the generated catalog; keep ordinary editor JSON unchanged.
 - Keep wire-properties.json generated from actual source node exports and shared with conformance.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
 - Preserve raw code language/theme when the parent afterCloneFrom hook restores them.

@@ -576,3 +576,254 @@ fn assisted_retry_schedules_only_the_new_ack_deadline() {
     assert!(h.core.assist_push.is_some());
     assert!(h.out.wake_at.is_none_or(|at| at > retry));
 }
+
+#[test]
+fn adoption_inside_coalesce_window_keeps_local_edit_for_append() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Durable);
+    load_rows(&mut h, vec![row(1)]);
+    let id = h
+        .core
+        .storage
+        .iter()
+        .find_map(|(id, pending)| {
+            matches!(pending.completion, StorageCompletion::Adopt { .. }).then_some(*id)
+        })
+        .unwrap();
+    h.edit();
+    let peer = h.doc.peer_id();
+    let local_end = h.doc.oplog_vv().get(&peer).copied().unwrap();
+    h.send(SyncInput::Storage(StorageEvent::Adopted {
+        id,
+        result: Ok(1),
+    }));
+    h.at(25, SyncInput::Tick);
+    let record = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Storage {
+                op: StorageOp::WalAppend { record, .. },
+                ..
+            } => Some(record),
+            _ => None,
+        })
+        .expect("the local edit must still be appended after adoption replay");
+    let meta = loro::LoroDoc::decode_import_blob_meta(&record.bytes, true).unwrap();
+    assert_eq!(meta.partial_end_vv.get(&peer).copied(), Some(local_end));
+}
+
+#[test]
+fn server_evidence_retires_only_the_confirmed_part_of_an_own_push() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.config.chatter = true;
+    let bytes = row(1).record.bytes;
+    h.send(SyncInput::Chatter(ChatterMessage::Update(bytes.clone())));
+    h.edit();
+    h.core.foreign_writer_closed = true;
+    h.at(25, SyncInput::Tick);
+    let push = h.core.push.as_ref().unwrap();
+    let id = push.id.as_str().to_owned();
+    assert_eq!(push.rows, vec![WalSeq(1), WalSeq(2)]);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&bytes),
+    });
+    assert_eq!(h.core.wal.delivered_through, Some(WalSeq(1)));
+    assert_eq!(h.core.push.as_ref().unwrap().rows, vec![WalSeq(2)]);
+    assert_eq!(h.core.push.as_ref().unwrap().id.as_str(), id);
+    h.ack();
+    assert_eq!(h.core.wal.delivered_through, Some(WalSeq(2)));
+    assert!(h.core.push.is_none());
+}
+
+#[test]
+fn server_evidence_retires_an_entire_foreign_push_before_its_ack() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.config.chatter = true;
+    let bytes = row(1).record.bytes;
+    h.send(SyncInput::Chatter(ChatterMessage::Update(bytes.clone())));
+    h.send(SyncInput::Chatter(ChatterMessage::Closing(SessionId(
+        uuid_value::Uuid::from_u128(99),
+    ))));
+    assert_eq!(h.core.push.as_ref().unwrap().rows, vec![WalSeq(1)]);
+    let id = h.core.push.as_ref().unwrap().id.as_str().to_owned();
+    h.core.not_acked = 20;
+    h.core.suspect_delay = Millis(60_000);
+    h.core.waiting_for_fresh_ack = true;
+    let span = h.core.span("wal.delivery_outage", None, &mut h.out);
+    h.core.outage_span = Some(span);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&bytes),
+    });
+    assert!(h.core.is_delivered(WalSeq(1)));
+    assert!(h.core.push.is_none());
+    assert!(h.core.push_retry.is_none());
+    assert_eq!(h.core.not_acked, 0);
+    assert_eq!(h.core.suspect_delay, Millis(5_000));
+    assert!(!h.core.waiting_for_fresh_ack);
+    assert!(h.core.outage_span.is_none());
+    h.remote(sync_protocol::FromRemote::RemoteUpdateAck { id: &id });
+    assert!(!h.core.waiting_for_fresh_ack);
+    assert_eq!(h.core.status().save, SaveState::Saved);
+}
+
+#[test]
+fn assisted_ack_imports_missing_history_and_prevents_reloading_delivered_rows() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    let record = row(1);
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record.clone()],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    let id = h.core.assist_push.as_ref().unwrap().id.as_str().to_owned();
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "");
+    h.remote(sync_protocol::FromRemote::RemoteUpdateAck { id: &id });
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "foreign");
+    assert!(h.core.assist.is_empty());
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+}
+
+#[test]
+fn read_only_helpers_do_not_queue_or_become_busy_with_foreign_assistance() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![row(1)],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+    assert!(h.core.is_idle());
+    assert_eq!(h.core.status().save, SaveState::Saved);
+}
+
+#[test]
+fn revoked_helpers_leave_assistance_retained_until_they_can_write_again() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.assist.push(row(1));
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    assert_eq!(h.core.assist.len(), 1);
+    assert!(h.core.assist_push.is_none());
+    assert!(h.core.is_idle());
+    assert_eq!(h.core.status().save, SaveState::Saved);
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: true,
+        can_comment: false,
+    }));
+    assert!(h.core.assist_push.is_some());
+}
+
+#[test]
+fn own_ack_prevents_later_assistance_of_the_same_committed_span() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let entry = h.core.wal.entries.back().unwrap();
+    let record = StoredWalRecord {
+        delivered: false,
+        record: WalRecord {
+            seq: WalSeq(4),
+            created_at: now(h.time).wall,
+            user: h.core.config.user.clone(),
+            foreign: true,
+            quarantined: false,
+            bytes: entry.bytes.to_vec(),
+        },
+    };
+    h.ack();
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+    assert!(
+        !h.out
+            .io
+            .iter()
+            .any(|io| matches!(io, IoEffect::SocketSend { .. }))
+    );
+}
+
+#[test]
+fn own_ack_evidence_excludes_unpushed_rows_and_invalid_checksums() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let first = h.doc.oplog_vv();
+    h.append();
+    assert!(!first.includes_vv(&h.doc.oplog_vv()));
+    h.ack();
+    assert!(h.core.server_vv.includes_vv(&first));
+    assert!(!h.core.server_vv.includes_vv(&h.doc.oplog_vv()));
+
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let entry = h.core.wal.entries.back_mut().unwrap();
+    let mut damaged = entry.bytes.to_vec();
+    *damaged.last_mut().unwrap() ^= 1;
+    entry.bytes = damaged.into();
+    h.ack();
+    assert!(!h.core.server_vv.includes_vv(&h.doc.oplog_vv()));
+}
+
+mod gaps;
+
+mod adoption;

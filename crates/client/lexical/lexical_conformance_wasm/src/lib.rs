@@ -9,6 +9,10 @@ mod corpus;
 pub use corpus::corpus_route;
 mod gate;
 pub use gate::gate_compare;
+mod compat;
+pub use compat::text_format_flags;
+#[cfg(feature = "js-nodes")]
+pub use compat::{generate_random_key, reset_key_counter};
 mod rich;
 pub use rich::RichHandle;
 mod command;

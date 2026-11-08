@@ -8,7 +8,7 @@
       "replace(other, includeChildren) selection mapping",
       "replace without includeChildren falls back to the legacy moveSelectionPointToEnd"
     ],
-    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+    "recordedWith": "lexical-conformance@04aff172e316cc2b09915d3c2c15908126798d835268cf980f6e7547724e2aec"
   },
   "tier": "A-rec",
   "partial": false,

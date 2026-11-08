@@ -14,7 +14,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - `src/replay/golden.rs`: ordered Worker-boundary projection and final storage checks.
 - `src/replay/golden/receipts.rs`: validated native snapshot/receipt correspondence.
 - `src/transcript.rs`: lossless JSONL parsing and comparison helpers.
-- `tests/transcripts/COVERAGE.md`: behavior inventory and representative fixtures.
+- `tests/transcripts/COVERAGE.md`: behavior inventory and 158 Worker fixtures, including the three application comment-root gate modes.
 
 ## Boundaries
 
@@ -37,6 +37,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - A closing socket stays listed until the runtime completes its close callback.
 - D1 claims may replace only the system author; missing-peer insertion never
   replaces an existing owner. D1 writes survive DO output-gate rollback.
+- Record Worker goldens with the pinned 1.16.3 service test driver and vendored server encoder; verify old/new native replay, real legacy interoperability and repeated exact recordings before refreshing encoded snapshots.
 - Re-record comparison is byte-exact except the documented time/UUID and
   awareness normalization. Under the S6 native comparison ruling (2026-11-07),
   native Loro envelopes allow export-derived lengths/chunks to differ while
@@ -48,6 +49,10 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   repair forged inputs. Keep workerd digest bytes exact.
 - `fork_durable` opens an isolated cold view; `take_completed_puts` and
   `take_delivery_proofs` expose success/generation evidence without changing port effects.
+  Durable generations share immutable value/snapshot buffers; writes replace leaves,
+  and public reads/dumps return owned copies. Deserialize typed reads from borrowed
+  immutable values so raw-byte arrays need no intermediate JSON clone. Confirming an older generation must
+  preserve its exact pre-overwrite content through cold recovery.
   `take_queued_sends` and `take_completed_closes` distinguish successful runtime
   actions from failed attempts.
   Fault `"*"` counts calls through the fault-capable boundary, not diagnostic clock reads.
@@ -69,3 +74,8 @@ runtime effects. Presence comparisons include exact native timestamps, including
 tombstones. For C0's unobservable local-delete clocks, only clock inputs are
 recovered from wire timestamps. Runtime enumeration order must retain exact live
 socket membership. Read-only Room diagnostics expose no mutable Loro handle.
+- `src/persistence_test.rs` checks failed first writes versus durable pending/failed
+  archive writes, same-time log identities and actual cold replay after cache invalidation.
+
+The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
+separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.

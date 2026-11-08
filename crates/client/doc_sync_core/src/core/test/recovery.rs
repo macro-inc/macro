@@ -1,6 +1,82 @@
 use super::*;
 
 #[test]
+fn imported_shallow_history_can_persist_at_its_confirmed_causal_frontier() {
+    let ancestor = Doc::new(9);
+    ancestor.edit("base");
+    let server = Doc::new(10);
+    server.loro.import(&ancestor.snapshot()).unwrap();
+    server.edit("head");
+    let confirmed = server.loro.oplog_frontiers();
+    let shallow = server
+        .loro
+        .export(loro::ExportMode::shallow_snapshot(&confirmed))
+        .unwrap();
+    let loaded = Doc::new(11);
+    loaded.loro.import(&shallow).unwrap();
+    assert!(
+        loaded
+            .loro
+            .export(loro::ExportMode::shallow_snapshot(
+                &loaded.oplog_vv().get_frontiers()
+            ))
+            .is_err()
+    );
+
+    let mut h = Harness::new(TransportKind::None, Persistence::Durable);
+    h.start();
+    let load = h.storage_id();
+    h.send(SyncInput::Storage(StorageEvent::Loaded {
+        id: load,
+        result: Ok(empty()),
+    }));
+    h.send(SyncInput::Seed {
+        kind: SeedKind::Remote,
+        snapshot: shallow,
+    });
+    h.send(SyncInput::Ready);
+    h.append();
+    let append = h.storage_id();
+    h.done(append);
+    h.at(5000, SyncInput::Tick);
+    let bytes = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Storage {
+                op: StorageOp::SnapshotSave { bytes, .. },
+                ..
+            } => Some(bytes),
+            _ => None,
+        })
+        .expect("a shallow server seed must remain persistable after local typing");
+    assert_eq!(h.doc.calls.borrow().snapshots.last(), Some(&confirmed));
+    let reopened = Doc::new(12);
+    reopened.loro.import(bytes).unwrap();
+    assert_eq!(reopened.loro.get_text("text").to_string(), "baseheadx");
+    let base = server.oplog_vv();
+    server.edit("remote");
+    let remote = server
+        .loro
+        .export(loro::ExportMode::updates(&base))
+        .unwrap();
+    let imported = reopened.loro.import(&remote).unwrap();
+    assert!(
+        imported.pending.is_none(),
+        "concurrent remote history remains readable above the confirmed root"
+    );
+    let reference = Doc::new(13);
+    reference.loro.import(&h.doc.snapshot()).unwrap();
+    reference.loro.import(&remote).unwrap();
+    assert_eq!(
+        reopened.loro.get_text("text").to_string(),
+        reference.loro.get_text("text").to_string()
+    );
+    assert_eq!(reopened.oplog_vv(), reference.oplog_vv());
+}
+
+#[test]
 fn s7_006_snapshot_runs_only_for_changed_vector() {
     let mut h = Harness::running(TransportKind::None, Persistence::Durable);
     h.at(5000, SyncInput::Tick);
@@ -51,14 +127,17 @@ fn s7_011_reset_preserves_old_edits_and_uses_new_peer() {
 #[test]
 fn s7_012_failed_reset_preserves_old_document() {
     let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
     h.core.add_peer_ids([2]).unwrap();
     h.doc.edit("keep");
     let vv = h.doc.oplog_vv();
     h.doc.replace_fails = true;
     h.send(SyncInput::Reset);
     h.at(5000, SyncInput::Tick);
-    h.remote(sync_protocol::FromRemote::RemoteSnapshot {
-        snapshot: SliceWrapper::from_cooked(&[]),
+    let request_vv = h.core.since.back().unwrap().vv.clone();
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&request_vv),
+        update: SliceWrapper::from_cooked(&[]),
     });
     assert_eq!(h.doc.peer_id(), 1);
     assert_eq!(h.doc.oplog_vv(), vv);
@@ -544,4 +623,428 @@ fn comment_fork_uses_reserved_peer_and_registers_it() {
     assert_eq!(peer, 2);
     assert!(h.core.registered_peers.contains(&2));
     assert_eq!(h.core.add_peer_ids([2]), Err(SyncError::PeerReused));
+}
+
+#[test]
+fn blocked_rebase_does_not_rearm_an_expired_wake_during_reset() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.at(100, SyncInput::Tick);
+    h.core.rebase_due = Some(Millis(100));
+    h.core.phase = Phase::Resetting;
+    h.core.reset = Some(ResetState::Awaiting { rebase: true });
+    h.at(100, SyncInput::Tick);
+    assert!(h.out.wake_at.is_none_or(|wake| wake > Millis(100)));
+    assert!(!h.core.rebase_rerun);
+    assert_eq!(h.core.rebase_due, Some(Millis(100)));
+}
+#[test]
+fn acknowledged_rows_covered_by_a_shallow_snapshot_replay_idempotently() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.ack();
+    let remote = h.doc.loro.fork();
+    remote.set_peer_id(9).unwrap();
+    remote.get_text("text").insert(1, "y").unwrap();
+    remote.commit_with(loro::CommitOptions::default().timestamp(0));
+    let snapshot = remote
+        .export(loro::ExportMode::shallow_snapshot(
+            &remote.state_frontiers(),
+        ))
+        .unwrap();
+    let replacement = loro::LoroDoc::new();
+    replacement.set_peer_id(99).unwrap();
+    replacement.import(&snapshot).unwrap();
+    h.doc.loro = replacement;
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports);
+    assert!(h.core.rebase_due.is_none());
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "xy");
+}
+
+#[test]
+fn covered_unacknowledged_rows_still_use_the_replay_importer() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.doc.faults.push_back(Err(ImportFailure::Outdated));
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports + 1);
+    assert_eq!(h.core.rebase_due, Some(Millis(h.time)));
+    assert!(!h.core.is_delivered(h.core.wal.entries.front().unwrap().seq));
+}
+
+#[test]
+fn invalid_checksum_acknowledged_rows_still_use_the_replay_importer() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.ack();
+    let entry = h.core.wal.entries.front_mut().unwrap();
+    let seq = entry.seq;
+    let mut bytes = entry.bytes.to_vec();
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0xff;
+    assert!(loro::LoroDoc::decode_import_blob_meta(&bytes, true).is_err());
+    entry.bytes = bytes.into();
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports + 1);
+    assert_eq!(h.core.wal.entries.front().unwrap().seq, seq);
+    assert!(h.core.is_delivered(seq));
+}
+
+#[test]
+fn successful_reset_clears_pending_history_when_no_wal_replay_follows() {
+    let remote = Doc::new(7);
+    remote.edit("first");
+    let vv = remote.oplog_vv();
+    remote.edit("second");
+    let delta = remote.loro.export(loro::ExportMode::updates(&vv)).unwrap();
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&delta),
+    });
+    assert!(h.core.status().pending_import);
+    assert!(h.core.wal.entries.is_empty());
+    h.send(SyncInput::Reset);
+    h.remote(sync_protocol::FromRemote::RemoteSnapshot {
+        snapshot: SliceWrapper::from_cooked(&remote.snapshot()),
+    });
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "firstsecond");
+    assert_eq!(h.core.phase(), Phase::Running);
+    assert!(!h.core.status().pending_import);
+    assert_ne!(h.core.busy(), Some(BusyReason::PendingImport));
+}
+
+#[test]
+fn failed_reset_preserves_pending_history_until_its_dependency_arrives() {
+    let remote = Doc::new(7);
+    remote.edit("first");
+    let base = remote.snapshot();
+    let vv = remote.oplog_vv();
+    remote.edit("second");
+    let delta = remote.loro.export(loro::ExportMode::updates(&vv)).unwrap();
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&delta),
+    });
+    assert!(h.core.status().pending_import);
+    h.doc.replace_fails = true;
+    h.send(SyncInput::Reset);
+    h.remote(sync_protocol::FromRemote::RemoteSnapshot {
+        snapshot: SliceWrapper::from_cooked(&remote.snapshot()),
+    });
+    assert!(h.core.status().pending_import);
+    assert_eq!(h.core.busy(), Some(BusyReason::PendingImport));
+    assert_eq!(h.doc.peer_id(), 1);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&base),
+    });
+    assert!(!h.core.status().pending_import);
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "firstsecond");
+}
+
+#[test]
+fn failed_conditional_adoption_reloads_the_source_selection() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Durable);
+    h.settle();
+    let first = h.core.wal.next_seq;
+    let id = h.core.issue(
+        StorageOp::WalAdopt {
+            doc: h.core.config.doc.clone(),
+            from: WalOwner::Session(SessionId(uuid_value::Uuid::from_u128(99))),
+            to: h.core.config.session,
+            first_seq: first,
+            covers: WalSeq(1),
+            expected: Vec::new(),
+        },
+        StorageCompletion::Adopt {
+            first,
+            records: Vec::new(),
+        },
+        now(100),
+        &mut h.out,
+    );
+    h.at(
+        100,
+        SyncInput::Storage(StorageEvent::Adopted {
+            id,
+            result: Err(StorageFailure::Other),
+        }),
+    );
+    assert_eq!(h.core.load_retry, Some(Millis(2100)));
+    h.at(2099, SyncInput::Tick);
+    assert!(!h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::Load { .. },
+            ..
+        }
+    )));
+    h.at(2100, SyncInput::Tick);
+    assert!(h.out.io.iter().any(|effect| matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::Load { .. },
+            ..
+        }
+    )));
+    let load = h.storage_id();
+    h.send(SyncInput::Storage(StorageEvent::Loaded {
+        id: load,
+        result: Ok(LocalState {
+            snapshot: None,
+            orphans: Vec::new(),
+            assist: Vec::new(),
+        }),
+    }));
+    assert_eq!(h.core.wal.health, StorageHealth::Ok);
+    assert_eq!(h.core.load_retry, None);
+}
+
+#[test]
+fn revoked_private_rows_recover_with_history_and_resume_after_regrant() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    h.doc.edit("private first");
+    h.core.append_local(now(0), &mut h.doc, &mut h.out);
+    h.doc.edit(" and second");
+    h.core.append_local(now(0), &mut h.doc, &mut h.out);
+    let private_vv = h.doc.oplog_vv();
+    let retained = h
+        .core
+        .wal
+        .entries
+        .iter()
+        .map(|row| row.bytes.clone())
+        .collect::<Vec<_>>();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.core.wal.entries[0].park = Some(ParkReason::NeedsRebase);
+    h.send(SyncInput::ImportFailed(ImportFailure::Outdated));
+    h.send(SyncInput::Tick);
+    assert_eq!(
+        h.core.status().save,
+        SaveState::Unsaved(UnsavedReason::ReadOnly)
+    );
+    assert!(
+        h.core
+            .parked()
+            .iter()
+            .all(|(_, reason)| *reason == ParkReason::ReadOnly)
+    );
+    let server = Doc::new(9);
+    server.edit("server");
+    let bytes = server.loro.export(loro::ExportMode::all_updates()).unwrap();
+    let vv = h.core.since.back().unwrap().vv.clone();
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&vv),
+        update: SliceWrapper::from_cooked(&bytes),
+    });
+    assert_eq!(h.doc.peer_id(), 2);
+    assert!(h.doc.oplog_vv().includes_vv(&private_vv));
+    assert_eq!(h.core.confirmed_base, server.loro.oplog_frontiers());
+    let text = h.doc.loro.get_text("text").to_string();
+    assert!(text.contains("private first and second"));
+    assert!(text.contains("server"));
+    assert_eq!(
+        h.core
+            .wal
+            .entries
+            .iter()
+            .map(|row| row.bytes.clone())
+            .collect::<Vec<_>>(),
+        retained
+    );
+    assert!(h.core.push.is_none());
+    assert!(h.core.rebase_due.is_none());
+    assert!(!h.core.pending_import);
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: true,
+        can_comment: true,
+    }));
+    assert!(h.core.push.is_some());
+    h.ack();
+    assert!(h.core.parked().is_empty());
+    assert!(
+        h.core
+            .wal
+            .entries
+            .iter()
+            .all(|row| h.core.is_delivered(row.seq))
+    );
+}
+
+#[test]
+fn insufficient_recovery_history_keeps_the_private_document_and_wal() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    // Already-imported remote history is not necessarily duplicated in the own WAL.
+    let foreign = Doc::new(9);
+    foreign.edit("retained history");
+    h.doc.loro.import(&foreign.snapshot()).unwrap();
+    h.core.wal.logged_vv = h.doc.oplog_vv();
+    h.append();
+    let private_vv = h.doc.oplog_vv();
+    let private_value = h.doc.loro.get_deep_value();
+    let retained = h.core.wal.entries[0].bytes.clone();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.send(SyncInput::ImportFailed(ImportFailure::Outdated));
+    h.at(5_025, SyncInput::Tick);
+    let vv = h.core.since.back().unwrap().vv.clone();
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&vv),
+        update: SliceWrapper::from_cooked(&[]),
+    });
+    assert_eq!(h.doc.peer_id(), 1);
+    assert_eq!(h.doc.oplog_vv(), private_vv);
+    assert_eq!(h.doc.loro.get_deep_value(), private_value);
+    assert_eq!(h.core.wal.entries[0].bytes, retained);
+    assert_eq!(h.core.phase, Phase::Running);
+    assert_eq!(
+        h.core.status().save,
+        SaveState::Unsaved(UnsavedReason::ReadOnly)
+    );
+    assert!(h.core.push.is_none());
+}
+
+#[test]
+fn ordinary_catchup_timeout_does_not_expire_history_recovery() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.edit();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.at(5_000, SyncInput::ImportFailed(ImportFailure::Outdated));
+    h.send(SyncInput::Tick);
+    assert!(matches!(
+        h.core.reset,
+        Some(ResetState::AwaitingHistory { .. })
+    ));
+    h.at(10_000, SyncInput::Tick);
+    assert!(
+        h.core
+            .since
+            .iter()
+            .any(|request| !request.expired && request.recovery_deadline == Some(Millis(15_000)))
+    );
+    assert!(
+        h.core
+            .since
+            .iter()
+            .any(|request| request.expired && request.recovery_deadline.is_none())
+    );
+    assert!(matches!(
+        h.core.reset,
+        Some(ResetState::AwaitingHistory { .. })
+    ));
+    h.at(15_000, SyncInput::Tick);
+    assert_eq!(h.core.phase, Phase::Running);
+    assert!(h.core.reset.is_none());
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "x");
+    assert_eq!(
+        h.core.status().save,
+        SaveState::Unsaved(UnsavedReason::ReadOnly)
+    );
+}
+
+#[test]
+fn recovery_preserves_empty_vector_fifo_and_ignores_a_stale_shallow_snapshot() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.add_peer_ids([2]).unwrap();
+    h.edit();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.at(5_000, SyncInput::ImportFailed(ImportFailure::Outdated));
+    h.send(SyncInput::Tick);
+    let vv = h.core.since.back().unwrap().vv.clone();
+    assert_eq!(h.core.since.front().unwrap().vv, vv);
+    h.core
+        .reset_snapshot(Doc::new(9).snapshot(), now(5_000), &mut h.doc, &mut h.out);
+    assert!(matches!(
+        h.core.reset,
+        Some(ResetState::AwaitingHistory { .. })
+    ));
+    assert_eq!(h.doc.peer_id(), 1);
+    h.at(10_000, SyncInput::Tick);
+    // The expired ordinary response still owns the first identical wire slot.
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&vv),
+        update: SliceWrapper::from_cooked(&[]),
+    });
+    assert!(matches!(
+        h.core.reset,
+        Some(ResetState::AwaitingHistory { .. })
+    ));
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&vv),
+        update: SliceWrapper::from_cooked(&[]),
+    });
+    assert_eq!(h.core.phase, Phase::Running);
+    assert_eq!(h.doc.peer_id(), 2);
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "x");
+    assert_eq!(
+        h.core.status().save,
+        SaveState::Unsaved(UnsavedReason::ReadOnly)
+    );
+}
+
+#[test]
+fn invalid_recovery_bytes_or_row_checksum_preserve_live_private_history() {
+    for corrupt_row in [false, true] {
+        let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+        h.settle();
+        h.core.add_peer_ids([2]).unwrap();
+        h.edit();
+        h.send(SyncInput::Authorization(AuthorizationState {
+            current: true,
+            can_write: false,
+            can_comment: false,
+        }));
+        h.at(25, SyncInput::Tick);
+        let private_vv = h.doc.oplog_vv();
+        if corrupt_row {
+            let mut bytes = h.core.wal.entries[0].bytes.to_vec();
+            let last = bytes.len() - 1;
+            bytes[last] ^= 1;
+            h.core.wal.entries[0].bytes = bytes.into();
+        }
+        let retained = h.core.wal.entries[0].bytes.clone();
+        h.send(SyncInput::ImportFailed(ImportFailure::Outdated));
+        h.send(SyncInput::Tick);
+        let vv = h.core.since.back().unwrap().vv.clone();
+        let response = if corrupt_row { &[][..] } else { &[1, 2, 3][..] };
+        h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+            vv: SliceWrapper::from_cooked(&vv),
+            update: SliceWrapper::from_cooked(response),
+        });
+        assert_eq!(h.core.phase, Phase::Running);
+        assert_eq!(h.doc.peer_id(), 1);
+        assert_eq!(h.doc.oplog_vv(), private_vv);
+        assert_eq!(h.doc.loro.get_text("text").to_string(), "x");
+        assert_eq!(h.core.wal.entries[0].bytes, retained);
+        assert_eq!(
+            h.core.status().save,
+            SaveState::Unsaved(UnsavedReason::ReadOnly)
+        );
+    }
 }

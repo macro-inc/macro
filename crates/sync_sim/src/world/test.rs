@@ -61,6 +61,8 @@ fn duplicate_multi_frame_updates_are_two_complete_fifo_messages() {
         42
     );
     assert_eq!(doc.oplog_vv().get(&9_000), Some(&1));
+    assert_eq!(sim.stats.multi_frame_messages, 2);
+    assert!(sim.events.iter().any(|event| matches!(event.fact, Fact::Frame { frames, kind: FrameKind::Update, .. } if frames > 1)));
 }
 
 #[test]
@@ -161,7 +163,7 @@ fn chatter_is_fifo_even_with_perturbed_equal_time_scheduling() {
 
 #[test]
 fn hostile_fragment_loss_reaches_the_real_client_protocol_error_path() {
-    let mut sim = Sim::new(SimConfig::calm(89));
+    let mut sim = Sim::new(SimConfig::calm(90));
     sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
     sim.advance(500);
     let key = sim
@@ -204,4 +206,167 @@ fn hostile_fragment_loss_reaches_the_real_client_protocol_error_path() {
         Fact::SocketClose { connection, reason, .. } if *connection == key.2 && reason == "ProtocolError")), "{:?}", sim.events.iter().filter(|event| event.at.0 >= 500).map(|event| &event.fact).collect::<Vec<_>>());
     assert!(!sim.events.iter().any(|event| matches!(&event.fact,
         Fact::Telemetry { name, .. } if name == "doc.sync.reset")));
+}
+
+#[test]
+fn settle_resumes_failed_freeze_from_durable_claim_after_eviction() {
+    use futures::FutureExt;
+    use sync_server_core::domain::{migration::SourceState, ports::RoomStorage};
+    let mut sim = Sim::new(SimConfig::calm(239));
+    sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+    sim.advance(500);
+    let ports = sim.servers[&DocIx(0)].ports.clone();
+    ports.set_operation_error("snapshot.put", Some("injected export failure".into()));
+    sim.step(Step::Server(ServerStep::FreezeSource)).unwrap();
+    sim.advance(200);
+    assert!(matches!(
+        ports.source_migration().now_or_never().unwrap().unwrap(),
+        Some(SourceState::Freezing(_))
+    ));
+    ports.set_operation_error("snapshot.put", None);
+    sim.step(Step::Server(ServerStep::Evict {
+        close_sockets: true,
+    }))
+    .unwrap();
+    let outcome = sim.run(&[
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 2,
+                value: 67,
+            },
+        },
+        Step::Settle,
+    ]);
+    assert!(
+        outcome.per_step_failures.is_empty(),
+        "{:?}",
+        outcome.per_step_failures
+    );
+    invariants::check_all(&outcome).unwrap();
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        67
+    );
+    assert!(matches!(
+        ports.source_migration().now_or_never().unwrap().unwrap(),
+        Some(SourceState::Thawed(_))
+    ));
+}
+
+#[test]
+fn storage_effects_require_the_real_sessions_document_lease() {
+    let mut sim = Sim::new(SimConfig::calm(241));
+    let name = ClientName("a".into());
+    sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+    let client = &sim.clients[&name];
+    let session = client.session;
+    let doc = client.core_doc_id();
+    let profile = client.spec.profile.clone();
+    assert!(
+        sim.profiles[&profile]
+            .leases
+            .contains(&(doc.clone(), session))
+    );
+    assert!(!sim.profiles[&profile].pending.is_empty());
+    sim.profiles
+        .get_mut(&profile)
+        .unwrap()
+        .leases
+        .remove(&(doc.clone(), session));
+    let error = sim
+        .outputs(
+            &name,
+            session,
+            SyncOutput {
+                io: vec![IoEffect::Storage {
+                    id: doc_sync_core::StorageOpId(999),
+                    op: doc_sync_core::StorageOp::Load {
+                        doc,
+                        owner: session,
+                        user: doc_sync_core::UserKey("user-0".into()),
+                    },
+                }],
+                ..SyncOutput::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.invariant, "storage_lease");
+}
+
+#[test]
+fn other_user_expiry_uses_the_requesting_clients_positive_or_negative_skew() {
+    use doc_sync_core::{StoredWalRecord, UnixMillis, UserKey, WalOwner, WalRecord, WalSeq};
+    for offset in [-2_000, 2_000] {
+        let mut config = SimConfig::calm(251);
+        config.session.wal.ttl = doc_sync_core::Millis(1_000);
+        let mut sim = Sim::new(config);
+        sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+        let doc = sim.clients[&ClientName("a".into())].core_doc_id();
+        let origin = sim.clock.wall(0);
+        sim.profiles
+            .get_mut(&ProfileName("one".into()))
+            .unwrap()
+            .durable
+            .entries
+            .insert(
+                (doc, WalOwner::Legacy, WalSeq(1)),
+                StoredWalRecord {
+                    delivered: false,
+                    record: WalRecord {
+                        seq: WalSeq(1),
+                        created_at: UnixMillis(origin),
+                        user: UserKey("other-user".into()),
+                        foreign: false,
+                        quarantined: false,
+                        bytes: vec![0],
+                    },
+                },
+            );
+        let outcome = sim.run(&[
+            Step::ClockSkew {
+                client: ClientName("a".into()),
+                wall_offset_ms: offset,
+            },
+            Step::Run(Millis(500)),
+        ]);
+        assert!(
+            outcome.per_step_failures.is_empty(),
+            "{:?}",
+            outcome.per_step_failures
+        );
+        let dropped = outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { seqs, .. } if seqs.contains(&WalSeq(1))));
+        assert_eq!(dropped, offset > 0, "offset={offset}");
+    }
+}
+
+#[test]
+fn queued_non_periodic_input_is_reported_when_the_settlement_budget_expires() {
+    let mut config = SimConfig::calm(263);
+    config.budgets.settle = Millis(20_000);
+    config.budgets.quiet = Millis(0);
+    config.seeds.insert(
+        DocIx(0),
+        SeedDocument::Cached {
+            server: vec![(1, 42)],
+            s3: Some((vec![(1, 17)], Millis(40_000))),
+            local: None,
+        },
+    );
+    let outcome = Sim::new(config).run(&[Step::Open(OpenSpec::form("a", "one")), Step::Settle]);
+    assert!(outcome.events.iter().any(|event| matches!(
+        event.fact,
+        Fact::SettleTimedOut {
+            queued_non_periodic: true,
+            ..
+        }
+    )));
+    let failure = invariants::settled(&outcome).unwrap_err();
+    assert!(failure.detail.contains("queued_non_periodic=true"));
+    assert!(
+        !outcome
+            .events
+            .iter()
+            .any(|event| matches!(event.fact, Fact::Settled))
+    );
 }

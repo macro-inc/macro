@@ -4,6 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import type { SerializedEditorState } from 'lexical';
+import { object } from '../../corpus/dev/scan';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const output = process.argv[2];
@@ -33,15 +35,20 @@ await import(root + 'services/lexical-service/src/polyfills/prism.ts');
 const { isCommentOnlyChange, contentWithoutComments } = await import(
   root + 'services/lexical-service/src/lib/comment-only-change.ts'
 );
-const seedPairs = JSON.parse(readFileSync(seedFile, 'utf8'));
-const synthetic = readFileSync(
-  root + 'crates/client/lexical/macro_document_model/tests/corpus/nodes.jsonl',
-  'utf8'
-)
-  .trim()
-  .split('\n')
-  .map((line) => JSON.parse(line))
-  .filter((row) => row.profile === 'export');
+const seedPairs: {
+  before: SerializedEditorState;
+  after: SerializedEditorState;
+}[] = JSON.parse(readFileSync(seedFile, 'utf8'));
+const synthetic: { profile: string; input: SerializedEditorState }[] =
+  readFileSync(
+    root +
+      'crates/client/lexical/macro_document_model/tests/corpus/nodes.jsonl',
+    'utf8'
+  )
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+    .filter((row) => row.profile === 'export');
 let rng = 0x71d44c2b;
 function random() {
   rng ^= rng << 13;
@@ -49,15 +56,15 @@ function random() {
   rng ^= rng << 5;
   return rng >>> 0;
 }
-function walk(node, out = []) {
-  if (node && typeof node === 'object') {
+function walk(node: unknown, out: Record<string, unknown>[] = []) {
+  if (object(node)) {
     out.push(node);
     if (Array.isArray(node.children))
       for (const child of node.children) walk(child, out);
   }
   return out;
 }
-function observe(before, after) {
+function observe(before: SerializedEditorState, after: SerializedEditorState) {
   try {
     return {
       commentOnly: isCommentOnlyChange(before, after),
@@ -80,12 +87,15 @@ for (let index = 0; index < 20000; index++) {
   if (index >= 12) {
     const nodes = walk(after.root);
     const node = nodes[random() % nodes.length];
-    const text = nodes.find((value) => value.type === 'text');
+    const text = nodes.find(
+      (value): value is Record<string, unknown> & { text: string } =>
+        value.type === 'text' && typeof value.text === 'string'
+    );
     const mutation = index % 20;
     switch (mutation) {
       case 0:
         node.$ = {
-          ...(node.$ ?? {}),
+          ...(object(node.$) ? node.$ : {}),
           id: `id-${random()}`,
           peerId: 'peer',
           sharedPeerIds: [],
@@ -93,7 +103,7 @@ for (let index = 0; index < 20000; index++) {
         };
         break;
       case 1:
-        node.$ = { ...(node.$ ?? {}), retained: random() % 9 };
+        node.$ = { ...(object(node.$) ? node.$ : {}), retained: random() % 9 };
         break;
       case 2:
         if (text) text.text += '!';
@@ -121,7 +131,12 @@ for (let index = 0; index < 20000; index++) {
         break;
       case 10:
         if (text) {
-          const parent = nodes.find((value) => value.children?.includes(text));
+          const parent = nodes.find(
+            (value) =>
+              Array.isArray(value.children) && value.children.includes(text)
+          );
+          if (!parent || !Array.isArray(parent.children))
+            throw new Error('Text parent required');
           const at = parent.children.indexOf(text);
           let split = random() % (text.text.length + 1);
           if (

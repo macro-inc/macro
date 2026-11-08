@@ -1,4 +1,5 @@
 import { LoadErrors, loadResult } from '@core/block';
+import { isFeatureEnabled, rustEditorModel } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   catchToResult,
@@ -129,7 +130,10 @@ const fileLoader = createSyncDocumentContextLoader({
 });
 
 async function openWith(opener: typeof loader, documentId: string) {
-  if (isNativeMobilePlatform() && !offlineDocumentContextCache.capture()) {
+  if (
+    (isNativeMobilePlatform() || isFeatureEnabled(rustEditorModel)) &&
+    !offlineDocumentContextCache.capture()
+  ) {
     const epoch = documentSessionEpoch();
     await prefetchUserInfo();
     if (

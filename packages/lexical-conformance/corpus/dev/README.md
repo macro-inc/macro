@@ -65,8 +65,11 @@ Replay covers Markdown, search, cognition v1/v2, comment-mark, XML, mentions,
 reply extraction, agent composers and Markdown/Notion snapshots. Image
 composition uses eligible corpus images. Notion uses existing literal source
 fixtures because these Markdown documents do not retain Notion source inputs.
-Legacy code/list synthetic fixtures supplement missing types. HTML is counted
-as unported at the frozen model tip, never silently omitted.
+Legacy code/list synthetic fixtures supplement missing types. HTML uses the same
+internal Markdown as the other Markdown-input routes, comparing both HTML bytes
+and plain text through the source service and the owned Rust HTML exporter.
+HTML calls temporarily supply linkedom DOM constructors, matching WP-31’s source
+oracle, and restore them afterward; other routes retain an absent browser host.
 
 Local telemetry uses the shared facade and localhost OTLP only. Pull propagates
 trace context on GET. Replay traces scans and representative first-document

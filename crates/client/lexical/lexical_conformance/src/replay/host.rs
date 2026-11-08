@@ -2,7 +2,7 @@
 use super::*;
 use std::{collections::VecDeque, sync::Arc};
 #[derive(Default)]
-pub(super) struct HostTape {
+pub(crate) struct HostTape {
     events: VecDeque<Value>,
     error: Option<String>,
     active: bool,

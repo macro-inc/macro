@@ -11,6 +11,7 @@ import type {
 } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
 import { createParamsState } from '@core/component/ParamsProvider';
+import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { LexicalEditor } from 'lexical';
 import { createSignal } from 'solid-js';
@@ -76,6 +77,7 @@ type MarkdownCommentsState = {
 
 export function createMarkdownDocumentState() {
   const params = createParamsState();
+  const [sessionStatus, setSessionStatus] = createSignal<SyncSourceStatus>();
   const [md, setMd] = createStore<MdData>({});
   const [error, setError] = createSignal<MarkdownEditorErrors | null>(null);
   const [findAndReplace, setFindAndReplace] = createStore<FindAndReplaceState>(
@@ -102,6 +104,7 @@ export function createMarkdownDocumentState() {
 
   return {
     params,
+    session: { status: sessionStatus, setStatus: setSessionStatus },
     editor: {
       md,
       setMd,

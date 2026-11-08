@@ -29,7 +29,7 @@ the oracle environment before test modules load. The loader frees each handle af
 Upstream source is fetched and checksum-verified from `upstream.lock` into a
 separate disposable directory, without touching the recorder's source checkout.
 
-U uses the pinned production source, a headless editor for transactions and a
+U uses the pinned production source with S1 D-11 error-mode caret validation retained, a headless editor for transactions and a
 second attached jsdom editor for view events. Hydration notifications are
 suppressed outside the command, then real input, compositionend and
 selectionchange events run upstream DOM-reading code. A pre-reconciliation
@@ -77,3 +77,13 @@ This is WP-07 v0: raw transactions for text, paragraphs, line breaks, tabs,
 formatting and view inputs. EditorCore/session encoding (WP-14), rich nodes,
 markdown, history, command-bus handlers and foreign JS nodes (WP-54) are outside
 this package. Their future full S4 surface is not claimed by this harness.
+
+S1 D-11 requires `$getTextNodeOffset` bounds errors in release fuzzing. The
+config retains precisely that invariant; the oracle maps its diagnostic to the
+Rust boundary error while comparing outcomes and snapshots normally. It does
+not suppress mismatches or disable validation.
+
+For an identical paired caret bounds error, S1 D-13 permits upstream's empty
+recovery publication versus Rust's absent commit. The comparator accepts this
+only when every upstream commit array is empty and Rust's JSON, selection, text
+and live keys equal the previous snapshot. Nonempty recovery metadata fails.

@@ -142,6 +142,10 @@ impl Transaction<'_> {
         self.commit_phase()
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
         let selection_changed = self.selection_dirty
@@ -201,6 +205,8 @@ impl Transaction<'_> {
             }
         }
         crate::pipeline::apply_model_caches(self);
+        #[cfg(feature = "foreign-nodes")]
+        self.view().check_foreign_payloads()?;
         changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
         if let Some(selection) = &mut self.pending.selection {
@@ -217,6 +223,10 @@ impl Transaction<'_> {
         let composition_changed = self.editor.composition_key != self.composition_key;
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.editor.suspend_version = next_id;
+        }
         Ok(Commit {
             default_prevented: self.default_prevented,
             following: vec![],
@@ -254,6 +264,15 @@ impl Transaction<'_> {
                 .nodes
                 .get_mut(&key)
                 .ok_or(Error::NodeNotFound(key))?;
+            #[cfg(feature = "foreign-nodes")]
+            let replacement = crate::foreign::payload::clone_payload(
+                &self.pending.registry,
+                slot.type_index,
+                key,
+                key,
+                &slot.data,
+            );
+            #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let record = Arc::make_mut(slot);
             if let Some(data) = replacement {

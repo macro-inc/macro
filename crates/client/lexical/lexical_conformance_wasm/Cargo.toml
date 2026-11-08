@@ -14,7 +14,7 @@ js-nodes = ["lexical_model/foreign-nodes"]
 [dependencies]
 macro_document_composers.workspace = true
 lexical_loro.workspace = true
-macro_document_model = { workspace = true, default-features = false }
+macro_document_model = { workspace = true, default-features = false, features = ["html"] }
 thiserror.workspace = true
 lexical_model.workspace = true
 lexical_rich_nodes.workspace = true
@@ -22,6 +22,7 @@ lexical_markdown.workspace = true
 regress.workspace = true
 wasm-bindgen.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 
 [build-dependencies]

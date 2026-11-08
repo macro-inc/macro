@@ -6,6 +6,10 @@ The inventory IDs refer to S6 revision R2, sections 1 and 5.2. Each link is a re
 
 Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone storage. `kv_bytes` additionally applies DurableKv’s Uint8Array conversion. The normalizer checks callback-local port/output order, independent per-socket delivery order, clock count/kinds, alarm delays and exact bytes except decoded awareness timestamps. Test client entropy is seeded; worker clocks and UUIDs are not substituted.
 
+Worker export goldens use the pinned Loro 1.16.3 test driver and the vendored 1.16 server. Cross-version checks import current 1.17.1
+peer bytes, and native replay retains semantic snapshot equivalence. Golden
+refreshes preserve the byte-exact Worker comparator and migration digest checks.
+
 | ID | Representative transcript |
 | --- | --- |
 | E1 | [hibernation.test/H1_restores_the_websocket_tag_after_eviction.jsonl](hibernation.test/H1_restores_the_websocket_tag_after_eviction.jsonl) |
@@ -216,3 +220,9 @@ control-request/storage references. These have no exception in the real-workerd
 diff. The runtime projection separately maps JS undefined/omitted optional
 migration source IDs to typed None, and records migration-export SQL constructor
 and direct chunk-read effects; native policy and ordering remain strict.
+
+The corpus also retains the three real Macro comment-root scenarios in
+`comment_marks.test/real_comment_roots_are_accepted_and_content_edits_refused_in_{http,in_process,shadow}_mode.jsonl`.
+They cover acceptance of annotation changes and refusal of content changes in
+each gate mode. All 158 Worker recordings use strict normalized comparison;
+the native replay allowlist remains the 18 fully extracted callback scenarios.

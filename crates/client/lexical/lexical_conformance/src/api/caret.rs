@@ -17,10 +17,7 @@ fn direction(value: &Value) -> Result<CaretDirection> {
     }
 }
 fn get(r: &Replayer, value: &Value) -> Result<CaretValue> {
-    r.carets
-        .get(integer(&value["$caretValue"])? as usize)
-        .copied()
-        .ok_or_else(|| fail("unknown caret"))
+    r.carets.get(integer(&value["$caretValue"])? as usize)
 }
 fn point(r: &Replayer, value: &Value) -> Result<PointCaret> {
     match get(r, value)? {
@@ -35,16 +32,15 @@ fn range(r: &Replayer, value: &Value) -> Result<CaretRange> {
     }
 }
 fn put(r: &mut Replayer, view: StateRef<'_>, value: CaretValue) -> Result<Value> {
-    let id = r.carets.len();
-    r.carets.push(value);
+    let id = r.carets.push(value)?;
     if let CaretValue::Range(range) = value {
         let anchor = put(r, view, CaretValue::Point(range.anchor))?;
         let focus = put(r, view, CaretValue::Point(range.focus))?;
-        r.caret_endpoints.insert(id, (anchor, focus));
+        r.carets.set_endpoints(id, (anchor, focus))?;
     }
     if let CaretValue::Point(point) = value {
         let origin = r.node(view, point.origin())?;
-        r.caret_origins.insert(id, origin);
+        r.carets.set_origin(id, origin)?;
     }
     Ok(match value {
         CaretValue::Point(c) => {
@@ -72,23 +68,17 @@ pub(crate) fn call(
             return Err(fail("unsupported iterator method"));
         }
         let id = integer(id)? as usize;
-        if let Some(mut cursor) = r.child_iterators.remove(&id) {
-            let mut values = Vec::new();
-            while let Some(key) = cursor.next(tx) {
-                values.push(r.node(tx.view(), key)?);
+        let (cursor, first_origin) = match r.carets.take_iterator(id)? {
+            Some(IteratorValue::Children(mut cursor)) => {
+                let mut values = Vec::new();
+                while let Some(key) = cursor.next(tx) {
+                    values.push(r.node(tx.view(), key)?);
+                }
+                return Ok(json!(values));
             }
-            return Ok(json!(values));
-        }
-        if let Some(values) = r.value_iterators.remove(&id) {
-            return Ok(json!(values));
-        }
-        let Some((cursor, first_origin)) = r
-            .iterators
-            .get_mut(id)
-            .ok_or_else(|| fail("iterator handle"))?
-            .take()
-        else {
-            return Ok(json!([]));
+            Some(IteratorValue::Values(values)) => return Ok(json!(values)),
+            Some(IteratorValue::Carets(cursor, first_origin)) => (cursor, first_origin),
+            None => return Ok(json!([])),
         };
         let carets = cursor
             .iter(tx.view())
@@ -97,12 +87,12 @@ pub(crate) fn call(
             .into_iter()
             .enumerate()
             .map(|(index, caret)| {
-                let id = r.carets.len();
                 let mut value = put(r, tx.view(), CaretValue::Point(caret.into()))?;
+                let id = integer(&value["$caretValue"])? as usize;
                 if index == 0
                     && let Some(origin) = &first_origin
                 {
-                    r.caret_origins.insert(id, origin.clone());
+                    r.carets.set_origin(id, origin.clone())?;
                     value["origin"] = origin.clone();
                 }
                 Ok(value)
@@ -122,14 +112,15 @@ pub(crate) fn call(
                             Some(v) if v.get("$nodeKey") == Some(&json!(0)) => RootMode::Root,
                             _ => return Err(fail("caret root mode")),
                         };
-                        let id = r.iterators.len();
                         let cursor = c.node_carets(tx.view(), mode)?;
                         let mut probe = cursor;
                         let first_origin = probe
                             .next(tx.view())?
                             .map(|caret| r.node(tx.view(), caret.origin()))
                             .transpose()?;
-                        r.iterators.push(Some((cursor, first_origin)));
+                        let id = r
+                            .carets
+                            .iterator(IteratorValue::Carets(cursor, first_origin))?;
                         Ok(json!({"$iteratorValue":id}))
                     }
                     "iter" => {
@@ -145,7 +136,7 @@ pub(crate) fn call(
                     "isCollapsed" => Ok(json!(c.is_collapsed())),
                     "get:anchor" | "get:focus" => {
                         let id = integer(&receiver["$caretValue"])? as usize;
-                        if let Some((anchor, focus)) = r.caret_endpoints.get(&id) {
+                        if let Some((anchor, focus)) = r.carets.endpoints(id)? {
                             Ok(if name == "get:anchor" {
                                 anchor.clone()
                             } else {
@@ -166,18 +157,17 @@ pub(crate) fn call(
                     "getLatest" => {
                         let id = integer(&receiver["$caretValue"])? as usize;
                         let (anchor, focus) = r
-                            .caret_endpoints
-                            .get(&id)
-                            .cloned()
+                            .carets
+                            .endpoints(id)?
                             .ok_or_else(|| fail("range endpoints"))?;
                         let latest_anchor = call(r, tx, &anchor, "getLatest", &[])?;
                         let latest_focus = call(r, tx, &focus, "getLatest", &[])?;
                         if anchor == latest_anchor && focus == latest_focus {
                             Ok(receiver.clone())
                         } else {
-                            let id = r.carets.len();
                             let value = put(r, tx.view(), CaretValue::Range(c))?;
-                            r.caret_endpoints.insert(id, (latest_anchor, latest_focus));
+                            let id = integer(&value["$caretValue"])? as usize;
+                            r.carets.set_endpoints(id, (latest_anchor, latest_focus))?;
                             Ok(value)
                         }
                     }
@@ -185,9 +175,8 @@ pub(crate) fn call(
                         let (a, b) = c.text_slices(tx.view())?;
                         let id = integer(&receiver["$caretValue"])? as usize;
                         let (anchor, focus) = r
-                            .caret_endpoints
-                            .get(&id)
-                            .cloned()
+                            .carets
+                            .endpoints(id)?
                             .ok_or_else(|| fail("range endpoints"))?;
                         [(a, anchor), (b, focus)]
                             .into_iter()
@@ -233,9 +222,8 @@ pub(crate) fn call(
                     "get:direction" => return Ok(json!(c.direction().to_string())),
                     "get:origin" => {
                         return r
-                            .caret_origins
-                            .get(&(integer(&receiver["$caretValue"])? as usize))
-                            .cloned()
+                            .carets
+                            .origin(integer(&receiver["$caretValue"])? as usize)?
                             .ok_or_else(|| fail("caret origin"));
                     }
                     "iter" | "iterNodeCarets" => {
@@ -271,9 +259,9 @@ pub(crate) fn call(
                     }
                     "getLatest" => {
                         let current = r.node(tx.view(), c.origin())?;
-                        if r.caret_origins
-                            .get(&(integer(&receiver["$caretValue"])? as usize))
-                            == Some(&current)
+                        if r.carets
+                            .origin(integer(&receiver["$caretValue"])? as usize)?
+                            == Some(current)
                         {
                             return Ok(receiver.clone());
                         }
@@ -330,16 +318,15 @@ pub(crate) fn call(
                     }
                     _ => return Err(fail(format!("unmapped point caret: {name}"))),
                 };
-                let id = r.carets.len();
                 let mut output = put(r, tx.view(), CaretValue::Point(result))?;
+                let id = integer(&output["$caretValue"])? as usize;
                 if name != "getLatest"
                     && result.origin() == c.origin()
                     && let Some(origin) = r
-                        .caret_origins
-                        .get(&(integer(&receiver["$caretValue"])? as usize))
-                        .cloned()
+                        .carets
+                        .origin(integer(&receiver["$caretValue"])? as usize)?
                 {
-                    r.caret_origins.insert(id, origin.clone());
+                    r.carets.set_origin(id, origin.clone())?;
                     output["origin"] = origin;
                 }
                 return Ok(output);
@@ -402,10 +389,7 @@ pub(crate) fn call(
         "$setPointFromCaret" => {
             let target = first()?;
             let id = integer(&target["$point"]["selection"])? as usize;
-            let slot = *r
-                .selections
-                .get(id)
-                .ok_or_else(|| fail("selection handle"))?;
+            let slot = r.selections.slot(id)?;
             let role = match target["$point"]["role"].as_str() {
                 Some("anchor") => PointRole::Anchor,
                 Some("focus") => PointRole::Focus,
@@ -465,9 +449,9 @@ pub(crate) fn call(
                 a.get(1).ok_or_else(|| fail("focus"))?.clone()
             };
             let range = CaretRange::new(point(r, &anchor)?, point(r, &focus)?)?;
-            let id = r.carets.len();
             let result = put(r, tx.view(), CaretValue::Range(range))?;
-            r.caret_endpoints.insert(id, (anchor, focus));
+            let id = integer(&result["$caretValue"])? as usize;
+            r.carets.set_endpoints(id, (anchor, focus))?;
             return Ok(result);
         }
         "$caretRangeFromSelection" => CaretValue::Range(caret_range_from_selection(
@@ -487,14 +471,11 @@ pub(crate) fn call(
                 return Ok(input);
             }
             let old_id = integer(&input["$caretValue"])? as usize;
-            let endpoints = r.caret_endpoints.get(&old_id).cloned();
-            let id = r.carets.len();
+            let endpoints = r.carets.endpoints(old_id)?;
             let value = put(r, tx.view(), CaretValue::Range(result))?;
+            let id = integer(&value["$caretValue"])? as usize;
             if let Some((anchor, _focus)) = endpoints {
-                let old_origin = r
-                    .caret_origins
-                    .get(&(integer(&anchor["$caretValue"])? as usize))
-                    .cloned();
+                let old_origin = r.carets.origin(integer(&anchor["$caretValue"])? as usize)?;
                 let current_origin = r.node(tx.view(), result.anchor.origin())?;
                 let anchor = if range.direction == CaretDirection::Next
                     && result.anchor == range.anchor
@@ -509,7 +490,7 @@ pub(crate) fn call(
                 } else {
                     put(r, tx.view(), CaretValue::Point(result.focus))?
                 };
-                r.caret_endpoints.insert(id, (anchor, focus));
+                r.carets.set_endpoints(id, (anchor, focus))?;
             }
             return Ok(value);
         }
@@ -543,10 +524,10 @@ pub(crate) fn call(
         }
         "$setSelectionFromCaretRange" => {
             if !tx.selection().is_some_and(Selection::is_range) {
-                r.active_selection = None;
+                r.selections.set_active(None)?;
             }
             tx.set_selection_from_caret_range(range(r, first()?)?)?;
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "$normalizeCaret" => CaretValue::Point(normalize_caret(tx.view(), point(r, first()?)?)?),
         "$splitAtPointCaretNext" => {
@@ -563,14 +544,14 @@ pub(crate) fn call(
         }
         _ => return Err(fail(format!("unmapped caret API: {name}"))),
     };
-    let id = r.carets.len();
     let mut output = put(r, tx.view(), result)?;
+    let id = integer(&output["$caretValue"])? as usize;
     if matches!(
         name,
         "$getSiblingCaret" | "$getChildCaret" | "$getTextPointCaret"
     ) {
         let origin = first()?.clone();
-        r.caret_origins.insert(id, origin.clone());
+        r.carets.set_origin(id, origin.clone())?;
         output["origin"] = origin;
     }
     Ok(output)

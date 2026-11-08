@@ -1,6 +1,14 @@
 use super::*;
 
 #[test]
+fn corpus_html_returns_both_owned_markup_and_text() {
+    assert_eq!(
+        corpus_route("html", r#"{"markdown":"hello"}"#),
+        r#"{"ok":{"html":"<p><span style=\"white-space:pre-wrap\">hello</span></p>","text":"hello"}}"#
+    );
+}
+
+#[test]
 fn corpus_errors_never_return_input_content() {
     let result = corpus_route("xml", r#"{"state":{"root":{"type":"private-input"}}}"#);
     assert_eq!(result, r#"{"error":"conversion"}"#);
