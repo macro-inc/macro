@@ -126,6 +126,24 @@ export class Mirror {
     return this.apply(words, strings);
   }
   apply(words: Uint32Array, strings: Uint8Array): AppliedDiff {
+    const generation = this.generation;
+    const undo = new Map<NodeKey, ViewNode | undefined>();
+    try {
+      return this.applyDiff(words, strings, undo);
+    } catch (error) {
+      for (const [key, node] of undo) {
+        if (node) this.records.set(key, node);
+        else this.records.delete(key);
+      }
+      this.generation = generation;
+      throw error;
+    }
+  }
+  private applyDiff(
+    words: Uint32Array,
+    strings: Uint8Array,
+    undo: Map<NodeKey, ViewNode | undefined>
+  ): AppliedDiff {
     const mutations = new Map<NodeKey, NodeMutation>();
     const children = new Set<NodeKey>(),
       props = new Set<NodeKey>();
@@ -152,6 +170,7 @@ export class Mirror {
     const matches = r.word(),
       count = r.word();
     const change = (key: NodeKey, next: ViewNode | undefined) => {
+      if (!undo.has(key)) undo.set(key, this.records.get(key));
       const prior = mutations.get(key);
       const before = prior ? prior.before : this.records.get(key);
       if (next) this.records.set(key, next);
@@ -206,6 +225,7 @@ export class Mirror {
       const op = r.word(),
         key = r.word();
       if (op === DiffOpcode.Remove) {
+        if (key === 0) throw new Error('Cannot remove the mirror root');
         const subtreeRoot = r.word();
         if (subtreeRoot > 1) throw new Error('Invalid subtree-root flag');
         if (!this.records.has(key)) {
@@ -228,6 +248,8 @@ export class Mirror {
           throw new Error('Creating existing key: ' + key);
         const typeIndex = r.word(),
           type = this.type(typeIndex);
+        if ((type.name === 'root') !== (key === 0))
+          throw new Error('Invalid root key');
         let elementProps: ElementProps | undefined,
           textProps: TextProps | undefined;
         let text = '',
@@ -317,6 +339,26 @@ export class Mirror {
       } else throw new Error('Unknown Diff opcode: ' + op);
     }
     if (r.at !== words.length) throw new Error('Trailing Diff words');
+    if (this.records.get(0)?.parent !== null)
+      throw new Error('Cyclic or reparented mirror root');
+    for (const key of children) {
+      const node = this.records.get(key);
+      if (!node) continue;
+      for (const child of node.children)
+        if (get(child).parent !== key)
+          throw new Error('Child has multiple parents');
+      const ancestors = new Set<number>();
+      for (
+        let parent: ViewNode | undefined = node;
+        parent;
+        parent =
+          parent.parent === null ? undefined : this.records.get(parent.parent)
+      ) {
+        if (ancestors.has(parent.key)) throw new Error('Cyclic mirror tree');
+        ancestors.add(parent.key);
+      }
+    }
+
     return {
       mutations,
       children,

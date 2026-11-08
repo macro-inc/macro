@@ -39,8 +39,19 @@ export interface EditorPort {
     facts: number
   ): boolean | undefined;
   selectionFromView(selection: ViewSelection): void;
-  command(code: number, a?: number, b?: number, text?: string): boolean | undefined;
-  keyDown(code: number, mods: number, routed: number, key: string, selection: ViewSelection): boolean | undefined;
+  command(
+    code: number,
+    a?: number,
+    b?: number,
+    text?: string
+  ): boolean | undefined;
+  keyDown(
+    code: number,
+    mods: number,
+    routed: number,
+    key: string,
+    selection: ViewSelection
+  ): boolean | undefined;
   input(input: EditorInputMsg): void;
   setState(json: string): void;
   initialize(): void;

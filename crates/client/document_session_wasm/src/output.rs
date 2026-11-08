@@ -127,6 +127,20 @@ pub(crate) fn encode(
                 };
                 m.flag = status.pending_import;
             }
+            ViewEffect::Cursors(peers) => {
+                let mut marker = view(10);
+                marker.flag = true;
+                entry(&mut entries, 16, 10, 0, &bytes(&marker)?);
+                count += 1;
+                for peer in peers {
+                    let mut cursor = view(10);
+                    cursor.keys = vec![peer.key.clone(), peer.color.clone()];
+                    cursor.selection = editor_input::view_selection(&peer.selection);
+                    entry(&mut entries, 16, 10, 0, &bytes(&cursor)?);
+                    count += 1;
+                }
+                continue;
+            }
             ViewEffect::Presence(peers) => {
                 m.kind = 4;
                 for peer in peers {
