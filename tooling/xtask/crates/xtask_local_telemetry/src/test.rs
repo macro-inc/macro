@@ -297,7 +297,11 @@ fn a_killed_run_is_sent_by_the_next_one() {
     assert_eq!(killed[1]["event"], json!("run"));
     assert_eq!(killed[1]["outcome"], json!("interrupted"));
     assert_eq!(killed[1]["failed_step"], json!("Building service binaries"));
-    assert!(killed[1]["seconds"].as_f64().is_some_and(|seconds| seconds >= 0.0));
+    assert!(
+        killed[1]["seconds"]
+            .as_f64()
+            .is_some_and(|seconds| seconds >= 0.0)
+    );
     assert_eq!(killed[0]["run_id"], killed[1]["run_id"]);
     assert!(buffered_files(&paths).is_empty());
 }
