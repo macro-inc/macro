@@ -105,7 +105,8 @@ function EntityKnobPicker(props: {
     const id = ids.values().next().value;
     if (!id) return;
     const entityType = picked?.find((entity) => entity.id === id)?.entity_type;
-    const only = types().length === 1 ? props.knob.entity_types[0] : undefined;
+    const [first, ...rest] = types();
+    const only = first && !rest.length ? knobType(first) : undefined;
     const type = entityType ? knobType(entityType) : only;
     if (!type || !props.knob.entity_types.includes(type)) return;
     if (isTouchDevice()) setDraft({ type, id });

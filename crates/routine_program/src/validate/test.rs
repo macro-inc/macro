@@ -280,4 +280,9 @@ fn an_entity_knob_holds_one_of_the_kinds_it_allows() {
         reason(entity(json!(["channel", "channel"]), "channel")),
         "it must allow one or more kinds of item, each once"
     );
+    entity(json!(["database"]), "database").unwrap();
+    assert_eq!(
+        reason(entity(json!(["channel", "database"]), "channel")),
+        "a database knob allows only databases"
+    );
 }
