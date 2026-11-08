@@ -338,3 +338,69 @@ fn splice_text_only_moves_an_existing_range_selection() -> Result<(), Error> {
     assert_eq!(tx.text_content(text), "azc");
     Ok(())
 }
+
+#[test]
+fn text_splice_transfers_composition_through_existing_range_points() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let other = tx.create_text("other")?;
+    let text = tx.create_text("abcd")?;
+    tx.text(text)?.set_format(TextFormat::BOLD)?;
+    tx.append(p, &[other.key(), text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    let mut range = RangeSelection::new(
+        Point::text(other, Utf16Offset(0)),
+        Point::text(other, Utf16Offset(2)),
+    );
+    range.format = TextFormat::ITALIC;
+    range.style = "color:blue".into();
+    tx.set_selection(Some(Selection::Range(range)))?;
+    tx.set_composition_key(Some(other.key()))?;
+    let replacements = tx.selection_replacements();
+    tx.text(text)?
+        .splice_text(Utf16Offset(1)..Utf16Offset(2), "Z", true)?;
+    assert_eq!(tx.selection_replacements(), replacements);
+    assert_eq!(tx.composition_key(), Some(text.key()));
+    assert_eq!(tx.range_selection()?.format, TextFormat::ITALIC);
+    assert_eq!(tx.range_selection()?.style.as_ref(), "color:blue");
+    assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(2)));
+    assert_eq!(tx.focus()?, Point::text(text, Utf16Offset(2)));
+    assert_eq!(tx.text_content(text), "aZcd");
+    Ok(())
+}
+
+#[test]
+fn text_select_transfers_composition_from_either_existing_range_endpoint() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let a = tx.create_text("aa")?;
+    let b = tx.create_text("bb")?;
+    let target = tx.create_text("cc")?;
+    tx.append(p, &[a.key(), b.key(), target.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.select_points(
+        Point::text(a, Utf16Offset(0)),
+        Point::text(b, Utf16Offset(2)),
+    )?;
+    tx.set_composition_key(Some(a.key()))?;
+    tx.text(target)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(2)))?;
+    assert_eq!(tx.composition_key(), Some(target.key()));
+    tx.select_points(
+        Point::text(a, Utf16Offset(0)),
+        Point::text(b, Utf16Offset(2)),
+    )?;
+    tx.set_composition_key(Some(b.key()))?;
+    tx.text(target)?
+        .select(Some(Utf16Offset(0)), Some(Utf16Offset(1)))?;
+    assert_eq!(tx.composition_key(), Some(target.key()));
+    assert_eq!(tx.anchor()?, Point::text(target, Utf16Offset(0)));
+    assert_eq!(tx.focus()?, Point::text(target, Utf16Offset(1)));
+    Ok(())
+}

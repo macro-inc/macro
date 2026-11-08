@@ -339,7 +339,8 @@ impl TextMut<'_, '_> {
         data.absent.remove(crate::node::AbsentKeys::TEXT);
         if move_selection && self.tx.selection().is_some_and(Selection::is_range) {
             let offset = range.start + TextBuffer::new(insert).utf16_len();
-            self.select(Some(offset), Some(offset))?;
+            self.tx
+                .set_text_node_range(self.key, offset, self.key, offset)?;
         }
         Ok(self)
     }
@@ -358,8 +359,13 @@ impl TextMut<'_, '_> {
                 return Err(Error::Utf16OffsetOutOfRange(offset));
             }
         }
-        self.tx
-            .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
+        if self.tx.selection().is_some_and(Selection::is_range) {
+            self.tx
+                .set_text_node_range(self.key, anchor, self.key, focus)
+        } else {
+            self.tx
+                .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
+        }
     }
     /// Split into plain text nodes, retaining text properties and state but not mode.
     /// s2: TX-05

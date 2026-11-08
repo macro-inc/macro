@@ -122,4 +122,6 @@ Cache range direction only when upstream calls isBackward in a write context; in
 
 Capture an existing selection for a foreign host with snapshot_for_foreign_read; Clone intentionally clears range direction memos for upstream clone() semantics.
 
-Apply splice_text through its own check hook and direct text write, without dispatching set_text_content; move_selection only moves an existing range.
+Apply splice_text through its own check hook and direct text write, without dispatching set_text_content; move_selection edits an existing range in place, preserving its identity and typing attributes.
+
+Move existing text ranges through point edits in select and splice_text so composition follows the old anchor/focus node.
