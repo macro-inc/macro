@@ -57,8 +57,11 @@ impl<'state> NodeRef<'state> {
         self.slot.type_index
     }
     /// Registered type name.
-    pub fn type_name(self) -> &'static str {
-        self.registry.registered(self.slot.type_index).type_name
+    pub fn type_name(self) -> &'state str {
+        crate::opaque::raw(self.slot.data.as_ref())
+            .and_then(|json| json.get("type"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(self.registry.registered(self.slot.type_index).type_name)
     }
     /// Parent identity.
     pub fn parent(self) -> Option<NodeKey> {

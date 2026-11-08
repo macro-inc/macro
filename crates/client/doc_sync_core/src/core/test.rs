@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 mod assistance;
+mod comments;
 mod lifecycle;
 mod presence;
 mod recovery;

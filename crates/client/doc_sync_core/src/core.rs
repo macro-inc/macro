@@ -141,6 +141,7 @@ pub struct SyncCore {
     convergence: Option<Convergence>,
     convergence_retry: Option<(u8, Millis)>,
     since: VecDeque<SinceRequest>,
+    staged_comments: Vec<(RequestId, Millis)>,
     snapshots: VecDeque<SnapshotRequest>,
     comments: Vec<CommentRequest>,
     confirmed_base: loro::Frontiers,
@@ -254,6 +255,7 @@ impl SyncCore {
             convergence: None,
             convergence_retry: None,
             since: VecDeque::new(),
+            staged_comments: Vec::new(),
             snapshots: VecDeque::new(),
             comments: Vec::new(),
             confirmed_base: loro::Frontiers::default(),
@@ -500,6 +502,9 @@ impl SyncCore {
                 }
                 self.push_retry = None;
             }
+            SyncInput::PrepareComment(request) => {
+                self.prepare_comment(request, now, doc, out);
+            }
             SyncInput::PublishComment { request, update } => {
                 self.publish_comment(request, update, now, doc, out)
             }
@@ -514,6 +519,9 @@ impl SyncCore {
                 }
             }
             SyncInput::ImportFailed(error) => self.import_failure(error, now, doc, out),
+            SyncInput::ProjectionResynced => {
+                self.charge_recovery(now, doc, out);
+            }
             SyncInput::Storage(event) => self.storage_event(event, now, doc, out),
             SyncInput::Token(event) => {
                 self.connection.token(event, now, &mut out.io);

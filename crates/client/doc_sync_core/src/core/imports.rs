@@ -197,6 +197,12 @@ impl SyncCore {
                 });
             }
         }
+        for (request, _) in self.staged_comments.drain(..) {
+            out.events.push(SyncEvent::Reply {
+                request,
+                reply: Reply::Comment(CommentReply::Refused(CommentRefusal::CatchupFailed)),
+            });
+        }
         for comment in self.comments.drain(..) {
             out.events.push(SyncEvent::Reply {
                 request: comment.request,
@@ -471,6 +477,21 @@ impl SyncCore {
         );
     }
 
+    pub(super) fn charge_recovery(
+        &mut self,
+        now: Now,
+        doc: &mut impl SyncDoc,
+        out: &mut SyncOutput,
+    ) -> bool {
+        self.reset_times
+            .retain(|at| now.mono.0.saturating_sub(at.0) < self.config.reset_budget.window.0);
+        if self.reset_times.len() >= usize::from(self.config.reset_budget.max) {
+            self.stop(now, doc, None, CloseReason::Corrupt, out);
+            return false;
+        }
+        self.reset_times.push_back(now.mono);
+        true
+    }
     pub(super) fn begin_reset(
         &mut self,
         now: Now,
@@ -490,15 +511,15 @@ impl SyncCore {
             }
             return;
         }
+        for (request, _) in self.staged_comments.drain(..) {
+            out.events.push(SyncEvent::Reply {
+                request,
+                reply: Reply::Comment(CommentReply::Refused(CommentRefusal::CatchupFailed)),
+            });
+        }
         self.append_local(now, doc, out);
-        if charged {
-            self.reset_times
-                .retain(|at| now.mono.0.saturating_sub(at.0) < self.config.reset_budget.window.0);
-            if self.reset_times.len() >= usize::from(self.config.reset_budget.max) {
-                self.stop(now, doc, None, CloseReason::Corrupt, out);
-                return;
-            }
-            self.reset_times.push_back(now.mono);
+        if charged && !self.charge_recovery(now, doc, out) {
+            return;
         }
         self.reset_requested = false;
         self.rebase_active = rebase;

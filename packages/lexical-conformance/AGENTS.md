@@ -51,3 +51,9 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Entropy, node keys, handles and callback tapes reset for every test.
 
 - Keep the S1 D-11 error-mode text-offset guard enabled in the release differential oracle; compare rollback state and identities exactly.
+The independent `diff/collab.config.mts` profile runs four document-session/current
+TS peers with three fixed 2,000-step seeds and a collaborative undo literal.
+Run it from root with `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`;
+type-check it with `bunx tsc --noEmit -p packages/lexical-conformance/diff/collab/tsconfig.json`.
+It uses current app Loro 1.17.1 and isolated DOM documents per TS peer; it does not
+change the recorder pin or normalize comparator fields.

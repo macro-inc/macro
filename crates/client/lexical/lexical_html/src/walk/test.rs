@@ -99,8 +99,8 @@ fn registry_overrides_fragments_and_after_callbacks_preserve_output_order() -> c
     assert!(matches!(
         exporter.generate_html_from_nodes(editor.state(), None),
         Err(crate::Error::UnregisteredNodeType {
-            type_name: "paragraph"
-        })
+            type_name
+        }) if type_name == "paragraph"
     ));
     Ok(())
 }

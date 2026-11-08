@@ -6,6 +6,7 @@ Portable export-only DOM builder, walker and linkedom 0.18.13 serializer.
 
 ## Boundaries
 
+- Keep unknown-type error names owned: collaborative opaque node names borrow their snapshot.
 - Depend only on the portable model and scalar/parser libraries; no DOM, I/O or runtime.
 - Implement each node's ExportDom next to its owning type; rich and Macro impls are feature gated.
 - Apply decodeURI only for programmatic anchor href setters, preserving reserved escapes and rejecting malformed UTF-8.

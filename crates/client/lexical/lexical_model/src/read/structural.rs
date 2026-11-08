@@ -61,7 +61,7 @@ impl<'state> StateRef<'state> {
         self.slot(key.into()).is_some()
     }
     /// Type name.
-    pub fn type_name(self, key: impl Into<NodeKey>) -> Result<&'static str, Error> {
+    pub fn type_name(self, key: impl Into<NodeKey>) -> Result<&'state str, Error> {
         Ok(self.node_or_err(key)?.type_name())
     }
     /// Get or err.

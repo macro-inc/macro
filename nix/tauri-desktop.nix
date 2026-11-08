@@ -151,6 +151,7 @@
           simd ? false,
           profile ? null,
           cargoArgs ? "",
+          converge ? false,
         }:
         let
           outDir = "apps/web/src/lib/core/${dir}/wasm";
@@ -175,6 +176,7 @@
                 ${if profile == null then "--release" else "--profile ${profile}"} \
                 --mode no-install \
                 --out-dir "$PWD/${outDir}" ${cargoArgs}
+              ${pkgs.lib.optionalString converge ''wasm-opt -Oz --converge "${outDir}/${name}_bg.wasm" -o "${outDir}/${name}_bg.wasm"''}
             '';
             installPhaseCommand = ''
               mkdir -p $out
@@ -192,6 +194,13 @@
       # missing package's `new URL()` unchanged, so one left out here ships a
       # desktop bundle that cannot open that kind of file.
       coreWasmPackages = map mkCoreWasmPackage [
+        {
+          name = "document_session_wasm";
+          crate = "crates/client/document_session_wasm";
+          dir = "document-session";
+          profile = "document-session-wasm";
+          converge = true;
+        }
         {
           name = "agent_fold";
           crate = "crates/folds/agent_fold";

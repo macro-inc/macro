@@ -1,4 +1,5 @@
 use super::*;
+use crate::index::Slot;
 use lexical_model::Mutation;
 use loro::{ExportMode, LoroMovableList};
 /// Same predecessor/binary-search tie breaking as loro-mirror's LIS.
@@ -39,7 +40,6 @@ pub(crate) fn lis(sequence: &[usize]) -> OrderedSet<usize> {
 }
 impl LoroProjection {
     /// Project a complete output's commit/follow-up chain as one explicit Loro commit.
-    #[tracing::instrument(name = "doc.projection.local", skip_all, err)]
     pub fn local_commit(
         &mut self,
         doc: &LoroDoc,
@@ -156,6 +156,20 @@ impl LoroProjection {
             .filter(|key| next.is_element(*key))
             .collect::<Vec<_>>();
         structural.sort_by_key(|key| next.ancestors(*key).count());
+        // Creating a new ancestor can rebind an existing descendant before its
+        // old parent is reconciled. Remember only affected parents' current
+        // children so those old containers stay owned until their removal.
+        let mut previous_owners = FxHashMap::default();
+        for key in &structural {
+            if self.index.nodes.contains_key(key) {
+                let map = self.index.map(doc, *key)?;
+                for child in projected_children(&map, self.policy)? {
+                    if let Some((key, Slot::Node)) = self.index.owner.get(&child.id()) {
+                        previous_owners.insert(child.id(), *key);
+                    }
+                }
+            }
+        }
         for key in structural {
             if handled.contains(&key) || !self.index.nodes.contains_key(&key) {
                 continue;
@@ -184,7 +198,14 @@ impl LoroProjection {
                     .map(|map| self.index.owner.get(&map.id()).map(|(key, _)| *key))
                     .collect::<Option<Vec<_>>>();
                 if current.as_deref() != Some(b.as_slice())
-                    && self.diff_children(next, &list, &b, &mut handled, &mut stats)?
+                    && self.diff_children(
+                        next,
+                        &list,
+                        &b,
+                        &previous_owners,
+                        &mut handled,
+                        &mut stats,
+                    )?
                 {
                     written.insert(key);
                 }
@@ -281,6 +302,7 @@ impl LoroProjection {
         view: StateRef<'_>,
         list: &LoroMovableList,
         new: &[NodeKey],
+        previous_owners: &FxHashMap<ContainerID, NodeKey>,
         handled: &mut OrderedSet<NodeKey>,
         stats: &mut ProjectionStats,
     ) -> Result<bool> {
@@ -303,7 +325,13 @@ impl LoroProjection {
         let mut old = Vec::new();
         for i in 0..list.len() {
             let map = schema::map_at(list.get(i), "children item")?;
-            old.push(self.index.owner.get(&map.id()).map(|(k, _)| *k));
+            old.push(
+                self.index
+                    .owner
+                    .get(&map.id())
+                    .map(|(k, _)| *k)
+                    .or_else(|| previous_owners.get(&map.id()).copied()),
+            );
         }
         stats.children_scanned += old.len();
         let positions = old

@@ -34,6 +34,11 @@ jobs:
             - 'crates/client/cache-core/**'
             - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
+            - 'crates/client/document_session/**'
+            - 'crates/client/document_session_wasm/**'
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/lexical/**'
+            - 'crates/sync_protocol/**'
             - 'crates/client/turso-opfs/**'
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
@@ -59,6 +64,11 @@ jobs:
             - 'crates/client/cache-core/**'
             - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
+            - 'crates/client/document_session/**'
+            - 'crates/client/document_session_wasm/**'
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/lexical/**'
+            - 'crates/sync_protocol/**'
             - 'crates/client/turso-opfs/**'
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
@@ -361,7 +371,7 @@ jobs:
         check 'Check Types' 'apps/web' 'bun run type-check'
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
-        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check && bun scripts/generate-session-schema.ts --check'
         check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
         check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
@@ -752,6 +762,9 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
+    - name: Check document session executor and storage
+      run: git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts
+      working-directory: packages/collaboration
     - name: Functional Browser Tests
       run: bun run test:functional
       env:

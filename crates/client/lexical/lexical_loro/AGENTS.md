@@ -47,3 +47,12 @@ WP-49. Keep literal tests for each intentional S11 delta. Strict checks must
 report unrepresentable newer own fields while preserving them in Loro.
 Use saved event paths for unindexed filtered wrappers; reconcile final policy
 visibility before emitting updates or retaining their model bindings.
+
+Remote Create JSON retains an empty children marker for native elements so
+opt-in unknown types keep their structural kind through EditorCore.
+
+Snapshot ownership of affected child lists before initializing new subtrees;
+rebinding a moved descendant must not turn its old container into a foreign child.
+
+Local projection uses debug metrics without per-keystroke tracing spans; cold session
+flows own the parent spans.

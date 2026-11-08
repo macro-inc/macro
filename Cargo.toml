@@ -7,12 +7,14 @@ members = [
   "crates/macro_document_composers",
   "crates/client/mention_date",
   "crates/client/lexical/macro_document_model",
+  "crates/client/document_session",
+  "crates/client/document_session_wasm",
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
+  "crates/client/lexical/lexical_markdown",
   "crates/client/lexical/lexical_conformance",
   "crates/client/lexical/lexical_rich_nodes",
-  "crates/client/lexical/lexical_markdown",
   "crates/client/lexical/lexical_conformance_wasm",
   "crates/client/lexical/lexical_workspace_tests",
   "crates/sync_doc_id",
@@ -241,6 +243,7 @@ trigger_context = { path = "crates/trigger_context" }
 mention_date = { path = "crates/client/mention_date" }
 macro_config = { path = "crates/macro_config" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
+document_session = { path = "crates/client/document_session" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_loro = { path = "crates/client/lexical/lexical_loro" }
@@ -663,3 +666,11 @@ opt-level = 2
 [profile.test.package.doc_sync_core]
 opt-level = 2
 
+# The complete session includes native Loro; keep its single browser artifact small.
+[profile.document-session-wasm]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
