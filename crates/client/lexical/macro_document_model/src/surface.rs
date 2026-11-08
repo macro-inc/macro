@@ -7,7 +7,10 @@ pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuild
     let builder = crate::preset_builder_with_mode(ty, mode);
 
     // WP-58 Group B: structure, lists, tables, media, paste and links.
-    crate::plugins_group_b::register(builder, ty)
+    let builder = crate::plugins_group_b::register(builder, ty);
+
+    // WP-58 Group A: input shortcuts and native menu policy.
+    crate::plugins_group_a::register(builder, ty)
 }
 
 /// Decode application command names through the registered migration groups.

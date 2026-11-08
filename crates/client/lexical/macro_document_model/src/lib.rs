@@ -59,6 +59,8 @@ pub mod sync;
 #[cfg(feature = "html")]
 pub mod html;
 
+/// Application input shortcuts and native menu surface policy.
+pub mod plugins_group_a;
 /// Structure, list, table, media, clipboard and link surface policy.
 pub mod plugins_group_b;
 /// Application surface plugin registration.
