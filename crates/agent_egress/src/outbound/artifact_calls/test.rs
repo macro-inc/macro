@@ -53,7 +53,11 @@ async fn an_endpoint_keeps_the_gateway_prefix_and_carries_a_token_for_the_user()
     );
     assert_eq!(
         *tokens.minted.lock().expect("lock"),
-        vec![("macro|teammate@macro.com".to_owned(), BotId::TEST_A, session)]
+        vec![(
+            "macro|teammate@macro.com".to_owned(),
+            BotId::TEST_A,
+            session
+        )]
     );
 }
 
