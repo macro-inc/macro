@@ -4,10 +4,10 @@ import type { MacroClient } from '../../utils/client';
 import type { EmailAttachment } from '../email/attachment';
 import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search/options';
+import { Spreadsheet } from '../spreadsheets/spreadsheet';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Document } from './document';
-import { Spreadsheet } from './spreadsheet';
 import { SystemSkill } from './system-skill';
 
 /** One skill found by {@link DocumentNamespace.skills}. */

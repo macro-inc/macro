@@ -448,17 +448,6 @@ export {
 } from './entities/documents/markdown';
 export type { FileContent } from './entities/documents/namespace';
 export {
-  RevisionConflictError,
-  Spreadsheet,
-  type SpreadsheetCalculateOptions,
-  type SpreadsheetCalculation,
-  type SpreadsheetEdited,
-  type SpreadsheetEditOptions,
-  type SpreadsheetRead,
-  type SpreadsheetReadOptions,
-  type SpreadsheetSheet,
-} from './entities/documents/spreadsheet';
-export {
   CommentQuoteNotPlacedError,
   type TextComment,
   type TextCommentOptions,
@@ -537,6 +526,17 @@ export type {
 } from './entities/search/types';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export {
+  RevisionConflictError,
+  Spreadsheet,
+  type SpreadsheetCalculateOptions,
+  type SpreadsheetCalculation,
+  type SpreadsheetEdited,
+  type SpreadsheetEditOptions,
+  type SpreadsheetRead,
+  type SpreadsheetReadOptions,
+  type SpreadsheetSheet,
+} from './entities/spreadsheets/spreadsheet';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export type { ActivityReport } from './entities/users/user';
