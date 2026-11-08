@@ -47,7 +47,7 @@ struct Exchange {
 
 fn transcript(name: &str) -> Transcript {
     let path = format!(
-        "{}/../database_sql/fixtures/transcripts/{name}.json",
+        "{}/../database_sql_engine/fixtures/transcripts/{name}.json",
         env!("CARGO_MANIFEST_DIR")
     );
     let text = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"));

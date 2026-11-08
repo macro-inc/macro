@@ -10,9 +10,9 @@ import type { CalendarEventSearchTimeOneOfFour } from './calendarEventSearchTime
 /**
  * Timed or all-day span of a calendar event.
 
-Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
+Deliberately a local mirror of `soup_types::calendar_event::SoupCalendarEventTime`
 rather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and
-`JsonSchema` (AI tool schemas), and `models_soup` carries no schemars
+`JsonSchema` (AI tool schemas), and `soup_types` carries no schemars
 dependency. The wire shape is identical and must stay that way, so a
 client can decode a search row and a soup row with one mapping.
 
