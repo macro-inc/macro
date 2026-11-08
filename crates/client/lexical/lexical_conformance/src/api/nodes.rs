@@ -405,7 +405,7 @@ pub(crate) fn call(
         }
         "replace" => {
             if let Some(id) = r.selections.take_active()?
-                && let Some(selection) = tx.selection().cloned()
+                && let Some(selection) = tx.selection().map(Selection::snapshot_for_foreign_read)
             {
                 r.selections.set_slot(id, tx.detach_selection(selection))?;
             }

@@ -119,3 +119,5 @@ demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Pers
 and removal; opaque text hooks rule out the local root-text proof.
 
 Cache range direction only when upstream calls isBackward in a write context; invalidate it on endpoint changes and selection-object cloning, while preserving it through text-only trimming.
+
+Capture an existing selection for a foreign host with snapshot_for_foreign_read; Clone intentionally clears range direction memos for upstream clone() semantics.
