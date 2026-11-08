@@ -1,7 +1,3 @@
-import type {
-  DocSession,
-  EditorSession,
-} from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm';
 import { platformWebSocketFactory } from '../websocket/platform/factory';
 import type {
   MinimalWebSocket,
@@ -23,6 +19,7 @@ import { decodeOutput, type Effect, Flag } from './output';
 import type { SessionRouter } from './router';
 import { StorageAdapter, type StorageResult } from './storage';
 import type { SessionTelemetry } from './telemetry';
+import type { DocSession, EditorSession } from './wasm.generated';
 
 export type NativeSession = EditorSession | DocSession;
 export interface SessionAuthorization {

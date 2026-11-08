@@ -1,4 +1,3 @@
-import type { SyncRouter } from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm';
 import { platformWebSocketFactory } from '../websocket/platform/factory';
 import type {
   MinimalWebSocket,
@@ -8,6 +7,7 @@ import { RouteMsg, TelemetryMsg } from './abi.generated';
 import type { SessionAuthorization } from './executor';
 import { decodeOutput, Flag } from './output';
 import type { SessionTelemetry } from './telemetry';
+import type { SyncRouter } from './wasm.generated';
 
 /** Shared physical I/O only; native RouterCore owns route state and token generations. */
 export class SessionRouter {
