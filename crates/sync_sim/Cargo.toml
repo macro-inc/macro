@@ -9,6 +9,7 @@ autotests = false
 document_session = { workspace = true, features = ["conformance"] }
 lexical_model = { workspace = true, features = ["model-segmentation"] }
 lexical_loro.workspace = true
+lexical_markdown.workspace = true
 lexical_rich_nodes.workspace = true
 macro_document_model.workspace = true
 proptest.workspace = true

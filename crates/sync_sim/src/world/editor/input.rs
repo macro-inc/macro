@@ -4,7 +4,9 @@ use lexical_model::*;
 
 pub(super) fn editing_input(state: &EditorState, op: &EditorOp, headless: bool) -> Option<Input> {
     let (from, to, commands) = match op {
-        EditorOp::SetBlock { at, .. } | EditorOp::InsertTable { at, .. } => (
+        EditorOp::SetBlock { at, .. }
+        | EditorOp::InsertTable { at, .. }
+        | EditorOp::PasteMarkdown { at, .. } => (
             *at,
             *at,
             vec![Command::Extension(ExtensionCommand::new(

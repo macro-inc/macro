@@ -86,3 +86,6 @@ mod editor_rich;
 
 #[path = "stories/editor_cursor.rs"]
 mod editor_cursor;
+
+#[path = "stories/editor_markdown.rs"]
+mod editor_markdown;

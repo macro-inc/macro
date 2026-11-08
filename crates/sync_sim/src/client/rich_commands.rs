@@ -48,6 +48,28 @@ impl Plugin for RichEdits {
                 })?;
                 Ok(Handled::Yes)
             }
+            EditorOp::PasteMarkdown { snippet, .. } => {
+                let selection = tx.selection().cloned();
+                let scratch = tx.create(Paragraph::default())?.key();
+                let transformers =
+                    macro_document_model::transformers::transformers("all", &Default::default())
+                        .map_err(|error| Error::Extension(Box::new(error)))?;
+                lexical_markdown::convert_from_markdown_string(
+                    tx,
+                    crate::markdown_snippet(*snippet),
+                    &transformers,
+                    Some(scratch),
+                    &lexical_markdown::MarkdownOptions {
+                        list_indent: 2,
+                        ..Default::default()
+                    },
+                )
+                .map_err(|error| Error::Extension(Box::new(error)))?;
+                let nodes = tx.children_keys(scratch)?;
+                tx.set_selection(selection)?;
+                tx.insert_nodes(&nodes)?;
+                Ok(Handled::Yes)
+            }
             EditorOp::InsertTable { rows, cols, .. } => {
                 let handled = table::commands::insert_table(
                     tx,

@@ -579,6 +579,7 @@
       "name": "@macro-inc/sync-sim-peer",
       "dependencies": {
         "@lexical/list": "catalog:",
+        "@lexical/markdown": "catalog:",
         "@loro-mirror/core": "workspace:*",
         "@macro-inc/collaboration": "workspace:*",
         "@macro-inc/lexical-core": "workspace:*",

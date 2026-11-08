@@ -20302,6 +20302,7 @@ dependencies = [
  "document_session",
  "futures",
  "lexical_loro",
+ "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",

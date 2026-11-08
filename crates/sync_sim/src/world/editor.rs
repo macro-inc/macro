@@ -41,6 +41,7 @@ impl Sim {
             EditorOp::SetBlock { .. }
             | EditorOp::ToggleList { .. }
             | EditorOp::InsertTable { .. }
+            | EditorOp::PasteMarkdown { .. }
             | EditorOp::Type { .. }
             | EditorOp::Backspace { .. }
             | EditorOp::DeleteRange { .. }

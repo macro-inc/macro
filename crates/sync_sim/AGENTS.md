@@ -8,7 +8,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 ## Start here
 
 - `src/client/application.rs`: real application registries, policy and injected constructor ports.
-- `src/client/rich_commands.rs`: package block/table operations; list commands use the registered list plugin.
+- `src/client/rich_commands.rs`: package block/table/Markdown paste operations; list commands use the registered list plugin.
 - `src/client/runtime.rs`: exclusive generic/session ownership; `src/client/resolve.rs`: live UTF-16 positions.
 - `src/world/editor.rs`: real session editor inputs and effects; `editor/input.rs`
   lowers range edits and segmented backspace without resetting consecutive cursors.
@@ -28,7 +28,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
 - `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore;
   actual local-update ranges cover rotating foreign editor peers.
-- `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
+- `tests/stories/COVERAGE.md`: story/S7 map and pending editor producers.
+- `fixtures/`: shared exact native/TS Markdown inputs, including the incompressible large paste.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
@@ -240,3 +241,12 @@ and transactional identity streams by peer and factory creation ordinal, so a
 rebuild cannot restart a retired identity stream. Keep the staging comment factory
 matched to CommentNode. This registry checkpoint does not establish application
 comment-gate parity; the gate remains a separate required producer.
+
+PasteMarkdown imports the committed corpus through lexical_markdown and the source
+ALL_TRANSFORMERS, restores the original selection, then uses the real insert-nodes
+operation. Preserve typed package callback errors through Error::Extension. The
+large literal checks actual one-row fragmentation and delivered frames before and
+after Hibernate, plus the complete payload, every invariant and exact replay.
+The TS literals cover each short snippet independently; compound insertion at a
+heading start retains a separate upstream stale-block reproduction and is not
+claimed by those literals. Markdown shortcuts and editor-generated floors remain pending.

@@ -486,3 +486,68 @@ fn real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays
     first.compare_replay(&again).unwrap();
     assert_eq!(wire, replayed);
 }
+
+fn markdown_native_and_shipping_worker(seed: u64, snippet: u8) -> (Outcome, Vec<String>) {
+    let mut world = Mixed::with_config(SimConfig::editor(seed));
+    world
+        .sim
+        .apply_step(Step::Open(OpenSpec::form("native", "one")))
+        .unwrap();
+    world.sim.apply_step(Step::Run(Millis(500))).unwrap();
+    world.open_editor("editor", "two");
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::PasteMarkdown {
+                at: Pos::default(),
+                snippet,
+            },
+        },
+    );
+    world.pump(500);
+    world
+        .sim
+        .apply_step(Step::Edit {
+            client: ClientName("native".into()),
+            op: AbstractOp::Editor(EditorOp::Type {
+                at: Pos::default(),
+                text: "native🦀".into(),
+            }),
+        })
+        .unwrap();
+    world.pump(500);
+    let (outcome, peers, wire) = world.finish();
+    let peer = &peers[&ClientName("editor".into())];
+    let editor: serde_json::Value =
+        serde_json::from_str(peer.editor_json.as_ref().unwrap()).unwrap();
+    let native = outcome.finals.clients[&ClientName("native".into())]
+        .editor
+        .as_ref()
+        .unwrap();
+    assert_eq!(editor, native.synced_json);
+    assert_eq!(editor, native.reconstructed);
+    assert!(peer.rows.iter().all(|row| row.delivered));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&peer.value_json).unwrap(),
+        outcome.finals.servers[&DocIx(0)].deep_value
+    );
+    let vv = peer
+        .vv
+        .iter()
+        .map(|(peer, counter)| (peer.parse().unwrap(), *counter))
+        .collect::<Vv>();
+    assert_eq!(vv, outcome.finals.servers[&DocIx(0)].persisted_vv);
+    (outcome, wire)
+}
+#[test]
+fn real_shipping_markdown_pastes_interoperate_and_replay_exactly() {
+    for snippet in 0..3 {
+        let (first, wire) = markdown_native_and_shipping_worker(809 + u64::from(snippet), snippet);
+        let (again, replayed) =
+            markdown_native_and_shipping_worker(809 + u64::from(snippet), snippet);
+        first.compare_replay(&again).unwrap();
+        assert_eq!(wire, replayed);
+    }
+}

@@ -14,6 +14,7 @@ by native clients. No shipped package depends on this directory.
 - `peer.ts`: real engine, WAL and GenericMirror integration.
 - `editor-peer.ts`: shipping AI workspace, editor bindings and rotating peer commits.
 - `editor-ops.ts`: live upstream positions and package editing operations.
+- `../../crates/sync_sim/fixtures/`: exact Markdown corpus shared with native sessions.
 - `storage.ts`: actual storage observations shared by both hosts.
 - `ts-peer.ts`: JSON-lines command/report adapter; stdout is protocol only.
 - `../../crates/sync_sim/tests/mixed_versions.rs`: native host and assertions.
@@ -41,6 +42,9 @@ by native clients. No shipped package depends on this directory.
 - Await stdout completion before shutdown; table snapshots can exceed a pipe buffer.
 - Seed Node random-fill and Node webcrypto as well as global crypto before importing
   either shipped Nanoid version.
+- Paste Markdown with the actual source ALL_TRANSFORMERS and selection insertNodes;
+  read the committed native corpus, never substitute a second parser. Independent
+  short-snippet literals do not establish compound heading-start insertion parity.
 - GenericMirror tests alone do not establish editor or browser-selection parity.
 
 ## Checks

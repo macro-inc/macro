@@ -47,6 +47,7 @@ impl RunStats {
                         AbstractOp::Editor(EditorOp::SetBlock { .. }) => "SetBlock",
                         AbstractOp::Editor(EditorOp::ToggleList { .. }) => "ToggleList",
                         AbstractOp::Editor(EditorOp::InsertTable { .. }) => "InsertTable",
+                        AbstractOp::Editor(EditorOp::PasteMarkdown { .. }) => "PasteMarkdown",
                         AbstractOp::Editor(EditorOp::Backspace { .. }) => "Backspace",
                         AbstractOp::Editor(EditorOp::DeleteRange { .. }) => "DeleteRange",
                         AbstractOp::Editor(EditorOp::SplitBlock { .. }) => "SplitBlock",
