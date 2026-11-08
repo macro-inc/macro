@@ -1,6 +1,101 @@
 use super::*;
 
 #[test]
+fn read_only_point_values_change_without_composition_dirty_or_cache_side_effects()
+-> Result<(), Error> {
+    // LexicalSelection.ts Point.set and RangeSelection.isBackward keep value
+    // writes in read mode while skipping composition, dirty and memo writes.
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((first, second), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?.key();
+        let q = tx.create(Paragraph::default())?.key();
+        let first = tx.create_text("first")?.key();
+        let second = tx.create_text("second")?.key();
+        tx.append(p, &[first])?;
+        tx.append(q, &[second])?;
+        tx.append(NodeKey::ROOT, &[p, q])?;
+        tx.text(first)?
+            .select(Some(Utf16Offset(1)), Some(Utf16Offset(3)))?;
+        Ok((first, second))
+    })?;
+    let mut tx = editor.transaction();
+    tx.set_composition_key(Some(first))?;
+    assert!(!tx.range_is_backward_at(SelectionSlot::Active)?);
+    let Selection::Range(active) = tx.selection_mut_at(SelectionSlot::Active)? else {
+        panic!("range")
+    };
+    active.dirty = false;
+    let detached = tx.detach_selection(Selection::Range(RangeSelection::new(
+        Point::text(first, Utf16Offset(1)),
+        Point::text(first, Utf16Offset(3)),
+    )));
+    let snapshot = tx.view().snapshot_for_foreign_read()?;
+    snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        assert!(!peer.selection_dirty);
+        let dirty_since_flush = peer.dirty_since_flush;
+        peer.set_point_at(
+            SelectionSlot::Active,
+            PointRole::Anchor,
+            Point::text(second, Utf16Offset(2)),
+        )?;
+        let active = peer.range_selection()?;
+        assert_eq!(active.anchor, Point::text(second, Utf16Offset(2)));
+        assert_eq!(active.focus, Point::text(first, Utf16Offset(3)));
+        assert_eq!(active.cached_is_backward(), Some(false));
+        assert!(!active.dirty);
+        assert!(!peer.range_is_backward_at(SelectionSlot::Active)?);
+        assert_eq!(peer.composition_key(), Some(first));
+        peer.set_point_at(
+            detached,
+            PointRole::Anchor,
+            Point::text(second, Utf16Offset(2)),
+        )?;
+        assert!(peer.range_is_backward_at(detached)?);
+        assert_eq!(peer.range_at(detached)?.cached_is_backward(), None);
+        assert!(!peer.range_at(detached)?.dirty);
+        peer.set_text_node_range_at(detached, second, Utf16Offset(4), second, Utf16Offset(1))?;
+        assert!(peer.range_is_backward_at(detached)?);
+        assert_eq!(peer.range_at(detached)?.cached_is_backward(), None);
+        assert!(!peer.range_at(detached)?.dirty);
+        assert!(!peer.selection_dirty);
+        assert_eq!(peer.dirty_since_flush, dirty_since_flush);
+        assert_eq!(peer.composition_key(), Some(first));
+        assert!(matches!(
+            peer.set_point_at(
+                detached,
+                PointRole::Anchor,
+                Point::element(second, ChildIndex(0))
+            ),
+            Err(Error::PointTypeMismatch)
+        ));
+        assert_eq!(
+            peer.anchor_at(detached)?,
+            Point::text(second, Utf16Offset(4))
+        );
+        assert!(matches!(
+            peer.set_selection(None),
+            Err(Error::ForeignReadOnly)
+        ));
+        Ok(())
+    })??;
+    assert_eq!(tx.anchor()?, Point::text(first, Utf16Offset(1)));
+    assert_eq!(tx.anchor_at(detached)?, Point::text(first, Utf16Offset(1)));
+    assert_eq!(tx.composition_key(), Some(first));
+    assert_eq!(
+        snapshot
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::text(first, Utf16Offset(1))
+    );
+    Ok(())
+}
+
+#[test]
 fn owned_read_keeps_pending_text_selection_composition_and_previous_selection() -> Result<(), Error>
 {
     let mut editor = Editor::builder(EditorMode::Headless)

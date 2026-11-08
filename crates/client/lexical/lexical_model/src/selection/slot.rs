@@ -23,9 +23,13 @@ impl Transaction<'_> {
             .and_then(Selection::as_range)
             .ok_or(Error::NoRangeSelection)
     }
-    /// Compute and cache direction in a writable selection context.
+    /// Compute direction, caching only outside a development read-only peer.
     pub fn range_is_backward_at(&mut self, slot: SelectionSlot) -> Result<bool, Error> {
         let backward = self.range_at(slot)?.is_backward(self.view())?;
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Ok(backward);
+        }
         let Selection::Range(range) = self.selection_mut_at(slot)? else {
             return Err(Error::NoRangeSelection);
         };
@@ -41,6 +45,9 @@ impl Transaction<'_> {
         slot: SelectionSlot,
     ) -> Result<&mut Selection, Error> {
         self.guard_write()?;
+        self.selection_value_mut_at(slot)
+    }
+    fn selection_value_mut_at(&mut self, slot: SelectionSlot) -> Result<&mut Selection, Error> {
         match slot {
             SelectionSlot::Active => self.pending.selection.as_mut().ok_or(Error::NoSelection),
             SelectionSlot::Detached(id) => self
@@ -104,20 +111,31 @@ impl Transaction<'_> {
         self.focus_at(SelectionSlot::Active)
     }
     /// Update a live point with composition transfer and selection dirtiness.
+    /// A development read-only peer changes only its own selection value.
     pub fn set_point_at(
         &mut self,
         slot: SelectionSlot,
         role: PointRole,
         point: Point,
     ) -> Result<(), Error> {
-        self.guard_write()?;
-        let correct = match point {
-            Point::Text { .. } => self.is_text(point.key()),
-            Point::Element { .. } => self.is_element(point.key()),
-        };
-        if !correct {
-            return Err(Error::PointTypeMismatch);
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            self.check_point_type(point)?;
+            let Selection::Range(range) = self.selection_value_mut_at(slot)? else {
+                return Err(Error::NoRangeSelection);
+            };
+            let cached = range.cached_is_backward();
+            match role {
+                PointRole::Anchor => range.anchor = point,
+                PointRole::Focus => range.focus = point,
+            }
+            // Upstream Point.set leaves _cachedIsBackward untouched in read
+            // mode, even if the new endpoints have a different direction.
+            range.cached_direction = cached.map(|backward| (range.anchor, range.focus, backward));
+            return Ok(());
         }
+        self.guard_write()?;
+        self.check_point_type(point)?;
         let old = match role {
             PointRole::Anchor => self.anchor_at(slot)?,
             PointRole::Focus => self.focus_at(slot)?,
@@ -139,6 +157,16 @@ impl Transaction<'_> {
         if slot == SelectionSlot::Active {
             self.selection_dirty = true;
             self.dirty_since_flush = true;
+        }
+        Ok(())
+    }
+    fn check_point_type(&self, point: Point) -> Result<(), Error> {
+        let correct = match point {
+            Point::Text { .. } => self.is_text(point.key()),
+            Point::Element { .. } => self.is_element(point.key()),
+        };
+        if !correct {
+            return Err(Error::PointTypeMismatch);
         }
         Ok(())
     }
