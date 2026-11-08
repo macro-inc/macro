@@ -301,8 +301,10 @@ fn foreign_link_ancestry_does_not_route_core_methods_through_a_native_payload_ca
 fn nested_model_callback_frames_share_record_identity_without_borrowing_the_parent_dispatcher()
 -> Result<(), crate::replay::ReplayError> {
     struct Hooks {
+        return_to_original: bool,
         records: crate::replay::RecordIdentities,
         bindings: crate::replay::Bindings,
+        selections: crate::replay::SelectionBindings,
         seen: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
     }
     impl ForeignHooks for Hooks {
@@ -317,6 +319,7 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
                 let mut child = Replayer {
                     record_ids: self.records.clone(),
                     bindings: self.bindings.clone(),
+                    selections: self.selections.clone(),
                     record_owner: Some((0, tx.committed_state().clone())),
                     version: 1,
                     in_callback: true,
@@ -342,6 +345,36 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
                     &json!({"fn":"lexical.$createTextNode","args":["nested"]}),
                 )?;
                 tx.append(sibling, &[crate::replay::node_key(&nested)?])?;
+                // A model operation replaces the selection before the host
+                // callback activates another object (or reactivates the old ID).
+                tx.replace_selection(tx.selection().cloned())?;
+                let selection = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$createRangeSelection","args":[]}),
+                )?;
+                assert_eq!(selection, json!({"$selection":1,"kind":"range"}));
+                api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$setSelection","args":[selection]}),
+                )?;
+                let selected = if self.return_to_original {
+                    let original = json!({"$selection":0,"kind":"range"});
+                    api::call(
+                        &mut child,
+                        tx,
+                        &json!({"fn":"lexical.$setSelection","args":[original]}),
+                    )?;
+                    original
+                } else {
+                    selection
+                };
+                api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"Selection.setTextNodeRange","this":selected,"args":[nested,2,nested,2]}),
+                )?;
                 child.compare(&json!({"$h":77,"key":nested["$node"].as_u64().expect("key").to_string(),"type":"text","ver":1}), &nested)?;
                 let committed = tx.committed_state().clone();
                 let root = child.node(committed.view(), NodeKey::ROOT)?;
@@ -364,79 +397,226 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
             }
         }
     }
-    let records = crate::replay::RecordIdentities::default();
-    let bindings = crate::replay::Bindings::default();
-    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    for return_to_original in [false, true] {
+        let records = crate::replay::RecordIdentities::default();
+        let bindings = crate::replay::Bindings::default();
+        let selections = crate::replay::SelectionBindings::default();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut editor = Editor::builder(EditorMode::Headless)
+            .foreign_node(ForeignNodeType {
+                type_name: "callback-paragraph".into(),
+                class_name: "CallbackParagraph".into(),
+                kind: NodeKind::Element,
+                extends: Some("paragraph"),
+                required_state: vec![],
+                hooks: std::sync::Arc::new(Hooks {
+                    return_to_original,
+                    records: records.clone(),
+                    bindings: bindings.clone(),
+                    selections: selections.clone(),
+                    seen: seen.clone(),
+                }),
+            })
+            .build()
+            .expect("editor");
+        let mut parent = Replayer {
+            record_ids: records.clone(),
+            bindings: bindings.clone(),
+            selections: selections.clone(),
+            record_owner: Some((0, editor.state().clone())),
+            version: 1,
+            ..Replayer::default()
+        };
+        bindings.pin_state(0, editor.state().clone())?;
+        let mut tx = editor.transaction();
+        let old_selection = api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"lexical.$createRangeSelection","args":[]}),
+        )?;
+        assert_eq!(old_selection, json!({"$selection":0,"kind":"range"}));
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"lexical.$setSelection","args":[old_selection]}),
+        )?;
+        let first = tx.create_foreign("callback-paragraph", SerializedNode::new())?;
+        let sibling = tx.create(Paragraph::default())?.key();
+        tx.append(NodeKey::ROOT, &[first])?;
+        let first = parent.node(tx.view(), first)?;
+        let sibling = parent.node(tx.view(), sibling)?;
+        parent.compare(&json!({"$h":22,"key":sibling["$node"].as_u64().expect("key").to_string(),"type":"paragraph","ver":1}), &sibling)?;
+        let returned = api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"LexicalNode.insertAfter","this":first,"args":[sibling]}),
+        )?;
+        assert_eq!(
+            api::call(
+                &mut parent,
+                &mut tx,
+                &json!({"fn":"lexical.$getSelection","args":[]})
+            )?,
+            if return_to_original {
+                json!({"$selection":0,"kind":"range"})
+            } else {
+                json!({"$selection":1,"kind":"range"})
+            }
+        );
+        assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
+        assert_eq!(
+            tx.range_at(selections.slot(0)?)?.anchor.offset(),
+            if return_to_original { 2 } else { 0 }
+        );
+        assert_eq!(
+            tx.range_at(selections.slot(1)?)?.anchor.offset(),
+            if return_to_original { 0 } else { 2 }
+        );
+        let nested = seen.lock().expect("test log")[0].clone();
+        assert_eq!(parent.decode(&json!({"$h":77}))?, nested);
+        assert_eq!(
+            super::lexical::key_arg(
+                &parent,
+                &json!(nested["$node"].as_u64().expect("key").to_string())
+            )?,
+            crate::replay::node_key(&nested)?
+        );
+        let root = seen.lock().expect("test log")[1].clone();
+        assert_eq!(
+            parent.node(tx.committed_state().view(), NodeKey::ROOT)?,
+            root
+        );
+        let snapshot = seen.lock().expect("test log")[2].clone();
+        assert_eq!(
+            parent
+                .saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?
+                .view()
+                .text_content(NodeKey::ROOT),
+            ""
+        );
+        assert_ne!(nested["identity"], first["identity"]);
+        assert_ne!(nested["identity"], sibling["identity"]);
+        assert_eq!(returned["identity"], sibling["identity"]);
+        assert_eq!(
+            parent.node(tx.view(), crate::replay::node_key(&nested)?)?,
+            nested
+        );
+        assert_eq!(tx.text_content(NodeKey::ROOT), "\n\nnested");
+        tx.commit()?;
+        records.release_version(1)?;
+        let recaptured = parent.node(editor.state().view(), crate::replay::node_key(&nested)?)?;
+        assert_ne!(recaptured["identity"], nested["identity"]);
+        bindings.release_saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?;
+        bindings.release_state(0)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn paragraph_insertion_keeps_a_selection_activated_by_its_foreign_hook()
+-> Result<(), crate::replay::ReplayError> {
+    struct Hooks {
+        selections: crate::replay::SelectionBindings,
+    }
+    impl ForeignHooks for Hooks {
+        fn insert_new_after(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            _: SelectionSlot,
+            _: bool,
+        ) -> Override<std::result::Result<Option<NodeKey>, Error>> {
+            let result = (|| -> Result<(), crate::replay::ReplayError> {
+                let mut child = Replayer {
+                    selections: self.selections.clone(),
+                    in_callback: true,
+                    ..Replayer::default()
+                };
+                let text = tx.children(key).next().expect("text");
+                let text = child.node(tx.view(), text)?;
+                let selection = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$createRangeSelection","args":[]}),
+                )?;
+                assert_eq!(selection, json!({"$selection":1,"kind":"range"}));
+                api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$setSelection","args":[selection]}),
+                )?;
+                api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"Selection.setTextNodeRange","this":selection,"args":[text,2,text,2]}),
+                )?;
+                Ok(())
+            })();
+            Override::Value(
+                result
+                    .map(|()| None)
+                    .map_err(|error| Error::invariant(error.to_string())),
+            )
+        }
+    }
+    let selections = crate::replay::SelectionBindings::default();
     let mut editor = Editor::builder(EditorMode::Headless)
         .foreign_node(ForeignNodeType {
-            type_name: "callback-paragraph".into(),
-            class_name: "CallbackParagraph".into(),
+            type_name: "selection-paragraph".into(),
+            class_name: "SelectionParagraph".into(),
             kind: NodeKind::Element,
             extends: Some("paragraph"),
             required_state: vec![],
             hooks: std::sync::Arc::new(Hooks {
-                records: records.clone(),
-                bindings: bindings.clone(),
-                seen: seen.clone(),
+                selections: selections.clone(),
             }),
         })
         .build()
         .expect("editor");
     let mut parent = Replayer {
-        record_ids: records.clone(),
-        bindings: bindings.clone(),
-        record_owner: Some((0, editor.state().clone())),
-        version: 1,
+        selections: selections.clone(),
+        in_callback: true,
         ..Replayer::default()
     };
-    bindings.pin_state(0, editor.state().clone())?;
     let mut tx = editor.transaction();
-    let first = tx.create_foreign("callback-paragraph", SerializedNode::new())?;
-    let sibling = tx.create(Paragraph::default())?.key();
-    tx.append(NodeKey::ROOT, &[first])?;
-    let first = parent.node(tx.view(), first)?;
-    let sibling = parent.node(tx.view(), sibling)?;
-    parent.compare(&json!({"$h":22,"key":sibling["$node"].as_u64().expect("key").to_string(),"type":"paragraph","ver":1}), &sibling)?;
-    let returned = api::call(
+    let paragraph = tx.create_foreign("selection-paragraph", SerializedNode::new())?;
+    let text = tx.create_text("hello")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    let text = parent.node(tx.view(), text)?;
+    let selection = api::call(
         &mut parent,
         &mut tx,
-        &json!({"fn":"LexicalNode.insertAfter","this":first,"args":[sibling]}),
+        &json!({"fn":"lexical.$createRangeSelection","args":[]}),
     )?;
-    let nested = seen.lock().expect("test log")[0].clone();
-    assert_eq!(parent.decode(&json!({"$h":77}))?, nested);
+    api::call(
+        &mut parent,
+        &mut tx,
+        &json!({"fn":"lexical.$setSelection","args":[selection]}),
+    )?;
+    api::call(
+        &mut parent,
+        &mut tx,
+        &json!({"fn":"Selection.setTextNodeRange","this":selection,"args":[text,5,text,5]}),
+    )?;
     assert_eq!(
-        super::lexical::key_arg(
-            &parent,
-            &json!(nested["$node"].as_u64().expect("key").to_string())
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"Selection.insertParagraph","this":selection,"args":[]})
         )?,
-        crate::replay::node_key(&nested)?
+        serde_json::Value::Null
     );
-    let root = seen.lock().expect("test log")[1].clone();
     assert_eq!(
-        parent.node(tx.committed_state().view(), NodeKey::ROOT)?,
-        root
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"lexical.$getSelection","args":[]})
+        )?,
+        json!({"$selection":1,"kind":"range"})
     );
-    let snapshot = seen.lock().expect("test log")[2].clone();
-    assert_eq!(
-        parent
-            .saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?
-            .view()
-            .text_content(NodeKey::ROOT),
-        ""
-    );
-    assert_ne!(nested["identity"], first["identity"]);
-    assert_ne!(nested["identity"], sibling["identity"]);
-    assert_eq!(returned["identity"], sibling["identity"]);
-    assert_eq!(
-        parent.node(tx.view(), crate::replay::node_key(&nested)?)?,
-        nested
-    );
-    assert_eq!(tx.text_content(NodeKey::ROOT), "\n\nnested");
+    assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
+    assert_eq!(tx.range_at(selections.slot(0)?)?.anchor.offset(), 5);
     tx.commit()?;
-    records.release_version(1)?;
-    let recaptured = parent.node(editor.state().view(), crate::replay::node_key(&nested)?)?;
-    assert_ne!(recaptured["identity"], nested["identity"]);
-    bindings.release_saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?;
-    bindings.release_state(0)?;
     Ok(())
 }

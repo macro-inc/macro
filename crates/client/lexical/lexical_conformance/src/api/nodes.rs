@@ -156,7 +156,7 @@ pub(crate) fn call(
             } else {
                 tx.select_next(key, offset(0)?, offset(1)?)?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "isEmpty" => return Ok(json!(view.is_empty(key))),
         "isInline" => return Ok(json!(view.is_inline(key))),
@@ -279,10 +279,10 @@ pub(crate) fn call(
             return Ok(undefined());
         }
         "replace" => {
-            if let Some(id) = r.active_selection.take()
+            if let Some(id) = r.selections.take_active()?
                 && let Some(selection) = tx.selection().cloned()
             {
-                r.selections[id] = tx.detach_selection(selection);
+                r.selections.set_slot(id, tx.detach_selection(selection))?;
             }
             let node = node_key(a.first().ok_or_else(|| fail("replacement"))?)?;
             let node = tx.replace(
@@ -320,7 +320,7 @@ pub(crate) fn call(
                 tx.element(key)?
                     .select(anchor.map(ChildIndex), focus.map(ChildIndex))?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "selectStart" | "selectEnd" => {
             if method == "selectStart" {
@@ -328,7 +328,7 @@ pub(crate) fn call(
             } else {
                 tx.select_end(key)?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "setTextStyle" => {
             tx.element(key)?.set_text_style(str_arg(a, 0)?)?;

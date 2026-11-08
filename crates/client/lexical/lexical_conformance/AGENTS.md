@@ -10,6 +10,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and published snapshot pins; return clones before any model or host call.
+- `src/replay/selections.rs`: shared mutable-frame selection identities and activation revisions; no model call executes under its lock.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
@@ -59,6 +60,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
 - Read raw framework fields from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
+- Detach replaced selection handles only if the call still owns their activation revision after nested callbacks.
 - Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.
 - Keep callback owners from retaining strong binding-store references once real hosting is wired; pinned snapshots retain their node registry and callbacks.
 - Defer host version collection until any update borrowing that committed or pending version ends.

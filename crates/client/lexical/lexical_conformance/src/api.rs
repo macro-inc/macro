@@ -41,14 +41,18 @@ pub fn call_by_id(
 /// Arguments and receiver use the recorder's value encoding. The development
 /// host owns the same identity bookkeeping as a fixture replay.
 pub fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Result<Value> {
+    let active = r.selections.active()?;
     let selection = tx.selection().cloned();
     let replacements = tx.selection_replacements();
     let result = lexical::call(r, tx, op);
     if replacements != tx.selection_replacements()
-        && let Some(id) = r.active_selection.take()
+        && let Some(active) = active
+        && r.selections.active()? == Some(active)
         && let Some(selection) = selection
     {
-        r.selections[id] = tx.detach_selection(selection);
+        r.selections.take_active()?;
+        r.selections
+            .set_slot(active.id, tx.detach_selection(selection))?;
     }
     result
 }
