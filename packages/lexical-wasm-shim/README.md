@@ -51,3 +51,5 @@ the complete prototype-driven class facade remains unfinished.
 Mutable structural overrides (`append`, `splice`, `remove`, `setIndent`, `updateFromJSON`, `resetOnCopyNodeFrom`) share the exact callback scope and native-super path. Node arguments from internal model calls use the shared captured identity encoder. Other foreign hooks and the full facade remain unfinished.
 
 Node-returning overrides (`replace`, `insertAfter`, `insertBefore`, `createParentElementNode`) return captured node handles. The host validates them against the exact update and reuses the normal identity encoder; invalid results fail without losing the callback scope.
+
+Selection-bearing `insertNewAfter` and `collapseAtStart` hooks retain active/detached slot identities. Static `transform` callbacks run in the dirty loop. Optional node results accept null; undefined is invalid. The JS facade still needs to invoke a class transform factory and its returned node function.
