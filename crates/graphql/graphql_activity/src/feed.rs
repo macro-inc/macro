@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use async_graphql::{Context, Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Base64Str, CursorVal, CursorWithVal, Sortable};
+use pagination_types::{Base64Str, CursorVal, CursorWithVal, Sortable};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

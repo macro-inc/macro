@@ -22,7 +22,7 @@ use entity_access::domain::models::{
     AdminParticipantRole, EntityAccessReceipt, EntityType, MemberParticipantRole,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, PaginateOn, Query};
+use pagination_types::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;

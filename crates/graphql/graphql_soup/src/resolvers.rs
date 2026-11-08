@@ -17,7 +17,7 @@ use graphql_common::{extract_part, require_authorized_user};
 use graphql_email::EmailThreadMutationOutput;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::TypeEraseCursor;
+use pagination_types::TypeEraseCursor;
 use soup::domain::{
     models::{SoupPropertiesField, grouping::build_grouped_response},
     ports::SoupService,

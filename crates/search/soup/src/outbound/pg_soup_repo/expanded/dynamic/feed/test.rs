@@ -28,8 +28,8 @@ use item_filters::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_owner::Owner;
-use models_pagination::{Cursor, Identify, Query, SimpleSortMethod, SortOn};
 use models_soup::item::SoupItem;
+use pagination_types::{Cursor, Identify, Query, SimpleSortMethod, SortOn};
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::sync::Arc;

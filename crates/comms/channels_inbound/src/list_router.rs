@@ -15,7 +15,7 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{
+use pagination_types::{
     CursorOptionExt, CursorWithValAndFilter, PaginateOn, Paginated, SimpleSortMethod,
     TypeEraseCursor,
 };

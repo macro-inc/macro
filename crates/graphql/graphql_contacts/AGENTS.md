@@ -18,7 +18,7 @@ bounded, enriched pages under `GraphqlUser`; these are not CRM contacts.
 
 ## Boundaries
 
-- Depends on: the `contacts` domain read port, `macro_user_id`, and `models_pagination`.
+- Depends on: the `contacts` domain read port, `macro_user_id`, and `pagination_types`.
 - Used by: `complete_graph` and the DSS composition root.
 
 ## Checks

@@ -5,7 +5,7 @@ use axum::{
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;

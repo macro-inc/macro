@@ -21,7 +21,7 @@ model_owner = { workspace = true }
 model_file_type = { workspace = true, features = ["utoipa"] }
 model_user = { workspace = true }
 bulk_upload_types = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_permissions = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

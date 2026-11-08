@@ -959,7 +959,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_pagination = { path = "crates/types/models_pagination" }
 models_permissions = { path = "crates/types/models_permissions" }
 models_properties = { path = "crates/types/models_properties" }
 models_search = { path = "crates/search/models_search" }
@@ -984,6 +983,7 @@ opensearch_client = { path = "crates/clients/opensearch_client" }
 opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 opensearch_types = { path = "crates/types/opensearch_types" }
 outlook_emulator = { path = "crates/testing/outlook_emulator" }
+pagination_types = { path = "crates/types/pagination_types" }
 pairing_id = { path = "crates/types/pairing_id" }
 password_events = { path = "crates/accounts/password_events" }
 password_import = { path = "crates/accounts/password_import" }

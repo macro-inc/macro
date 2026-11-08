@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 
 async fn sent_threads(repo: &EmailPgRepo, link: Uuid) -> Vec<Uuid> {
     repo.previews_for_view_cursor(

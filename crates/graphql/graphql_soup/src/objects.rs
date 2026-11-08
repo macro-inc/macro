@@ -9,7 +9,6 @@ use graphql_common::{
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     agent_session::{AgentPullRequestState, AgentSessionArchiveCause, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
@@ -33,6 +32,7 @@ use models_soup::{
     project::SoupProject,
     team::SoupTeam,
 };
+use pagination_types::PaginatedOpaqueCursor;
 use predicate_index::RecordKey;
 use serde_json::Value;
 use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::GroupedResponse};

@@ -46,8 +46,8 @@ use item_filters::ast::{
     project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::SimpleSortMethod;
 use models_soup::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
+use pagination_types::SimpleSortMethod;
 use rootcause::{
     Report,
     markers::{Cloneable, Dynamic},

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use models_pagination::Identify;
+use pagination_types::Identify;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]

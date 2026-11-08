@@ -4,7 +4,7 @@ use item_filters::ast::{
     agent_session::AgentSessionLiteral, calendar_event::CalendarEventLiteral, chat::ChatLiteral,
     document::DocumentLiteral, project::ProjectLiteral,
 };
-use models_pagination::{CursorVal, CursorWithValAndFilter, Query, SimpleSortMethod};
+use pagination_types::{CursorVal, CursorWithValAndFilter, Query, SimpleSortMethod};
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;

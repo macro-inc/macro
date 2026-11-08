@@ -8,7 +8,6 @@ use chrono::{DateTime, Utc};
 use entity_kind::{Entity, EntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Query};
 use notification::domain::models::device::DeviceType;
 use notification::domain::models::request::{
     NotificationCategory, NotificationListFilters, NotificationStatus,
@@ -19,6 +18,7 @@ use notification::domain::models::{
 };
 use notification::domain::ports::NotificationRepository;
 use notification_state::NotificationState;
+use pagination_types::{CreatedAt, Query};
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;

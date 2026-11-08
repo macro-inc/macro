@@ -8,7 +8,7 @@ use crm::domain::{
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CursorWithValAndFilter, Query, SimpleSortMethod};
+use pagination_types::{CursorWithValAndFilter, Query, SimpleSortMethod};
 
 use super::{SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupSortDirection};
 

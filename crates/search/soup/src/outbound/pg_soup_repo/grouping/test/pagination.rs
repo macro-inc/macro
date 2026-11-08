@@ -2,8 +2,8 @@ use super::*;
 use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
 use document_sub_type::DocumentSubType;
 use item_filters::ast::project::ProjectLiteral;
-use models_pagination::{CursorWithValAndFilter, SortOn};
 use models_soup::item::SoupItem;
+use pagination_types::{CursorWithValAndFilter, SortOn};
 use uuid::Uuid;
 
 pub(super) fn task_filter() -> EntityFilterAst {

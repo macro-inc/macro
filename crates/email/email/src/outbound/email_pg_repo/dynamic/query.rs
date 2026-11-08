@@ -13,11 +13,11 @@ use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
 use owned_scope::OwnedRead;
 pub(crate) use owned_scope::{OwnedReadStats, OwnedReadTuning};
 #[cfg(test)]
 pub(crate) use owned_scope::{OwnedStreams, inbox_window};
+use pagination_types::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};

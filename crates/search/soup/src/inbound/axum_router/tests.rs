@@ -17,7 +17,7 @@ use macro_authorization::{
 };
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
-use models_pagination::{
+use pagination_types::{
     CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, PaginateOn, Query,
     SimpleSortMethod, SortOn, TypeEraseCursor,
 };
@@ -210,9 +210,10 @@ impl SoupService for MockSoup {
         drop(guard);
 
         if self.succeeds {
-            Ok(SoupOutput::Simple(
-                models_pagination::Paginated::from_parts(Vec::new(), None),
-            ))
+            Ok(SoupOutput::Simple(pagination_types::Paginated::from_parts(
+                Vec::new(),
+                None,
+            )))
         } else {
             Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
         }
@@ -304,10 +305,10 @@ impl EmailService for MockEmail {
         &self,
         _req: email::domain::models::GetEmailsRequest,
     ) -> Result<
-        models_pagination::PaginatedCursor<
+        pagination_types::PaginatedCursor<
             email::domain::models::EnrichedEmailThreadPreview,
             uuid::Uuid,
-            models_pagination::SimpleSortMethod,
+            pagination_types::SimpleSortMethod,
             (),
         >,
         email::domain::models::EmailErr,
@@ -818,10 +819,10 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _req: email::domain::models::GetEmailsRequest,
     ) -> Result<
-        models_pagination::PaginatedCursor<
+        pagination_types::PaginatedCursor<
             email::domain::models::EnrichedEmailThreadPreview,
             uuid::Uuid,
-            models_pagination::SimpleSortMethod,
+            pagination_types::SimpleSortMethod,
             (),
         >,
         email::domain::models::EmailErr,
@@ -1171,7 +1172,7 @@ async fn cursor_with_assoc_works() {
     }
 
     impl SortOn<Frecency> for Data {
-        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
+        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> pagination_types::CursorVal<Frecency> {
             |v| CursorVal {
                 sort_type: Frecency,
                 last_val: FrecencyValue::FrecencyScore(v.0 as f64),
@@ -1256,7 +1257,7 @@ async fn cursor_with_all_works() {
     }
 
     impl SortOn<Frecency> for Data {
-        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
+        fn sort_on(_sort: Frecency) -> impl FnMut(&Self) -> pagination_types::CursorVal<Frecency> {
             |v| CursorVal {
                 sort_type: Frecency,
                 last_val: FrecencyValue::FrecencyScore(v.0 as f64),
@@ -2172,11 +2173,11 @@ async fn touched_cursor_round_trips() {
     // The shape the service emits: entity id + own-mutation timestamp. The
     // sort marker serializes as null (like frecency's); the timestamp value
     // is what keeps this out of the frecency cursor arm.
-    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+    let cursor = pagination_types::Base64Str::encode_json(pagination_types::Cursor {
         id: Uuid::new_v4().to_string(),
         limit: 20usize,
         val: CursorVal {
-            sort_type: models_pagination::TouchedByMe,
+            sort_type: pagination_types::TouchedByMe,
             last_val: chrono::DateTime::<chrono::Utc>::default(),
         },
         filter: EntityFilters::default(),
@@ -2272,11 +2273,11 @@ async fn notified_cursor_round_trips() {
         },
     );
 
-    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+    let cursor = pagination_types::Base64Str::encode_json(pagination_types::Cursor {
         id: Uuid::new_v4().to_string(),
         limit: 20usize,
         val: CursorVal {
-            sort_type: models_pagination::NotifiedAt,
+            sort_type: pagination_types::NotifiedAt,
             last_val: chrono::DateTime::<chrono::Utc>::default(),
         },
         filter: EntityFilters::default(),
@@ -2392,7 +2393,7 @@ async fn name_sort_takes_the_selected_sort_route_without_a_property() {
 async fn name_cursor_decodes_as_a_name_sort() {
     for name in [Some("Quarterly plan"), None] {
         let sort = DynamicSort::name(SoupSortDirection::Asc);
-        let cursor = models_pagination::Base64Str::encode_json(CursorWithValAndFilter {
+        let cursor = pagination_types::Base64Str::encode_json(CursorWithValAndFilter {
             id: Uuid::from_u128(1),
             limit: 10,
             val: CursorVal {
@@ -2433,7 +2434,7 @@ async fn property_cursor_with_missing_key_is_not_restarted() {
         property_definition_id: Uuid::from_u128(17),
         direction: SoupSortDirection::Asc,
     };
-    let cursor = models_pagination::Base64Str::encode_json(CursorWithValAndFilter {
+    let cursor = pagination_types::Base64Str::encode_json(CursorWithValAndFilter {
         id: Uuid::from_u128(1),
         limit: 10,
         val: CursorVal {

@@ -1,5 +1,5 @@
 use super::super::db_types::*;
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use sqlx::PgPool;
 use uuid::Uuid;
 

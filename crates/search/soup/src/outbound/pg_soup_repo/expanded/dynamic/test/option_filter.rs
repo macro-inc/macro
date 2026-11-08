@@ -12,7 +12,7 @@ use item_filters::ast::{
     properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use macro_user_id::cow_str::CowLike;
-use models_pagination::{Identify, Query, SimpleSortMethod};
+use pagination_types::{Identify, Query, SimpleSortMethod};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 

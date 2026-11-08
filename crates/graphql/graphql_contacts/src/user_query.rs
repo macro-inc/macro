@@ -5,7 +5,7 @@ use contacts_core::models::{
     query::{ContactLookup, ContactSearch},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 
 use crate::ContactsGraphqlContext;
 

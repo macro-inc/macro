@@ -28,7 +28,7 @@ use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Query};
+use pagination_types::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use thread_id::ThreadId;
 use uuid::Uuid;
@@ -802,7 +802,7 @@ pub trait ChannelService: Send + Sync + 'static {
 
 /// A paginated page of channel attachments.
 pub type ChannelAttachmentsPage =
-    models_pagination::PaginatedCursor<ChannelAttachment, Uuid, CreatedAt, ()>;
+    pagination_types::PaginatedCursor<ChannelAttachment, Uuid, CreatedAt, ()>;
 
 /// Errors that can occur when fetching channel messages.
 #[derive(Debug, thiserror::Error)]

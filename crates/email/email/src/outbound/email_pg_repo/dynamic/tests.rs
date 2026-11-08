@@ -820,7 +820,7 @@ fn test_build_query_defers_user_history_join_for_updated_at_sort() {
     let sql = super::query::debug_build_query_sql_with_sort(
         &view,
         &expr,
-        models_pagination::SimpleSortMethod::UpdatedAt,
+        pagination_types::SimpleSortMethod::UpdatedAt,
     );
 
     // Exactly one uh join, deferred to the outer query (after email_links)
@@ -858,7 +858,7 @@ fn test_viewed_at_filter_keeps_user_history_join_inline_for_updated_sort() {
     let sql = super::query::debug_build_query_sql_with_sort(
         &view,
         &expr,
-        models_pagination::SimpleSortMethod::UpdatedAt,
+        pagination_types::SimpleSortMethod::UpdatedAt,
     );
 
     assert_eq!(
@@ -882,7 +882,7 @@ fn test_build_query_keeps_user_history_join_inline_for_viewed_at_sort() {
     let sql = super::query::debug_build_query_sql_with_sort(
         &view,
         &expr,
-        models_pagination::SimpleSortMethod::ViewedAt,
+        pagination_types::SimpleSortMethod::ViewedAt,
     );
 
     // uh drives the sort key for viewed_at, so the join must stay in the
@@ -2072,7 +2072,7 @@ fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded
             super::query::debug_build_query_sql_with_sort(
                 &all,
                 &unfiltered,
-                models_pagination::SimpleSortMethod::ViewedUpdated,
+                pagination_types::SimpleSortMethod::ViewedUpdated,
             ),
         ),
     ] {

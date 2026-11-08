@@ -4,7 +4,7 @@
 
 use filter_ast::Expr;
 use item_filters::ast::database_row::DatabaseRowLiteral;
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 
 use super::access_semi_join;
 

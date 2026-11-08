@@ -13,7 +13,7 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Cursor, CursorVal, Query, SimpleSortMethod};
+use pagination_types::{CreatedAt, Cursor, CursorVal, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 use std::{
     collections::{HashMap, HashSet},

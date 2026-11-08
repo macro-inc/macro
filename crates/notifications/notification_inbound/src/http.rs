@@ -17,7 +17,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use models_pagination::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
+use pagination_types::{CreatedAt, CursorOptionExt, CursorWithValAndFilter};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;

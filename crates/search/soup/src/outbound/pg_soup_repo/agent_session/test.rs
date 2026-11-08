@@ -351,10 +351,10 @@ async fn cursor_pages_past_the_first_row(pool: PgPool) -> anyhow::Result<()> {
         SimpleSortRequest {
             limit: 1,
             cursor: SimpleSortQuery::ItemsFilter(Query::Cursor(
-                models_pagination::CursorWithValAndFilter {
+                pagination_types::CursorWithValAndFilter {
                     id: private.id,
                     limit: 1,
-                    val: models_pagination::CursorVal {
+                    val: pagination_types::CursorVal {
                         sort_type: SimpleSortMethod::UpdatedAt,
                         last_val: private.updated_at,
                     },
