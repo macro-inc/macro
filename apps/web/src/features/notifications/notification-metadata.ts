@@ -341,8 +341,8 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
 
 /**
  * How an agent's turn ended, so a failed or stopped turn does not read as
- * finished. A reason ACP adds later reads as finished, as the backend's
- * alert title does.
+ * finished. A reason ACP adds later, or one an older backend stored before
+ * the reason was typed, reads as finished, as the backend's alert title does.
  */
 export function agentTurnEnding(stopReason: AgentTurnStopReason): string {
   return match(stopReason)
@@ -351,7 +351,7 @@ export function agentTurnEnding(stopReason: AgentTurnStopReason): string {
     .with('max_tokens', 'max_turn_requests', () => 'hit its limit')
     .with('refusal', () => 'declined')
     .with('error', () => 'ran into an error')
-    .exhaustive();
+    .exhaustive(() => 'finished');
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {
