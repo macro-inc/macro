@@ -62,8 +62,8 @@ read-only and observes IDs before projection fixups, not inferred new op spans.
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
 Remaining application/editor producers:
-reset-budget closure driven by a faulty editor projection; stripping abandoned draft
-comment marks; Markdown shortcuts; comment-only gate verdict parity; editor generation
+reset-budget closure driven by a faulty editor projection; Markdown shortcuts;
+comment-only gate verdict parity; editor generation
 and observed undo/backspace floors. Existing core unit
 reset-budget tests do not establish faulty-editor integration.
 
@@ -167,3 +167,9 @@ projection, all invariants and exact replay remain checked. The actual shipping
 TS peer imports all three short snippets independently; native/editor/raw Loro/VV/WAL
 and twice-exact IPC checks remain. Compound heading-start source insertion is a
 separate known upstream stale-block case and is not covered by independent literals.
+
+`editor_drafts`: exact stored application JSON contains an abandoned draft and a
+published mark. Read-only initialization renders policy-filtered state without
+writes. Writable initialization removes only the abandoned wrapper through one
+actual full-sync local commit, preserving all text, the published mark and
+protected local state. Every invariant and exact replay remains enabled.

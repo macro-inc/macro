@@ -200,6 +200,23 @@ pub(crate) fn seed_snapshots(
     wall: i64,
     spec: &crate::SeedDocument,
 ) -> Result<SeedSnapshots, Failure> {
+    if let crate::SeedDocument::StoredEditor(state) = spec {
+        let doc = lexical_loro::new_doc(peer)
+            .map_err(|error| Failure::new("stored_editor_seed", error))?;
+        let root = state
+            .get("root")
+            .ok_or_else(|| Failure::new("stored_editor_seed", "missing root"))?;
+        lexical_loro::mirror::set_state(&doc, root)
+            .map_err(|error| Failure::new("stored_editor_seed", error))?;
+        return Ok(SeedSnapshots {
+            server: doc
+                .export(loro::ExportMode::Snapshot)
+                .map_err(|error| Failure::new("stored_editor_seed", error))?,
+            local: None,
+            s3: None,
+            vv: vv(&doc.oplog_vv()),
+        });
+    }
     if let crate::SeedDocument::Editor(state) = spec {
         let editor = crate::client::application::builder(
             lexical_model::EditorMode::Headless,
@@ -246,7 +263,9 @@ pub(crate) fn seed_snapshots(
     let mut local = None;
     let mut s3 = None;
     match spec {
-        crate::SeedDocument::Editor(_) => unreachable!("handled editor seed"),
+        crate::SeedDocument::Editor(_) | crate::SeedDocument::StoredEditor(_) => {
+            unreachable!("handled editor seed")
+        }
         crate::SeedDocument::Empty => {}
         crate::SeedDocument::Form(writes) => {
             seed_fields(&mut doc, writes, fields, wall)?;

@@ -30,6 +30,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   actual local-update ranges cover rotating foreign editor peers.
 - `tests/stories/COVERAGE.md`: story/S7 map and pending editor producers.
 - `fixtures/`: shared exact native/TS Markdown inputs, including the incompressible large paste.
+- `SeedDocument::StoredEditor`: exact previously persisted JSON before client policy/initialization; render it as literal JSON in reproductions.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
@@ -250,3 +251,8 @@ after Hibernate, plus the complete payload, every invariant and exact replay.
 The TS literals cover each short snippet independently; compound insertion at a
 heading start retains a separate upstream stale-block reproduction and is not
 claimed by those literals. Markdown shortcuts and editor-generated floors remain pending.
+
+The abandoned-draft literal seeds actual stored application JSON, including source
+paragraph textFormat/textStyle fields. Read-only clients render filtered state with
+zero own writes; writable initialization emits one full-sync cleanup commit, retains
+published marks/text and protected local data, and leaves every invariant enabled.

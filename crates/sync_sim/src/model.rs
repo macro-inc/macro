@@ -212,6 +212,8 @@ impl Default for Budgets {
 pub enum SeedDocument {
     /// A rich-text document initialized through the real editor projection.
     Editor(serde_json::Value),
+    /// Existing persisted editor JSON, retained verbatim before client initialization.
+    StoredEditor(serde_json::Value),
     /// Empty fields and the configured ordered field list.
     #[default]
     Empty,
