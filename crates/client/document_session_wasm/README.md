@@ -27,8 +27,11 @@ filter. Native builds keep their normal tracing levels. Size changes must retain
 the model, projection and session keystroke work-counter checks.
 
 Run `just -f apps/web/justfile build-document-session-wasm` to build glue and the
-optimized binary, then enforce the 8 MB raw gate and provisional D5 cap of
-1,130,000 Brotli bytes. The cap may tighten; WP-59 measures real startup cost. Nix
+optimized binary, then report its raw/Brotli size against a 1,600,000-byte soft
+Brotli ceiling. Retain measured speed gains; size reductions must not cost speed.
+Start the shared streaming preload at boot when the engine flag is ON without
+blocking first paint; require startup p95 <50ms and document-open p95 no slower
+than the current app. Nix
 uses the same size profile and Binaryen convergence pass. No SIMD override is
 needed. The flag-off application continues to preload Loro; the session package
 is emitted as an optional asset and initialized lazily.

@@ -971,10 +971,12 @@ loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
 The optional document-session package uses the document-session-wasm Cargo profile
-and a Binaryen convergence pass; enforce its provisional D5 cap of 1,130,000
-Brotli bytes. The cap may tighten; WP-59 measures real startup cost. Its
-main-thread loader is lazy. Keep one model WASM preload: Loro for flag-off builds,
-document_session_wasm when documentSessionPreload is selected. Do not preload both.
+and a Binaryen convergence pass. Treat 1,600,000 Brotli bytes as a soft ceiling;
+retain measured speed gains and make size reductions only without speed loss.
+When the immutable engine flag is ON, start the shared streaming preload at app
+boot without blocking first paint; gate only editor-building subtrees.
+Require startup p95 <50ms and document-open p95 no slower than the current app.
+Flag-off builds keep the Loro preload.
 
 Resolve `rust-editor-model` before constructing the document body owner in both
 block and Drive loaders; keep SessionExecutor/EditorView imports lazy and the
