@@ -41778,6 +41778,122 @@ export const createInitiativeResponse = zod
   );
 
 /**
+ * @summary Page the initiatives the caller can view, filtered by name and canonical properties,
+with each row's properties and progress over the tasks the caller can view.
+ */
+export const pageInitiativesQueryLimitMin = 0;
+
+export const pageInitiativesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(pageInitiativesQueryLimitMin)
+    .nullish()
+    .describe('Maximum rows, between one and one hundred; defaults to fifty.'),
+  cursor: zod
+    .string()
+    .nullish()
+    .describe('Opaque continuation returned by the previous page.'),
+  query: zod.string().nullish().describe('Case-insensitive name substring.'),
+  status: zod.uuid().nullish().describe('Required status option id.'),
+  priority: zod.uuid().nullish().describe('Required priority option id.'),
+  assignee: zod.string().nullish().describe('Required assignee user id.'),
+  dueAfter: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date lower bound.'),
+  dueBefore: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date upper bound.'),
+  sort: zod
+    .enum(['updated', 'name', 'due'])
+    .optional()
+    .describe('Sort key; defaults to updated time.'),
+  descending: zod
+    .boolean()
+    .nullish()
+    .describe('Descending order; defaults to true for updated time.'),
+});
+
+export const pageInitiativesResponseInitiativesItemCompletedTaskCountMin = 0;
+
+export const pageInitiativesResponseInitiativesItemTaskCountMin = 0;
+
+export const pageInitiativesResponse = zod
+  .object({
+    initiatives: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+              ),
+            name: zod.string().describe('Display name.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the initiative was last updated.'),
+          })
+          .describe('List-row view of an initiative.')
+          .and(
+            zod.object({
+              completedTaskCount: zod
+                .number()
+                .min(
+                  pageInitiativesResponseInitiativesItemCompletedTaskCountMin
+                )
+                .describe('Number of visible tasks whose status is completed.'),
+              properties: zod
+                .object({
+                  assignees: zod
+                    .array(zod.string())
+                    .describe(
+                      'Assigned user ids, independent of sharing membership.'
+                    ),
+                  completed: zod
+                    .boolean()
+                    .describe(
+                      'Whether the canonical task status represents completion.'
+                    ),
+                  dueDate: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Due timestamp, or unset.'),
+                  priority: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Priority option id, or unset.'),
+                  status: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Status option id, or unset.'),
+                })
+                .describe(
+                  'Snapshot of canonical property values, never a second writable store.'
+                ),
+              taskCount: zod
+                .number()
+                .min(pageInitiativesResponseInitiativesItemTaskCountMin)
+                .describe('Number of associated tasks the caller may view.'),
+              userAccessLevel: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            })
+          )
+          .describe(
+            'A project row with caller-specific permissions, properties and visible task progress.'
+          )
+      )
+      .describe('Rows in requested order.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Continuation, absent when exhausted.'),
+  })
+  .describe('One authorized project collection page.');
+
+/**
  * @summary Fetch one initiative the caller can view.
  */
 export const getInitiativeParams = zod.object({
@@ -42011,94 +42127,21 @@ export const updateInitiativeResponse = zod
   );
 
 /**
- * Task references require current view access to the task, so a page can hold
-fewer records than `limit`, even none. Follow `nextCursor` with the same
-window until it is absent.
- * @summary Read an initiative's creation, edits, property changes and task membership
-changes, newest first.
+ * @summary Read the description of an initiative the caller can view.
  */
-export const getInitiativeActivityParams = zod.object({
+export const getInitiativeDescriptionParams = zod.object({
   initiative_id: zod.string().describe('Initiative identifier.'),
 });
 
-export const getInitiativeActivityQueryLimitMin = 0;
-
-export const getInitiativeActivityQueryParams = zod.object({
-  after: zod.iso
-    .datetime({})
-    .optional()
-    .describe('Only changes at or after this time.'),
-  before: zod.iso
-    .datetime({})
-    .optional()
-    .describe('Only changes before this time.'),
-  cursorOccurredAt: zod.iso
-    .datetime({})
-    .optional()
-    .describe(
-      "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`."
-    ),
-  cursorId: zod
-    .uuid()
-    .optional()
-    .describe(
-      "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`."
-    ),
-  limit: zod
-    .number()
-    .min(getInitiativeActivityQueryLimitMin)
-    .optional()
-    .describe('Events to scan, 1 through 100; defaults to 100.'),
-});
-
-export const getInitiativeActivityResponse = zod
+export const getInitiativeDescriptionResponse = zod
   .object({
-    nextCursor: zod
-      .union([
-        zod.null(),
-        zod
-          .object({
-            id: zod.uuid().describe('Tie-breaker within the same timestamp.'),
-            occurredAt: zod.iso
-              .datetime({})
-              .describe('Time of the last scanned activity.'),
-          })
-          .describe('Stable cursor for project history.'),
-      ])
-      .optional(),
-    records: zod
-      .array(
-        zod
-          .object({
-            action: zod.string().describe('Durable activity action tag.'),
-            actionPayload: zod
-              .unknown()
-              .optional()
-              .describe(
-                'Typed payload for known actions. Absent for unknown actions.'
-              ),
-            actorId: zod.string().describe('Principal who acted.'),
-            id: zod
-              .uuid()
-              .describe(
-                'Stable record identifier, also used for realtime deduplication.'
-              ),
-            occurredAt: zod.iso.datetime({}).describe('Time of the change.'),
-            subjectId: zod
-              .string()
-              .describe(
-                "Acting user's feed identity when a bot acted on their behalf."
-              ),
-          })
-          .describe(
-            'One authorized activity row; task names are hydrated through existing authorized task reads.'
-          )
-      )
-      .describe('Visible changes in newest-first order.'),
+    markdown: zod
+      .string()
+      .describe(
+        'GitHub-flavored markdown; empty while no one has opened or written it.'
+      ),
   })
-  .describe(
-    'History page. Access filtering can shorten records; follow nextCursor until exhausted.'
-  );
+  .describe("An initiative's description.");
 
 /**
  * @summary Gets the instructions document for the current user

@@ -12269,58 +12269,13 @@ export type InitialPropertyValue = {
 };
 
 /**
- * Stable cursor for project history.
+ * An initiative's description.
  */
-export type InitiativeActivityCursor = {
+export type InitiativeDescription = {
     /**
-     * Tie-breaker within the same timestamp.
+     * GitHub-flavored markdown; empty while no one has opened or written it.
      */
-    id: string;
-    /**
-     * Time of the last scanned activity.
-     */
-    occurredAt: string;
-};
-
-/**
- * History page. Access filtering can shorten records; follow nextCursor until exhausted.
- */
-export type InitiativeActivityPage = {
-    nextCursor?: null | InitiativeActivityCursor;
-    /**
-     * Visible changes in newest-first order.
-     */
-    records: Array<InitiativeActivityRecord>;
-};
-
-/**
- * One authorized activity row; task names are hydrated through existing authorized task reads.
- */
-export type InitiativeActivityRecord = {
-    /**
-     * Durable activity action tag.
-     */
-    action: string;
-    /**
-     * Typed payload for known actions. Absent for unknown actions.
-     */
-    actionPayload?: unknown;
-    /**
-     * Principal who acted.
-     */
-    actorId: string;
-    /**
-     * Stable record identifier, also used for realtime deduplication.
-     */
-    id: string;
-    /**
-     * Time of the change.
-     */
-    occurredAt: string;
-    /**
-     * Acting user's feed identity when a bot acted on their behalf.
-     */
-    subjectId: string;
+    markdown: string;
 };
 
 /**
@@ -12418,6 +12373,73 @@ export type InitiativeList = {
      */
     initiatives: Array<InitiativeSummary>;
 };
+
+/**
+ * One authorized project collection page.
+ */
+export type InitiativePage = {
+    /**
+     * Rows in requested order.
+     */
+    initiatives: Array<InitiativePageRow>;
+    /**
+     * Continuation, absent when exhausted.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A project row with caller-specific permissions, properties and visible task progress.
+ */
+export type InitiativePageRow = InitiativeSummary & {
+    /**
+     * Number of visible tasks whose status is completed.
+     */
+    completedTaskCount: number;
+    /**
+     * Canonical property values.
+     */
+    properties: InitiativePropertySnapshot;
+    /**
+     * Number of associated tasks the caller may view.
+     */
+    taskCount: number;
+    /**
+     * Verified effective access for the caller.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Snapshot of canonical property values, never a second writable store.
+ */
+export type InitiativePropertySnapshot = {
+    /**
+     * Assigned user ids, independent of sharing membership.
+     */
+    assignees: Array<string>;
+    /**
+     * Whether the canonical task status represents completion.
+     */
+    completed: boolean;
+    /**
+     * Due timestamp, or unset.
+     */
+    dueDate?: string | null;
+    /**
+     * Priority option id, or unset.
+     */
+    priority?: string | null;
+    /**
+     * Status option id, or unset.
+     */
+    status?: string | null;
+};
+
+/**
+ * Supported collection ordering. Every ordering uses id as its final tie breaker.
+ */
+export type InitiativeSort = 'updated' | 'name' | 'due';
 
 /**
  * List-row view of an initiative.
@@ -29915,6 +29937,71 @@ export type CreateInitiativeResponses = {
 
 export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
 
+export type PageInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum rows, between one and one hundred; defaults to fifty.
+         */
+        limit?: number | null;
+        /**
+         * Opaque continuation returned by the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Case-insensitive name substring.
+         */
+        query?: string | null;
+        /**
+         * Required status option id.
+         */
+        status?: string | null;
+        /**
+         * Required priority option id.
+         */
+        priority?: string | null;
+        /**
+         * Required assignee user id.
+         */
+        assignee?: string | null;
+        /**
+         * Inclusive due-date lower bound.
+         */
+        dueAfter?: string | null;
+        /**
+         * Inclusive due-date upper bound.
+         */
+        dueBefore?: string | null;
+        /**
+         * Sort key; defaults to updated time.
+         */
+        sort?: InitiativeSort;
+        /**
+         * Descending order; defaults to true for updated time.
+         */
+        descending?: boolean | null;
+    };
+    url: '/initiatives/page';
+};
+
+export type PageInitiativesErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PageInitiativesError = PageInitiativesErrors[keyof PageInitiativesErrors];
+
+export type PageInitiativesResponses = {
+    200: InitiativePage;
+};
+
+export type PageInitiativesResponse = PageInitiativesResponses[keyof PageInitiativesResponses];
+
 export type DeleteInitiativeData = {
     body?: never;
     path: {
@@ -30010,7 +30097,7 @@ export type UpdateInitiativeResponses = {
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
 
-export type GetInitiativeActivityData = {
+export type GetInitiativeDescriptionData = {
     body?: never;
     path: {
         /**
@@ -30018,32 +30105,11 @@ export type GetInitiativeActivityData = {
          */
         initiative_id: string;
     };
-    query?: {
-        /**
-         * Only changes at or after this time.
-         */
-        after?: string;
-        /**
-         * Only changes before this time.
-         */
-        before?: string;
-        /**
-         * `occurredAt` of the previous page's `nextCursor`; send with `cursorId`.
-         */
-        cursorOccurredAt?: string;
-        /**
-         * `id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.
-         */
-        cursorId?: string;
-        /**
-         * Events to scan, 1 through 100; defaults to 100.
-         */
-        limit?: number;
-    };
-    url: '/initiatives/{initiative_id}/activity';
+    query?: never;
+    url: '/initiatives/{initiative_id}/description';
 };
 
-export type GetInitiativeActivityErrors = {
+export type GetInitiativeDescriptionErrors = {
     400: ErrorResponse;
     /**
      * Missing or invalid credentials
@@ -30053,13 +30119,13 @@ export type GetInitiativeActivityErrors = {
     500: ErrorResponse;
 };
 
-export type GetInitiativeActivityError = GetInitiativeActivityErrors[keyof GetInitiativeActivityErrors];
+export type GetInitiativeDescriptionError = GetInitiativeDescriptionErrors[keyof GetInitiativeDescriptionErrors];
 
-export type GetInitiativeActivityResponses = {
-    200: InitiativeActivityPage;
+export type GetInitiativeDescriptionResponses = {
+    200: InitiativeDescription;
 };
 
-export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
+export type GetInitiativeDescriptionResponse = GetInitiativeDescriptionResponses[keyof GetInitiativeDescriptionResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
