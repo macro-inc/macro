@@ -369,3 +369,22 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     assert_eq!(sizes.iter().sum::<usize>(), catalog.len());
     assert!(result.contains(catalog[32].index.as_deref().unwrap()));
 }
+
+/// Every session that sets up a routine reads these rules here, and the
+/// routine drafter's brief carries this same guide.
+#[test]
+fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
+    let guide = entity_guide("routines").expect("routines has a guide");
+    for rule in [
+        "never bug-reports-archive",
+        "never an id, and never an `ids` key",
+        "Create nothing else.",
+        "makes no task today",
+        "weekday numbers start at 1 = Sunday",
+        "check the whole routine with `macro.routines.check`",
+        "`channel.message_posted`",
+    ] {
+        assert!(guide.contains(rule), "{rule}: {guide}");
+    }
+    assert!(inline_guides(GuideHost::Code).contains(guide));
+}
