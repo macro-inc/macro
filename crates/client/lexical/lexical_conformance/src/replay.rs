@@ -66,9 +66,11 @@ pub struct Replayer {
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
     pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
+    pub(crate) next_record: u64,
+    pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
     pub(crate) states: HashMap<u64, EditorState>,
-    pub(crate) saved_states: Vec<EditorState>,
+    pub(crate) saved_states: Vec<Option<EditorState>>,
     pub(crate) committed_version: u64,
     pub(crate) published_snapshot: Option<(u64, usize)>,
     pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
@@ -92,6 +94,12 @@ pub struct Replayer {
     pub(crate) microtasks: std::collections::VecDeque<Value>,
 }
 impl Replayer {
+    pub(crate) fn saved_state(&self, id: usize) -> Result<&EditorState> {
+        self.saved_states
+            .get(id)
+            .and_then(Option::as_ref)
+            .ok_or_else(|| fail("unknown or released state handle"))
+    }
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
         if fixture.schema != 2
@@ -436,15 +444,11 @@ impl Replayer {
                 editor.parse_editor_state(&serde_json::from_value(value)?)?
             };
             let id = self.saved_states.len();
-            self.saved_states.push(state);
+            self.saved_states.push(Some(state));
             json!({"$snapshot":id})
         } else {
             let id = integer(&args[0]["$snapshot"])? as usize;
-            let state = self
-                .saved_states
-                .get(id)
-                .ok_or_else(|| fail("state handle"))?
-                .clone();
+            let state = self.saved_state(id)?.clone();
             let mut tags = TagSet::default();
             if let Some(tag) = args[1]["tag"].as_str() {
                 tags.insert(tag.parse().map_err(|_| fail("tag"))?);
@@ -458,7 +462,7 @@ impl Replayer {
         };
         self.compare(op.get("ret").unwrap_or(&undefined()), &actual)
     }
-    fn begin_slots(&mut self, tx: &mut Transaction<'_>, clone_active: bool) {
+    pub(crate) fn begin_slots(&mut self, tx: &mut Transaction<'_>, clone_active: bool) {
         let previous_active = self.active_selection;
         if clone_active {
             self.active_selection = None;
@@ -478,7 +482,7 @@ impl Replayer {
             })
             .collect();
     }
-    fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
+    pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
         self.selection_values = self
             .selections
             .iter()
@@ -556,7 +560,10 @@ impl Replayer {
                 let previous = self.read_state.take();
                 self.read_state = if let Some(state) = op.get("state") {
                     let decoded = self.decode(state)?;
-                    Some(self.saved_states[integer(&decoded["$snapshot"])? as usize].clone())
+                    Some(
+                        self.saved_state(integer(&decoded["$snapshot"])? as usize)?
+                            .clone(),
+                    )
                 } else if self.updates.is_empty() {
                     Some(tx.committed_state().clone())
                 } else {
@@ -815,11 +822,24 @@ impl Replayer {
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
         let node = view.node_or_err(key)?;
         let pointer = std::ptr::from_ref(node.base()) as usize;
-        let next = self.records.len() as u64;
-        let (version, identity) = *self
-            .records
-            .entry((key, pointer))
-            .or_insert((self.version, next));
+        let (version, identity) = if let Some(record) = self.records.get(&(key, pointer)) {
+            *record
+        } else {
+            let version = self
+                .record_owner
+                .as_ref()
+                .filter(|(_, state)| {
+                    state
+                        .view()
+                        .node(key)
+                        .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
+                })
+                .map_or(self.version, |(version, _)| *version);
+            let record = (version, self.next_record);
+            self.next_record += 1;
+            self.records.insert((key, pointer), record);
+            record
+        };
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
         )

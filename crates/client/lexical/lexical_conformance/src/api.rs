@@ -5,6 +5,9 @@ use serde_json::Value;
 
 include!(concat!(env!("OUT_DIR"), "/api_index.rs"));
 
+mod context;
+pub use context::Context;
+
 /// Every explicitly mapped API name, sorted in stable dispatch-ID order.
 ///
 /// Generated from the dispatch match arms, so adding an operation cannot leave

@@ -1,0 +1,241 @@
+//! Fixture value identities owned by one development host editor.
+use crate::replay::{Replayer, Result, fail, integer, node_key, tagged_key};
+use lexical_model::{EditorState, NodeKey, Selection, Transaction};
+use serde_json::{Value, json};
+use std::collections::HashMap;
+
+/// Shared dispatch and fixture-value encoding across suspended host calls.
+///
+/// This owns identities and immutable published states, never a parallel editor
+/// model. Transactions and their suspend/resume lifecycle belong to the host.
+#[derive(Default)]
+pub struct Context {
+    replay: Replayer,
+    identities: HashMap<String, u32>,
+    owners: HashMap<u32, u64>,
+    next_handle: u32,
+    scope: Scope,
+    previous_selections: Vec<Option<Selection>>,
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum Scope {
+    #[default]
+    Idle,
+    Updating,
+    Publishing,
+}
+
+impl Context {
+    /// Start bookkeeping for a newly opened transaction.
+    pub fn begin_update(&mut self, tx: &mut Transaction<'_>) -> Result<()> {
+        if self.scope != Scope::Idle {
+            return Err(fail("an API update is already active"));
+        }
+        self.replay.version = self
+            .replay
+            .version
+            .checked_add(1)
+            .ok_or_else(|| fail("API version overflow"))?;
+        if self.replay.version == 1 {
+            self.replay.states.insert(0, tx.committed_state().clone());
+        }
+        self.previous_selections = self.replay.selection_values.clone();
+        self.replay.record_owner =
+            Some((self.replay.committed_version, tx.committed_state().clone()));
+        self.replay.begin_slots(tx, true);
+        self.replay.keys.insert("root".into(), NodeKey::ROOT);
+        self.replay.in_callback = true;
+        self.scope = Scope::Updating;
+        Ok(())
+    }
+
+    /// Capture selection objects before committing the current transaction.
+    pub fn finish_update(&mut self, tx: &Transaction<'_>) -> Result<()> {
+        if self.scope != Scope::Updating {
+            return Err(fail("no API update is active"));
+        }
+        self.replay.capture_slots(tx)?;
+        self.replay.in_callback = false;
+        self.scope = Scope::Publishing;
+        Ok(())
+    }
+
+    /// Pin the committed snapshot for raw fields of captured node handles.
+    pub fn publish(&mut self, state: EditorState) -> Result<u64> {
+        if self.scope != Scope::Publishing {
+            return Err(fail("finish the API update before publication"));
+        }
+        self.replay.states.insert(self.replay.version, state);
+        self.replay.committed_version = self.replay.version;
+        self.replay.record_owner = None;
+        self.previous_selections.clear();
+        self.scope = Scope::Idle;
+        Ok(self.replay.version)
+    }
+
+    /// Forget an unpublished update after the host drops its transaction.
+    pub fn discard_update(&mut self) -> Result<()> {
+        if self.scope == Scope::Idle {
+            return Err(fail("no API update is active"));
+        }
+        self.scope = Scope::Idle;
+        self.replay.in_callback = false;
+        self.replay.record_owner = None;
+        self.replay.selection_values = std::mem::take(&mut self.previous_selections);
+        self.replay.active_selection = None;
+        self.replay.selections.clear();
+        self.release_version(self.replay.version)
+    }
+
+    /// Dispatch an indexed operation using fixture-encoded arguments/receiver.
+    pub fn call(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Option<Value>,
+    ) -> Result<Value> {
+        if self.scope != Scope::Updating {
+            return Err(crate::replay::ReplayError::NoActiveEditor);
+        }
+        let result = super::call_by_id(&mut self.replay, tx, id, args, receiver)?;
+        self.encode(result)
+    }
+
+    /// Read a raw captured field without changing the active update's version.
+    pub fn read_field(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        handle: u32,
+        field: &str,
+    ) -> Result<Value> {
+        let receiver = self.replay.decode(&json!({"$h":handle}))?;
+        let value = super::properties::get(&mut self.replay, tx, &receiver, field)?;
+        self.encode(value)
+    }
+
+    /// Release a state and its host-owned handles after that state is collected.
+    /// A host must retain a state while any of its JS handles remain reachable.
+    pub fn release_version(&mut self, version: u64) -> Result<()> {
+        if self.scope != Scope::Idle && self.replay.version == version {
+            return Err(fail("cannot release the active API version"));
+        }
+        self.replay.states.remove(&version);
+        self.replay
+            .records
+            .retain(|_, (owner, _)| *owner != version);
+        let released = self
+            .owners
+            .iter()
+            .filter_map(|(id, owner)| (*owner == version).then_some(*id))
+            .collect::<std::collections::HashSet<_>>();
+        self.owners.retain(|_, owner| *owner != version);
+        self.identities.retain(|_, id| !released.contains(id));
+        for tag in ["$h", "$sel", "$pt", "$caret", "$iterator", "$state", "$ed"] {
+            for id in &released {
+                if let Some(value) = self.replay.handles.remove(&format!("{tag}:{id}"))
+                    && let Some(snapshot) = value.get("$snapshot")
+                {
+                    let snapshot = integer(snapshot)? as usize;
+                    if let Some(state) = self.replay.saved_states.get_mut(snapshot) {
+                        *state = None;
+                    }
+                    if self
+                        .replay
+                        .published_snapshot
+                        .is_some_and(|(_, id)| id == snapshot)
+                    {
+                        self.replay.published_snapshot = None;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn encode(&mut self, value: Value) -> Result<Value> {
+        if value.get("$nodeKey").is_some() {
+            let key = tagged_key(&value, "$nodeKey")?;
+            let raw = key.to_string();
+            self.replay.keys.insert(raw.clone(), key);
+            // Key references use a known node handle when available. The raw
+            // string remains authoritative for fixture decoding.
+            return Ok(match self.identities.get(&format!("key:{raw}")) {
+                Some(id) => json!({"$key":id,"raw":raw}),
+                None => json!(raw),
+            });
+        }
+        for (raw_tag, tag) in [
+            ("$node", "$h"),
+            ("$selection", "$sel"),
+            ("$point", "$pt"),
+            ("$caretValue", "$caret"),
+            ("$iteratorValue", "$iterator"),
+            ("$snapshot", "$state"),
+            ("$editor", "$ed"),
+        ] {
+            if value.get(raw_tag).is_none() {
+                continue;
+            }
+            let identity = if raw_tag == "$node" {
+                let key = node_key(&value)?;
+                format!(
+                    "node:{}:{}:{}",
+                    key.generation(),
+                    key,
+                    integer(&value["ver"])?
+                )
+            } else {
+                format!("{tag}:{}", serde_json::to_string(&value)?)
+            };
+            if let Some(id) = self.identities.get(&identity) {
+                return Ok(json!({tag:*id}));
+            }
+            let id = self.next_handle;
+            self.next_handle = id
+                .checked_add(1)
+                .ok_or_else(|| fail("API handle overflow"))?;
+            self.identities.insert(identity, id);
+            let owner = match raw_tag {
+                "$node" => integer(&value["ver"])?,
+                "$snapshot" => self.replay.committed_version,
+                _ => self.replay.version,
+            };
+            self.owners.insert(id, owner);
+            self.replay
+                .handles
+                .insert(format!("{tag}:{id}"), value.clone());
+            let mut encoded = json!({tag:id});
+            if raw_tag == "$node" {
+                let key = node_key(&value)?;
+                self.replay.keys.insert(key.to_string(), key);
+                self.identities.insert(format!("key:{key}"), id);
+                encoded["key"] = json!(key.to_string());
+                encoded["type"] = value["type"].clone();
+                encoded["ver"] = value["ver"].clone();
+            } else if raw_tag == "$selection" {
+                encoded["kind"] = value["kind"].clone();
+            } else if raw_tag == "$caretValue" {
+                for field in ["origin", "direction", "type"] {
+                    if let Some(field_value) = value.get(field) {
+                        encoded[field] = self.encode(field_value.clone())?;
+                    }
+                }
+            }
+            return Ok(encoded);
+        }
+        match value {
+            Value::Array(values) => values.into_iter().map(|v| self.encode(v)).collect(),
+            Value::Object(values) => values
+                .into_iter()
+                .map(|(k, v)| Ok((k, self.encode(v)?)))
+                .collect::<Result<serde_json::Map<_, _>>>()
+                .map(Value::Object),
+            value => Ok(value),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;

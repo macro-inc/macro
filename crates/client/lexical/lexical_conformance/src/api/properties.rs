@@ -38,7 +38,9 @@ pub(crate) fn get(
         };
     }
     if receiver.get("$snapshot").is_some() && name == "_nodeMap" {
-        let state = r.saved_states[integer(&receiver["$snapshot"])? as usize].clone();
+        let state = r
+            .saved_state(integer(&receiver["$snapshot"])? as usize)?
+            .clone();
         let mut pairs = Vec::new();
         for key in crate::snapshot::keys(&state) {
             pairs.push(json!([key.to_string(), r.node(state.view(), key)?]));
