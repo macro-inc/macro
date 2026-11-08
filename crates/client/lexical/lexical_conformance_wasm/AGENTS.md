@@ -146,3 +146,5 @@ All no-argument boolean ForeignHooks use the shared predicate adapter. Keep one 
 Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain original indexed arguments; internal native calls encode their node through the shared owned read peer. Exercise native list append failure and retry in hosting-node-predicates.test.ts.
 
 Native rich-node registrations omit kind and reject foreign behavior; host/native.rs selects their existing Rust implementations. Registrations with kind remain foreign even when their type matches a package node.
+
+Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and excludeFromCopy destinations. Scalar hooks require their declared primitive type; reject objects without getters/coercion, invalid u32 indents, and preserve opaque throws/recovery.

@@ -84,3 +84,5 @@ Use hosting-empty.test.ts for native child-removal dispatch of canBeEmpty, nativ
 Use hosting-predicates.test.ts for individual no-argument boolean hook dispatch/native-super literals, and hosting-format-predicate.test.ts for native range-format denial, throw suppression and recovery.
 
 Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain original indexed arguments; internal native calls encode their node through the shared owned read peer. Exercise native list append failure and retry in hosting-node-predicates.test.ts.
+
+Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and excludeFromCopy destinations. Scalar hooks require their declared primitive type; reject objects without getters/coercion, invalid u32 indents, and preserve opaque throws/recovery.

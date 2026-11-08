@@ -45,6 +45,44 @@ extern "C" {
 }
 
 impl BoundFunction {
+    fn invoke_scalar(&self, message: Value, errors: &Errors) -> Result<Value, Error> {
+        ForeignReadOperation::check()?;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let message = to_js(message).map_err(|error| Error::invariant(format!("{error:?}")))?;
+            match self.function.call1(&JsValue::UNDEFINED, &message) {
+                Ok(value) => {
+                    let result = if let Some(value) = value.as_string() {
+                        let result = Value::String(value);
+                        crate::debug::json_payload(&result);
+                        result
+                    } else if let Some(value) = value.as_f64() {
+                        crate::debug::add_bytes(8);
+                        serde_json::Number::from_f64(value)
+                            .map(Value::Number)
+                            .ok_or(Error::Invariant(
+                                "node read hook must return a finite scalar",
+                            ))?
+                    } else {
+                        return Err(Error::Invariant(
+                            "node read hook must return a primitive scalar",
+                        ));
+                    };
+                    Ok(result)
+                }
+                Err(error) => {
+                    errors.save(error);
+                    Err(Error::Invariant("JS node read hook threw"))
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (message, errors);
+            Err(Error::Invariant("JS callbacks require WASM"))
+        }
+    }
+
     fn invoke_export(&self, message: Value, errors: &Errors) -> Result<Value, Error> {
         ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
@@ -149,7 +187,36 @@ impl Callback {
         key: NodeKey,
         hook: ForeignHook,
         nodes: &[NodeKey],
+        arguments: &[Value],
     ) -> Result<bool, Error> {
+        self.read(
+            snapshot,
+            key,
+            hook,
+            nodes,
+            arguments,
+            BoundFunction::invoke_boolean,
+        )
+    }
+
+    pub(crate) fn scalar(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        key: NodeKey,
+        hook: ForeignHook,
+    ) -> Result<Value, Error> {
+        self.read(snapshot, key, hook, &[], &[], BoundFunction::invoke_scalar)
+    }
+
+    fn read<T>(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        key: NodeKey,
+        hook: ForeignHook,
+        nodes: &[NodeKey],
+        arguments: &[Value],
+        invoke: impl FnOnce(&BoundFunction, Value, &Errors) -> Result<T, Error>,
+    ) -> Result<T, Error> {
         if !ForeignReadOperation::is_active() {
             return Err(Error::Invariant(
                 "JS read hooks require a fallible host operation",
@@ -158,13 +225,18 @@ impl Callback {
         self.context
             .with_read_scope(snapshot, |peer| {
                 let node = peer.node(key)?;
-                let args = match peer.original_arguments(key, hook)? {
+                let original = peer.original_arguments(key, hook)?;
+                let peer_arguments_missing = original.is_none();
+                let mut args = match original {
                     Some(args) => args,
                     None => nodes
                         .iter()
                         .map(|key| peer.node(*key))
                         .collect::<Result<Vec<_>, _>>()?,
                 };
+                if peer_arguments_missing {
+                    args.extend_from_slice(arguments);
+                }
                 let message =
                     serde_json::to_value(super::super::host_protocol::HostNodeMutation {
                         hook: hook as u8,
@@ -176,9 +248,7 @@ impl Callback {
                     errors: &self.errors,
                     peer: RefCell::new(peer),
                 };
-                Ok(CURRENT.set(&frame, || {
-                    self.function.invoke_boolean(message, &self.errors)
-                }))
+                Ok(CURRENT.set(&frame, || invoke(&self.function, message, &self.errors)))
             })
             .map_err(|error| Error::invariant(error.to_string()))?
     }
