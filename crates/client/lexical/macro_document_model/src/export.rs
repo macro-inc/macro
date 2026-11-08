@@ -255,11 +255,13 @@ pub fn to_comment_mark_context(
     )?)
 }
 /// Convert a fetched cognition body, retaining the source fallback on any conversion failure.
-pub fn cognition_from_presigned_body(body: &str) -> Vec<CognitionNode> {
+pub fn cognition_from_presigned_body(
+    body: &str,
+    context: &crate::DocumentContext,
+) -> Vec<CognitionNode> {
     let converted = (|| -> Result<Vec<CognitionNode>> {
         let raw: SerializedEditorState = serde_json::from_str(body)?;
-        let mut editor = crate::export_builder().build()?;
-        let state = editor.parse_editor_state(&raw)?;
+        let state = parse_export_state(&raw, context)?;
         to_cognition_text(&state)
     })();
     converted.unwrap_or_else(|_| {

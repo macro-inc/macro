@@ -91,3 +91,30 @@ fn service_exports_and_xml_match_source_and_leave_stored_state_unchanged() -> Re
     );
     Ok(())
 }
+
+#[test]
+fn cognition_body_fallback_keeps_invalid_body_and_service_partial_import_policy() -> Result<()> {
+    let context = DocumentContext {
+        clock: NodeClock(Arc::new(|| 1794052800000)),
+        random: NodeRandom(Arc::new(|size| vec![0; size])),
+        host: NodeHost::default(),
+        keys: KeySource::default(),
+        editor_created: None,
+    };
+    let fallback = cognition_from_presigned_body("plain body", &context);
+    assert_eq!(fallback.len(), 1);
+    assert_eq!(fallback[0].node_id, "plain-text");
+    assert_eq!(fallback[0].content, "plain body");
+    assert_eq!(fallback[0].raw_content, "plain body");
+    let row: Value = include_str!("corpus/exports.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("oracle JSON"))
+        .find(|row| row["name"] == "partial-import:export")
+        .expect("source partial import");
+    let body = serde_json::to_string(&row["input"])?;
+    assert_eq!(
+        serde_json::to_value(cognition_from_presigned_body(&body, &context))?,
+        row["results"]["cognition"]["value"]
+    );
+    Ok(())
+}
