@@ -33,4 +33,24 @@ export default {
 
   // Picker sheet
   done: 'Done',
+
+  // App update waiting for Wi-Fi
+  updateOffWifiTitle: 'Update available',
+  updateOffWifiDescription:
+    'A new update to Macro is available. Updates download automatically on Wi-Fi. Download it now? This may use mobile data.',
+  updateNotNow: 'Not now',
+  updateDownload: 'Download',
+  updateDownloadingTitle: 'Downloading update',
+  updateStartingDownload: 'Starting download…',
+  updateDownloadProgress: 'Downloading… {{progress}}%',
+  updateInstallProgress: 'Installing… {{progress}}%',
+  updateHide: 'Hide',
+  updateReadyTitle: 'Update ready',
+  updateReadyDescription: 'Restart Macro to use the new version.',
+  updateLater: 'Later',
+  updateRestart: 'Restart',
+  updateFailedTitle: "Couldn't download the update",
+  updateFailedDescription:
+    'Try again later. Macro downloads updates automatically on Wi-Fi.',
+  updateOk: 'OK',
 };

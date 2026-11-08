@@ -171,6 +171,12 @@ the gateway `/email` prefix.
   Outlook sync monitors in `infra/stacks/monitoring`; rename them only
   together. Loops whose domain service logs its own deferrals use `reported`,
   the others `record`, which logs gate refusals at DEBUG.
+- `GET /internal/recent_messages/{user_id}` reads the user's own syncing
+  inboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`), not
+  the synced mailbox, so it answers before a backfill finishes. Every call
+  spends live provider quota; Gmail reads three messages at a time to stay
+  under the gate's live cap. Don't record message content or addresses on
+  its spans.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer
@@ -180,3 +186,5 @@ the gateway `/email` prefix.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
+
+- Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.

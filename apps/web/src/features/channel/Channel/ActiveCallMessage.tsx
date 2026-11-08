@@ -1,5 +1,7 @@
 import { analytics } from '@app/lib/analytics';
+import { t } from '@app/lib/i18n';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
+import { formatCallElapsed } from '@channel/Call/discussion/format-call-elapsed';
 import { useCall } from '@channel/Call/use-call';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
@@ -8,20 +10,15 @@ import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { useChannelTab } from './ChannelTabContext';
 
-function formatDuration(startedAt: string | undefined, nowMs: number) {
-  const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
-  if (!Number.isFinite(startedAtMs)) return '';
-
-  const totalSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-export function ActiveCallMessage(props: { channelId: string }) {
+export function ActiveCallMessage(props: {
+  channelId: string;
+  /** The call's own row is on screen and says all this already. */
+  hidden?: boolean;
+  /** Messages in the call's thread, when its discussion is in the channel. */
+  messageCount?: (callId: string) => number | undefined;
+  /** Takes the viewer to the call's row. */
+  onOpenRow?: (callId: string) => void;
+}) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const { setActiveTab } = useChannelTab();
   const call = useCall(() => props.channelId, {
@@ -34,9 +31,14 @@ export function ActiveCallMessage(props: { channelId: string }) {
   );
   onCleanup(() => globalThis.clearInterval(durationTimer));
 
-  const shouldShow = () => !!activeCallQuery.data && !call.isInThisChannel();
+  const shouldShow = () =>
+    !props.hidden && !!activeCallQuery.data && !call.isInThisChannel();
+  const messageCount = () => {
+    const callId = activeCallQuery.data?.callId;
+    return callId ? props.messageCount?.(callId) : undefined;
+  };
   const duration = createMemo(() =>
-    formatDuration(activeCallQuery.data?.createdAt, nowMs())
+    formatCallElapsed(activeCallQuery.data?.createdAt, nowMs())
   );
 
   async function handleJoin() {
@@ -78,9 +80,27 @@ export function ActiveCallMessage(props: { channelId: string }) {
               >
                 <div class="flex min-w-0 items-center gap-2">
                   <div class="min-w-0 flex-1">
-                    <div class="font-medium">
-                      A call is active in this channel
-                    </div>
+                    <Show
+                      when={messageCount()}
+                      fallback={
+                        <div class="font-medium">
+                          A call is active in this channel
+                        </div>
+                      }
+                    >
+                      {(count) => (
+                        <button
+                          type="button"
+                          class="font-medium hover:underline"
+                          onClick={() => {
+                            const callId = activeCallQuery.data?.callId;
+                            if (callId) props.onOpenRow?.(callId);
+                          }}
+                        >
+                          {t('calls.activeCallMessages', { count: count() })}
+                        </button>
+                      )}
+                    </Show>
                     <Show when={duration()}>
                       {(value) => (
                         <div class="text-xs text-ink-extra-muted">

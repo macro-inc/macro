@@ -705,7 +705,7 @@ async fn run() -> anyhow::Result<()> {
                     config.macro_api_token_issuer.as_ref(),
                     config.macro_api_token_private_secret_key.as_ref(),
                 ),
-                code_mode::sdk_hosts()?,
+                code_mode::sdk_endpoints()?,
                 Arc::clone(&recorder),
                 tool_context.cognition_tool_context.service.clone(),
                 Arc::new(routine_code::CalendarTimeZones(Arc::clone(
@@ -754,31 +754,24 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // `ai-code-mode` decides, per user, whether agent sessions hide
-    // SDK-covered tools and whether the public MCP lists only code mode.
-    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        match (&code_runner, &feature_flags) {
-            (Some(_), Some(flags)) => Some(Arc::new(
-                agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags.clone()),
-            )),
-            _ => None,
-        };
-    let public_code_mode = match (&code_runner, &code_mode_selector) {
-        (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+    let public_code_mode = match &code_runner {
+        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    correlations: agent_correlation::outbound::PgCorrelationRepository(
+                        pool.clone(),
+                    ),
                     signer: MacroApiTokenSigner::new(
                         pool.clone(),
                         config.macro_api_token_issuer.as_ref(),
                         config.macro_api_token_private_secret_key.as_ref(),
                     ),
-                    hosts: code_mode::sdk_hosts()?,
+                    endpoints: code_mode::sdk_endpoints()?,
                 }),
             )),
-            selector: Arc::clone(selector),
         }),
-        _ => None,
+        None => None,
     };
     let public_mcp_router = public_mcp::router(
         &config,
@@ -843,13 +836,14 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::RunCredentials {
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),
                     config.macro_api_token_private_secret_key.as_ref(),
                 ),
                 gate: owner_tool_gate.clone(),
-                hosts: code_mode::sdk_hosts()?,
+                endpoints: code_mode::sdk_endpoints()?,
             }),
             execution_store,
             execution_turns,
@@ -930,9 +924,6 @@ async fn run() -> anyhow::Result<()> {
 
     let mut inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
-    if let Some(selector) = &code_mode_selector {
-        inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
-    }
     // `auto-skills` decides, per user, whether a turn loads the user's skills
     // its request needs, and whether code-mode turns load the SDK areas a
     // request needs instead of carrying every area's guidance.
@@ -1850,6 +1841,17 @@ async fn run() -> anyhow::Result<()> {
             service: notification_service,
         },
     );
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        pool.clone(),
+        JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
+    );
+    let agent_activity = agent_session::inbound::axum_router::activity::router(
+        agent_session::inbound::axum_router::activity::AgentActivityState::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -1862,6 +1864,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
+            .with_agent_correlation(correlation)
+            .with_activity(agent_activity)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)

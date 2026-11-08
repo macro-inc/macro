@@ -12,9 +12,6 @@ const memoryStorage = () => {
   };
 };
 
-const unread = { id: 'a', unseen: true };
-const read = { id: 'a', unseen: false };
-
 describe('createInboxFilters', () => {
   it('opens at the choice saved on the last visit', () => {
     createRoot((dispose) => {
@@ -30,30 +27,18 @@ describe('createInboxFilters', () => {
     });
   });
 
-  it('shows only unread rows under Unread, and every row under All', () => {
+  it('asks the feed for unread rows only under Unread', () => {
     createRoot((dispose) => {
       const filters = createInboxFilters(memoryStorage());
-      expect(filters.includesRow(read)).toBe(true);
+      expect(filters.scope().unreadOnly).toBe(false);
 
       filters.setStatus('unread');
-      expect(filters.includesRow(unread)).toBe(true);
-      expect(filters.includesRow(read)).toBe(false);
-      dispose();
-    });
-  });
-
-  it('keeps a row read under Unread until the reader next switches', () => {
-    createRoot((dispose) => {
-      const filters = createInboxFilters(memoryStorage());
-      filters.setStatus('unread');
-
-      filters.keepRead('a');
-      expect(filters.includesRow(read)).toBe(true);
-      expect(filters.includesRow({ id: 'b', unseen: false })).toBe(false);
-
-      filters.setStatus('all');
-      filters.setStatus('unread');
-      expect(filters.includesRow(read)).toBe(false);
+      expect(filters.scope().unreadOnly).toBe(true);
+      filters.setShown('email', false);
+      expect(filters.scope()).toEqual({
+        rowTypes: filters.rowTypes(),
+        unreadOnly: true,
+      });
       dispose();
     });
   });

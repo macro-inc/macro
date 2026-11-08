@@ -27,6 +27,7 @@ const credentials = {
   serverUrl: 'wss://example.com',
   token: 'rtc-token',
   participantId: 'host',
+  started: false,
   shareToken: meeting.shareToken,
 };
 const preferences = { microphoneEnabled: false, cameraEnabled: false };

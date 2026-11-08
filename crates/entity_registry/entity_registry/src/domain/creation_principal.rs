@@ -69,8 +69,16 @@ pub fn resolve_creation_principal(
     non_user_owners: NonUserOwners,
 ) -> Result<CreationPrincipal, CreationPrincipalError> {
     match authorization {
+        // A token signed for an agent still acts as its user, who owns the
+        // result, but the agent is who did it.
         MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
-            Ok(CreationPrincipal::User(user.macro_user_id.clone()))
+            Ok(match user.agent_id {
+                Some(bot) => CreationPrincipal::BotForUser {
+                    bot,
+                    user: user.macro_user_id.clone(),
+                },
+                None => CreationPrincipal::User(user.macro_user_id.clone()),
+            })
         }
         MacroAuthorization::Bot(bot) => resolve_bot(bot, non_user_owners),
         MacroAuthorization::Internal(None) => Err(CreationPrincipalError::InternalWithoutUser),

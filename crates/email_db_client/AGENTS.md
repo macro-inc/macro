@@ -91,3 +91,5 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.

@@ -5,7 +5,7 @@
 //! operation and how it ended, never its arguments or results.
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
@@ -16,11 +16,12 @@ use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SourceFile, Unattended, operations, sdk_declarations,
+    SdkEndpoints, SourceFile, Unattended, operations, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use routine_program::{
-    CallRecord, CallStatus, CodeStep, MAX_OUTPUT_BYTES, RoutineProgram, STEP_CONTEXT,
+    CallRecord, CallStatus, CodeIdentity, CodeStep, MAX_OUTPUT_BYTES, RoutineProgram, STEP_CONTEXT,
     SdkFingerprint, code_version,
 };
 use scheduled_action::domain::ports::{
@@ -60,25 +61,34 @@ const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine
 
 /// Mints the short-lived token a routine's code acts as its owner with.
 pub trait RoutineCredentials: Send + Sync + 'static {
-    /// A token for `owner` that outlives one step's deadline.
+    /// A token for `owner` that outlives one step's deadline, its writes
+    /// attributed as `acts_as` says, for a run of `routine_id`.
     fn mint(
         &self,
         owner: &MacroUserIdStr<'static>,
+        acts_as: CodeIdentity,
+        routine_id: Uuid,
     ) -> impl std::future::Future<Output = anyhow::Result<String>> + Send;
 }
 
 impl RoutineCredentials for MacroApiTokenSigner {
-    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
-        // The owner's access, attributed to Macro acting for them, as an agent
-        // step's writes are: routines start only on people's actions, so a
-        // step posting where its routine listens doesn't start it again.
+    async fn mint(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        acts_as: CodeIdentity,
+        routine_id: Uuid,
+    ) -> anyhow::Result<String> {
+        // The owner's access either way. As the agent, writes are attributed
+        // to Macro acting for them, as an agent step's are; as the owner,
+        // they look like the owner's own. The routine id signed into every
+        // token marks the events its writes produce, so they never start a
+        // routine, this one included.
+        let agent_id = match acts_as {
+            CodeIdentity::Agent => Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
+            CodeIdentity::Owner => None,
+        };
         Ok(self
-            .mint_for_agent(
-                owner,
-                TOKEN_LIFETIME_SECONDS,
-                Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
-                None,
-            )
+            .mint_for_routine(owner, TOKEN_LIFETIME_SECONDS, agent_id, routine_id)
             .await?)
     }
 }
@@ -114,7 +124,7 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     executor: Arc<dyn ProgramExecutor>,
     checker: Arc<dyn ProgramChecker>,
     credentials: Credentials,
-    hosts: BTreeMap<String, String>,
+    endpoints: SdkEndpoints,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     /// Chooses the SDK entities relevant to a task, as code mode does.
     cognition: Option<Arc<dyn cognition::domain::Cognition>>,
@@ -133,7 +143,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         executor: Arc<dyn ProgramExecutor>,
         checker: Arc<dyn ProgramChecker>,
         credentials: Credentials,
-        hosts: BTreeMap<String, String>,
+        endpoints: SdkEndpoints,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
         cognition: Option<Arc<dyn cognition::domain::Cognition>>,
         time_zones: Arc<dyn OwnerTimeZones>,
@@ -142,7 +152,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             executor,
             checker,
             credentials,
-            hosts,
+            endpoints,
             recorder,
             cognition,
             time_zones,
@@ -251,7 +261,11 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 waited_ms,
             };
         };
-        let token = match self.credentials.mint(owner).await {
+        let token = match self
+            .credentials
+            .mint(owner, run.acts_as, run.routine_id)
+            .await
+        {
             Ok(token) => token,
             Err(error) => {
                 tracing::error!(?error, "could not mint a routine code credential");
@@ -275,7 +289,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         let environment = RunEnvironment {
             token,
             trace_headers: crate::code_mode::trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: None,
             execution_id: None,
             unattended: Some(Unattended {
