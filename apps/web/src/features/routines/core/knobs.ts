@@ -1,3 +1,4 @@
+import type { RoutineKnob } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -81,6 +82,18 @@ export const knobSchema = z.discriminatedUnion('type', [
     value: z.string(),
   }),
 ]) satisfies z.ZodType<Knob>;
+
+/** A stored knob for the editor: `min` and `max` only when set. */
+export function knobFromWire(knob: RoutineKnob): Knob {
+  return match(knob)
+    .returnType<Knob>()
+    .with({ type: 'number' }, ({ min, max, ...rest }) => ({
+      ...rest,
+      ...(min == null ? {} : { min }),
+      ...(max == null ? {} : { max }),
+    }))
+    .otherwise((knob) => knob);
+}
 
 /** A knob as stored: `min` and `max` only when set. */
 export function knobToWire(knob: Knob): Knob {

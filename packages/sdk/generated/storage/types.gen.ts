@@ -2861,6 +2861,253 @@ export type CallTokenResponse = {
 };
 
 /**
+ * What to change, in words.
+ */
+export type CanvasAiEditRequest = {
+    /**
+     * Natural-language instructions, naming items by id where they exist.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type CanvasAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * What the editor did, in words.
+     */
+    summary: string;
+};
+
+/**
+ * World-space crop or object bounds.
+ */
+export type CanvasBounds = {
+    /**
+     * Positive world height.
+     */
+    height: number;
+    /**
+     * Positive world width.
+     */
+    width: number;
+    /**
+     * World x coordinate.
+     */
+    x: number;
+    /**
+     * World y coordinate.
+     */
+    y: number;
+};
+
+/**
+ * A committed batch.
+ */
+export type CanvasEdited = {
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * The scene's revision after the batch.
+     */
+    revision: string;
+    /**
+     * The scene after the batch, with `textLayout` for measured text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+    /**
+     * What happened, in words.
+     */
+    summary: string;
+};
+
+/**
+ * One batch of CanvasEditor code to apply against a revision.
+ */
+export type CanvasEditsRequest = {
+    /**
+     * JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.
+     */
+    code: string;
+    /**
+     * The revision the batch was planned against, from a fresh scene read.
+     */
+    expectedRevision: string;
+    /**
+     * Plain text values the code reads as `snippets.<key>`.
+     */
+    snippets?: {
+        [key: string]: string;
+    } | null;
+};
+
+/**
+ * Why a canvas call failed.
+ */
+export type CanvasErrorBody = {
+    /**
+     * What kind of failure.
+     */
+    error: CanvasErrorCode;
+    /**
+     * What happened and what to do next.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a canvas call.
+ */
+export type CanvasErrorCode = 'invalid_request' | 'revision_conflict' | 'edit_rejected' | 'edit_refused' | 'edit_failed' | 'internal';
+
+/**
+ * Scene representation requested by a reader.
+ */
+export type CanvasReadFormat = 'scene' | 'overview';
+
+/**
+ * Stable object-to-image mapping.
+ */
+export type CanvasRenderObject = {
+    /**
+     * World-space bounds in the frozen scene.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+};
+
+/**
+ * What to render.
+ */
+export type CanvasRenderRequest = {
+    crop?: null | CanvasBounds;
+    /**
+     * Items to fit the image to, at most 100.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * A PNG of the canvas, stored as a static file owned by the caller.
+ */
+export type CanvasRendered = {
+    /**
+     * World bounds the image covers; pixels map linearly onto them.
+     */
+    crop: CanvasBounds;
+    /**
+     * Static file id of the PNG.
+     */
+    fileId: string;
+    /**
+     * Image height in pixels.
+     */
+    height: number;
+    /**
+     * Items in the image, with their world bounds.
+     */
+    objects: Array<CanvasRenderObject>;
+    /**
+     * Revision of the scene the image shows.
+     */
+    revision: string;
+    /**
+     * Rendered text bounds and whether text overflows its frame.
+     */
+    textLayout: Array<CanvasTextLayout>;
+    /**
+     * Referenced content the renderer could not show, and why.
+     */
+    unavailable: Array<CanvasUnavailable>;
+    /**
+     * Permanent URL of the PNG.
+     */
+    url: string;
+    /**
+     * Image width in pixels.
+     */
+    width: number;
+};
+
+/**
+ * The live scene at one revision.
+ */
+export type CanvasScene = {
+    /**
+     * The scene's immutable revision; pass it as `expectedRevision` to edit.
+     */
+    revision: string;
+    /**
+     * The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and
+     * `items` with stable ids, transforms, world bounds, shapes and text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Which part of the scene to read.
+ */
+export type CanvasSceneRequest = {
+    format?: null | CanvasReadFormat;
+    /**
+     * Stable item ids to read, at most 100; omit for the whole scene, up to
+     * 300 items.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * Actual browser text bounds and overflow for a read-only render.
+ */
+export type CanvasTextLayout = {
+    /**
+     * Actual rendered text bounds in world coordinates.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Stable item ID.
+     */
+    id: string;
+    /**
+     * Whether the DOM text exceeds its intended text frame.
+     */
+    overflow: boolean;
+};
+
+/**
+ * Explicitly unavailable referenced content.
+ */
+export type CanvasUnavailable = {
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+    /**
+     * Why no referenced resource was loaded.
+     */
+    reason: string;
+};
+
+/**
  * Where one card sits on a board: its lane, and its fractional key there.
  * A card whose row has since moved to another lane has no place until it is
  * moved again.
@@ -5638,6 +5885,11 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
+     * Whether the address uses a known personal provider and permits company edits.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    personalEmail?: boolean;
+    /**
      * When the contact record was last updated.
      */
     updatedAt: string;
@@ -5718,8 +5970,8 @@ export type CrmStagesResponse = {
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
- * except the `crm_enabled` killswitch, which is managed via
- * `PATCH /team/crm` on the auth service).
+ * except the retired `crm_enabled` flag). Email contribution consent and
+ * exclusions are managed separately through `/crm/email-privacy`.
  */
 export type CrmTeamSettingsResponse = {
     /**
@@ -8440,6 +8692,11 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * The audience affected by a domain exclusion.
+ */
+export type EmailBlockScope = 'team' | 'personal';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -8603,6 +8860,71 @@ export type EmailFollowupCommand = {
  */
 export type EmailFollowupResponse = {
     followup?: null | EmailFollowup;
+};
+
+/**
+ * One explicit privacy change, avoiding lost updates to whole blocklists.
+ */
+export type EmailPrivacyChange = {
+    action: 'set_consent';
+    /**
+     * False withdraws this mailbox's CRM contribution without deleting records.
+     */
+    enabled: boolean;
+    /**
+     * Required when enabling; must match the displayed primary connection.
+     */
+    link_id?: string | null;
+} | {
+    action: 'add_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which contributions the exclusion affects.
+     */
+    scope: EmailBlockScope;
+} | {
+    action: 'remove_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which list to edit.
+     */
+    scope: EmailBlockScope;
+};
+
+/**
+ * Current consent and exclusions, readable by any team member.
+ */
+export type EmailPrivacySettings = {
+    /**
+     * Whether the caller can remove a team exclusion.
+     */
+    can_remove_team_domains: boolean;
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute; absent before email connection.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary connection; clients bind opt-in to this identifier.
+     */
+    mailbox_link_id?: string | null;
+    /**
+     * Domains excluded only for the caller's contributions.
+     */
+    personal_domains: Array<string>;
+    /**
+     * Domains excluded across the team, including legacy company exclusions.
+     */
+    team_domains: Array<string>;
 };
 
 /**
@@ -15597,16 +15919,39 @@ export type SaveDocumentResponseData = {
 };
 
 /**
- * Request body for saving a query.
+ * The result columns a chart of a saved question plots.
+ */
+export type SaveQueryChart = {
+    /**
+     * The column whose values split the series.
+     */
+    color?: string;
+    /**
+     * The label column.
+     */
+    x: string;
+    /**
+     * The value columns, each a number.
+     */
+    y: Array<string>;
+};
+
+/**
+ * Request body for saving a question.
  */
 export type SaveQueryRequest = {
+    /**
+     * The result columns a chart of the answer plots, checked against what
+     * the `SELECT` returns. The chart itself lives with the answer's block.
+     */
+    chart?: SaveQueryChart;
     /**
      * The database whose tables win name resolution. The caller must be
      * able to see it.
      */
     databaseId?: string;
     /**
-     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     * What the question asks: `{"version": 1, "query": "<SELECT>"}`.
      */
     definition: QueryDefinition;
 };
@@ -15870,6 +16215,26 @@ export type SetCompanyNameRequest = {
 };
 
 /**
+ * Link or switch a contact with a known personal-provider email.
+ */
+export type SetContactCompanyRequest = {
+    /**
+     * Destination company in the same team. Unlinking is not supported.
+     */
+    companyId: string;
+};
+
+/**
+ * Add a missing contact email. Existing addresses are read-only.
+ */
+export type SetContactEmailRequest = {
+    /**
+     * The address to add. An identical retry is accepted.
+     */
+    email: string;
+};
+
+/**
  * Request body for `PUT /contacts/{contact_id}/hidden`.
  */
 export type SetContactHiddenRequest = {
@@ -15915,12 +16280,11 @@ export type SetDocumentTeamShareRequest = {
  */
 export type SetEmailSyncRequest = {
     /**
-     * New value for `crm_companies.email_sync`. Purely a read-side
-     * visibility/permission gate — `soup` queries and email-permission
-     * checks require `email_sync = true` before exposing the
-     * company's emails team-wide. Populate continues to write CRM
-     * history regardless, so toggling never destroys data and
-     * re-enabling never requires a backfill.
+     * Allow eligible email contributions for this company's domains.
+     * Disabling excludes new ingestion and CRM thread access while preserving
+     * records. Re-enabling requires an admin, removes exact team exclusions,
+     * and schedules backfill only for explicitly consenting primary mailboxes.
+     * Personal and broader team exclusions continue to apply.
      */
     email_sync: boolean;
 };
@@ -17765,15 +18129,15 @@ export type SpreadsheetCellInput = {
      */
     address: string;
     /**
-     * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-     * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-     * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-     * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-     * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-     * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
+     * The new input: text or a formula, a number, true/false, or null to empty the cell.
      */
-    value: string;
+    value: SpreadsheetCellValue;
 };
+
+/**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
 
 /**
  * Applied edit summary.
@@ -24644,6 +25008,64 @@ export type GetContactResponses = {
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
 
+export type SetCrmContactCompanyData = {
+    body: SetContactCompanyRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type SetCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactCompanyError = SetCrmContactCompanyErrors[keyof SetCrmContactCompanyErrors];
+
+export type SetCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactCompanyResponse = SetCrmContactCompanyResponses[keyof SetCrmContactCompanyResponses];
+
+export type SetCrmContactEmailData = {
+    body: SetContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/email';
+};
+
+export type SetCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactEmailError = SetCrmContactEmailErrors[keyof SetCrmContactEmailErrors];
+
+export type SetCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
+
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;
     path: {
@@ -24696,6 +25118,32 @@ export type SetCrmContactNameResponses = {
 };
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
+
+export type GetCrmEmailPrivacyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type GetCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
+
+export type UpdateCrmEmailPrivacyData = {
+    body: EmailPrivacyChange;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type UpdateCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;
@@ -25064,6 +25512,10 @@ export type SaveDatabaseQueryData = {
 };
 
 export type SaveDatabaseQueryErrors = {
+    /**
+     * Not a SELECT, does not compile, or the chart names a column it does not return
+     */
+    400: ErrorResponse;
     /**
      * Missing or invalid credentials
      */
@@ -26624,6 +27076,214 @@ export type GetDocumentBranchNameResponses = {
 };
 
 export type GetDocumentBranchNameResponse = GetDocumentBranchNameResponses[keyof GetDocumentBranchNameResponses];
+
+export type EditCanvasWithAiData = {
+    body: CanvasAiEditRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/ai-edit';
+};
+
+export type EditCanvasWithAiErrors = {
+    /**
+     * Not a canvas, or empty instructions
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The edit could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: CanvasErrorBody;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditCanvasWithAiError = EditCanvasWithAiErrors[keyof EditCanvasWithAiErrors];
+
+export type EditCanvasWithAiResponses = {
+    200: CanvasAiEdited;
+};
+
+export type EditCanvasWithAiResponse = EditCanvasWithAiResponses[keyof EditCanvasWithAiResponses];
+
+export type ApplyCanvasEditsData = {
+    body: CanvasEditsRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/edits';
+};
+
+export type ApplyCanvasEditsErrors = {
+    /**
+     * Not a canvas, or an invalid revision, code or snippets
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The scene changed since expectedRevision; nothing was committed
+     */
+    409: CanvasErrorBody;
+    /**
+     * The batch failed before it committed; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The batch could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The batch failed and may have applied
+     */
+    502: CanvasErrorBody;
+};
+
+export type ApplyCanvasEditsError = ApplyCanvasEditsErrors[keyof ApplyCanvasEditsErrors];
+
+export type ApplyCanvasEditsResponses = {
+    200: CanvasEdited;
+};
+
+export type ApplyCanvasEditsResponse = ApplyCanvasEditsResponses[keyof ApplyCanvasEditsResponses];
+
+export type RenderCanvasData = {
+    body: CanvasRenderRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/render';
+};
+
+export type RenderCanvasErrors = {
+    /**
+     * Not a canvas, or an invalid crop or selection
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The render could not start or be stored
+     */
+    500: CanvasErrorBody;
+    /**
+     * The render failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type RenderCanvasError = RenderCanvasErrors[keyof RenderCanvasErrors];
+
+export type RenderCanvasResponses = {
+    200: CanvasRendered;
+};
+
+export type RenderCanvasResponse = RenderCanvasResponses[keyof RenderCanvasResponses];
+
+export type ReadCanvasSceneData = {
+    body: CanvasSceneRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/scene';
+};
+
+export type ReadCanvasSceneErrors = {
+    /**
+     * Not a canvas, or an invalid request
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The read could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The read failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type ReadCanvasSceneError = ReadCanvasSceneErrors[keyof ReadCanvasSceneErrors];
+
+export type ReadCanvasSceneResponses = {
+    200: CanvasScene;
+};
+
+export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
 export type CopyDocumentData = {
     body: CopyDocumentRequest;

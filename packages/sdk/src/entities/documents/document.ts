@@ -26,6 +26,7 @@ import {
   unwrap,
 } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Canvas } from '../canvases/canvas';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -480,6 +481,15 @@ export class Document
   }
 
   /**
+   * This document as a canvas, to read, edit and render its live scene; never
+   * use `content()` or `edit()` on a canvas. Calls on it fail when the
+   * document is not a native canvas.
+   */
+  canvas(): Canvas {
+    return new Canvas(this.client, this);
+  }
+
+  /**
    * Read a PowerPoint (.pptx) deck as text: slide size, layouts, theme
    * colors, and every slide's id, layout and shapes (ids, kinds, positions
    * and sizes in points, text by paragraph, tables, charts, pictures,
@@ -877,9 +887,15 @@ export class Document
     return branchName;
   }
 
-  /** The document's URL in the Macro web app. */
+  /**
+   * The document's URL in the Macro web app. A native canvas or spreadsheet
+   * whose detail has loaded links to its own editor; use `canvas().webUrl()`
+   * or `documents.spreadsheet()` when it has not.
+   */
   webUrl(): string {
-    return `${this.client.webAppUrl}/app/md/${this.id}`;
+    const fileType = this.detail.peek()?.fileType;
+    const route = fileType && NATIVE_FILE_TYPES.has(fileType) ? fileType : 'md';
+    return `${this.client.webAppUrl}/app/${route}/${this.id}`;
   }
 
   /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */

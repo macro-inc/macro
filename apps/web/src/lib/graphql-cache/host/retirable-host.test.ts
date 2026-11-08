@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
-import { createRetirableCacheHost } from './retirable-host';
+import { createRetirableCacheHost, retainCacheHost } from './retirable-host';
 import type { CacheHost } from './types';
 
 const QUERY = { query: 'query Q { user { id } }', operationName: 'Q' };
@@ -106,4 +106,76 @@ describe('createRetirableCacheHost', () => {
 
     expect(inner.dispose).toHaveBeenCalledOnce();
   });
+});
+
+it('keeps the physical host alive until every idempotent lease is released', async () => {
+  const inner = disposedLikeHost();
+  const host = createRetirableCacheHost(inner);
+  const first = retainCacheHost(host);
+  const second = retainCacheHost(host);
+  expect(first?.host).toBe(inner);
+  expect(second?.host).toBe(inner);
+  host.dispose();
+  expect(host.disabled).toBe(true);
+  expect(retainCacheHost(host)).toBeUndefined();
+  expect(inner.dispose).not.toHaveBeenCalled();
+  await expect(host.readQuery(QUERY)).resolves.toEqual({ kind: 'miss' });
+  first?.release();
+  first?.release();
+  expect(inner.dispose).not.toHaveBeenCalled();
+  second?.release();
+  second?.release();
+  host.dispose();
+  expect(inner.dispose).toHaveBeenCalledOnce();
+});
+
+it('silences retired public subscriptions while retained storage still emits events', () => {
+  let affected: Parameters<CacheHost['onOpsAffected']>[0] | undefined;
+  let changed: Parameters<CacheHost['onCacheChanged']>[0] | undefined;
+  let generation:
+    | Parameters<CacheHost['onCacheGenerationChanged']>[0]
+    | undefined;
+  let settled: Parameters<CacheHost['onMutationSettled']>[0] | undefined;
+  const inner = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    dispose: vi.fn(),
+    onOpsAffected: (cb: Parameters<CacheHost['onOpsAffected']>[0]) => {
+      affected = cb;
+      return () => {};
+    },
+    onCacheChanged: (cb: Parameters<CacheHost['onCacheChanged']>[0]) => {
+      changed = cb;
+      return () => {};
+    },
+    onCacheGenerationChanged: (
+      cb: Parameters<CacheHost['onCacheGenerationChanged']>[0]
+    ) => {
+      generation = cb;
+      return () => {};
+    },
+    onMutationSettled: (cb: Parameters<CacheHost['onMutationSettled']>[0]) => {
+      settled = cb;
+      return () => {};
+    },
+  };
+  const host = createRetirableCacheHost(inner);
+  const callbacks = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+  host.onOpsAffected(callbacks[0]);
+  host.onCacheChanged(callbacks[1]);
+  host.onCacheGenerationChanged(callbacks[2]);
+  host.onMutationSettled(callbacks[3]);
+  const retained = retainCacheHost(host);
+  affected?.([1]);
+  expect(callbacks[0]).toHaveBeenCalledOnce();
+  callbacks[0].mockClear();
+  host.dispose();
+  affected?.([2]);
+  changed?.(INITIAL_CACHE_REVISION);
+  generation?.({ storage: 'preserved' });
+  settled?.({ transactionId: 'draft', status: 'committed' });
+  for (const callback of callbacks) expect(callback).not.toHaveBeenCalled();
+  expect(inner.dispose).not.toHaveBeenCalled();
+  retained?.release();
+  expect(inner.dispose).toHaveBeenCalledOnce();
 });

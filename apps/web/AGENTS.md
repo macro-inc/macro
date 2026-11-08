@@ -434,6 +434,18 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
+- Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
+  property primitives and committed-response/session-fenced cache updates. Close
+  direct cache-write admission on logout and login replacement, and drain admitted
+  durable writes before clearing storage, while starting independent local/server
+  sign-out immediately. Retain the exact physical cache owner through cleanup even
+  after its public wrapper retires. On login, remove only session-written contact
+  records before refetch; recover typed owner/bootstrap failures only through the
+  original backend/scope factory. Preserve queued offline edits, report failed
+  repair, release email verification's busy state on failure, and retry only local
+  completion after a code has been consumed. New address/back/send attempts must
+  verify anew. Keep admission closed until cleanup succeeds; serialize login behind every logout wipe;
+  `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1121,7 +1133,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ### Creation choices and notifications
 
-- Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
+- Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 

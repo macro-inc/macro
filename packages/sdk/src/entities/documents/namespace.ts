@@ -44,6 +44,10 @@ function toBlob(content: FileContent): Blob {
  *
  * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
  *
+ * ## New spreadsheets
+ *
+ * `createSpreadsheet` saves the spreadsheet before it returns, so it exists even when a later step of the program throws. Keep its id across that failure: fill it inside `try`/`catch` and return `{ data: { spreadsheet: sheet, error } }` (the handle serializes as its `id` and `url`). To retry, reopen it with `macro.documents.spreadsheet(macro.documents.byId(id))`; never search recent documents for it or create another.
+ *
  * ## Linking Macro items inside document content
  *
  * `CreateDocument` content (the `fileContent` argument) is rendered with the same Markdown parser used for chat responses, channel messages, and email bodies inside the Macro app — but only for Markdown (`.md`) documents. Non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX, created by passing a non-`md` `file_extension`) are stored as raw file bytes and must never contain Markdown syntax or mention tags.
@@ -56,7 +60,7 @@ function toBlob(content: FileContent): Blob {
  *
  * Reference a GitHub pull request with a PR chip rather than a Markdown link or bare URL: `<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>`. Put the PR's github.com URL in `url`; no Macro id is needed. This applies to Markdown document content and to `SendChannelMessage` content, which uses the same Markdown syntax. The chip shows the PR's number, title, and live status and opens it in Macro, so leave `label` empty and do not repeat the number or title beside it. Issues, commits, and other GitHub pages stay Markdown links. Your own chat replies to the MCP client still link pull requests as plain Markdown URLs.
  *
- * Reference a Macro booking link with a booking-link chip rather than a Markdown link or bare URL: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page). Put the shareable URL in `url` and the path's profile id (and slug when present) in `profileId`/`slug`. Leave `label` empty. Your own chat replies to the MCP client still link booking pages as plain Markdown URLs.
+ * Reference a Macro booking link with a booking-link chip rather than a Markdown link or bare URL: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"{booking_url}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page). Put the shareable URL in `url` and the path's profile id (and slug when present) in `profileId`/`slug`. Leave `label` empty. Your own chat replies to the MCP client still link booking pages as plain Markdown URLs.
  *
  * This holds true even when `CreateDocument` is called through the MCP server, where you are otherwise told to link items in your own chat replies as plain Markdown URLs — that rule is about your conversational responses to the MCP client, not about content you write into a Macro document. Do NOT use plain Markdown links or bare URLs to reference other Macro items inside document content; only `<m-document-mention>` tags (and the other chip tags above) render as working links there.
  *
@@ -190,7 +194,10 @@ export class DocumentNamespace {
     return Document.create(this.client, opts);
   }
 
-  /** Create a native Canvas with shared content ready for reading and editing. */
+  /**
+   * Create a native Canvas with shared content ready for reading and editing;
+   * work on it with `document.canvas()`.
+   */
   async createCanvas(opts: {
     name: string;
     project?: Project;
@@ -205,17 +212,26 @@ export class DocumentNamespace {
 
   /**
    * Create a blank native spreadsheet, ready to read and edit; fill it with
-   * `applyEdits`.
+   * `applyEdits`. It is saved before this returns: keep its `id` even when
+   * filling it fails, and reopen it by id rather than creating another.
    *
-   * @example
+   * @example Create and fill a budget, keeping the spreadsheet if a step fails.
    * ```js
    * const sheet = await macro.documents.createSpreadsheet({ name: 'Q4 budget' });
-   * const { revision, sheets } = await sheet.read();
-   * await sheet.applyEdits(
-   *   [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'A1', value: 'Item' }, { address: 'B1', value: 'Cost' }] }],
-   *   { expectedRevision: revision },
-   * );
-   * return { data: sheet.webUrl() };
+   * try {
+   *   const { revision, sheets } = await sheet.read();
+   *   await sheet.applyEdits(
+   *     [{ type: 'set_cells', sheetId: sheets[0].id, cells: [
+   *       { address: 'A1', value: 'Item' }, { address: 'B1', value: 'Cost' },
+   *       { address: 'A2', value: 'Laptops' }, { address: 'B2', value: 4200 },
+   *       { address: 'A3', value: 'Total' }, { address: 'B3', value: '=SUM(B2:B2)' },
+   *     ] }],
+   *     { expectedRevision: revision },
+   *   );
+   *   return { data: { spreadsheet: sheet } };
+   * } catch (error) {
+   *   return { data: { spreadsheet: sheet, error: String(error) } };
+   * }
    * ```
    */
   async createSpreadsheet(opts: {

@@ -345,8 +345,6 @@ export const storageExcluded = [
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'getDatabaseQuery',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
   'getDatabaseTableChanges',
   'getDocumentListHandler',
@@ -387,8 +385,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
@@ -413,8 +409,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

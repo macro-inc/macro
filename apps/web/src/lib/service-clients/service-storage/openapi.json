@@ -7990,7 +7990,7 @@
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
-        "summary": "Toggle `email_sync` on a CRM company. Purely a visibility flag —\nit gates whether team members can see each other's emails with\nthis company. Existing CRM data is unaffected.",
+        "summary": "Toggle email contribution for a CRM company without archiving its records.\nIndividual consent and all remaining exclusions still apply.",
         "operationId": "set_email_sync",
         "parameters": [
           {
@@ -8458,6 +8458,208 @@
         }
       }
     },
+    "/crm/contacts/{contact_id}/company": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_company"],
+        "summary": "Update an existing team-owned contact without merging its identity.",
+        "operationId": "set_crm_contact_company",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactCompanyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/email": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_email"],
+        "summary": "Update an existing team-owned contact without merging its identity.",
+        "operationId": "set_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}/hidden": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_contact_hidden"],
@@ -8589,6 +8791,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "Read the caller's mailbox consent and both exclusion lists.",
+        "operationId": "get_crm_email_privacy",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPrivacySettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "Apply one consent or domain-exclusion change as the authenticated member.",
+        "operationId": "update_crm_email_privacy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPrivacyChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPrivacySettings"
                 }
               }
             }
@@ -9413,7 +9661,7 @@
     "/databases/queries": {
       "post": {
         "tags": ["databases"],
-        "summary": "Save an immutable query. Editing a question saves a new one.",
+        "summary": "Save a question: a `SELECT` that compiles against the caller's databases,\nwhose chart columns, when given, are ones it returns. Saved questions\nnever change; editing one saves a new one.",
         "operationId": "save_database_query",
         "requestBody": {
           "content": {
@@ -9432,6 +9680,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SavedQuery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a SELECT, does not compile, or the chart names a column it does not return",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -13124,6 +13382,372 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a canvas by natural-language instructions with edit access, through\nEditCanvas's editor, AI admission and billing.",
+        "operationId": "edit_canvas_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/edits": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Apply one batch of CanvasEditor code with edit access, against the revision\nit was planned on, without a model. The batch validates, measures text and\ncommits once, or not at all.",
+        "operationId": "apply_canvas_edits",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasEditsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid revision, code or snippets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The scene changed since expectedRevision; nothing was committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The batch failed before it committed; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The batch could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The batch failed and may have applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/render": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Render a canvas to a PNG with view access, with the Canvas renderer, and\nkeep it as a static file owned by the caller. No model runs.",
+        "operationId": "render_canvas",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasRenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasRendered"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid crop or selection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document view access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "The render could not start or be stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The render failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/canvas/scene": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Read a canvas's live scene with view access: stable item ids, containment\nand order, transforms, world bounds, shapes and text. No model runs.",
+        "operationId": "read_canvas_scene",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Canvas document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanvasSceneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasScene"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a canvas, or an invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document view access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "The read could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The read failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasErrorBody"
                 }
               }
             }
@@ -27568,6 +28192,331 @@
           }
         }
       },
+      "CanvasAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions, naming items by id where they exist.",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["operationsApplied", "summary"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "operationsApplied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Operations the live scene acknowledged.",
+            "minimum": 0
+          },
+          "summary": {
+            "type": "string",
+            "description": "What the editor did, in words."
+          }
+        }
+      },
+      "CanvasBounds": {
+        "type": "object",
+        "description": "World-space crop or object bounds.",
+        "required": ["x", "y", "width", "height"],
+        "properties": {
+          "height": {
+            "type": "number",
+            "format": "double",
+            "description": "Positive world height."
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "description": "Positive world width."
+          },
+          "x": {
+            "type": "number",
+            "format": "double",
+            "description": "World x coordinate."
+          },
+          "y": {
+            "type": "number",
+            "format": "double",
+            "description": "World y coordinate."
+          }
+        }
+      },
+      "CanvasEdited": {
+        "type": "object",
+        "description": "A committed batch.",
+        "required": ["operationsApplied", "revision", "scene", "summary"],
+        "properties": {
+          "operationsApplied": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Operations the live scene acknowledged.",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "string",
+            "description": "The scene's revision after the batch."
+          },
+          "scene": {
+            "type": "object",
+            "description": "The scene after the batch, with `textLayout` for measured text."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What happened, in words."
+          }
+        }
+      },
+      "CanvasEditsRequest": {
+        "type": "object",
+        "description": "One batch of CanvasEditor code to apply against a revision.",
+        "required": ["expectedRevision", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.",
+            "minLength": 1
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "The revision the batch was planned against, from a fresh scene read."
+          },
+          "snippets": {
+            "type": ["object", "null"],
+            "description": "Plain text values the code reads as `snippets.<key>`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasErrorBody": {
+        "type": "object",
+        "description": "Why a canvas call failed.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CanvasErrorCode",
+            "description": "What kind of failure."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened and what to do next."
+          }
+        }
+      },
+      "CanvasErrorCode": {
+        "type": "string",
+        "description": "Error code of a canvas call.",
+        "enum": [
+          "invalid_request",
+          "revision_conflict",
+          "edit_rejected",
+          "edit_refused",
+          "edit_failed",
+          "internal"
+        ]
+      },
+      "CanvasReadFormat": {
+        "type": "string",
+        "description": "Scene representation requested by a reader.",
+        "enum": ["scene", "overview"]
+      },
+      "CanvasRenderObject": {
+        "type": "object",
+        "description": "Stable object-to-image mapping.",
+        "required": ["id", "bounds"],
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "World-space bounds in the frozen scene."
+          },
+          "id": {
+            "type": "string",
+            "description": "Canvas item ID."
+          }
+        }
+      },
+      "CanvasRenderRequest": {
+        "type": "object",
+        "description": "What to render.",
+        "properties": {
+          "crop": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasBounds",
+                "description": "A world-space rectangle; overrides `itemIds`."
+              }
+            ]
+          },
+          "itemIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Items to fit the image to, at most 100."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasRendered": {
+        "type": "object",
+        "description": "A PNG of the canvas, stored as a static file owned by the caller.",
+        "required": [
+          "fileId",
+          "url",
+          "revision",
+          "crop",
+          "width",
+          "height",
+          "objects",
+          "unavailable",
+          "textLayout"
+        ],
+        "properties": {
+          "crop": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "World bounds the image covers; pixels map linearly onto them."
+          },
+          "fileId": {
+            "type": "string",
+            "description": "Static file id of the PNG."
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image height in pixels.",
+            "minimum": 0
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasRenderObject"
+            },
+            "description": "Items in the image, with their world bounds."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision of the scene the image shows."
+          },
+          "textLayout": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasTextLayout"
+            },
+            "description": "Rendered text bounds and whether text overflows its frame."
+          },
+          "unavailable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanvasUnavailable"
+            },
+            "description": "Referenced content the renderer could not show, and why."
+          },
+          "url": {
+            "type": "string",
+            "description": "Permanent URL of the PNG."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Image width in pixels.",
+            "minimum": 0
+          }
+        }
+      },
+      "CanvasScene": {
+        "type": "object",
+        "description": "The live scene at one revision.",
+        "required": ["revision", "scene"],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "description": "The scene's immutable revision; pass it as `expectedRevision` to edit."
+          },
+          "scene": {
+            "type": "object",
+            "description": "The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text."
+          }
+        }
+      },
+      "CanvasSceneRequest": {
+        "type": "object",
+        "description": "Which part of the scene to read.",
+        "properties": {
+          "format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasReadFormat",
+                "description": "`scene` (default) for exact geometry and data, `overview` for a compact\napproximate graph with an exact id legend."
+              }
+            ]
+          },
+          "itemIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CanvasTextLayout": {
+        "type": "object",
+        "description": "Actual browser text bounds and overflow for a read-only render.",
+        "required": ["id", "bounds", "overflow"],
+        "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/CanvasBounds",
+            "description": "Actual rendered text bounds in world coordinates."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable item ID."
+          },
+          "overflow": {
+            "type": "boolean",
+            "description": "Whether the DOM text exceeds its intended text frame."
+          }
+        }
+      },
+      "CanvasUnavailable": {
+        "type": "object",
+        "description": "Explicitly unavailable referenced content.",
+        "required": ["id", "reason"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Canvas item ID."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why no referenced resource was loaded."
+          }
+        }
+      },
       "CardPosition": {
         "type": "object",
         "description": "Where one card sits on a board: its lane, and its fractional key there.\nA card whose row has since moved to another lane has no place until it is\nmoved again.",
@@ -31620,6 +32569,10 @@
             "type": ["string", "null"],
             "description": "Display name observed for the contact, if any."
           },
+          "personalEmail": {
+            "type": "boolean",
+            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -31711,7 +32664,7 @@
       },
       "CrmTeamSettingsResponse": {
         "type": "object",
-        "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
+        "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `/crm/email-privacy`.",
         "required": [
           "edit_stages_role",
           "move_closed_deals_role",
@@ -36457,6 +37410,11 @@
         ],
         "description": "One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options."
       },
+      "EmailBlockScope": {
+        "type": "string",
+        "description": "The audience affected by a domain exclusion.",
+        "enum": ["team", "personal"]
+      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -36682,6 +37640,112 @@
                 "description": "Most recent specialized follow-up, if any."
               }
             ]
+          }
+        }
+      },
+      "EmailPrivacyChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Consent covers all available past and future emails in the primary mailbox.",
+            "required": ["enabled", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["set_consent"]
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "False withdraws this mailbox's CRM contribution without deleting records."
+              },
+              "link_id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Required when enabling; must match the displayed primary connection."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add a domain and its subdomains to an exclusion list.",
+            "required": ["scope", "domain", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["add_domain"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Bare company domain."
+              },
+              "scope": {
+                "$ref": "#/components/schemas/EmailBlockScope",
+                "description": "Which contributions the exclusion affects."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Remove an exclusion; other exclusions still apply.",
+            "required": ["scope", "domain", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["remove_domain"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Bare company domain."
+              },
+              "scope": {
+                "$ref": "#/components/schemas/EmailBlockScope",
+                "description": "Which list to edit."
+              }
+            }
+          }
+        ],
+        "description": "One explicit privacy change, avoiding lost updates to whole blocklists."
+      },
+      "EmailPrivacySettings": {
+        "type": "object",
+        "description": "Current consent and exclusions, readable by any team member.",
+        "required": [
+          "enabled",
+          "team_domains",
+          "personal_domains",
+          "can_remove_team_domains"
+        ],
+        "properties": {
+          "can_remove_team_domains": {
+            "type": "boolean",
+            "description": "Whether the caller can remove a team exclusion."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this exact mailbox has explicit contribution consent."
+          },
+          "mailbox_email": {
+            "type": ["string", "null"],
+            "description": "The primary mailbox that would contribute; absent before email connection."
+          },
+          "mailbox_link_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact current primary connection; clients bind opt-in to this identifier."
+          },
+          "personal_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Domains excluded only for the caller's contributions."
+          },
+          "team_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Domains excluded across the team, including legacy company exclusions."
           }
         }
       },
@@ -48235,11 +49299,37 @@
           }
         }
       },
+      "SaveQueryChart": {
+        "type": "object",
+        "description": "The result columns a chart of a saved question plots.",
+        "required": ["x", "y"],
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "The column whose values split the series."
+          },
+          "x": {
+            "type": "string",
+            "description": "The label column."
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The value columns, each a number."
+          }
+        }
+      },
       "SaveQueryRequest": {
         "type": "object",
-        "description": "Request body for saving a query.",
+        "description": "Request body for saving a question.",
         "required": ["definition"],
         "properties": {
+          "chart": {
+            "$ref": "#/components/schemas/SaveQueryChart",
+            "description": "The result columns a chart of the answer plots, checked against what\nthe `SELECT` returns. The chart itself lives with the answer's block."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -48247,7 +49337,7 @@
           },
           "definition": {
             "$ref": "#/components/schemas/QueryDefinition",
-            "description": "What the query asks: `{\"version\": 1, \"query\": \"<SELECT>\"}`."
+            "description": "What the question asks: `{\"version\": 1, \"query\": \"<SELECT>\"}`."
           }
         }
       },
@@ -48616,6 +49706,29 @@
           }
         }
       },
+      "SetContactCompanyRequest": {
+        "type": "object",
+        "description": "Link or switch a contact with a known personal-provider email.",
+        "required": ["companyId"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Destination company in the same team. Unlinking is not supported."
+          }
+        }
+      },
+      "SetContactEmailRequest": {
+        "type": "object",
+        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add. An identical retry is accepted."
+          }
+        }
+      },
       "SetContactHiddenRequest": {
         "type": "object",
         "description": "Request body for `PUT /contacts/{contact_id}/hidden`.",
@@ -48673,7 +49786,7 @@
         "properties": {
           "email_sync": {
             "type": "boolean",
-            "description": "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
+            "description": "Allow eligible email contributions for this company's domains.\nDisabling excludes new ingestion and CRM thread access while preserving\nrecords. Re-enabling requires an admin, removes exact team exclusions,\nand schedules backfill only for explicitly consenting primary mailboxes.\nPersonal and broader team exclusions continue to apply."
           }
         }
       },
@@ -51525,11 +52638,34 @@
             "description": "A1 address, from A1 through XFD100000."
           },
           "value": {
-            "type": "string",
-            "description": "Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}</m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}</m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}</m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal."
+            "$ref": "#/components/schemas/SpreadsheetCellValue",
+            "description": "The new input: text or a formula, a number, true/false, or null to empty the cell."
           }
         },
         "additionalProperties": false
+      },
+      "SpreadsheetCellValue": {
+        "oneOf": [
+          {
+            "type": "boolean",
+            "description": "TRUE or FALSE."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "A number, passed to the engine exactly as written."
+          },
+          {
+            "type": "string",
+            "description": "Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}</m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}</m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}</m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal."
+          },
+          {
+            "type": "null",
+            "description": "Empties the cell's input; formatting stays.",
+            "default": null
+          }
+        ],
+        "description": "A cell's new input, typed as the caller has it."
       },
       "SpreadsheetChange": {
         "type": "object",

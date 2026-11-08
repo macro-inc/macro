@@ -10,7 +10,12 @@ enforced by the ordinary backend APIs.
 
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
-  it requires no browser open or upload.
+  it requires no browser open or upload. `document.canvas()` (`entities/canvases/canvas.ts`, its own code-mode entity)
+  reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
+  renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
+  `StaticImage` the server stored, since static file storage rejects API keys.
+  `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
+  native file type's route and falls back to `/app/md/` before detail loads.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
   `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
   `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
@@ -20,7 +25,7 @@ enforced by the ordinary backend APIs.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
-  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
+  in the harness's `sdk_endpoints`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `Document.readPresentation`/`editPresentation`/`copyPresentation`,
   `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
@@ -39,12 +44,22 @@ enforced by the ordinary backend APIs.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
-  included) that the `ListCodingAgents` tool serves.
+  included) that the `ListCodingAgents` tool serves. `routines.create` takes
+  either the single agent task or `steps` (generated `CodeStep`s, agent steps
+  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
+  restricts to an explicit user request; `routineBody` maps both onto the
+  scheduler's `RoutineTask`.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
+  links or switches a known personal-provider contact. Neither accepts clearing.
+- `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
+  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  document's `<m-db-query>` block. The block format must match lexical-core's
+  `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
@@ -65,7 +80,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
-  { images })` and `thread.reply` as `static/image` attachments.
+  { images })` and `thread.reply` as `static/image` attachments, and
+  `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
+  shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
+  (pinned in `lexical-core/tests/generated-image.test.ts`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
@@ -158,6 +176,7 @@ the existing gateway prefixes.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
+- Lazy detail invalidation fences in-flight reads so a pre-write response cannot restore stale cached fields.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
