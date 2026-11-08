@@ -389,8 +389,8 @@ export function CallOverlay(props: {
   const localOnStage = () => stageTarget() === 'local';
   const selfInGrid = () =>
     !localOnStage() &&
-    (layout() === 'grid' ||
-      (staged() && (!!activePin() || speakerLayout())) ||
+    (layout() !== 'auto' ||
+      (staged() && !!activePin()) ||
       (isMobile() && (staged() || !hasAnyScreenShare())) ||
       (compactControls() && !hasAnyScreenShare())) &&
     participants().length > 0;
@@ -789,7 +789,7 @@ export function CallOverlay(props: {
                       />
                     </Show>
 
-                    {/* Local participant PIP (Google Meet style: small, bottom-right) */}
+                    {/* Auto alone uses a floating self view; other layouts own a tile. */}
                     <div
                       hidden={false}
                       style={tilePosition('local')}

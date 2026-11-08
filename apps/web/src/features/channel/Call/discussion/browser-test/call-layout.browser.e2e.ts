@@ -106,3 +106,41 @@ test('pinning matrix preserves portrait camera aspect ratio', async ({
   const box = await tile.boundingBox();
   expect(box!.width / box!.height).toBeCloseTo(9 / 16, 1);
 });
+
+test('call self view floats only in Auto and fills the stage when alone', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  test.setTimeout(180_000);
+  for (const count of [1, 3]) {
+    for (const layout of ['auto', 'grid', 'speaker', 'sidebar']) {
+      await page.goto(
+        `/src/features/channel/Call/discussion/browser-test/call-overlay.html?count=${count}&layout=${layout}&media=on&view=messages&work=off`,
+        { waitUntil: 'domcontentloaded' }
+      );
+      const tile = page.locator(
+        '[data-call-participant="macro|me@example.com"]'
+      );
+      await expect(tile).toBeVisible();
+      const floating = await tile.evaluate((element) => {
+        for (
+          let parent = element.parentElement;
+          parent && !parent.hasAttribute('data-call-participant-stage');
+          parent = parent.parentElement
+        )
+          if (getComputedStyle(parent).position === 'absolute') return true;
+        return false;
+      });
+      expect(floating).toBe(layout === 'auto' && count > 1);
+      const box = await tile.boundingBox();
+      expect(box!.width).toBeGreaterThan(count === 1 ? 500 : 100);
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L90-${count}-${layout}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+          animations: 'disabled',
+        });
+    }
+  }
+});

@@ -356,8 +356,9 @@ Messages tab instead. Only **Leave call** ends participation.
 On desktop, pin a participant, yourself, or a shared screen to take the stage; see [Pinning call tiles on desktop](#pinning-call-tiles-on-desktop). A phone tap does not pin; hold a tile for its Pin/Unpin menu.
 A talking participant has a success-colored border above their video or avatar.
 Camera-off tiles are flat and show a neutral initial, never a profile-color gradient.
-On desktop the self view stays at the bottom-right beside the controls, or above
-them while chat is docked, unless you pin it to the stage. Muted icons sit beside the participant name.
+In desktop Auto layout the self view floats at the bottom-right beside the controls,
+or above them while chat is docked, unless pinned. Grid, Speaker and Sidebar keep
+the self view in a grid or strip tile. Alone, your tile fills the stage in every layout. Muted icons sit beside the participant name.
 
 A shared-screen chip leads with its screen icon, then the presenter's avatar
 and name. A hidden-participant speaking chip uses the same order with a waveform; the
