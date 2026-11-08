@@ -341,7 +341,6 @@ export type ApiMessage = {
     provider_id?: string | null;
     provider_thread_id?: string | null;
     replying_to_id?: string | null;
-    scheduled_send_source?: null | ScheduledSendSource;
     scheduled_send_status?: null | ScheduledSendStatus;
     scheduled_send_time?: string | null;
     sent_at?: string | null;
@@ -993,10 +992,6 @@ export type Contact = {
  */
 export type ContactEnrollment = {
     /**
-     * Whether the viewer owns the sequence.
-     */
-    isOwner: boolean;
-    /**
      * When the last step was sent.
      */
     lastSentAt?: string | null;
@@ -1158,7 +1153,7 @@ export type EnrollResult = {
 /**
  * Why a contact wasn't enrolled.
  */
-export type EnrollSkip = 'not_found' | 'no_email' | 'invalid_email' | 'unsubscribed' | 'already_enrolled';
+export type EnrollSkip = 'not_found' | 'no_email' | 'unsubscribed' | 'already_enrolled';
 
 /**
  * What an owner can do to an enrollment.
@@ -1188,7 +1183,7 @@ export type EnrollmentCounts = {
      */
     completed: number;
     /**
-     * Waiting on the owner.
+     * An email didn't go out.
      */
     needsAttention: number;
     /**
@@ -1202,19 +1197,9 @@ export type EnrollmentCounts = {
 };
 
 /**
- * An enrollment with its rendered steps.
+ * Why an enrollment stopped.
  */
-export type EnrollmentDetail = EnrollmentSummary & {
-    /**
-     * Its steps in order.
-     */
-    steps: Array<EnrollmentStep>;
-};
-
-/**
- * Why an enrollment stopped or needs attention.
- */
-export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed' | 'access_lost' | 'contact_removed' | 'inbox_unavailable' | 'step_failed' | 'step_withdrawn' | 'step_unknown' | 'step_stuck';
+export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed' | 'contact_removed';
 
 /**
  * Where one contact is in a sequence.
@@ -1222,29 +1207,11 @@ export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed'
 export type EnrollmentStatus = 'active' | 'paused' | 'needs_attention' | 'stopped' | 'completed';
 
 /**
- * One rendered step of an enrollment with what happened to it.
- */
-export type EnrollmentStep = Step & {
-    /**
-     * When it was scheduled to send.
-     */
-    scheduledAt?: string | null;
-    /**
-     * When it was sent.
-     */
-    sentAt?: string | null;
-    /**
-     * What happened to its email.
-     */
-    status: StepStatus;
-};
-
-/**
  * One contact's progress through a sequence.
  */
 export type EnrollmentSummary = {
     /**
-     * Name at enrollment.
+     * The CRM name its last email used.
      */
     contactName?: string | null;
     /**
@@ -1271,19 +1238,15 @@ export type EnrollmentSummary = {
      * When the next step is scheduled or due.
      */
     nextSendAt?: string | null;
-    /**
-     * Index of the next step to send.
-     */
-    nextStep: number;
     reason?: null | EnrollmentReason;
     /**
      * Status.
      */
     status: EnrollmentStatus;
     /**
-     * Number of steps.
+     * Emails sent, or skipped because they may have gone out.
      */
-    stepCount: number;
+    stepsSent: number;
 };
 
 /**
@@ -1951,7 +1914,7 @@ export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' |
 /**
  * What is wrong with a sequence.
  */
-export type Problem = 'name_required' | 'name_too_long' | 'footer_too_long' | 'steps_required' | 'too_many_steps' | 'first_step_is_reply' | 'subject_required' | 'subject_single_line' | 'subject_too_long' | 'body_required' | 'body_too_long' | 'delay_range' | 'unknown_token' | 'sender_required' | 'sender_unavailable';
+export type Problem = 'name_required' | 'steps_required' | 'subject_required' | 'body_required' | 'over_limit' | 'unknown_token' | 'sender_unavailable';
 
 /**
  * Payload for the `refresh_email` connection gateway event: identifies the
@@ -2014,14 +1977,6 @@ export type ResyncResponse = {
 };
 
 /**
- * What created a scheduled send, when it was not the user's own composer.
- *
- * A pending send from a source stays out of the user's mail lists (Drafts,
- * Scheduled, Inbox) until it is sent or its delivery fails.
- */
-export type ScheduledSendSource = 'sequence';
-
-/**
  * The user-visible delivery state of an unsent scheduled message.
  */
 export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
@@ -2075,17 +2030,13 @@ export type Sequence = {
      */
     status: SequenceStatus;
     /**
-     * Step templates.
+     * Its emails, in order.
      */
     steps: Array<Step>;
     /**
      * When it last changed.
      */
     updatedAt: string;
-    /**
-     * Incremented by every change; edits must name the version they saw.
-     */
-    version: number;
 };
 
 /**
@@ -2105,7 +2056,7 @@ export type SequenceDetailResponse = {
 /**
  * What went wrong, for the client to show.
  */
-export type SequenceErrorCode = 'not_found' | 'version_conflict' | 'invalid_transition' | 'invalid_sequence' | 'too_many_contacts' | 'invalid_start' | 'invalid_timezone' | 'action_unavailable' | 'step_in_delivery' | 'step_taken_over' | 'no_team' | 'crm_disabled' | 'internal';
+export type SequenceErrorCode = 'not_found' | 'invalid_sequence' | 'invalid_request' | 'action_unavailable' | 'crm_unavailable' | 'internal';
 
 /**
  * An error response.
@@ -2147,7 +2098,7 @@ export type SequenceInput = {
      */
     name: string;
     /**
-     * Step templates.
+     * Its emails.
      */
     steps?: Array<Step>;
 };
@@ -2222,8 +2173,7 @@ export type SharedInboxConflictResponse = {
 };
 
 /**
- * One email of a sequence. A sequence holds templates; an enrollment holds
- * them rendered for its contact.
+ * One email of a sequence, rendered for each person when it is created.
  */
 export type Step = {
     /**
@@ -2239,15 +2189,15 @@ export type Step = {
      */
     delayDays: number;
     /**
-     * Subject line; a reply step uses its thread's subject instead.
+     * Stable across edits; step history is keyed by it. New steps bring a
+     * fresh UUIDv7.
+     */
+    id: string;
+    /**
+     * Subject line; a reply step uses its thread's instead.
      */
     subject: string;
 };
-
-/**
- * State of one step's email.
- */
-export type StepStatus = 'pending' | 'scheduled' | 'sent' | 'unknown';
 
 /**
  * Coarse sync state for an inbox, used to render a one-line hint in the
@@ -2395,10 +2345,6 @@ export type UpdateSequenceRequest = {
      * New steps.
      */
     steps?: Array<Step> | null;
-    /**
-     * The version the caller last read.
-     */
-    version: number;
 };
 
 /**
@@ -3687,27 +3633,6 @@ export type ContactEnrollmentsResponses = {
 };
 
 export type ContactEnrollmentsResponse2 = ContactEnrollmentsResponses[keyof ContactEnrollmentsResponses];
-
-export type GetEnrollmentData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/email/sequences/enrollments/{id}';
-};
-
-export type GetEnrollmentErrors = {
-    404: SequenceErrorResponse;
-};
-
-export type GetEnrollmentError = GetEnrollmentErrors[keyof GetEnrollmentErrors];
-
-export type GetEnrollmentResponses = {
-    200: EnrollmentDetail;
-};
-
-export type GetEnrollmentResponse = GetEnrollmentResponses[keyof GetEnrollmentResponses];
 
 export type UpdateEnrollmentData = {
     body: EnrollmentActionRequest;

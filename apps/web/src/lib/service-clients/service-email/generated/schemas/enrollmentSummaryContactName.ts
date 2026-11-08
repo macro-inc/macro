@@ -6,6 +6,6 @@
  */
 
 /**
- * Name at enrollment.
+ * The CRM name its last email used.
  */
 export type EnrollmentSummaryContactName = string | null;

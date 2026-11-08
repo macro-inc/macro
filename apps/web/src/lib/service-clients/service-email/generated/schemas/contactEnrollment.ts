@@ -13,8 +13,6 @@ import type { EnrollmentStatus } from './enrollmentStatus';
  * A contact's enrollment as any teammate sees it: never step content.
  */
 export interface ContactEnrollment {
-  /** Whether the viewer owns the sequence. */
-  isOwner: boolean;
   /** When the last step was sent. */
   lastSentAt?: ContactEnrollmentLastSentAt;
   /** When the next step is scheduled or due. */

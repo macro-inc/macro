@@ -24,10 +24,8 @@ export interface Sequence {
   name: string;
   /** Lifecycle status. */
   status: SequenceStatus;
-  /** Step templates. */
+  /** Its emails, in order. */
   steps: Step[];
   /** When it last changed. */
   updatedAt: string;
-  /** Incremented by every change; edits must name the version they saw. */
-  version: number;
 }

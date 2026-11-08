@@ -6,7 +6,7 @@
  */
 
 /**
- * Why an enrollment stopped or needs attention.
+ * Why an enrollment stopped.
  */
 export type EnrollmentReason =
   (typeof EnrollmentReason)[keyof typeof EnrollmentReason];
@@ -17,11 +17,5 @@ export const EnrollmentReason = {
   replied: 'replied',
   bounced: 'bounced',
   unsubscribed: 'unsubscribed',
-  access_lost: 'access_lost',
   contact_removed: 'contact_removed',
-  inbox_unavailable: 'inbox_unavailable',
-  step_failed: 'step_failed',
-  step_withdrawn: 'step_withdrawn',
-  step_unknown: 'step_unknown',
-  step_stuck: 'step_stuck',
 } as const;

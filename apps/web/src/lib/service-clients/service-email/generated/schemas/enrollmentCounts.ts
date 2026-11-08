@@ -13,7 +13,7 @@ export interface EnrollmentCounts {
   active: number;
   /** Finished. */
   completed: number;
-  /** Waiting on the owner. */
+  /** An email didn't go out. */
   needsAttention: number;
   /** Paused by the owner. */
   paused: number;
