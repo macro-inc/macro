@@ -62,3 +62,6 @@ mod idle_presence;
 
 #[path = "stories/adoption_snapshot.rs"]
 mod adoption_snapshot;
+
+#[path = "stories/idle_orphans.rs"]
+mod idle_orphans;
