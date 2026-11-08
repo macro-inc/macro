@@ -19,6 +19,8 @@ export {
   type MacroDecorators,
   type MacroDecoratorType,
   macroDecoratorTypes,
+  registerMacroDecoratorViews,
+  registerMacroElementViews,
   registerMacroViews,
 } from './view/node-views/macro';
 export type {
