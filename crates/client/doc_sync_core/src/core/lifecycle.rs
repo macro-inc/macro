@@ -209,9 +209,11 @@ impl SyncCore {
         self.delivered.contains(&seq)
     }
     pub(super) fn park_reason(&self, entry: &WalEntry) -> Option<ParkReason> {
-        entry
-            .park
-            .or_else(|| (self.effective_access != Access::Edit).then_some(ParkReason::ReadOnly))
+        match entry.park {
+            Some(ParkReason::Poison | ParkReason::Gap) => entry.park,
+            _ if self.effective_access != Access::Edit => Some(ParkReason::ReadOnly),
+            reason => reason,
+        }
     }
 
     pub(super) fn update_status(&mut self, out: &mut SyncOutput) {
@@ -229,6 +231,11 @@ impl SyncCore {
             SaveState::Unsaved(UnsavedReason::Poison)
         } else if parked.iter().any(|(_, r)| *r == ParkReason::Gap) {
             SaveState::Unsaved(UnsavedReason::Gap)
+        } else if parked
+            .iter()
+            .any(|(_, reason)| *reason == ParkReason::ReadOnly)
+        {
+            SaveState::Unsaved(UnsavedReason::ReadOnly)
         } else if self.rebase_due.is_some()
             || self.rebase_active
             || parked.iter().any(|(_, r)| *r == ParkReason::NeedsRebase)
@@ -312,6 +319,12 @@ impl SyncCore {
                     }),
             ]);
         }
+        deadlines.extend(
+            self.since
+                .iter()
+                .filter(|request| !request.expired)
+                .map(|request| request.recovery_deadline),
+        );
         deadlines.extend(self.storage.values().map(|p| Some(p.deadline)));
         deadlines.extend(
             self.snapshots
