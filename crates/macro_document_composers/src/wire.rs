@@ -8,6 +8,8 @@ pub use crate::image::compose_source_image;
 use macro_document_model::{DocumentContext, Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+mod announcement;
+pub use announcement::*;
 /// Markdown response shared by the composer routes.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MarkdownResponse {
@@ -45,20 +47,6 @@ pub fn handle_agent_context(value: &Value, context: &DocumentContext) -> Result<
     Ok(MarkdownResponse {
         markdown: compose_agent_context(&agent_context_from_json(value)?, context)?,
     })
-}
-/// Handle connection, chat reply and session announcement in source precedence order.
-pub fn handle_agent_announcement(
-    value: &Value,
-    context: &DocumentContext,
-) -> Result<MarkdownResponse> {
-    let markdown = if let Some(prompt) = value.get("connectionPrompt") {
-        crate::compose_agent_connection_prompt(&serde_json::from_value(prompt.clone())?, context)?
-    } else if let Some(reply) = value.get("chatReply") {
-        crate::compose_agent_chat_reply(&serde_json::from_value(reply.clone())?, context)?
-    } else {
-        crate::compose_agent_session_announcement(&serde_json::from_value(value.clone())?, context)?
-    };
-    Ok(MarkdownResponse { markdown })
 }
 /// Validate endpoint UUID, URL and positive u32 dimensions without rewriting strings.
 pub fn image_from_json(value: &Value) -> Result<crate::ImageMarkdownInput> {
@@ -149,7 +137,6 @@ pub fn compose_agent_context(
     compose_source_context(&value, context)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn non_null_option<'de, D, T>(
     deserializer: D,
 ) -> std::result::Result<Option<T>, D::Error>
@@ -161,16 +148,13 @@ where
 }
 /// Ordered channel mentions from authored Markdown.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChannelMentionsResponse {
+pub struct Mentions {
     /// Deduplicated shareable entity references.
     pub mentions: Vec<macro_document_model::mentions::MessageReference>,
 }
 /// Parse Markdown before extracting references, including nested presented forms.
-pub fn handle_channel_mentions(
-    input: &MarkdownRequest,
-    context: &DocumentContext,
-) -> Result<ChannelMentionsResponse> {
-    Ok(ChannelMentionsResponse {
+pub fn handle_mentions(input: &MarkdownRequest, context: &DocumentContext) -> Result<Mentions> {
+    Ok(Mentions {
         mentions: macro_document_model::mentions::extract_channel_mentions_from_markdown(
             &input.markdown,
             context,
@@ -180,16 +164,16 @@ pub fn handle_channel_mentions(
 /// Leading reply target, when followed by authored content.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExplicitReplyResponse {
+pub struct ExtractReplyResponse {
     /// Full source reply data or null.
     pub reply: Option<macro_document_model::nodes::ReplyTargetNode>,
 }
 /// Extract an explicit reply using the portable document model.
-pub fn handle_explicit_reply(
+pub fn handle_extract_reply(
     input: &MarkdownRequest,
     context: &DocumentContext,
-) -> Result<ExplicitReplyResponse> {
-    Ok(ExplicitReplyResponse {
+) -> Result<ExtractReplyResponse> {
+    Ok(ExtractReplyResponse {
         reply: macro_document_model::mentions::extract_explicit_reply(&input.markdown, context)?,
     })
 }

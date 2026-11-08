@@ -17,6 +17,7 @@ Portable document nodes, mentions, XML and Markdown machinery live in macro_docu
 
 - Keep typed TriggerContext dependencies native-only; only the development conformance harness depends on the source-wire replay.
 - Expose portable source-wire replay on development WASM targets without server domain dependencies.
+- Apply announcement schema order before handler dispatch; normalize deployed channelId reply parents and drop unknown activity cards at the wire boundary.
 - Reject legacy conversation fields in current endpoint parsing; retain their source behavior only for strict corpus replay.
 - Reuse the model XML builder, Markdown engine, node constructors and explicit DocumentContext.
 - Preserve wire scalar serialization and source field order, including unknown activity-card fields.
@@ -29,7 +30,7 @@ Portable document nodes, mentions, XML and Markdown machinery live in macro_docu
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4`
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_composers --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_composers --all-targets -j4 -- -D warnings`
-- `cargo tree -p macro_document_model --target wasm32-unknown-unknown -e normal -i trigger_context` prints nothing.
+- `cargo tree -p macro_document_model --target wasm32-unknown-unknown -e normal` contains neither trigger_context nor workspace-hack.
 - `bun packages/lexical-conformance/corpus/composer-wire.ts --check`
 - `bun packages/lexical-conformance/corpus/macro-composers.ts --check`
 - `cargo x deps --check`, `just check`, `just pr-privacy`

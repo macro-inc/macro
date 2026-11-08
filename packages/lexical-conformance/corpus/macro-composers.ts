@@ -377,6 +377,113 @@ const rows = inputs.map((row) => {
   }
   return JSON.stringify({ ...row, expected });
 });
+const { AgentAnnouncementEndpoint } = await import(
+  root + 'services/lexical-service/src/endpoints/agent-announcement.ts'
+);
+const chip = {
+  agentSessionId: 'session',
+  promptedMessage: { turn: 0, author: 'user' },
+  status: 'acp_ready',
+};
+const targetData = {
+  parent: { type: 'channel', id: 'channel' },
+  targetMessageId: 'message',
+  targetThreadId: 'thread',
+  displayText: ' A \n reply ',
+  senderId: 'sender',
+};
+const chatReply = { sessionId: 'session', body: { kind: 'pending' } };
+const connectionPrompt = {
+  agentTag: 'agent',
+  message: 'Connect',
+  chip: { appSlug: 'example', name: 'Example', target: 'connections' },
+};
+const endpointInputs = [
+  { chip },
+  { chip, replyTarget: targetData },
+  {
+    chip,
+    replyTarget: { ...targetData, parent: undefined, channelId: 'channel' },
+  },
+  { chip, replyTarget: { ...targetData, parent: undefined, channelId: '' } },
+  { chip, replyTarget: { ...targetData, parent: undefined } },
+  { chip, replyTarget: { ...targetData, parent: { type: 'channel', id: '' } } },
+  { chip, replyTarget: null },
+  { chip: { ...chip, promptedMessage: undefined } },
+  { chip: { ...chip, promptedMessage: null } },
+  { chip: { ...chip, promptedMessage: { turn: -1, author: 'user' } } },
+  { chip: { ...chip, channelId: null } },
+  { chip, chatReply, connectionPrompt },
+  { chatReply, connectionPrompt },
+  { chatReply },
+  { chatReply: { ...chatReply, sessionId: '' } },
+  { chatReply: { ...chatReply, link: null } },
+  { chatReply: { sessionId: 'session' } },
+  { connectionPrompt },
+  { connectionPrompt: { ...connectionPrompt, agentTag: '' } },
+  {
+    connectionPrompt: {
+      ...connectionPrompt,
+      chip: { ...connectionPrompt.chip, appSlug: 'Invalid' },
+    },
+  },
+];
+for (const card of [
+  null,
+  { kind: 'unknown', future: 1 },
+  { kind: 'view', view: null },
+  { kind: 'view', view: { version: 1, widgets: [] }, future: 1 },
+])
+  endpointInputs.push({
+    chatReply: {
+      sessionId: 'session',
+      body: {
+        kind: 'segments',
+        segments: [
+          {
+            kind: 'activity',
+            turn: 0,
+            segment: 0,
+            rows: [
+              {
+                id: 'row',
+                label: 'View',
+                status: 'completed',
+                card,
+                unknown: 'stripped',
+              },
+            ],
+            sealed: true,
+          },
+        ],
+      },
+    },
+  });
+for (const input of endpointInputs) {
+  let expected;
+  try {
+    const endpoint = new AgentAnnouncementEndpoint({});
+    const body =
+      endpoint.schema.request.body.content['application/json'].schema.parse(
+        input
+      );
+    endpoint.getValidatedData = async () => ({ body });
+    const result = await endpoint.handle({ json: (value) => value });
+    if (typeof result.markdown !== 'string')
+      throw Error('Source route rejected render');
+    expected = { value: result.markdown };
+  } catch {
+    expected = { throws: true };
+  }
+  rows.push(
+    JSON.stringify({
+      name: `endpoint:${rows.length}`,
+      route: 'endpoint-announcement',
+      input,
+      expected,
+    })
+  );
+}
 const target =
   root + 'crates/macro_document_composers/tests/corpus/composers.jsonl';
 const text = rows.join('\n') + '\n';
