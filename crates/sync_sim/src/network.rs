@@ -45,6 +45,10 @@ pub struct SimNetwork {
     pub(crate) partitions: BTreeSet<ClientName>,
     pub(crate) offline: BTreeSet<ClientName>,
     pub(crate) profile: NetProfile,
+    pub(crate) max_latency: u64,
+    // Exact open generations that actually lost partition/offline traffic.
+    // Keep this evidence across an explicit Heal until settlement consumes it.
+    pub(crate) partition_losses: BTreeSet<LinkKey>,
     drops: Vec<DropRule>,
     corrupt: BTreeSet<(ClientName, Direction)>,
 }
@@ -56,7 +60,9 @@ impl SimNetwork {
             router_frames: BTreeMap::new(),
             partitions: BTreeSet::new(),
             offline: BTreeSet::new(),
+            max_latency: profile.latency.0.0.max(profile.latency.1.0),
             profile,
+            partition_losses: BTreeSet::new(),
             drops: Vec::new(),
             corrupt: BTreeSet::new(),
         }
@@ -90,7 +96,13 @@ impl SimNetwork {
             NetStep::CorruptNext { client, direction } => {
                 self.corrupt.insert((client, direction));
             }
-            NetStep::Profile(profile) => self.profile = profile,
+            NetStep::Profile(profile) => {
+                self.max_latency = self
+                    .max_latency
+                    .max(profile.latency.0.0)
+                    .max(profile.latency.1.0);
+                self.profile = profile;
+            }
         }
         None
     }
@@ -129,6 +141,13 @@ impl SimNetwork {
         *frames = sync_protocol::framing::into_frames(&corrupt[1..], chunk);
         true
     }
+    pub(crate) fn record_partition_loss(&mut self, key: &LinkKey) {
+        if self.links.get(key).is_some_and(|link| link.open)
+            && (self.partitions.contains(&key.0) || self.offline.contains(&key.0))
+        {
+            self.partition_losses.insert(key.clone());
+        }
+    }
     pub(crate) fn transit(
         &mut self,
         key: &LinkKey,
@@ -138,6 +157,7 @@ impl SimNetwork {
         rng: &mut impl Rng,
     ) -> Transit {
         if self.partitions.contains(&key.0) || self.offline.contains(&key.0) {
+            self.record_partition_loss(key);
             return Transit::Dropped;
         }
         if self.profile.break_per_frame > 0.0

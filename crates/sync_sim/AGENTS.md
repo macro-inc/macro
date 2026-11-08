@@ -7,7 +7,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Start here
 
-- `src/world.rs`: virtual event executor and script transitions.
+- `src/world.rs`: virtual event executor; `src/world/settle.rs`: healing and quiescence.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/storage_reference.rs`: independent flat-row IndexedDbModel and portable StorageCase/StorageContract suite.
 - `src/network.rs`: FIFO links and injected failures.
@@ -68,9 +68,21 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   its heartbeat hold; only periodic awareness, ping/pong, wake and alarm work is ignored.
   Core idleness and durable callback counters still cover outstanding operations.
   Complete already-issued token failures before the healing Online signal. Capture
-  presence once per Settle after finite upstream/downstream FIFO publication barriers;
+  the first presence view of each stable lifetime after finite upstream/downstream
+  FIFO publication barriers;
   ignore later refreshes and restart the barriers for new socket/route lifetimes.
-  Keep bounded backward clock offsets and wait for publication time to catch up.
+  Include writer peer/key replacement in publication lifetimes and reissue the
+  actual current selection even when periodic refresh is disabled. Keep bounded
+  backward clock offsets and wait for publication time to catch up. Before that
+  first resend, allow retired keys their fixed TTL plus observed signed clock
+  spread, maximum issued latency and one millisecond; never wait for query success.
+  Once data work and old publications drain, issue one fresh selection and finite
+  FIFO barrier pair so bounded skew cannot expire the entry-time publication
+  before the first view. Heartbeat restarts alone do not replace that view.
+- Record actual partition/offline losses on exact open socket generations, including
+  packets lost at delivery. Preserve evidence across explicit Heal. During Settle,
+  close only affected generations still open through real direct/router callbacks;
+  never reconnect a newer generation, lost-ACK socket, or fault with no lost traffic.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
 - Settlement thaws injected source freezes through the real migration operation and
@@ -133,3 +145,8 @@ before treating a retained StoreImage row as confirmed. Actual Gap rows stay par
 missing durable edits still fail independent loss queries. A live revoked memory AI
 can retain its own ReadOnly WAL without a browser append fact; require its exact
 validated retained intervals and parking, never infer retention from document VV.
+
+Record only applied clock-skew transitions as facts. Expiry uses timeout plus
+observed signed offset spread (including baseline zero) and latency: opposite
+sender/receiver offsets add. Keep deadline checks and exact stale-view mutations;
+unapplied script intentions cannot extend the budget or exempt convergence.

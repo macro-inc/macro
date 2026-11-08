@@ -98,7 +98,8 @@ or unpushed rows, so periodic foreign scans cannot resend already confirmed hist
 
 Correct premature Gap parking only with validated retained-row coverage in the local
 oplog and server evidence for every required parent frontier, while Running outside
-reset/rebase. This disproves the earlier missing-store inference; it does not prove
+reset/rebase and without an outstanding own push. Preserve batch eligibility until
+its ACK or timeout, then retry gap recovery. This disproves the earlier missing-store inference; it does not prove
 row delivery. Genuinely missing parents stay parked until TTL and never get pushed.
 `PrepareComment` releases `CommentReady` only after a fresh catch-up and W-1
 checks. `ProjectionResynced` charges the shared recovery budget without fetching

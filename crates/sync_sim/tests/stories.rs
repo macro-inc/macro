@@ -47,3 +47,15 @@ mod gap_parent;
 
 #[path = "stories/presence_snapshot.rs"]
 mod presence_snapshot;
+
+#[path = "stories/gap_push.rs"]
+mod gap_push;
+
+#[path = "stories/lost_update.rs"]
+mod lost_update;
+
+#[path = "stories/presence_replacement.rs"]
+mod presence_replacement;
+
+#[path = "stories/idle_presence.rs"]
+mod idle_presence;

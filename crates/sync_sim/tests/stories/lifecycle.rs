@@ -472,3 +472,138 @@ fn routed_healing_barriers_drain_deferred_callbacks_with_overlapping_refreshes()
         ],
     );
 }
+
+#[test]
+fn retired_selection_with_opposite_bounded_clocks_expires_before_snapshot() {
+    let outcome = verify(
+        SimConfig::calm(317),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::ClockSkew {
+                client: ClientName("a".into()),
+                wall_offset_ms: 2_400,
+            },
+            Step::ClockSkew {
+                client: ClientName("b".into()),
+                wall_offset_ms: -2_400,
+            },
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Run(Millis(100)),
+            Step::Crash {
+                client: ClientName("a".into()),
+            },
+            Step::ReopenCrashed,
+            Step::Settle,
+        ],
+    );
+    assert_eq!(outcome.finals.clients[&ClientName("b".into())].skew, -2_400);
+    let retired = outcome
+        .events
+        .iter()
+        .find_map(|event| match &event.fact {
+            Fact::Opened { client, peer, .. } if client.0 == "a" => Some(peer.to_string()),
+            _ => None,
+        })
+        .unwrap();
+    assert!(outcome.events.iter().any(|event| matches!(&event.fact, Fact::PresenceChanged { client, remote } if client.0 == "b" && remote.contains_key(&retired))));
+    let mut stale = outcome.clone();
+    stale
+        .finals
+        .presence
+        .as_mut()
+        .unwrap()
+        .get_mut(&ClientName("b".into()))
+        .unwrap()
+        .insert(retired.clone(), serde_json::json!({ "selection": 1 }));
+    assert!(invariants::presence_converged(&stale).is_err());
+    let crash_at = outcome
+        .events
+        .iter()
+        .find_map(|event| {
+            matches!(&event.fact,
+        Fact::Crashed { client } if client.0 == "a")
+            .then_some(event.at.0)
+        })
+        .unwrap();
+    let deadline = crash_at + 5_000 + 20 + 4_800 + 1;
+    stale.events.push(Event {
+        at: Millis(deadline),
+        fact: Fact::PresenceChanged {
+            client: ClientName("b".into()),
+            remote: [(retired, serde_json::json!({ "selection": 1 }))].into(),
+        },
+    });
+    stale.events.sort_by_key(|event| event.at.0);
+    // A never-applied script intention must not expand the observed clock budget.
+    stale.script.push(Step::ClockSkew {
+        client: ClientName("b".into()),
+        wall_offset_ms: i64::MIN,
+    });
+    assert!(invariants::presence_expires(&stale).is_err());
+    assert!(invariants::presence_converged(&stale).is_err());
+}
+
+#[test]
+fn peer_replacement_during_settlement_republishes_without_a_periodic_refresh() {
+    let mut config = SimConfig::calm(331);
+    config.session.presence_refresh = None;
+    verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Run(Millis(100)),
+            Step::Net(NetStep::Profile(NetProfile {
+                latency: (Millis(1_000), Millis(1_000)),
+                ..NetProfile::calm()
+            })),
+            Step::Net(NetStep::CorruptNext {
+                client: ClientName("b".into()),
+                direction: Direction::ToClient,
+            }),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 11,
+                },
+            },
+            Step::Run(Millis(1_050)),
+            Step::Settle,
+        ],
+    );
+}
+
+#[test]
+fn a_crashed_ai_fixed_key_expires_before_the_first_healed_snapshot() {
+    verify(
+        SimConfig::calm(337),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec {
+                kind: ClientKind::AiWorker,
+                ..OpenSpec::form("ai", "worker")
+            }),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("ai".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Run(Millis(100)),
+            Step::Crash {
+                client: ClientName("ai".into()),
+            },
+            Step::Settle,
+        ],
+    );
+}
