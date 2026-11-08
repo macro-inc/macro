@@ -378,3 +378,45 @@ fn may_depend_on_naming_an_unknown_layer_is_a_config_error() {
         "layer `types` may_depend_on names unknown layer `typos`"
     );
 }
+
+#[test]
+fn only_allowed_violations_keep_the_report_clean() {
+    let violation = Violation {
+        from: "shared_types".to_owned(),
+        from_layer: "types".to_owned(),
+        to: "agent_loop".to_owned(),
+        to_layer: "domain".to_owned(),
+        kind: EdgeKind::Normal,
+    };
+    let baselined = Report {
+        allowed: vec![violation.clone()],
+        ..Report::default()
+    };
+    assert!(baselined.is_clean());
+
+    let failing = [
+        Report {
+            violations: vec![violation],
+            ..Report::default()
+        },
+        Report {
+            stale_allows: vec![Allow {
+                from: "shared_types".to_owned(),
+                to: "email".to_owned(),
+                reason: "removed since".to_owned(),
+            }],
+            ..Report::default()
+        },
+        Report {
+            unassigned: vec!["new_crate".to_owned()],
+            ..Report::default()
+        },
+        Report {
+            unmatched_paths: vec!["crates/types/gone".to_owned()],
+            ..Report::default()
+        },
+    ];
+    for report in failing {
+        assert!(!report.is_clean(), "{report:?}");
+    }
+}

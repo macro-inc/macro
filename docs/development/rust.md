@@ -98,15 +98,17 @@ in a layer (`types`, `platform`, `aws`, `clients`, `engines`, `client`,
 `domain`, `graphql`, `testing`, `services`, `tooling`) by directory glob, and
 says which layers each may depend on. `cargo x deps` (and CI's
 `cargo x deps --check`) prints the report after regenerating the dependency
-artifacts. It is report-only: nothing fails on a violation yet.
+artifacts, and fails on anything it lists below; allowed (baselined) edges
+only print.
 
 - **New crate:** if the report lists it as `unassigned`, add its directory to
   the layer it belongs in. A crate directory under a group (`crates/types/`,
   `crates/email/email/`, …) is placed by that group's glob.
 - **`violation`:** a normal or build dependency from one layer into a layer it
   may not use. Cut the edge (move the shared types down into a `types` crate,
-  or construct the adapter in the composition root). If the edge must stay for
-  now, add an `[[allow]]` with `from`, `to` (package names) and a `reason`.
+  or construct the adapter in the composition root). The `[[allow]]` entries
+  (`from`, `to` package names and a `reason`) are the baseline from before the
+  check became blocking; do not add new ones.
 - **`stale allow`:** the edge is gone; delete the `[[allow]]` entry.
 - **`unmatched path`:** a literal path names a crate that moved or was
   removed; update it.

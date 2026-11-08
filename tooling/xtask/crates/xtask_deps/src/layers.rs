@@ -1,7 +1,8 @@
 //! Crate layer check: reads `.config/layers.toml` and reports workspace
 //! dependency edges that cross layers in a direction the config does not
-//! allow. Report-only: violations are printed and never fail the run, so the
-//! baseline can be burned down before the check becomes blocking.
+//! allow. Blocking: a new violation, a stale `[[allow]]`, an unassigned crate
+//! or a layer path matching no crate fails the run. The `[[allow]]` baseline
+//! lists today's violations with their reasons; burn it down, never grow it.
 //!
 //! A crate's layer comes from its directory (path globs), so moving a crate
 //! into its group directory is what places it. Edges are matched by package
@@ -95,6 +96,17 @@ pub struct Report {
     /// Layer or ignore paths without glob characters that match no crate:
     /// the crate moved or was removed.
     pub unmatched_paths: Vec<String>,
+}
+
+impl Report {
+    /// Nothing to fix: no new violation, stale allow, unassigned crate or
+    /// unmatched layer path. Allowed (baselined) violations do not count.
+    pub fn is_clean(&self) -> bool {
+        self.violations.is_empty()
+            && self.stale_allows.is_empty()
+            && self.unassigned.is_empty()
+            && self.unmatched_paths.is_empty()
+    }
 }
 
 const MATCH_OPTIONS: MatchOptions = MatchOptions {
@@ -248,7 +260,7 @@ pub fn check(config: &LayerConfig, crates: &[Crate], edges: &[Edge]) -> Result<R
 }
 
 /// Reads the config, checks every workspace edge and prints the report.
-/// Config errors fail; violations only print.
+/// Fails on config errors and on anything the report lists.
 pub fn run(graph: &PackageGraph) -> Result<()> {
     let workspace = graph.workspace();
     let root = workspace.root();
@@ -293,7 +305,7 @@ pub fn run(graph: &PackageGraph) -> Result<()> {
 
     let report = check(&config, &crates, &edges)?;
     println!(
-        "layer check ({CONFIG_REL}, report-only): {} new violations, {} allowed, {} stale [[allow]] entries, {} unassigned crates, {} layer paths matching no crate",
+        "layer check ({CONFIG_REL}): {} new violations, {} allowed, {} stale [[allow]] entries, {} unassigned crates, {} layer paths matching no crate",
         report.violations.len(),
         report.allowed.len(),
         report.stale_allows.len(),
@@ -322,6 +334,9 @@ pub fn run(graph: &PackageGraph) -> Result<()> {
     }
     for path in &report.unmatched_paths {
         println!("  unmatched path: {path} matches no crate; remove or update it");
+    }
+    if !report.is_clean() {
+        bail!("layer check failed; see the report above and docs/development/rust.md#crate-layers");
     }
     Ok(())
 }

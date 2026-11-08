@@ -11,8 +11,8 @@
 //!   transitive workspace dependency closure, consumed by flake.nix to build
 //!   pruned per-artifact deploy sources.
 //!
-//! It then prints the crate layer report (`.config/layers.toml`), which never
-//! fails the run on violations.
+//! It then runs the crate layer check (`.config/layers.toml`), which fails the
+//! run on a new violation, a stale allow or an unassigned crate.
 //!
 //! They run from the hakari/guppy/toml_edit versions pinned in Cargo.lock, so
 //! local runs and CI cannot disagree about generator versions. `just hakari`

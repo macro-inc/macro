@@ -1,4 +1,4 @@
-# Crate layering rules, checked by `cargo x deps` (report-only for now).
+# Crate layering rules, enforced by `cargo x deps` (and CI's `--check`).
 #
 # A crate's layer is the [[layer]] whose `paths` glob matches its directory
 # (`*` stays inside one directory, `**` spans several). Each layer lists
@@ -9,7 +9,8 @@
 # Paths name both today's flat directories and the planned group
 # directories (`crates/<group>/`), so a crate keeps its layer when it moves.
 # `[[allow]]` entries name packages, not paths, and record edges that break
-# the rules today, with the reason. See docs/development/rust.md.
+# the rules today, with the reason. The list only shrinks: cut a new edge
+# instead of allowing it. See docs/development/rust.md.
 
 ignore = ["crates/workspace-hack"]
 
