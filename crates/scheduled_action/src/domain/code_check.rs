@@ -3,7 +3,7 @@
 //! checked against.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CODE_STEPS, RoutineProgram, STEP_CONTEXT};
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -130,40 +130,6 @@ pub struct CodeGuide {
     pub contract: String,
     /// The SDK's entities relevant to the task, with method signatures.
     pub reference: String,
-    /// Starter routines, as worked examples of code steps.
-    pub examples: Vec<StarterRoutine>,
-}
-
-/// A catalog routine whose step is code, shown to the drafter as a worked
-/// example.
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct StarterRoutine {
-    /// Names it, e.g. `inbox`.
-    pub key: String,
-    /// What someone asks for, with when it runs.
-    pub request: String,
-    /// Its steps, in the shape a routine's task holds them.
-    #[schema(value_type = Vec<routine_program::Step>)]
-    pub steps: Vec<Value>,
-}
-
-/// The catalog routines whose step is code; none where code can't be saved.
-pub fn starters(code: &impl RoutineCode) -> Vec<StarterRoutine> {
-    if code.sdk().is_none() {
-        return Vec::new();
-    }
-    CATALOG
-        .iter()
-        .filter_map(|routine| {
-            let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
-            Some(StarterRoutine {
-                key: routine.key.to_owned(),
-                request: routine.request.to_owned(),
-                steps: vec![step],
-            })
-        })
-        .collect()
 }
 
 /// What type-checking a routine's code steps found.
@@ -220,7 +186,6 @@ pub async fn guide(
         steps: CODE_STEPS.to_owned(),
         contract: STEP_CONTEXT.to_owned(),
         reference,
-        examples: starters(code),
     })
 }
 
