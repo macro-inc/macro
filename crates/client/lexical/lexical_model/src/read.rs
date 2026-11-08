@@ -80,11 +80,24 @@ impl<'state> TextView<'state> {
 }
 impl<'state> StateRef<'state> {
     pub(crate) fn cached_root_text_content(self) -> std::sync::Arc<str> {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            if let Some(text) = self.state.root_text.get() {
+                return text.clone();
+            }
+            let text = std::sync::Arc::from(self.text_content(NodeKey::ROOT).as_ref());
+            if ForeignReadOperation::check().is_err() {
+                return text;
+            }
+            self.state.root_text.get_or_init(|| text).clone()
+        }
+        #[cfg(not(feature = "foreign-nodes"))]
         self.state
             .root_text
             .get_or_init(|| std::sync::Arc::from(self.text_content(NodeKey::ROOT).as_ref()))
             .clone()
     }
+
     pub(crate) fn slot(self, key: NodeKey) -> Option<&'state NodeSlot> {
         self.state.nodes.get(&key).map(AsRef::as_ref)
     }

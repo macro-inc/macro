@@ -105,6 +105,9 @@ pub(crate) fn clone_payload(
         let fields = &payload.user;
         let mut entry = registry.node(index);
         while let Some(current) = entry {
+            if ForeignReadOperation::check().is_err() {
+                return None;
+            }
             let Some(definition) = &current.foreign else {
                 break;
             };

@@ -55,12 +55,19 @@ impl Transaction<'_> {
     }
     pub(crate) fn drain_updates(&mut self) -> Result<bool, Error> {
         let mut skip_transforms = false;
-        while let Some((update, options)) = self.nested.pop_front() {
+        loop {
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
+            let Some((update, options)) = self.nested.pop_front() else {
+                break;
+            };
             skip_transforms |= options.skip_transforms;
             for tag in options.tags.iter() {
                 self.add_tag(tag.clone());
             }
             update(self)?;
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
         }
         Ok(skip_transforms)
     }
@@ -81,7 +88,11 @@ impl Transaction<'_> {
         if self.sealed {
             return Ok(());
         }
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         let result = self.flush_inner(mode);
+        #[cfg(feature = "foreign-nodes")]
+        let result = result.and_then(|()| ForeignReadOperation::check());
         #[cfg(feature = "foreign-nodes")]
         let result = result.and_then(|()| self.view().check_foreign_payloads());
         self.transform_iterations = 0;
@@ -120,6 +131,8 @@ impl Transaction<'_> {
                 transforms::apply(self)?;
             }
             self.drain_updates()?;
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             gc::collect(self);
         }
         if let Some(Selection::Range(range)) = &self.pending.selection
@@ -185,6 +198,8 @@ impl Transaction<'_> {
         Ok(())
     }
     pub(crate) fn guard_write(&self) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
             return Err(Error::ForeignReadOnly);

@@ -177,6 +177,8 @@ impl Transaction<'_> {
         if self.foreign_read_only {
             return Err(Error::ForeignReadOnly.into());
         }
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
         let selection_changed = self.selection_will_change();
@@ -231,6 +233,8 @@ impl Transaction<'_> {
         }
         crate::pipeline::apply_model_caches(self);
         #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        #[cfg(feature = "foreign-nodes")]
         self.view().check_foreign_payloads()?;
         changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
@@ -267,6 +271,8 @@ impl Transaction<'_> {
             work: std::mem::take(&mut self.work),
         };
         let artifact = prepare(&commit)?;
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         if dirty || selection_changed {
             self.editor.state = self.pending.clone();
         }
@@ -310,6 +316,8 @@ impl Transaction<'_> {
                 key,
                 &slot.data,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let record = Arc::make_mut(slot);
