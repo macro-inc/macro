@@ -4,6 +4,7 @@
  * LexicalUtils.ts inline/block tags; 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import type { JsonObject } from './types';
+
 const inlineTags =
   /^(a|abbr|acronym|b|cite|code|del|em|i|ins|kbd|label|mark|output|q|ruby|s|samp|span|strong|sub|sup|time|u|tt|var|#text)$/i;
 const blockTags =
@@ -85,7 +86,11 @@ export function convertText(
   if (text.startsWith(' ')) {
     let previous: Node | null = node;
     let start = true;
-    while ((previous = findTextInLine(previous, false, ElementType))) {
+    for (
+      previous = findTextInLine(previous, false, ElementType);
+      previous;
+      previous = findTextInLine(previous, false, ElementType)
+    ) {
       const value = previous.textContent ?? '';
       if (value.length) {
         if (/[ \t\n]$/.test(value)) text = text.slice(1);
@@ -98,7 +103,11 @@ export function convertText(
   if (text.endsWith(' ')) {
     let next: Node | null = node;
     let end = true;
-    while ((next = findTextInLine(next, true, ElementType)))
+    for (
+      next = findTextInLine(next, true, ElementType);
+      next;
+      next = findTextInLine(next, true, ElementType)
+    )
       if ((next.textContent ?? '').replace(/^( |\t|\r?\n)+/, '').length) {
         end = false;
         break;

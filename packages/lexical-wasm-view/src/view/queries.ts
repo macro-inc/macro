@@ -1,5 +1,5 @@
-import type { EditorPort } from './port';
 import type { EditorView } from './editor-view';
+import type { EditorPort } from './port';
 import type { ViewNode } from './types';
 
 /** Bulk crossings only; view-only navigation reads the local mirror. */

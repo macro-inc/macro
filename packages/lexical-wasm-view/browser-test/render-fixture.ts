@@ -1,8 +1,8 @@
 import { createEffect, onCleanup } from 'solid-js';
 import type { EditorView } from '../src/view/editor-view';
 import {
-  registerMacroViews,
   type MacroDecorators,
+  registerMacroViews,
 } from '../src/view/node-views/macro';
 import type { DecoratorProps, NodeViewRegistry } from '../src/view/registry';
 import type { TypeRow } from '../src/view/types';

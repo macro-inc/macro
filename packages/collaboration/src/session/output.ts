@@ -1,4 +1,9 @@
-import { ABI_MAJOR, DIFF_FORMAT_VERSION, FLAG_HANDLED, ViewEffectMsg } from './abi.generated';
+import {
+  ABI_MAJOR,
+  DIFF_FORMAT_VERSION,
+  FLAG_HANDLED,
+  ViewEffectMsg,
+} from './abi.generated';
 
 export const Flag = {
   View: 1,
