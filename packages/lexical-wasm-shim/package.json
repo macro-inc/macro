@@ -3,7 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "vitest run", "check": "tsc --noEmit" },
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc --noEmit && bun run check:hooks",
+    "derive-hooks": "bun scripts/derive-hooks.ts",
+    "check:hooks": "bun scripts/derive-hooks.ts --check"
+  },
   "devDependencies": {
     "@types/node": "24.10.1",
     "typescript": "6.0.3",
