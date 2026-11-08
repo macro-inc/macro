@@ -2609,8 +2609,9 @@ async fn run_server() -> anyhow::Result<()> {
     // Resumes clears a crashed or redeployed instance left partway.
     consumer_tracker.spawn(graphql_notification_inbox_context.clone().recover_clears());
 
-    let sync_sessions =
-        sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    let sync_sessions = document_sync_router::session::SyncSessionFactory::new(
+        SyncServiceUrl::new()?.as_ref().parse()?,
+    )?;
     // GraphQL and REST share one saved-view service; each committed write
     // pushes a change to the pages that show those views.
     let saved_views = Arc::new(crate::service::saved_views::service(

@@ -694,7 +694,7 @@ use email_policy::EmailPolicySchemas;
         github::inbound::github_sync_router::install_sync_handler,
 
         // /internal/sync_service
-        sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
+        document_sync::inbound::axum_router::bulk_wakeup_handler,
 
         // /crm
         crm::inbound::pipelines::create,
@@ -1300,8 +1300,8 @@ use email_policy::EmailPolicySchemas;
             documents_hex::domain::models::GithubPullRequestTasksResponse,
 
             // Sync service
-            sync_service_hex::domain::models::BulkWakeupRequest,
-            sync_service_hex::domain::models::BulkWakeupResponse,
+            document_sync::domain::models::BulkWakeupRequest,
+            document_sync::domain::models::BulkWakeupResponse,
 
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,

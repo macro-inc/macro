@@ -23,7 +23,7 @@ Object): document CRUD, state, surfaces, and wakeup calls.
 
 ## Boundaries
 
-- Depends on: `macro_sync_service_jwt`, `model`, `sync_service_hex`
+- Depends on: `macro_sync_service_jwt`, `model`, `document_sync`
   (`crates/sync_service`, aliased).
 - Used by: `services/document_storage_service`, `services/agent_harness_service`,
   `services/document_upload_finalizer_handler`, `services/agent_harness_service`,
