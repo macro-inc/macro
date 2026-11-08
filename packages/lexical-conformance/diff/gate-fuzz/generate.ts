@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { plugin } from 'bun';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const output = process.argv[2];
@@ -31,19 +30,6 @@ mock.module(
   () => ({ nanoid: (size = 21) => 'u'.repeat(size) })
 );
 await import(root + 'services/lexical-service/src/polyfills/prism.ts');
-plugin({
-  name: 'observe-gate-normalization',
-  setup(builder) {
-    builder.onLoad(
-      { filter: /\/lib\/comment-only-change\.ts$/ },
-      ({ path }) => ({
-        contents:
-          readFileSync(path, 'utf8') + '\nexport {contentWithoutComments};',
-        loader: 'ts',
-      })
-    );
-  },
-});
 const { isCommentOnlyChange, contentWithoutComments } = await import(
   root + 'services/lexical-service/src/lib/comment-only-change.ts'
 );

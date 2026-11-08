@@ -17,7 +17,12 @@ S1 Q8: the service export call graph reads the declared `idState` through `$getI
 search-text and XML callbacks introduce no additional StateKey reads. The
 TaskList view accessor is outside this export call graph. Rust reads ID_STATE
 through StateRef without mutating known/unknown NodeState or committed caches.
-The 344-case source oracle includes identity between unknown state keys and
+Custom-code import invokes the source peer/id setters. The first imported node
+retains an existing unknown-state slot; subsequent nodes of that class import
+learned configs into known state in JSON entry order. The learned map belongs
+to the editor, so fresh editors and other classes remain isolated.
+
+The source oracle includes identity between unknown state keys and
 compares shallow JSON bytes exactly, then repeats serialization after all reads.
 It covers internal/external/embedding Markdown, plaintext, search, cognition/v2
 and XML, including supplied and absent hostname. No read cache fallback is needed

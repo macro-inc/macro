@@ -11809,6 +11809,7 @@ dependencies = [
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "lexical_loro",
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",

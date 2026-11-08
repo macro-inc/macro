@@ -133,12 +133,12 @@ pub fn delete_table_column_at_selection(tx: &mut Transaction<'_>) -> Result<()> 
     move_selection_to_cell(tx, destination.cell)?;
     if let Some(mut widths) = tx
         .get::<TableNode>(table)
-        .and_then(|t| t.col_widths.clone())
+        .and_then(|t| t.col_widths.as_ref().cloned())
     {
         let start = (start as usize).min(widths.len());
         let end = start.saturating_add(count as usize).min(widths.len());
         widths.drain(start..end);
-        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths);
+        tx.get_mut::<TableNode>(table)?.col_widths = Some(widths).into();
     }
     Ok(())
 }

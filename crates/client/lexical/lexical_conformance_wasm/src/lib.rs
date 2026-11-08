@@ -5,6 +5,8 @@ use lexical_model::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
+mod corpus;
+pub use corpus::corpus_route;
 mod gate;
 pub use gate::gate_compare;
 mod rich;
