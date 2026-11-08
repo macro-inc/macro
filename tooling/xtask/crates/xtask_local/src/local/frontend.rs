@@ -11,6 +11,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+mod bundle_cache;
+
+use super::content_key;
+
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
@@ -116,10 +120,28 @@ fn lock_build_in(dir: &Path, on_wait: impl FnOnce()) -> Result<File> {
     Ok(file)
 }
 
+/// Build or restore the generated wasm packages the app imports. Builds share
+/// a machine-wide cache keyed by each package's sources (see
+/// `apps/web/scripts/cached-wasm-build.sh`), so a new checkout or instance
+/// copies packages another one already built instead of compiling them.
 fn prepare_dependencies(stage: &Stage) -> Result<()> {
     let mut prepare = Command::new("bun");
     prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    if macro_env_var::maybe_read_env("WASM_PKG_CACHE_DIR").is_none() {
+        let home = macro_env_var::maybe_read_env("HOME").context("HOME is not set")?;
+        prepare.env(
+            "WASM_PKG_CACHE_DIR",
+            Path::new(&home).join(".cache/macro-local/wasm-pkgs"),
+        );
+    }
     stage.run("Preparing frontend dependencies", &mut prepare)
+}
+
+/// Prepare the dev server's dependencies. `bring_up` runs this alongside the
+/// service build, before [`start`].
+pub fn prepare(stage: &Stage) -> Result<()> {
+    let _build_lock = lock_checkout_build(stage)?;
+    prepare_dependencies(stage)
 }
 
 /// Host-facing frontend URL.
@@ -171,34 +193,69 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// `VITE_LOCAL_ONLY` makes the bundle count as local, as the dev server does
 /// through `import.meta.hot`, so local-only flags, routes and tools match
 /// `just run_local`.
+///
+/// Bundles are cached machine-wide by everything the build reads (see
+/// [`bundle_cache`]), so an unchanged frontend is staged without rebuilding.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
     // Held through staging: `dist/` is shared until it's copied out.
     let _build_lock = lock_checkout_build(stage)?;
     prepare_dependencies(stage)?;
-    let dist = {
-        let mut cmd = Command::new("bun");
-        cmd.current_dir(app_dir())
-            .args(["run", "--bun", "build"])
-            .env("MODE", "development")
-            .env("NODE_ENV", "production")
-            .env("VITE_LOCAL_SERVERS", "ALL")
-            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
-            .env("VITE_LOCAL_ONLY", "true");
-        if mode.spec().runs_local_infra {
-            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-        }
-        stage.run("Building frontend bundle", &mut cmd)?;
-        app_dir().join("dist")
-    };
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(app_dir())
+        .args(["run", "--bun", "build"])
+        .env("MODE", "development")
+        .env("NODE_ENV", "production")
+        .env("VITE_LOCAL_SERVERS", "ALL")
+        .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+        .env("VITE_LOCAL_ONLY", "true");
+    if mode.spec().runs_local_infra {
+        cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+    }
     if stage.is_dry_run() {
-        return Ok(());
+        return stage.run("Building frontend bundle", &mut cmd);
     }
-    if !dist.join("index.html").exists() {
-        anyhow::bail!(
-            "no index.html in {} — frontend build did not produce a bundle",
-            dist.display()
-        );
-    }
+
+    let key = bundle_cache::key(&repo_root(), &cmd)?;
+    // Held until the bundle is staged, so pruning can't remove it first.
+    let (bundle, _reading) = match bundle_cache::lookup(&key)? {
+        Some((cached, reading)) => {
+            stage.note(&format!(
+                "frontend unchanged: reusing bundle {}",
+                &key[..12]
+            ));
+            (cached, reading)
+        }
+        None => {
+            stage.run("Building frontend bundle", &mut cmd)?;
+            let dist = app_dir().join("dist");
+            if !dist.join("index.html").exists() {
+                anyhow::bail!(
+                    "no index.html in {} — frontend build did not produce a bundle",
+                    dist.display()
+                );
+            }
+            // The read lock is taken after the store's install lock is released.
+            // Another checkout would have to store a cache's worth of newer
+            // bundles in that gap for this one to be pruned, but if it is gone,
+            // store it again from `dist/`, which this checkout's lock still holds.
+            let mut stored = None;
+            for _ in 0..2 {
+                let mut cached = None;
+                stage.run_step("Caching frontend bundle", || {
+                    cached = Some(bundle_cache::store(&key, &dist)?);
+                    Ok(())
+                })?;
+                let cached = cached.context("frontend bundle was not cached")?;
+                let reading = content_key::read_lock(&cached)
+                    .with_context(|| format!("locking {}", cached.display()))?;
+                if cached.join("index.html").exists() {
+                    stored = Some((cached, reading));
+                    break;
+                }
+            }
+            stored.context("the cached frontend bundle was pruned before it could be staged")?
+        }
+    };
     stage.run_step("Staging frontend bundle", || {
         let staged = static_dir(instance);
         if staged.exists() {
@@ -206,14 +263,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                 .with_context(|| format!("clearing {}", staged.display()))?;
         }
         instance.ensure_artifact_dir()?;
-        let status = Command::new("cp")
-            .arg("-a")
-            .arg(&dist)
-            .arg(&staged)
-            .status()
-            .context("running cp -a")?;
-        anyhow::ensure!(status.success(), "cp -a exited with {status}");
-        Ok(())
+        bundle_cache::copy_tree(&bundle, &staged)
     })
 }
 
@@ -406,7 +456,8 @@ fn tail_str(s: &str, n: usize) -> String {
 /// Start the frontend dev server and wait until *our* child is serving. Output
 /// goes to [`log_path`] (the vite banner would duplicate the summary's URL), so
 /// an unexpected exit can be diagnosed. Callers have already waited for the
-/// backend. Returns `None` in dry-run mode.
+/// backend and run [`prepare`] (`bring_up` does both). Returns `None` in
+/// dry-run mode.
 pub fn start(
     stage: &Stage,
     instance: &Instance,
@@ -430,10 +481,6 @@ pub fn start(
             "frontend port {port} is already in use — likely a stale dev server from a \
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
-    }
-    {
-        let _build_lock = lock_checkout_build(stage)?;
-        prepare_dependencies(stage)?;
     }
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
