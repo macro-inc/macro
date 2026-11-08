@@ -110,3 +110,9 @@ including a previously stopped tab; never exempt a whole crashed profile.
 Presence expiry obligations use the live receiver's Opened epoch at the source
 fault. A receiver already crashed cannot tick, and a later reopen must not inherit
 its previous incarnation's last view; live and thawed receiver deadlines stay strict.
+
+Join retained read-only parking through exact owner sessions, including an old user
+whose client name has reopened. Require retained rows and final parking/access in
+that epoch; never forgive missing rows. Exempt an exact live read-only owner's parked
+row from the profile-drain check, while keeping durable recovery and ACK checks strict.
+Comment-only replicas share Read's private-history rule and must cover server history.

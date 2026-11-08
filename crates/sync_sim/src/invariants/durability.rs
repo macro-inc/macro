@@ -23,6 +23,71 @@ fn opened(
         _ => None,
     })
 }
+// A reopened client name must not erase an old user's retained read-only row.
+fn retained_readonly_row(
+    outcome: &Outcome,
+    profile: &ProfileName,
+    doc: DocIx,
+    owner: WalOwner,
+    seq: WalSeq,
+    required: &[IdSpan],
+) -> bool {
+    let WalOwner::Session(session) = owner else {
+        return false;
+    };
+    let Some(start) = outcome.events.iter().position(
+        |event| matches!(&event.fact, Fact::Opened { session: opened, .. } if *opened == session),
+    ) else {
+        return false;
+    };
+    let Fact::Opened {
+        client,
+        access,
+        profile: scope,
+        doc: row_doc,
+        ..
+    } = &outcome.events[start].fact
+    else {
+        return false;
+    };
+    if scope != profile || *row_doc != doc {
+        return false;
+    }
+    let mut access = *access;
+    let mut parked = false;
+    for event in outcome.events.iter().skip(start + 1).take_while(
+        |event| !matches!(&event.fact, Fact::Opened { client: name, .. } if name == client),
+    ) {
+        match &event.fact {
+            Fact::AccessChanged {
+                client: name,
+                access: current,
+            } if name == client => access = *current,
+            Fact::RowsParked { client: name, rows } if name == client => {
+                parked = rows
+                    .iter()
+                    .any(|(row, reason)| *row == seq && reason == "ReadOnly")
+            }
+            _ => {}
+        }
+    }
+    access != Access::Edit
+        && parked
+        && outcome.finals.profiles.get(profile).is_some_and(|store| {
+            store
+                .entries
+                .iter()
+                .any(|((key, row_owner, row_seq), row)| {
+                    key.as_str() == document_key(doc, &outcome.config)
+                        && *row_owner == owner
+                        && *row_seq == seq
+                        && loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true).is_ok()
+                        && crate::document::spans(&row.record.bytes).is_ok_and(|retained| {
+                            required.iter().all(|span| ranges_cover(&retained, span))
+                        })
+                })
+        })
+}
 fn spans_for_update(outcome: &Outcome, update: &str) -> Vec<IdSpan> {
     outcome
         .events
@@ -306,7 +371,13 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                 Fact::WalWriteLost { profile: scope, session, seq }
                 if scope == profile && rows.contains(&(WalOwner::Session(*session), *seq)))
             });
-            if parked || rolled_back || expired(outcome, profile, &rows, doc) {
+            if parked
+                || rolled_back
+                || rows.iter().any(|(owner, seq)| {
+                    retained_readonly_row(outcome, profile, doc, *owner, *seq, row_spans)
+                })
+                || expired(outcome, profile, &rows, doc)
+            {
                 exempt.extend(row_spans.clone());
             }
         }
@@ -399,7 +470,23 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
                     && client.access == Access::Edit
                     && document_key(client.doc, &outcome.config) == doc.to_string()
             });
-            if writable && !row.delivered && !row.record.quarantined && !acknowledged {
+            let parked_readonly = outcome.finals.clients.values().any(|client| {
+                client.alive
+                    && client.profile == *profile
+                    && client.access != Access::Edit
+                    && *owner == WalOwner::Session(client.session)
+                    && document_key(client.doc, &outcome.config) == doc.as_str()
+                    && client
+                        .parked
+                        .iter()
+                        .any(|(parked, reason)| *parked == *seq && reason == "ReadOnly")
+            });
+            if writable
+                && !row.delivered
+                && !row.record.quarantined
+                && !acknowledged
+                && !parked_readonly
+            {
                 return Err(Failure::new(
                     "all_wals_drained",
                     format!("{profile:?} has an undelivered orphan/foreign row"),
