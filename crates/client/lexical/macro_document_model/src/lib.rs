@@ -51,3 +51,6 @@ pub use node_ids as ids;
 
 /// Plaintext, search, cognition and Markdown export projections.
 pub mod export;
+
+/// Comment-only permission gate using the exact service registry.
+pub mod comment_gate;
