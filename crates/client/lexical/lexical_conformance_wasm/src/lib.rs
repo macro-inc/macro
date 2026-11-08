@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 mod debug;
-pub use debug::{debug_crossings, debug_live_editors, debug_reset_counters};
+pub use debug::{debug_boundary_bytes, debug_crossings, debug_live_editors, debug_reset_counters};
 mod compat;
 pub use compat::text_format_flags;
 #[cfg(feature = "js-nodes")]
@@ -35,7 +35,7 @@ enum BoundaryError {
 /// Pinned upstream version shared with the recorder.
 #[wasm_bindgen]
 pub fn upstream_version() -> String {
-    env!("LEXICAL_UPSTREAM_VERSION").into()
+    debug::returned_string(env!("LEXICAL_UPSTREAM_VERSION").into())
 }
 
 /// Raw model transactions for the upstream text/paragraph profile.
@@ -51,15 +51,18 @@ impl CoreHandle {
     /// Build one isolated editor. Version zero supports the upstream profile only.
     #[wasm_bindgen(constructor)]
     pub fn new(profile: &str, seed_state_json: Option<String>) -> Result<CoreHandle, JsError> {
-        Self::create(profile, seed_state_json.as_deref()).map_err(|e| JsError::new(&e.to_string()))
+        Self::create(profile, seed_state_json.as_deref())
+            .map(debug::returned_handle)
+            .map_err(debug::error)
     }
     /// Apply one version-zero JSON command atomically; return the complete comparison record.
     pub fn apply(&mut self, input: &str, now_ms: f64) -> Result<String, JsError> {
         if !now_ms.is_finite() || now_ms < 0.0 {
-            return Err(JsError::new("invalid monotonic time"));
+            return Err(debug::error("invalid monotonic time"));
         }
         self.apply_json(input)
-            .map_err(|e| JsError::new(&e.to_string()))
+            .map(debug::returned_string)
+            .map_err(debug::error)
     }
     /// Export key-free upstream editor JSON.
     pub fn state_json(&self) -> Result<String, JsError> {
@@ -67,20 +70,20 @@ impl CoreHandle {
             .state()
             .to_json()
             .and_then(|v| serde_json::to_value(v).map_err(Into::into))
-            .map(|v| to_js_json_string(&v))
-            .map_err(|e| JsError::new(&e.to_string()))
+            .map(|v| debug::returned_string(to_js_json_string(&v)))
+            .map_err(debug::error)
     }
     /// Export the same path-based range selection as the differential oracle.
     pub fn selection_json(&self) -> Result<String, JsError> {
         snapshot::selection(self.editor.state())
-            .map(|v| to_js_json_string(&v))
-            .map_err(|e| JsError::new(&e.to_string()))
+            .map(|v| debug::returned_string(to_js_json_string(&v)))
+            .map_err(debug::error)
     }
     /// Full state, selection, identities and text before the first step.
     pub fn snapshot(&self) -> Result<String, JsError> {
         snapshot::capture(self.editor.state(), None)
-            .map(|v| to_js_json_string(&v))
-            .map_err(|e| JsError::new(&e.to_string()))
+            .map(|v| debug::returned_string(to_js_json_string(&v)))
+            .map_err(debug::error)
     }
 }
 impl CoreHandle {

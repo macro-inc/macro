@@ -7,10 +7,11 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/debug.rs`: actual export-entry and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
+- `src/debug.rs`: actual export-entry, logical payload-byte and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
+- `build.rs`: build-time syn derivation of fixed scalar/receiver input sizes and string ABI locations; unsupported signatures or unknown exports fail instrumentation.
 - `src/compat.rs`: model-derived format flags and one WASM-instance key counter for shim host allocation/reset; Tier C handles retain their isolated counters.
 - `src/lib.rs`: isolated `CoreHandle`, JSON transaction boundary and build identity.
-- `examples/instrument_exports/main.rs`: native export counter postprocessor; run after bindgen/wasm-opt and never optimize afterward. Preserve internal indices and keep the reserved counter helper unwrapped so generated raw ABI types stay accurate.
+- `examples/instrument_exports/main.rs`: native export counter postprocessor; run after bindgen/wasm-opt and never optimize afterward. Preserve internal model indices; only bindgen throw imports gain outgoing-string wrappers. Keep the reserved counter helper unwrapped so generated raw ABI types stay accurate.
 - `src/rich.rs` and `src/rich/input.rs`: rich profile, history, markdown and explicit
   package operations for the external differential harness.
 - `src/command.rs`: text/paragraph commands and explicit host-resolved view inputs.
@@ -49,3 +50,12 @@ Never import them from production crates or bundles.
   under `/home/wolf/tmp/lexical-port/difffuzz`; never copy that harness here.
 
 Rich snapshots retain dangling table selection points with null paths after final row/column deletion.
+
+Count strings as UTF-16 units times two, typed scalar values by their facade width,
+and returned object keys/values recursively (JS numbers are f64). Pointer/length,
+allocator and generated control metadata carry no payload. Reserved counter-hook
+arguments are measurement adjustments, not ordinary payload. Keep return/error
+accounting in src/debug.rs helpers when adding exports; raw-input accounting is
+derived and runs before receiver validation. Optional strings use pointer zero as
+absence even when bindgen leaves a stale length. Each artifact must contain one
+unshared memory32 when strings are accounted. Run the postprocessor after optimization.

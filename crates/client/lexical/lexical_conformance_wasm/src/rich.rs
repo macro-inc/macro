@@ -22,16 +22,21 @@ impl RichHandle {
     /// Create the pinned upstream rich profile with matching intrinsic transforms.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<RichHandle, JsError> {
-        Self::create().map_err(|e| JsError::new(&e.to_string()))
+        Self::create()
+            .map(debug::returned_handle)
+            .map_err(debug::error)
     }
     /// Apply one development command at explicit monotonic milliseconds.
     pub fn apply(&mut self, input: &str, now_ms: u32) -> Result<String, JsError> {
         self.execute(input, HistoryTime(u64::from(now_ms)))
-            .map_err(|e| JsError::new(&e.to_string()))
+            .map(debug::returned_string)
+            .map_err(debug::error)
     }
     /// Compare key-free JSON, all selection variants, root text and markdown.
     pub fn snapshot(&self) -> Result<String, JsError> {
-        self.capture(None).map_err(|e| JsError::new(&e.to_string()))
+        self.capture(None)
+            .map(debug::returned_string)
+            .map_err(debug::error)
     }
 }
 impl RichHandle {

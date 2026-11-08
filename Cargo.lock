@@ -11777,6 +11777,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "syn 2.0.117",
  "thiserror 2.0.18",
  "wasm-bindgen",
  "wasm-encoder",
