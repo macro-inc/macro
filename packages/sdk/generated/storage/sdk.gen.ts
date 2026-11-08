@@ -1312,6 +1312,21 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Create the companies a CSV lists, and put its Stage, Owner and Revenue
+     * values on entries of a company pipeline.
+     */
+    public importCrmCompaniesCsv<ThrowOnError extends boolean = false>(options: Options<ImportCrmCompaniesCsvData, ThrowOnError>): RequestResult<ImportCrmCompaniesCsvResponses, ImportCrmCompaniesCsvErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportCrmCompaniesCsvResponses, ImportCrmCompaniesCsvErrors, ThrowOnError>({
+            url: '/crm/companies/import',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Fetch a single CRM company by id, hydrated with its domains, the
      * primary domain's directory display metadata (name + description),
      * and the company's contacts. Access is enforced by
@@ -1557,10 +1572,140 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Entries whose company or contact matches the search, across the caller's
+     * pipelines; pipelines without a match are left out.
+     */
+    public searchCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<SearchCrmPipelineEntriesData, ThrowOnError>): RequestResult<SearchCrmPipelineEntriesResponses, SearchCrmPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<SearchCrmPipelineEntriesResponses, SearchCrmPipelineEntriesErrors, ThrowOnError>({ url: '/crm/pipelines/entry-search', ...options });
+    }
+
+    /**
+     * Every entry tracking one of the records, across the caller's pipelines;
+     * pipelines without one are left out.
+     */
+    public listCrmRecordPipelineEntries<ThrowOnError extends boolean = false>(options: Options<ListCrmRecordPipelineEntriesData, ThrowOnError>): RequestResult<ListCrmRecordPipelineEntriesResponses, ListCrmRecordPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ListCrmRecordPipelineEntriesResponses, ListCrmRecordPipelineEntriesErrors, ThrowOnError>({
+            url: '/crm/pipelines/record-entries',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Read one pipeline by its entity identity.
      */
     public getCrmPipeline<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineData, ThrowOnError>): RequestResult<GetCrmPipelineResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<GetCrmPipelineResponses, unknown, ThrowOnError>({ url: '/crm/pipelines/{id}', ...options });
+    }
+
+    /**
+     * Every entry as CSV text: Company and Domain (or Contact and Email), then
+     * one column per field, people as emails. An import reads the same layout.
+     */
+    public getCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineCsvData, ThrowOnError>): RequestResult<GetCrmPipelineCsvResponses, GetCrmPipelineCsvErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetCrmPipelineCsvResponses, GetCrmPipelineCsvErrors, ThrowOnError>({ url: '/crm/pipelines/{id}/csv', ...options });
+    }
+
+    /**
+     * Rename or share a pipeline, and add, rename or delete its fields and
+     * options by name, in one change.
+     */
+    public editCrmPipeline<ThrowOnError extends boolean = false>(options: Options<EditCrmPipelineData, ThrowOnError>): RequestResult<EditCrmPipelineResponses, EditCrmPipelineErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<EditCrmPipelineResponses, EditCrmPipelineErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/edit',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Set fields of entries by name, all or nothing; a stage takes its label.
+     */
+    public updateCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<UpdateCrmPipelineEntriesData, ThrowOnError>): RequestResult<UpdateCrmPipelineEntriesResponses, UpdateCrmPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateCrmPipelineEntriesResponses, UpdateCrmPipelineEntriesErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/entries',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Add entries, filling fields by name: companies or contacts in a tracked
+     * pipeline, free-form rows in a generic one. A record already in the
+     * pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
+     */
+    public addCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<AddCrmPipelineEntriesData, ThrowOnError>): RequestResult<AddCrmPipelineEntriesResponses, AddCrmPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AddCrmPipelineEntriesResponses, AddCrmPipelineEntriesErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/entries',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Entries of one pipeline matching filters, records or a search, with
+     * per-option counts and number totals over every match.
+     */
+    public findCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<FindCrmPipelineEntriesData, ThrowOnError>): RequestResult<FindCrmPipelineEntriesResponses, FindCrmPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<FindCrmPipelineEntriesResponses, FindCrmPipelineEntriesErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/entries/find',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Delete entries by id, or every entry of the records; the companies and
+     * contacts stay in the CRM.
+     */
+    public removeCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<RemoveCrmPipelineEntriesData, ThrowOnError>): RequestResult<RemoveCrmPipelineEntriesResponses, RemoveCrmPipelineEntriesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RemoveCrmPipelineEntriesResponses, RemoveCrmPipelineEntriesErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/entries/remove',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Save every entry as a CSV file in the caller's files, laid out as
+     * `/csv` returns it.
+     */
+    public exportCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<ExportCrmPipelineCsvData, ThrowOnError>): RequestResult<ExportCrmPipelineCsvResponses, ExportCrmPipelineCsvErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ExportCrmPipelineCsvResponses, ExportCrmPipelineCsvErrors, ThrowOnError>({ url: '/crm/pipelines/{id}/export', ...options });
+    }
+
+    /**
+     * Add a CSV's rows as entries, matching its columns to fields by name and
+     * creating the companies or contacts the team lacks. Records already in the
+     * pipeline are not added again.
+     */
+    public importCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<ImportCrmPipelineCsvData, ThrowOnError>): RequestResult<ImportCrmPipelineCsvResponses, ImportCrmPipelineCsvErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ImportCrmPipelineCsvResponses, ImportCrmPipelineCsvErrors, ThrowOnError>({
+            url: '/crm/pipelines/{id}/import',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -4223,151 +4368,6 @@ export class Sdk extends HeyApiClient {
     public whatsappPasskey<ThrowOnError extends boolean = false>(options: Options<WhatsappPasskeyData, ThrowOnError>): RequestResult<WhatsappPasskeyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).post<WhatsappPasskeyResponses, unknown, ThrowOnError>({
             url: '/whatsapp/pairing/{id}/passkey',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Create the companies a CSV lists, and put its Stage, Owner and Revenue
-     * values on entries of a company pipeline.
-     */
-    public importCrmCompaniesCsv<ThrowOnError extends boolean = false>(options: Options<ImportCrmCompaniesCsvData, ThrowOnError>): RequestResult<ImportCrmCompaniesCsvResponses, ImportCrmCompaniesCsvErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<ImportCrmCompaniesCsvResponses, ImportCrmCompaniesCsvErrors, ThrowOnError>({
-            url: '/crm/companies/import',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Entries whose company or contact matches the search, across the caller's
-     * pipelines; pipelines without a match are left out.
-     */
-    public searchCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<SearchCrmPipelineEntriesData, ThrowOnError>): RequestResult<SearchCrmPipelineEntriesResponses, SearchCrmPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<SearchCrmPipelineEntriesResponses, SearchCrmPipelineEntriesErrors, ThrowOnError>({ url: '/crm/pipelines/entry-search', ...options });
-    }
-
-    /**
-     * Every entry tracking one of the records, across the caller's pipelines;
-     * pipelines without one are left out.
-     */
-    public listCrmRecordPipelineEntries<ThrowOnError extends boolean = false>(options: Options<ListCrmRecordPipelineEntriesData, ThrowOnError>): RequestResult<ListCrmRecordPipelineEntriesResponses, ListCrmRecordPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<ListCrmRecordPipelineEntriesResponses, ListCrmRecordPipelineEntriesErrors, ThrowOnError>({
-            url: '/crm/pipelines/record-entries',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Every entry as CSV text: Company and Domain (or Contact and Email), then
-     * one column per field, people as emails. An import reads the same layout.
-     */
-    public getCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<GetCrmPipelineCsvData, ThrowOnError>): RequestResult<GetCrmPipelineCsvResponses, GetCrmPipelineCsvErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetCrmPipelineCsvResponses, GetCrmPipelineCsvErrors, ThrowOnError>({ url: '/crm/pipelines/{id}/csv', ...options });
-    }
-
-    /**
-     * Rename or share a pipeline, and add, rename or delete its fields and
-     * options by name, in one change.
-     */
-    public editCrmPipeline<ThrowOnError extends boolean = false>(options: Options<EditCrmPipelineData, ThrowOnError>): RequestResult<EditCrmPipelineResponses, EditCrmPipelineErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<EditCrmPipelineResponses, EditCrmPipelineErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/edit',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Set fields of entries by name, all or nothing; a stage takes its label.
-     */
-    public updateCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<UpdateCrmPipelineEntriesData, ThrowOnError>): RequestResult<UpdateCrmPipelineEntriesResponses, UpdateCrmPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<UpdateCrmPipelineEntriesResponses, UpdateCrmPipelineEntriesErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/entries',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Add entries, filling fields by name: companies or contacts in a tracked
-     * pipeline, free-form rows in a generic one. A record already in the
-     * pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
-     */
-    public addCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<AddCrmPipelineEntriesData, ThrowOnError>): RequestResult<AddCrmPipelineEntriesResponses, AddCrmPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<AddCrmPipelineEntriesResponses, AddCrmPipelineEntriesErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/entries',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Entries of one pipeline matching filters, records or a search, with
-     * per-option counts and number totals over every match.
-     */
-    public findCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<FindCrmPipelineEntriesData, ThrowOnError>): RequestResult<FindCrmPipelineEntriesResponses, FindCrmPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<FindCrmPipelineEntriesResponses, FindCrmPipelineEntriesErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/entries/find',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Delete entries by id, or every entry of the records; the companies and
-     * contacts stay in the CRM.
-     */
-    public removeCrmPipelineEntries<ThrowOnError extends boolean = false>(options: Options<RemoveCrmPipelineEntriesData, ThrowOnError>): RequestResult<RemoveCrmPipelineEntriesResponses, RemoveCrmPipelineEntriesErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<RemoveCrmPipelineEntriesResponses, RemoveCrmPipelineEntriesErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/entries/remove',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Save every entry as a CSV file in the caller's files, laid out as
-     * `/csv` returns it.
-     */
-    public exportCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<ExportCrmPipelineCsvData, ThrowOnError>): RequestResult<ExportCrmPipelineCsvResponses, ExportCrmPipelineCsvErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<ExportCrmPipelineCsvResponses, ExportCrmPipelineCsvErrors, ThrowOnError>({ url: '/crm/pipelines/{id}/export', ...options });
-    }
-
-    /**
-     * Add a CSV's rows as entries, matching its columns to fields by name and
-     * creating the companies or contacts the team lacks. Records already in the
-     * pipeline are not added again.
-     */
-    public importCrmPipelineCsv<ThrowOnError extends boolean = false>(options: Options<ImportCrmPipelineCsvData, ThrowOnError>): RequestResult<ImportCrmPipelineCsvResponses, ImportCrmPipelineCsvErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<ImportCrmPipelineCsvResponses, ImportCrmPipelineCsvErrors, ThrowOnError>({
-            url: '/crm/pipelines/{id}/import',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
