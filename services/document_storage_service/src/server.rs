@@ -31,7 +31,7 @@ use ai_editing_worker_url::AiEditingWorkerUrl;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
-use cal::{
+use calcom_webhooks::{
     domain::service::{CalConfig, CalEventMeta, CalWebhookServiceImpl},
     inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
