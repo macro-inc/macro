@@ -10,7 +10,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
-- `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, selection and composition; its independent read transaction rejects guarded writes before model hooks. Hosts still own complete read-only ABI and selection behavior.
+- `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
+- `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
@@ -90,7 +91,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
-- Give owned captures of pending state a separate root-text memo, and materialize active native projections without invoking clone hooks.
+- Give owned captures of pending state a separate root-text memo; materialize native projections without clone hooks while retaining their source record identity. Preserve detached slot indices, holes and selection caches when capturing read inputs.
+- Use SharedKeyCounter::allocate_for_foreign_host for dev generateRandomKey; it shares allocation with editors without creating records or consuming commit identities.
+- Preserve source editor/update provenance through pure read peers; combine matches_origin with active callback checks, and keep plain editor-state captures originless.
 
 ## Tests
 

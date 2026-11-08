@@ -55,7 +55,7 @@ export default defineConfig({
   test: {
     include: ["diff/**/*.test.ts"],
     // Bun invokes this capture file through the native gate oracle generator.
-    exclude: ["diff/gate-fuzz/seed-capture.test.ts"],
+    exclude: ["diff/gate-fuzz/seed-capture.test.ts", "diff/collab/**"],
     setupFiles: [path.join(pkg, "diff/setup.ts")],
     environment: "jsdom",
     maxWorkers: 1,

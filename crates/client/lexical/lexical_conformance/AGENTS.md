@@ -9,7 +9,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/fixture.rs`: recorder wire schema.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
-- `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and per-editor published snapshot pins; return clones before any model or host call.
+- `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and per-editor published snapshot and retired-record pins; return clones before any model or host call.
 - `src/replay/selections.rs`: shared mutable-frame selection identities and activation revisions; no model call executes under its lock.
 - `src/replay/carets.rs`: shared caret metadata and owned single-consumption cursors; move cursors out before model traversal.
 - `src/replay/editors.rs`: per-editor installation and selection slots; prune dead record pointers only after checking all retained snapshots.
@@ -66,7 +66,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Gotchas
 
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
-- Read raw framework fields from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
+- Keep collected raw captures by version and generation-aware key until version release; historical snapshots take precedence, and graph lookup never consults retired records. Drop replaced/released record owners outside binding locks.
+- Read raw framework fields in src/api/properties/node.rs from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
 - Detach replaced selection handles only if the call still owns their activation revision after nested callbacks.
 - Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.

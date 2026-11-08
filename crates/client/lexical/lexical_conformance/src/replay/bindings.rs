@@ -1,6 +1,6 @@
 //! Owned bindings shared by dispatchers without borrowing an ancestor frame.
-use super::{Result, fail};
-use lexical_model::{EditorState, NodeKey};
+use super::{Result, fail, integer, node_key};
+use lexical_model::{EditorState, NodeKey, NodeRecord, Transaction};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -15,6 +15,7 @@ struct Values {
     handles: HashMap<String, Value>,
     keys: HashMap<String, NodeKey>,
     states: HashMap<(u64, u64), EditorState>,
+    retired: HashMap<(u64, u64), HashMap<NodeKey, Arc<NodeRecord>>>,
     saved_states: Vec<Option<EditorState>>,
     saved_versions: HashMap<usize, u64>,
     published_snapshots: HashMap<(u64, u64), usize>,
@@ -141,7 +142,68 @@ impl Bindings {
     }
 
     pub fn state(&self, version: &u64) -> Result<Option<EditorState>> {
-        Ok(self.lock()?.states.get(&(0, *version)).cloned())
+        self.editor_state(0, *version)
+    }
+
+    pub fn editor_state(&self, editor: u64, version: u64) -> Result<Option<EditorState>> {
+        Ok(self.lock()?.states.get(&(editor, version)).cloned())
+    }
+
+    pub fn retired_record(
+        &self,
+        editor: u64,
+        version: u64,
+        key: NodeKey,
+    ) -> Result<Option<Arc<NodeRecord>>> {
+        Ok(self
+            .lock()?
+            .retired
+            .get(&(editor, version))
+            .and_then(|records| records.get(&key))
+            .cloned())
+    }
+
+    pub fn capture_retired_records(
+        &self,
+        tx: &Transaction<'_>,
+        editor: u64,
+        version: u64,
+    ) -> Result<()> {
+        for value in self.handles()?.into_values() {
+            if value.get("$node").is_some()
+                && value["editor"].as_u64().unwrap_or(0) == editor
+                && integer(&value["ver"])? == version
+            {
+                let key = node_key(&value)?;
+                if let Some(record) = tx.retired_record(key) {
+                    self.pin_retired_record(
+                        editor,
+                        version,
+                        key,
+                        record.capture_for_foreign_read(),
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pin_retired_record(
+        &self,
+        editor: u64,
+        version: u64,
+        key: NodeKey,
+        record: NodeRecord,
+    ) -> Result<()> {
+        let previous = {
+            self.lock()?
+                .retired
+                .entry((editor, version))
+                .or_default()
+                .insert(key, Arc::new(record))
+        };
+        drop(previous);
+        Ok(())
     }
 
     pub fn pin_state(&self, version: u64, state: EditorState) -> Result<()> {
@@ -155,7 +217,17 @@ impl Bindings {
     }
 
     pub fn release_state(&self, version: u64) -> Result<()> {
-        let previous = { self.lock()?.states.remove(&(0, version)) };
+        self.release_editor_state(0, version)
+    }
+
+    pub fn release_editor_state(&self, editor: u64, version: u64) -> Result<()> {
+        let previous = {
+            let mut values = self.lock()?;
+            (
+                values.states.remove(&(editor, version)),
+                values.retired.remove(&(editor, version)),
+            )
+        };
         drop(previous);
         Ok(())
     }

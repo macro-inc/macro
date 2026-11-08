@@ -2,7 +2,8 @@
 mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
 mod read;
-pub use read::ForeignReadSnapshot;
+pub use read::{ForeignReadSnapshot, ForeignRecordIdentity};
+pub(crate) use read::{ReadOrigin, ReadOriginRef};
 
 mod hooks;
 pub use hooks::{ForeignData, ForeignHooks, ForeignNodeType, Override};
@@ -18,3 +19,5 @@ pub use runtime::{ForeignListener, ForeignListenerId, ForeignTransform};
 
 pub(crate) mod state;
 pub use state::{ForeignStateCodec, ForeignStateConfig};
+
+mod records;

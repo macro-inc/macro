@@ -89,10 +89,9 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 let record = value
                     .get("$nodeState")
                     .ok_or_else(|| fail("NodeState argument"))?;
-                let key = node_key(record)?;
-                let state = r.captured_state(record);
-                let view = state.as_ref().map(EditorState::view).unwrap_or(tx.view());
-                Ok(view.node_or_err(key)?.node_state().cloned())
+                super::properties::with_captured_record(r, tx, record, |node| {
+                    Ok(node.node_state().cloned())
+                })
             };
             let left = state(a.first())?;
             let right = state(a.get(1))?;

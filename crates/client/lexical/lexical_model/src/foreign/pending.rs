@@ -6,7 +6,7 @@ use std::sync::Arc;
 /// Opaque development host identity for an editor, independent of its state.
 /// Clones retain only an identity marker, never the editor or its callbacks.
 #[derive(Clone)]
-pub struct ForeignEditorIdentity(Arc<()>);
+pub struct ForeignEditorIdentity(pub(super) Arc<()>);
 
 impl ForeignEditorIdentity {
     /// Whether a current transaction belongs to this identity's editor.
@@ -18,7 +18,7 @@ impl ForeignEditorIdentity {
 /// Opaque identity of one pending update, preserved across suspend/resume.
 /// Retaining this marker does not retain pending state or callbacks.
 #[derive(Clone)]
-pub struct ForeignUpdateIdentity(Arc<()>);
+pub struct ForeignUpdateIdentity(pub(super) Arc<()>);
 
 impl ForeignUpdateIdentity {
     /// Whether the transaction is the same pending update, rather than a fresh
@@ -33,6 +33,9 @@ impl ForeignUpdateIdentity {
 pub struct PendingUpdate {
     update: Arc<()>,
     read_only: bool,
+    read_sources: Option<crate::state::NodeMap>,
+    read_origin: Option<super::ReadOrigin>,
+    retired_records: crate::state::NodeMap,
     previous_selection: Option<Selection>,
     owner: Arc<()>,
     version: CommitId,
@@ -76,6 +79,9 @@ impl Transaction<'_> {
         PendingUpdate {
             update: self.foreign_update,
             read_only: self.foreign_read_only,
+            read_sources: self.foreign_read_sources,
+            read_origin: self.foreign_read_origin,
+            retired_records: self.foreign_retired_records,
             previous_selection: self.foreign_previous_selection,
             native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
@@ -116,6 +122,9 @@ impl Editor {
         Ok(Transaction {
             foreign_update: update.update,
             foreign_read_only: update.read_only,
+            foreign_read_sources: update.read_sources,
+            foreign_read_origin: update.read_origin,
+            foreign_retired_records: update.retired_records,
             foreign_previous_selection: update.previous_selection,
             native_projection: update.native_projection,
             editor: self,

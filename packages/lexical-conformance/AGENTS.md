@@ -13,6 +13,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
 - `corpus/dev/README.md`: bounded dev collection, encrypted frozen sample, count-only scans and local source-versus-WASM replay.
+- `diff/compat.test.ts`: real Node/web WASM compatibility constants and per-instance key stream checks.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
@@ -34,7 +35,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 - In this package: `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun run test`.
 - From the repository: `just lexical-fixtures --check` twice, then `just check`.
-- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` and `STEPS=10000 bunx vitest run --config diff/vitest.config.mts` in this package (uses its pinned Vitest).
+- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json`, `STEPS=10000 bunx vitest run --config diff/vitest.config.mts`, and `COLLAB_STEPS=2000 bunx vitest run --config diff/collab.config.mts` in this package (uses its pinned Vitest); the raw-model and collaboration suites use their own configs.
 
 - In this package: `bunx tsc --noEmit -p coverage/tsconfig.json`, `bunx vitest run --config coverage/vitest.config.ts`.
 - From the repository: `just lexical-coverage-seed --check`, `just lexical-coverage --check`.
