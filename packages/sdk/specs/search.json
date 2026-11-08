@@ -586,7 +586,7 @@
             }
           }
         ],
-        "description": "Timed or all-day span of a calendar event.\n\nDeliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`\nrather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and\n`JsonSchema` (AI tool schemas), and `models_soup` carries no schemars\ndependency. The wire shape is identical and must stay that way, so a\nclient can decode a search row and a soup row with one mapping.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores."
+        "description": "Timed or all-day span of a calendar event.\n\nDeliberately a local mirror of `soup_types::calendar_event::SoupCalendarEventTime`\nrather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and\n`JsonSchema` (AI tool schemas), and `soup_types` carries no schemars\ndependency. The wire shape is identical and must stay that way, so a\nclient can decode a search row and a soup row with one mapping.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores."
       },
       "CallFilters": {
         "type": "object",
