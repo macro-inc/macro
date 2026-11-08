@@ -4,6 +4,121 @@ use doc_sync_core::*;
 use document_session::*;
 use lexical_model::*;
 #[test]
+fn macro_session_opens_persisted_task_lists_and_projects_typing() {
+    use std::sync::Arc;
+    let context = macro_document_model::DocumentContext {
+        clock: macro_document_model::NodeClock(Arc::new(|| 1794052800000)),
+        random: macro_document_model::NodeRandom(Arc::new({
+            let next = std::sync::atomic::AtomicU8::new(7);
+            move |size| vec![next.fetch_add(1, std::sync::atomic::Ordering::Relaxed); size]
+        })),
+        host: macro_document_model::NodeHost::default(),
+        keys: KeySource::default(),
+        editor_created: None,
+    };
+    let snapshot =
+        macro_document_model::snapshot::markdown_to_loro_snapshot("- todo", &context).unwrap();
+    let config = wire::SessionConfigMsg {
+        doc: "macro-list-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Edit,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut machine = machine::Machine::create_macro(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        1794052800000.0,
+    )
+    .unwrap();
+    machine.sync(SyncInput::Start, 0.0, None).unwrap();
+    machine
+        .sync(
+            SyncInput::Seed {
+                kind: SeedKind::Optimistic,
+                snapshot: snapshot.clone(),
+            },
+            1.0,
+            None,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert!(
+        session
+            .last_output()
+            .view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Initialize(_))),
+        "{:?}",
+        session
+            .last_output()
+            .view
+            .iter()
+            .filter_map(|effect| if let ViewEffect::Error(error) = effect {
+                Some(error.to_string())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>()
+    );
+    assert!(!session
+        .last_output()
+        .view
+        .iter()
+        .any(|effect| matches!(effect, ViewEffect::Error(_))));
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo"
+    );
+    let key = session
+        .surface()
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .unwrap();
+    let selection = ViewSelection::Range {
+        anchor: Point::text(key, Utf16Offset(5)),
+        focus: Point::text(key, Utf16Offset(5)),
+        resolution_dirty: false,
+    };
+    machine
+        .editor(
+            Input::TextFromView {
+                key,
+                text: "todo!".into(),
+                anchor: Some(Utf16Offset(5)),
+                focus: Some(Utf16Offset(5)),
+                composition_end: false,
+                composition_data: None,
+                selection,
+            },
+            2.0,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo!"
+    );
+}
+#[test]
 fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
     let config = wire::SessionConfigMsg {
         doc: "fixture-document".into(),

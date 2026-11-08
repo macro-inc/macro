@@ -6638,6 +6638,8 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
+ "rand_chacha 0.9.0",
  "serde_json",
  "sync_protocol",
  "thiserror 2.0.18",

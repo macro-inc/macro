@@ -2,6 +2,10 @@ use crate::*;
 use doc_sync_core::*;
 use document_session::*;
 use lexical_model::{EditorMode, Input};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc,
+};
 pub(crate) enum Session {
     Editor(Box<DocumentSession<EditorSurface>>),
     Doc(Box<DocumentSession<GenericSurface>>),
@@ -13,6 +17,7 @@ pub(crate) struct Machine {
     wall_origin: f64,
     terminal: bool,
     initial_telemetry: Vec<wire::TelemetryMsg>,
+    constructor_clock: Option<Arc<AtomicI64>>,
 }
 impl Machine {
     pub(crate) fn create(
@@ -22,15 +27,34 @@ impl Machine {
         wall: f64,
         editor: bool,
     ) -> Result<Self, BoundaryError> {
+        Self::create_with(abi, config, mono, wall, editor, false)
+    }
+    pub(crate) fn create_macro(
+        abi: u32,
+        config: &[u8],
+        mono: f64,
+        wall: f64,
+    ) -> Result<Self, BoundaryError> {
+        Self::create_with(abi, config, mono, wall, true, true)
+    }
+    fn create_with(
+        abi: u32,
+        config: &[u8],
+        mono: f64,
+        wall: f64,
+        editor: bool,
+        application: bool,
+    ) -> Result<Self, BoundaryError> {
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
         }
         let (mut config, headless, view_host) =
             codec::config(wire::SessionConfigMsg::deserialize(config)?)?;
         let now = codec::now(mono, wall)?;
+        let constructor_clock = application.then(|| Arc::new(AtomicI64::new(now.wall.0)));
         let capture = crate::telemetry::begin();
         let session = if editor {
-            config.surface = SurfaceConfig::Editor(EditorConfig {
+            let mut editor_config = EditorConfig {
                 view_host,
                 mode: if headless {
                     EditorMode::Headless
@@ -38,7 +62,11 @@ impl Machine {
                     EditorMode::ViewAttached
                 },
                 ..EditorConfig::default()
-            });
+            };
+            if let Some(clock) = &constructor_clock {
+                editor_config = crate::macro_editor::config(editor_config, clock.clone());
+            }
+            config.surface = SurfaceConfig::Editor(editor_config);
             Session::Editor(Box::new(DocumentSession::new(config, now)?))
         } else {
             Session::Doc(Box::new(DocumentSession::new(config, now)?))
@@ -50,6 +78,7 @@ impl Machine {
             wall_origin: wall - mono,
             terminal: false,
             initial_telemetry: capture.finish(),
+            constructor_clock,
         })
     }
     pub(crate) fn generation(&self) -> u32 {
@@ -65,6 +94,9 @@ impl Machine {
         wall: Option<f64>,
     ) -> Result<u32, BoundaryError> {
         let now = codec::now(mono, wall.unwrap_or(self.wall_origin + mono))?;
+        if let Some(clock) = &self.constructor_clock {
+            clock.store(now.wall.0, Ordering::Relaxed);
+        }
         if let Some(wall) = wall {
             self.wall_origin = wall - mono;
         }

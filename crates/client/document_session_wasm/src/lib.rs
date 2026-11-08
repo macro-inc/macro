@@ -9,6 +9,7 @@ mod editor;
 mod editor_input;
 mod generic;
 mod machine;
+mod macro_editor;
 mod output;
 mod query;
 mod router;

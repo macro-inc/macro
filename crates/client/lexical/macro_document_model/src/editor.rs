@@ -173,14 +173,18 @@ pub fn headless_editor() -> Editor {
 }
 /// Web preset builder with exactly the source exclusions and applicable replacements.
 pub fn preset_builder(ty: EditorType) -> EditorBuilder {
+    preset_builder_with_mode(ty, EditorMode::ViewAttached)
+}
+/// Build the same surface registry for a live editor or its headless comment fork.
+pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuilder {
     match ty {
-        EditorType::PlainText => Editor::builder(EditorMode::ViewAttached),
-        EditorType::Title => Editor::builder(EditorMode::ViewAttached).node::<InlineSearchNode>(),
+        EditorType::PlainText => Editor::builder(mode),
+        EditorType::Title => Editor::builder(mode).node::<InlineSearchNode>(),
         EditorType::Markdown
         | EditorType::MarkdownSync
         | EditorType::Chat
         | EditorType::Calendar => {
-            let builder = register_preset_nodes(Editor::builder(EditorMode::ViewAttached), ty);
+            let builder = register_preset_nodes(Editor::builder(mode), ty);
             let builder = if ty == EditorType::MarkdownSync {
                 crate::sync::DraftCommentPlugin::register(builder)
             } else {

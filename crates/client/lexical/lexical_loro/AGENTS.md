@@ -17,6 +17,8 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 ## Boundaries
 
 - Keep application node types and ownership policy behind SyncPolicy.
+- Apply source own-undefined storage fields through SyncPolicy before writing; retain strict attach equality and keep PlainPolicy unchanged.
+- Verify client Loro 1.17.1 separately from the server's preserved JavaScript 1.16.3 dependency in the pair test.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
 - Retain recorded timestamps only in server-created snapshot helpers; never regenerate the frozen Markdown ancestor.

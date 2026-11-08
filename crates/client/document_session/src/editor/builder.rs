@@ -9,7 +9,15 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
         .node::<link::LinkNode>()
         .node::<link::AutoLinkNode>()
         .node::<mark::MarkNode>();
-    table::register_table(builder, &table::TableConfig::default())
+    with_session_plugins(
+        table::register_table(builder, &table::TableConfig::default()),
+        peer,
+    )
+}
+
+/// Install session commands and durable identity tracking over a supplied registry.
+pub fn with_session_plugins(builder: EditorBuilder, peer: u64) -> EditorBuilder {
+    builder
         .extension_state(NodeIdIndex::default())
         .plugin(RichCommands)
         .plugin(NodeIds(peer))
