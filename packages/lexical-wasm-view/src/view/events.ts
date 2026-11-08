@@ -305,12 +305,18 @@ export function registerEvents(view: EditorView): {
     const route = view.keyRoute(event);
     const generation = view.mirror.keyGeneration;
     if (route && generation !== null) {
-      event.preventDefault();
+      if (route.preventDefault !== false) event.preventDefault();
+      const cached = view.selection().selection;
+      const selection =
+        cached.kind === 'table' || cached.kind === 'node'
+          ? { kind: 'keep' as const }
+          : readSelection(view);
       view.port.input(
         EditorInputMsg.fromEditorApplication({
-          ...route,
+          name: route.name,
+          json: route.json,
           generation,
-          selection: selectionMessage(readSelection(view)),
+          selection: selectionMessage(selection),
           keyboard: true,
           key: event.key,
           mods:
@@ -323,10 +329,13 @@ export function registerEvents(view: EditorView): {
           code: event.keyCode,
         }),
         (handled) => {
-          if (!handled) {
-            view.runViewCommand('KeyDown', event, 'after');
-            if (keyCommand) view.runViewCommand(keyCommand, event, 'after');
-          }
+          if (view.consumePreventDefault()) event.preventDefault();
+          if (
+            !handled &&
+            (view.runViewCommand('KeyDown', event, 'after') ||
+              (keyCommand && view.runViewCommand(keyCommand, event, 'after')))
+          )
+            event.preventDefault();
         }
       );
       return;

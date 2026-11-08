@@ -201,3 +201,43 @@ fn code_edge_arrows_insert_a_caret_before_the_first_block_and_leave_middle_lines
     assert_eq!(editor.state().view().children_keys(NodeKey::ROOT)?.len(), 3);
     Ok(())
 }
+
+#[test]
+fn fresh_code_text_uses_edge_navigation_without_model_highlight_nodes() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (code, text) = editor
+        .update(|tx| {
+            let code = create_custom_code_node(tx, Some("rust"))?;
+            set_custom_code(tx, code, Some("rust"), "let n = 1;")?;
+            tx.append(NodeKey::ROOT, &[code.key()])?;
+            let text = tx.first_child(code).expect("plain code text");
+            assert_eq!(tx.type_name(text)?, "text");
+            tx.select_start(text)?;
+            Ok((code, text))
+        })?
+        .0;
+    assert_eq!(
+        editor
+            .dispatch(&Command::Key {
+                command: KeyCommand::ArrowUp,
+                event: None
+            })?
+            .0,
+        Handled::Yes
+    );
+    assert!(
+        editor.state().view().is::<Paragraph>(
+            editor
+                .state()
+                .view()
+                .first_child(NodeKey::ROOT)
+                .expect("leading paragraph")
+        )
+    );
+    assert_eq!(editor.state().view().parent(text), Some(code.key()));
+    assert_eq!(editor.state().view().type_name(text)?, "text");
+    Ok(())
+}

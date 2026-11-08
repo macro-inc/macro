@@ -107,6 +107,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = table::decode_key(name, json, generation, event)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = table::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -160,5 +163,23 @@ pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, E
     if let Some(payload) = text_paste::event_payload(event)? {
         return Ok(Some(payload));
     }
+    if let Some(payload) = table::event_payload(event)? {
+        return Ok(Some(payload));
+    }
     clipboard::event_payload(event)
+}
+
+/// Execute a Group B bulk read without live handles or host callbacks.
+pub fn query(
+    name: &str,
+    data: &serde_json::Value,
+    generation: u32,
+    state: &EditorState,
+) -> Result<Option<serde_json::Value>, Error> {
+    table::query(name, data, generation, state)
+}
+
+/// Whether an application key route claims the browser default before dispatch.
+pub fn key_prevents_default(name: &str) -> Option<bool> {
+    (name == "group-b.table-key").then_some(false)
 }

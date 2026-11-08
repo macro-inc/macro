@@ -11,10 +11,11 @@ shares this view through EditorPort; it does not supply production model code.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
   through that applier. Authoritative Rust corrections take precedence.
+- Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
 - Carry ephemeral clipboard host facts through registerFacts; release them after native admission or cancellation, and deliver typed plugin host requests through onPluginEvent after Diff.
-- Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks.
+- Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks. Set preventDefault=false for layout-dependent routes that leave unhandled movement to the browser, and consume native prevention plus short-circuiting after-listeners.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach
   lower-priority view listeners, including queued inputs.
 - Send marked typing style for 200 ms and Android post-delete context through the
@@ -27,12 +28,14 @@ shares this view through EditorPort; it does not supply production model code.
 - Handle session effect kind 9 before painting: end native composition and suppress
   its redundant synchronous input/end events; Rust already merged the accepted text.
 
+Keep table pointer selection tied to its pointer id; cancel it on pointercancel or loss of editability, and leave touch selection to the long-press adapter.
+
 Keep drag source validity tied to documentRevision; selection-only commits do not invalidate a drag. Lazy clipboard imports retain the broader revision guard.
 
 ## Checks
 
 - `bun run check`, `bun run test`, `bun run test:browser`
-- `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste and nested-editor ownership under both plugin registration orders.
+- `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
 - Browser tests launch their own headless Chromium; never connect to a person's
   browser or the shared CDP instance. No existing-server reuse.

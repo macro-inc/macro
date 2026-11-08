@@ -1,12 +1,23 @@
 //! Application table integrity, list-first Tab, row growth and scoped select-all.
 use super::*;
 mod actions;
+mod controls;
+mod keys;
+pub(super) use keys::decode as decode_key;
+mod resize;
+pub(super) use resize::query;
 mod list_grid;
 pub(super) use actions::decode;
+pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(payload) = keys::event_payload(event)? {
+        return Ok(Some(payload));
+    }
+    actions::event_payload(event)
+}
 use lexical_rich_nodes::{list::ListItemNode, table::*};
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    actions::register(builder)
+    let builder = actions::register(builder)
         .node_trait::<TableNode, dyn CanSelectBefore>(|node| node)
         .table_selection_hooks(TableSelectionHooksImpl)
         .transform::<TableNode>(transforms::table_transform)
@@ -38,7 +49,8 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
             }
             Ok(())
         })
-        .plugin(Tables)
+        .plugin(Tables);
+    keys::register(resize::register(builder))
 }
 struct Tables;
 impl Plugin for Tables {

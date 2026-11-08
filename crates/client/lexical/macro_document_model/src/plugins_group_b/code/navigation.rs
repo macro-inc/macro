@@ -1,6 +1,5 @@
 //! Source edge-arrow movement for code/highlight selection points.
 use super::*;
-use lexical_rich_nodes::code::CodeHighlightNode;
 
 pub(super) fn arrow(tx: &mut Transaction<'_>, down: bool) -> Result<Handled, Error> {
     let Some(range) = tx
@@ -14,7 +13,8 @@ pub(super) fn arrow(tx: &mut Transaction<'_>, down: bool) -> Result<Handled, Err
     let focus = range.focus;
     let target = if tx.is::<CodeNode>(focus.key()) {
         Some(focus.key())
-    } else if tx.is::<CodeHighlightNode>(focus.key()) {
+    // Highlighting is view-only (D6); fresh code retains ordinary text leaves.
+    } else if tx.view().text(focus.key()).is_some() {
         tx.parent(focus.key()).filter(|key| tx.is::<CodeNode>(*key))
     } else {
         None

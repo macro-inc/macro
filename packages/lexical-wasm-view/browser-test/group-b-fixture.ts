@@ -12,6 +12,14 @@ import { registerNativeDraggableBlock } from '../../../apps/web/src/lib/core/com
 import { registerNativeListSwipeIndent } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/list-swipe-indent/native';
 import { registerNativeNormalizeEnter } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/normalize-enter/native';
 import { registerNativeTabIndentation } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/native';
+import {
+  deleteNativeTableAtHover,
+  insertNativeTableAxis,
+  moveNativeTableCells,
+} from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/native';
+import { registerNativeTableKeys } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/nativeKeys';
+import { registerNativeTableResizeEdges } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/nativeResizeEdges';
+import { registerNativeTableTouchSelection } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/trailing-paragraph/native';
 import init, {
   EditorSession,
@@ -175,7 +183,51 @@ function mount(id: string) {
   const releaseGap = registerNativeTrailingParagraph(mounted);
   const releaseEnter = registerNativeNormalizeEnter(mounted);
   const releaseTab = registerNativeTabIndentation(mounted);
+  const releaseTableKeys = registerNativeTableKeys(mounted);
+  const releaseResize = registerNativeTableResizeEdges(mounted);
+  const releaseTouchSelection = registerNativeTableTouchSelection(mounted);
   return {
+    tableDelete(cell: number, axis: 'row' | 'column' | 'table') {
+      return deleteNativeTableAtHover(mounted, cell, axis);
+    },
+    tableInsert(cell: number, axis: 'row' | 'column', after: boolean) {
+      return insertNativeTableAxis(mounted, cell, axis, after);
+    },
+    tableMove(anchor: number, focus: number, target: number) {
+      return moveNativeTableCells(mounted, anchor, focus, target);
+    },
+    caret(text: string, offset: number) {
+      const node = [...mounted.mirror.values()].find(
+        (node) => node.kind === 'text' && node.text === text
+      );
+      const element = node ? mounted.getElementByKey(node.key) : null;
+      const leaf = element
+        ? document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()
+        : null;
+      if (!node || !leaf) throw new Error('Missing caret text');
+      root.focus();
+      document.getSelection()?.setBaseAndExtent(leaf, offset, leaf, offset);
+      port.selectionFromView({
+        kind: 'range',
+        anchor: { key: node.key, offset, type: 'text' },
+        focus: { key: node.key, offset, type: 'text' },
+      });
+    },
+    selectCells(anchor: number, focus: number) {
+      const table = [...mounted.mirror.values()].find(
+        (node) => node.type === 'table'
+      );
+      if (!table) throw new Error('Missing table');
+      port.selectionFromView({
+        kind: 'table',
+        table: table.key,
+        anchorCell: anchor,
+        focusCell: focus,
+      });
+    },
+    selection() {
+      return mounted.selection().selection;
+    },
     set(json: string) {
       port.setState(json);
     },
@@ -204,6 +256,9 @@ function mount(id: string) {
       }));
     },
     close() {
+      releaseTableKeys();
+      releaseResize();
+      releaseTouchSelection();
       releaseTab();
       releaseEnter();
       releaseGap();

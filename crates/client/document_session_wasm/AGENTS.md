@@ -8,7 +8,10 @@ Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
 TextFromView returns zero only for an exact accepted DOM edit; all other outcomes
 include authoritative text or full view repair, including permission rejection,
 stale/non-text keys and malformed UTF-16. A cold `initialize` rebuilds only the
-view. ABI major 2 includes static type predicate flags and initialize markers.
+view. SelectionFromView likewise returns zero only for accepted points matching
+final model selection; nonzero or normalized/rejected inputs carry authoritative
+selection. The view caches those facts while honoring skip-dom-selection tags.
+ABI major 2 includes static type predicate flags and initialize markers.
 View effect kind 9 ends native composition before a bounded remote hold is painted.
 Kind 10 replaces remote cursors: a flag=true marker clears the set, followed by
 point selections with peer key/color in keys[0]/keys[1].
@@ -24,7 +27,8 @@ claiming the browser default unless a handler consumes it.
 Application command envelopes carry the mirror generation and an optional
 keyboard event; reject stale generations before decoding typed surface commands.
 Use clipboard kind 2 for complete block-drag subtrees; retain ordinary node-selection copy semantics for kinds 0 and 1.
-Use the surface decoder table so migration groups append registrations independently.
+Use the surface decoder and key-default policy tables so migration groups append registrations independently; table-key routes let model effects decide browser prevention.
+Route application bulk reads through query kind 9 with the mirror generation in flags and a name/data JSON envelope in text; reject retired generations and unknown names.
 
 ## Start here
 

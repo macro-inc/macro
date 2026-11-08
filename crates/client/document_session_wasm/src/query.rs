@@ -316,6 +316,22 @@ pub(crate) fn query(
                 ))?];
             }
         }
+        9 => {
+            if msg.flags != session.machine.generation() {
+                return Err(BoundaryError::Invalid("application query generation"));
+            }
+            let envelope: serde_json::Value = serde_json::from_str(&msg.text)?;
+            let name = envelope
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(BoundaryError::Invalid("application query name"))?;
+            let data = envelope
+                .get("data")
+                .ok_or(BoundaryError::Invalid("application query data"))?;
+            let value = macro_document_model::surface::query(name, data, msg.flags, state)?
+                .ok_or(BoundaryError::Invalid("application query"))?;
+            reply.text = serde_json::to_string(&value)?;
+        }
         _ => return Err(BoundaryError::Invalid("query kind")),
     }
     Ok(reply)
