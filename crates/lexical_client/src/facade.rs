@@ -64,7 +64,8 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `get_markdown` through its configured route group.
+    /// Fetches the full document rendered as a single markdown string in the
+    /// requested target format.
     pub async fn get_markdown(&self, document_id: &str, target: MarkdownTarget) -> Result<String> {
         self.dispatch(
             Route::Markdown,
@@ -75,7 +76,10 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `get_embedding_markdown` through its configured route group.
+    /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),
+    /// typed so callers can only consume it as an [`EmbeddingMarkdown`]. Prefer
+    /// this over [`get_markdown`](Self::get_markdown) with
+    /// [`MarkdownTarget::Embedding`] anywhere the result feeds task-dedup.
     pub async fn get_embedding_markdown(&self, document_id: &str) -> Result<EmbeddingMarkdown> {
         self.dispatch(
             Route::Markdown,
@@ -86,7 +90,9 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `resolve_comment_mark` through its configured route group.
+    /// Resolve a comment mark against the live document: `None` when the
+    /// document no longer carries it. Performs no access check of its own, so
+    /// callers must already hold access to the document.
     pub async fn resolve_comment_mark(
         &self,
         document_id: &str,
@@ -148,7 +154,10 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `markdown_to_html` through its configured route group.
+    /// Renders `markdown` to an email-ready HTML body through the configured
+    /// backend, so a caller with no browser composer — the `SendEmail` tool,
+    /// whose body the model writes as markdown — produces the same HTML the
+    /// composer would have exported.
     pub async fn markdown_to_html(&self, markdown: &str) -> Result<RenderedBody> {
         self.dispatch(
             Route::Html,
@@ -159,7 +168,8 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `extract_mentions` through its configured route group.
+    /// Parses `markdown` through the configured backend and returns the entity
+    /// mentions it contains.
     pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
         self.dispatch(
             Route::Mentions,
@@ -170,7 +180,7 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `compose_image_markdown` through its configured route group.
+    /// Compose dimension-preserving channel markup from a real Lexical image node.
     pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
         self.dispatch(
             Route::ImageMarkdown,
@@ -181,7 +191,9 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `compose_agent_announcement` through its configured route group.
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — through the configured backend,
+    /// so the markdown is built from real Lexical nodes.
     pub async fn compose_agent_announcement(
         &self,
         reply_target: Option<&AgentAnnouncementReplyTarget>,
@@ -196,7 +208,7 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `compose_agent_connection_prompt` through its configured route group.
+    /// Compose an account setup reply through the lexical service's real nodes.
     pub async fn compose_agent_connection_prompt(
         &self,
         prompt: &AgentConnectionPrompt,
@@ -213,7 +225,8 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `compose_agent_chat_reply` through its configured route group.
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
     pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
         self.dispatch(
             Route::AgentChatReply,
@@ -224,7 +237,9 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `compose_agent_context` through its configured route group.
+    /// Sanitizes an agent prompt and optionally composes it with why the
+    /// agent was called through the configured backend, so internal nodes and
+    /// escaping are handled by Lexical rather than by the caller.
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
@@ -255,7 +270,9 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `extract_explicit_reply` through its configured route group.
+    /// Parses `markdown` through the configured backend and returns the leading
+    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
     pub async fn extract_explicit_reply(
         &self,
         markdown: &str,
@@ -269,7 +286,7 @@ impl LexicalClient {
         )
         .await
     }
-    /// Dispatch `notion_to_loro_snapshot` through its configured route group.
+    /// Convert a Notion page to a new document's Loro snapshot.
     pub async fn notion_to_loro_snapshot(
         &self,
         request: &NotionSnapshotRequest<'_>,

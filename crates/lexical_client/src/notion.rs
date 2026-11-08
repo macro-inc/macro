@@ -63,8 +63,6 @@ struct NotionSnapshotResponse {
 }
 
 impl HttpLexicalClient {
-    /// Convert a Notion page to a new document's Loro snapshot.
-
     pub async fn notion_to_loro_snapshot(
         &self,
         request: &NotionSnapshotRequest<'_>,
