@@ -344,7 +344,8 @@ fn hostname(host_header: &str) -> String {
         Some((host, port)) if port.bytes().all(|byte| byte.is_ascii_digit()) => host,
         _ => host_header,
     };
-    host.to_ascii_lowercase()
+    // `host.` is the same name as `host`.
+    host.trim_end_matches('.').to_ascii_lowercase()
 }
 
 /// A request for one file of a version on an artifact's origin.
