@@ -350,7 +350,7 @@ export function CallRecordingBody(props: {
                             <div>
                               <Tabs
                                 aria-label={t('calls.detailContent')}
-                                size={isMobile() ? 'md' : 'sm'}
+                                size="md"
                                 fullWidth={isMobile()}
                                 options={[
                                   {

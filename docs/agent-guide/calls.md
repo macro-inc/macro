@@ -68,7 +68,7 @@ started the call can change sharing; it never substitutes their email.
 An editable switch stays disabled while its change is pending.
 
 Close the side panel to widen and center the recording column and expose
-Summary/Transcript tabs. Stored summary attribution sits below the Summary
+medium-size Summary/Transcript tabs. Stored summary attribution sits below the Summary
 heading or reading tabs, above the summary text. Below 960px of call-pane width the panel starts closed;
 opening it covers the content with Back to content, keeping the same tabs.
 Playback remains reachable in a pinned bar after the recording scrolls above the
