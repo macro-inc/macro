@@ -19,7 +19,7 @@ every other created document.
 
 The generic document paths refuse artifacts: `POST /documents` and file
 uploads reject the file type, copying an artifact is refused (its body is its
-version history), `location_v3` points callers at `view_url`, and the AI
+version history) and duplicating a folder skips its artifacts, `location_v3` points callers at `view_url`, and the AI
 `ReadContent` tool says the content is a web page. Search indexes the name
 only.
 
