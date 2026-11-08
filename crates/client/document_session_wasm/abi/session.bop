@@ -1,4 +1,5 @@
 const uint32 ABI_MAJOR = 2;
+const uint32 FLAG_HANDLED = 32;
 const uint32 DIFF_FORMAT_VERSION = 1;
 enum DiffOpcode : uint32 { Remove = 1; CreateElement = 2; CreateText = 3; CreateDecorator = 4; CreateLineBreak = 5; Children = 6; Text = 7; TextProps = 8; ElementProps = 9; NodeProps = 10; State = 11; }
 enum Access : byte { Read = 0; CommentOnly = 1; Edit = 2; }
@@ -43,7 +44,7 @@ struct ViewEffectMsg { ClosedReason closedReason; SaveReason saveReason; byte ki
 struct QueryMsg { byte kind; uint32 key; string text; uint32 flags; }
 struct QueryReplyMsg { string text; uint32 count; uint32[] keys; string[] nodes; PointMsg[] points; }
 struct ClipboardMsg { string html; string lexical; string plain; }
-struct TypeRowMsg { uint32 index; string name; byte kind; }
+struct TypeRowMsg { uint32 index; string name; byte kind; uint32 flags; }
 struct TypeTableMsg { TypeRowMsg[] rows; }
 struct ListenerRowMsg { string command; uint32 priority; }
 struct ListenerTableMsg { ListenerRowMsg[] rows; }

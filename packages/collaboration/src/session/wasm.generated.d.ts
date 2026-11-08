@@ -118,6 +118,10 @@ export class EditorSession {
      */
     static create(abi_major: number, config: Uint8Array, now: number, wall: number): EditorSession;
     /**
+     * Full development insertion predicate using the host's resolved selection.
+     */
+    debugInsertion(selection: Uint8Array, format: number, style: string, text: string, facts: number): boolean;
+    /**
      * Development cross-check for the host insertion predicate.
      */
     debugShouldPreventDefault(index: number, offset: number, text: string): boolean;
@@ -130,13 +134,17 @@ export class EditorSession {
      */
     host(signal: number, now: number, wall: number): number;
     /**
+     * Cold recovery patch from an empty view; does not reset sync or history.
+     */
+    initialize(): Uint8Array;
+    /**
      * Deliver a cold Bebop input.
      */
     input(msg: Uint8Array, now: number, wall: number): number;
     /**
      * Key routing computed by the host view.
      */
-    keyDown(code: number, mods: number, routed: number, key: string, now: number): number;
+    keyDown(code: number, mods: number, routed: number, key: string, anchor_key: number, anchor_offset: number, anchor_type: number, focus_key: number, focus_offset: number, focus_type: number, selection_kind: number, now: number): number;
     /**
      * Command listener priorities read once at open.
      */
@@ -206,7 +214,7 @@ export class EditorSession {
      */
     tokenFetched(attempt: number, token: string | null | undefined, access: number, now: number, wall: number): number;
     /**
-     * Registered types, without instance-specific view flags.
+     * Registered types and static predicate flags; bit zero marks known flags.
      */
     typeTable(): Uint8Array;
     /**
@@ -309,9 +317,11 @@ export interface InitOutput {
     readonly editorsession_compositionEnd: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly editorsession_debugViewChecksum: (a: number) => [number, number, number];
-    readonly editorsession_keyDown: (a: number, b: number, c: number, d: number, e: any, f: number) => [number, number, number];
+    readonly editorsession_initialize: (a: number) => [number, number, number, number];
+    readonly editorsession_keyDown: (a: number, b: number, c: number, d: number, e: any, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly editorsession_listenerTable: (a: number) => [number, number, number, number];
     readonly editorsession_markdown: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_nodeText: (a: number, b: number) => [number, number];
