@@ -12,7 +12,11 @@ pub struct TsChild {
 impl TsChild {
     pub fn spawn(seed: u32) -> Self {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let lane = std::env::var("SYNC_SIM_TS_LORO").unwrap_or_else(|_| "current".into());
+        let lane = match macro_env_var::read_env_var("SYNC_SIM_TS_LORO") {
+            Ok(value) => value,
+            Err(std::env::VarError::NotPresent) => "current".into(),
+            Err(error) => panic!("invalid SYNC_SIM_TS_LORO: {error}"),
+        };
         let expected_loro = match lane.as_str() {
             "current" => "1.17.1",
             "legacy" => "1.16.3",
