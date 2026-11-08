@@ -232,6 +232,13 @@ fn comparable<T: Serialize>(result: &Result<T>, group: RouteGroup) -> Option<Com
     Some(Comparable::Value(value))
 }
 
+// OpenTelemetry has signed integer attributes; usize/Option use debug strings.
+fn record_size(span: &tracing::Span, field: &'static str, size: Option<usize>) {
+    if let Some(size) = size.and_then(|size| i64::try_from(size).ok()) {
+        span.record(field, size);
+    }
+}
+
 pub(crate) async fn dispatch<T: Serialize>(
     mode: RouteMode,
     route: Route,
@@ -246,7 +253,7 @@ pub(crate) async fn dispatch<T: Serialize>(
     span.record("route", route);
     span.record("mode", mode.as_ref());
     span.record("document_id", document_id);
-    span.record("bytes_in", bytes_in);
+    record_size(&span, "bytes_in", Some(bytes_in));
     let result = async {
         match mode {
             RouteMode::Http => http.await,
@@ -261,10 +268,16 @@ pub(crate) async fn dispatch<T: Serialize>(
                         .zip(comparable(&in_process, group).as_ref())
                         .is_some_and(|(a, b)| a == b);
                     tracing::Span::current().record("equal", equal);
-                    tracing::Span::current()
-                        .record("http_bytes", http_bytes.as_ref().map(Vec::len));
-                    tracing::Span::current()
-                        .record("in_process_bytes", local_bytes.as_ref().map(Vec::len));
+                    record_size(
+                        &tracing::Span::current(),
+                        "http_bytes",
+                        http_bytes.as_ref().map(Vec::len),
+                    );
+                    record_size(
+                        &tracing::Span::current(),
+                        "in_process_bytes",
+                        local_bytes.as_ref().map(Vec::len),
+                    );
                     tracing::Span::current()
                         .record("outcome", if equal { "equal" } else { "mismatch" });
                     if let Err(error) = &in_process {
@@ -298,7 +311,7 @@ pub(crate) async fn dispatch<T: Serialize>(
     }
     .instrument(span.clone())
     .await;
-    span.record("bytes_out", bytes(&result).as_ref().map(Vec::len));
+    record_size(&span, "bytes_out", bytes(&result).as_ref().map(Vec::len));
     span.record("outcome", if result.is_ok() { "ok" } else { "error" });
     if let Err(error) = &result {
         span.record(
