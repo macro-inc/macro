@@ -265,6 +265,12 @@ where
                     (false, SessionSource::Agent) => {
                         agent_session::domain::model::SessionPurpose::Dispatched
                     }
+                    // Asked for out of sight, such as a routine draft.
+                    (false, SessionSource::User)
+                        if request.visibility == SessionVisibility::Hidden =>
+                    {
+                        agent_session::domain::model::SessionPurpose::Background
+                    }
                     (false, SessionSource::User) => {
                         agent_session::domain::model::SessionPurpose::Standalone
                     }

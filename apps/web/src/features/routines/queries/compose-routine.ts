@@ -1,6 +1,6 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
-import { statusError } from '@core/util/safeFetch';
+import type { ResultError } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
@@ -15,8 +15,8 @@ import { stepsFromWire } from '../core/routine-steps';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
 /**
- * What the drafter may write. The user's workspace is never sent: a large
- * one exceeds the request size limit.
+ * What the drafter may write. It finds the channels, people and other items
+ * the description names itself, with the user's access.
  */
 export type ComposerContext = {
   timezone: string;
@@ -31,6 +31,8 @@ export type ComposerContext = {
 const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
 const TOO_LARGE =
   'This routine is too large for AI to draft. Shorten it and try again.';
+const TIMED_OUT =
+  'Drafting took too long. Try again, or describe the routine more simply.';
 
 function draftContext(context: ComposerContext): DraftContext {
   return {
@@ -39,6 +41,20 @@ function draftContext(context: ComposerContext): DraftContext {
     code: context.codeSteps,
     conditions: context.decisions,
   };
+}
+
+/** Why a draft request failed, for the dialog; `failure` when it's no known reason. */
+function requestFailure(
+  errors: ResultError<string>[],
+  failure: string
+): string {
+  const usageLimit = errors.find(isAiUsageLimitError);
+  if (usageLimit) return usageLimit.message;
+  if (errors.some((error) => error.code === 'PAYLOAD_TOO_LARGE')) {
+    return TOO_LARGE;
+  }
+  if (errors.some((error) => error.code === 'TIMEOUT')) return TIMED_OUT;
+  return failure;
 }
 
 /**
@@ -60,14 +76,10 @@ export async function requestDraft(
     });
     if (response.isErr()) {
       span.setAttr('routine.draft.outcome', 'request_failed');
+      span.setAttr('routine.draft.error', response.error[0]?.code ?? 'unknown');
       span.error('Routine draft request failed');
       handleAiUsageLimitError(response.error);
-      return (
-        response.error.find(isAiUsageLimitError)?.message ??
-        (response.error.some((e) => e.message === statusError(413).message)
-          ? TOO_LARGE
-          : failure)
-      );
+      return requestFailure(response.error, failure);
     }
     span.setAttr('routine.draft.outcome', response.value.outcome);
     return response.value.outcome === 'failed'
@@ -93,6 +105,7 @@ export function draftFromRoutine(
   });
   const base = {
     ...createEmptyDraft(defaultModel),
+    created: routine.created,
     name: routine.name,
     triggers: (routine.trigger && parseRoutineTriggers(routine.trigger)) ?? [],
     enabled: true,

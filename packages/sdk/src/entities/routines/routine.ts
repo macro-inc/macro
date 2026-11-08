@@ -24,7 +24,11 @@ import { User } from '../users/user';
 
 /** An event selector references resources by typed handles. */
 export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
-  /** Resource selectors for these events. Omit to match all resources. */
+  /**
+   * The items these events are watched on, as references to handles the SDK
+   * returned, such as `{ type: 'channel', entity: channel }`; never ids.
+   * Omit to match all items.
+   */
   entities?: EntityReference[];
   /** Optional yes/no condition on the triggering content. */
   condition?: string;
