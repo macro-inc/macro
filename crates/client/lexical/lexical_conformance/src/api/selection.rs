@@ -3,20 +3,20 @@ use crate::replay::*;
 use lexical_model::*;
 use serde_json::{Value, json};
 pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value) -> Result<()> {
-    if let Some(old) = r.active_selection.take()
+    if let Some(old) = r.selections.take_active()?
         && let Some(selection) = tx.selection().cloned()
     {
-        r.selections[old] = tx.detach_selection(selection);
+        r.selections.set_slot(old, tx.detach_selection(selection))?;
     }
     if value.is_null() {
         tx.set_selection(None)?;
         return Ok(());
     }
     let id = integer(&value["$selection"])? as usize;
-    let selection = tx.selection_at(r.selections[id])?.cloned();
+    let selection = tx.selection_at(r.selections.slot(id)?)?.cloned();
     tx.set_selection(selection)?;
-    r.selections[id] = SelectionSlot::Active;
-    r.active_selection = Some(id);
+    r.selections.set_slot(id, SelectionSlot::Active)?;
+    r.selections.set_active(Some(id))?;
     Ok(())
 }
 pub(crate) fn call(
@@ -28,7 +28,7 @@ pub(crate) fn call(
 ) -> Result<Value> {
     if let Some(point) = receiver.get("$point") {
         let id = integer(&point["selection"])? as usize;
-        let slot = r.selections[id];
+        let slot = r.selections.slot(id)?;
         let role = if point["role"] == "anchor" {
             PointRole::Anchor
         } else {
@@ -50,7 +50,7 @@ pub(crate) fn call(
             "isBefore" | "is" => {
                 let other = a.first().ok_or_else(|| fail("point"))?;
                 let other_id = integer(&other["$point"]["selection"])? as usize;
-                let other_slot = r.selections[other_id];
+                let other_slot = r.selections.slot(other_id)?;
                 let other = if other["$point"]["role"] == "anchor" {
                     tx.anchor_at(other_slot)?
                 } else {
@@ -66,11 +66,12 @@ pub(crate) fn call(
         };
     }
     let id = integer(&receiver["$selection"])? as usize;
-    let slot = r.selections[id];
+    let slot = r.selections.slot(id)?;
     let selection = tx
         .selection_at(slot)?
         .cloned()
         .ok_or_else(|| fail("empty selection handle"))?;
+    let active = r.selections.active()?;
     match method {
         "add" => {
             let key = key_arg(r, a.first().ok_or_else(|| fail("key"))?)?;
@@ -82,7 +83,7 @@ pub(crate) fn call(
             if slot == SelectionSlot::Active {
                 tx.set_selection(Some(value))?;
             } else {
-                r.selections[id] = tx.detach_selection(value);
+                r.selections.set_slot(id, tx.detach_selection(value))?;
             }
             Ok(undefined())
         }
@@ -152,18 +153,18 @@ pub(crate) fn call(
         }
         "insertNodes" => {
             tx.insert_nodes_at(slot, &node_args(a.first().ok_or_else(|| fail("nodes"))?)?)?;
-            r.active_selection = None;
+            r.selections.clear_if_active(active)?;
             Ok(undefined())
         }
         "insertParagraph" => {
             let node = tx.insert_paragraph_at(slot)?;
-            r.active_selection = None;
+            r.selections.clear_if_active(active)?;
             node.map(|key| r.node(tx.view(), key))
                 .unwrap_or(Ok(Value::Null))
         }
         "insertLineBreak" => {
             tx.insert_line_break_at(slot, a.first().and_then(Value::as_bool).unwrap_or(false))?;
-            r.active_selection = None;
+            r.selections.clear_if_active(active)?;
             Ok(undefined())
         }
         "formatText" => {
@@ -200,14 +201,13 @@ pub(crate) fn call(
             if let Selection::Range(range) = &mut selection {
                 range.clear_direction_cache();
             }
-            let new_id = r.selections.len();
+
             let kind = if selection.is_range() {
                 "range"
             } else {
                 "node"
             };
-            r.selections.push(tx.detach_selection(selection));
-            r.selection_values.push(None);
+            let new_id = r.selections.push(tx.detach_selection(selection))?;
             Ok(json!({"$selection":new_id,"kind":kind}))
         }
         _ => Err(fail(format!("unmapped API: RangeSelection.{method}"))),

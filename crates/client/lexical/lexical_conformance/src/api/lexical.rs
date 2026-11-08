@@ -355,16 +355,14 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             nodes.into_iter().map(|key| r.node(view, key)).collect()
         }
         "lexical.$getRoot" => r.node(view, NodeKey::ROOT),
-        "lexical.$getSelection" => Ok(r.selection(tx)),
+        "lexical.$getSelection" => r.selection(tx),
         "lexical.$createRangeSelection" | "lexical.$createNodeSelection" => {
             let selection = if short == "$createRangeSelection" {
                 Selection::Range(RangeSelection::at_root())
             } else {
                 Selection::Node(NodeSelection::new())
             };
-            let id = r.selections.len();
-            r.selections.push(tx.detach_selection(selection));
-            r.selection_values.push(None);
+            let id = r.selections.push(tx.detach_selection(selection))?;
             Ok(
                 json!({"$selection":id,"kind":if short == "$createRangeSelection" {"range"} else {"node"}}),
             )
@@ -381,16 +379,20 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .and_then(|id| r.selections.get(id as usize))
-                .and_then(|slot| tx.selection_at(*slot).ok().flatten())
+                .map(|id| r.selections.try_slot(id as usize))
+                .transpose()?
+                .flatten()
+                .and_then(|slot| tx.selection_at(slot).ok().flatten())
                 .is_some_and(Selection::is_range)
         )),
         "lexical.$isNodeSelection" => Ok(json!(
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .and_then(|id| r.selections.get(id as usize))
-                .and_then(|slot| tx.selection_at(*slot).ok().flatten())
+                .map(|id| r.selections.try_slot(id as usize))
+                .transpose()?
+                .flatten()
+                .and_then(|slot| tx.selection_at(slot).ok().flatten())
                 .is_some_and(Selection::is_node)
         )),
         "lexical.$createTextNode" | "lexical/nodes/LexicalTextNode.$createTextNode" => {
@@ -482,7 +484,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$selectAll" => {
             tx.select_all(None)?;
-            Ok(r.selection(tx))
+            r.selection(tx)
         }
         "lexical.$insertNodes" => {
             let nodes = node_args(a.first().ok_or_else(|| fail("nodes argument"))?)?;
@@ -558,10 +560,7 @@ pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
         .ok_or_else(|| fail(format!("unknown key argument: {value}")))
 }
 pub(crate) fn slot_arg(r: &Replayer, value: &Value) -> Result<SelectionSlot> {
-    r.selections
-        .get(integer(&value["$selection"])? as usize)
-        .copied()
-        .ok_or_else(|| fail("selection handle"))
+    r.selections.slot(integer(&value["$selection"])? as usize)
 }
 pub(crate) fn node_args(value: &Value) -> Result<Vec<NodeKey>> {
     value

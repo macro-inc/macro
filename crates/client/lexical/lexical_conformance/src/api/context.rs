@@ -43,10 +43,10 @@ impl Context {
                 .bindings
                 .pin_state(self.replay.committed_version, tx.committed_state().clone())?;
         }
-        self.previous_selections = self.replay.selection_values.clone();
+        self.previous_selections = self.replay.selections.values()?;
         self.replay.record_owner =
             Some((self.replay.committed_version, tx.committed_state().clone()));
-        self.replay.begin_slots(tx, true);
+        self.replay.begin_slots(tx, true)?;
         self.replay
             .bindings
             .bind_key("root".into(), NodeKey::ROOT)?;
@@ -87,9 +87,9 @@ impl Context {
         self.scope = Scope::Idle;
         self.replay.in_callback = false;
         self.replay.record_owner = None;
-        self.replay.selection_values = std::mem::take(&mut self.previous_selections);
-        self.replay.active_selection = None;
-        self.replay.selections.clear();
+        self.replay
+            .selections
+            .restore_values(std::mem::take(&mut self.previous_selections))?;
         self.release_version(self.replay.version)
     }
 

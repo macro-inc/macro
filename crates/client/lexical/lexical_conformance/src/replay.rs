@@ -7,8 +7,10 @@ use std::collections::HashMap;
 mod bindings;
 mod initial;
 mod records;
+mod selections;
 pub(crate) use bindings::Bindings;
 pub(crate) use records::RecordIdentities;
+pub(crate) use selections::SelectionBindings;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -81,9 +83,7 @@ pub struct Replayer {
     pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
     pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
-    pub(crate) selections: Vec<SelectionSlot>,
-    pub(crate) selection_values: Vec<Option<Selection>>,
-    pub(crate) active_selection: Option<usize>,
+    pub(crate) selections: SelectionBindings,
     pub(crate) tapes: Vec<crate::fixture::Tape>,
     pub(crate) tape_positions: Vec<usize>,
     pub(crate) updates: Vec<Value>,
@@ -260,7 +260,7 @@ impl Replayer {
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     self.version += 1;
                     let mut tx = ed.transaction();
-                    self.begin_slots(&mut tx, true);
+                    self.begin_slots(&mut tx, true)?;
                     self.pending_writes = false;
                     if kind == "commit" && self.version == 1 && self.attached {
                         tx.mark_dirty(NodeKey::ROOT)?;
@@ -343,7 +343,7 @@ impl Replayer {
                 "call" if op["fn"] == "LexicalEditor.dispatchCommand" => {
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     let mut tx = ed.transaction();
-                    self.begin_slots(&mut tx, false);
+                    self.begin_slots(&mut tx, false)?;
                     self.execute(op, &mut tx)?;
                     self.capture_slots(&tx)?;
                     self.pending_install = Some(tx.commit()?);
@@ -382,7 +382,7 @@ impl Replayer {
                         self.compare(&op["ret"], &undefined())
                     } else {
                         let mut tx = ed.transaction();
-                        self.begin_slots(&mut tx, false);
+                        self.begin_slots(&mut tx, false)?;
                         self.execute(op, &mut tx)
                     }
                 }
@@ -473,38 +473,44 @@ impl Replayer {
             if !self.causes.iter().any(|cause| cause == "setEditorState") {
                 self.causes.push(json!("setEditorState"));
             }
-            self.active_selection = None;
+            self.selections.set_active(None)?;
             undefined()
         };
         self.compare(op.get("ret").unwrap_or(&undefined()), &actual)
     }
-    pub(crate) fn begin_slots(&mut self, tx: &mut Transaction<'_>, clone_active: bool) {
-        let previous_active = self.active_selection;
+    pub(crate) fn begin_slots(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        clone_active: bool,
+    ) -> Result<()> {
+        let previous_active = self.selections.active()?.map(|active| active.id);
         if clone_active {
-            self.active_selection = None;
+            self.selections.set_active(None)?;
         }
-        self.selections = self
-            .selection_values
-            .iter()
+        let slots = self
+            .selections
+            .values()?
+            .into_iter()
             .enumerate()
             .map(|(id, s)| {
                 if !clone_active && previous_active == Some(id) {
                     SelectionSlot::Active
                 } else {
-                    s.clone()
-                        .map(|s| tx.detach_selection(s))
+                    s.map(|s| tx.detach_selection(s))
                         .unwrap_or(SelectionSlot::Active)
                 }
             })
             .collect();
+        self.selections.replace_slots(slots)
     }
     pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
-        self.selection_values = self
+        let values = self
             .selections
-            .iter()
-            .map(|slot| tx.selection_at(*slot).map(|s| s.cloned()))
+            .slots()?
+            .into_iter()
+            .map(|slot| tx.selection_at(slot).map(|s| s.cloned()))
             .collect::<std::result::Result<_, _>>()?;
-        Ok(())
+        self.selections.replace_values(values)
     }
     pub(crate) fn execute(&mut self, op: &Value, tx: &mut Transaction<'_>) -> Result<()> {
         validate_operation(op)?;
@@ -865,18 +871,20 @@ impl Replayer {
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
         )
     }
-    pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Value {
+    pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Result<Value> {
         if tx.selection().is_none() {
-            return Value::Null;
+            return Ok(Value::Null);
         }
-        if let Some(id) = self.active_selection {
-            return json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}});
-        }
-        let id = self.selections.len();
-        self.selections.push(SelectionSlot::Active);
-        self.selection_values.push(None);
-        self.active_selection = Some(id);
-        json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}})
+        let id = if let Some(active) = self.selections.active()? {
+            active.id
+        } else {
+            let id = self.selections.push(SelectionSlot::Active)?;
+            self.selections.set_active(Some(id))?;
+            id
+        };
+        Ok(
+            json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}}),
+        )
     }
 }
 pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {

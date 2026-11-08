@@ -402,10 +402,7 @@ pub(crate) fn call(
         "$setPointFromCaret" => {
             let target = first()?;
             let id = integer(&target["$point"]["selection"])? as usize;
-            let slot = *r
-                .selections
-                .get(id)
-                .ok_or_else(|| fail("selection handle"))?;
+            let slot = r.selections.slot(id)?;
             let role = match target["$point"]["role"].as_str() {
                 Some("anchor") => PointRole::Anchor,
                 Some("focus") => PointRole::Focus,
@@ -543,10 +540,10 @@ pub(crate) fn call(
         }
         "$setSelectionFromCaretRange" => {
             if !tx.selection().is_some_and(Selection::is_range) {
-                r.active_selection = None;
+                r.selections.set_active(None)?;
             }
             tx.set_selection_from_caret_range(range(r, first()?)?)?;
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "$normalizeCaret" => CaretValue::Point(normalize_caret(tx.view(), point(r, first()?)?)?),
         "$splitAtPointCaretNext" => {

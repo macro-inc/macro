@@ -250,6 +250,7 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
     struct Hooks {
         bindings: crate::replay::Bindings,
         records: crate::replay::RecordIdentities,
+        selections: crate::replay::SelectionBindings,
         seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
     }
     impl ForeignHooks for Hooks {
@@ -264,6 +265,7 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
                 let mut child = Context {
                     replay: Replayer {
                         bindings: self.bindings.clone(),
+                        selections: self.selections.clone(),
                         record_ids: self.records.clone(),
                         record_owner: Some((0, tx.committed_state().clone())),
                         version: 1,
@@ -315,6 +317,7 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
             hooks: std::sync::Arc::new(Hooks {
                 bindings: host.replay.bindings.clone(),
                 records: host.replay.record_ids.clone(),
+                selections: host.replay.selections.clone(),
                 seen: seen.clone(),
             }),
         })
