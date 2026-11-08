@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 bots = { workspace = true, features = ["outbound", "ports"] }
 channels_outbound = { workspace = true }
 connection_gateway_client = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 document_storage_service_client = { workspace = true }
 entity_access = { workspace = true, default-features = true }
 entity_access_outbound = { workspace = true }

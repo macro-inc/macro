@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;

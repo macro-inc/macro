@@ -1,6 +1,6 @@
 //! Environment-backed startup configuration. Queue/URL overrides use shared types.
 
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use slack_integration::{domain::models::ImportError, inbound::worker::WorkerConfig};
 
 #[cfg(test)]

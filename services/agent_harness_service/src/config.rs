@@ -6,7 +6,7 @@
 //! environments, surfacing any missing or mistyped values at CI time.
 
 use anyhow::Context;
-use database_env_vars::{DatabaseUrl, RedisUri};
+use datastore_env_vars::{DatabaseUrl, RedisUri};
 use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;

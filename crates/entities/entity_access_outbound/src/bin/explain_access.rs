@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use entity_access::domain::{
     explain::ExplainAccessServiceImpl, models::EntityType, ports::ExplainAccessService,
 };

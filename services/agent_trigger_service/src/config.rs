@@ -1,7 +1,7 @@
 //! Environment-backed service configuration.
 
 use anyhow::Context as _;
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use macro_env_var::env_vars;
 
 env_vars! {

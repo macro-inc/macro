@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "database_env_vars"
+name = "datastore_env_vars"
 publish = false
 version = "0.1.0"
 

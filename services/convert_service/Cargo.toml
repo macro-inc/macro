@@ -19,7 +19,7 @@ anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 doppler-config = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
