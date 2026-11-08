@@ -1,5 +1,35 @@
 use super::*;
 
+#[test]
+fn descendant_index_past_the_last_child_uses_its_last_descendant() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let inline = tx.create(Inline {
+        label: "nested".into(),
+    })?;
+    let first = tx.create_text("first")?;
+    let last = tx.create_text("last")?;
+    tx.append(inline, &[first.key(), last.key()])?;
+    tx.append(p, &[inline.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    let view = tx.view();
+    assert_eq!(
+        view.descendant_by_index(p, ChildIndex(0)),
+        Some(first.key())
+    );
+    assert_eq!(view.descendant_by_index(p, ChildIndex(1)), Some(last.key()));
+    assert_eq!(
+        view.descendant_by_index(p, ChildIndex(99)),
+        Some(last.key())
+    );
+    assert_eq!(view.descendant_by_index(last, ChildIndex(0)), None);
+    Ok(())
+}
+
 // LexicalNode.test.ts:862, plus direction/ancestor literals from the pinned oracle.
 #[test]
 fn nodes_between_retains_visited_ancestors_in_upstream_traversal_order() -> Result<(), Error> {
