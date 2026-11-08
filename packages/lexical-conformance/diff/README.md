@@ -9,6 +9,17 @@ bun install --cwd packages/lexical-conformance --frozen-lockfile
 STEPS=10000 bunx vitest run --config diff/vitest.config.mts
 ```
 
+Prebuild the native collab bridge before running its independent profile:
+
+```sh
+cargo build -p document_session --example collab --features conformance -j4
+bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts
+```
+
+Run those commands from the repository root. The raw-model profile excludes collab;
+the collab profile supplies the app's single Loro instance and Lexical bundle aliases.
+Both profiles retain all their comparisons and fixed seeds.
+
 The fixed seeds are 73129, 19088743 and 1592639710. `STEPS` counts generated
 commands per seed; `DIFF_SEED` and `DIFF_PATH` replay one run. Every generated
 command executes against the current upstream tree. A failure stops at the first
