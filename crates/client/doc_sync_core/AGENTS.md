@@ -88,3 +88,7 @@ while read-only and resumes after regrant without changing other owners' durable
 Clear the old document's pending-import flag only after successful replacement,
 before WAL/assistance replay can establish new pending dependencies; failed
 replacement keeps the original document and its pending-history status.
+
+Record server evidence from checksum-valid bytes of actually ACKed own-push rows;
+the sender receives no broadcast echo. Never infer that proof from local document VV
+or unpushed rows, so periodic foreign scans cannot resend already confirmed history.
