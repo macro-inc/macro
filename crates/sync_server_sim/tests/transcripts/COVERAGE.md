@@ -220,3 +220,9 @@ control-request/storage references. These have no exception in the real-workerd
 diff. The runtime projection separately maps JS undefined/omitted optional
 migration source IDs to typed None, and records migration-export SQL constructor
 and direct chunk-read effects; native policy and ordering remain strict.
+
+The corpus also retains the three real Macro comment-root scenarios in
+`comment_marks.test/real_comment_roots_are_accepted_and_content_edits_refused_in_{http,in_process,shadow}_mode.jsonl`.
+They cover acceptance of annotation changes and refusal of content changes in
+each gate mode. All 158 Worker recordings use strict normalized comparison;
+the native replay allowlist remains the 18 fully extracted callback scenarios.

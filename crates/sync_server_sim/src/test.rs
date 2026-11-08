@@ -224,7 +224,7 @@ fn actual_operation_log_uses_the_memory_ports_in_order() {
 fn all_golden_fixtures_load_and_enabled_callbacks_replay() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts");
     let paths = fixtures(&root).unwrap();
-    assert_eq!(paths.len(), 155);
+    assert_eq!(paths.len(), 158);
     for path in paths {
         let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
         let transcript = Transcript::load(&path, name).unwrap();
