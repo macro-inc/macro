@@ -78,3 +78,9 @@ other owners never advances the local logged vector over an unappended edit.
 
 Retire server-confirmed foreign rows from an outstanding own push; preserve its
 message identity and every still-unconfirmed row until their ack or timeout.
+
+Retain acknowledged assist bytes until local VV coverage proves they imported,
+including across reset failure, replacement and pending dependencies; the server
+excludes the sender from broadcasts. Do not reload rows covered by server evidence.
+Queue assistance only with write authority; retained unsent assistance stays inactive
+while read-only and resumes after regrant without changing other owners' durable rows.

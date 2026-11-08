@@ -369,9 +369,12 @@ impl SyncCore {
         }
         for owner in local.assist {
             for row in owner.records {
-                if row.record.user == self.config.user
+                if self.effective_access == Access::Edit
+                    && row.record.user == self.config.user
                     && !row.delivered
                     && !row.record.quarantined
+                    && !loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true)
+                        .is_ok_and(|meta| self.server_vv.includes_vv(&meta.partial_end_vv))
                     && !self.assist.iter().any(|r| {
                         r.record.seq == row.record.seq && r.record.bytes == row.record.bytes
                     })

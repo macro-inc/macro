@@ -7,6 +7,7 @@ impl SyncCore {
         {
             self.resume_reset(now, doc, out);
         }
+        self.replay_assistance(now, doc, out);
         self.push_rows(now, out);
         self.push_assist(now, out);
         self.advance_reset(now, out);
@@ -243,8 +244,9 @@ impl SyncCore {
             .any(|e| !self.is_delivered(e.seq) && !e.superseded)
             || self.wal.append_due.is_some()
             || self.pending_import
+            || !self.assist_replay.is_empty()
             || self.waiting_for_fresh_ack
-            || !self.assist.is_empty()
+            || (!self.assist.is_empty() && self.effective_access == Access::Edit)
         {
             if self.push.is_some()
                 || self

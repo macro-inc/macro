@@ -2,6 +2,7 @@ use super::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+mod assistance;
 mod lifecycle;
 mod presence;
 mod recovery;
