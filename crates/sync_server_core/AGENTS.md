@@ -3,42 +3,43 @@
 ## What it is
 
 Worker-independent synchronization policy and persisted domain models shared by
-the Durable Object adapter and native simulation.
+Cloudflare Durable Objects and native simulation.
 
 ## Start here
 
-- `src/domain/document.rs`: atomic update and snapshot policy.
-- `src/domain/permissions.rs`: verified grants and permission checks.
-- `src/domain/state.rs`: imported document state with explicit monotonic time.
-- `src/domain/ports.rs`: runtime capability contracts, with non-Send futures.
-- `src/domain/room.rs`: owned memory and configuration; adapters serialize callbacks.
-- `src/domain/operation_log.rs`: pending-write order, replay and snapshot policy.
-- `src/domain/connection.rs`: persisted metadata and explicit-time grant policy.
-- `src/domain/migration.rs`: persisted migration states.
+- `src/domain/room.rs`: owned private memory, configuration and read-only diagnostics.
+- `src/domain/ports.rs`: runtime capabilities; local futures/errors are intentional (CS-60/CS-56).
+- `src/domain/room/connection.rs`, `frame.rs`: socket lifecycle, grants, framing and telemetry.
+- `src/domain/room/http.rs`, `atomic.rs`: initialization, reads and atomic updates.
+- `src/domain/room/alarm.rs`, `delete.rs`: snapshot/compaction, blame and permanent erasure.
+- `src/domain/room/surface.rs`, `migration.rs`, `fault.rs`: isolated lifecycles and recovery.
+- `src/domain/state.rs`, `operation_log.rs`: explicit-clock imports and ordered persistence.
+- `src/domain/document.rs`, `permissions.rs`: update validation and verified grant policy.
 
 - `src/comment_gate.rs`: optional shared in-process CommentGate implementation; no HTML feature or runtime dependency.
 
 ## Boundaries
 
-- Depends on pure domain types and Loro; no Worker, Tokio, sockets or environment.
-- Used by `services/sync-service` and `crates/sync_server_sim`; authentication stays in that adapter.
-- Keep persisted serde shapes and error text compatible with the golden corpus.
+- Depend on pure domain types and pinned Loro; never Worker, Tokio, sockets, HTTP or environment.
+- Keep authentication, HTTP parsing/limits and runtime handles in adapters.
+- Serialize complete callbacks in the adapter, including the request gate and route handler.
+- Background ports receive owned snapshots/editor batches; never a room or lock guard.
+- Keep memory private. `RoomMemoryView` exposes identity, mapped peers and read-only document exports.
+- Preserve stored serde shapes, wire errors and named quirks in the golden corpus.
 
 ## Checks
 
-- `cargo test -p sync_server_core`
+- `cargo test -p sync_server_core -p sync_server_sim -p sync_protocol`
 - `cargo check -p sync_server_core --target wasm32-unknown-unknown`
-- `cargo tree -p sync_server_core` contains no Worker, wasm-bindgen, Tokio or mio.
-- Run the sync-service suite and compare a fresh transcript recording.
+- `cargo tree -p sync_server_core` must contain no Worker, wasm-bindgen, Tokio or mio.
+- Re-record the sync-service suite and require zero normalized transcript diffs.
+- Run the native public-function coverage floor described in `../sync_server_sim/AGENTS.md`.
 
 ## Gotchas
 
-- Server documents import and export without committing; committing requires an
-  explicitly assigned peer. Preserve Loro's pinned version.
 - Keep this crate excluded from hakari so it remains wasm-safe.
-- Use `uuid-types` for supplied identifiers; ambient UUID generation belongs to adapters.
-
-`RoomMemory` owns the document, operation log, metadata and pending batches. Its
-hidden accessors temporarily support Worker handler bodies during extraction;
-keep runtime handles and locks in the adapter. Presence retains the pinned Loro
-store until C9a.
+- Import/export server documents without committing local operations.
+- Presence uses clock-injected `sync_protocol::presence`, vendored from Loro 1.16.2.
+- Supply UUIDs through ports and `uuid-types`; ambient randomness belongs to adapters.
+- Production adapters always select `FaultPlan::None`; fault headers are test-only.
+- Retain operation IDs and applied keys across same-session exists/initialize calls. Retain unresolved operation keys until the oplog covers them.

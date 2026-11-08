@@ -65,7 +65,7 @@ function awarenessFrames(entries) {
 
 /** Normalize recorded entropy/time references, retaining raw fixtures for replay. */
 export function normalize(lines) {
-  const entries = lines.filter(line => line.trim()).map(line => JSON.parse(line));
+  const entries = lines.filter(line => line.trim()).map(line => JSON.parse(line)).filter(entry => entry.clock !== "presence");
   const expirations = new Set();
   for (const entry of entries) {
     if (!entry.in) continue;

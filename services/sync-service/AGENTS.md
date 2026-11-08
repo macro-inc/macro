@@ -12,6 +12,9 @@ updates over WebSocket.
 - `README.md`: project structure, Durable Object lifecycle (in-memory vs
   persistent state, the keep-alive alarm), JWT auth, and Bebop codegen. Read
   it before changing this service.
+- `../../crates/sync_server_core/src/domain/room/http.rs`: initialization, reads and source-request gate policy; handlers retain deferred body reads.
+- `../../crates/sync_server_core/src/domain/room/alarm.rs`: persistence alarms and blame flushing; callbacks map its empty/ok outcomes.
+- `../../crates/sync_server_core/src/domain/room/frame.rs`: inbound frame policy and message telemetry, including the fail-closed HTTP comment gate.
 - `src/inbound/durable_object.rs` + `src/inbound/durable_object/document_api.rs`: the Durable
   Object — WebSocket handling, loro document state, alarm-driven snapshotting.
 - `src/inbound/durable_object/surface_api.rs`, `surface_migration.rs`: non-document
@@ -31,7 +34,8 @@ updates over WebSocket.
 - `../../crates/sync_server_core/src/domain/`: shared session permission policy,
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
-- `src/state.rs`: read-only Loro views for adapter exports; mutable state lives in the core Room.
+- `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
+- `src/outbound/room_ports.rs`: Worker clocks; document state and migration proof decoding live in core.
 
 ## Scope
 
@@ -49,8 +53,8 @@ updates over WebSocket.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
-  `src/domain/` (surface-specific logic) → migration in
-  `src/inbound/durable_object/surface_migration.rs` if it changes stored shape.
+  `../../crates/sync_server_core/src/domain/room/surface.rs` → migration policy in
+  `../../crates/sync_server_core/src/domain/room/migration.rs` if it changes stored shape.
 
 Active-peer queries with `include_ai=false` exclude signed agent actors and the
 reserved AI peer blocks (`sync_server_core::domain::ai_peer`); Canvas workers use random full-width
@@ -116,7 +120,15 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 - Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.
 
-The request gate and Axum handler share one owned room guard. Handler adapters
-borrow the room for the whole request; background work receives owned snapshots
-and editor batches, never a room guard. `websocket_error` only logs and stays
-lock-free. H9 still replaces the operation log and snapshot transport handle.
+The request gate and Axum handler share one owned room guard (CS-61). `HttpHandlers`
+borrows only Room for request decoding and response serialization; it owns no session
+memory. WebSocket/alarm/close adapters call Room directly. The error callback stays
+lock-free. Background effects receive owned snapshots and editor batches. Same-session exists/initialize retain the operation log. Compaction retains
+unresolved updates until their dependencies arrive.
+
+All room policy lives under `../../crates/sync_server_core/src/domain/room/`:
+connections/frames, HTTP reads/atomic updates, alarms/deletion, surfaces/migration.
+The Worker retains credential verification, body limits, HTTP parsing and runtime
+transports. Native replay and fault recovery run with
+`cargo test -p sync_server_core -p sync_server_sim -p sync_protocol` from the root;
+see `../../crates/sync_server_sim/AGENTS.md` for coverage and transcript recipes.

@@ -12,43 +12,37 @@ use worker::{Env, State};
 
 /// Snapshot transport preserving the existing backend selection and value types.
 pub struct WorkerSnapshots {
-    scope: Scope,
+    env: Env,
     state: Rc<State>,
     cached: RefCell<Option<(SessionKey, Rc<backends::Storage>)>>,
 }
-enum Scope {
-    Fixed(Rc<backends::Storage>),
-    Dynamic { env: Env, state: Rc<State> },
-}
 impl WorkerSnapshots {
-    pub fn fixed(backend: backends::Storage, state: Rc<State>) -> Self {
+    pub fn new(env: Env, state: Rc<State>) -> Self {
         Self {
-            scope: Scope::Fixed(Rc::new(backend)),
+            env,
             state,
             cached: RefCell::new(None),
         }
     }
-    pub fn new(env: Env, state: Rc<State>) -> Self {
-        Self {
-            state: state.clone(),
-            scope: Scope::Dynamic { env, state },
-            cached: RefCell::new(None),
+    pub(crate) fn backend(&self, key: &SessionKey) -> worker::Result<Rc<backends::Storage>> {
+        if let Some((cached_key, backend)) = self.cached.borrow().as_ref()
+            && cached_key == key
+        {
+            return Ok(backend.clone());
         }
+        let backend = Rc::new(get_snapshot_storage(
+            &self.env,
+            &self.state,
+            key.as_str().to_owned(),
+        )?);
+        *self.cached.borrow_mut() = Some((key.clone(), backend.clone()));
+        Ok(backend)
     }
-    fn backend(&self, key: &SessionKey) -> worker::Result<Rc<backends::Storage>> {
-        match &self.scope {
-            Scope::Fixed(backend) => Ok(backend.clone()),
-            Scope::Dynamic { env, state } => {
-                if let Some((cached_key, backend)) = self.cached.borrow().as_ref()
-                    && cached_key == key
-                {
-                    return Ok(backend.clone());
-                }
-                let backend = Rc::new(get_snapshot_storage(env, state, key.as_str().to_owned())?);
-                *self.cached.borrow_mut() = Some((key.clone(), backend.clone()));
-                Ok(backend)
-            }
-        }
+    pub(crate) fn forget(&self) {
+        *self.cached.borrow_mut() = None;
+    }
+    pub(crate) fn adopt(&self, key: SessionKey, backend: Rc<backends::Storage>) {
+        *self.cached.borrow_mut() = Some((key, backend));
     }
     fn export_backend(
         &self,
@@ -62,6 +56,17 @@ impl WorkerSnapshots {
 }
 impl SnapshotStore for WorkerSnapshots {
     type Error = worker::Error;
+    fn prepare(&self, key: &SessionKey) -> worker::Result<()> {
+        self.adopt(
+            key.clone(),
+            Rc::new(get_snapshot_storage(
+                &self.env,
+                &self.state,
+                key.as_str().to_owned(),
+            )?),
+        );
+        Ok(())
+    }
     async fn has(&self, key: &SessionKey) -> worker::Result<bool> {
         self.backend(key)?.has_snapshot().await
     }

@@ -9,3 +9,6 @@ pub mod replay;
 mod test;
 /// Golden transcript parsing and comparison primitives.
 pub mod transcript;
+
+#[cfg(test)]
+mod migration_test;

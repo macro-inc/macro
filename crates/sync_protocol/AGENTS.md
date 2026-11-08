@@ -15,7 +15,9 @@ Shared, worker-free wire types for document collaboration and sync routing.
 
 ## Boundaries
 
-- Depends on the Bebop runtime; no Worker or service dependency.
+- Presence is default-on for direct consumers; workspace users opt in explicitly.
+- `src/presence.rs` vendors Loro 1.16.2 with explicit `UnixMillis`; preserve its license and byte parity; use the workspace-pinned loro-internal utilities alongside Loro 1.17.1.
+- With presence disabled, depends on the Bebop runtime only; no Worker or service dependency.
 - Used by sync-service, sync_router and document_storage_service.
 
 ## Recipes

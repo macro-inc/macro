@@ -1,229 +1,60 @@
 use super::*;
 
-impl SyncSession<'_> {
-    pub(super) async fn websocket_message(
-        &mut self,
-        ws: WebSocket,
-        msg: WebSocketIncomingMessage,
-    ) -> Result<()> {
-        if self.source_blocked().await? {
-            ws.close(Some(1008), Some("session frozen or retired"))?;
-            return Ok(());
-        }
-        if !self.validate_surface_sockets(Some(&ws)).await? {
-            return Ok(());
-        }
-        use sync_protocol::{PING, PONG};
-        let binary_message = match msg {
-            WebSocketIncomingMessage::String(message) => {
-                // Heartbeat: deliberately unspanned to keep it out of traces.
-                if message == PING {
-                    ws.send_with_str(PONG).ok();
-                } else {
-                    return worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
-                        warn!("Received unknown 'String' message: {message:?}");
-                        Ok(())
-                    })
-                    .await;
-                }
-                return Ok(());
-            }
-            WebSocketIncomingMessage::Binary(bm) => bm,
-        };
-        let ws_id = get_ws_id(&self.state, &ws)?;
-        let Some(binary_message) = Socket::receive(&mut self.inbound, &ws_id, &binary_message)?
-        else {
-            return Ok(());
-        };
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
-
-            let res: Result<()> = async {
-                let document_id = self.document_id().await.inspect_err(|_| {
-                    telemetry.record_error_stage("document_context");
-                })?;
-                let ws_id = get_ws_id_from_tags(&self.state.get_tags(&ws)).ok();
-                telemetry.record_context(&document_id, ws_id);
-
-                let message = protocol::deserialize_message(&binary_message).inspect_err(|_| {
-                    telemetry.record_message_type("invalid");
-                    telemetry.record_error_stage("deserialize");
-                })?;
-                telemetry.record_message_type(protocol::message_type(&message));
-
-                let document_state = self.document_state().await?;
-                self.session_storage().await?;
-                protocol::process_message(
-                    &self.socket_for(&ws),
-                    &document_id,
-                    &document_state,
-                    message,
-                    self,
-                    &mut telemetry,
-                )
-                .await
-                .inspect_err(|_| {
-                    telemetry.record_error_stage("process");
-                })
-                .context("failed to process websocket message")?;
-
-                bump_alarm(&self.state)
-                    .await
-                    .inspect_err(|_| {
-                        telemetry.record_error_stage("alarm");
-                    })
-                    .context("failed to keep document alive")?;
-
-                Ok(())
-            }
-            .await;
-
-            if let Err(error) = &res {
-                let span = telemetry.error_span();
-                {
-                    let _entered = span.enter();
-                    tracing::error!(error = ?error, "failed to handle websocket message");
-                }
-            }
-            res
-        })
-        .await
-    }
-
-    /// Save document if needed
-    pub(super) async fn alarm(&mut self) -> Result<Response> {
-        if self.source_blocked().await? {
-            return Response::empty();
-        }
-        self.validate_surface_sockets(None).await?;
-        let span = tracing::info_span!("do.alarm");
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            let state = match self
-            .document_state()
+pub(super) async fn websocket_message(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+    ws: WebSocket,
+    msg: WebSocketIncomingMessage,
+) -> Result<()> {
+    use sync_server_core::domain::room::InboundFrame;
+    let frame = match msg {
+        WebSocketIncomingMessage::String(text) => InboundFrame::Text(text),
+        WebSocketIncomingMessage::Binary(bytes) => InboundFrame::Binary(bytes),
+    };
+    let heartbeat = matches!(&frame, InboundFrame::Text(text) if text == sync_protocol::PING);
+    let handled = room.on_frame(&ws, frame);
+    if heartbeat {
+        handled.await.map_err(room_error)
+    } else {
+        worker_rs_otel::scope(env, state, handled)
             .await
-            .context("failed to get document_state")
-        {
-            Ok(x) => x,
-            Err(_e) => {
-                // This is likely due to a programming issue. We don't return `Err`
-                // because it wuld cause this alarm to retry, then fail again.
-                return Response::empty();
-            }
-        };
-
-        if state.should_save() {
-            let seshs = self
-                .session_storage()
-                .await
-                .context("failed to get session storage")?;
-
-            // Keeps the worker alive for DEFAULT_TIME_TO_LIVE
-            keepalive(DEFAULT_TIME_TO_LIVE);
-
-            let doc_state = self.document_state().await?;
-            let (sf, of) = doc_state.frontiers();
-            seshs
-                .store_snapshot(self.operation_log.as_ref().expect("log initialized"), self.document.as_ref().expect("document loaded"))
-                .await
-                .context("failed to store snapshot")?;
-
-            debug!(state_frontiers =? sf, oplog_frontiers =? of, "Stored new DocumentState");
-            seshs
-                .clear_applied_ops(self.operation_log.as_mut().expect("log initialized"))
-                .await
-                .context("failed deleting applied ops")?;
-
-            self.document.as_mut().expect("document loaded").mark_exported(crate::state::monotonic());
-
-            // The old wait_until future captured these on its first poll, at
-            // the next yield or return, before any callback could acquire the
-            // barrier. Capturing now under the same room guard yields the same
-            // snapshot and editor set, without sharing mutable room state.
-            let publication = self.document_id().await.ok().and_then(|document_id| {
-                doc_state.export_shallow_snapshot().ok().map(|snapshot| (document_id, snapshot))
-            }).map(|(document_id, snapshot)| (document_id, snapshot, take_editors(&mut self.pending_editors)));
-            let env = self.env.clone();
-            // Preserve the scheduling effect even if exporting failed.
-            self.state.wait_until(crate::background(async move {
-                if let Some((document_id, snapshot, editors)) = publication {
-                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
-                    report_interaction(&document_id, &env, InteractionReason::Edited).await;
-                }
-            }));
-        }
-
-        self.flush_pending_blame();
-
-        // Re-arm the alarm while clients are connected so the in-memory state
-        // stays warm and pending updates keep getting persisted. Updates reach
-        // peers when they happen (PeerUpdate broadcast); pushing a full
-        // snapshot to every client on every alarm tick only burned bandwidth
-        // and stalled clients on large documents.
-        if !self.state.get_websockets().is_empty() {
-            bump_alarm(&self.state)
-                .await
-                .context("failed to keep document alive")?;
-        } else {
-            info!("durable object has reached 0 connections")
-        }
-
-            Response::ok("ok")
-        }
-        .instrument(span))
-        .await
+            .map_err(room_error)
     }
+}
 
-    pub(super) async fn websocket_close(
-        &mut self,
-        ws: WebSocket,
-        _code: usize,
-        _reason: String,
-        _was_clean: bool,
-    ) -> Result<()> {
-        if self.source_blocked().await? {
-            self.forget_websocket_metadata(&ws).await;
-            return Ok(());
-        }
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            // Sockets closed by `delete_handler` report back after the session is gone.
-            if self.try_document_id().await?.is_none() {
-                self.forget_websocket_metadata(&ws).await;
-                return Ok(());
-            }
-            self.validate_surface_sockets(None).await?;
-            let peer_ids = Wsm::new(self, &ws).get_peer_ids(true).await?;
-            for peer_id in peer_ids {
-                self.awareness.delete(&peer_id.to_string());
-                let update = self.awareness.encode(&peer_id.to_string());
-
-                // Don't silently discard the error
-                protocol::broadcast_awareness(self, &self.socket_for(&ws), update.as_slice())
-                    .context("failed to broadcast awareness")?;
-            }
-
-            if self.state.get_websockets().len() == 1
-                && let Ok(state) = self.document_state().await
-                && let Ok(document_id) = self.document_id().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
-            {
-                let editors = take_editors(&mut self.pending_editors);
-                let env = self.env.clone();
-                self.state.wait_until(crate::background(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
-                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
-                }));
-            }
-            self.forget_websocket_metadata(&ws).await;
-            Ok(())
-        })
-        .await
+/// Map the core alarm outcome without changing durable retry behavior.
+pub(super) async fn alarm(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+) -> Result<Response> {
+    use sync_server_core::domain::room::AlarmOutcome;
+    let outcome = worker_rs_otel::scope(
+        env,
+        state,
+        room.on_alarm().instrument(tracing::info_span!("do.alarm")),
+    )
+    .await
+    .map_err(room_error)?;
+    match outcome {
+        AlarmOutcome::Skipped => Response::empty(),
+        AlarmOutcome::Completed => Response::ok("ok"),
     }
+}
+
+pub(super) async fn websocket_close(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+    ws: WebSocket,
+    _code: usize,
+    _reason: String,
+    _was_clean: bool,
+) -> Result<()> {
+    worker_rs_otel::scope(env, state, room.on_close(&ws))
+        .await
+        .map_err(room_error)
 }
 
 fn room_config() -> RoomConfig {
@@ -280,20 +111,10 @@ impl DocumentSyncSession {
             self.state.as_ref(),
             async {
                 async {
-                    if let Some(response) =
-                        SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                            .gate_request(&req)
-                            .await?
-                    {
+                    if let Some(response) = HttpHandlers::new(&mut room).gate_request(&req).await? {
                         return Ok(response);
                     }
-                    crate::inbound::router::dispatch(
-                        room,
-                        self.state.clone(),
-                        self.env.clone(),
-                        req,
-                    )
-                    .await
+                    crate::inbound::router::dispatch(room, self.env.clone(), req).await
                 }
                 .await
                 .context("DurableObject::fetch error")
@@ -329,9 +150,7 @@ impl DurableObject for DocumentSyncSession {
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .websocket_message(ws, msg)
-                .await
+            websocket_message(&mut room, self.state.as_ref(), &self.env, ws, msg).await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;
@@ -341,9 +160,7 @@ impl DurableObject for DocumentSyncSession {
     async fn alarm(&self) -> Result<Response> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .alarm()
-                .await
+            alarm(&mut room, self.state.as_ref(), &self.env).await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;
@@ -359,9 +176,16 @@ impl DurableObject for DocumentSyncSession {
     ) -> Result<()> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .websocket_close(ws, code, reason, was_clean)
-                .await
+            websocket_close(
+                &mut room,
+                self.state.as_ref(),
+                &self.env,
+                ws,
+                code,
+                reason,
+                was_clean,
+            )
+            .await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;
