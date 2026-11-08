@@ -4,19 +4,19 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import {
+  DiscussionComment,
+  type DiscussionParent,
+  type DiscussionThread,
+  listDiscussionThreads,
+  postDiscussionComment,
+} from '../messages/discussion';
+import {
   MessageThread,
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
 import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
-import {
-  CrmComment,
-  type CrmCommentParent,
-  type CrmCommentThread,
-  listCrmCommentThreads,
-  postCrmComment,
-} from './comment';
 import { Contact } from './contact';
 
 type CompanyDetail = GetCompanyResponses[200];
@@ -41,12 +41,12 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    *
    * @readonly
    */
-  timelinePage(selection?: TimelineOptions<CrmComment>) {
+  timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
       { type: 'crm_company', entity: this },
       (record) =>
-        CrmComment.from(
+        DiscussionComment.from(
           this.client,
           { type: 'crm_company', id: this.id },
           record,
@@ -226,7 +226,7 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   }
 
   /** The CRM record this company's discussions hang off. */
-  private get commentParent(): CrmCommentParent {
+  private get commentParent(): DiscussionParent {
     return { type: 'crm_company', id: this.id };
   }
 
@@ -235,8 +235,8 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    *
    * @readonly
    */
-  async comments(): Promise<CrmCommentThread[]> {
-    return listCrmCommentThreads(this.client, this.commentParent);
+  async comments(): Promise<DiscussionThread[]> {
+    return listDiscussionThreads(this.client, this.commentParent);
   }
 
   /**
@@ -250,8 +250,8 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   async comment(
     body: string | RichMessage,
     opts?: { threadId?: string },
-  ): Promise<CrmComment> {
-    return postCrmComment(this.client, this.commentParent, body, opts);
+  ): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.commentParent, body, opts);
   }
 
   /**
@@ -259,7 +259,7 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    *
    * @readonly
    */
-  commentById(id: string): CrmComment {
-    return CrmComment.byId(this.client, this.commentParent, id);
+  commentById(id: string): DiscussionComment {
+    return DiscussionComment.byId(this.client, this.commentParent, id);
   }
 }

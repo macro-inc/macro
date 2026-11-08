@@ -187,8 +187,13 @@ the existing gateway prefixes.
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
   or `initiatives.summaries` (the list response); `name()` per handle loads each
-  entity. Task create `propertyValues` replace the service defaults (creator
-  assigned, Not started), so `Task.create` spells them out when it sends any.
+  entity. `initiatives.list(filters)` pages `/initiatives/page` and maps
+  the system Status and Priority option ids to names; keep its tables in step
+  with `system_properties`' `StatusOption` and `PriorityOption`. Task create
+  `propertyValues` replace the service defaults (creator assigned, Not
+  started), so `Task.create` spells them out when it sends any.
+- CRM records and initiatives share `messages/discussion.ts`: their comments are
+  messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Team routes act on the caller's current team, which the auth service

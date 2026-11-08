@@ -8,7 +8,11 @@ import {
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TUTORIALS } from './catalog';
-import { TutorialPill, TutorialRow } from './views/BlockTutorial';
+import {
+  TutorialPill,
+  TutorialRow,
+  TutorialSidebarItem,
+} from './views/BlockTutorial';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -298,5 +302,38 @@ describe('block tutorial pill', () => {
     } finally {
       TUTORIALS.scheduling = scheduling;
     }
+  });
+});
+
+describe('block tutorial sidebar item', () => {
+  it('names its block among other tutorials and opens that video', async () => {
+    render(() => (
+      <>
+        <TutorialSidebarItem tutorial="docs" named />
+        <TutorialSidebarItem tutorial="spreadsheets" named />
+      </>
+    ));
+    const spreadsheets = screen.getByRole('button', {
+      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 0:56',
+    });
+    expect(spreadsheets.textContent).toContain('Macro Spreadsheets');
+    expect(spreadsheets.textContent).not.toContain('Watch tutorial');
+
+    fireEvent.click(spreadsheets);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Learn how to use Macro Spreadsheets');
+    expect(video()?.getAttribute('src')).toBe(TUTORIALS.spreadsheets?.videoUrl);
+    expect(track).toHaveBeenCalledWith('tutorial_video', {
+      tutorial: 'macro-spreadsheets',
+      action: 'opened',
+    });
+  });
+
+  it('says "Watch tutorial" on its own', () => {
+    render(() => <TutorialSidebarItem tutorial="docs" />);
+    const docs = screen.getByRole('button', {
+      name: /Learn how to use Macro Docs/,
+    });
+    expect(docs.textContent).toContain('Watch tutorial');
   });
 });
