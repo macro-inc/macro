@@ -8,25 +8,10 @@ fn replay() {
         Err(std::env::VarError::NotPresent) => 197,
         Err(error) => panic!("invalid SIM_SEED: {error}"),
     };
-    let outcome = Sim::new(SimConfig::calm(seed)).run(&[
-        Step::Open(OpenSpec::form("a", "browser")),
-        Step::Open(OpenSpec::form("b", "other")),
-        Step::Run(Millis(800)),
-        Step::Edit {
-            client: ClientName("a".into()),
-            op: AbstractOp::FormSet {
-                field: 1,
-                value: 42,
-            },
-        },
-        Step::Run(Millis(40)),
-        Step::Crash {
-            client: ClientName("a".into()),
-        },
-        Step::ReopenCrashed,
-        Step::Settle,
-    ]);
-    println!("{}", outcome.reproduction());
+    let (config, script) =
+        generate::seeded_script(seed, generate::ScriptShape::forms()).materialize(seed);
+    let outcome = Sim::new(config).run(&script);
+    println!("{}", outcome.failure_report());
     println!("events={:#?}", outcome.events);
     println!("server_ports={:#?}", outcome.server_ports);
     println!("trace_hash={:016x}", outcome.trace_hash);
