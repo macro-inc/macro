@@ -1,6 +1,6 @@
-import { expect, test } from 'vitest';
 import { build } from 'vite';
 import solid from 'vite-plugin-solid';
+import { expect, test } from 'vitest';
 
 test('production entry excludes legacy model modules and splits lazy HTML and Prism', async () => {
   const modules: string[] = [];

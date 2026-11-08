@@ -3,10 +3,12 @@
  * MIT licensed. DOM import selection, wrappers and built-in conversions retargeted
  * from Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
-import { macroConversion } from './macro-html';
+
 import { convertText, importLineBreak, isBlockDOM } from './html-text';
+import { macroConversion } from './macro-html';
 import type { DraftConversion, NodeViewRegistry } from './registry';
 import type { JsonObject } from './types';
+
 function element(
   type: string,
   children: readonly JsonObject[],

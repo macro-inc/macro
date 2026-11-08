@@ -48,7 +48,8 @@ function record(data: NodeData): ViewNode {
     ...data,
     children: Object.freeze([...data.children]),
     props() {
-      return (cached ??= properties(data.propsJSON));
+      cached ??= properties(data.propsJSON);
+      return cached;
     },
   });
 }

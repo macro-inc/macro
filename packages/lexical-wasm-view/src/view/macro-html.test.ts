@@ -1,31 +1,32 @@
 // @vitest-environment jsdom
-import { afterEach, expect, test, vi } from 'vitest';
+
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { $isElementNode, type LexicalNode } from 'lexical';
-import { UserMentionNode } from '../../../lexical-core/nodes/UserMentionNode';
-import { ContactMentionNode } from '../../../lexical-core/nodes/ContactMentionNode';
-import { DateMentionNode } from '../../../lexical-core/nodes/DateMentionNode';
-import { GroupMentionNode } from '../../../lexical-core/nodes/GroupMentionNode';
-import { WatermarkNode } from '../../../lexical-core/nodes/WatermarkNode';
-import { UnknownMentionNode } from '../../../lexical-core/nodes/UnknownMentionNode';
+import { afterEach, expect, test, vi } from 'vitest';
 import { AgentSessionMentionNode } from '../../../lexical-core/nodes/AgentSessionMentionNode';
 import { BookingLinkMentionNode } from '../../../lexical-core/nodes/BookingLinkMentionNode';
-import { TagMentionNode } from '../../../lexical-core/nodes/TagMentionNode';
-import { PullRequestMentionNode } from '../../../lexical-core/nodes/PullRequestMentionNode';
-import { DocumentMentionNode } from '../../../lexical-core/nodes/DocumentMentionNode';
-import { DocumentCardNode } from '../../../lexical-core/nodes/DocumentCardNode';
-import { SnapshotNode } from '../../../lexical-core/nodes/SnapshotNode';
-import { ThemeMentionNode } from '../../../lexical-core/nodes/ThemeMentionNode';
-import { HtmlRenderNode } from '../../../lexical-core/nodes/HtmlRenderNode';
 import { ClassedBlockNode } from '../../../lexical-core/nodes/ClassedBlockNode';
+import { ContactMentionNode } from '../../../lexical-core/nodes/ContactMentionNode';
+import { DateMentionNode } from '../../../lexical-core/nodes/DateMentionNode';
+import { DocumentCardNode } from '../../../lexical-core/nodes/DocumentCardNode';
+import { DocumentMentionNode } from '../../../lexical-core/nodes/DocumentMentionNode';
 import { EquationNode } from '../../../lexical-core/nodes/EquationNode';
+import { GroupMentionNode } from '../../../lexical-core/nodes/GroupMentionNode';
 import { HorizontalRuleNode } from '../../../lexical-core/nodes/HorizontalRuleNode';
+import { HtmlRenderNode } from '../../../lexical-core/nodes/HtmlRenderNode';
 import { ImageNode } from '../../../lexical-core/nodes/ImageNode';
 import { PasteNode } from '../../../lexical-core/nodes/PasteNode';
+import { PullRequestMentionNode } from '../../../lexical-core/nodes/PullRequestMentionNode';
+import { SnapshotNode } from '../../../lexical-core/nodes/SnapshotNode';
+import { TagMentionNode } from '../../../lexical-core/nodes/TagMentionNode';
+import { ThemeMentionNode } from '../../../lexical-core/nodes/ThemeMentionNode';
+import { UnknownMentionNode } from '../../../lexical-core/nodes/UnknownMentionNode';
+import { UserMentionNode } from '../../../lexical-core/nodes/UserMentionNode';
 import { VideoNode } from '../../../lexical-core/nodes/VideoNode';
-import { NodeViewRegistry } from './registry';
+import { WatermarkNode } from '../../../lexical-core/nodes/WatermarkNode';
 import { importHTML } from './html-import';
+import { NodeViewRegistry } from './registry';
 
 afterEach(() => vi.restoreAllMocks());
 const classes = [
