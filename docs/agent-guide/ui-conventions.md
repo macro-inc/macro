@@ -55,7 +55,10 @@ Main expands to its narrow layout. The sidebar remains inert through the closing
 animation, then unmounts. Show navigation opens the dismissible overlay instead;
 required navigation opens that overlay immediately. Returning to wide restores
 the saved docked state without changing the sidebar preference. Reduced-motion
-settings and missing animation support skip the closing animation.
+settings and missing animation support skip the closing animation. A view whose
+aside is its entity list passes `asideList` instead: narrow, the list fills the
+shell until `open`, then Main does, with a Back button (calling `onBack`) in
+place of Show navigation. Chat and Notifications use it.
 
 ## Canonical desktop surfaces
 

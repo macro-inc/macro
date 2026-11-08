@@ -1,4 +1,5 @@
 pub mod action_history;
+pub mod activity;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;
@@ -56,3 +57,6 @@ pub mod tool_actions;
 
 /// Durable system notifications.
 pub mod notifications;
+
+/// Sessions registered as an account's work.
+pub mod work_registration;

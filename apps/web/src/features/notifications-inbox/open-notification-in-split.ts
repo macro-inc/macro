@@ -6,6 +6,7 @@ import { openNotification } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
 import type { NotificationInboxRow } from './context/notifications-inbox-context';
 import { agentTurnParams } from './primitives/notification-location';
+import { rowEntity } from './primitives/row-entity';
 
 type OpenOptions = { newSplit: boolean; splitHandle: SplitHandle };
 
@@ -34,7 +35,7 @@ async function openStackNotification(
       options.splitHandle
     ));
   if (!opened || opened.isErr()) {
-    await openEntityInSplitFromUnifiedList(row.content.entityAt(notification), {
+    await openEntityInSplitFromUnifiedList(rowEntity(row, notification), {
       openInNewSplit: options.newSplit,
       splitHandle: options.splitHandle,
     });
@@ -60,7 +61,7 @@ export function openNotificationInSplit(
   fireAndForget(
     options.notification
       ? openStackNotification(row, options.notification, options)
-      : openEntityInSplitFromUnifiedList(row.content.entity, {
+      : openEntityInSplitFromUnifiedList(rowEntity(row), {
           openInNewSplit: options.newSplit,
           splitHandle: options.splitHandle,
         }),

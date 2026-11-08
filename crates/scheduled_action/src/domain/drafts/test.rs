@@ -167,6 +167,45 @@ async fn drafts_an_event_routine_with_named_code_and_tells_the_model_the_workspa
 }
 
 #[tokio::test]
+async fn a_drafted_routine_never_operates_as_its_owner() {
+    // Only the owner turns this on, by asking for it; a draft that tries is
+    // still attributed to the agent.
+    let model = Model::answering([Some(json!({
+        "name": "Post standup",
+        "triggers": [],
+        "dangerously_operate_as_user": true,
+        "dangerouslyOperateAsUser": true,
+        "steps": [{
+            "type": "code",
+            "title": "Post standup",
+            "summary": "",
+            "source": "export async function main() {}",
+            "dangerously_operate_as_user": true,
+        }],
+    }))]);
+    let drafts = drafts(Checker::default(), &model);
+
+    let draft = draft(&drafts, routine("post my standup as me in eng")).await;
+
+    let routine = serde_json::to_value(&draft).unwrap();
+    assert_eq!(
+        routine,
+        json!({
+            "outcome": "routine",
+            "name": "Post standup",
+            "trigger": null,
+            "steps": [{
+                "type": "code",
+                "id": "post_standup",
+                "title": "Post standup",
+                "source": "export async function main() {}",
+            }],
+            "problems": [],
+        })
+    );
+}
+
+#[tokio::test]
 async fn keeps_one_off_times_beside_repeating_schedules() {
     let model = Model::answering([answer(
         json!([

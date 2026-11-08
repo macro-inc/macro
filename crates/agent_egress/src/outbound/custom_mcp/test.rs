@@ -29,6 +29,7 @@ impl McpCredentials for &SpyInner {
         &self,
         _owner: &MacroUserIdStr<'static>,
         _agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         let McpDestination::Connected(slug) = destination else {
@@ -138,7 +139,7 @@ async fn a_connected_server_resolves_to_its_url_with_the_owners_bearer() {
     let credentials = WithCustomMcp::new(&inner, Arc::clone(&servers));
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), BotId::TEST_A, &custom(WIKI))
+        .resolve(&owner(), BotId::TEST_A, uuid::Uuid::nil(), &custom(WIKI))
         .await
         .expect("resolved")
     else {
@@ -167,7 +168,7 @@ async fn a_server_with_no_account_resolves_anonymously() {
     let credentials = WithCustomMcp::new(&inner, servers);
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), BotId::TEST_A, &custom(WIKI))
+        .resolve(&owner(), BotId::TEST_A, uuid::Uuid::nil(), &custom(WIKI))
         .await
         .expect("resolved")
     else {
@@ -186,7 +187,7 @@ async fn a_dead_grant_is_reported_disconnected_by_name() {
     let credentials = WithCustomMcp::new(&inner, servers);
 
     let McpResolution::Disconnected { call, name } = credentials
-        .resolve(&owner(), BotId::TEST_A, &custom(WIKI))
+        .resolve(&owner(), BotId::TEST_A, uuid::Uuid::nil(), &custom(WIKI))
         .await
         .expect("resolved")
     else {
@@ -209,7 +210,7 @@ async fn an_unknown_or_disabled_key_is_refused() {
     let credentials = WithCustomMcp::new(&inner, servers);
 
     let refusal = credentials
-        .resolve(&owner(), BotId::TEST_A, &custom(WIKI))
+        .resolve(&owner(), BotId::TEST_A, uuid::Uuid::nil(), &custom(WIKI))
         .await
         .expect_err("disabled");
     assert!(
@@ -220,6 +221,7 @@ async fn an_unknown_or_disabled_key_is_refused() {
         .resolve(
             &owner(),
             BotId::TEST_A,
+            uuid::Uuid::nil(),
             &custom("https://nobody.example.com/mcp"),
         )
         .await
@@ -237,7 +239,7 @@ async fn a_cleartext_server_is_refused() {
     let credentials = WithCustomMcp::new(&inner, servers);
 
     let refusal = credentials
-        .resolve(&owner(), BotId::TEST_A, &custom(PLAIN))
+        .resolve(&owner(), BotId::TEST_A, uuid::Uuid::nil(), &custom(PLAIN))
         .await
         .expect_err("cleartext");
     assert!(matches!(refusal, EgressError::InsecureUpstream(_)));
@@ -250,7 +252,12 @@ async fn every_other_destination_delegates_to_the_inner_resolver() {
     let credentials = WithCustomMcp::new(&inner, Arc::clone(&servers));
 
     let refusal = credentials
-        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
+        .resolve(
+            &owner(),
+            BotId::TEST_A,
+            uuid::Uuid::nil(),
+            &connected("linear"),
+        )
         .await
         .expect_err("the spy refuses everything");
 

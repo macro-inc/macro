@@ -82,12 +82,65 @@ export function rowTypesFor(filters: InboxFilters): InboxRowType[] {
   );
 }
 
-/** Whether a row's read state passes the status filter. */
-export function statusIncludes(status: InboxStatus, unseen: boolean): boolean {
-  return match(status)
-    .with('all', () => true)
-    .with('unread', () => unseen)
+/**
+ * Which rows a clear takes: those of these types, only unread ones when
+ * `unreadOnly`, and only those whose newest notification arrived at or after
+ * `since` (epoch milliseconds) when it is set.
+ */
+export type InboxClear = {
+  rowTypes: readonly InboxRowType[];
+  unreadOnly: boolean;
+  since?: number;
+};
+
+/** What a reader asked to clear: today, everything, or one kind. */
+export type InboxClearChoice =
+  | { kind: 'today' }
+  | { kind: 'all' }
+  | { kind: 'category'; category: InboxCategory };
+
+/**
+ * The clear a choice makes under the reader's filters: never a kind the
+ * filters hide, only unread rows under Unread, and today from local
+ * midnight, as the list's today sections are.
+ */
+export function clearFor(
+  choice: InboxClearChoice,
+  filters: InboxFilters,
+  now: Date
+): InboxClear {
+  const shown = rowTypesFor(filters);
+  const unreadOnly = filters.status === 'unread';
+  return match(choice)
+    .returnType<InboxClear>()
+    .with({ kind: 'today' }, () => ({
+      rowTypes: shown,
+      unreadOnly,
+      since: new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime(),
+    }))
+    .with({ kind: 'all' }, () => ({ rowTypes: shown, unreadOnly }))
+    .with({ kind: 'category' }, ({ category }) => ({
+      rowTypes: shown.filter((type) => rowCategory(type) === category),
+      unreadOnly,
+    }))
     .exhaustive();
+}
+
+/** Whether a clear takes a row. */
+export function clearIncludes(
+  clear: InboxClear,
+  row: { type: InboxRowType | 'other'; unseen: boolean; latestAt: number }
+): boolean {
+  return (
+    row.type !== 'other' &&
+    clear.rowTypes.includes(row.type) &&
+    (!clear.unreadOnly || row.unseen) &&
+    (clear.since === undefined || row.latestAt >= clear.since)
+  );
 }
 
 /**

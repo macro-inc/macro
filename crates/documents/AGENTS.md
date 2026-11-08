@@ -44,6 +44,30 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/inbound/axum_router/canvas.rs`: the SDK's canvas routes,
+  `POST /{id}/canvas/{scene,render,edits,ai-edit}`, over `CanvasService` with
+  `CanvasRouteDeps`. Calls run as `CanvasCaller` (the acting user, plus the bot
+  as token actor). `edits` answers 409 `revision_conflict` and 422
+  `edit_rejected` when nothing committed, 502 `edit_failed` when it may have;
+  `render` stores the PNG through the `CanvasImageStore` port (DSS adapter:
+  `outbound/canvas_images.rs`).
+- `src/inbound/axum_router/spreadsheet.rs`: SDK spreadsheets over the
+  spreadsheet tools' `SpreadsheetService`: `POST /create_spreadsheet` and
+  `POST /{id}/spreadsheet/read|calculate|edits`. Their tokens name the
+  receipt's user and bot (`SpreadsheetCaller::Receipt`); the tools name the
+  agent (`SpreadsheetCaller::Agent`). Worker 400/413 map to 400, 409 to a
+  revision conflict, and anything else to 502 (an edit may have saved).
+  `POST /{id}/spreadsheet/ai-edit` runs `SpreadsheetAiEditService`
+  (`domain/spreadsheet/instructions.rs`): admission, the worker's writer model,
+  and metering of its usage for every outcome; 422 refused, 409 conflict, 500
+  failed unsaved, 502 may have saved.
+- `axum_router/presentation.rs`, `word_document.rs`, `design_files.rs`: the
+  presentation, Word, design, Photoshop and Illustrator tools over HTTP
+  (`/{id}/presentation`, `/word`, `/design`, `/photoshop`, `/illustrator`),
+  calling the same domain services with the same receipts. Word routes need
+  an acting user; a bot caller's id rides in the worker token as the actor.
+  Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
+  readers' errors) are 400s.
 - `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
   and runs UploadFile's `DocumentCreator::upload_file`, minting the project
   receipt from the caller like the tool. It exists for clients that cannot PUT
@@ -115,3 +139,5 @@ word docs, Illustrator/Photoshop files).
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md` ·
   Skill: `collab-surface-core`
+
+- Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.

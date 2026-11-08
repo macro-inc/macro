@@ -2,7 +2,7 @@
 
 use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
-use crate::workflows::{runners, steps};
+use crate::workflows::runners;
 
 /// Build the workflow.
 pub fn assign_labels() -> Workflow {
@@ -24,22 +24,7 @@ fn label_job() -> Job {
             pull_requests: Some(Level::Write),
             ..Default::default()
         })
-        .add_step(steps::checkout(true, false))
-        .add_step(changed_files())
         .add_step(label_by_paths())
-}
-
-fn changed_files() -> Step<gh_workflow::Use> {
-    Step::new("Get changed files")
-        .uses(
-            "tj-actions",
-            "changed-files",
-            "24d32ffd492484c1d75e0c0b894501ddb9d30d62",
-        )
-        .id("changed-files")
-        .add_with(("json", true))
-        .add_with(("escape_json", false))
-        .add_with(("write_output_files", true))
 }
 
 fn label_by_paths() -> Step<gh_workflow::Use> {
@@ -53,10 +38,18 @@ fn label_by_paths() -> Step<gh_workflow::Use> {
         .add_with((
             "script",
             indoc::indoc! {r#"
-                const fs = require('fs');
-                const changedFiles = JSON.parse(
-                  fs.readFileSync('.github/outputs/all_changed_files.json', 'utf8')
-                );
+                // The PR's files from the API, without the files it deletes: the
+                // same set a full-history checkout and diff gave, in about 4 s
+                // instead of 38 s (once 705 s). The API lists at most 3,000 files.
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100,
+                });
+                const changedFiles = files
+                  .filter((file) => file.status !== 'removed')
+                  .map((file) => file.filename);
                 const labels = new Set();
 
                 // Define path-to-label mappings

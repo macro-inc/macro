@@ -69,6 +69,27 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+#### Account managers
+
+An agent account can manage a person's account: either side asks in their DM, and
+the other side approves. An agent account can't be managed.
+
+```ts
+// As the agent, ask to manage a person's account:
+const grant = await macro.accountManagers.askToManage(person);
+// Once the person approves, the agent gets the token, once:
+const token = await grant.claimToken();
+```
+
+A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+manager can claim, so the agent approves and claims with its own client, using the grant id
+from the card in the DM: `macro.accountManagers.byId(id)`.
+
+The token is an API key for the managed account, with full access except its
+managers, API keys and other credentials, sign-in, and deleting the account. It
+lasts until either side calls `grant.revoke()`, or the managed account revokes it
+in Settings → Account Managers.
+
 #### Bot token
 
 ```ts
@@ -155,6 +176,18 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+Documents, projects, calls and chats change their link and channel sharing with
+`updateSharePermissions`; omitted fields are left as they are. A calendar event
+is shared with a channel's members through `shareWithChannel`:
+
+```ts
+await project.updateSharePermissions({
+  linkShareAccessLevel: 'view',
+  channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
+});
+await event.shareWithChannel(channel);
+```
+
 ### Listing and searching
 
 List/search methods that can page return a genreator that auto-paginates:
@@ -213,6 +246,22 @@ await database.query(`UPDATE "Guests" SET "Status" = 'Going' WHERE "Name" = 'Sam
 nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
 are dynamic, so result cells use a generated tagged union rather than an inferred
 TypeScript interface for each table. The HTTP route is `POST /databases/query`.
+
+To show a live answer in a document, save the `SELECT` as a question. The
+server refuses anything but one `SELECT` that compiles, and chart columns the
+`SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
+`<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
+views it. `withView()` restyles the answer without saving a new question.
+
+```ts
+const question = await database.saveQuery({
+  sql: 'SELECT "Party", COUNT(*) AS invites FROM "Guests" GROUP BY "Party"',
+  title: 'Invites per party',
+  display: { mode: 'bar', chart: { x: 'Party', y: ['invites'] } },
+});
+await macro.documents.create({ name: 'Invites', markdown: question.toBlock() });
+const pie = question.withView({ displayMode: 'pie' }).toBlock();
+```
 
 The SDK's schema methods write typed ops through one endpoint,
 `POST /databases/{id}/ops`. The methods below each send a one-op batch: the
@@ -352,7 +401,9 @@ These will render as @mentions in the Macro UI.
 `macro.images.generate()` makes an image with Google's Nano Banana model, charged
 to the acting user's AI allowance, and stores it as a static file. Attach it to a
 message with `images`; its width and height let the message reserve space before
-the image loads. Pass up to three image documents or earlier images as
+the image loads. `image.toMarkdown()` is the `<m-image>` tag that shows it inline
+in Markdown, such as an agent's reply; a static image is not a document, so never
+mention its id as one. Pass up to three image documents or earlier images as
 `referenceImages` to edit or combine them. `examples/generate-image.ts` runs this
 end to end.
 
@@ -401,6 +452,29 @@ const transcript = await routine.execute(); // Chat or AgentSession, if availabl
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
+A routine can instead run `steps` in order: `code` steps run TypeScript against
+this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
+hands the run to a model or agent. Code steps' writes are attributed to Macro's
+agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
+user explicitly asks for the routine to act, send or post as them:
+
+```ts
+await macro.routines.create({
+  name: 'Say hello',
+  trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+  steps: [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: `export async function main({ macro }: StepContext) {
+  await macro.channels.byId(channelId).send('Hello');
+}`,
+    },
+  ],
+  dangerouslyOperateAsUser: true,
+});
+```
+
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
@@ -439,8 +513,13 @@ await routine.update({
 
 ### Agents, conversations and hosts
 
-`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
-channel, team and host handles. Updates replace the configuration.
+`macro.agents.list/create/byId` manage agent configuration; listed agents read
+their runtime, coding/chat choice, apps, channel scope and permission settings.
+`agent.update(patch)` changes only the settings it names (`PATCH /agents/{id}`);
+`agent.replace(options)` replaces everything, including the owning team, and
+`AgentOptions` takes channel, team and host handles. `macro.agents.coding()` lists the coding personas the caller can
+start right now, built-in ones such as Cursor included; pass an entry's `agent`
+to `macro.agentSessions.createManaged`.
 `channel.agentConversations()` returns conversations with session and turn handles;
 `conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
 conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
@@ -484,6 +563,14 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 `thread.setFollowup(command)` expose revision-aware reminder state; commands require
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
+
+### CRM contact fields
+
+`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
+an identical retry is safe. Existing addresses cannot be replaced or cleared.
+`setCompany(company)` links or switches a known personal-provider contact to a
+Company handle in the same team. Unlinking is not supported. Both preserve
+identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives
 
@@ -535,6 +622,30 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `call.meeting()` creates or reads its shareable meeting; calls also expose
 `editTranscript(assignments)` and `toggleTeamShare()`.
 
+### Programmatic calls
+
+Use `macro.calls.active()` to find joinable live calls and reconcile missed
+`call.*` events. `macro.calls.summaries(calls)` previews live or archived call
+handles in one request. `channel.activeCall()` checks without starting a call; use
+`channel.startCall()` only when intending to ring channel members. A live
+`call.join()` never creates a replacement call. `meeting.join()` enters with
+an account and `meeting.joinAsGuest(name)` uses the invitation link.
+
+Each entry returns a `CallConnection` with the LiveKit URL, token, identity,
+room name, call handle, and `started` flag. Pass the token directly to a
+LiveKit client; it is omitted from JSON and console inspection. Call
+`connection.leave()` when finished. Joins default to `onOtherCall: 'fail'`;
+pass `{ onOtherCall: 'switch' }` to move intentionally, or `{ replace: true }`
+to take over an existing connection for the same identity. Branch on
+`InOtherCallError`, `AlreadyConnectedError`, and `CallEndedError`.
+
+`call.ringState()` reads this account's ring state, `call.participants()` reads
+the live roster with user handles, `call.decline()` declines its ring,
+`call.discussion()` returns the call chat or its channel thread, and
+`call.recording.bytes()` downloads through the Macro host. Historical
+participants remain available as `call.historicParticipants()`.
+
+
 `calendar.occurrences(viewport)` auto-paginates and seeds event handles.
 `calendar.teamPage(viewport)` includes the roster and an optional next cursor;
 `teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
@@ -559,6 +670,53 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 `options.signal` cancels the edit, keeping what was applied before the abort. A
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
+
+### Canvases
+
+`document.canvas()` reads and edits a native canvas's live, shared scene:
+
+```ts
+const canvas = document.canvas();
+const scene = await canvas.scene(); // stable item ids, geometry, text, revision
+await canvas.apply(
+  "editor.move(['box'], 0, 40); editor.text('box', snippets.label)",
+  { expectedRevision: scene.revision, snippets: { label: 'Shipped' } },
+);
+await canvas.edit('Arrange the boxes left to right as a flowchart.');
+const image = await canvas.render({ items: ['box'] }); // a StaticImage
+```
+
+`apply` runs CanvasEditor code without a model and commits the batch whole or
+not at all: `CanvasRevisionConflictError` (the scene changed since
+`expectedRevision`) and `CanvasEditRejectedError` (the code failed) mean nothing
+changed; `EditOutcomeUnknownError` means read the scene before retrying. `edit`
+takes natural-language instructions, like `document.edit`, and is billed as an
+AI edit. `render` keeps the PNG as a static file you own, ready to attach to a
+message. A canvas links to `canvas.webUrl()` (`/app/canvas/<id>`).
+
+### Spreadsheets
+
+`documents.createSpreadsheet({ name })` creates a blank native spreadsheet, and
+`documents.spreadsheet(document)` addresses an existing one. `read()` returns
+every sheet's summary and the cells of the requested ranges with the revision,
+`calculate(formulas, { overrides })` evaluates scratch formulas without saving,
+and `applyEdits(operations, { expectedRevision })` saves one atomic batch:
+
+```ts
+const sheet = macro.documents.spreadsheet(document);
+const { revision, sheets } = await sheet.read({ ranges: ['A1:D20'] });
+await sheet.applyEdits(
+  [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'D21', value: '=SUM(D2:D20)' }] }],
+  { expectedRevision: revision },
+);
+```
+
+A workbook that changed since the read throws `RevisionConflictError` and
+saves nothing: read again and rebuild the batch.
+
+`sheet.edit(instructions)` hands the change to an AI writer instead, which reads
+what it needs and saves one batch the same way. It is billed as an AI edit and
+throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
 
 ### Document lifecycle and other resources
 
@@ -911,3 +1069,10 @@ for (const shared of await personal.externalChats.list()) {
 Keep the same idempotency key when retrying the same request. A delivery state of
 `unknown` must be reconciled; never automatically resend it. Uploads, quoted
 messages, mentions, mutations, and delivery references must belong to the same chat.
+
+## Live call media
+
+Use `@macro-inc/sdk/calls/node` or `@macro-inc/sdk/calls/browser` for room
+connections and screen sharing. Install the optional LiveKit runtime only when
+using those helpers. The core import does not load or bundle call media code.
+See [Call rooms](CALLS.md) for installation and examples.

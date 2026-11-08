@@ -228,6 +228,7 @@ async fn get_channel_participants_for_thread_id(
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
+              AND m.kind = 'message'
               AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
@@ -941,16 +942,19 @@ fn push_channel_thread_participant_filter_expr(
 }
 
 /// Whether `participant` sent or is @-mentioned in the message aliased `message`.
+/// Starting a call doesn't count as sending: a call's root stands for the call.
 #[cfg(feature = "list")]
 fn push_channel_message_participation_expr(
     builder: &mut QueryBuilder<'static, Postgres>,
     message: &'static str,
     participant: &str,
 ) {
-    builder.push(format!("({message}.sender_id = "));
+    builder.push(format!(
+        "(({message}.kind = 'message' AND {message}.sender_id = "
+    ));
     builder.push_bind(participant.to_owned());
     builder.push(format!(
-        r#"
+        r#")
             OR EXISTS (
                 SELECT 1
                 FROM comms_entity_mentions em
