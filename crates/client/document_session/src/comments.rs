@@ -37,7 +37,7 @@ struct Stage {
     text: Option<String>,
 }
 static STAGE: CommandKey<Stage> = CommandKey::new("session-stage-comment");
-struct StagePlugin;
+struct StagePlugin(CommentNodeFactory);
 impl Plugin for StagePlugin {
     fn name(&self) -> &'static str {
         "session-comment-staging"
@@ -76,9 +76,13 @@ impl Plugin for StagePlugin {
                 return Err(Error::Invariant("comment selection changed"));
             }
             let backward = range.is_backward(tx.view())?;
-            mark::wrap_selection_in_mark_node::<
-                fn(&mut Transaction<'_>, Vec<String>) -> Result<NodeKey, Error>,
-            >(tx, range, backward, &stage.id, None)?;
+            mark::wrap_selection_in_mark_node::<CommentNodeFactory>(
+                tx,
+                range,
+                backward,
+                &stage.id,
+                Some(self.0),
+            )?;
         } else {
             for key in marks {
                 let id = tx
@@ -114,7 +118,7 @@ impl EditorSurface {
         let state = lexical_loro::reconstruct_state(&fork, self.config.policy)
             .map_err(|_| CommentRefusal::StagingFailed)?;
         let editor = Self::builder(&self.config, EditorMode::Headless, peer)
-            .plugin(StagePlugin)
+            .plugin(StagePlugin(self.config.comment_node))
             .initial_state(state)
             .build()
             .map_err(|_| CommentRefusal::StagingFailed)?;

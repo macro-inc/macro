@@ -6,14 +6,19 @@ use lexical_model::*;
 use loro::{LoroDoc, UndoManager};
 use std::sync::Arc;
 mod builder;
-pub use builder::default_editor_builder;
+pub use builder::{default_editor_builder, register_editor_commands};
 static PLAIN: PlainPolicy = PlainPolicy;
+
+/// Annotation constructor supplied by the editor's application registry.
+pub type CommentNodeFactory = fn(&mut Transaction<'_>, Vec<String>) -> Result<NodeKey, Error>;
 
 /// Rebuildable editor configuration shared by live editors and comment forks.
 #[derive(Clone)]
 pub struct EditorConfig {
     /// Registry and plugins, built anew for every document instance.
     pub builder: Arc<dyn Fn(EditorMode, u64) -> EditorBuilder + Send + Sync>,
+    /// Create an annotation wrapper inside the isolated staging transaction.
+    pub comment_node: CommentNodeFactory,
     /// Application projection exclusions.
     pub policy: &'static dyn SyncPolicy,
     /// Live model mode; comment staging always uses Headless.
@@ -29,6 +34,7 @@ impl Default for EditorConfig {
     fn default() -> Self {
         Self {
             builder: Arc::new(default_editor_builder),
+            comment_node: lexical_rich_nodes::mark::create_mark_node,
             policy: &PLAIN,
             mode: EditorMode::ViewAttached,
             view_host: ViewHost {
