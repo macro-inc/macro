@@ -299,3 +299,38 @@ async fn dispatch_timeout_does_not_invite_automatic_retry() {
         json!({"code":"dispatch_delivery_unknown"})
     );
 }
+
+#[tokio::test]
+async fn the_public_listing_lists_for_the_signed_in_user_only() {
+    let service = Arc::new(ServiceSpy::default());
+    let response = app(service.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/coding-agents")
+                .header("authorization", "Bearer user")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body(response).await, json!({"agents":[]}));
+    assert_eq!(
+        service.seen.lock().unwrap().as_slice(),
+        &[json!({"user_id":USER})]
+    );
+
+    for header in [None, Some((INTERNAL_API_KEY_HEADER, KEY))] {
+        let mut request = Request::builder().method("GET").uri("/coding-agents");
+        if let Some((name, value)) = header {
+            request = request.header(name, value);
+        }
+        let response = app(service.clone())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::OK);
+    }
+    assert_eq!(service.seen.lock().unwrap().len(), 1);
+}
