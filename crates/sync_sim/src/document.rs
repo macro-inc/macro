@@ -23,6 +23,12 @@ impl SimDoc {
     }
     pub fn edit(&mut self, op: &AbstractOp, fields: u16, wall: i64) -> Result<(), Failure> {
         match op {
+            AbstractOp::Editor(_) => {
+                return Err(Failure::new(
+                    "editor_surface",
+                    "editor input on a generic document",
+                ));
+            }
             AbstractOp::FormSet { field, value } => {
                 self.loro
                     .get_map("fields")
@@ -194,6 +200,33 @@ pub(crate) fn seed_snapshots(
     wall: i64,
     spec: &crate::SeedDocument,
 ) -> Result<SeedSnapshots, Failure> {
+    if let crate::SeedDocument::Editor(state) = spec {
+        let editor =
+            document_session::default_editor_builder(lexical_model::EditorMode::Headless, peer)
+                .initial_state(
+                    serde_json::from_value(state.clone())
+                        .map_err(|error| Failure::new("editor_seed", error))?,
+                )
+                .build()
+                .map_err(|error| Failure::new("editor_seed", error))?;
+        let doc =
+            lexical_loro::new_doc(peer).map_err(|error| Failure::new("editor_seed", error))?;
+        lexical_loro::LoroProjection::initialize(
+            &doc,
+            editor.state(),
+            &lexical_loro::PlainPolicy,
+            wall / 1000,
+        )
+        .map_err(|error| Failure::new("editor_seed", error))?;
+        return Ok(SeedSnapshots {
+            server: doc
+                .export(loro::ExportMode::Snapshot)
+                .map_err(|error| Failure::new("editor_seed", error))?,
+            local: None,
+            s3: None,
+            vv: vv(&doc.oplog_vv()),
+        });
+    }
     let mut doc = SimDoc::new(peer)?;
     for index in 0..fields.max(1) {
         doc.loro
@@ -206,6 +239,7 @@ pub(crate) fn seed_snapshots(
     let mut local = None;
     let mut s3 = None;
     match spec {
+        crate::SeedDocument::Editor(_) => unreachable!("handled editor seed"),
         crate::SeedDocument::Empty => {}
         crate::SeedDocument::Form(writes) => {
             seed_fields(&mut doc, writes, fields, wall)?;

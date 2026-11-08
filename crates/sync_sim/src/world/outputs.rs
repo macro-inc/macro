@@ -300,6 +300,11 @@ impl Sim {
                     });
                 }
                 SyncEvent::Replaced => ready = true,
+                SyncEvent::CommentReady { .. }
+                    if self
+                        .clients
+                        .get(name)
+                        .is_some_and(|client| client.core.is_editor()) => {}
                 SyncEvent::CommentReady { .. } => {
                     return Err(Failure::new(
                         "comment_stage",
@@ -364,7 +369,12 @@ impl Sim {
                 }
             }
         }
-        if ready {
+        if ready
+            && !self
+                .clients
+                .get(name)
+                .is_some_and(|client| client.core.is_editor())
+        {
             self.input(name, session, SyncInput::Ready)?;
         }
         self.finish_close(name)?;

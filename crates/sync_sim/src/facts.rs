@@ -522,6 +522,8 @@ pub enum Fact {
 /// Final state of one real client core/document.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClientFinal {
+    /// Actual rich-text model and independent persisted reconstruction, when present.
+    pub editor: Option<EditorFinal>,
     /// Whether a session remains live.
     pub alive: bool,
     /// Terminal connection reason, when closed by the core.
@@ -566,6 +568,20 @@ pub struct ClientFinal {
     pub presence_key: String,
     /// Wall-clock offset retained across settle.
     pub skew: i64,
+}
+/// Immutable observations from a real editor session.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct EditorFinal {
+    /// Live model JSON with only policy-excluded local fields removed.
+    pub synced_json: serde_json::Value,
+    /// Independently reconstructed persisted editor tree.
+    pub reconstructed: serde_json::Value,
+    /// Actual durable selection cursor payload.
+    pub selection: Option<serde_json::Value>,
+    /// Real collaborative history availability.
+    pub can_undo: bool,
+    /// Real collaborative redo availability.
+    pub can_redo: bool,
 }
 /// Freshly loaded durable room state, alongside live room state.
 #[derive(Clone, Debug, PartialEq, Serialize)]

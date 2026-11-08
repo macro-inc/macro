@@ -91,7 +91,7 @@ fn convergence_pending_quiet_and_presence_queries_reject_damaged_observations() 
     assert!(invariants::presence_converged(&outcome).is_err());
 }
 #[test]
-fn comment_and_undo_queries_reject_false_claims_without_editor_adapters() {
+fn comment_and_undo_queries_reject_false_claims_without_editor_clients() {
     let mut outcome = baseline();
     let at = outcome.events.last().unwrap().at;
     let client = ClientName("a".into());
@@ -127,8 +127,8 @@ fn comment_and_undo_queries_reject_false_claims_without_editor_adapters() {
         },
     });
     assert!(invariants::undo_reverts_only_own(&outcome).is_err());
-    assert!(invariants::editor_states_equal(&outcome).is_err());
-    assert!(invariants::projection_consistent(&outcome).is_err());
+    assert!(invariants::editor_states_equal(&outcome).is_ok());
+    assert!(invariants::projection_consistent(&outcome).is_ok());
 }
 #[test]
 fn unrelated_parked_row_does_not_exempt_a_lost_edit() {

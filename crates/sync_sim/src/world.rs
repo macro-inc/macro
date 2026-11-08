@@ -13,6 +13,7 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::{BTreeMap, BTreeSet};
 use sync_server_sim::transcript::ServerInput;
 
+mod editor;
 pub mod external;
 mod inputs;
 mod outputs;
@@ -161,7 +162,7 @@ impl Sim {
             per_step_failures: self.failures,
             external_clients: self.external.keys().cloned().collect(),
             pending_adapters: vec![
-                "document_session / lexical_model / lexical_loro editor projection and undo".into(),
+                "remaining editor command/story producers and undo removal attribution".into(),
                 "macro_document_model comment-only gate and lexical-service parity".into(),
             ],
         }
@@ -277,10 +278,13 @@ impl Sim {
             let kind = client.spec.kind;
             let ids = (0..16).map(|_| self.peer(kind)).collect::<Vec<_>>();
             if let Some(client) = self.clients.get_mut(name) {
-                client
-                    .core
-                    .add_peer_ids(ids)
-                    .map_err(|error| Failure::new("peer_supply", error))?;
+                client.core.add_peers(
+                    ids,
+                    doc_sync_core::Now {
+                        mono: doc_sync_core::Millis(self.clock.now),
+                        wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
+                    },
+                )?;
             }
         }
         let Some(client) = self.clients.get_mut(name) else {
@@ -295,10 +299,14 @@ impl Sim {
             .stats
             .wal_max_depth
             .max(u64::try_from(client.core.wal().entries.len()).unwrap_or(u64::MAX));
+        let failures = std::mem::take(&mut client.failures);
         let generation = client.generation;
         self.stats.handles = self.stats.handles.saturating_add(1);
         for fact in facts {
             self.emit(fact);
+        }
+        for failure in failures {
+            self.fail(failure);
         }
         if let Some(at) = out.wake_at {
             self.schedule(at.0, Pending::Wake(name.clone(), session, generation));

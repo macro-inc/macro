@@ -32,6 +32,16 @@ impl Sim {
             if !client.alive {
                 continue;
             }
+            match client.core.editor_final() {
+                Ok(Some(editor)) if editor.synced_json != editor.reconstructed => {
+                    failures.push(Failure::new(
+                        "projection_consistent",
+                        format!("{name:?}: live model differs from persisted reconstruction"),
+                    ))
+                }
+                Err(error) => failures.push(error),
+                _ => {}
+            }
             let wal = client.core.wal();
             let mut previous = None;
             for row in &wal.entries {
@@ -49,7 +59,7 @@ impl Sim {
                     format!("{name:?}: delivered prefix exceeds allocated rows"),
                 ));
             }
-            for (peer, counter) in client.doc.loro.oplog_vv().iter() {
+            for (peer, counter) in client.core.version().iter() {
                 if *counter > created.get(peer).copied().unwrap_or(0) {
                     failures.push(Failure::new(
                         "no_future_vv",
@@ -86,7 +96,7 @@ impl Sim {
             if client.core.status().save == SaveState::Saved
                 && (retained
                     || !client.core.parked().is_empty()
-                    || client.doc.pending
+                    || client.core.pending()
                     || client.core.status().pending_import
                     || !matches!(wal.health, StorageHealth::Ok)
                     || client.core.busy() == Some(doc_sync_core::BusyReason::Rebasing))
@@ -326,7 +336,7 @@ pub(crate) fn canonical(value: serde_json::Value) -> serde_json::Value {
     }
 }
 pub(crate) fn canonical_finals(finals: &Finals) -> serde_json::Value {
-    let clients = finals.clients.iter().map(|(name, state)| serde_json::json!({ "name": name, "alive": state.alive, "terminal": state.terminal, "session": state.session, "profile": state.profile, "user": state.user, "doc": state.doc, "access": state.access, "kind": state.kind, "peer": state.peer, "vv": state.oplog_vv, "value": state.deep_value, "wal": state.wal_undelivered, "total": state.wal_total, "delivered": state.delivered, "parked": state.parked, "parked_spans": state.parked_spans, "status": format!("{:?}", state.status), "storage_healthy": state.storage_healthy, "pending": state.pending_import, "selection": state.selection, "presence_key": state.presence_key, "skew": state.skew })).collect::<Vec<_>>();
+    let clients = finals.clients.iter().map(|(name, state)| serde_json::json!({ "name": name, "editor": state.editor, "alive": state.alive, "terminal": state.terminal, "session": state.session, "profile": state.profile, "user": state.user, "doc": state.doc, "access": state.access, "kind": state.kind, "peer": state.peer, "vv": state.oplog_vv, "value": state.deep_value, "wal": state.wal_undelivered, "total": state.wal_total, "delivered": state.delivered, "parked": state.parked, "parked_spans": state.parked_spans, "status": format!("{:?}", state.status), "storage_healthy": state.storage_healthy, "pending": state.pending_import, "selection": state.selection, "presence_key": state.presence_key, "skew": state.skew })).collect::<Vec<_>>();
     let profiles = finals.profiles.iter().map(|(name, store)| serde_json::json!({ "name": name, "rows": store.entries.iter().collect::<Vec<_>>(), "snapshots": store.snapshots })).collect::<Vec<_>>();
     canonical(
         serde_json::json!({ "clients": clients, "servers": finals.servers.iter().collect::<Vec<_>>(), "profiles": profiles, "presence": finals.presence.as_ref().map(|presence| presence.iter().collect::<Vec<_>>()) }),
