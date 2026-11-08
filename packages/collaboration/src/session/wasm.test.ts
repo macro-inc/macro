@@ -196,6 +196,7 @@ test('generic preorder ABI preserves nested bytes and integers beyond Number pre
 });
 test('Bebop byte arrays decode as subarray views and storage metadata keeps bigint sequences', () => {
   const wire = StorageOpMsg.encode({
+    expected: [],
     kind: 2,
     doc: 'fixture',
     owner: 'owner',

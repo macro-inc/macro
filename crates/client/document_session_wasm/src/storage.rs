@@ -96,6 +96,7 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
         snapshot: vec![],
         covers_owner: String::new(),
         covers_seq: 0,
+        expected: vec![],
     };
     match op {
         StorageOp::Load { doc, owner, user } | StorageOp::LoadOrphans { doc, owner, user } => {
@@ -145,6 +146,7 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             to,
             first_seq,
             covers,
+            expected,
         } => {
             m.kind = 5;
             m.doc = doc.to_string();
@@ -152,6 +154,13 @@ pub(crate) fn encode(op: &StorageOp, terminal: bool) -> wire::StorageOpMsg {
             m.owner = to.0.to_string();
             m.seq = first_seq.0;
             m.through = covers.0;
+            m.expected = expected
+                .iter()
+                .map(|row| wire::WalRecordMsg {
+                    delivered: row.delivered,
+                    ..wire_record(&row.record)
+                })
+                .collect();
         }
         StorageOp::WalDropExpired { doc, from, before } => {
             m.kind = 6;
