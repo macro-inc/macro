@@ -303,7 +303,9 @@ IndexedDB storage fails. Selected devices and backgrounds carry into the call; u
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
 button. In a channel's Call tab, the header shows the live waveform and duration,
-then an icon-only meeting link and Invite. The link is fetched only when copied.
+then an icon-only meeting link and Invite. Below 560px of header width, the
+duration pill hides so the channel title and tabs retain room; Call tabs, join
+cards and the app's live-call entry remain available. The link is fetched only when copied.
 Active phone calls fill the viewport and retain Back, channel title and live status.
 The speaker button sits before the live time in channel and standalone call headers.
 It opens Audio output with the available routes and a check on the active one.

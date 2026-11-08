@@ -80,6 +80,7 @@ type Scenario = {
   baseline?: boolean;
   unread?: boolean;
   theme?: string;
+  headerWidth?: number;
 };
 
 async function open(
@@ -210,7 +211,7 @@ async function open(
     ? PATH.replace('call-thread.html', 'call-overlay.html')
     : PATH;
   await page.goto(
-    `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}`
+    `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}${scenario.headerWidth ? `&headerWidth=${scenario.headerWidth}` : ''}`
   );
   // Let the cold entry-module graph mount before timing an interaction.
   await page.getByRole('main').waitFor({ state: 'attached', timeout: 60_000 });
@@ -861,4 +862,38 @@ test('rebuilt call discussion survives the conditional Work tab', async ({
     await page.screenshot({
       path: `${process.env.CALL_REPRO_DIR}/L95-8-chat.png`,
     });
+});
+
+test('call duration pill follows header width, not viewport width', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  for (const width of [720, 480]) {
+    await open(page, 'messages', {
+      status: { state: 'live' },
+      fullOverlay: true,
+      headerWidth: width,
+    });
+    await expect(page.getByText('Call channel', { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
+    if (process.env.CALL_REPRO_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_REPRO_DIR}/L84-${width}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+      });
+    if (width < 560)
+      await expect(
+        page.getByRole('button', { name: 'Open call', exact: true })
+      ).toBeHidden();
+    else
+      await expect(
+        page.getByRole('button', { name: 'Open call', exact: true })
+      ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Open chat and participants' })
+    ).toBeVisible();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
 });

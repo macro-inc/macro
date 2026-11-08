@@ -17,10 +17,11 @@ import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
-import { createSignal, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
+import { ActiveCallHeader } from '../../ActiveCallHeader';
 import { CallOverlay } from '../../CallOverlay';
 import { CallDiscussionContent } from '../CallDiscussionContent';
 
@@ -72,6 +73,21 @@ function Fixture() {
                             Refresh discussion
                           </button>
                           <main class="h-screen bg-page text-ink">
+                            <Show when={params.get('headerWidth')}>
+                              {(width) => (
+                                <header
+                                  class="@container/channel-header"
+                                  style={{ width: `${width()}px` }}
+                                >
+                                  <div class="flex items-center gap-3 p-2">
+                                    <span class="min-w-0 flex-1 truncate">
+                                      Call channel
+                                    </span>
+                                    <ActiveCallHeader channelId="00000000-0000-7000-8000-00000000c0c0" />
+                                  </div>
+                                </header>
+                              )}
+                            </Show>
                             <Suspense>
                               <Dynamic
                                 component={

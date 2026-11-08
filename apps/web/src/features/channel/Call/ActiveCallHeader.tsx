@@ -17,6 +17,7 @@ function CallHeaderPill(props: { channelId: string; startedAt?: string }) {
     <Button
       variant="ghost"
       size="sm"
+      class="@max-[560px]/channel-header:hidden @max-[560px]/split-header:hidden"
       aria-label={t('calls.openCall')}
       tooltip={t('calls.openCall')}
       onClick={() => {

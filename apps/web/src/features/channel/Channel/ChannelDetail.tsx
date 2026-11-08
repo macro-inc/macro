@@ -262,7 +262,10 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+    <ViewShell.TopBar
+      ref={collapse.setRow}
+      class="@container/channel-header gap-3 py-0"
+    >
       {/* Reserve room for the tab outline inside the clipped, measured region. */}
       <PriorityCollapseOverflowSensor
         controller={collapse}
