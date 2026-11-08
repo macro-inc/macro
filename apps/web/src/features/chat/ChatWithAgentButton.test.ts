@@ -132,6 +132,7 @@ describe('Ask Agent without the agent composer', () => {
   it.each([
     { type: 'email' as const, id: 'email-id', name: 'Subject' },
     { type: 'project' as const, id: 'project-id', name: 'Launch' },
+    { type: 'chat' as const, id: 'chat-id', name: 'Old chat' },
     {
       type: 'channel' as const,
       id: 'channel-id',
@@ -144,6 +145,8 @@ describe('Ask Agent without the agent composer', () => {
     expect(seed.prompt).toBeUndefined();
     expect(seed.initialInput).toContain(entity.id);
     expect(seed.initialInput).toContain(entity.name);
+    if (entity.type === 'chat')
+      expect(seed.initialInput).toContain('"blockName":"chat"');
     if (entity.type === 'channel')
       expect(seed.initialInput).toContain('"channelType":"public"');
   });

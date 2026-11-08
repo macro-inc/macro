@@ -32,6 +32,7 @@ type ChatWithAgentEntity =
       blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
+  | { type: 'chat'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
 function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
