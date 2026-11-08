@@ -180,7 +180,7 @@ Check that the load function does not return a preload source when the intent is
     // An earlier in-flight load must not restore a document after revocation.
     if (untrack(currentSharedAccess) === null) {
       if (result?.isOk() && 'syncSource' in result.value)
-        result.value.syncSource.cleanup();
+        result.value.syncSource?.cleanup();
       clearLoadedDocument();
       setError('UNAUTHORIZED');
       return;

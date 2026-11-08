@@ -1,5 +1,5 @@
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
-import type { DocumentSyncAuthorization } from '@service-sync/source/authorization';
+import type { DocumentSessionAuthorization } from '@service-sync/source/authorization';
 import type {
   DocumentCacheSession,
   OfflineDocumentContext,
@@ -12,7 +12,7 @@ export type FreshSyncDocumentContext = OfflineDocumentContext & {
 export type SyncDocumentOpenContext = OfflineDocumentContext & {
   fromCache: boolean;
   token?: string;
-  authorization?: DocumentSyncAuthorization;
+  authorization?: DocumentSessionAuthorization;
 };
 
 function assertSession(
@@ -65,7 +65,7 @@ export function createSyncDocumentContextLoader(options: {
     session: DocumentCacheSession,
     opened: OfflineDocumentContext,
     initial?: FreshSyncDocumentContext
-  ): DocumentSyncAuthorization {
+  ): DocumentSessionAuthorization {
     let first = initial;
     let freshAccess = initial?.userAccessLevel;
     let revoked = false;
@@ -76,6 +76,7 @@ export function createSyncDocumentContextLoader(options: {
     };
     return {
       isCurrent,
+      currentAccess: () => (isCurrent() ? freshAccess : undefined),
       canWrite: () =>
         isCurrent() &&
         (freshAccess === 'owner' ||

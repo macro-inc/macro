@@ -24,9 +24,12 @@ import type { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createSignal,
+  lazy,
+  Match,
   on,
   type ParentProps,
   Suspense,
+  Switch,
 } from 'solid-js';
 import {
   type MarkdownDocumentContextValue,
@@ -292,7 +295,41 @@ export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
   autoFocus?: boolean;
 };
 
+const RustMarkdownEditor = lazy(() => import('./RustMarkdownEditor'));
+
 export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
+  const { documentSource, documentId } = useMarkdownDocument();
+  const session = () => {
+    const source = documentSource();
+    return source.type === 'session' ? source : undefined;
+  };
+  return (
+    <Switch>
+      <Match when={session()} keyed>
+        {(source) => (
+          <Suspense>
+            <TraceFlow name="editor.open" key={documentId}>
+              <RustMarkdownEditor
+                context={source.context}
+                autoFocus={props.autoFocus ?? false}
+                onReady={props.onDataReady}
+              />
+            </TraceFlow>
+          </Suspense>
+        )}
+      </Match>
+      <Match
+        when={
+          documentSource().type === 'sync' || documentSource().type === 'dss'
+        }
+      >
+        <LegacyMarkdownDocumentContent {...props} />
+      </Match>
+    </Switch>
+  );
+}
+
+function LegacyMarkdownDocumentContent(props: MarkdownDocumentContentProps) {
   const { documentId: getDocumentId, state } = useMarkdownDocument();
   const documentId = getDocumentId();
 
