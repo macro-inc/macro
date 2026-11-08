@@ -69,6 +69,8 @@ impl Replayer {
         self.selections.replace_slots(slots)
     }
     pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
+        self.bindings
+            .capture_retired_records(tx, self.editor_id, self.version)?;
         let values = self
             .selections
             .slots()?

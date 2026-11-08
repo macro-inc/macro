@@ -24,6 +24,12 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_origin: Option<crate::foreign::ReadOrigin>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_retired_records: crate::state::NodeMap,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
@@ -66,6 +72,12 @@ impl<'editor> Transaction<'editor> {
             foreign_update: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_read_sources: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_read_origin: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_retired_records: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
             #[cfg(feature = "foreign-nodes")]
@@ -111,6 +123,23 @@ impl<'editor> Transaction<'editor> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
+            #[cfg(feature = "foreign-nodes")]
+            detached_selections: &self.detached,
+            #[cfg(feature = "foreign-nodes")]
+            source_records: self.foreign_read_sources.as_ref(),
+            #[cfg(feature = "foreign-nodes")]
+            retired_records: Some(&self.foreign_retired_records),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_origin: if self.foreign_read_only {
+                self.foreign_read_origin
+                    .as_ref()
+                    .map(crate::foreign::ReadOrigin::borrowed)
+            } else {
+                Some(crate::foreign::ReadOriginRef {
+                    editor: &self.editor.suspend_owner,
+                    update: &self.foreign_update,
+                })
+            },
             state: &self.pending,
             previous_selection,
             composition_key: self.composition_key,
@@ -119,6 +148,13 @@ impl<'editor> Transaction<'editor> {
     /// The state committed before this update began.
     pub fn committed_state(&self) -> &EditorState {
         &self.editor.state
+    }
+    pub(crate) fn remove_record(&mut self, key: NodeKey) {
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(record) = self.pending.nodes.get(&key) {
+            self.foreign_retired_records.insert(key, record.clone());
+        }
+        self.pending.remove_record(key);
     }
     pub(crate) fn writable(&mut self, key: NodeKey) -> Result<&mut NodeSlot, Error> {
         self.mark_dirty(key)?;
@@ -322,7 +358,7 @@ impl<'editor> Transaction<'editor> {
                 .ok_or(Error::Invariant("missing replacement"))?
                 .replace(slot.data.as_any())?;
             // The original allocation is burned, exactly as $applyNodeReplacement does.
-            self.pending.remove_record(original.key());
+            self.remove_record(original.key());
             self.dirty_leaves.shift_remove(&original.key());
             self.dirty_elements.shift_remove(&original.key());
             let base = (self.pending.registry.vtable(replacement).initial_base)(data.as_any())?;

@@ -9,7 +9,6 @@ const root = path.resolve(
 );
 export default defineConfig({
 	root: path.join(root, "packages/lexical-conformance"),
-	define: { "process.env.NODE_ENV": JSON.stringify("production") },
 	resolve: {
 		alias: [
 			{
@@ -50,11 +49,13 @@ export default defineConfig({
 		dedupe: ["lexical"],
 	},
 	test: {
+		env: { NODE_ENV: "production" },
 		server: { deps: { inline: [/lexical/] } },
 		setupFiles: [path.join(root, "packages/lexical-conformance/diff/setup.ts")],
 		include: ["diff/collab/**/*.test.ts"],
 		environment: "jsdom",
 		maxWorkers: 1,
+		hookTimeout: 300000,
 		testTimeout: 300000,
 	},
 });

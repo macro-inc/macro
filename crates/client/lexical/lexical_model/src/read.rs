@@ -14,6 +14,14 @@ pub use structural::CommonAncestor;
 pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) source_records: Option<&'state crate::state::NodeMap>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) retired_records: Option<&'state crate::state::NodeMap>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_origin: Option<crate::foreign::ReadOriginRef<'state>>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) detached_selections: &'state [Option<Selection>],
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -87,12 +95,7 @@ impl<'state> StateRef<'state> {
         if let Some(frame) = self.native_projection.filter(|frame| frame.key == key) {
             return frame.get::<Node>();
         }
-        let slot = self.slot(key)?;
-        (self.state.registry.vtable(slot.type_index).project)(
-            slot.data.as_any(),
-            TypeId::of::<Node>(),
-        )?
-        .downcast_ref::<Node>()
+        self.node(key)?.get::<Node>()
     }
     /// Cast.
     pub fn cast<Node: NodeType>(self, key: impl Into<NodeKey>) -> Option<Id<Node>> {
@@ -862,6 +865,14 @@ impl<'state> StateRef<'state> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection,
+            #[cfg(feature = "foreign-nodes")]
+            detached_selections: self.detached_selections,
+            #[cfg(feature = "foreign-nodes")]
+            source_records: self.source_records,
+            #[cfg(feature = "foreign-nodes")]
+            retired_records: self.retired_records,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_origin: self.foreign_origin,
             state: &snapshot,
             previous_selection: self.previous_selection,
             composition_key: self.composition_key,

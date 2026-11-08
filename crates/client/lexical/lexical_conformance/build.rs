@@ -77,6 +77,7 @@ fn main() -> Result<(), std::io::Error> {
         ("selection", "call", "method", "Selection.", false),
         ("caret", "call", "name", "Caret.", true),
         ("properties", "get", "name", "get:", false),
+        ("properties/node", "get", "name", "get:", false),
         ("rich", "call", "name", "", false),
         ("rich", "link_method", "method", "LexicalNode.", false),
         ("markdown", "call", "short", "@lexical/markdown.", false),

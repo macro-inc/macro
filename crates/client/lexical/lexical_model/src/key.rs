@@ -99,6 +99,12 @@ impl SharedKeyCounter {
             })
         })
     }
+    /// Allocate a development host key from the same stream as its editors.
+    /// This creates no node and consumes no commit identity.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn allocate_for_foreign_host(&self) -> Result<NodeKey, Error> {
+        self.next()
+    }
     pub(crate) fn next_commit(&self) -> Result<crate::CommitId, Error> {
         self.1
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
