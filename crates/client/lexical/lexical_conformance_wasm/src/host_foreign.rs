@@ -39,7 +39,8 @@ impl ForeignNode {
             | ForeignHook::CollapseAtStart.bit()
             | ForeignHook::StaticTransform.bit()
             | ForeignHook::Import.bit()
-            | ForeignHook::SelectionTransform.bit();
+            | ForeignHook::SelectionTransform.bit()
+            | ForeignHook::AdjustExportJson.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -132,6 +133,26 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn adjust_export_json(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        json: &mut SerializedNode,
+    ) -> Override<Result<(), Error>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::AdjustExportJson.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => node.state.snapshot_for_foreign_read().and_then(|snapshot| {
+                let result = callback.export_json(&snapshot, node.key)?;
+                *json = result;
+                Ok(())
+            }),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
+
     fn selection_transform(
         &self,
         tx: &mut Transaction<'_>,

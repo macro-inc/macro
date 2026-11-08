@@ -7,7 +7,7 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners use scoped current-hook reborrows; foreign node classes and read-only API scopes are not wired yet.
+- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners and mutable node hooks use scoped current-hook reborrows; exportJSON uses an owned guarded read peer. The complete class facade and remaining pure hooks are unfinished.
 - `src/host_commands.rs`: opaque JS application-command envelope over the model extension pipeline, filtering identities before JS; the future shim supplies identity strings and handles parent-editor propagation.
 - `src/host_callbacks.rs`: single-threaded JS transform ownership, exact-owner scoped reborrows, callback identity dedup and opaque exception transport. Never recover an ancestor transaction pointer or hold a metadata lock over JS.
 - `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
@@ -124,3 +124,7 @@ Mutable insertNewAfter/collapseAtStart callbacks receive the existing selection 
 Static importJSON callbacks use HostNodeMutation with a null node and one serialized-node argument. Invoke the factory in the exact mutable callback scope and require a live encoded node result; the model imports children and invokes virtual append after the factory returns. Explicit native-super import construction remains unfinished.
 
 Mutable selectionTransform callbacks receive the previous committed object and current active object. Consume original indexed arguments before encoding fallback selections; native-super bypasses one vtable call. Pipeline focus dispatch follows the live focus after the anchor callback.
+
+Pure exportJSON callbacks run against one independently owned guarded read peer. Reentrant indexed/native/raw reads use that peer; mutations, commands and registrations reject. Preserve original indexed arguments and opaque exceptions through Result/RAII. Inherited selection value writes and originless committed captures remain unsupported; this bounded adapter does not complete pure-hook hosting.
+
+Snapshot exportJSON result fields under the caught JS import before serde deserialization: its Object.entries import cannot catch getters. Preserve opaque getter/proxy exceptions and reject undefined results before sentinel encoding. The snapshot retains keys and undefined values instead of JSON.stringify normalization.
