@@ -495,9 +495,6 @@ impl HttpLexicalClient {
         Ok(data.data.into_iter().map(Into::into).collect())
     }
 
-    /// Fetches the full document rendered as a single markdown string in the
-    /// requested target format.
-
     pub async fn get_markdown(&self, document_id: &str, target: MarkdownTarget) -> Result<String> {
         let url = format!(
             "{}/markdown/{}?target={}",
@@ -509,21 +506,12 @@ impl HttpLexicalClient {
         Ok(response.data)
     }
 
-    /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),
-    /// typed so callers can only consume it as an [`EmbeddingMarkdown`]. Prefer
-    /// this over [`get_markdown`](Self::get_markdown) with
-    /// [`MarkdownTarget::Embedding`] anywhere the result feeds task-dedup.
-
     pub async fn get_embedding_markdown(&self, document_id: &str) -> Result<EmbeddingMarkdown> {
         let markdown = self
             .get_markdown(document_id, MarkdownTarget::Embedding)
             .await?;
         Ok(EmbeddingMarkdown(markdown))
     }
-
-    /// Resolve a comment mark against the live document: `None` when the
-    /// document no longer carries it. Performs no access check of its own, so
-    /// callers must already hold access to the document.
 
     pub async fn resolve_comment_mark(
         &self,
@@ -578,11 +566,6 @@ impl HttpLexicalClient {
         Ok(bytes.to_vec())
     }
 
-    /// Renders `markdown` to an email-ready HTML body via the lexical
-    /// service, so a caller with no browser composer — the `SendEmail` tool,
-    /// whose body the model writes as markdown — produces the same HTML the
-    /// composer would have exported.
-
     pub async fn markdown_to_html(&self, markdown: &str) -> Result<RenderedBody> {
         let url = format!("{}/html", self.url);
         let response = check_response(
@@ -596,9 +579,6 @@ impl HttpLexicalClient {
         .await?;
         response.json().await.context("unexpected response")
     }
-
-    /// Parses `markdown` via the lexical service and returns the entity
-    /// mentions it contains.
 
     pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
         let url = format!("{}/mentions", self.url);
@@ -615,8 +595,6 @@ impl HttpLexicalClient {
         Ok(data.mentions)
     }
 
-    /// Compose dimension-preserving channel markup from a real Lexical image node.
-
     pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
         let response = check_response(
             self.client
@@ -631,10 +609,6 @@ impl HttpLexicalClient {
             response.json().await.context("unexpected response")?;
         Ok(data.markdown)
     }
-
-    /// Composes the channel message announcing an agent session — a structured
-    /// reply target above the session's Magic Chip — via the lexical service,
-    /// so the markdown is built from real Lexical nodes.
 
     pub async fn compose_agent_announcement(
         &self,
@@ -655,8 +629,6 @@ impl HttpLexicalClient {
             response.json().await.context("unexpected response")?;
         Ok(data.markdown)
     }
-
-    /// Compose an account setup reply through the lexical service's real nodes.
 
     pub async fn compose_agent_connection_prompt(
         &self,
@@ -679,9 +651,6 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
-    /// Compose a chat agent's thread message - its session link over the
-    /// spinner or its prose - through the lexical service's real nodes.
-
     pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
@@ -697,10 +666,6 @@ impl HttpLexicalClient {
             response.json().await.context("unexpected response")?;
         Ok(data.markdown)
     }
-
-    /// Sanitizes an agent prompt and optionally composes it with why the
-    /// agent was called via the lexical service, so internal nodes and
-    /// escaping are handled by Lexical rather than by the caller.
 
     pub async fn compose_agent_context(
         &self,
@@ -729,10 +694,6 @@ impl HttpLexicalClient {
         let data: AgentContextResponse = response.json().await.context("unexpected response")?;
         Ok(data.markdown)
     }
-
-    /// Parses `markdown` via the lexical service and returns the leading
-    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
-    /// Standard Markdown blockquotes carry no reply semantics.
 
     pub async fn extract_explicit_reply(
         &self,
