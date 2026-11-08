@@ -16,6 +16,8 @@ mod host;
 #[cfg(feature = "js-nodes")]
 mod host_callbacks;
 #[cfg(feature = "js-nodes")]
+mod host_commands;
+#[cfg(feature = "js-nodes")]
 pub use host::EditorHandle;
 #[cfg(feature = "js-nodes")]
 /// Development commit packet shared with the generated host decoder.

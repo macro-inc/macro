@@ -8,16 +8,41 @@ use std::{cell::Cell, sync::Arc};
 use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Default)]
-pub(super) struct Errors(Arc<std::sync::Mutex<Option<Thrown>>>);
-struct Thrown {
+pub(super) struct Errors(Arc<std::sync::Mutex<Option<HostValue>>>);
+#[derive(Clone)]
+pub(super) struct HostValue {
     #[cfg(target_arch = "wasm32")]
     value: JsValue,
 }
 // Same single-threaded ownership restriction as BoundFunction below.
 #[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
-unsafe impl Send for Thrown {}
+unsafe impl Send for HostValue {}
 #[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
-unsafe impl Sync for Thrown {}
+unsafe impl Sync for HostValue {}
+impl std::fmt::Debug for HostValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("HostValue")
+    }
+}
+impl HostValue {
+    pub(super) fn new(value: JsValue) -> Self {
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self {
+                value: crate::debug::returned_handle(value),
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = value;
+            Self {}
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn to_js(&self) -> JsValue {
+        crate::debug::returned_handle(self.value.clone())
+    }
+}
 impl Errors {
     #[cfg(target_arch = "wasm32")]
     fn save(&self, value: JsValue) {
@@ -25,9 +50,7 @@ impl Errors {
             self.0
                 .lock()
                 .expect("callback exception slot")
-                .replace(Thrown {
-                    value: crate::debug::returned_handle(value),
-                })
+                .replace(HostValue::new(value))
         };
         drop(previous);
     }
@@ -53,13 +76,20 @@ impl Errors {
 compile_error!("the development JS host requires single-threaded WASM");
 
 trait Dispatch {
+    fn listen(
+        &self,
+        registration: lexical_model::CommandRegistration,
+        callback: Arc<super::host_commands::Listener>,
+    ) -> Result<ForeignListenerId, JsValue>;
+    fn unlisten(&self, id: ForeignListenerId) -> Result<(), JsValue>;
+    fn command(&self, command: &lexical_model::Command) -> Result<lexical_model::Handled, JsValue>;
     fn owner(&self) -> &Arc<()>;
     fn call(&self, id: u32, args: Value, receiver: Option<Value>) -> Result<Value, JsValue>;
     fn read_field(&self, handle: u32, field: &str) -> Result<Value, JsValue>;
     fn register(
         &self,
         type_name: &str,
-        callback: Arc<Transform>,
+        callback: Arc<Callback>,
     ) -> Result<ForeignListenerId, JsValue>;
     fn unregister(&self, id: ForeignListenerId) -> Result<(), JsValue>;
 }
@@ -98,10 +128,29 @@ impl Frame<'_, '_> {
     }
 }
 impl Dispatch for Frame<'_, '_> {
+    fn listen(
+        &self,
+        registration: lexical_model::CommandRegistration,
+        callback: Arc<super::host_commands::Listener>,
+    ) -> Result<ForeignListenerId, JsValue> {
+        self.with_tx(|tx| Ok(tx.register_foreign_listener(registration, callback)))
+    }
+    fn unlisten(&self, id: ForeignListenerId) -> Result<(), JsValue> {
+        self.with_tx(|tx| {
+            tx.unregister_foreign_listener(id);
+            Ok(())
+        })
+    }
+    fn command(&self, command: &lexical_model::Command) -> Result<lexical_model::Handled, JsValue> {
+        self.with_tx(|tx| {
+            tx.dispatch(command)
+                .map_err(|error| self.errors.convert(error))
+        })
+    }
     fn register(
         &self,
         type_name: &str,
-        callback: Arc<Transform>,
+        callback: Arc<Callback>,
     ) -> Result<ForeignListenerId, JsValue> {
         self.with_tx(|tx| {
             tx.mark_foreign_type_dirty(type_name)
@@ -168,12 +217,28 @@ pub(super) fn read_field(owner: &Arc<()>, handle: u32, field: &str) -> Result<Va
 pub(super) fn register(
     owner: &Arc<()>,
     type_name: &str,
-    callback: Arc<Transform>,
+    callback: Arc<Callback>,
 ) -> Result<ForeignListenerId, JsValue> {
     current(owner, |frame| frame.register(type_name, callback))
 }
 pub(super) fn unregister(owner: &Arc<()>, id: ForeignListenerId) -> Result<(), JsValue> {
     current(owner, |frame| frame.unregister(id))
+}
+pub(super) fn listen(
+    owner: &Arc<()>,
+    registration: lexical_model::CommandRegistration,
+    callback: Arc<super::host_commands::Listener>,
+) -> Result<ForeignListenerId, JsValue> {
+    current(owner, |frame| frame.listen(registration, callback))
+}
+pub(super) fn unlisten(owner: &Arc<()>, id: ForeignListenerId) -> Result<(), JsValue> {
+    current(owner, |frame| frame.unlisten(id))
+}
+pub(super) fn command(
+    owner: &Arc<()>,
+    command: &lexical_model::Command,
+) -> Result<lexical_model::Handled, JsValue> {
+    current(owner, |frame| frame.command(command))
 }
 
 // The function can only be held/executed by this single-threaded WASM module.
@@ -187,6 +252,27 @@ unsafe impl Send for BoundFunction {}
 #[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
 unsafe impl Sync for BoundFunction {}
 impl BoundFunction {
+    fn invoke_opaque(&self, payload: &HostValue, errors: &Errors) -> Result<bool, Error> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            match self.function.call1(&JsValue::UNDEFINED, &payload.to_js()) {
+                Ok(value) => {
+                    let handled = value.is_truthy();
+                    crate::debug::json_payload(&Value::Bool(handled));
+                    Ok(handled)
+                }
+                Err(error) => {
+                    errors.save(error);
+                    Err(Error::Invariant("JS listener threw"))
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (payload, errors);
+            Err(Error::Invariant("JS callbacks require WASM"))
+        }
+    }
     fn new(function: js_sys::Function) -> Result<Self, JsValue> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -224,13 +310,29 @@ impl BoundFunction {
     }
 }
 
-pub(super) struct Transform {
+pub(super) struct Callback {
     function: BoundFunction,
     context: CallbackContext,
     owner: Arc<()>,
     errors: Errors,
 }
-impl Transform {
+impl Callback {
+    fn with_scope<T>(&self, tx: &mut Transaction<'_>, body: impl FnOnce() -> T) -> T {
+        let frame = Frame {
+            tx: Cell::new(Some(tx)),
+            context: &self.context,
+            owner: &self.owner,
+            errors: &self.errors,
+        };
+        CURRENT.set(&frame, body)
+    }
+    pub(super) fn command(
+        &self,
+        tx: &mut Transaction<'_>,
+        payload: &HostValue,
+    ) -> Result<bool, Error> {
+        self.with_scope(tx, || self.function.invoke_opaque(payload, &self.errors))
+    }
     pub(super) fn matches(&self, function: &js_sys::Function) -> bool {
         #[cfg(target_arch = "wasm32")]
         {
@@ -256,18 +358,12 @@ impl Transform {
         })
     }
 }
-impl ForeignTransform for Transform {
+impl ForeignTransform for Callback {
     fn transform(&self, tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
         let node = self
             .context
             .node(tx, key)
             .map_err(|error| Error::InvariantMessage(error.to_string()))?;
-        let frame = Frame {
-            tx: Cell::new(Some(tx)),
-            context: &self.context,
-            owner: &self.owner,
-            errors: &self.errors,
-        };
-        CURRENT.set(&frame, || self.function.invoke(node, &self.errors))
+        self.with_scope(tx, || self.function.invoke(node, &self.errors))
     }
 }
