@@ -16,6 +16,7 @@ use crate::domain::{
     },
 };
 use bot_id::{BotId, cowlike::CowLike};
+use channel_id::ChannelId;
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{
     AdminParticipantRole, EntityAccessReceipt, EntityType, MemberParticipantRole,
@@ -961,11 +962,12 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_attachments(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
         attachment_type: Option<ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        let channel_id = channel_id.0;
         let limit = limit.clamp(1, 500);
 
         let attachments = self
@@ -986,8 +988,9 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_participants(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        let channel_id = channel_id.0;
         let participants = self
             .repo
             .get_channel_participants(channel_id)
@@ -1014,9 +1017,10 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_metadata(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> Result<ChannelMetadata, ChannelMessagesErr> {
+        let channel_id = channel_id.0;
         let metadata = self
             .repo
             .get_channel_metadata(channel_id, viewer_user_id)
@@ -1264,9 +1268,10 @@ where
     async fn share_referenced_items_with_channel(
         &self,
         actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let channel_id = channel_id.0;
         self.reference_share_permissions
             .update_channel_share_permissions_for_referenced_items(actor, channel_id, items)
             .await
@@ -1284,41 +1289,46 @@ where
     async fn delete_channel(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::delete_channel(self, actor, channel_id).await
     }
 
     async fn add_participants(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         req: AddParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::add_participants(self, actor, channel_id, req).await
     }
 
     async fn remove_participants(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::remove_participants(self, actor, channel_id, req).await
     }
 
     async fn get_channel_join_code(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::get_channel_join_code(self, channel_id).await
     }
 
     async fn join_channel(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::join_channel(self, actor, channel_id).await
     }
 
@@ -1333,8 +1343,9 @@ where
     async fn leave_channel(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         ChannelServiceImpl::leave_channel(self, actor, channel_id).await
     }
 

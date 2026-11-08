@@ -15,6 +15,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
+use channel_id::ChannelId;
 use channels::domain::models::{
     Activity, ActivityType, AttachmentChannelReference, AttachmentCommentReference,
     AttachmentEntityReference, AttachmentGenericReference, ChannelAttachment,
@@ -405,7 +406,10 @@ pub async fn delete_channel_handler<
 ) -> Result<(StatusCode, String), ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
-    state.service.delete_channel(actor, channel_id).await?;
+    state
+        .service
+        .delete_channel(actor, ChannelId(channel_id))
+        .await?;
     Ok((StatusCode::OK, "channel successfully deleted".to_string()))
 }
 
@@ -442,7 +446,7 @@ pub async fn add_participants_handler<
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state
         .service
-        .add_participants(actor, channel_id, req)
+        .add_participants(actor, ChannelId(channel_id), req)
         .await?;
     Ok(StatusCode::OK)
 }
@@ -494,7 +498,7 @@ pub async fn share_with_channel_handler<
     let item = ReferencedShareItem::new(req.entity_id.to_string(), req.entity_type.to_domain());
     let results = state
         .service
-        .share_referenced_items_with_channel(actor, channel_id, vec![item])
+        .share_referenced_items_with_channel(actor, ChannelId(channel_id), vec![item])
         .await?;
     if results
         .iter()
@@ -539,7 +543,7 @@ pub async fn remove_participants_handler<
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
     state
         .service
-        .remove_participants(actor, channel_id, req)
+        .remove_participants(actor, ChannelId(channel_id), req)
         .await?;
     Ok(StatusCode::OK)
 }
@@ -572,7 +576,10 @@ pub async fn get_channel_join_link_handler<
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
 ) -> Result<Json<ChannelJoinCodeResponse>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
-    let response = state.service.get_channel_join_code(channel_id).await?;
+    let response = state
+        .service
+        .get_channel_join_code(ChannelId(channel_id))
+        .await?;
     Ok(Json(response))
 }
 
@@ -640,7 +647,10 @@ pub async fn join_channel_handler<
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
-    state.service.join_channel(actor, channel_id).await?;
+    state
+        .service
+        .join_channel(actor, ChannelId(channel_id))
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -674,7 +684,10 @@ pub async fn leave_channel_handler<
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let actor = user_actor_from_receipt(&access.entity_access_receipt)?;
-    state.service.leave_channel(actor, channel_id).await?;
+    state
+        .service
+        .leave_channel(actor, ChannelId(channel_id))
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -891,7 +904,7 @@ pub async fn get_channel_attachments_handler<
 
     let page = state
         .service
-        .get_channel_attachments(channel_id, query, limit, params.attachment_type)
+        .get_channel_attachments(ChannelId(channel_id), query, limit, params.attachment_type)
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
@@ -949,9 +962,12 @@ pub async fn get_channel_handler<
 
     let metadata = state
         .service
-        .get_channel_metadata(channel_id, viewer)
+        .get_channel_metadata(ChannelId(channel_id), viewer)
         .await?;
-    let participants = state.service.get_channel_participants(channel_id).await?;
+    let participants = state
+        .service
+        .get_channel_participants(ChannelId(channel_id))
+        .await?;
 
     Ok(Json(ApiChannelDetail {
         channel_id,
@@ -993,7 +1009,10 @@ pub async fn get_channel_participants_handler<
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
-    let participants = state.service.get_channel_participants(channel_id).await?;
+    let participants = state
+        .service
+        .get_channel_participants(ChannelId(channel_id))
+        .await?;
 
     Ok(Json(
         participants
