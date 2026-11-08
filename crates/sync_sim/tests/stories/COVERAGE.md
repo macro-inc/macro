@@ -61,10 +61,9 @@ read-only and observes IDs before projection fixups, not inferred new op spans.
 ## Remaining M2 producers
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
-Remaining application/editor producers:
-comment-only gate verdict parity; editor generation
-and observed undo/backspace floors. Existing core unit
-reset-budget tests do not establish faulty-editor integration.
+Remaining application/editor producers: comment commands, compound source paste,
+editor generation and observed undo/backspace floors. Actual faulty-editor
+integration and native gate parity are covered below.
 
 Executor-only unit rows remain in their existing adapters/core suites: IDB abort retry
 (S7:27), outage/TTL telemetry (25,33), stale connection events (61,64,71), Tauri read
@@ -132,14 +131,14 @@ paragraph splitting, formatting and indent/outdent through both tab and headless
 sessions. Every command must produce actual own spans; both replicas' synced JSON
 and independent reconstruction pass unchanged invariants and exact replay. A second
 literal checks repeated backspace follows the updated cursor across astral text.
-Real package block/list/table operations are covered below; comments/gate and
+Real package block/list/table operations are covered below; comment commands and
 editor generator floors remain pending.
 
 `editor_rich`: all six block forms preserve real application replacements and
 eight-character identities; all three headless list commands create TaskListNode;
 table behavior composes with the application-owned registry and preserves the
 requested rows/columns. Every story retains all invariants and exact replay.
-Markdown paste is covered below; shortcuts, comments/gate and generated editor
+Markdown paste is covered below; comment commands and generated editor
 floors remain pending.
 
 `mixed_versions::real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays_exactly`
@@ -193,3 +192,11 @@ push, then delivers automatically on write regrant. Missing, quarantined,
 already-delivered, unparked and foreign-user retention cannot exempt convergence;
 missing bytes cannot exempt edit loss. Own projection and acknowledged-edit
 checks remain strict.
+
+Editor-room permission checks use the real native application comment gate,
+including stored editor seeds and cold durable forks. T0's `gate_parity` test
+runs all20,000 real service/adversarial cases and the570 exact fail-closed
+partial-import divergences. Every ledger row binds the original oracle hash,
+native error, source verdict and source parse-error messages. Source-error
+observation is a separate generated sidecar; original oracle rows stay byte-identical.
+Comment command producers remain a separate pending item.
