@@ -1,0 +1,882 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+    "test": [
+      "LexicalMarkNode tests",
+      "$wrapSelectionInMarkNode",
+      "does not include block element nodes"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 2,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root",
+          "1"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              3,
+              true
+            ],
+            [
+              2,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "2",
+            "type": "test_block",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "more text"
+          ],
+          "ret": {
+            "$h": 5,
+            "key": "3",
+            "type": "text",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 6,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createRangeSelection",
+          "args": [],
+          "ret": {
+            "$sel": 7,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 7
+          },
+          "args": [],
+          "ret": {
+            "$pt": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 6,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "Point.set",
+          "args": [
+            {
+              "$key": 6,
+              "raw": "1"
+            },
+            0,
+            "element"
+          ],
+          "this": {
+            "$pt": 8
+          },
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 7
+          },
+          "args": [],
+          "ret": {
+            "$pt": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 6,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildrenSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 2
+        },
+        {
+          "op": "call",
+          "fn": "Point.set",
+          "args": [
+            {
+              "$key": 6,
+              "raw": "1"
+            },
+            2,
+            "element"
+          ],
+          "this": {
+            "$pt": 9
+          },
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/mark.$wrapSelectionInMarkNode",
+          "args": [
+            {
+              "$sel": 7
+            },
+            false,
+            "my-id"
+          ],
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 10,
+              "key": "4",
+              "type": "mark",
+              "ver": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildAtIndex",
+          "args": [
+            0
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$key": 4,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$key": 4,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildAtIndex",
+          "args": [
+            1
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "MarkNode.getType",
+          "args": [],
+          "this": {
+            "$h": 10
+          },
+          "ret": "mark"
+        },
+        {
+          "op": "call",
+          "fn": "MarkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 10
+          },
+          "ret": [
+            {
+              "$h": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "MarkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 10
+          },
+          "ret": "more text"
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "clock",
+      "src": "perf",
+      "t": 0
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "more text",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "mark",
+                    "version": 1,
+                    "ids": [
+                      "my-id"
+                    ]
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 5,
+              "raw": "3"
+            },
+            "path": [
+              0,
+              1,
+              0
+            ],
+            "offset": 9,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 5,
+              "raw": "3"
+            },
+            "path": [
+              0,
+              1,
+              0
+            ],
+            "offset": 9,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "\n\nmore text",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            5
+          ],
+          "elements": [
+            [
+              4,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              10,
+              true
+            ],
+            [
+              2,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "more text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "mark",
+                "version": 1,
+                "ids": [
+                  "my-id"
+                ]
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 5,
+          "raw": "3"
+        },
+        "path": [
+          0,
+          1,
+          0
+        ],
+        "offset": 9,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 5,
+          "raw": "3"
+        },
+        "path": [
+          0,
+          1,
+          0
+        ],
+        "offset": 9,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "\n\nmore text",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
+  }
+}

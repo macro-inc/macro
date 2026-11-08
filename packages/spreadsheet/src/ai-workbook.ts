@@ -2,6 +2,8 @@ import type { LoroDoc } from 'loro-crdt';
 import type {
   SpreadsheetCalculateRequest,
   SpreadsheetCalculateResponse,
+  SpreadsheetCellInput,
+  SpreadsheetCellValue,
   SpreadsheetEditRequest,
   SpreadsheetEditResponse,
   SpreadsheetOperation,
@@ -343,8 +345,15 @@ export function readSpreadsheetForAi(
   };
 }
 
+/** The source text a person would type for a typed cell value. */
+function cellSource(value: SpreadsheetCellValue): string {
+  if (value === null) return '';
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  return String(value);
+}
+
 function validateInputs(
-  cells: { address: string; value: string }[],
+  cells: SpreadsheetCellInput[],
   sheet: SpreadsheetWorkbookSheet
 ) {
   const edits: SpreadsheetCellEdits = {};
@@ -354,13 +363,16 @@ function validateInputs(
       throw new Error(
         `Cell ${key.normalized} exceeds ${sheet.name}'s ${sheet.layout.rowCount} rows. Append rows first.`
       );
-    if (cell.value.length > SPREADSHEET_MAX_CELL_LENGTH)
+    if (typeof cell.value === 'number' && !Number.isFinite(cell.value))
+      throw new Error(`Cell ${key.normalized} needs a finite number.`);
+    const source = cellSource(cell.value);
+    if (source.length > SPREADSHEET_MAX_CELL_LENGTH)
       throw new Error(`Cell ${key.normalized} exceeds 10,000 characters.`);
     if (key.normalized in edits)
       throw new Error(
         `Cell ${key.normalized} is specified twice in one operation.`
       );
-    edits[key.normalized] = { value: cell.value };
+    edits[key.normalized] = { value: source };
   }
   return edits;
 }

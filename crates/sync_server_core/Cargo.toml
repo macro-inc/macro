@@ -8,7 +8,7 @@ publish = false
 openapi = ["dep:utoipa"]
 
 [dependencies]
-loro.workspace = true
+loro_server.workspace = true
 bebop.workspace = true
 rootcause.workspace = true
 sync_protocol = { workspace = true, features = ["presence"] }

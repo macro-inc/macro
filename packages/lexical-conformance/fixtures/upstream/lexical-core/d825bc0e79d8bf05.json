@@ -1,0 +1,37 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/mentions.test.ts",
+    "test": [
+      "markdownToEmbeddingText",
+      "decodes base64 snapshots"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "<m-snapshot>eyJkb2N1bWVudElkIjoiZG9jLTMiLCJkb2N1bWVudE5hbWUiOiJTcGVjIiwiYmxvY2tOYW1lIjoibWQifQ==</m-snapshot>"
+      ],
+      "ret": "[Spec](md:doc-3)"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

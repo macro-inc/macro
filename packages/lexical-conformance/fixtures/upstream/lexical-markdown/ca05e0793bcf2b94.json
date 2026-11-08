@@ -1,0 +1,489 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "Markdown",
+      "Enter key triggers",
+      "should transform heading on Enter when a line was inserted at once (no trailing space listener trigger)"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "link"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+      },
+      "list": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+      },
+      "listitem": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+      },
+      "quote": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+      },
+      "code": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+      },
+      "link": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "link"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+          },
+          "list": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+          },
+          "listitem": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+          },
+          "code": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+          },
+          "link": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "plugin",
+      "name": "@lexical/markdown.registerMarkdownShortcuts",
+      "args": [
+        {
+          "$ed": 0
+        },
+        [
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.HEADING"
+          }
+        ]
+      ]
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 3,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.selectEnd",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$sel": 4,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isRangeSelection",
+          "args": [
+            {
+              "$sel": 4
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.insertText",
+          "args": [
+            "## "
+          ],
+          "this": {
+            "$sel": 4
+          },
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "## ",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": "2",
+            "path": [
+              0,
+              0
+            ],
+            "offset": 3,
+            "type": "text"
+          },
+          "focus": {
+            "key": "2",
+            "path": [
+              0,
+              0
+            ],
+            "offset": 3,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "## ",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "2"
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "LexicalEditor.dispatchCommand",
+          "args": [
+            {
+              "$cmd": "KEY_ENTER_COMMAND"
+            },
+            null
+          ],
+          "this": {
+            "$ed": 0
+          },
+          "ret": true
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "heading",
+                "version": 1,
+                "tag": "h2"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": "3",
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "focus": {
+            "key": "3",
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "",
+        "nodeMapKeys": [
+          "root",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "2"
+          ],
+          "elements": [
+            [
+              "3",
+              true
+            ],
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/html.$generateHtmlFromNodes",
+          "args": [
+            {
+              "$ed": 0
+            }
+          ],
+          "ret": "<h2><br></h2>"
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "heading",
+            "version": 1,
+            "tag": "h2"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": "3",
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "focus": {
+        "key": "3",
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "",
+    "nodeMapKeys": [
+      "root",
+      "3"
+    ]
+  }
+}

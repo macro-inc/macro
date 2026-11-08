@@ -1,0 +1,134 @@
+use std::sync::Weak;
+
+use loro_common::{ContainerID, LoroResult, LoroValue};
+
+use crate::{
+    configure::Configure,
+    container::idx::ContainerIdx,
+    event::{Diff, Index, InternalDiff},
+    op::{Op, RawOp, RawOpContent},
+    LoroDocInner,
+};
+
+use super::{ApplyLocalOpReturn, ContainerState, DiffApplyContext};
+
+#[derive(Debug, Clone)]
+pub struct CounterState {
+    idx: ContainerIdx,
+    value: f64,
+}
+
+impl CounterState {
+    pub(crate) fn new(idx: ContainerIdx) -> Self {
+        Self { idx, value: 0. }
+    }
+}
+
+impl ContainerState for CounterState {
+    fn container_idx(&self) -> ContainerIdx {
+        self.idx
+    }
+
+    fn is_state_empty(&self) -> bool {
+        false
+    }
+
+    fn apply_diff_and_convert(&mut self, diff: InternalDiff, _ctx: DiffApplyContext) -> Diff {
+        if let InternalDiff::Counter(diff) = diff {
+            self.value += diff;
+            Diff::Counter(diff)
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn apply_diff(&mut self, diff: InternalDiff, ctx: DiffApplyContext) -> LoroResult<()> {
+        let _ = self.apply_diff_and_convert(diff, ctx);
+        Ok(())
+    }
+
+    fn apply_local_op(&mut self, raw_op: &RawOp, _op: &Op) -> LoroResult<ApplyLocalOpReturn> {
+        if let RawOpContent::Counter(diff) = raw_op.content {
+            self.value += diff;
+            Ok(Default::default())
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[doc = " Convert a state to a diff, such that an empty state will be transformed into the same as this state when it\'s applied."]
+    fn to_diff(&mut self, _doc: &Weak<LoroDocInner>) -> Diff {
+        Diff::Counter(self.value)
+    }
+
+    fn get_value(&mut self) -> LoroValue {
+        LoroValue::Double(self.value)
+    }
+
+    #[doc = " Get the index of the child container"]
+    #[allow(unused)]
+    fn get_child_index(&self, id: &ContainerID) -> Option<Index> {
+        None
+    }
+
+    #[allow(unused)]
+    fn get_child_containers(&self) -> Vec<ContainerID> {
+        vec![]
+    }
+
+    fn contains_child(&self, _id: &ContainerID) -> bool {
+        false
+    }
+
+    fn fork(&self, _config: &Configure) -> Self {
+        self.clone()
+    }
+}
+
+mod snapshot {
+    use crate::state::FastStateSnapshot;
+
+    use super::*;
+
+    impl FastStateSnapshot for CounterState {
+        fn encode_snapshot_fast<W: std::io::Write>(&mut self, mut w: W) {
+            let bytes = self.value.to_le_bytes();
+            w.write_all(&bytes).unwrap();
+        }
+
+        fn decode_value(bytes: &[u8]) -> LoroResult<(LoroValue, &[u8])> {
+            // Builds without the counter feature can re-export an untouched counter as header only.
+            if bytes.is_empty() {
+                return Ok((LoroValue::Double(0.0), bytes));
+            }
+
+            if bytes.len() != 8 {
+                return Err(loro_common::LoroError::DecodeError(
+                    "Decode counter value failed".to_string().into_boxed_str(),
+                ));
+            }
+
+            let value = f64::from_le_bytes(bytes[..8].try_into().unwrap());
+            Ok((LoroValue::Double(value), &bytes[8..]))
+        }
+
+        fn decode_snapshot_fast(
+            idx: ContainerIdx,
+            v: (LoroValue, &[u8]),
+            _ctx: crate::state::ContainerCreationContext,
+        ) -> LoroResult<Self>
+        where
+            Self: Sized,
+        {
+            if !v.1.is_empty() {
+                return Err(loro_common::LoroError::DecodeError(
+                    "Decode counter state failed".to_string().into_boxed_str(),
+                ));
+            }
+
+            let mut counter = CounterState::new(idx);
+            counter.value = *v.0.as_double().unwrap();
+            Ok(counter)
+        }
+    }
+}

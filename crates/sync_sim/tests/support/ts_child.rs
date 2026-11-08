@@ -41,7 +41,7 @@ impl TsChild {
             .unwrap_or_else(|error| panic!("peer report: {error}: {line}"));
         assert_eq!(report.version, 1);
         assert_eq!(
-            report.loro_version, "1.16.3",
+            report.loro_version, "1.17.1",
             "branch-pinned web Loro changed"
         );
         self.transcript.push((command, line));

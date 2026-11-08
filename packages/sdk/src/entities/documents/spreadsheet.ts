@@ -186,7 +186,8 @@ export class Spreadsheet extends Document {
    * Apply one atomic batch of up to 25 operations, planned on the revision a
    * `read()` returned: every operation validates before anything is saved.
    *
-   * Operations set values and formulas, format, clear or fill ranges, append
+   * Operations set values (text, numbers, `true`/`false`, or `null` to empty
+   * a cell) and formulas, format, clear or fill ranges, append
    * rows, resize columns, add dropdowns (with a color per choice), insert
    * checkboxes, turn a range with a header row into a named table, and add,
    * rename, duplicate or delete sheets; at most 2,000 affected cells. Address

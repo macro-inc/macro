@@ -4,6 +4,16 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/document_session",
+  "crates/client/document_session_wasm",
+  "crates/client/lexical/lexical_loro",
+  "crates/client/lexical/lexical_model",
+  "crates/client/lexical/lexical_html",
+  "crates/client/lexical/lexical_markdown",
+  "crates/client/lexical/lexical_conformance",
+  "crates/client/lexical/lexical_rich_nodes",
+  "crates/client/lexical/lexical_conformance_wasm",
+  "crates/client/lexical/lexical_workspace_tests",
   "crates/sync_doc_id",
   "crates/client/doc_sync_core",
   "crates/lexical_node_id",
@@ -219,7 +229,30 @@ members = [
   "tooling/xtask/crates/*",
 ]
 
+# WP-00 reserves these dependencies for the following Lexical work packages.
+# Remove each exception when its first consumer lands (model, replay, XML, HTML).
+[workspace.metadata.cargo-shear]
+ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
+
 [workspace.dependencies]
+lexical_html = { path = "crates/client/lexical/lexical_html" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
+document_session = { path = "crates/client/document_session" }
+lexical_loro = { path = "crates/client/lexical/lexical_loro" }
+phf = { version = "0.13.1", features = ["macros"] }
+lexical_model = { path = "crates/client/lexical/lexical_model" }
+lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
+# Shared dependencies for the portable Lexical model and its conformance suites.
+imbl = { version = "=7.0.2", default-features = false }
+rustc-hash = { version = "2.1.2", default-features = false }
+smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
+bitflags = { version = "2.11.1", default-features = false }
+regress = { version = "=0.12.0", default-features = false, features = ["std", "backend-pikevm", "utf16"] }
+quick-xml = { version = "0.41.0", default-features = false }
+insta = { version = "1.48.0", default-features = false }
+libtest-mimic = { version = "0.8.2", default-features = false }
+rand_chacha = { version = "0.9.0", default-features = false }
+ryu-js = { version = "1.0.2", default-features = false }
 macro_user_id = { path = "crates/macro_user_id" }
 sync_doc_id = { path = "crates/sync_doc_id" }
 lexical_node_id = { path = "crates/lexical_node_id" }
@@ -358,9 +391,10 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
-loro-internal = "=1.16.2"
-rustc-hash = "2.1.1"
+loro = "=1.17.1"
+# Preserve the existing server encoder while editor/session clients use1.17.1.
+loro_server = { package = "loro", path = "vendor/loro-server/loro" }
+loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
@@ -396,7 +430,6 @@ prost-build = "0.14"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
-rand_chacha = "0.9.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
@@ -554,6 +587,8 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Legacy ECMAScript case folding; see vendor/regress/README-MACRO.md.
+regress = { path = "vendor/regress" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
@@ -606,10 +641,6 @@ inherits = "release"
 lto = "fat"
 codegen-units = 1
 
-[workspace.metadata.cargo-shear]
-# Leaf ID registered for the document model, which lands in the next work package.
-ignored = ["lexical_node_id"]
-
 # S8 T0 retains exact frame bytes and canonical port evidence across hundreds
 # of worlds. Optimize the simulation and JSON tree traversal in tests only;
 # production profiles and assertion coverage stay unchanged.
@@ -627,3 +658,12 @@ opt-level = 2
 
 [profile.test.package.doc_sync_core]
 opt-level = 2
+
+# The complete session includes native Loro; keep its single browser artifact small.
+[profile.document-session-wasm]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

@@ -1,0 +1,991 @@
+use std::{io::Write, ops::RangeBounds, sync::Weak};
+
+use super::{ApplyLocalOpReturn, ContainerState, DiffApplyContext, FastStateSnapshot};
+use crate::{
+    configure::Configure,
+    container::{idx::ContainerIdx, list::list_op::ListOp, ContainerID},
+    event::{Diff, Index, InternalDiff, ListDiff},
+    handler::ValueOrHandler,
+    op::{ListSlice, Op, RawOp, RawOpContent},
+    LoroDocInner, LoroValue,
+};
+
+use generic_btree::{
+    iter,
+    rle::{CanRemove, HasLength, Mergeable, Sliceable, TryInsert},
+    BTree, BTreeTrait, Cursor, LeafIndex, LengthFinder, UseLengthFinder,
+};
+use loro_common::{IdFull, LoroError, LoroResult, ID};
+use loro_delta::array_vec::ArrayVec;
+use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
+
+const TINY_LIST_MAX: usize = 4;
+
+#[derive(Debug)]
+pub struct ListState {
+    idx: ContainerIdx,
+    list: ListEntries,
+}
+
+impl Clone for ListState {
+    fn clone(&self) -> Self {
+        Self {
+            idx: self.idx,
+            list: self.list.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Elem {
+    pub v: LoroValue,
+    pub id: IdFull,
+}
+
+impl HasLength for Elem {
+    fn rle_len(&self) -> usize {
+        1
+    }
+}
+
+impl Sliceable for Elem {
+    fn _slice(&self, range: std::ops::Range<usize>) -> Self {
+        assert_eq!(range.start, 0);
+        assert_eq!(range.end, 1);
+        self.clone()
+    }
+
+    fn split(&mut self, _pos: usize) -> Self {
+        unreachable!()
+    }
+}
+
+impl Mergeable for Elem {
+    fn can_merge(&self, _rhs: &Self) -> bool {
+        false
+    }
+
+    fn merge_right(&mut self, _rhs: &Self) {
+        unreachable!()
+    }
+
+    fn merge_left(&mut self, _left: &Self) {
+        unreachable!()
+    }
+}
+
+impl TryInsert for Elem {
+    fn try_insert(&mut self, _pos: usize, _elem: Self) -> Result<(), Self> {
+        Err(_elem)
+    }
+}
+
+impl CanRemove for Elem {
+    fn can_remove(&self) -> bool {
+        false
+    }
+}
+
+struct ListImpl;
+impl BTreeTrait for ListImpl {
+    type Elem = Elem;
+    type Cache = isize;
+    type CacheDiff = isize;
+    const USE_DIFF: bool = true;
+
+    #[inline(always)]
+    fn calc_cache_internal(
+        cache: &mut Self::Cache,
+        caches: &[generic_btree::Child<Self>],
+    ) -> Self::CacheDiff {
+        let mut new_cache = 0;
+        for child in caches {
+            new_cache += child.cache;
+        }
+
+        let diff = new_cache - *cache;
+        *cache = new_cache;
+        diff
+    }
+
+    #[inline(always)]
+    fn apply_cache_diff(cache: &mut Self::Cache, diff: &Self::CacheDiff) {
+        *cache += diff;
+    }
+
+    #[inline(always)]
+    fn merge_cache_diff(diff1: &mut Self::CacheDiff, diff2: &Self::CacheDiff) {
+        *diff1 += diff2
+    }
+
+    #[inline(always)]
+    fn get_elem_cache(_elem: &Self::Elem) -> Self::Cache {
+        1
+    }
+
+    #[inline(always)]
+    fn new_cache_to_diff(cache: &Self::Cache) -> Self::CacheDiff {
+        *cache
+    }
+
+    fn sub_cache(cache_lhs: &Self::Cache, cache_rhs: &Self::Cache) -> Self::CacheDiff {
+        cache_lhs - cache_rhs
+    }
+}
+
+impl UseLengthFinder<ListImpl> for ListImpl {
+    fn get_len(cache: &isize) -> usize {
+        *cache as usize
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ListEntries {
+    Tiny {
+        entries: SmallVec<[Elem; 1]>,
+        child_container_to_index: FxHashMap<ContainerID, usize>,
+    },
+    Tree {
+        tree: BTree<ListImpl>,
+        child_container_to_index: FxHashMap<ContainerID, LeafIndex>,
+    },
+}
+
+impl ListEntries {
+    fn new_tiny() -> Self {
+        Self::Tiny {
+            entries: SmallVec::new(),
+            child_container_to_index: Default::default(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::Tiny { entries, .. } => entries.is_empty(),
+            Self::Tree { tree, .. } => tree.is_empty(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Tiny { entries, .. } => entries.len(),
+            Self::Tree { tree, .. } => *tree.root_cache() as usize,
+        }
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = &Elem> + '_> {
+        match self {
+            Self::Tiny { entries, .. } => Box::new(entries.iter()),
+            Self::Tree { tree, .. } => Box::new(tree.iter()),
+        }
+    }
+}
+
+impl ListState {
+    pub fn new(idx: ContainerIdx) -> Self {
+        Self {
+            idx,
+            list: ListEntries::new_tiny(),
+        }
+    }
+
+    fn rebuild_tiny_child_index(&mut self) {
+        let ListEntries::Tiny {
+            entries,
+            child_container_to_index,
+        } = &mut self.list
+        else {
+            return;
+        };
+
+        child_container_to_index.clear();
+        for (index, elem) in entries.iter().enumerate() {
+            if let LoroValue::Container(id) = &elem.v {
+                child_container_to_index.insert(id.clone(), index);
+            }
+        }
+    }
+
+    fn upgrade_to_tree(&mut self) {
+        let ListEntries::Tiny { entries, .. } =
+            std::mem::replace(&mut self.list, ListEntries::new_tiny())
+        else {
+            return;
+        };
+
+        let mut tree = BTree::new();
+        let mut child_container_to_index = FxHashMap::default();
+        for elem in entries {
+            let container = elem.v.as_container().cloned();
+            let leaf = tree.push(elem);
+            if let Some(container) = container {
+                child_container_to_index.insert(container, leaf.leaf);
+            }
+        }
+
+        self.list = ListEntries::Tree {
+            tree,
+            child_container_to_index,
+        };
+    }
+
+    fn downgrade_tree_if_tiny(&mut self) {
+        let ListEntries::Tree { tree, .. } = &self.list else {
+            return;
+        };
+
+        if *tree.root_cache() as usize > TINY_LIST_MAX {
+            return;
+        }
+
+        let entries = tree.iter().cloned().collect();
+        self.list = ListEntries::Tiny {
+            entries,
+            child_container_to_index: Default::default(),
+        };
+        self.rebuild_tiny_child_index();
+    }
+
+    pub fn contains_child_container(&self, id: &ContainerID) -> bool {
+        match &self.list {
+            ListEntries::Tiny {
+                entries,
+                child_container_to_index,
+            } => child_container_to_index.get(id).is_some_and(|index| {
+                entries
+                    .get(*index)
+                    .is_some_and(|elem| elem.v.as_container() == Some(id))
+            }),
+            ListEntries::Tree {
+                tree,
+                child_container_to_index,
+            } => child_container_to_index
+                .get(id)
+                .is_some_and(|leaf| tree.get_elem(*leaf).is_some()),
+        }
+    }
+
+    pub fn get_child_container_index(&self, id: &ContainerID) -> Option<usize> {
+        let (leaf, list) = match &self.list {
+            ListEntries::Tiny {
+                entries,
+                child_container_to_index,
+            } => {
+                let index = *child_container_to_index.get(id)?;
+                entries.get(index)?;
+                return Some(index);
+            }
+            ListEntries::Tree {
+                tree,
+                child_container_to_index,
+            } => (*child_container_to_index.get(id)?, tree),
+        };
+
+        list.get_elem(leaf)?;
+        let mut index = 0;
+        list.visit_previous_caches(Cursor { leaf, offset: 0 }, |cache| match cache {
+            generic_btree::PreviousCache::NodeCache(cache) => {
+                index += *cache;
+            }
+            generic_btree::PreviousCache::PrevSiblingElem(..) => {
+                index += 1;
+            }
+            generic_btree::PreviousCache::ThisElemAndOffset { .. } => {}
+        });
+
+        Some(index as usize)
+    }
+
+    pub fn insert(&mut self, index: usize, value: LoroValue, id: IdFull) {
+        if index > self.len() {
+            panic!("Index {index} out of range. The length is {}", self.len());
+        }
+
+        if let ListEntries::Tiny { entries, .. } = &mut self.list {
+            if entries.len() < TINY_LIST_MAX {
+                entries.insert(
+                    index,
+                    Elem {
+                        v: value.clone(),
+                        id,
+                    },
+                );
+                self.rebuild_tiny_child_index();
+                return;
+            }
+
+            self.upgrade_to_tree();
+        }
+
+        let ListEntries::Tree {
+            tree,
+            child_container_to_index,
+        } = &mut self.list
+        else {
+            unreachable!()
+        };
+        let (leaf, data) = tree.insert::<LengthFinder>(
+            &index,
+            Elem {
+                v: value.clone(),
+                id,
+            },
+        );
+
+        if value.is_container() {
+            child_container_to_index.insert(value.into_container().unwrap(), leaf.leaf);
+        }
+
+        assert!(data.arr.is_empty());
+    }
+
+    pub fn push(&mut self, value: LoroValue, id: IdFull) {
+        if let ListEntries::Tiny { entries, .. } = &mut self.list {
+            if entries.len() < TINY_LIST_MAX {
+                entries.push(Elem {
+                    v: value.clone(),
+                    id,
+                });
+                self.rebuild_tiny_child_index();
+                return;
+            }
+
+            self.upgrade_to_tree();
+        }
+
+        let ListEntries::Tree {
+            tree,
+            child_container_to_index,
+        } = &mut self.list
+        else {
+            unreachable!()
+        };
+        let leaf = tree.push(Elem {
+            v: value.clone(),
+            id,
+        });
+
+        if value.is_container() {
+            child_container_to_index.insert(value.into_container().unwrap(), leaf.leaf);
+        }
+    }
+
+    pub fn delete(&mut self, index: usize) -> LoroValue {
+        if let ListEntries::Tiny { entries, .. } = &mut self.list {
+            let elem = entries.remove(index);
+            self.rebuild_tiny_child_index();
+            return elem.v;
+        }
+
+        let ListEntries::Tree {
+            tree,
+            child_container_to_index,
+        } = &mut self.list
+        else {
+            unreachable!()
+        };
+        let leaf = tree.query::<LengthFinder>(&index);
+        let leaf = tree.remove_leaf(leaf.unwrap().cursor).unwrap();
+        if leaf.v.is_container() {
+            child_container_to_index.remove(leaf.v.as_container().unwrap());
+        }
+        self.downgrade_tree_if_tiny();
+        leaf.v
+    }
+
+    pub fn delete_range(
+        &mut self,
+        range: impl RangeBounds<usize>,
+        mut notify_deletion: Option<&mut Vec<ContainerID>>,
+    ) {
+        let start: usize = match range.start_bound() {
+            std::ops::Bound::Included(x) => *x,
+            std::ops::Bound::Excluded(x) => *x + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+        let end: usize = match range.end_bound() {
+            std::ops::Bound::Included(x) => *x + 1,
+            std::ops::Bound::Excluded(x) => *x,
+            std::ops::Bound::Unbounded => self.len(),
+        };
+
+        if let ListEntries::Tiny { entries, .. } = &mut self.list {
+            for elem in entries.drain(start..end) {
+                if let LoroValue::Container(c) = elem.v {
+                    if let Some(notify_deletion) = &mut notify_deletion {
+                        notify_deletion.push(c);
+                    }
+                }
+            }
+            self.rebuild_tiny_child_index();
+            return;
+        }
+
+        if end - start == 1 {
+            if let LoroValue::Container(c) = self.delete(start) {
+                if let Some(notify_deletion) = &mut notify_deletion {
+                    notify_deletion.push(c);
+                }
+            }
+            return;
+        }
+
+        let ListEntries::Tree {
+            tree,
+            child_container_to_index,
+        } = &mut self.list
+        else {
+            unreachable!()
+        };
+        let q = start..end;
+        let start1 = tree.query::<LengthFinder>(&q.start);
+        let end1 = tree.query::<LengthFinder>(&q.end);
+        for v in iter::Drain::new(tree, start1, end1) {
+            if v.v.is_container() {
+                child_container_to_index.remove(v.v.as_container().unwrap());
+                if let Some(notify_deletion) = &mut notify_deletion {
+                    notify_deletion.push(v.v.into_container().unwrap());
+                }
+            }
+        }
+        self.downgrade_tree_if_tiny();
+    }
+
+    // PERF: use &[LoroValue]
+    // PERF: batch
+    pub fn insert_batch(&mut self, index: usize, values: Vec<LoroValue>, start_id: IdFull) {
+        let mut id = start_id;
+        for (i, value) in values.into_iter().enumerate() {
+            self.insert(index + i, value, id);
+            id = id.inc(1);
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &LoroValue> {
+        self.iter_with_id().map(|x| &x.v)
+    }
+
+    #[allow(unused)]
+    pub(crate) fn iter_with_id(&self) -> Box<dyn Iterator<Item = &Elem> + '_> {
+        self.list.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    fn to_vec(&self) -> Vec<LoroValue> {
+        let mut ans = Vec::with_capacity(self.len());
+        for value in self.list.iter() {
+            ans.push(value.v.clone());
+        }
+        ans
+    }
+
+    pub fn get(&self, index: usize) -> Option<&LoroValue> {
+        match &self.list {
+            ListEntries::Tiny { entries, .. } => entries.get(index).map(|elem| &elem.v),
+            ListEntries::Tree { tree, .. } => {
+                let result = tree.query::<LengthFinder>(&index)?;
+                if result.found {
+                    Some(&result.elem(tree).unwrap().v)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    pub fn get_id_at(&self, index: usize) -> Option<IdFull> {
+        match &self.list {
+            ListEntries::Tiny { entries, .. } => entries.get(index).map(|elem| elem.id),
+            ListEntries::Tree { tree, .. } => {
+                let result = tree.query::<LengthFinder>(&index)?;
+                if result.found {
+                    Some(result.elem(tree).unwrap().id)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn check(&self) {
+        for value in self.iter() {
+            if let LoroValue::Container(c) = value {
+                self.get_child_index(c).unwrap();
+            }
+        }
+    }
+
+    pub fn get_index_of_id(&self, id: ID) -> Option<usize> {
+        for (i, elem) in self.iter_with_id().enumerate() {
+            if elem.id.id() == id {
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+
+impl ContainerState for ListState {
+    fn container_idx(&self) -> ContainerIdx {
+        self.idx
+    }
+
+    fn is_state_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    fn apply_diff_and_convert(
+        &mut self,
+        diff: InternalDiff,
+        DiffApplyContext { doc, .. }: DiffApplyContext,
+    ) -> Diff {
+        let InternalDiff::ListRaw(delta) = diff else {
+            unreachable!()
+        };
+        let mut ans: ListDiff = ListDiff::default();
+        let mut index = 0;
+        let doc = &doc.upgrade().unwrap();
+        for span in delta.iter() {
+            match span {
+                crate::delta::DeltaItem::Retain { retain: len, .. } => {
+                    index += len;
+                    ans.push_retain(*len, Default::default());
+                }
+                crate::delta::DeltaItem::Insert { insert: value, .. } => {
+                    let mut arr = Vec::new();
+                    match &value.values {
+                        either::Either::Left(range) => {
+                            for i in range.to_range() {
+                                let value = doc.arena.get_value(i).unwrap();
+                                arr.push(value);
+                            }
+                        }
+                        either::Either::Right(v) => arr.push(v.clone()),
+                    }
+                    for arr in ArrayVec::from_many(
+                        arr.iter()
+                            .map(|v| ValueOrHandler::from_value(v.clone(), doc)),
+                    ) {
+                        ans.push_insert(arr, Default::default());
+                    }
+                    let len = arr.len();
+                    self.insert_batch(index, arr, value.id);
+                    index += len;
+                }
+                crate::delta::DeltaItem::Delete { delete: len, .. } => {
+                    self.delete_range(index..index + len, None);
+                    ans.push_delete(*len);
+                }
+            }
+        }
+
+        Diff::List(ans)
+    }
+
+    fn validate_diff(&self, diff: &InternalDiff) -> LoroResult<()> {
+        let InternalDiff::ListRaw(delta) = diff else {
+            unreachable!()
+        };
+
+        let mut cursor = 0usize;
+        let mut projected = self.len();
+        for span in delta.iter() {
+            match span {
+                crate::delta::DeltaItem::Retain { retain: len, .. } => {
+                    cursor += len;
+                    if cursor > projected {
+                        return Err(LoroError::internal(format!(
+                            "list diff retains {cursor} items but state only has {projected}",
+                        )));
+                    }
+                }
+                crate::delta::DeltaItem::Insert { insert: value, .. } => {
+                    let len = match &value.values {
+                        either::Either::Left(range) => range.to_range().len(),
+                        either::Either::Right(_) => 1,
+                    };
+                    if cursor > projected {
+                        return Err(LoroError::internal(format!(
+                            "list diff inserts at {cursor} but state only has {projected}",
+                        )));
+                    }
+                    cursor += len;
+                    projected += len;
+                }
+                crate::delta::DeltaItem::Delete { delete: len, .. } => {
+                    if cursor + len > projected {
+                        return Err(LoroError::internal(format!(
+                            "list diff deletes {len} at {cursor} but state only has {projected}",
+                        )));
+                    }
+                    projected -= len;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn apply_diff(
+        &mut self,
+        diff: InternalDiff,
+        DiffApplyContext { doc, .. }: DiffApplyContext,
+    ) -> LoroResult<()> {
+        let doc = &doc.upgrade().unwrap();
+        match diff {
+            InternalDiff::ListRaw(delta) => {
+                let mut index = 0;
+                for span in delta.iter() {
+                    match span {
+                        crate::delta::DeltaItem::Retain { retain: len, .. } => {
+                            index += len;
+                        }
+                        crate::delta::DeltaItem::Insert { insert: value, .. } => {
+                            let mut arr = Vec::new();
+                            match &value.values {
+                                either::Either::Left(range) => {
+                                    for i in range.to_range() {
+                                        let value = doc.arena.get_value(i).unwrap();
+                                        arr.push(value);
+                                    }
+                                }
+                                either::Either::Right(v) => arr.push(v.clone()),
+                            }
+
+                            let len = arr.len();
+                            self.insert_batch(index, arr, value.id);
+                            index += len;
+                        }
+                        crate::delta::DeltaItem::Delete { delete: len, .. } => {
+                            self.delete_range(index..index + len, None);
+                        }
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    fn apply_local_op(&mut self, op: &RawOp, _: &Op) -> LoroResult<ApplyLocalOpReturn> {
+        let mut ans: ApplyLocalOpReturn = Default::default();
+        match &op.content {
+            RawOpContent::List(list) => match list {
+                ListOp::Insert { slice, pos } => match slice {
+                    ListSlice::RawData(list) => match list {
+                        std::borrow::Cow::Borrowed(list) => {
+                            self.insert_batch(*pos, list.to_vec(), op.id_full());
+                        }
+                        std::borrow::Cow::Owned(list) => {
+                            self.insert_batch(*pos, list.clone(), op.id_full());
+                        }
+                    },
+                    _ => unreachable!(),
+                },
+                ListOp::Delete(del) => {
+                    self.delete_range(del.span.to_urange(), Some(&mut ans.deleted_containers));
+                }
+                ListOp::Move { .. } => {
+                    unreachable!()
+                }
+                ListOp::StyleStart { .. } => unreachable!(),
+                ListOp::StyleEnd { .. } => unreachable!(),
+                ListOp::Set { .. } => {
+                    unreachable!()
+                }
+            },
+            _ => unreachable!(),
+        }
+        Ok(ans)
+    }
+
+    #[doc = " Convert a state to a diff that when apply this diff on a empty state,"]
+    #[doc = " the state will be the same as this state."]
+    fn to_diff(&mut self, doc: &Weak<LoroDocInner>) -> Diff {
+        let doc = &doc.upgrade().unwrap();
+        Diff::List(ListDiff::from_many(
+            self.to_vec()
+                .into_iter()
+                .map(|v| ValueOrHandler::from_value(v, doc)),
+        ))
+    }
+
+    fn get_value(&mut self) -> LoroValue {
+        let ans = self.to_vec();
+        LoroValue::List(ans.into())
+    }
+
+    fn get_child_index(&self, id: &ContainerID) -> Option<Index> {
+        self.get_child_container_index(id).map(Index::Seq)
+    }
+
+    fn contains_child(&self, id: &ContainerID) -> bool {
+        self.contains_child_container(id)
+    }
+
+    fn get_child_containers(&self) -> Vec<ContainerID> {
+        let mut ans = Vec::new();
+        for elem in self.iter_with_id() {
+            if elem.v.is_container() {
+                ans.push(elem.v.as_container().unwrap().clone());
+            }
+        }
+        ans
+    }
+
+    fn fork(&self, _config: &Configure) -> Self {
+        self.clone()
+    }
+}
+
+mod snapshot {
+    use loro_common::PeerID;
+    use serde_columnar::columnar;
+
+    use crate::{
+        encoding::value_register::ValueRegister,
+        state::{
+            decode_lamport_from_delta, decode_peer_from_table, decode_peer_table,
+            state_decode_error, ContainerCreationContext,
+        },
+    };
+
+    use super::*;
+    #[columnar(vec, ser, de, iterable)]
+    #[derive(Debug, Clone)]
+    struct EncodedListId {
+        #[columnar(strategy = "DeltaRle")]
+        peer_idx: usize,
+        #[columnar(strategy = "DeltaRle")]
+        counter: i32,
+        #[columnar(strategy = "DeltaRle")]
+        lamport_sub_counter: i32,
+    }
+
+    #[columnar(ser, de)]
+    struct EncodedListIds {
+        #[columnar(class = "vec", iter = "EncodedListId")]
+        ids: Vec<EncodedListId>,
+    }
+
+    impl FastStateSnapshot for ListState {
+        /// Encodes the ListState snapshot in a compact binary format:
+        /// 1. Encodes the list values using postcard serialization
+        /// 2. Encodes a table of unique peer IDs
+        /// 3. For each element, encodes its ID as:
+        ///    - Index of the peer ID in the table (LEB128)
+        ///    - Counter (LEB128)
+        ///    - Lamport timestamp (LEB128)
+        fn encode_snapshot_fast<W: Write>(&mut self, mut w: W) {
+            let value = self.get_value().into_list().unwrap();
+            postcard::to_io(&*value, &mut w).unwrap();
+            let mut peers: ValueRegister<PeerID> = ValueRegister::new();
+            let mut ids = Vec::with_capacity(self.len());
+            for elem in self.iter_with_id() {
+                let id = elem.id;
+                let peer_idx = peers.register(&id.peer);
+                ids.push(EncodedListId {
+                    peer_idx,
+                    counter: id.counter,
+                    lamport_sub_counter: (id.lamport as i32 - id.counter),
+                });
+            }
+
+            let peers = peers.unwrap_vec();
+            leb128::write::unsigned(&mut w, peers.len() as u64).unwrap();
+            for peer in peers {
+                w.write_all(&peer.to_le_bytes()).unwrap();
+            }
+
+            let id_bytes = serde_columnar::to_vec(&EncodedListIds { ids }).unwrap();
+            w.write_all(&id_bytes).unwrap();
+        }
+        fn decode_value(bytes: &[u8]) -> LoroResult<(LoroValue, &[u8])> {
+            let (value, bytes) = postcard::take_from_bytes(bytes).map_err(|_| {
+                loro_common::LoroError::DecodeError(
+                    "Decode list value failed".to_string().into_boxed_str(),
+                )
+            })?;
+            let value: Vec<LoroValue> = value;
+            Ok((LoroValue::List(value.into()), bytes))
+        }
+
+        fn decode_snapshot_fast(
+            idx: ContainerIdx,
+            (v, mut bytes): (LoroValue, &[u8]),
+            _ctx: ContainerCreationContext,
+        ) -> LoroResult<Self>
+        where
+            Self: Sized,
+        {
+            let peers = decode_peer_table(&mut bytes, "Decode list state failed")?;
+
+            let EncodedListIds { ids } = serde_columnar::from_bytes(bytes).map_err(|err| {
+                state_decode_error(format!("Decode list state failed: invalid id table: {err}"))
+            })?;
+
+            let list = v.as_list().unwrap();
+            if ids.len() != list.len() {
+                return Err(state_decode_error(
+                    "Decode list state failed: id/value length mismatch",
+                ));
+            }
+
+            let mut ans = Self::new(idx);
+            for (i, id) in ids.into_iter().enumerate() {
+                let peer = decode_peer_from_table(&peers, id.peer_idx, "Decode list state failed")?;
+                ans.insert(
+                    i,
+                    list[i].clone(),
+                    IdFull::new(
+                        peer,
+                        id.counter,
+                        decode_lamport_from_delta(
+                            id.counter,
+                            id.lamport_sub_counter,
+                            "Decode list state failed",
+                        )?,
+                    ),
+                );
+            }
+
+            Ok(ans)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use loro_common::LoroValue;
+
+        use crate::{container::idx::ContainerIdx, state::ContainerCreationContext};
+
+        use super::*;
+
+        #[test]
+        fn list_fast_snapshot_rejects_negative_counter() {
+            let mut bytes = Vec::new();
+            postcard::to_io(&vec![LoroValue::I64(1)], &mut bytes).unwrap();
+            leb128::write::unsigned(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&1_u64.to_le_bytes());
+            bytes.extend_from_slice(
+                &serde_columnar::to_vec(&EncodedListIds {
+                    ids: vec![EncodedListId {
+                        peer_idx: 0,
+                        counter: -1,
+                        lamport_sub_counter: 1,
+                    }],
+                })
+                .unwrap(),
+            );
+
+            let idx = ContainerIdx::from_index_and_type(0, loro_common::ContainerType::List);
+            let (value, state_bytes) = ListState::decode_value(&bytes).unwrap();
+            assert!(ListState::decode_snapshot_fast(
+                idx,
+                (value, state_bytes),
+                ContainerCreationContext {
+                    configure: &Default::default(),
+                    peer: 0,
+                },
+            )
+            .is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use itertools::Itertools;
+    use loro_common::{Counter, Lamport};
+
+    use crate::state::ContainerCreationContext;
+
+    use super::*;
+
+    #[test]
+    fn test() {
+        let mut list = ListState::new(ContainerIdx::from_index_and_type(
+            0,
+            loro_common::ContainerType::List,
+        ));
+        fn id(name: &str) -> ContainerID {
+            ContainerID::new_root(name, crate::ContainerType::List)
+        }
+        list.insert(0, LoroValue::Container(id("abc")), IdFull::new(0, 0, 0));
+        list.insert(0, LoroValue::Container(id("x")), IdFull::new(0, 0, 0));
+        assert_eq!(list.get_child_container_index(&id("x")), Some(0));
+        assert_eq!(list.get_child_container_index(&id("abc")), Some(1));
+        list.insert(1, LoroValue::Bool(false), IdFull::new(0, 0, 0));
+        assert_eq!(list.get_child_container_index(&id("x")), Some(0));
+        assert_eq!(list.get_child_container_index(&id("abc")), Some(2));
+    }
+
+    #[test]
+    fn test_list_fast_snapshot() {
+        let mut list = ListState::new(ContainerIdx::from_index_and_type(
+            0,
+            loro_common::ContainerType::List,
+        ));
+        let mut w = Vec::new();
+        list.encode_snapshot_fast(&mut w);
+        println!("Empty: {}", w.len());
+
+        list.insert(0, LoroValue::I64(0), IdFull::new(0, 0, 0));
+        list.insert(1, LoroValue::I64(2), IdFull::new(1, 1, 1));
+        list.insert(2, LoroValue::I64(4), IdFull::new(1, 2, 2));
+        let mut w = Vec::new();
+        list.encode_snapshot_fast(&mut w);
+        assert!(w.len() <= 39, "w.len() = {}", w.len());
+        let (v, left) = ListState::decode_value(&w).unwrap();
+        let mut new_list = ListState::decode_snapshot_fast(
+            ContainerIdx::from_index_and_type(0, loro_common::ContainerType::List),
+            (v.clone(), left),
+            ContainerCreationContext {
+                configure: &Default::default(),
+                peer: 0,
+            },
+        )
+        .unwrap();
+        new_list.check();
+        assert_eq!(
+            new_list.get_value(),
+            vec![LoroValue::I64(0), LoroValue::I64(2), LoroValue::I64(4)].into()
+        );
+        assert_eq!(new_list.get_value(), v);
+        let v = new_list.list.iter().collect_vec();
+        assert_eq!(v[0].id.peer, 0);
+        assert_eq!(v[0].id.counter, 0 as Counter);
+        assert_eq!(v[0].id.lamport, 0 as Lamport);
+
+        assert_eq!(v[1].id.peer, 1);
+        assert_eq!(v[1].id.counter, 1 as Counter);
+        assert_eq!(v[1].id.lamport, 1 as Lamport);
+
+        assert_eq!(v[2].id.peer, 1);
+        assert_eq!(v[2].id.counter, 2 as Counter);
+        assert_eq!(v[2].id.lamport, 2 as Lamport);
+    }
+
+    #[test]
+    fn list_fast_snapshot_rejects_corrupt_state_metadata() {
+        let idx = ContainerIdx::from_index_and_type(0, loro_common::ContainerType::List);
+        let ctx = ContainerCreationContext {
+            configure: &Default::default(),
+            peer: 0,
+        };
+
+        let value = LoroValue::from(vec![LoroValue::I64(1)]);
+        assert!(ListState::decode_snapshot_fast(idx, (value.clone(), &[1]), ctx).is_err());
+
+        let mut empty = ListState::new(idx);
+        let mut bytes = Vec::new();
+        empty.encode_snapshot_fast(&mut bytes);
+        let (_, state_bytes) = ListState::decode_value(&bytes).unwrap();
+        assert!(ListState::decode_snapshot_fast(idx, (value, state_bytes), ctx).is_err());
+    }
+}

@@ -21,7 +21,7 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_image, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, loro_pair, observability_image, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -54,6 +54,12 @@ struct Call {
 }
 
 const CALLS: &[Call] = &[
+    Call {
+        id: "loro-pair",
+        name: "Loro compatibility",
+        file: "loro-pair.yml",
+        paths: Some(loro_pair::PATHS),
+    },
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",

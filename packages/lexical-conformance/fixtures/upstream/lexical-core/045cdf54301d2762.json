@@ -1,0 +1,92 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/xml.test.ts",
+    "test": [
+      "xml",
+      "emits the expected XML for a simple known input (snapshot)"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/transformers/xml.toXml",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "hi ",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "ta"
+                    }
+                  },
+                  {
+                    "detail": 0,
+                    "format": 1,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "bold",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "tb"
+                    }
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "id": "p1"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1,
+            "$": {
+              "documentMetadata": {
+                "version": 1.4,
+                "environmentTags": null
+              },
+              "id": "root"
+            }
+          }
+        }
+      ],
+      "ret": "\n<doc>\n  <p id=\"p1\">\n    <t id=\"ta\">hi </t>\n    <t id=\"tb\" bold=\"true\">bold</t>\n  </p>\n</doc>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

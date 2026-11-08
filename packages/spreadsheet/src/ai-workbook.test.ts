@@ -356,6 +356,64 @@ describe('spreadsheet AI atomic editing', () => {
     expect(doc.version().encode()).toEqual(version);
   });
 
+  it('writes typed cell values as the source a person would type', () => {
+    const doc = document();
+    writeSpreadsheetCells(doc, { E1: { value: 'old', bold: true } });
+    const edit = prepareSpreadsheetEdit(
+      doc,
+      {
+        action: 'edit',
+        expectedRevision: 'v',
+        operations: [
+          {
+            type: 'set_cells',
+            sheetId: 'sheet1',
+            cells: [
+              { address: 'A1', value: 'Item' },
+              { address: 'B1', value: 42 },
+              { address: 'B2', value: -0.25 },
+              { address: 'B3', value: 1e21 },
+              { address: 'B4', value: 1e-7 },
+              { address: 'C1', value: true },
+              { address: 'C2', value: false },
+              { address: 'D1', value: '=SUM(B1:B2)' },
+              { address: 'E1', value: null },
+            ],
+          },
+        ],
+      },
+      calculator
+    );
+    doc.import(edit.update);
+    expect(readSpreadsheetCells(doc)).toEqual({
+      A1: { value: 'Item' },
+      B1: { value: '42' },
+      B2: { value: '-0.25' },
+      B3: { value: '1e+21' },
+      B4: { value: '1e-7' },
+      C1: { value: 'TRUE' },
+      C2: { value: 'FALSE' },
+      D1: { value: '=SUM(B1:B2)' },
+      E1: { value: '', bold: true },
+    });
+    const { ranges } = readSpreadsheetForAi(
+      doc,
+      'v',
+      { action: 'read', ranges: ['A1:D4'] },
+      calculator
+    );
+    const cell = (address: string) =>
+      ranges[0].cells.find((candidate) => candidate.address === address);
+    expect(cell('A1')).toMatchObject({ type: 'text', value: 'Item' });
+    expect(cell('B1')).toMatchObject({ type: 'number', value: 42 });
+    expect(cell('B2')).toMatchObject({ type: 'number', value: -0.25 });
+    expect(cell('B3')).toMatchObject({ type: 'number', value: 1e21 });
+    expect(cell('B4')).toMatchObject({ type: 'number', value: 1e-7 });
+    expect(cell('C1')).toMatchObject({ type: 'boolean', value: true });
+    expect(cell('C2')).toMatchObject({ type: 'boolean', value: false });
+    expect(cell('D1')).toMatchObject({ type: 'number', value: 41.75 });
+  });
+
   it('supports clear, duplicate, rename and delete and retains reference protections', () => {
     const doc = document();
     writeSpreadsheetCells(doc, {

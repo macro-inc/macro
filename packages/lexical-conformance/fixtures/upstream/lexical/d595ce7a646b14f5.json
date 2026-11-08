@@ -1,0 +1,4990 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+    "test": [
+      "LexicalCaret",
+      "$caretRangeFromSelection",
+      "multiple text node non-empty selection (previous)"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "first"
+          ],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setMode",
+          "args": [
+            "token"
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "second"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setMode",
+          "args": [
+            "token"
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "third"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setMode",
+          "args": [
+            "token"
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.select",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$sel": 7,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            0,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 8,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 8
+          },
+          "args": [],
+          "ret": {
+            "$caret": 9,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 9
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 8
+          },
+          "args": [],
+          "ret": {
+            "$caret": 10,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 10
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 8
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 8
+          },
+          "ret": [
+            {
+              "$caret": 11,
+              "type": "slice",
+              "caret": {
+                "$caret": 9
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 12,
+              "type": "slice",
+              "caret": {
+                "$caret": 10
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 8
+          },
+          "ret": {
+            "$iterator": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 13
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            1,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 14,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 14
+          },
+          "args": [],
+          "ret": {
+            "$caret": 15,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 15
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 14
+          },
+          "args": [],
+          "ret": {
+            "$caret": 16,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 16
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 14
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 14
+          },
+          "ret": [
+            {
+              "$caret": 17,
+              "type": "slice",
+              "caret": {
+                "$caret": 15
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 18,
+              "type": "slice",
+              "caret": {
+                "$caret": 16
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 14
+          },
+          "ret": {
+            "$iterator": 19
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 19
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            6,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 20,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 20
+          },
+          "args": [],
+          "ret": {
+            "$caret": 21,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 20
+          },
+          "args": [],
+          "ret": {
+            "$caret": 22,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 20
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 20
+          },
+          "ret": [
+            {
+              "$caret": 23,
+              "type": "slice",
+              "caret": {
+                "$caret": 21
+              },
+              "distance": -6
+            },
+            {
+              "$caret": 24,
+              "type": "slice",
+              "caret": {
+                "$caret": 22
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 20
+          },
+          "ret": {
+            "$iterator": 25
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 25
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            0,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 26,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 26
+          },
+          "args": [],
+          "ret": {
+            "$caret": 27,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 26
+          },
+          "args": [],
+          "ret": {
+            "$caret": 28,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 26
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 26
+          },
+          "ret": [
+            {
+              "$caret": 29,
+              "type": "slice",
+              "caret": {
+                "$caret": 27
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 30,
+              "type": "slice",
+              "caret": {
+                "$caret": 28
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 26
+          },
+          "ret": {
+            "$iterator": 31
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 31
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            1,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 32,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 32
+          },
+          "args": [],
+          "ret": {
+            "$caret": 33,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 32
+          },
+          "args": [],
+          "ret": {
+            "$caret": 34,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 32
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 32
+          },
+          "ret": [
+            {
+              "$caret": 35,
+              "type": "slice",
+              "caret": {
+                "$caret": 33
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 36,
+              "type": "slice",
+              "caret": {
+                "$caret": 34
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 32
+          },
+          "ret": {
+            "$iterator": 37
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 37
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            6,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 38,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 38
+          },
+          "args": [],
+          "ret": {
+            "$caret": 39,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 39
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 38
+          },
+          "args": [],
+          "ret": {
+            "$caret": 40,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 40
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 38
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 38
+          },
+          "ret": [
+            {
+              "$caret": 41,
+              "type": "slice",
+              "caret": {
+                "$caret": 39
+              },
+              "distance": -6
+            },
+            {
+              "$caret": 42,
+              "type": "slice",
+              "caret": {
+                "$caret": 40
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 38
+          },
+          "ret": {
+            "$iterator": 43
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 43
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            0,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 44,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 44
+          },
+          "args": [],
+          "ret": {
+            "$caret": 45,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 45
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 44
+          },
+          "args": [],
+          "ret": {
+            "$caret": 46,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 46
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 44
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 44
+          },
+          "ret": [
+            {
+              "$caret": 47,
+              "type": "slice",
+              "caret": {
+                "$caret": 45
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 48,
+              "type": "slice",
+              "caret": {
+                "$caret": 46
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 44
+          },
+          "ret": {
+            "$iterator": 49
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 49
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            1,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 50,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 50
+          },
+          "args": [],
+          "ret": {
+            "$caret": 51,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 51
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 50
+          },
+          "args": [],
+          "ret": {
+            "$caret": 52,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 52
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 50
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 50
+          },
+          "ret": [
+            {
+              "$caret": 53,
+              "type": "slice",
+              "caret": {
+                "$caret": 51
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 54,
+              "type": "slice",
+              "caret": {
+                "$caret": 52
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 50
+          },
+          "ret": {
+            "$iterator": 55
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 55
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 2
+            },
+            6,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 56,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 56
+          },
+          "args": [],
+          "ret": {
+            "$caret": 57,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 57
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 56
+          },
+          "args": [],
+          "ret": {
+            "$caret": 58,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 58
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 56
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 56
+          },
+          "ret": [
+            {
+              "$caret": 59,
+              "type": "slice",
+              "caret": {
+                "$caret": 57
+              },
+              "distance": -6
+            },
+            {
+              "$caret": 60,
+              "type": "slice",
+              "caret": {
+                "$caret": 58
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 56
+          },
+          "ret": {
+            "$iterator": 61
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 61
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 62,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 62
+          },
+          "args": [],
+          "ret": {
+            "$caret": 63,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 63
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 62
+          },
+          "args": [],
+          "ret": {
+            "$caret": 64,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 64
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 62
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 62
+          },
+          "ret": [
+            {
+              "$caret": 65,
+              "type": "slice",
+              "caret": {
+                "$caret": 63
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 66,
+              "type": "slice",
+              "caret": {
+                "$caret": 64
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 62
+          },
+          "ret": {
+            "$iterator": 67
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 67
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 68,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 69,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 69
+          },
+          "args": [],
+          "ret": {
+            "$caret": 70,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 70
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 69
+          },
+          "args": [],
+          "ret": {
+            "$caret": 71,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 71
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 69
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 69
+          },
+          "ret": [
+            {
+              "$caret": 72,
+              "type": "slice",
+              "caret": {
+                "$caret": 70
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 73,
+              "type": "slice",
+              "caret": {
+                "$caret": 71
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 69
+          },
+          "ret": {
+            "$iterator": 74
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 74
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 75,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 1
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 76,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 76
+          },
+          "args": [],
+          "ret": {
+            "$caret": 77,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 77
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 76
+          },
+          "args": [],
+          "ret": {
+            "$caret": 78,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 78
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 76
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 76
+          },
+          "ret": [
+            {
+              "$caret": 79,
+              "type": "slice",
+              "caret": {
+                "$caret": 77
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 80,
+              "type": "slice",
+              "caret": {
+                "$caret": 78
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 76
+          },
+          "ret": {
+            "$iterator": 81
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 81
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 82,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 83,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 83
+          },
+          "args": [],
+          "ret": {
+            "$caret": 84,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 84
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 83
+          },
+          "args": [],
+          "ret": {
+            "$caret": 85,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 85
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 83
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 83
+          },
+          "ret": [
+            {
+              "$caret": 86,
+              "type": "slice",
+              "caret": {
+                "$caret": 84
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 87,
+              "type": "slice",
+              "caret": {
+                "$caret": 85
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 83
+          },
+          "ret": {
+            "$iterator": 88
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 88
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 89,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 90,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 90
+          },
+          "args": [],
+          "ret": {
+            "$caret": 91,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 91
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 90
+          },
+          "args": [],
+          "ret": {
+            "$caret": 92,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 92
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 90
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 90
+          },
+          "ret": [
+            {
+              "$caret": 93,
+              "type": "slice",
+              "caret": {
+                "$caret": 91
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 94,
+              "type": "slice",
+              "caret": {
+                "$caret": 92
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 90
+          },
+          "ret": {
+            "$iterator": 95
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 95
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 96,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 1
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 97,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 97
+          },
+          "args": [],
+          "ret": {
+            "$caret": 98,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 98
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 97
+          },
+          "args": [],
+          "ret": {
+            "$caret": 99,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 99
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 97
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 97
+          },
+          "ret": [
+            {
+              "$caret": 100,
+              "type": "slice",
+              "caret": {
+                "$caret": 98
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 101,
+              "type": "slice",
+              "caret": {
+                "$caret": 99
+              },
+              "distance": 4
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 97
+          },
+          "ret": {
+            "$iterator": 102
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 102
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 103,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 104,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 104
+          },
+          "args": [],
+          "ret": {
+            "$caret": 105,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 105
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 104
+          },
+          "args": [],
+          "ret": {
+            "$caret": 106,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 106
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 104
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 104
+          },
+          "ret": [
+            {
+              "$caret": 107,
+              "type": "slice",
+              "caret": {
+                "$caret": 105
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 108,
+              "type": "slice",
+              "caret": {
+                "$caret": 106
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 104
+          },
+          "ret": {
+            "$iterator": 109
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 109
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 110,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 111,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 111
+          },
+          "args": [],
+          "ret": {
+            "$caret": 112,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 112
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 111
+          },
+          "args": [],
+          "ret": {
+            "$caret": 113,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 113
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 111
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 111
+          },
+          "ret": [
+            {
+              "$caret": 114,
+              "type": "slice",
+              "caret": {
+                "$caret": 112
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 115,
+              "type": "slice",
+              "caret": {
+                "$caret": 113
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 111
+          },
+          "ret": {
+            "$iterator": 116
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 116
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 117,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 1
+            },
+            5
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 118,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 118
+          },
+          "args": [],
+          "ret": {
+            "$caret": 119,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 119
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 118
+          },
+          "args": [],
+          "ret": {
+            "$caret": 120,
+            "type": "text",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 120
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 118
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 118
+          },
+          "ret": [
+            {
+              "$caret": 121,
+              "type": "slice",
+              "caret": {
+                "$caret": 119
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 122,
+              "type": "slice",
+              "caret": {
+                "$caret": 120
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 118
+          },
+          "ret": {
+            "$iterator": 123
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 123
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 124,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "previous"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 2
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 125,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 125
+          },
+          "args": [],
+          "ret": {
+            "$caret": 126,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 126
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 125
+          },
+          "args": [],
+          "ret": {
+            "$caret": 127,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 127
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 125
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 125
+          },
+          "ret": [
+            {
+              "$caret": 128,
+              "type": "slice",
+              "caret": {
+                "$caret": 126
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 129,
+              "type": "slice",
+              "caret": {
+                "$caret": 127
+              },
+              "distance": 6
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 125
+          },
+          "ret": {
+            "$iterator": 130
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 130
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 2
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 131,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 131
+          },
+          "args": [],
+          "ret": {
+            "$caret": 132,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 132
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 131
+          },
+          "args": [],
+          "ret": {
+            "$caret": 133,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 133
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 131
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 131
+          },
+          "ret": [
+            {
+              "$caret": 134,
+              "type": "slice",
+              "caret": {
+                "$caret": 132
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 135,
+              "type": "slice",
+              "caret": {
+                "$caret": 133
+              },
+              "distance": 6
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 131
+          },
+          "ret": {
+            "$iterator": 136
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 136
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 2
+            },
+            0
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 137,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 137
+          },
+          "args": [],
+          "ret": {
+            "$caret": 138,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 138
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 137
+          },
+          "args": [],
+          "ret": {
+            "$caret": 139,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 139
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 137
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 137
+          },
+          "ret": [
+            {
+              "$caret": 140,
+              "type": "slice",
+              "caret": {
+                "$caret": 138
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 141,
+              "type": "slice",
+              "caret": {
+                "$caret": 139
+              },
+              "distance": 6
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 137
+          },
+          "ret": {
+            "$iterator": 142
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 142
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 2
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 143,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 143
+          },
+          "args": [],
+          "ret": {
+            "$caret": 144,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 144
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 143
+          },
+          "args": [],
+          "ret": {
+            "$caret": 145,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 145
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 143
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 143
+          },
+          "ret": [
+            {
+              "$caret": 146,
+              "type": "slice",
+              "caret": {
+                "$caret": 144
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 147,
+              "type": "slice",
+              "caret": {
+                "$caret": 145
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 143
+          },
+          "ret": {
+            "$iterator": 148
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 148
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 2
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 149,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 149
+          },
+          "args": [],
+          "ret": {
+            "$caret": 150,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 150
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 149
+          },
+          "args": [],
+          "ret": {
+            "$caret": 151,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 151
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 149
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 149
+          },
+          "ret": [
+            {
+              "$caret": 152,
+              "type": "slice",
+              "caret": {
+                "$caret": 150
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 153,
+              "type": "slice",
+              "caret": {
+                "$caret": 151
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 149
+          },
+          "ret": {
+            "$iterator": 154
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 154
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 2
+            },
+            1
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 155,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 155
+          },
+          "args": [],
+          "ret": {
+            "$caret": 156,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 156
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 155
+          },
+          "args": [],
+          "ret": {
+            "$caret": 157,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 157
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 155
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 155
+          },
+          "ret": [
+            {
+              "$caret": 158,
+              "type": "slice",
+              "caret": {
+                "$caret": 156
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 159,
+              "type": "slice",
+              "caret": {
+                "$caret": 157
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 155
+          },
+          "ret": {
+            "$iterator": 160
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 160
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            0,
+            {
+              "$h": 2
+            },
+            6
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 161,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 161
+          },
+          "args": [],
+          "ret": {
+            "$caret": 162,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 162
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 161
+          },
+          "args": [],
+          "ret": {
+            "$caret": 163,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 163
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 161
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 161
+          },
+          "ret": [
+            {
+              "$caret": 164,
+              "type": "slice",
+              "caret": {
+                "$caret": 162
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 165,
+              "type": "slice",
+              "caret": {
+                "$caret": 163
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 161
+          },
+          "ret": {
+            "$iterator": 166
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 166
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            1,
+            {
+              "$h": 2
+            },
+            6
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 167,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 167
+          },
+          "args": [],
+          "ret": {
+            "$caret": 168,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 168
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 167
+          },
+          "args": [],
+          "ret": {
+            "$caret": 169,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 169
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 167
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 167
+          },
+          "ret": [
+            {
+              "$caret": 170,
+              "type": "slice",
+              "caret": {
+                "$caret": 168
+              },
+              "distance": -1
+            },
+            {
+              "$caret": 171,
+              "type": "slice",
+              "caret": {
+                "$caret": 169
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 167
+          },
+          "ret": {
+            "$iterator": 172
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 172
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.setTextNodeRange",
+          "args": [
+            {
+              "$h": 3
+            },
+            5,
+            {
+              "$h": 2
+            },
+            6
+          ],
+          "this": {
+            "$sel": 7
+          },
+          "ret": {
+            "$sel": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 173,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 173
+          },
+          "args": [],
+          "ret": {
+            "$caret": 174,
+            "type": "text",
+            "origin": {
+              "$h": 3
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 174
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 173
+          },
+          "args": [],
+          "ret": {
+            "$caret": 175,
+            "type": "text",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextPointCaret",
+          "args": [
+            {
+              "$caret": 175
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:direction",
+          "this": {
+            "$sel": 173
+          },
+          "args": [],
+          "ret": "previous"
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 173
+          },
+          "ret": [
+            {
+              "$caret": 176,
+              "type": "slice",
+              "caret": {
+                "$caret": 174
+              },
+              "distance": -5
+            },
+            {
+              "$caret": 177,
+              "type": "slice",
+              "caret": {
+                "$caret": 175
+              },
+              "distance": 0
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 6
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 173
+          },
+          "ret": {
+            "$iterator": 178
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 178
+          },
+          "args": [],
+          "ret": []
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "token",
+                    "style": "",
+                    "text": "first",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "token",
+                    "style": "",
+                    "text": "second",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "token",
+                    "style": "",
+                    "text": "third",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 3,
+              "raw": "3"
+            },
+            "path": [
+              0,
+              2
+            ],
+            "offset": 5,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 2,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              1
+            ],
+            "offset": 6,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": true
+        },
+        "text": "firstsecondthird",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            1,
+            2,
+            3
+          ],
+          "elements": [
+            [
+              6,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "token",
+                "style": "",
+                "text": "first",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "token",
+                "style": "",
+                "text": "second",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "token",
+                "style": "",
+                "text": "third",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 3,
+          "raw": "3"
+        },
+        "path": [
+          0,
+          2
+        ],
+        "offset": 5,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 2,
+          "raw": "2"
+        },
+        "path": [
+          0,
+          1
+        ],
+        "offset": 6,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": true
+    },
+    "text": "firstsecondthird",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
+  }
+}

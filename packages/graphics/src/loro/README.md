@@ -6,7 +6,7 @@ binds an externally owned document through `@loro-mirror/core`, observes remote
 scene changes and disposes its Mirror/subscription/history. The original snapshot-owning factory
 remains useful for standalone hosts and the in-memory test harness.
 Host bookkeeping uses `GRAPHICS_METADATA_ORIGIN` and is excluded from scene undo.
-The workspace pins Loro 1.16.3.
+The workspace pins Loro 1.17.1.
 
 The root graphics export stays framework/DOM/Loro-free. `GraphicsBackend` is the
 small document/history contract; `createGraphicsEditorFromBackend` proposes local
