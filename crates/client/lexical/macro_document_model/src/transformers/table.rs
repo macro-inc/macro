@@ -124,7 +124,7 @@ pub(super) fn import_internal(
         .filter(|widths| !widths.is_empty())
     {
         tx.get_mut::<TableNode>(table)?.col_widths =
-            Some(widths.into_iter().map(|w| Some(JsNumber(w))).collect());
+            Some(widths.into_iter().map(|w| Some(JsNumber(w))).collect()).into();
     }
     tx.replace(parent, table, false)?;
     Ok(ReplaceResult::Handled)
