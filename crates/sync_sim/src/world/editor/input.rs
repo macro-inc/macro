@@ -51,7 +51,10 @@ pub(super) fn editing_input(state: &EditorState, op: &EditorOp, headless: bool) 
         ),
         EditorOp::Indent { at } => (*at, *at, vec![Command::IndentContent]),
         EditorOp::Outdent { at } => (*at, *at, vec![Command::OutdentContent]),
-        EditorOp::Select { .. } | EditorOp::Undo | EditorOp::Redo => return None,
+        EditorOp::Select { .. }
+        | EditorOp::MarkdownShortcut { .. }
+        | EditorOp::Undo
+        | EditorOp::Redo => return None,
     };
     let anchor = resolve(state, from)?;
     let focus = resolve(state, to)?;

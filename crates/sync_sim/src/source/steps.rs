@@ -33,6 +33,7 @@ pub(super) fn source(step: &Step) -> String {
                 | EditorOp::ToggleList { .. }
                 | EditorOp::InsertTable { .. }
                 | EditorOp::PasteMarkdown { .. }
+                | EditorOp::MarkdownShortcut { .. }
                 | EditorOp::Backspace { .. }
                 | EditorOp::DeleteRange { .. }
                 | EditorOp::SplitBlock { .. }

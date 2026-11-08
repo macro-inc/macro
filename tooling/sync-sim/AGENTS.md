@@ -35,7 +35,7 @@ by native clients. No shipped package depends on this directory.
   Legacy rows have no user identity and are attributed to the importing current user
   per S7 O-2; these handoffs do not establish mixed-account cache convergence.
 - Editor peers use the actual AI worker registry, bindings, engine and WAL. Reject
-  undo/redo and browser movement commands absent from that shipping workspace;
+  undo/redo, browser shortcuts and movement commands absent from that shipping workspace;
   native DocumentSession stories exercise those paths. Do not emulate a binding.
 - Record local-update ranges from decoded subscription bytes, including rotated AI
   peers, before forwarding frames. Imported VV growth is not authorship evidence.

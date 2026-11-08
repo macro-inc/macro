@@ -144,13 +144,14 @@ export function edit(session: LexicalSession, op: EditorOp): void {
     $setSelection(saved);
     saved.insertNodes(nodes);
   } else if (
+    op.MarkdownShortcut !== undefined ||
     op.Backspace !== undefined ||
     op.Indent !== undefined ||
     op.Outdent !== undefined ||
     op.Select !== undefined
   ) {
     throw new Error(
-      'action requires a browser selection/movement binding, absent in the shipping AI workspace'
+      'action requires a browser editor binding, absent in the shipping AI workspace'
     );
   } else {
     const unexpected: never = op;

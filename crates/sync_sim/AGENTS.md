@@ -28,6 +28,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
 - `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore;
   actual local-update ranges cover rotating foreign editor peers.
+- `src/client/shortcuts.rs`: actual browser-only Markdown shortcut package calls in conditional model transactions.
 - `tests/stories/COVERAGE.md`: story/S7 map and pending editor producers.
 - `fixtures/`: shared exact native/TS Markdown inputs, including the incompressible large paste.
 - `SeedDocument::StoredEditor`: exact previously persisted JSON before client policy/initialization; render it as literal JSON in reproductions.
@@ -250,9 +251,18 @@ large literal checks actual one-row fragmentation and delivered frames before an
 after Hibernate, plus the complete payload, every invariant and exact replay.
 The TS literals cover each short snippet independently; compound insertion at a
 heading start retains a separate upstream stale-block reproduction and is not
-claimed by those literals. Markdown shortcuts and editor-generated floors remain pending.
+claimed by those literals. Editor-generated floors remain pending.
 
 The abandoned-draft literal seeds actual stored application JSON, including source
 paragraph textFormat/textStyle fields. Read-only clients render filtered state with
 zero own writes; writable initialization emits one full-sync cleanup commit, retains
 published marks/text and protected local data, and leaves every invariant enabled.
+
+MarkdownShortcut selects a live block start and sends the four S8 corpus sequences
+character by character through real tab-session inputs. Use the source application
+transformers, conversion-only/dependency filtering and HistoryPush only on success;
+discard false follow-ups. Type remains literal. Keep one aggregate LocalOp with
+observed spans and every actual LocalCommit; never invent per-character Type facts.
+The shipping headless AI workspace lacks the browser shortcut plugin: native AI
+skips this capability explicitly and the TS peer rejects it. Bare triple backticks
+remain literal as in the source probe; do not claim every corpus entry converts.

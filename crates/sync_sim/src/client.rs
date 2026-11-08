@@ -9,6 +9,7 @@ pub(crate) mod commands;
 pub(crate) mod resolve;
 pub(crate) mod rich_commands;
 pub(crate) mod runtime;
+pub(crate) mod shortcuts;
 use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) struct Identity {

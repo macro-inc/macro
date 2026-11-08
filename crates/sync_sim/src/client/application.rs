@@ -128,5 +128,10 @@ pub(crate) fn builder(
     seed[8] = 0x49;
     let registry =
         macro_document_model::node_ids::NodeIdPlugin::register(registry, &CLASSES, id_length, seed);
-    super::commands::register(registry).plugin(super::rich_commands::RichEdits)
+    let registry = super::commands::register(registry).plugin(super::rich_commands::RichEdits);
+    if mode == EditorMode::ViewAttached {
+        registry.plugin(super::shortcuts::Shortcuts)
+    } else {
+        registry
+    }
 }

@@ -28,7 +28,16 @@ impl Sim {
             });
             return Ok(());
         }
-        let before = client.core.version();
+        if let EditorOp::MarkdownShortcut { block, shortcut } = &op {
+            if client.spec.kind == ClientKind::AiWorker {
+                self.emit(Fact::OpSkipped {
+                    client: name.clone(),
+                    reason: "BrowserShortcutUnavailable".into(),
+                });
+                return Ok(());
+            }
+            return self.editor_shortcut(name, *block, *shortcut);
+        }
         let Runtime::Editor(session) = &mut client.core else {
             return Err(Failure::new(
                 "editor_surface",
@@ -36,6 +45,7 @@ impl Sim {
             ));
         };
         let input = match &op {
+            EditorOp::MarkdownShortcut { .. } => unreachable!("shortcut lowered above"),
             EditorOp::Undo => EditorInput::Undo,
             EditorOp::Redo => EditorInput::Redo,
             EditorOp::SetBlock { .. }
@@ -92,6 +102,25 @@ impl Sim {
                 }
             }
         };
+        self.apply_editor_input(name, Some(op), input)
+    }
+    fn apply_editor_input(
+        &mut self,
+        name: &ClientName,
+        op: Option<EditorOp>,
+        input: EditorInput,
+    ) -> Result<(), Failure> {
+        let client = self
+            .clients
+            .get_mut(name)
+            .ok_or_else(|| Failure::new("editor_surface", "missing client"))?;
+        let before = client.core.version();
+        let Runtime::Editor(session) = &mut client.core else {
+            return Err(Failure::new(
+                "editor_surface",
+                "editor operation on a generic client",
+            ));
+        };
         let now = doc_sync_core::Now {
             mono: doc_sync_core::Millis(self.clock.now),
             wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
@@ -114,11 +143,13 @@ impl Sim {
             .stats
             .wal_max_depth
             .max(u64::try_from(client.core.wal().entries.len()).unwrap_or(u64::MAX));
-        self.emit(Fact::LocalOp {
-            client: name.clone(),
-            op: AbstractOp::Editor(op),
-            spans,
-        });
+        if let Some(op) = op {
+            self.emit(Fact::LocalOp {
+                client: name.clone(),
+                op: AbstractOp::Editor(op),
+                spans,
+            });
+        }
         for fact in facts {
             self.emit(fact);
         }
@@ -129,5 +160,67 @@ impl Sim {
             self.schedule(at.0, Pending::Wake(name.clone(), session, generation));
         }
         self.outputs(name, session, out)
+    }
+
+    fn editor_shortcut(
+        &mut self,
+        name: &ClientName,
+        block: u16,
+        shortcut: u8,
+    ) -> Result<(), Failure> {
+        let client = &self.clients[name];
+        let before = client.core.version();
+        let Runtime::Editor(session) = &client.core else {
+            return Err(Failure::new(
+                "editor_surface",
+                "shortcut on a generic client",
+            ));
+        };
+        let Some(point) = resolve(session.surface().state(), Pos { block, offset: 0 }) else {
+            self.emit(Fact::OpSkipped {
+                client: name.clone(),
+                reason: "NoTarget".into(),
+            });
+            return Ok(());
+        };
+        self.apply_editor_input(
+            name,
+            None,
+            EditorInput::SelectionFromView {
+                selection: ViewSelection::Range {
+                    anchor: point,
+                    focus: point,
+                    resolution_dirty: false,
+                },
+                change: None,
+            },
+        )?;
+        for character in crate::client::shortcuts::PATTERNS[usize::from(shortcut) % 4].chars() {
+            self.apply_editor_input(
+                name,
+                None,
+                EditorInput::Command {
+                    command: Command::Extension(lexical_model::ExtensionCommand::new(
+                        &crate::client::shortcuts::SHORTCUT_CHAR,
+                        character,
+                    )),
+                    selection: ViewSelection::KeepModel,
+                },
+            )?;
+        }
+        let client = &self.clients[name];
+        let peer = client.core.peer_id();
+        let start = before.get(&peer).copied().unwrap_or(0);
+        let end = client.core.version().get(&peer).copied().unwrap_or(0);
+        self.emit(Fact::LocalOp {
+            client: name.clone(),
+            op: AbstractOp::Editor(EditorOp::MarkdownShortcut { block, shortcut }),
+            spans: if end > start {
+                vec![IdSpan { peer, start, end }]
+            } else {
+                vec![]
+            },
+        });
+        Ok(())
     }
 }

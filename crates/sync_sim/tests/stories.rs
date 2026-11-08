@@ -92,3 +92,6 @@ mod editor_markdown;
 
 #[path = "stories/editor_drafts.rs"]
 mod editor_drafts;
+
+#[path = "stories/editor_shortcuts.rs"]
+mod editor_shortcuts;
