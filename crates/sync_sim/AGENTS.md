@@ -7,6 +7,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Start here
 
+- `src/client/application.rs`: real application registries, policy and injected constructor ports.
+- `src/client/rich_commands.rs`: package block/table operations; list commands use the registered list plugin.
 - `src/client/runtime.rs`: exclusive generic/session ownership; `src/client/resolve.rs`: live UTF-16 positions.
 - `src/world/editor.rs`: real session editor inputs and effects; `editor/input.rs`
   lowers range edits and segmented backspace without resetting consecutive cursors.
@@ -228,3 +230,11 @@ actual visible text-character and editor-node creation IDs immediately before an
 after undo/redo, before projection fixups; never infer removals from new operation
 spans or requested inputs. Keep ownership checks over both undo and redo, including
 foreign-removal negative mutations and a no-op-history control.
+
+Editor runtimes use the source application headless/MarkdownSync registries,
+MacroSyncPolicy and source NodeIdPlugin lengths (web8; AI default11). Supply constructor
+time from each actual Now before handling input. Seed deterministic constructor
+and transactional identity streams by peer and factory creation ordinal, so a
+rebuild cannot restart a retired identity stream. Keep the staging comment factory
+matched to CommentNode. This registry checkpoint does not establish application
+comment-gate parity; the gate remains a separate required producer.

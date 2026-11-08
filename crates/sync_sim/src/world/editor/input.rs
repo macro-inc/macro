@@ -4,6 +4,26 @@ use lexical_model::*;
 
 pub(super) fn editing_input(state: &EditorState, op: &EditorOp, headless: bool) -> Option<Input> {
     let (from, to, commands) = match op {
+        EditorOp::SetBlock { at, .. } | EditorOp::InsertTable { at, .. } => (
+            *at,
+            *at,
+            vec![Command::Extension(ExtensionCommand::new(
+                &crate::client::rich_commands::RICH_EDIT,
+                op.clone(),
+            ))],
+        ),
+        EditorOp::ToggleList { at, kind } => {
+            let command = match kind % 3 {
+                0 => &lexical_rich_nodes::list::INSERT_ORDERED_LIST,
+                1 => &lexical_rich_nodes::list::INSERT_UNORDERED_LIST,
+                _ => &lexical_rich_nodes::list::INSERT_CHECK_LIST,
+            };
+            (
+                *at,
+                *at,
+                vec![Command::Extension(ExtensionCommand::new(command, ()))],
+            )
+        }
         EditorOp::Type { at, text } => (*at, *at, vec![Command::InsertText(text.clone())]),
         EditorOp::Backspace { at, count } => (
             *at,

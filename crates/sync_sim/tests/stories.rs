@@ -80,3 +80,6 @@ mod editor_undo;
 
 #[path = "stories/editor_commands.rs"]
 mod editor_commands;
+
+#[path = "stories/editor_rich.rs"]
+mod editor_rich;

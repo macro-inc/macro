@@ -29,7 +29,10 @@ pub(super) fn source(step: &Step) -> String {
                     "EditorOp::Select {{ from: Pos {{ block: {}, offset: {} }}, to: Pos {{ block: {}, offset: {} }} }}",
                     from.block, from.offset, to.block, to.offset
                 ),
-                EditorOp::Backspace { .. }
+                EditorOp::SetBlock { .. }
+                | EditorOp::ToggleList { .. }
+                | EditorOp::InsertTable { .. }
+                | EditorOp::Backspace { .. }
                 | EditorOp::DeleteRange { .. }
                 | EditorOp::SplitBlock { .. }
                 | EditorOp::Format { .. }

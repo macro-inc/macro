@@ -135,3 +135,10 @@ and independent reconstruction pass unchanged invariants and exact replay. A sec
 literal checks repeated backspace follows the updated cursor across astral text.
 Rich package operations, application registry/gate and editor generator floors remain
 pending; these literals do not claim those producers.
+
+`editor_rich`: all six block forms preserve real application replacements and
+eight-character identities; all three headless list commands create TaskListNode;
+table behavior composes with the application-owned registry and preserves the
+requested rows/columns. Every story retains all invariants and exact replay.
+Markdown, comments/gate, generated editor floors and the TS editor peer remain
+pending.
