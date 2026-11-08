@@ -50,3 +50,7 @@ Keep mutations.test.ts literals tied to the pinned upstream observations; assert
 Use backend foreignHookIndex for override-bit order; the model trait and independent upstream inventory must agree. `bun run check` verifies committed hook evidence as well as TypeScript. Regenerate with `bun run derive-hooks` after a source or contract change; per-hook hosting tests remain a separate requirement.
 
 Derive polymorphic methods from actual inherited overrides, distinguishing static/instance membership and nearest base kind; ordinary calls to native accessors do not make hooks. Resolve import aliases and reexports with the source compiler, never a flat class-name map. Keep the three S4 reserved extension points and the two explicitly required ListItemNode predicates even when the pinned sources lack overrides or callers. Keep native root traversal and S1 non-hooks out of the virtual set.
+
+Use backend callNative for an explicit native-super node hook; it shares the indexed ABI and current callback lease. native-super.test.ts covers actual WASM dispatch and transform reentry; model literals separately prove foreign-chain bypass and nested virtual calls. Pure hosted callbacks and lifecycle constructor scopes are still required.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.

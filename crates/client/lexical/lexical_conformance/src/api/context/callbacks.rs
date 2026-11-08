@@ -185,6 +185,22 @@ impl CallbackContext {
         frames.context(&active)?.call(tx, id, args, receiver)
     }
 
+    /// Native-super dispatch through the current exact mutable callback frame.
+    pub fn call_native(
+        &self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Value,
+    ) -> Result<Value> {
+        let frames = self
+            .0
+            .upgrade()
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+        let active = frames.active(tx)?;
+        frames.context(&active)?.call_native(tx, id, args, receiver)
+    }
+
     /// Read a captured node's raw fields from an independently owned pure snapshot.
     /// The capture must belong to the current exact update, including its publication
     /// phase. This grants neither indexed API dispatch nor access to the source

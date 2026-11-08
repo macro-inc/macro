@@ -86,6 +86,7 @@ trait Dispatch {
     fn owner(&self) -> &Arc<()>;
     fn call(&self, id: u32, args: Value, receiver: Option<Value>) -> Result<Value, JsValue>;
     fn read_field(&self, handle: u32, field: &str) -> Result<Value, JsValue>;
+    fn call_native(&self, id: u32, args: Value, receiver: Value) -> Result<Value, JsValue>;
     fn register(
         &self,
         type_name: &str,
@@ -175,6 +176,13 @@ impl Dispatch for Frame<'_, '_> {
                 .map_err(|error| self.errors.convert(error))
         })
     }
+    fn call_native(&self, id: u32, args: Value, receiver: Value) -> Result<Value, JsValue> {
+        self.with_tx(|tx| {
+            self.context
+                .call_native(tx, id, args, receiver)
+                .map_err(|error| self.errors.convert(error))
+        })
+    }
     fn read_field(&self, handle: u32, field: &str) -> Result<Value, JsValue> {
         self.with_tx(|tx| {
             let snapshot = tx
@@ -209,6 +217,14 @@ pub(super) fn call(
     receiver: Option<Value>,
 ) -> Result<Value, JsValue> {
     current(owner, |frame| frame.call(id, args, receiver))
+}
+pub(super) fn call_native(
+    owner: &Arc<()>,
+    id: u32,
+    args: Value,
+    receiver: Value,
+) -> Result<Value, JsValue> {
+    current(owner, |frame| frame.call_native(id, args, receiver))
 }
 pub(super) fn read_field(owner: &Arc<()>, handle: u32, field: &str) -> Result<Value, JsValue> {
     current(owner, |frame| frame.read_field(handle, field))

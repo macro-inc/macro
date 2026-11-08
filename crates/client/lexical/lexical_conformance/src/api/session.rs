@@ -121,6 +121,11 @@ impl Session {
         self.with_update(|context, tx| context.call(tx, id, args, receiver))
     }
 
+    /// Resume one explicit native-super node operation, then suspend again.
+    pub fn call_native(&mut self, id: u32, args: Value, receiver: Value) -> Result<Value> {
+        self.with_update(|context, tx| context.call_native(tx, id, args, receiver))
+    }
+
     /// Normalize and run model transforms without publishing the update.
     pub fn flush(&mut self) -> Result<()> {
         self.with_update(|_, tx| Ok(tx.flush()?))

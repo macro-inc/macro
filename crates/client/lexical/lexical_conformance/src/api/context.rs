@@ -153,6 +153,32 @@ impl Context {
         self.encode(result)
     }
 
+    /// Dispatch to the nearest native ancestor, preserving nested virtual calls.
+    /// This does not select an explicitly named older native prototype.
+    pub fn call_native(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Value,
+    ) -> Result<Value> {
+        if self.scope != Scope::Updating {
+            return Err(crate::replay::ReplayError::NoActiveEditor);
+        }
+        self.frames.validate(tx)?;
+        let method = super::index()
+            .get(id as usize)
+            .and_then(|name| name.strip_prefix("LexicalNode."))
+            .ok_or_else(|| fail("native-super requires a node hook API"))?;
+        let hook = lexical_model::ForeignHook::ALL
+            .iter()
+            .copied()
+            .find(|hook| hook.upstream_name() == method)
+            .ok_or_else(|| fail("native-super requires a node hook API"))?;
+        let key = node_key(&self.replay.decode(&receiver)?)?;
+        tx.with_foreign_native(key, hook, |tx| self.call(tx, id, args, Some(receiver)))
+    }
+
     /// Read a raw captured field without changing the active update's version.
     pub fn read_field(
         &mut self,

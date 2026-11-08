@@ -516,3 +516,99 @@ fn weak_callback_context_checks_scope_editor_and_does_not_retain_snapshots() -> 
     ));
     Ok(())
 }
+
+#[test]
+fn callback_native_super_uses_the_shared_index_and_keeps_nested_virtual_hooks() -> Result<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Hooks {
+        callback: CallbackContext,
+        append: Arc<AtomicUsize>,
+        splice: Arc<AtomicUsize>,
+        append_id: u32,
+    }
+    impl ForeignHooks for Hooks {
+        fn append(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            nodes: &[NodeKey],
+        ) -> Override<std::result::Result<(), Error>> {
+            self.append.fetch_add(1, Ordering::SeqCst);
+            let operation = (|| -> Result<()> {
+                let receiver = self.callback.node(tx, key)?;
+                let args = nodes
+                    .iter()
+                    .map(|key| self.callback.node(tx, *key))
+                    .collect::<Result<Vec<_>>>()?;
+                self.callback
+                    .call_native(tx, self.append_id, json!(args), receiver)?;
+                Ok(())
+            })();
+            Override::Value(operation.map_err(|error| Error::invariant(error.to_string())))
+        }
+        fn splice(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+            _: ChildIndex,
+            _: u32,
+            _: &[NodeKey],
+        ) -> Override<std::result::Result<(), Error>> {
+            self.splice.fetch_add(1, Ordering::SeqCst);
+            Override::Inherit
+        }
+    }
+    let append = Arc::new(AtomicUsize::new(0));
+    let splice = Arc::new(AtomicUsize::new(0));
+    let mut context = Context::default();
+    let append_id = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    let latest_id = super::super::index()
+        .binary_search(&"LexicalNode.getLatest")
+        .expect("latest") as u32;
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "native-callback".into(),
+            class_name: "NativeCallback".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                callback: context.callbacks(),
+                append: append.clone(),
+                splice: splice.clone(),
+                append_id,
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let block = tx.create_foreign("native-callback", SerializedNode::new())?;
+    let text = tx.create_text("native callback")?.key();
+    let raw = context.replay.node(tx.view(), block)?;
+    let receiver = context.encode(raw)?;
+    let raw = context.replay.node(tx.view(), text)?;
+    let text_arg = context.encode(raw)?;
+    append.store(0, Ordering::SeqCst);
+    splice.store(0, Ordering::SeqCst);
+    context.call(
+        &mut tx,
+        append_id,
+        json!([text_arg]),
+        Some(receiver.clone()),
+    )?;
+    assert_eq!(append.load(Ordering::SeqCst), 1);
+    assert_eq!(splice.load(Ordering::SeqCst), 1);
+    assert_eq!(tx.text_content(block), "native callback");
+    assert!(
+        context
+            .call_native(&mut tx, latest_id, json!([]), receiver.clone())
+            .is_err()
+    );
+    context.call_native(&mut tx, append_id, json!([]), receiver)?;
+    assert_eq!(append.load(Ordering::SeqCst), 1);
+    assert_eq!(splice.load(Ordering::SeqCst), 2);
+    Ok(())
+}

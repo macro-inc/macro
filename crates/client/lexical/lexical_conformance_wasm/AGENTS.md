@@ -110,3 +110,7 @@ prefixes consumed before a later error. Keep the wrapped deserializer requests
 and error text unchanged; do not count only the final normalized JSON value.
 
 Read foreign_hook_index in override-bit order; it is generated from the model trait, including its explicit upstream aliases. Never hand-maintain another host hook list.
+
+EditorHandle::call_native uses the same validated call envelope, weak callback context, RAII lease and opaque error path as call. It supports mutable callback frames and indexed node hooks; pure callback API dispatch and import/clone construction scopes remain unfinished.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.

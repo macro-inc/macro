@@ -97,3 +97,7 @@ and preserve null versus undefined when decoding getFormatFlags alignment.
 Preserve selection direction memos in host captures, detached-handle transfers and rollback values; clear them only for explicit upstream selection clones and active update clones.
 
 Route indexed text splicing, JSON updates, copy predicates and element creation through the model; retain D-6 surrogate and D-7 unsigned-offset checks at the bridge.
+
+Context/Session call_native uses the shared API index and model-derived hook names; accept only indexed node hooks and preserve the exact mutable callback frame. Native-super bypasses one outer foreign dispatch, never a whole native operation. Pure indexed read dispatch and lifecycle construction scopes remain separate host work.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
