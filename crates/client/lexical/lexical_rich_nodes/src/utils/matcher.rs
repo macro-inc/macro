@@ -74,11 +74,20 @@ pub enum MatcherError {
     Regex(#[from] regress::Error),
 }
 /// ECMAScript regex matcher with UTF-16 offsets and JS undefined captures.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RegexMatcher {
     regex: regress::Regex,
     source: Box<str>,
     flags: Box<str>,
+}
+impl std::fmt::Debug for RegexMatcher {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RegexMatcher")
+            .field("source", &self.source)
+            .field("flags", &self.flags)
+            .finish_non_exhaustive()
+    }
 }
 impl RegexMatcher {
     /// Compile a stateless non-global regex.

@@ -70,7 +70,7 @@ pub fn editor_states_equal(outcome: &Outcome) -> Result<(), Failure> {
         let Some(editor) = &client.editor else {
             if matches!(
                 outcome.config.seeds.get(&client.doc),
-                Some(SeedDocument::Editor(_))
+                Some(SeedDocument::Editor(_) | SeedDocument::StoredEditor(_))
             ) {
                 return Err(Failure::new(
                     "editor_states_equal",
@@ -97,7 +97,7 @@ pub fn projection_consistent(outcome: &Outcome) -> Result<(), Failure> {
             && client.terminal.is_none()
             && matches!(
                 outcome.config.seeds.get(&client.doc),
-                Some(SeedDocument::Editor(_))
+                Some(SeedDocument::Editor(_) | SeedDocument::StoredEditor(_))
             )
             && client.editor.is_none()
         {

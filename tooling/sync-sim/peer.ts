@@ -9,56 +9,21 @@ import { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   IDBSnapshotStore,
   LORO_SNAPSHOT_DB_NAME,
-  type SnapshotStore,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import {
   BrowserWALStore,
   InMemoryWALStore,
   LORO_WAL_DB_NAME,
-  type WALEntry,
-  type WALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import { SyncServiceSource } from '@macro-inc/collaboration/sync-service/source';
+import type { EditorPeer } from './editor-peer';
 import type { PeerCommand, PeerFinal, PeerWalRow } from './generated';
-import { Activity, clock, WALL_ORIGIN } from './runtime';
+import { activity, clock, WALL_ORIGIN } from './runtime';
+import { ObservedSnapshots, ObservedStore } from './storage';
 import { effects, transports } from './transport';
 
-export const activity = new Activity();
-class ObservedStore implements WALStore<Uint8Array> {
-  constructor(private readonly inner: WALStore<Uint8Array>) {}
-  append(update: Uint8Array) {
-    return activity.observe(this.inner.append(update));
-  }
-  getAll(): Promise<WALEntry<Uint8Array>[]> {
-    return activity.observe(this.inner.getAll());
-  }
-  markDelivered(ids: number[]) {
-    return activity.observe(this.inner.markDelivered(ids));
-  }
-  pruneDelivered() {
-    return activity.observe(this.inner.pruneDelivered());
-  }
-  pruneExpired(ttl: number) {
-    return activity.observe(this.inner.pruneExpired(ttl));
-  }
-  count() {
-    return activity.observe(this.inner.count());
-  }
-}
-class ObservedSnapshots implements SnapshotStore<Uint8Array> {
-  constructor(private readonly inner: SnapshotStore<Uint8Array>) {}
-  load() {
-    return activity.observe(this.inner.load());
-  }
-  save(bytes: Uint8Array) {
-    return activity.observe(this.inner.save(bytes));
-  }
-  delete() {
-    return activity.observe(this.inner.delete());
-  }
-}
 const formSchema = schema({
   fields: schema.LoroMap({
     '0': schema.Number(),
@@ -100,6 +65,7 @@ function isPeerId(value: string): value is `${number}` {
   return /^\d+$/.test(value) && BigInt(value) <= 0xffff_ffff_ffff_ffffn;
 }
 class Peer {
+  readonly kind = 'form';
   readonly manager: LoroManager<typeof formSchema>;
   readonly store: ObservedStore;
   readonly source: SyncServiceSource;
@@ -206,6 +172,7 @@ class Peer {
       initialized: this.manager.initialized,
       vv: Object.fromEntries(this.manager.doc.oplogVersion().toJSON()),
       value_json: JSON.stringify(this.manager.doc.toJSON()),
+      editor_json: null,
       rows: rows.map((row) => {
         const owner: unknown = Reflect.get(row, 'owner');
         return {
@@ -219,10 +186,16 @@ class Peer {
     };
   }
 }
-const peers = new Map<string, Peer>();
-function peer(name: string): Peer {
+const peers = new Map<string, Peer | EditorPeer>();
+function peer(name: string): Peer | EditorPeer {
   const result = peers.get(name);
   if (!result) throw new Error(`unknown peer ${name}`);
+  return result;
+}
+function formPeer(name: string): Peer {
+  const result = peer(name);
+  if (result.kind !== 'form')
+    throw new Error('form operation on an editor peer');
   return result;
 }
 export async function command(command: PeerCommand): Promise<void> {
@@ -232,6 +205,20 @@ export async function command(command: PeerCommand): Promise<void> {
         throw new Error('duplicate live peer identity');
       peers.set(command.client, new Peer(command));
       return;
+    case 'open_editor': {
+      const { EditorPeer } = await import('./editor-peer');
+      if (peers.has(command.client))
+        throw new Error('duplicate live peer identity');
+      peers.set(command.client, new EditorPeer(command));
+      return;
+    }
+    case 'editor': {
+      const result = peer(command.client);
+      if (result.kind !== 'editor')
+        throw new Error('editor operation on a form peer');
+      await result.edit(command.op);
+      return;
+    }
     case 'tick':
       if (command.now + WALL_ORIGIN < clock.now)
         throw new Error('virtual time moved backwards');
@@ -244,13 +231,13 @@ export async function command(command: PeerCommand): Promise<void> {
       transports.get(command.client)?.text(command.text);
       return;
     case 'edit':
-      await peer(command.client).edit(command.field, command.value);
+      await formPeer(command.client).edit(command.field, command.value);
       return;
     case 'move':
-      await peer(command.client).move(command.from, command.to);
+      await formPeer(command.client).move(command.from, command.to);
       return;
     case 'chatter':
-      peer(command.client).chatter.receive({
+      formPeer(command.client).chatter.receive({
         type: command.awareness ? 'awareness' : 'update',
         data: Uint8Array.from(command.bytes),
       });

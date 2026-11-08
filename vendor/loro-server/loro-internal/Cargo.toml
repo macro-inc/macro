@@ -367,3 +367,7 @@ features = ["checkpoint"]
 level = "warn"
 priority = 0
 check-cfg = ["cfg(loom)"]
+
+# Upstream test-only logging helper, absent from the published package manifest.
+[dev-dependencies.dev-utils]
+path = "../../loro-test-utils"

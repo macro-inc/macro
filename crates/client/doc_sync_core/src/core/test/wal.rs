@@ -825,3 +825,5 @@ fn own_ack_evidence_excludes_unpushed_rows_and_invalid_checksums() {
 }
 
 mod gaps;
+
+mod adoption;

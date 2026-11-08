@@ -112,10 +112,12 @@ pub enum Fact {
         /// Core completion.
         reply: CommentResult,
     },
-    /// Operations removed by real collaborative undo, when the editor adapter is available.
+    /// Actual text/node removals observed around real collaborative undo or redo.
     UndoApplied {
         /// Undoing client.
         client: ClientName,
+        /// Whether the operation was redo.
+        redo: bool,
         /// Actual removed IDs.
         removed: Vec<IdSpan>,
     },

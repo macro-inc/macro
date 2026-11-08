@@ -9,6 +9,9 @@ autotests = false
 document_session = { workspace = true, features = ["conformance"] }
 lexical_model = { workspace = true, features = ["model-segmentation"] }
 lexical_loro.workspace = true
+lexical_markdown.workspace = true
+lexical_rich_nodes.workspace = true
+macro_document_model.workspace = true
 proptest.workspace = true
 doc_sync_core.workspace = true
 sync_protocol = { workspace = true, features = ["presence"] }
@@ -20,6 +23,7 @@ loro.workspace = true
 bebop.workspace = true
 futures.workspace = true
 serde.workspace = true
+specta.workspace = true
 serde_json.workspace = true
 postcard.workspace = true
 thiserror.workspace = true
@@ -28,7 +32,6 @@ rand_chacha.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
-specta.workspace = true
 specta-serde.workspace = true
 specta-typescript.workspace = true
 macro_env_var = { path = "../macro_env_var" }

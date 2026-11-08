@@ -7,6 +7,25 @@ pub struct MacroSyncPolicy;
 /// Shared projection policy for all collaborative Macro documents.
 pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy;
 impl SyncPolicy for MacroSyncPolicy {
+    fn canonicalize_node_json(&self, node: &mut SerializedNode) {
+        // Source exportJSON omits these unset values; the open mirror record stores null.
+        let fields: &[&str] = match node.get("type").and_then(serde_json::Value::as_str) {
+            Some("table") => &[
+                "colWidths",
+                "frozenColumnCount",
+                "frozenRowCount",
+                "rowStriping",
+            ],
+            Some("tablecell") => &["width"],
+            Some("listitem") => &["checked"],
+            _ => &[],
+        };
+        for field in fields {
+            if node.get(*field).is_some_and(serde_json::Value::is_null) {
+                node.remove(*field);
+            }
+        }
+    }
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool {
         view.is::<CompletionNode>(key)
     }

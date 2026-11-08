@@ -8,6 +8,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 ## Start here
 
 - `src/golden.rs`, `mirror.rs`, `snapshot.rs`: frozen ancestor and server snapshot reconciliation.
+- `reconstruct_initial_state`: one read-only walk reports persisted transparent wrappers; `mirror::set_synced_state` performs explicit full cleanup with protected local fields retained.
 - `src/policy.rs`: synced editor view and application exclusions.
 - `src/schema.rs`: fresh/existing container inference and text splicing.
 - `src/local.rs`: dirty commit projection and corrected list moves.
@@ -16,7 +17,8 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 ## Boundaries
 
-- Keep application node types and ownership policy behind SyncPolicy.
+- Keep application node types, canonical editor serialization and ownership policy behind SyncPolicy.
+- Canonicalize transport aliases identically on model and persisted JSON reads; retain every underlying Loro value and operation.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
 - Retain recorded timestamps only in server-created snapshot helpers; never regenerate the frozen Markdown ancestor.
@@ -31,6 +33,8 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 Install root Bun dependencies before running tests; the differential oracle must
 run the current mirror source and must never be replaced with expected values.
+The editor pair uses workspace Loro1.17.1; the isolated Worker transcript driver
+remains1.16.3 beside the vendored1.16.2 server encoder to preserve C0 bytes.
 
 
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_loro -j4`

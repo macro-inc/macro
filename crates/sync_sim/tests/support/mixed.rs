@@ -1,9 +1,10 @@
 use super::{peer_protocol::*, ts_child::TsChild};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use sync_sim::*;
 
 pub struct Mixed {
     pub sim: Sim,
+    editors: BTreeSet<ClientName>,
     children: BTreeMap<ProfileName, TsChild>,
     profiles: BTreeMap<ClientName, ProfileName>,
     active: BTreeMap<ClientName, bool>,
@@ -13,8 +14,12 @@ pub struct Mixed {
 }
 impl Mixed {
     pub fn new(seed: u64) -> Self {
+        Self::with_config(SimConfig::calm(seed))
+    }
+    pub fn with_config(config: SimConfig) -> Self {
         Self {
-            sim: Sim::new(SimConfig::calm(seed)),
+            sim: Sim::new(config),
+            editors: BTreeSet::new(),
             children: BTreeMap::new(),
             profiles: BTreeMap::new(),
             active: BTreeMap::new(),
@@ -24,7 +29,17 @@ impl Mixed {
         }
     }
     pub fn open(&mut self, name: &str, profile: &str) {
-        let spec = OpenSpec::form(name, profile);
+        self.open_surface(name, profile, false);
+    }
+    pub fn open_editor(&mut self, name: &str, profile: &str) {
+        self.open_surface(name, profile, true);
+    }
+    fn open_surface(&mut self, name: &str, profile: &str, editor: bool) {
+        let mut spec = OpenSpec::form(name, profile);
+        if editor {
+            self.editors.insert(spec.client.clone());
+            spec.kind = ClientKind::AiWorker;
+        }
         let identity = self.sim.register_external(spec.clone()).unwrap();
         let seed = u32::try_from(self.children.len() + 197).unwrap();
         self.children
@@ -41,12 +56,20 @@ impl Mixed {
         ));
         self.pending.push_back((
             spec.profile,
-            PeerCommand::Open {
-                client: name.into(),
-                peer: identity.peer.to_string(),
-                document: "00000000-0000-7000-8000-000000000001".into(),
-                ai: false,
-                readonly: false,
+            if editor {
+                PeerCommand::OpenEditor {
+                    client: name.into(),
+                    peer: identity.peer.to_string(),
+                    document: "00000000-0000-7000-8000-000000000001".into(),
+                }
+            } else {
+                PeerCommand::Open {
+                    client: name.into(),
+                    peer: identity.peer.to_string(),
+                    document: "00000000-0000-7000-8000-000000000001".into(),
+                    ai: false,
+                    readonly: false,
+                }
             },
         ));
         self.drain();
@@ -124,11 +147,33 @@ impl Mixed {
                     .iter()
                     .map(|(id, counter)| (id.parse().unwrap(), *counter))
                     .collect();
-                self.sim.external_versions(&name, vv).unwrap();
+                if self.editors.contains(&name) {
+                    let spans = report
+                        .effects
+                        .iter()
+                        .filter_map(|effect| match effect {
+                            PeerEffect::Commit {
+                                client,
+                                peer,
+                                start,
+                                end,
+                            } if client == &name.0 => Some(IdSpan {
+                                peer: peer.parse().unwrap(),
+                                start: *start,
+                                end: *end,
+                            }),
+                            _ => None,
+                        })
+                        .collect();
+                    self.sim.external_authored(&name, vv, spans).unwrap();
+                } else {
+                    self.sim.external_versions(&name, vv).unwrap();
+                }
                 self.finals.insert(name, peer);
             }
             for effect in report.effects {
                 match effect {
+                    PeerEffect::Commit { .. } => {}
                     PeerEffect::Frame { client, bytes } => {
                         self.sim.external_frame(&ClientName(client), bytes).unwrap()
                     }
