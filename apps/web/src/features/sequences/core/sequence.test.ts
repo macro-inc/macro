@@ -1,79 +1,65 @@
 import type {
+  EnrollmentAction,
   EnrollmentReason,
   EnrollmentStatus,
   Sequence,
+  SequenceStatus,
 } from '@service-email/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   draftChanges,
   enrollmentActions,
   insertToken,
-  isRetry,
   shownStatus,
   toDraft,
 } from './sequence';
 
-const enrollment = (status: EnrollmentStatus, reason?: EnrollmentReason) => ({
-  status,
-  reason,
+describe('enrollmentActions', () => {
+  it.each<
+    [
+      EnrollmentStatus,
+      EnrollmentReason | null,
+      SequenceStatus,
+      EnrollmentAction[],
+    ]
+  >([
+    ['active', null, 'active', ['pause', 'stop', 'unsubscribe']],
+    ['paused', null, 'active', ['resume', 'stop', 'unsubscribe']],
+    [
+      'needs_attention',
+      null,
+      'active',
+      ['resume', 'pause', 'stop', 'unsubscribe'],
+    ],
+    ['stopped', 'replied', 'active', ['resume', 'unsubscribe']],
+    ['stopped', 'bounced', 'active', ['resume', 'unsubscribe']],
+    ['stopped', 'contact_removed', 'active', ['resume', 'unsubscribe']],
+    ['stopped', 'manual', 'active', ['unsubscribe']],
+    ['stopped', 'unsubscribed', 'active', []],
+    ['completed', null, 'active', ['unsubscribe']],
+    ['active', null, 'paused', ['stop', 'unsubscribe']],
+    ['needs_attention', null, 'paused', ['stop', 'unsubscribe']],
+    ['paused', null, 'draft', ['stop', 'unsubscribe']],
+    ['stopped', 'replied', 'paused', ['unsubscribe']],
+  ])(
+    '%s (%s) in a %s sequence offers %j',
+    (status, reason, sequence, expected) => {
+      expect(enrollmentActions({ status, reason }, sequence)).toEqual(expected);
+    }
+  );
 });
 
-describe('enrollment actions', () => {
-  it('offers resume for held enrollments and stops that may no longer hold', () => {
-    expect(enrollmentActions(enrollment('paused'), 'active')).toEqual([
-      'resume',
-      'stop',
-      'unsubscribe',
-    ]);
-    expect(
-      enrollmentActions(enrollment('needs_attention', 'step_failed'), 'active')
-    ).toEqual(['resume', 'pause', 'stop', 'unsubscribe']);
-    for (const reason of ['replied', 'bounced', 'access_lost'] as const)
-      expect(
-        enrollmentActions(enrollment('stopped', reason), 'active')
-      ).toEqual(['resume', 'unsubscribe']);
-  });
-
-  it('never resumes a deliberate stop or a finished enrollment, but can still opt it out', () => {
-    expect(
-      enrollmentActions(enrollment('stopped', 'manual'), 'active')
-    ).toEqual(['unsubscribe']);
-    expect(enrollmentActions(enrollment('completed'), 'active')).toEqual([
-      'unsubscribe',
-    ]);
-    expect(
-      enrollmentActions(enrollment('stopped', 'unsubscribed'), 'active')
-    ).toEqual([]);
-  });
-
-  it('leaves only stop and unsubscribe while the sequence is paused', () => {
-    for (const status of ['active', 'paused', 'needs_attention'] as const)
-      expect(enrollmentActions(enrollment(status), 'paused')).toEqual([
-        'stop',
-        'unsubscribe',
-      ]);
-    expect(
-      enrollmentActions(enrollment('stopped', 'replied'), 'paused')
-    ).toEqual(['unsubscribe']);
-  });
-
-  it('reads Retry only when the step never went out', () => {
-    expect(isRetry(enrollment('needs_attention', 'step_failed'))).toBe(true);
-    expect(isRetry(enrollment('needs_attention', 'step_withdrawn'))).toBe(true);
-    expect(isRetry(enrollment('needs_attention', 'step_unknown'))).toBe(false);
-    expect(isRetry(enrollment('stopped', 'replied'))).toBe(false);
-  });
-
-  it('shows active enrollments of a held sequence as paused', () => {
-    expect(shownStatus(enrollment('active'), true)).toBe('paused');
-    expect(shownStatus(enrollment('needs_attention'), true)).toBe(
-      'needs_attention'
-    );
-    expect(shownStatus(enrollment('active'), false)).toBe('active');
+describe('shownStatus', () => {
+  it.each<[EnrollmentStatus, boolean, EnrollmentStatus]>([
+    ['active', true, 'paused'],
+    ['active', false, 'active'],
+    ['needs_attention', true, 'needs_attention'],
+  ])('%s with the sequence held=%s shows %s', (status, held, expected) => {
+    expect(shownStatus({ status }, held)).toBe(expected);
   });
 });
 
-describe('draft changes', () => {
+describe('draftChanges', () => {
   const sequence: Sequence = {
     id: 'sequence',
     name: 'Intro',
@@ -81,68 +67,41 @@ describe('draft changes', () => {
     footer: '',
     status: 'draft',
     steps: [
-      { delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
-      { delayDays: 2, subject: '', body: 'Again', asReply: true },
+      { id: 'a', delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
+      { id: 'b', delayDays: 2, subject: '', body: 'Again', asReply: true },
     ],
-    version: 3,
     createdAt: '',
     updatedAt: '',
   };
+  const draft = toDraft(sequence);
+  const [first, second] = draft.steps;
 
   it('sends only what changed', () => {
-    expect(draftChanges(sequence, toDraft(sequence))).toBeUndefined();
-    expect(
-      draftChanges(sequence, { ...toDraft(sequence), name: 'Welcome' })
-    ).toEqual({ name: 'Welcome' });
-  });
-
-  it('never sends a reply as the first email', () => {
-    const draft = toDraft(sequence);
-    const changes = draftChanges(sequence, {
-      ...draft,
-      steps: [draft.steps[1], draft.steps[0]],
+    expect(draftChanges(sequence, draft)).toBeUndefined();
+    expect(draftChanges(sequence, { ...draft, name: 'Welcome' })).toEqual({
+      name: 'Welcome',
     });
-    expect(changes?.steps?.map((step) => step.asReply)).toEqual([false, false]);
   });
 
-  it('never gives the first email a wait, since it goes out at the start', () => {
-    const draft = toDraft(sequence);
+  it('sends the first email with no wait and not as a reply', () => {
     expect(
       draftChanges(sequence, {
         ...draft,
-        steps: [{ ...draft.steps[0], delayDays: 5 }, draft.steps[1]],
+        steps: [{ ...first, delayDays: 5 }, second],
       })
     ).toBeUndefined();
-    // Moving the second email up carries no wait into the first position.
     expect(
-      draftChanges(sequence, {
-        ...draft,
-        steps: [draft.steps[1], draft.steps[0]],
-      })?.steps?.map((step) => step.delayDays)
-    ).toEqual([0, 0]);
-    // Removing the first email leaves the next one sending at the start.
-    expect(
-      draftChanges(sequence, { ...draft, steps: [draft.steps[1]] })?.steps?.[0]
-        .delayDays
-    ).toBe(0);
-    expect(
-      toDraft({
-        ...sequence,
-        steps: [{ ...sequence.steps[0], delayDays: 3 }],
-      }).steps[0].delayDays
-    ).toBe(0);
+      draftChanges(sequence, { ...draft, steps: [second, first] })?.steps
+    ).toEqual([
+      { ...second, delayDays: 0, asReply: false },
+      { ...first, asReply: false },
+    ]);
   });
 });
 
-describe('personalization', () => {
-  it('replaces the selection with the token and puts the caret after it', () => {
-    expect(insertToken('Hi there,', 3, 8, '{{firstName}}')).toEqual({
-      value: 'Hi {{firstName}},',
-      caret: 16,
-    });
-    expect(insertToken('', 0, 0, '{{email}}')).toEqual({
-      value: '{{email}}',
-      caret: 9,
-    });
+it('inserts a token over the selection and puts the caret after it', () => {
+  expect(insertToken('Hi there,', 3, 8, '{{firstName}}')).toEqual({
+    value: 'Hi {{firstName}},',
+    caret: 16,
   });
 });

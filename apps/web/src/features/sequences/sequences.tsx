@@ -9,25 +9,16 @@ import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
-import {
-  type Accessor,
-  type ComponentProps,
-  createMemo,
-  type ParentProps,
-  Show,
-} from 'solid-js';
+import { type ComponentProps, type ParentProps, Show } from 'solid-js';
 import { addToSequenceDialog } from './add-to-sequence';
 import {
-  type PeopleSource,
   type SendersSource,
-  type SequencesContext,
   SequencesProvider,
 } from './context/sequences-context';
 import { ownGmailSenders, SEQUENCE_LIMITS } from './core/sequence';
 import {
   createContactEnrollments,
   createEnroller,
-  createEnrollment,
   createEnrollmentCommands,
   createSequence,
   createSequenceList,
@@ -37,71 +28,39 @@ import { EnrollView } from './views/enroll';
 import { SequencesNavView } from './views/sequences-nav';
 import { SequencesPane as SequencesPaneView } from './views/sequences-pane';
 
-function createSenders(): SendersSource {
-  const userId = useUserId();
-  const links = useEmailLinksQuery();
-  return {
-    senders: () => {
-      const user = userId();
-      return user && queryReadyGate(links)
-        ? ownGmailSenders(links.data.links, user)
-        : [];
-    },
-    pending: () => links.isPending,
-  };
-}
-
-/** CRM's own People search, the one its pickers and mentions use. */
-function createPeople(search: Accessor<string>): PeopleSource {
-  const results = useCrmPeopleSearch(search, SEQUENCE_LIMITS.contacts);
-  // Mapped once per result, so the picker's rows keep their identity.
-  const people = createMemo(() =>
-    results.people().map((person) => ({
-      id: person.id,
-      name: person.name,
-      email: person.email,
-    }))
-  );
-  return {
-    people,
-    pending: results.pending,
-    failed: results.failed,
-  };
-}
-
-function createCompanyPeople(
-  companyIds: Accessor<readonly string[]>
-): PeopleSource {
-  const results = useCrmCompanyPeople(companyIds, SEQUENCE_LIMITS.contacts + 1);
-  const people = createMemo(() =>
-    results.people().map((person) => ({
-      id: person.id,
-      name: person.name,
-      email: person.email,
-    }))
-  );
-  return { people, pending: results.pending, failed: results.failed };
-}
-
-function createAppSequencesContext(): SequencesContext {
-  return {
-    createSequenceList,
-    createSequence,
-    createEnrollment,
-    createEnrollmentCommands,
-    createPeople,
-    createCompanyPeople,
-    createEnroller,
-    createSenders,
-    createContactEnrollments,
-    userName: (userId) => getDisplayName(tryMacroId(userId)),
-    feedback: toast,
-  };
-}
-
 function AppSequences(props: ParentProps) {
+  const userId = useUserId();
+  function createSenders(): SendersSource {
+    const links = useEmailLinksQuery();
+    return {
+      senders: () => {
+        const user = userId();
+        return user && queryReadyGate(links)
+          ? ownGmailSenders(links.data.links, user)
+          : [];
+      },
+      pending: () => links.isPending,
+    };
+  }
   return (
-    <SequencesProvider value={createAppSequencesContext()}>
+    <SequencesProvider
+      value={{
+        createSequenceList,
+        createSequence,
+        createEnrollmentCommands,
+        // CRM's own People search, the one its pickers and mentions use.
+        createPeople: (search) =>
+          useCrmPeopleSearch(search, SEQUENCE_LIMITS.contacts),
+        createCompanyPeople: (companyIds) =>
+          useCrmCompanyPeople(companyIds, SEQUENCE_LIMITS.contacts + 1),
+        createEnroller,
+        createSenders,
+        createContactEnrollments,
+        userId,
+        userName: (id) => getDisplayName(tryMacroId(id)),
+        feedback: toast,
+      }}
+    >
       {props.children}
     </SequencesProvider>
   );

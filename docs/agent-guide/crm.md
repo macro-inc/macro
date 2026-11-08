@@ -664,9 +664,12 @@ CRM on for the team, the section and its links behave the same way.
   can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
   `{{email}}` at the caret) and the footer; the server adds an unsubscribe
   link. Edits save on their own (**Saving…** shows beside the status), and
-  **Activate** starts it; Delete is in the ⋯ menu. Editing needs a draft or
-  paused sequence; edits reach everyone who hasn't been sent an email yet. A
-  save over a copy changed elsewhere asks to **Reload**.
+  **Activate** starts it; Delete is in the ⋯ menu. A sequence can be edited
+  while active; edits reach every email not yet created (each is rendered
+  about a minute before it sends). A save that would leave an active sequence
+  incomplete (an emptied subject, say) is refused: the message shows above the
+  editor and the local edits stay. Pending emails show in Mail's Scheduled list
+  for the last ~90 seconds before they send.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
   takes a start time in your time zone. People can be added before activating;
   nothing sends until the sequence is active. Selected People or
@@ -676,14 +679,15 @@ CRM on for the team, the section and its links behave the same way.
   50 are selected. Skipped people (no email, unsubscribed, already added) are
   listed with why.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused
-  (also while the sequence is a draft or paused), Needs attention, Stopped or
-  Completed, with a reason (replied, bounced,
-  unsubscribed, removed from Customers, send failed, …). Rows offer Pause,
-  Resume (**Retry** after a failed or removed email; also after a stop for a
-  reply, bounce or lost access), Stop and Unsubscribe (team-wide, confirmed
-  first); opening a row shows that person's emails and when each sent. An
-  active sequence whose inbox was disconnected says so: pause it, choose an
-  inbox, resume it, then resume its people.
+  (also while the sequence is a draft or paused), Needs attention (an email
+  didn't go out: check it in Mail, then resume or stop; sending it from Mail
+  moves them on), Stopped (by you, replied, bounced, unsubscribed, or no
+  longer in Customers) or Completed. Rows show progress, last and next send,
+  and offer Pause, Resume (also after a stop for a reply, bounce or a person
+  no longer in Customers), Stop and Unsubscribe (team-wide, confirmed first);
+  the name opens the person, whose record holds the sent emails. An inbox
+  that can't send holds emails back instead of failing them; an active
+  sequence's detail says so until you reconnect it or choose another.
 - **Contact card:** a contact's Overview lists its sequences for every teammate:
-  sequence, owner, status, last and next send, never the emails. The owner's
-  sequence name opens it.
+  sequence, owner, status, last and next send. The owner's sequence name
+  opens it.

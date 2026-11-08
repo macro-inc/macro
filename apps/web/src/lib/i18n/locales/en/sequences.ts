@@ -38,11 +38,8 @@ export default {
   actions: 'Sequence actions',
   saving: 'Saving…',
   resumeSequence: 'Resume',
-  reload: 'Reload',
-  pauseToEdit: 'Pause to edit.',
-  connectGmail: 'Connect a Gmail inbox to send.',
-  senderDisconnected:
-    'Sending inbox disconnected. Pause and choose another inbox.',
+  senderUnavailable:
+    'The sending inbox can’t send. Emails wait until you reconnect it or choose another inbox.',
   noticeActivated: 'Sequence activated',
   noticePaused: 'Sequence paused',
   noticeDeleted: 'Sequence deleted',
@@ -91,35 +88,17 @@ export default {
   reasonReplied: 'Replied',
   reasonBounced: 'Bounced',
   reasonUnsubscribed: 'Unsubscribed',
-  reasonAccessLost: 'Access lost',
-  reasonContactRemoved: 'Removed from Customers',
-  reasonInboxUnavailable: 'Inbox unavailable',
-  reasonStepFailed: 'Send failed',
-  reasonStepWithdrawn: 'Email removed',
-  reasonStepUnknown: 'Send unconfirmed',
-  reasonStepStuck: 'Not sent yet',
-  reasonManualDetail: 'You stopped this enrollment.',
+  reasonContactRemoved: 'Not in Customers',
+  reasonManualDetail: 'You stopped sending to this person.',
   reasonRepliedDetail:
-    'They replied, so no more emails go out. If the reply shouldn’t end the sequence, resume to continue with the next email.',
+    'They replied, so no more emails go out. Resume if the reply shouldn’t end the sequence.',
   reasonBouncedDetail:
-    'The email couldn’t be delivered to this address, so no more emails go out. Resume to continue with the next email.',
-  reasonUnsubscribedDetail:
-    'They unsubscribed from your team’s sequences, so no more emails go out.',
-  reasonAccessLostDetail:
-    'Access to this person was lost when the team or Customers changed. Resume once access is back.',
+    'An email bounced, so no more emails go out. Resume to try the next one.',
+  reasonUnsubscribedDetail: 'They unsubscribed from your team’s sequences.',
   reasonContactRemovedDetail:
-    'This person was deleted from Customers, so no more emails go out.',
-  reasonInboxUnavailableDetail:
-    'The sending inbox is disconnected or needs to be reconnected. Reconnect it or choose another inbox for the sequence, then resume.',
-  reasonStepFailedDetail:
-    'Gmail refused the email after several tries. Retry to send it again.',
-  reasonStepWithdrawnDetail:
-    'The email was removed from Mail before it went out. Retry to schedule it again.',
-  reasonStepUnknownDetail:
-    'The email may have gone out, so it won’t be sent again. Resume to continue with the next one.',
-  reasonStepStuckDetail:
-    'The email still hasn’t gone out well after its send time. Resume to continue; it’s sent again only if it never went out.',
-  showSteps: 'Show emails',
+    'You can no longer see this person in Customers. Resume once you can.',
+  needsAttentionDetail:
+    'An email didn’t go out. Check it in Mail, then resume or stop.',
   stepProgress: '{{done}} of {{total}} sent',
   lastSent: 'Last sent {{time}}',
   nextSend: 'Next {{time}}',
@@ -131,13 +110,6 @@ export default {
   unsubscribeTitle: 'Unsubscribe {{email}}?',
   unsubscribeBody:
     'They stop getting every sequence from anyone on your team, and can’t be added again.',
-  loadingSteps: 'Loading emails',
-  stepsLoadFailed: 'Couldn’t load the emails.',
-  stepPending: 'Not scheduled yet',
-  stepScheduled: 'Sends {{time}}',
-  stepSent: 'Sent {{time}}',
-  stepSentUndated: 'Sent',
-  stepUnknown: 'May have been sent',
 
   // Enrolling
   enrollTitle: 'Add people',
@@ -151,6 +123,7 @@ export default {
   noMatchingPeople: 'No matching people',
   noEmail: 'No email address',
   startSending: 'Start sending',
+  invalidStart: 'Choose a valid start time.',
   sendsOnceActive: 'Nothing sends until the sequence is active.',
   consent: 'These people agreed to receive email from me.',
   selectedCount: { other: '{{count}} of {{max}} selected' },
@@ -168,48 +141,27 @@ export default {
   },
   done: 'Done',
   skipNotFound: 'Not in your team’s Customers',
-  skipNoEmail: 'No email address',
-  skipInvalidEmail: 'Invalid email address',
+  skipNoEmail: 'No usable email address',
   skipUnsubscribed: 'Unsubscribed',
   skipAlreadyEnrolled: 'Already in this sequence',
   skipUnknown: 'Skipped',
 
   // Errors
   errorUnavailable: 'Couldn’t reach Macro. Try again.',
-  errorNotFound: 'This sequence no longer exists, or it isn’t yours.',
-  errorVersionConflict:
-    'This sequence changed elsewhere. Reload to see the latest version.',
-  errorInvalidTransition: 'The sequence can’t change to that status now.',
-  errorInvalidSequence: 'The sequence isn’t ready to send yet.',
-  errorTooManyContacts: 'Add up to {{max}} people at a time.',
-  errorInvalidStart: 'Choose a valid start time.',
-  errorInvalidTimezone: 'Your time zone wasn’t recognized.',
-  errorActionUnavailable: 'That action isn’t available for this person now.',
-  errorStepInDelivery:
-    'An email to this person is being sent right now. Try again in a minute.',
-  errorStepTakenOver:
-    'You scheduled or restored this email in Mail, so it’s yours now. Send or delete it there, then resume.',
-  errorNoTeam: 'Sequences need a team with Customers turned on.',
-  errorCrmDisabled: 'Turn on Customers for your team to use sequences.',
+  errorNotFound: 'This no longer exists, or it isn’t yours.',
+  errorInvalidSequence: 'The sequence isn’t complete.',
+  errorInvalidRequest: 'That request isn’t valid.',
+  errorActionUnavailable:
+    'That isn’t available right now. Try again in a moment.',
+  errorCrmUnavailable: 'Sequences need a team with Customers turned on.',
   errorInternal: 'Something went wrong. Try again.',
   problemNameRequired: 'Give the sequence a name.',
-  problemNameTooLong: 'Use a name of up to {{max}} characters.',
-  problemFooterTooLong: 'Use a footer of up to {{max}} characters.',
   problemStepsRequired: 'Add at least one email.',
-  problemTooManySteps: 'A sequence can have up to {{max}} emails.',
-  problemFirstStepIsReply: 'The first email can’t be a reply.',
   problemSubjectRequired: 'Email {{position}} needs a subject.',
-  problemSubjectSingleLine:
-    'The subject of email {{position}} must be one line.',
-  problemSubjectTooLong:
-    'The subject of email {{position}} is longer than {{max}} characters.',
   problemBodyRequired: 'Email {{position}} needs a message.',
-  problemBodyTooLong:
-    'The message of email {{position}} is too long once personalized. Keep it under {{max}} characters and use less personalization.',
-  problemDelayRange: 'Email {{position}} must wait 0 to {{max}} days.',
   problemUnknownToken:
     'Remove personalization Macro can’t fill in: {{tokens}}.',
-  problemSenderRequired: 'Choose an inbox to send from.',
-  problemSenderUnavailable:
-    'The sequence’s sending inbox is disconnected or needs to be reconnected. Reconnect it or choose another inbox for the sequence.',
+  problemOverLimit: 'The sequence is over a size limit.',
+  problemStepOverLimit: 'Email {{position}} is too long.',
+  problemSenderUnavailable: 'Choose a connected Gmail inbox to send from.',
 };

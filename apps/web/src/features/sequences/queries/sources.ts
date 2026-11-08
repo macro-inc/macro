@@ -6,13 +6,11 @@ import type {
   ContactEnrollmentsSource,
   Enroller,
   EnrollmentCommands,
-  EnrollmentSource,
   SequenceListSource,
   SequenceSource,
 } from '../context/sequences-context';
 import {
   contactEnrollmentsQueryOptions,
-  enrollmentQueryOptions,
   sequenceQueryOptions,
   sequencesQueryOptions,
   toSequenceFailure,
@@ -39,7 +37,6 @@ export function createSequenceList(): SequenceListSource {
   const query = useQuery(() => sequencesQueryOptions());
   const create = useCreateSequenceMutation();
   return {
-    // Gated reads keep cached rows through a failed refetch (FE-48).
     sequences: () => (queryReadyGate(query) ? query.data : []),
     pending: () => query.isPending,
     failure: () => loadFailure(query),
@@ -62,21 +59,8 @@ export function createSequence(sequenceId: Accessor<string>): SequenceSource {
     refresh: () => query.refetch(),
     update: (request) =>
       outcome(update.mutateAsync({ sequenceId: sequenceId(), request })),
-    updating: () => update.isPending,
     remove: () => outcome(remove.mutateAsync(sequenceId())),
     removing: () => remove.isPending,
-  };
-}
-
-export function createEnrollment(
-  enrollmentId: Accessor<string>
-): EnrollmentSource {
-  const query = useQuery(() => enrollmentQueryOptions(enrollmentId()));
-  return {
-    detail: () => (queryReadyGate(query) ? query.data : undefined),
-    pending: () => query.isPending,
-    failed: () => query.isError && !queryReadyGate(query),
-    refresh: () => query.refetch(),
   };
 }
 
@@ -109,7 +93,6 @@ export function createContactEnrollments(
   const query = useQuery(() => contactEnrollmentsQueryOptions(crmContactId()));
   return {
     enrollments: () => (queryReadyGate(query) ? query.data : []),
-    pending: () => query.isPending,
     failure: () => loadFailure(query),
     refresh: () => query.refetch(),
   };

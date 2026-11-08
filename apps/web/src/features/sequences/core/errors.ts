@@ -16,9 +16,8 @@ export type SequenceFailure =
   | { kind: 'unavailable' };
 
 /**
- * Whether trying again can help. The server's typed refusals (no team, CRM
- * off, not found, …) are answers, not outages; only an internal error or no
- * answer at all is worth a retry.
+ * Whether trying again can help: a typed refusal is an answer, not an outage.
+ * Only an internal error or no answer at all is worth a retry.
  */
 export function isRetryable(failure: SequenceFailure) {
   return failure.kind === 'unavailable' || failure.code === 'internal';

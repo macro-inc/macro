@@ -1,10 +1,10 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import type {
   EnrollmentReason,
   EnrollmentStatus,
   SequenceStatus,
 } from '@service-email/generated/schemas';
-import { Badge, cn, Tooltip } from '@ui';
+import { Badge, cn } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -62,13 +62,7 @@ const REASON_LABEL = {
   replied: 'sequences.reasonReplied',
   bounced: 'sequences.reasonBounced',
   unsubscribed: 'sequences.reasonUnsubscribed',
-  access_lost: 'sequences.reasonAccessLost',
   contact_removed: 'sequences.reasonContactRemoved',
-  inbox_unavailable: 'sequences.reasonInboxUnavailable',
-  step_failed: 'sequences.reasonStepFailed',
-  step_withdrawn: 'sequences.reasonStepWithdrawn',
-  step_unknown: 'sequences.reasonStepUnknown',
-  step_stuck: 'sequences.reasonStepStuck',
 } as const satisfies Record<EnrollmentReason, string>;
 
 const REASON_DETAIL = {
@@ -76,20 +70,19 @@ const REASON_DETAIL = {
   replied: 'sequences.reasonRepliedDetail',
   bounced: 'sequences.reasonBouncedDetail',
   unsubscribed: 'sequences.reasonUnsubscribedDetail',
-  access_lost: 'sequences.reasonAccessLostDetail',
   contact_removed: 'sequences.reasonContactRemovedDetail',
-  inbox_unavailable: 'sequences.reasonInboxUnavailableDetail',
-  step_failed: 'sequences.reasonStepFailedDetail',
-  step_withdrawn: 'sequences.reasonStepWithdrawnDetail',
-  step_unknown: 'sequences.reasonStepUnknownDetail',
-  step_stuck: 'sequences.reasonStepStuckDetail',
 } as const satisfies Record<EnrollmentReason, string>;
 
-export function reasonDetail(reason: EnrollmentReason) {
-  return t(REASON_DETAIL[reason]);
+/** What the owner should know about an enrollment's status, if anything. */
+export function enrollmentDetail(
+  status: EnrollmentStatus,
+  reason: EnrollmentReason | null | undefined
+) {
+  if (status === 'needs_attention') return t('sequences.needsAttentionDetail');
+  return reason ? t(REASON_DETAIL[reason]) : undefined;
 }
 
-function EnrollmentBadge(props: {
+export function EnrollmentStatusBadge(props: {
   status: EnrollmentStatus;
   reason?: EnrollmentReason | null;
 }) {
@@ -115,21 +108,35 @@ function EnrollmentBadge(props: {
   );
 }
 
-/** An enrollment's status and why; the reason's explanation is its tooltip. */
-export function EnrollmentStatusBadge(props: {
-  status: EnrollmentStatus;
-  reason?: EnrollmentReason | null;
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(formatLocale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+/** When the last email went and, while sending, when the next one goes. */
+export function SendTimes(props: {
+  lastSentAt?: string | null;
+  nextSendAt?: string | null;
+  sending: boolean;
 }) {
   return (
-    <Show
-      when={props.reason}
-      fallback={<EnrollmentBadge status={props.status} />}
-    >
-      {(reason) => (
-        <Tooltip label={reasonDetail(reason())} as="span" tabIndex={0}>
-          <EnrollmentBadge status={props.status} reason={reason()} />
-        </Tooltip>
-      )}
-    </Show>
+    <>
+      <Show when={props.lastSentAt}>
+        {(sent) => (
+          <span>
+            {t('sequences.lastSent', { time: formatDateTime(sent()) })}
+          </span>
+        )}
+      </Show>
+      <Show when={props.sending && props.nextSendAt}>
+        {(next) => (
+          <span>
+            {t('sequences.nextSend', { time: formatDateTime(next()) })}
+          </span>
+        )}
+      </Show>
+    </>
   );
 }

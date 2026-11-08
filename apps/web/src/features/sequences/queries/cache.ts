@@ -1,6 +1,5 @@
 import type {
   EnrollmentAction,
-  EnrollmentDetail,
   EnrollmentSummary,
   Sequence,
   SequenceDetailResponse,
@@ -45,7 +44,7 @@ export function withoutSummary(
   return list?.filter((item) => item.id !== sequenceId);
 }
 
-/** A status toggled ahead of the server; the version stays the one it saw. */
+/** A status toggled ahead of the server. */
 export function withListStatus(
   list: SequenceSummary[] | undefined,
   sequenceId: string,
@@ -98,14 +97,6 @@ export function enrollmentSnapshot(
     (item) => item.id === enrollmentId
   );
   return enrollment && structuredClone(unwrap(enrollment));
-}
-
-/** An enrollment's frozen steps with its newer summary fields. */
-export function withEnrollmentSummary(
-  detail: EnrollmentDetail | undefined,
-  summary: EnrollmentSummary
-): EnrollmentDetail | undefined {
-  return detail && { ...detail, ...summary };
 }
 
 /**

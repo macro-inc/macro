@@ -14,70 +14,77 @@ const SEQUENCE: Sequence = {
   name: 'Intro',
   linkId: 'link',
   footer: '',
-  status: 'draft',
-  steps: [{ delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false }],
-  version: 3,
+  status: 'active',
+  steps: [
+    { id: 'a', delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
+  ],
   createdAt: '',
   updatedAt: '',
 };
 
-function setup(answer?: SequenceFailure) {
-  const [sequence] = createSignal<Sequence | undefined>(SEQUENCE);
-  const update = vi.fn(
-    async (
-      request: UpdateSequenceRequest
-    ): Promise<Result<Sequence, SequenceFailure>> =>
-      answer ? err(answer) : ok({ ...SEQUENCE, version: request.version + 1 })
-  );
-  return {
-    draft: createRoot(() => createSequenceDraft({ sequence, update })),
-    update,
-  };
+type Update = (
+  request: UpdateSequenceRequest
+) => Promise<Result<Sequence, SequenceFailure>>;
+
+/** Like the update mutation, a saved sequence reaches the cache before the save resolves. */
+function setup(
+  answer: Update = async (request) =>
+    ok({ ...SEQUENCE, ...request } as Sequence)
+) {
+  const [sequence, setSequence] = createSignal<Sequence | undefined>(SEQUENCE);
+  const update = vi.fn<Update>(async (request) => {
+    const result = await answer(request);
+    if (result.isOk()) setSequence(result.value);
+    return result;
+  });
+  let dispose!: () => void;
+  const draft = createRoot((disposeRoot) => {
+    dispose = disposeRoot;
+    return createSequenceDraft({ sequence, update });
+  });
+  return { draft, update, dispose };
 }
 
 describe('createSequenceDraft', () => {
-  it('keeps its version when a refetch updates the cached sequence in place', async () => {
+  it('sends only its own changes when the cached sequence changes in place', async () => {
     // Solid Query keeps data in a store and reconciles refetches into it by id.
     const [query, setQuery] = createStore<{ data?: Sequence }>({
       data: structuredClone(SEQUENCE),
     });
-    const update = vi.fn(
-      async (
-        request: UpdateSequenceRequest
-      ): Promise<Result<Sequence, SequenceFailure>> =>
-        ok({ ...SEQUENCE, version: request.version + 1 })
-    );
+    const update = vi.fn<Update>(async () => ok(SEQUENCE));
     const draft = createRoot(() =>
       createSequenceDraft({ sequence: () => query.data, update })
     );
-    const before = query.data;
     draft.change({ ...draft.draft()!, footer: 'Acme' });
-
     setQuery(
       'data',
-      reconcile(
-        { ...SEQUENCE, name: 'Changed elsewhere', version: 4 },
-        { key: 'id' }
-      )
+      reconcile({ ...SEQUENCE, name: 'Changed elsewhere' }, { key: 'id' })
     );
-    expect(query.data).toBe(before);
-    expect(query.data?.version).toBe(4);
 
     expect(await draft.save()).toBe(true);
-    expect(update).toHaveBeenCalledWith({ version: 3, footer: 'Acme' });
+    expect(update).toHaveBeenCalledWith({ footer: 'Acme' });
   });
 
-  it('keeps the edits and reports a conflict when the sequence changed elsewhere', async () => {
-    const { draft } = setup({ kind: 'refused', code: 'version_conflict' });
-    draft.change({ ...draft.draft()!, name: 'Mine' });
+  it('keeps a refused draft and its problem, and does not resend it on leaving', async () => {
+    const refusal: SequenceFailure = {
+      kind: 'refused',
+      code: 'invalid_sequence',
+      problem: 'subject_required',
+      position: 1,
+    };
+    const { draft, update, dispose } = setup(async () => err(refusal));
+    const emptied = draft.draft()!.steps.map((step) => ({
+      ...step,
+      subject: '',
+    }));
+    draft.change({ ...draft.draft()!, steps: emptied });
 
     expect(await draft.save()).toBe(false);
-    expect(draft.conflict()).toBe(true);
-    expect(draft.draft()?.name).toBe('Mine');
+    expect(draft.failure()).toEqual(refusal);
+    expect(draft.draft()?.steps[0]?.subject).toBe('');
 
-    draft.discard();
-    expect(draft.conflict()).toBe(false);
-    expect(draft.draft()?.name).toBe('Intro');
+    dispose();
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   describe('autosave', () => {
@@ -96,50 +103,30 @@ describe('createSequenceDraft', () => {
       await vi.advanceTimersByTimeAsync(1);
 
       expect(update).toHaveBeenCalledTimes(1);
-      expect(update).toHaveBeenCalledWith({
-        version: 3,
-        name: 'Intro to Macro',
-      });
+      expect(update).toHaveBeenCalledWith({ name: 'Intro to Macro' });
     });
 
-    it('keeps edits made during a save and sends them over the new version', async () => {
+    it('sends edits made during a save next, over what that save stored', async () => {
       vi.useFakeTimers();
-      // Like the query cache, the source takes each saved sequence.
-      const [sequence, setSequence] = createSignal<Sequence | undefined>(
-        SEQUENCE
-      );
-      const saved = (next: Sequence) => {
-        setSequence(next);
-        return ok<Sequence, SequenceFailure>(next);
-      };
-      let finishFirst!: (result: Result<Sequence, SequenceFailure>) => void;
-      const update = vi
-        .fn<
-          (
-            request: UpdateSequenceRequest
-          ) => Promise<Result<Sequence, SequenceFailure>>
-        >()
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              finishFirst = resolve;
-            })
-        )
-        .mockImplementation(async (request) =>
-          saved({ ...SEQUENCE, footer: 'AB', version: request.version + 1 })
-        );
-      const draft = createRoot(() => createSequenceDraft({ sequence, update }));
+      let finishFirst!: () => void;
+      const { draft, update } = setup(async (request) => {
+        if (request.footer === 'A')
+          await new Promise<void>((resolve) => {
+            finishFirst = resolve;
+          });
+        return ok({ ...SEQUENCE, ...request } as Sequence);
+      });
 
       draft.change({ ...draft.draft()!, footer: 'A' });
       await vi.advanceTimersByTimeAsync(800);
-      expect(update).toHaveBeenCalledWith({ version: 3, footer: 'A' });
+      expect(update).toHaveBeenCalledWith({ footer: 'A' });
 
       draft.change({ ...draft.draft()!, footer: 'AB' });
-      finishFirst(saved({ ...SEQUENCE, footer: 'A', version: 4 }));
+      finishFirst();
       await vi.advanceTimersByTimeAsync(800);
 
       expect(update).toHaveBeenCalledTimes(2);
-      expect(update).toHaveBeenLastCalledWith({ version: 4, footer: 'AB' });
+      expect(update).toHaveBeenLastCalledWith({ footer: 'AB' });
       expect(draft.draft()?.footer).toBe('AB');
     });
   });

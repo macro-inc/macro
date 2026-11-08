@@ -1,9 +1,6 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type {
-  Sequence,
-  SequenceStatus,
-} from '@service-email/generated/schemas';
+import type { SequenceStatus } from '@service-email/generated/schemas';
 import { createSignal, onCleanup } from 'solid-js';
 import type { SequenceSource } from '../context/sequences-context';
 import type { SequenceFailure } from '../core/errors';
@@ -12,23 +9,14 @@ import { draftChanges, type SequenceDraft, toDraft } from '../core/sequence';
 const SURFACE = 'sequences.autosave';
 const AUTOSAVE_DELAY_MS = 800;
 
-/** The saved sequence an edit started from, copied out of the query store. */
-type Base = { version: number; saved: SequenceDraft };
-type Edit = Base & { draft: SequenceDraft };
+type Edit = { saved: SequenceDraft; draft: SequenceDraft };
 
 /**
- * A plain copy: the query store updates the sequence in place on a refetch, so
- * a live reference would carry the newer version into the edit.
- */
-function snapshot(sequence: Sequence | undefined): Base | undefined {
-  return sequence && { version: sequence.version, saved: toDraft(sequence) };
-}
-
-/**
- * Local edits over the copy they started from, saved shortly after each
- * change. A save sends only what changed, with that copy's version, so a
- * sequence changed elsewhere is refused instead of overwritten. Saves run one
- * at a time; edits made while one is in flight are sent next.
+ * Local edits over the saved copy they started from, saved shortly after each
+ * change. A save sends only the fields that changed, so it keeps a field
+ * changed elsewhere since. Saves run one at a time; edits made while one is
+ * in flight are sent next. A refused save keeps the edits and its failure
+ * until the next change.
  */
 export function createSequenceDraft(
   source: Pick<SequenceSource, 'sequence' | 'update'>
@@ -37,23 +25,23 @@ export function createSequenceDraft(
   const [failure, setFailure] = createSignal<SequenceFailure>();
   const [saving, setSaving] = createSignal(false);
   let inFlight: Promise<boolean> | undefined;
-  const draft = (): SequenceDraft | undefined => {
+  const saved = () => {
     const current = edit();
-    if (current) return current.draft;
+    if (current) return current.saved;
     const sequence = source.sequence();
     return sequence && toDraft(sequence);
   };
+  const draft = () => edit()?.draft ?? saved();
 
   async function send(status?: SequenceStatus) {
-    const base = edit() ?? snapshot(source.sequence());
+    const base = saved();
     const sent = draft();
     if (!base || !sent) return false;
-    const changes = draftChanges(base.saved, sent);
+    const changes = draftChanges(base, sent);
     if (!changes && !status) return true;
     setFailure(undefined);
     setSaving(true);
     const result = await source.update({
-      version: base.version,
       ...changes,
       ...(status && { status }),
     });
@@ -62,11 +50,11 @@ export function createSequenceDraft(
       setFailure(result.error);
       return false;
     }
-    const saved = toDraft(result.value);
+    const next = toDraft(result.value);
     const current = edit()?.draft;
     setEdit(
-      current && draftChanges(saved, current)
-        ? { version: result.value.version, saved, draft: current }
+      current && draftChanges(next, current)
+        ? { saved: next, draft: current }
         : undefined
     );
     return true;
@@ -88,39 +76,22 @@ export function createSequenceDraft(
     () => fireAndForget(save(), SURFACE),
     AUTOSAVE_DELAY_MS
   );
-  // Leaving the editor saves what is left instead of dropping it.
+  // Leaving the editor saves what is left; a refused draft would be refused again.
   onCleanup(() => {
     autosave.clear();
-    if (edit() && !failure()) fireAndForget(save(), SURFACE);
+    if (edit() && failure()?.kind !== 'refused') fireAndForget(save(), SURFACE);
   });
 
   // An edit undone back to the saved copy is no edit.
   const change = (next: SequenceDraft) => {
     setFailure(undefined);
-    setEdit((current) => {
-      const base = current ?? snapshot(source.sequence());
-      return base && draftChanges(base.saved, next)
-        ? { version: base.version, saved: base.saved, draft: next }
-        : undefined;
-    });
+    const base = saved();
+    setEdit(
+      base && draftChanges(base, next)
+        ? { saved: base, draft: next }
+        : undefined
+    );
     autosave();
   };
-  const discard = () => {
-    autosave.clear();
-    setEdit(undefined);
-    setFailure(undefined);
-  };
-  return {
-    draft,
-    change,
-    discard,
-    save,
-    saving,
-    failure,
-    /** The sequence changed elsewhere since these edits began. */
-    conflict: () => {
-      const current = failure();
-      return current?.kind === 'refused' && current.code === 'version_conflict';
-    },
-  };
+  return { draft, change, save, saving, failure };
 }

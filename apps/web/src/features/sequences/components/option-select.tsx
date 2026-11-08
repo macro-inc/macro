@@ -14,7 +14,6 @@ export function OptionSelect<T extends string>(props: {
   value: T | undefined;
   options: SelectOption<T>[];
   placeholder?: string;
-  disabled?: boolean;
   /** Labels are personal data (contacts, inboxes): keep them out of session replay. */
   personal?: boolean;
   onChange: (value: T) => void;
@@ -29,7 +28,6 @@ export function OptionSelect<T extends string>(props: {
       optionTextValue="label"
       optionDisabled="disabled"
       placeholder={props.placeholder}
-      disabled={props.disabled}
       onChange={(option) => option && props.onChange(option.value)}
     >
       <Select.Trigger
