@@ -8,6 +8,48 @@ const node = createRequire(import.meta.url)(
   '../pkg/node/lexical_conformance_wasm.js'
 ) as typeof import('../pkg/node/lexical_conformance_wasm');
 
+test('indexed inputs count normalized numbers and copied prefixes of failed conversion', () => {
+  const editor = new node.EditorHandle({
+    namespace: 'input accounting',
+    nodes: [],
+  });
+  const get = node.EditorHandle.api_index().indexOf('lexical.$getNodeByKey');
+  try {
+    editor.begin_update([], false);
+    node.debug_reset_counters();
+    expect(editor.call(get, { args: [NaN] })).toBeNull();
+    // Receiver + id, args key, copied f64 (even though JSON becomes null), observer.
+    expect(node.debug_boundary_bytes()).toBe(32);
+
+    node.debug_reset_counters();
+    let during = 0;
+    const args = ['é😀', new Uint8Array([1, 2, 3])];
+    Object.defineProperty(args, 1, {
+      get() {
+        during = node.debug_boundary_bytes();
+        return new Uint8Array([1, 2, 3]);
+      },
+    });
+    let error: unknown;
+    try {
+      editor.call(get, { args });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    if (!(error instanceof Error)) throw new Error('expected input error');
+    expect(error.message).toContain('byte array');
+    // The earlier key/string bytes are observable before the failing value arrives.
+    expect(during).toBe(30);
+    // Both observers, the rejected three copied bytes, and the returned diagnostic count.
+    expect(node.debug_boundary_bytes()).toBe(41 + error.message.length * 2);
+    expect(editor.call(get, { args: [] })).toBeNull();
+    editor.discard_update();
+  } finally {
+    editor.free();
+  }
+});
+
 test('Node crossing observations include their own entry and reset starts a new interval', () => {
   node.debug_reset_counters();
   expect(node.debug_crossings()).toBe(1);

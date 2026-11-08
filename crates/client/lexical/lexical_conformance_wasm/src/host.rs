@@ -78,9 +78,11 @@ impl EditorHandle {
 }
 
 pub(super) fn from_js(value: JsValue) -> Result<Value, JsError> {
-    let value = serde_wasm_bindgen::from_value(value).map_err(debug::error)?;
-    debug::json_payload(&value);
-    Ok(value)
+    super::host_input::value(
+        serde_wasm_bindgen::Deserializer::from(value),
+        &debug::add_bytes,
+    )
+    .map_err(debug::error)
 }
 pub(super) fn to_js(value: Value) -> Result<JsValue, JsError> {
     let result = serde::Serialize::serialize(
