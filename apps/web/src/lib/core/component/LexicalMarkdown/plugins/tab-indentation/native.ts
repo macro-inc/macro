@@ -1,25 +1,16 @@
-import {
-  createViewCommand,
-  type EditorView,
-} from '@macro-inc/lexical-wasm-view';
-import { dispatchApplicationCommand } from '../group-b/command';
+import type { EditorView } from '@macro-inc/lexical-wasm-view';
 
-const TAB = createViewCommand(
-  'Key(Tab)',
-  (value): value is KeyboardEvent => value instanceof KeyboardEvent
-);
-
-/** Native list, table and code handlers decide indentation in one admission. */
+/** Route only the owned key; native listeners resolve all command priorities. */
 export function registerNativeTabIndentation(view: EditorView): () => void {
-  return view.registerViewCommand(
-    TAB,
-    (event) => {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing)
-        return false;
-      return (
-        dispatchApplicationCommand(view, 'group-b.key', null, event) !== false
-      );
-    },
-    4
-  );
+  return view.registerKeyRoute((event) => {
+    if (
+      event.key !== 'Tab' ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.isComposing
+    )
+      return null;
+    return { name: 'group-b.key', json: 'null' };
+  });
 }

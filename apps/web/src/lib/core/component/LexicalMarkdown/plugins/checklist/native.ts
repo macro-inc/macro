@@ -1,10 +1,5 @@
-import { createViewCommand, EditorView } from '@macro-inc/lexical-wasm-view';
+import { EditorView } from '@macro-inc/lexical-wasm-view';
 import { dispatchApplicationCommand } from '../group-b/command';
-
-const ENTER = createViewCommand(
-  'Key(Enter)',
-  (value): value is KeyboardEvent => value instanceof KeyboardEvent
-);
 
 export function registerNativeChecklist(view: EditorView): () => void {
   let downX = 0,
@@ -63,21 +58,21 @@ export function registerNativeChecklist(view: EditorView): () => void {
       if (mutation !== 'destroyed') fixTabIndex(key);
     }
   });
-  const releaseEnter = view.registerViewCommand(
-    ENTER,
-    (event) => {
-      const command =
-        navigator.platform.startsWith('Mac') ||
-        navigator.userAgent.includes('Mac')
-          ? event.metaKey
-          : event.ctrlKey;
-      if (!command || event.shiftKey || event.isComposing) return false;
-      return (
-        dispatchApplicationCommand(view, 'group-b.key', null, event) !== false
-      );
-    },
-    3
-  );
+  const releaseEnter = view.registerKeyRoute((event) => {
+    const command =
+      navigator.platform.startsWith('Mac') ||
+      navigator.userAgent.includes('Mac')
+        ? event.metaKey
+        : event.ctrlKey;
+    if (
+      event.key !== 'Enter' ||
+      !command ||
+      event.shiftKey ||
+      event.isComposing
+    )
+      return null;
+    return { name: 'group-b.key', json: 'null' };
+  });
   view.root.addEventListener('pointerdown', down);
   view.root.addEventListener('click', click);
   return () => {
