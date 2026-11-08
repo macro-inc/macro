@@ -34,6 +34,7 @@ use serde_json::json;
 use super::cli::{InstanceArgs, RunArgs};
 use super::instance::Instance;
 use super::stage::Stage;
+use super::telemetry::{DETACHED_FINISH_WAIT, RunKind, RunTelemetry};
 use super::{BringUp, Mode, Start, frontend, kafka, stack, summary};
 
 #[cfg(test)]
@@ -225,6 +226,8 @@ pub struct Job {
     path: PathBuf,
     record: Mutex<JobRecord>,
     lock: Mutex<Option<File>>,
+    /// `None` unless the user opted in to local telemetry.
+    telemetry: Mutex<Option<RunTelemetry>>,
 }
 
 impl Job {
@@ -242,10 +245,15 @@ impl Job {
             .filter(|r| r.kind == kind && r.status == JobStatus::Running && r.pid.is_none())
             .unwrap_or_else(|| JobRecord::new(kind, None));
         record.pid = Some(std::process::id());
+        // A detached run started when its foreground wrote the record.
+        let started_at = UNIX_EPOCH + Duration::from_secs(record.started_at);
+        let telemetry =
+            RunTelemetry::begin(instance, kind.into(), started_at, record.log.is_some());
         let job = Arc::new(Self {
             path: job_path(instance),
             record: Mutex::new(record),
             lock: Mutex::new(Some(lock)),
+            telemetry: Mutex::new(telemetry),
         });
         job.save();
         Ok(job)
@@ -258,11 +266,33 @@ impl Job {
     pub(super) fn step_started(&self, label: &str) {
         self.record().step_started(label);
         self.save();
+        self.with_telemetry(|telemetry| telemetry.step_started(label));
     }
 
     pub(super) fn step_failed(&self, label: &str) {
         self.record().step_failed(label);
         self.save();
+    }
+
+    pub(super) fn step_finished(&self, label: &str, elapsed: Duration, succeeded: bool) {
+        self.with_telemetry(|telemetry| telemetry.step_finished(label, elapsed, succeeded));
+    }
+
+    /// A finished command step's captured output, for the build's unit counts.
+    pub(super) fn step_output(&self, label: &str, output: &[u8]) {
+        self.with_telemetry(|telemetry| telemetry.step_output(label, output));
+    }
+
+    /// The bring-up's shape, for telemetry.
+    pub(super) fn bring_up(&self, mode: Mode, plan: &BringUp) {
+        self.with_telemetry(|telemetry| telemetry.bring_up(mode, plan));
+    }
+
+    fn with_telemetry(&self, hook: impl FnOnce(&RunTelemetry)) {
+        let telemetry = self.telemetry.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(telemetry) = telemetry.as_ref() {
+            hook(telemetry);
+        }
     }
 
     fn set_reloaded(&self, reloaded: Vec<String>) {
@@ -289,6 +319,25 @@ impl Job {
         // A background stage thread can outlive this call, so release the lock
         // explicitly instead of when the last handle drops.
         *self.lock.lock().unwrap_or_else(PoisonError::into_inner) = None;
+
+        // After the record is saved, so a waiting foreground has already returned.
+        let telemetry = self
+            .telemetry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(telemetry) = telemetry {
+            let (detached, failed_step) = {
+                let record = self.record();
+                (record.log.is_some(), record.failed_step.clone())
+            };
+            let wait = if detached {
+                DETACHED_FINISH_WAIT
+            } else {
+                Duration::ZERO
+            };
+            telemetry.finish(result.is_ok(), failed_step.as_deref(), wait);
+        }
         result
     }
 
@@ -705,7 +754,12 @@ pub fn run_action(action: &RunAction) -> Result<()> {
         RunAction::Logs(args) => logs(args),
         RunAction::Rebuild(args) if args.supervise => supervise_rebuild(args),
         RunAction::Rebuild(args) => rebuild(args),
-        RunAction::RestartFrontend(args) => restart_frontend(&instance_of(args)?),
+        RunAction::RestartFrontend(args) => {
+            let instance = instance_of(args)?;
+            RunTelemetry::action(&instance, RunKind::RestartFrontend, || {
+                restart_frontend(&instance)
+            })
+        }
         RunAction::Stop(args) => super::stop(args),
     }
 }

@@ -276,15 +276,14 @@ impl Recorder {
         }));
     }
 
-    /// Close the run with its `run` event, lasting from its start until now, and
-    /// send what is buffered. Waits at most `wait` for the send: whatever isn't
-    /// delivered by then stays buffered, and a later run sends it.
-    pub fn finish(self, fields: BTreeMap<String, Value>, wait: Duration) {
-        let now = SystemTime::now();
+    /// Close the run with its `run` event, lasting from its start until `ended`,
+    /// and send what is buffered. Waits at most `wait` for the send: whatever
+    /// isn't delivered by then stays buffered, and a later run sends it.
+    pub fn finish(self, fields: BTreeMap<String, Value>, ended: SystemTime, wait: Duration) {
         let started = UNIX_EPOCH + Duration::from_nanos(self.shared.begin.started_ns);
         let mut event = Event::new(RUN_EVENT)
-            .at(now)
-            .lasting(RUN_EVENT, now.duration_since(started).unwrap_or_default());
+            .at(ended)
+            .lasting(RUN_EVENT, ended.duration_since(started).unwrap_or_default());
         event.fields = fields;
         self.record(event);
         self.shared.notify(true);

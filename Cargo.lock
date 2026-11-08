@@ -23311,6 +23311,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "bollard",
+ "chrono",
  "clap",
  "console 0.15.11",
  "docker-compose-types",
@@ -23332,6 +23333,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "xtask_local_telemetry",
  "xtask_paths",
  "xtask_ports",
 ]

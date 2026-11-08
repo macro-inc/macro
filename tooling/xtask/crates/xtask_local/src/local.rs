@@ -50,6 +50,7 @@ pub mod staleness;
 pub mod status;
 pub mod summary;
 pub mod supervisor;
+mod telemetry;
 pub mod tls;
 pub mod validate;
 
@@ -249,6 +250,9 @@ pub(crate) fn bring_up(
 ) -> Result<StackUp> {
     if !stage.is_dry_run() {
         stack::clear_state(instance)?;
+    }
+    if let Some(job) = stage.job() {
+        job.bring_up(mode, plan);
     }
 
     // Before `prepare` (which resolves env and reads the OTLP port to decide
@@ -866,22 +870,28 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(
-                    stage,
-                    mode,
-                    instance,
-                    env,
-                    target,
-                    build_aux_services,
-                    None,
-                );
+                let _ = telemetry::RunTelemetry::action(instance, telemetry::RunKind::Rebuild, || {
+                    rebuild_and_reload(
+                        stage,
+                        mode,
+                        instance,
+                        env,
+                        target,
+                        build_aux_services,
+                        None,
+                    )
+                });
                 print_hotkeys(stage);
             }
             Ok(Key::Char('f' | 'F')) => {
                 let _ = term.clear_last_lines(1);
                 // A failed restart returns with captured output and leaves the
                 // backend containers running, like an unexpected frontend exit.
-                fe.restart(stage)?;
+                telemetry::RunTelemetry::action(
+                    instance,
+                    telemetry::RunKind::RestartFrontend,
+                    || fe.restart(stage),
+                )?;
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {
@@ -1672,11 +1682,13 @@ pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
 pub fn stop(args: &cli::InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
     let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
-    supervisor::stop_processes(&instance);
-    sdk_webhook::stop(&instance);
-    let mut cmd = Command::new("docker");
-    cmd.args(["compose", "-p", instance.project_name(), "stop"]);
-    stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)
+    telemetry::RunTelemetry::action(&instance, telemetry::RunKind::Stop, || {
+        supervisor::stop_processes(&instance);
+        sdk_webhook::stop(&instance);
+        let mut cmd = Command::new("docker");
+        cmd.args(["compose", "-p", instance.project_name(), "stop"]);
+        stage.run(&format!("Stopping {}", instance.project_name()), &mut cmd)
+    })
 }
 
 /// `cargo x reset-local` — drop, recreate, and migrate the instance DB.

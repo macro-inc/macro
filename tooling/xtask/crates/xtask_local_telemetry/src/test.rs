@@ -157,6 +157,7 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
             ("outcome".to_owned(), json!("success")),
             ("ready_seconds".to_owned(), json!(3.25)),
         ]),
+        SystemTime::now(),
         Duration::from_secs(20),
     );
 
@@ -272,7 +273,7 @@ fn a_killed_run_is_sent_by_the_next_one() {
     let next = Recorder::start(&paths, SystemTime::now(), common())
         .expect("start")
         .expect("opted in");
-    next.finish(BTreeMap::new(), Duration::from_secs(20));
+    next.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     let records = endpoint.log_records();
     let killed: Vec<BTreeMap<String, Value>> = records
@@ -308,7 +309,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     for index in 0..50 {
         recorder.record(Event::new("step").with("step", format!("step {index}")));
     }
-    recorder.finish(BTreeMap::new(), Duration::ZERO);
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::ZERO);
     assert!(
         began.elapsed() < Duration::from_secs(1),
         "recording took {:?}",
@@ -319,7 +320,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let second = Recorder::start(&paths, SystemTime::now(), common())
         .expect("start")
         .expect("opted in");
-    second.finish(BTreeMap::new(), Duration::from_millis(300));
+    second.finish(BTreeMap::new(), SystemTime::now(), Duration::from_millis(300));
     assert!(
         bounded.elapsed() < Duration::from_secs(2),
         "a bounded finish took {:?}",
@@ -339,7 +340,7 @@ fn an_unreachable_endpoint_keeps_the_events_for_later() {
         .expect("start")
         .expect("opted in");
     recorder.record(Event::new("step").with("step", "Running migrations"));
-    recorder.finish(BTreeMap::new(), Duration::from_secs(20));
+    recorder.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
 
     assert_eq!(buffered_files(&paths).len(), 1);
 }
