@@ -152,3 +152,8 @@ Rotated local peer ranges come from update metadata, never imported VV growth.
 This direct source AI host has no browser movement/undo binding; native stories
 own those paths. Browser reconcile, faults/reconnect and cross-account editor
 interop remain outside this literal.
+
+`editor_cursor`: literal seed1 headless model cursor across a remote astral prefix
+insertion. Keep the actual original character cursor identity, strict projection,
+all invariants and twice-exact replay. Session repair uses a private model command;
+the core headless view-input guard remains intact.
