@@ -6,7 +6,6 @@ import {
   clearIncludes,
   parseInboxFilters,
   rowTypesFor,
-  statusIncludes,
 } from './inbox-filters';
 
 describe('rowTypesFor', () => {
@@ -26,17 +25,6 @@ describe('rowTypesFor', () => {
     expect(types).not.toContain('calendar_event');
     expect(types).not.toContain('calendar_join_request');
     expect(types).toContain('channel_thread');
-  });
-});
-
-describe('statusIncludes', () => {
-  it('narrows to unread rows', () => {
-    expect(
-      [true, false].filter((unseen) => statusIncludes('unread', unseen))
-    ).toEqual([true]);
-    expect(
-      [true, false].filter((unseen) => statusIncludes('all', unseen))
-    ).toEqual([true, false]);
   });
 });
 

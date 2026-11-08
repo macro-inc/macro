@@ -5,6 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { RunInfoCodeActsAs } from './runInfoCodeActsAs';
 import type { RunInfoPreviousAt } from './runInfoPreviousAt';
 import type { RunInfoTimezone } from './runInfoTimezone';
 import type { RunStart } from './runStart';
@@ -16,6 +17,7 @@ happening, and since when.
 export interface RunInfo {
   /** When the run counts as happening: its trigger's time. */
   at: string;
+  code_acts_as?: RunInfoCodeActsAs;
   /** When the routine's previous finished run started. */
   previous_at?: RunInfoPreviousAt;
   /** What started it. */

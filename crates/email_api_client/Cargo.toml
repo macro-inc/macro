@@ -14,7 +14,6 @@ outbound-gmail = [
   "dep:gmail_client",
   "dep:html-escape",
   "dep:http",
-  "dep:lol_html",
   "dep:mailparse",
   "dep:serde_json",
 ]
@@ -35,7 +34,6 @@ gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
-lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
 mailparse = { version = "0.16.1", optional = true }
 models_email = { path = "../models_email" }

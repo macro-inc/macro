@@ -21,7 +21,7 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// message paths set both to the message's `internal_date_ts` (with
 /// `Utc::now()` fallback at the producer when Gmail returned none).
 /// The historical seed aggregates MIN/MAX per contact in SQL.
-#[tracing::instrument(skip(ctx), err, fields(contact_email = %p.contact_email, link_id = %link.id))]
+#[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
 pub async fn populate_crm_contact(
     ctx: &PubSubContext,
     link: &link::Link,

@@ -14,6 +14,7 @@ mod test;
 
 /// What a routine does each time it runs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RoutineProgram {
     /// Steps run in order. A failed step stops the run.
@@ -32,10 +33,34 @@ pub struct RoutineProgram {
     /// before running them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sdk: Option<SdkFingerprint>,
+    /// Code steps write as the owner, with no agent badge: their posts,
+    /// comments and emails appear written by the owner. Set only when the
+    /// owner explicitly asked for the routine to act or send as them; by
+    /// default code steps' writes are attributed to Macro's agent acting for
+    /// the owner. Agent ("Ask AI") steps keep their own agent attribution
+    /// either way: an agent session speaking as a person is a different
+    /// change. A single agent task has no code steps, so it never applies.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dangerously_operate_as_user: bool,
+}
+
+/// Who a routine's code steps write as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CodeIdentity {
+    /// Macro's agent acting for the owner, with the owner's access: writes
+    /// show as the agent's, from the owner.
+    #[default]
+    Agent,
+    /// The owner: writes show as theirs, with no agent badge.
+    Owner,
 }
 
 /// One step of a routine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineStep))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
     /// Run TypeScript against Macro's SDK, as the routine owner.
@@ -48,6 +73,7 @@ pub enum Step {
 /// routine. It is type-checked before it is saved and runs with its owner's
 /// access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CodeStep {
     /// Names this step's output for later steps: `steps.<id>` in later code.
@@ -91,6 +117,7 @@ impl CodeStep {
 /// Identifies the SDK API code was type-checked against: its version and a
 /// hash of its declarations, e.g. `0.2.2+18cc1c19c35c`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(try_from = "String", into = "String")]
 pub struct SdkFingerprint(pub(crate) String);
 
@@ -132,6 +159,7 @@ pub struct BlankFingerprint;
 /// Names a step's output: a lowercase letter, then up to 31 lowercase
 /// letters, digits or underscores.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(try_from = "String", into = "String")]
 pub struct StepId(String);
 
@@ -179,6 +207,7 @@ pub struct InvalidStepId(String);
 
 /// Hand the run to a model running as Macro, or to an agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
 pub struct AgentStep {
     /// Required when no agent is selected; otherwise overrides the agent's default model.
@@ -259,6 +288,18 @@ pub struct AgentTask {
     pub user_prompt: String,
 }
 
+/// A stored task's two forms, as the scheduler's API describes `task`:
+/// [`RoutineProgram::from_task`] reads them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum RoutineTask {
+    /// Steps, run in order.
+    Program(RoutineProgram),
+    /// A routine that is only an agent.
+    Agent(AgentTask),
+}
+
 /// A stored task that is neither a program nor a pre-program agent task.
 #[derive(Debug, thiserror::Error)]
 #[error("invalid routine task: {0}")]
@@ -272,6 +313,7 @@ impl RoutineProgram {
             mcp_servers: Vec::new(),
             single_agent_task: false,
             sdk: None,
+            dangerously_operate_as_user: false,
         }
     }
 
@@ -295,7 +337,17 @@ impl RoutineProgram {
             mcp_servers: legacy.mcp_servers,
             single_agent_task: true,
             sdk: None,
+            dangerously_operate_as_user: false,
         })
+    }
+
+    /// Who its code steps write as.
+    pub fn code_identity(&self) -> CodeIdentity {
+        if self.dangerously_operate_as_user {
+            CodeIdentity::Owner
+        } else {
+            CodeIdentity::Agent
+        }
     }
 
     /// Every code step, mutably, in program order.

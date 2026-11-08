@@ -183,7 +183,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         assert!(!prompt.contains(name), "{name}");
     }
     assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
-    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
         !tools_for(AiHost::AgentSession)
@@ -235,6 +235,32 @@ fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
         );
     }
     assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
+}
+
+#[test]
+fn code_mode_reads_and_edits_office_and_design_files_through_the_sdk() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ReadPresentation",
+        "EditPresentation",
+        "ReadWordDocument",
+        "EditWordDocument",
+        "ReadDesign",
+        "ReadPhotoshopDocument",
+        "ReadIllustratorDocument",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(
+        tools_for(AiHost::AgentSession)
+            .toolset
+            .tools
+            .contains_key("EditPresentation")
+    );
 }
 
 #[test]
@@ -737,6 +763,30 @@ fn booking_management_has_mcp_and_chat_parity() {
 }
 
 #[test]
+fn code_mode_manages_booking_links_through_the_sdk_instead_of_the_tools() {
+    let standard = tools_for(AiHost::AgentSession);
+    let direct = tools_for_agent_code_mode();
+    for name in [
+        "ReadBookingSettings",
+        "UpdateBookingSettings",
+        "ListBookings",
+        "GetBookingInsights",
+        "GetBookingRescheduleSlots",
+        "ChangeBooking",
+        "ListBookingLinks",
+        "CreateBookingLink",
+        "EditBookingLink",
+    ] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !direct.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery() {
     let standard = tools_for(AiHost::AgentSession);
     let direct = tools_for_agent_code_mode();
@@ -751,6 +801,15 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadCanvas",
+        "EditCanvas",
+        "ApplyCanvasEdits",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -759,17 +818,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
-        "GenerateImage",
-        "CreateRoutine",
-        "EditSpreadsheet",
-        "ReadCanvas",
         "RenderCanvas",
-        "ApplyCanvasEdits",
-        "EditCanvas",
-        "EditPresentation",
         "Subagent",
         "SearchTools",
         "LoadTools",
@@ -838,14 +887,45 @@ fn session_reader_is_available_to_every_conversation_host_and_mcp() {
         );
     }
     assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+}
+
+#[test]
+fn code_mode_hides_tools_the_sdk_replaces() {
+    let standard = tools_for(AiHost::AgentSession);
     let code_mode = tools_for_agent_code_mode();
-    assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
-    assert!(
-        !code_mode
-            .deferred
-            .iter()
-            .any(|tool| tool.name == "ReadAgentSession")
-    );
+    let prompt = code_mode.prompt.to_string();
+    for name in [
+        "ReadAgentSession",
+        "ManageAgentSession",
+        "ReadAgentSessionSharing",
+        "UpdateAgentSessionSharing",
+        "ListDatabases",
+        "DescribeDatabase",
+        "QueryDatabase",
+        "SaveDatabaseView",
+        "DeleteDatabaseView",
+        "CreateRoutine",
+        "ListRoutines",
+        "ReadRoutine",
+        "UpdateRoutine",
+        "RunRoutine",
+        "DeleteRoutine",
+        "ReadCalendarEvent",
+        "AddSharedCalendarEvent",
+        "GenerateImage",
+        "DuplicateItem",
+        "RenameItem",
+    ] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !code_mode.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(prompt.contains("macro.agentSessions.byId()"));
+    assert!(!code_mode.toolset.tools.contains_key("ReadChat"));
+    assert!(!prompt.contains("ReadChat"));
 }
 
 #[test]
@@ -855,7 +935,6 @@ fn conversation_tools_only_advertise_new_sessions() {
         tools_for(AiHost::AgentSession),
         tools_for(AiHost::ChannelBot),
         tools_for(AiHost::Mcp),
-        tools_for_agent_code_mode(),
     ] {
         assert!(!tools.toolset.tools.contains_key("ReadChat"));
         assert!(!tools.prompt.to_string().contains("ReadChat"));

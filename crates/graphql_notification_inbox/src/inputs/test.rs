@@ -30,12 +30,46 @@ fn scope_input_maps_row_types() {
             GraphqlNotificationInboxRowType::Agent,
             GraphqlNotificationInboxRowType::ChannelThread,
         ]),
+        unread_only: None,
     }
     .into_scope();
     assert_eq!(
         scope.row_types,
         vec![InboxRowType::Agent, InboxRowType::ChannelThread]
     );
+    assert!(!scope.unread_only);
+}
+
+#[test]
+fn scope_input_carries_unread_only_into_pages_and_clears() {
+    let unread = || NotificationInboxScopeInput {
+        row_types: None,
+        unread_only: Some(true),
+    };
+    let query = NotificationInboxInput {
+        scope: Some(unread()),
+        ..Default::default()
+    }
+    .into_query()
+    .unwrap();
+    assert!(query.scope.unread_only);
+
+    let clear = ClearNotificationInboxInput {
+        scope: Some(unread()),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert!(clear.scope.unread_only);
+
+    // Older clients name it beside the scope.
+    let legacy = ClearNotificationInboxInput {
+        unread_only: Some(true),
+        ..Default::default()
+    }
+    .into_request()
+    .unwrap();
+    assert!(legacy.scope.unread_only);
 }
 
 const ROW: &str = "channel:11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa#top_level";
