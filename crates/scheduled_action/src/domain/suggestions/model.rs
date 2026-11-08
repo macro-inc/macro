@@ -1,4 +1,4 @@
-//! What a routine suggestion is, as stored and as served.
+//! What a routine suggestion is, as handed back, stored and served.
 
 use chrono::{DateTime, Utc};
 use macro_uuid::Uuid;
@@ -7,57 +7,65 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use utoipa::ToSchema;
 
-/// A routine offered to one person, picked for them by AI.
+use crate::domain::models::{ActionConfiguration, CreatedItem, RoutineCheck};
+
+/// A routine offered to one person: one AI suggested for them, or one of
+/// Macro's catalog routines filling a surface.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutineSuggestion {
+    /// Saving a routine from it passes this as `suggestion_id`; dismissing
+    /// it uses it too.
     #[schema(value_type = String, format = Uuid)]
     pub id: Uuid,
-    /// Where it is offered: the sidebar of that part of the app.
-    pub surface: Surface,
-    /// Why it fits this person, in a line.
-    pub reason: String,
-    /// AI's estimate, from 0 to 1, that the person keeps it on.
-    pub keep_probability: f32,
-    /// It may be switched on before its owner changes anything: only a
-    /// catalog routine marked safe by default, never a request.
-    pub safe_default: bool,
+    /// Who suggests it: AI, for this person, or Macro, as a template.
+    pub from: SuggestionFrom,
+    /// The sidebars it shows in, first the one it belongs to most.
+    /// Dismissing it in one dismisses it everywhere.
+    pub surfaces: Vec<Surface>,
+    /// Why it fits this person, in a line; absent on Macro's templates.
+    pub reason: Option<String>,
+    /// AI's estimate, from 0 to 1, that the person keeps it on; absent on
+    /// Macro's templates.
+    pub keep_probability: Option<f32>,
+    /// Onboarding shows it switched on: one of at most two catalog
+    /// routines AI picked that are safe by default and likely kept. Never a
+    /// drafted routine or a template.
+    pub on_by_default: bool,
     #[serde(flatten)]
-    pub pick: SuggestionPick,
+    pub pick: SuggestedPick,
 }
 
-/// What AI picked: a catalog routine with its knobs, or a request for the
-/// drafter.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+/// Who suggests a routine.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::AsRefStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SuggestionFrom {
+    /// AI suggested it for this person, with a reason.
+    ForYou,
+    /// One of Macro's catalog routines, as a template.
+    Macro,
+}
+
+/// What is suggested: a catalog routine with its knobs, or a routine AI
+/// drafted and checked.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SuggestionPick {
-    /// A catalog routine, with the knob values AI filled in. Its trigger
-    /// and steps come from the catalog, never from AI.
-    Starter {
+pub enum SuggestedPick {
+    /// A catalog routine (`GET /scheduled-actions/catalog`), with the knob
+    /// values AI filled in. Its trigger and steps come from the catalog.
+    Catalog {
         /// The catalog routine, e.g. `inbox`.
         key: String,
         /// Knob values by knob name; knobs left out keep the catalog's.
         #[schema(value_type = Object)]
         knobs: Map<String, Value>,
     },
-    /// What a routine the catalog lacks would do, in the person's words. The
-    /// drafter writes it when the person accepts it, and they review it.
-    Request {
-        /// Its name, e.g. "Weekly supplier digest".
-        title: String,
-        /// What it does and when, e.g. "Every Friday, list the deliveries
-        /// suppliers confirmed this week."
-        request: String,
-    },
-}
-
-/// A suggestion AI made and the scheduler checked, before it is stored.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CheckedSuggestion {
-    pub surface: Surface,
-    pub reason: String,
-    pub keep_probability: f32,
-    pub pick: SuggestionPick,
+    /// A routine AI drafted that passed saving's checks, as it would be
+    /// saved (switched off), for the person to review first.
+    Routine { routine: ActionConfiguration },
 }
 
 /// Where a person's suggestions are in being generated.
@@ -76,25 +84,15 @@ pub struct CheckedSuggestion {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum GenerationStatus {
-    /// None generated yet: the scheduler generates the first soon.
-    Pending,
-    /// A generation is running; earlier suggestions still show.
+    /// Never generated: no inbox was connected yet. Only Macro's templates
+    /// show.
+    None,
+    /// AI is suggesting; its suggestions appear as each is handed back.
     Generating,
-    /// The last generation finished.
+    /// Generation finished.
     Ready,
-    /// The last generation failed; earlier suggestions still show.
+    /// Generation failed, after a retry; Macro's templates fill in.
     Failed,
-}
-
-/// The last generation for a person, as stored.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StoredGeneration {
-    pub status: GenerationStatus,
-    pub generation_id: Uuid,
-    /// What the last finished generation read, to tell when it changed.
-    pub inputs: Option<String>,
-    pub started_at: DateTime<Utc>,
-    pub generated_at: Option<DateTime<Utc>>,
 }
 
 /// A person's suggestions, and whether more are on the way.
@@ -102,26 +100,119 @@ pub struct StoredGeneration {
 #[serde(rename_all = "camelCase")]
 pub struct RoutineSuggestions {
     pub status: GenerationStatus,
-    /// When the suggestions shown were generated; absent before the first.
-    pub generated_at: Option<DateTime<Utc>>,
-    /// Best first within each surface.
+    /// Per surface, AI's first, best first, then Macro's templates, so each
+    /// surface has at least one and ideally three. A suggestion with
+    /// several surfaces appears once.
     pub suggestions: Vec<RoutineSuggestion>,
 }
 
-/// What asking for a generation did.
+/// What a suggestion session hands back through `macro.routines.suggest`.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum SuggestRequest {
+    /// A catalog routine, with knob values.
+    #[serde(rename_all = "camelCase")]
+    Catalog {
+        key: String,
+        #[serde(default)]
+        #[schema(value_type = Object)]
+        knobs: Map<String, Value>,
+        reason: String,
+        surfaces: Vec<Surface>,
+        keep_probability: f32,
+    },
+    /// A routine the catalog lacks, checked as saving checks it.
+    #[serde(rename_all = "camelCase")]
+    Routine {
+        routine: ActionConfiguration,
+        /// What the session created for it, as `macro.routines.check` takes.
+        #[serde(default)]
+        created: Vec<CreatedItem>,
+        reason: String,
+        surfaces: Vec<Surface>,
+        keep_probability: f32,
+    },
+}
+
+impl SuggestRequest {
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Self::Catalog { .. } => "catalog",
+            Self::Routine { .. } => "routine",
+        }
+    }
+}
+
+/// What became of a suggestion handed back.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestOutcome {
+    /// Whether it was kept.
+    pub ok: bool,
+    /// Why it wasn't, to fix and suggest again.
+    pub problems: Vec<String>,
+    /// A drafted routine's check, as `macro.routines.check` returns it.
+    pub check: Option<RoutineCheck>,
+    /// The kept suggestion's id.
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub id: Option<Uuid>,
+}
+
+/// A suggestion's pick as stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StoredPick {
+    Catalog {
+        key: String,
+        knobs: Map<String, Value>,
+    },
+    /// The routine as its check would store it, switched off.
+    Routine { routine: ActionConfiguration },
+}
+
+/// A suggestion checked and ready to store.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedSuggestion {
+    pub surfaces: Vec<Surface>,
+    pub reason: String,
+    pub keep_probability: f32,
+    pub pick: StoredPick,
+}
+
+/// A stored suggestion AI made.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredSuggestion {
+    pub id: Uuid,
+    pub surfaces: Vec<Surface>,
+    pub reason: String,
+    pub keep_probability: f32,
+    pub pick: StoredPick,
+    pub dismissed: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// A person's generation, as stored.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredGeneration {
+    pub status: GenerationStatus,
+    pub started_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+}
+
+/// How a generation ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum GenerationOutcome {
     /// Suggestions are off for the person.
     Off,
-    /// Another generation is running; it is left to finish.
-    Running,
-    /// New suggestions are stored.
+    /// They were generated before; generation runs once.
+    Done,
+    /// Every session handed back at least one suggestion.
     Ready,
-    /// It failed; the earlier suggestions stay.
+    /// Some sessions handed back none, even after a retry.
+    Partial,
+    /// No session handed back any; Macro's templates fill in.
     Failed,
-    /// A newer generation took over; its result wins.
-    Superseded,
     /// The process is stopping.
     Cancelled,
 }

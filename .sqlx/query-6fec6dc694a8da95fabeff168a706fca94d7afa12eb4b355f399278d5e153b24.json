@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT s.id, s.surface, s.catalog_key, s.knob_values, s.title, s.request, s.reason,\n                   s.keep_probability\n            FROM routine_suggestion s\n            WHERE s.user_id = $1 AND s.state = 'open'\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action a WHERE a.owner = s.user_id AND a.suggestion_id = s.id)\n            ORDER BY s.position\n            ",
+  "query": "SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,\n                      dismissed_at IS NOT NULL AS \"dismissed!\", created_at\n               FROM routine_suggestion\n               WHERE user_id = $1\n               ORDER BY created_at, id",
   "describe": {
     "columns": [
       {
@@ -10,8 +10,8 @@
       },
       {
         "ordinal": 1,
-        "name": "surface",
-        "type_info": "Text"
+        "name": "surfaces",
+        "type_info": "TextArray"
       },
       {
         "ordinal": 2,
@@ -25,23 +25,28 @@
       },
       {
         "ordinal": 4,
-        "name": "title",
-        "type_info": "Text"
+        "name": "routine",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 5,
-        "name": "request",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
         "name": "reason",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "keep_probability",
         "type_info": "Float4"
+      },
+      {
+        "ordinal": 7,
+        "name": "dismissed!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -55,10 +60,11 @@
       true,
       false,
       true,
-      true,
       false,
+      false,
+      null,
       false
     ]
   },
-  "hash": "07052ec2bd42efcd9ed0b4169fc52f9eab5fbe4baf77c82cac675c8014dda538"
+  "hash": "6fec6dc694a8da95fabeff168a706fca94d7afa12eb4b355f399278d5e153b24"
 }

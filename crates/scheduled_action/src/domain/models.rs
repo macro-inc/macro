@@ -279,6 +279,8 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last

@@ -7,9 +7,10 @@
  */
 
 import type { RoutineSuggestionAllOf } from './routineSuggestionAllOf';
-import type { SuggestionPick } from './suggestionPick';
+import type { SuggestedPick } from './suggestedPick';
 
 /**
- * A routine offered to one person, picked for them by AI.
+ * A routine offered to one person: one AI suggested for them, or one of
+Macro's catalog routines filling a surface.
  */
-export type RoutineSuggestion = SuggestionPick & RoutineSuggestionAllOf;
+export type RoutineSuggestion = SuggestedPick & RoutineSuggestionAllOf;

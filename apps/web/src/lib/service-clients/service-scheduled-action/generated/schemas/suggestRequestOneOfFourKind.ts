@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SuggestionPickOneOfFourKind =
-  (typeof SuggestionPickOneOfFourKind)[keyof typeof SuggestionPickOneOfFourKind];
+export type SuggestRequestOneOfFourKind =
+  (typeof SuggestRequestOneOfFourKind)[keyof typeof SuggestRequestOneOfFourKind];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SuggestionPickOneOfFourKind = {
-  request: 'request',
+export const SuggestRequestOneOfFourKind = {
+  routine: 'routine',
 } as const;

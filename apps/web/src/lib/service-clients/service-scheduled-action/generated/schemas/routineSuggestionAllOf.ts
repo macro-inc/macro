@@ -5,17 +5,28 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
+import type { RoutineSuggestionAllOfKeepProbability } from './routineSuggestionAllOfKeepProbability';
+import type { RoutineSuggestionAllOfReason } from './routineSuggestionAllOfReason';
+import type { SuggestionFrom } from './suggestionFrom';
 import type { Surface } from './surface';
 
 export type RoutineSuggestionAllOf = {
+  /** Who suggests it: AI, for this person, or Macro, as a template. */
+  from: SuggestionFrom;
+  /** Saving a routine from it passes this as `suggestion_id`; dismissing
+it uses it too. */
   id: string;
-  /** AI's estimate, from 0 to 1, that the person keeps it on. */
-  keepProbability: number;
-  /** Why it fits this person, in a line. */
-  reason: string;
-  /** It may be switched on before its owner changes anything: only a
-catalog routine marked safe by default, never a request. */
-  safeDefault: boolean;
-  /** Where it is offered: the sidebar of that part of the app. */
-  surface: Surface;
+  /** AI's estimate, from 0 to 1, that the person keeps it on; absent on
+Macro's templates. */
+  keepProbability?: RoutineSuggestionAllOfKeepProbability;
+  /** Onboarding shows it switched on: one of at most two catalog
+routines AI picked that are safe by default and likely kept. Never a
+drafted routine or a template. */
+  onByDefault: boolean;
+  /** Why it fits this person, in a line; absent on Macro's templates. */
+  reason?: RoutineSuggestionAllOfReason;
+  /** The sidebars it shows in, first the one it belongs to most.
+Dismissing it in one dismisses it everywhere. */
+  surfaces: Surface[];
 };

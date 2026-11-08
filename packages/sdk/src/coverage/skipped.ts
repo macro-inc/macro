@@ -279,7 +279,7 @@ export const scheduledActionExcluded = [
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
-  'refreshRoutineSuggestions', // The app's suggestion surfaces.
+  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];

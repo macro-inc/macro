@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Knob values by knob name; knobs left out keep the catalog's.
- */
-export type SuggestionPickOneOfKnobs = { [key: string]: unknown };
+export type GenerateRoutineSuggestionsParams = {
+  /**
+   * IANA time zone, e.g. `America/New_York`.
+   */
+  timezone: string;
+};

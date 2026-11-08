@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SuggestionPickOneOfKind =
-  (typeof SuggestionPickOneOfKind)[keyof typeof SuggestionPickOneOfKind];
+export type SuggestedPickOneOfKind =
+  (typeof SuggestedPickOneOfKind)[keyof typeof SuggestedPickOneOfKind];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SuggestionPickOneOfKind = {
-  starter: 'starter',
+export const SuggestedPickOneOfKind = {
+  catalog: 'catalog',
 } as const;

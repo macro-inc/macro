@@ -6,7 +6,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * When the suggestions shown were generated; absent before the first.
- */
-export type RoutineSuggestionsGeneratedAt = string | null;
+export type SuggestRequestOneOfKnobs = { [key: string]: unknown };

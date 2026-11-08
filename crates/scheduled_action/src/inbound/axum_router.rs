@@ -683,6 +683,7 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
+                ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled

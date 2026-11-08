@@ -33,7 +33,7 @@ use scheduled_action::domain::ports::{
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
-use scheduled_action::domain::suggestions::RoutineSuggestionService;
+use scheduled_action::domain::suggestions::{RoutineSuggestionService, SuggestionAgent};
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
@@ -80,9 +80,8 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often routine suggestions are swept: each sweep looks at a batch of
-/// active people and generates for those due.
-const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(10 * 60);
+/// How often suggestion sessions a stopped process left behind are cleaned up.
+const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
 /// What a session's programs created, from the activity recorded for its
 /// code-mode invocations.
@@ -162,7 +161,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
-    suggestion_model: routine_suggestions::ModelSuggestions,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -404,6 +402,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         });
     }
     let suggestion_code = Arc::clone(&code);
+    // Which agent session a code-mode request came from, for drafts' checks
+    // and suggestion sessions' suggestions.
+    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+        agent_correlation::outbound::PgCorrelationRepository(db.clone()),
+    ));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -413,13 +416,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(sessions))
-        .with_draft_hand_backs(
-            hand_backs,
-            Arc::new(CorrelationSessions(
-                agent_correlation::outbound::PgCorrelationRepository(db.clone()),
-            )),
-        )
+        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
@@ -438,9 +436,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         })
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
-    // Suggestions read the newest mail through email_service, which reads it
-    // from the provider. The sweep generates them on a schedule; reads only
-    // return what is stored.
+    // Suggestions run once per person, when their inbox connects, in hidden
+    // sessions of the in-process Macro agent on the free tier's model, as
+    // drafts do; each session hands back its suggestions through
+    // `macro.routines.suggest`. They read the newest mail through
+    // email_service, which reads it from the provider.
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),
         Arc::new(PgSuggestionRepo::new(db.clone())),
@@ -449,15 +449,23 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 config.internal_api_key.to_string(),
                 EmailServiceUrl::new()?.to_string(),
             )),
-            db: db.clone(),
+            apps: crate::routine_sessions::PipedreamConnectedApps(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+            ),
         }),
+        sessions,
         suggestion_code,
-        Arc::new(suggestion_model),
+        request_sessions,
         template_flags.clone(),
-        conditions_enabled,
+        SuggestionAgent {
+            bot: bot_id::MACRO_NEW_BOT_ID,
+            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            model: chat::domain::models::FREE_MODEL.to_owned(),
+        },
         lifecycle.workers.clone(),
         lifecycle.stop_workers.clone(),
     ));
+    // Suggestion sessions a stopped process left behind lose their session.
     {
         let suggestions = Arc::clone(&suggestions);
         let stop = lifecycle.stop_workers.clone();
@@ -471,7 +479,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = every.tick() => {}
                 }
                 // Logged by the sweep's span.
-                let _ = suggestions.sweep(chrono::Utc::now()).await;
+                let _ = suggestions.sweep().await;
             }
         });
     }
