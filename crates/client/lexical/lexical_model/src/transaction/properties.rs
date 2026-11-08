@@ -325,12 +325,18 @@ impl TextMut<'_, '_> {
     /// Toggle direction detection.
     pub fn toggle_directionless(&mut self) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
-        self.set_detail(self.data().detail ^ TextDetail::DIRECTIONLESS)
+        let data = self.data_mut()?;
+        data.detail ^= TextDetail::DIRECTIONLESS;
+        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        Ok(self)
     }
     /// Toggle merge prevention.
     pub fn toggle_unmergeable(&mut self) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
-        self.set_detail(self.data().detail ^ TextDetail::UNMERGEABLE)
+        let data = self.data_mut()?;
+        data.detail ^= TextDetail::UNMERGEABLE;
+        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        Ok(self)
     }
     /// Splice valid UTF-16 boundaries, optionally collapsing selection after inserted text.
     /// s2: TX-09
