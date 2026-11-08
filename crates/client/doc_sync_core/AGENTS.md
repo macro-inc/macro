@@ -10,6 +10,9 @@ identities come from callers; transport and durable storage run outside this cra
 - No I/O, clock reads, random generation, or unordered output iteration.
 - `SyncCore::handle` consumes inputs and clears/refills one output buffer; hosts
   send `Ready` after applying `Seeded` and execute storage effects in issue order.
+- `PrepareComment` requests a fresh convergence round and emits `CommentReady` only
+  after its reply imports and W-1 confirms all local rows delivered; the session then
+  stages the fork and submits `PublishComment`. A stage expires or cancels on reset/close.
 - `SyncCore` owns WAL, convergence, reset/rebase, snapshot and comment delivery.
   Never infer poison from an absent ack or advance a durable prefix over parked rows.
 - `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
@@ -97,3 +100,6 @@ Correct premature Gap parking only with validated retained-row coverage in the l
 oplog and server evidence for every required parent frontier, while Running outside
 reset/rebase. This disproves the earlier missing-store inference; it does not prove
 row delivery. Genuinely missing parents stay parked until TTL and never get pushed.
+`PrepareComment` releases `CommentReady` only after a fresh catch-up and W-1
+checks. `ProjectionResynced` charges the shared recovery budget without fetching
+a network snapshot; sessions attempt local recovery before `ImportFailed`.

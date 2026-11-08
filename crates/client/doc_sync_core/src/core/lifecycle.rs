@@ -320,6 +320,7 @@ impl SyncCore {
                 .map(|p| Some(p.deadline)),
         );
         deadlines.extend(self.comments.iter().map(|p| Some(p.deadline)));
+        deadlines.extend(self.staged_comments.iter().map(|(_, at)| Some(*at)));
         deadlines.extend(self.flushes.iter().map(|(_, at)| Some(*at)));
         if let Some(ResetState::Flushing { deadline, .. }) = self.reset {
             deadlines.push(Some(deadline));

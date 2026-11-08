@@ -128,7 +128,7 @@ const TYPECHECKS: [(&str, &str, &str); 9] = [
     (
         "Check Collaboration Package Types",
         "packages/collaboration",
-        "bun run type-check",
+        "bun run type-check && bun scripts/generate-session-schema.ts --check",
     ),
     (
         "Check Lexical Service Types",
@@ -296,6 +296,7 @@ fn functional() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(build_wasm_for_functional_tests())
+        .add_step(run_session_tests())
         .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -589,6 +590,12 @@ fn check_platform_rules() -> Step<Run> {
     Step::new("Check Browser Floor and Native Permissions").run(
         "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
     )
+}
+
+fn run_session_tests() -> Step<Run> {
+    Step::new("Check document session executor and storage")
+        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
 fn run_collaboration_biome() -> Step<Run> {

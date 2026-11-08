@@ -85,3 +85,4 @@ mod event_test;
 mod foreign;
 #[cfg(feature = "foreign-nodes")]
 pub use foreign::*;
+mod opaque;

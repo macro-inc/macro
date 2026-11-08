@@ -773,6 +773,19 @@ impl<'state> StateRef<'state> {
     pub fn export_json(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
         let key = key.into();
         let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
+        let v = self.state.registry.vtable(slot.type_index);
+        let mut json = self.export_framework_json(key)?;
+        if let Some(json) = crate::opaque::export(slot, &json) {
+            return Ok(json);
+        }
+        if slot.base.kind() != NodeKind::LineBreak {
+            json.extend(slot.data.to_json()?);
+        }
+        (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
+        Ok(json)
+    }
+    pub(crate) fn export_framework_json(self, key: NodeKey) -> Result<SerializedNode, Error> {
+        let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
         let registration = self.state.registry.registered(slot.type_index);
         let v = self.state.registry.vtable(slot.type_index);
         let mut json = SerializedNode::new();
@@ -817,9 +830,10 @@ impl<'state> StateRef<'state> {
         }
         if let BaseData::Element(data) = &slot.base
             && !self.is_root_or_shadow_root(key)
-            && !self
-                .children(key)
-                .any(|child| self.kind(child) == Some(NodeKind::Text))
+            && (crate::opaque::raw(slot.data.as_ref()).is_some()
+                || !self
+                    .children(key)
+                    .any(|child| self.kind(child) == Some(NodeKind::Text)))
         {
             if !data.text_format.is_empty() {
                 json.insert(
@@ -831,10 +845,6 @@ impl<'state> StateRef<'state> {
                 json.insert("textStyle".into(), serde_json::json!(data.text_style));
             }
         }
-        if slot.base.kind() != NodeKind::LineBreak {
-            json.extend(slot.data.to_json()?);
-        }
-        (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
         Ok(json)
     }
     /// Export a text slice through an ephemeral clone and its custom export hooks.

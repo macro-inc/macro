@@ -95,6 +95,11 @@ pub enum SyncEvent {
         /// Request completion payload.
         reply: Reply,
     },
+    /// Catch-up and durability checks succeeded; stage the correlated comment fork now.
+    CommentReady {
+        /// Host comment request.
+        request: RequestId,
+    },
     /// The doc was replaced (reset). The session re-initializes its surface.
     Replaced,
     /// A seed won. The session initializes its surface (editor init, §2.3).

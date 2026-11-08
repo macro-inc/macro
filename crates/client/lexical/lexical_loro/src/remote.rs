@@ -414,6 +414,10 @@ impl LoroProjection {
         let local = LocalNode(
             u32::try_from(b.pending.len()).map_err(|_| diverged("too many remote nodes"))?,
         );
+        // Preserve the structural kind for forward-compatible unknown node imports.
+        if schema::children(map)?.is_some() {
+            incoming.insert("children".into(), Value::Array(vec![]));
+        }
         b.creates.push(NodeChange::Create {
             local,
             json: incoming,

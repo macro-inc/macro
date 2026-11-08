@@ -478,3 +478,35 @@ describe('TauriWebSocketWrapper incoming messages', () => {
     expect(received).toEqual(['first', 'second']);
   });
 });
+
+it('shares in-flight native recovery so Visible waits for the buffered replay', async () => {
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  const socket = new TauriWebSocketWrapper('wss://dss.test/ws');
+  const opened = new Promise<void>((resolve) =>
+    socket.addEventListener('open', () => resolve())
+  );
+  plugin.connects[0].resolve(7);
+  await opened;
+  let resolveRecovery!: (value: {
+    messages: ReplayEnvelope[];
+    gap: boolean;
+  }) => void;
+  const response = new Promise<{ messages: ReplayEnvelope[]; gap: boolean }>(
+    (resolve) => {
+      resolveRecovery = resolve;
+    }
+  );
+  vi.mocked(invoke).mockReturnValueOnce(response);
+  const first = socket.recover();
+  const second = socket.recover();
+  expect(second).toBe(first);
+  const messages: string[] = [];
+  socket.onmessage = (event) => messages.push(String(event.data));
+  resolveRecovery({
+    messages: [{ seq: 1, message: { type: 'Text', data: 'fixture-replay' } }],
+    gap: false,
+  });
+  await second;
+  expect(messages).toEqual(['fixture-replay']);
+  socket.close();
+});

@@ -90,6 +90,7 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 pub struct Registry {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: crate::foreign::state::ForeignStateRegistry,
+    pub(crate) opaque_unknown_types: bool,
     pub(crate) table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     pub(crate) nodes: Vec<RegisteredNode>,
     pub(crate) vtables: Vec<NodeVTable>,
@@ -202,6 +203,7 @@ type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 pub struct EditorBuilder {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: Vec<ForeignStateConfig>,
+    opaque_unknown_types: bool,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) duplicate_extension: Option<&'static str>,
     pub(crate) plugins: Vec<Arc<dyn Plugin>>,
@@ -221,6 +223,7 @@ impl EditorBuilder {
         Self {
             #[cfg(feature = "foreign-nodes")]
             foreign_states: vec![],
+            opaque_unknown_types: false,
             extensions: Default::default(),
             duplicate_extension: None,
             plugins: vec![],
@@ -316,9 +319,20 @@ impl EditorBuilder {
         self.view_host = host;
         self
     }
-    /// Validate registrations and compute type-level flags in isolated scratch states.
-    /// s2: CFG-08
-    pub fn build(self) -> Result<Editor, BuildError> {
+    /// Preserve unregistered serialized node types for collaborative sessions.
+    /// Disabled by default; strict server/editor imports retain upstream errors.
+    pub fn opaque_unknown_types(mut self, enabled: bool) -> Self {
+        self.opaque_unknown_types = enabled;
+        self
+    }
+    /// Validate registrations and build the configured editor.
+    pub fn build(mut self) -> Result<Editor, BuildError> {
+        if self.opaque_unknown_types {
+            self = self
+                .node::<crate::opaque::OpaqueElement>()
+                .node::<crate::opaque::OpaqueText>()
+                .node::<crate::opaque::OpaqueDecorator>();
+        }
         if let Some(type_name) = self.duplicate_extension {
             return Err(BuildError::DuplicateExtensionState { type_name });
         }
@@ -333,6 +347,7 @@ impl EditorBuilder {
         let mut registry = Registry {
             #[cfg(feature = "foreign-nodes")]
             foreign_states: Default::default(),
+            opaque_unknown_types: self.opaque_unknown_types,
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
             vtables: self.vtables,

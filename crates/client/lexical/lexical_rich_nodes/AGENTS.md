@@ -56,3 +56,5 @@ Regenerate pinned export goldens from the repository root with
 `cargo test -p lexical_rich_nodes --all-features --test html_oracle -j4` compares them.
 
 HTML list attributes use `start_value()` so missing, null and fractional imported starts retain JavaScript DOM coercion.
+Global matcher scans retain anchors on the original input and advance empty matches
+by JavaScript UTF-16 rules; reuse exec_from/find_all in portable consumers.

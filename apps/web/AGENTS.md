@@ -969,6 +969,11 @@ and checks that both appear in the output. Without them, Vite leaves the
 loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
+The optional document-session package uses the document-session-wasm Cargo profile
+and a Binaryen convergence pass; preserve its 1,107,000-byte Brotli gate. Its
+main-thread loader is lazy. Keep one model WASM preload: Loro for flag-off builds,
+document_session_wasm when documentSessionPreload is selected. Do not preload both.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,

@@ -30,10 +30,16 @@ pub fn caret_from_point(
     let key = point.key();
     let type_name = view.type_name(key)?;
     if matches!(point, Point::Text { .. }) && !view.is_text(key) {
-        return Err(Error::CaretFromPointNotText { type_name, key });
+        return Err(Error::CaretFromPointNotText {
+            type_name: type_name.to_owned(),
+            key,
+        });
     }
     if matches!(point, Point::Element { .. }) && !view.is_element(key) {
-        return Err(Error::CaretFromPointNotElement { type_name, key });
+        return Err(Error::CaretFromPointNotElement {
+            type_name: type_name.to_owned(),
+            key,
+        });
     }
     Ok(match *point {
         Point::Text { key, offset } => {

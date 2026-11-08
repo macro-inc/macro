@@ -120,3 +120,12 @@ demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Pers
 and removal; opaque text hooks rule out the local root-text proof.
 
 Cache range direction only when upstream calls isBackward in a write context; invalidate it on endpoint changes and selection-object cloning, while preserving it through text-only trimming.
+Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
+the default. Opaque records keep original type/version and own JSON, while framework
+links own children. Own export stays flat and overlays changed framework fields.
+
+Opaque future framework enum values round-trip unchanged; known node validation stays strict.
+Copy only own fields when importing opaque elements; never recursively clone children.
+
+Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;
+keep typed event payload ownership in the plugin registry.

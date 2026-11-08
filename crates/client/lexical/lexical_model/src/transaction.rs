@@ -540,6 +540,10 @@ impl<'editor> Transaction<'editor> {
         let layout = self.pending.registry.registered(index).state_layout.clone();
         #[cfg(feature = "foreign-nodes")]
         let layout = self.pending.registry.foreign_states.layout(&layout);
+        let opaque = self
+            .view()
+            .slot(key)
+            .is_some_and(|slot| crate::opaque::raw(slot.data.as_ref()).is_some());
         let existing = self.view().slot(key).and_then(|slot| slot.state.clone());
         let mut filtered = json.clone();
         match import.state {
@@ -589,7 +593,15 @@ impl<'editor> Transaction<'editor> {
                     let detail = TextDetail::from_bits_retain(number("detail"));
                     let mode = json
                         .get("mode")
-                        .map(|value| serde_json::from_value(value.clone()))
+                        .map(|value| {
+                            serde_json::from_value(value.clone()).or_else(|error| {
+                                if opaque {
+                                    Ok(Default::default())
+                                } else {
+                                    Err(error)
+                                }
+                            })
+                        })
                         .transpose()?
                         .unwrap_or_default();
                     let style = json
@@ -633,7 +645,10 @@ impl<'editor> Transaction<'editor> {
                         .unwrap_or_default();
                     let direction = json
                         .get("direction")
-                        .map(|value| serde_json::from_value(value.clone()))
+                        .map(|value| {
+                            serde_json::from_value(value.clone())
+                                .or_else(|error| if opaque { Ok(None) } else { Err(error) })
+                        })
                         .transpose()?
                         .flatten();
                     let indent = number("indent");
@@ -686,6 +701,21 @@ impl<'editor> Transaction<'editor> {
                     .as_any_mut(),
                 json,
             )?;
+            if crate::opaque::raw(
+                self.view()
+                    .slot(key)
+                    .ok_or(Error::NodeNotFound(key))?
+                    .data
+                    .as_ref(),
+            )
+            .is_some()
+            {
+                let baseline = self.view().export_framework_json(key)?;
+                let slot = self.writable(key)?;
+                let data =
+                    Arc::get_mut(&mut slot.data).ok_or(Error::Invariant("payload shared"))?;
+                crate::opaque::set_baseline(data, baseline);
+            }
         }
         Ok(())
     }
@@ -695,12 +725,7 @@ impl<'editor> Transaction<'editor> {
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or(Error::Invariant("node type missing"))?;
-        let index = self
-            .pending
-            .registry
-            .get(name)
-            .ok_or_else(|| Error::UnknownSerializedType(name.to_owned()))?
-            .index;
+        let index = self.pending.registry.import_index(name, json)?;
         let key = (self.pending.registry.vtable(index).import)(self, json)?;
         if self.kind(key) == Some(NodeKind::Element)
             && let Some(children) = json.get("children").and_then(serde_json::Value::as_array)

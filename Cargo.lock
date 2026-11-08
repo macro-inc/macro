@@ -6604,6 +6604,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_session"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "doc_sync_core",
+ "imbl",
+ "lexical_loro",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "proptest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "document_session_wasm"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "doc_sync_core",
+ "document_session",
+ "js-sys",
+ "lexical_html",
+ "lexical_loro",
+ "lexical_markdown",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "serde_json",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "tracing",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [

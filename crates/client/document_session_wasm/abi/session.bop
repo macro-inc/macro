@@ -1,0 +1,50 @@
+const uint32 ABI_MAJOR = 1;
+const uint32 DIFF_FORMAT_VERSION = 1;
+enum DiffOpcode : uint32 { Remove = 1; CreateElement = 2; CreateText = 3; CreateDecorator = 4; CreateLineBreak = 5; Children = 6; Text = 7; TextProps = 8; ElementProps = 9; NodeProps = 10; State = 11; }
+enum Access : byte { Read = 0; CommentOnly = 1; Edit = 2; }
+enum Transport : byte { None = 0; Direct = 1; Routed = 2; }
+enum Failure : byte { None = 0; Unavailable = 1; QuotaExceeded = 2; Corrupt = 3; Uncertain = 4; Other = 5; }
+enum CommandCode : uint32 { InsertText = 1; RemoveText = 2; InsertParagraph = 3; InsertLineBreak = 4; InsertTab = 5; Indent = 6; Outdent = 7; FormatText = 8; FormatElement = 9; SelectAll = 10; ClearEditor = 11; ClearHistory = 12; Undo = 13; Redo = 14; DeleteCharacter = 15; DeleteWord = 16; DeleteLine = 17; }
+struct SessionConfigMsg { string doc; string session; string user; uint64[] peers; Access access; Transport transport; bool durable; bool chatter; bool headless; byte viewEngine; byte viewOs; string token; string traceparent; uint32 coalesce; uint32 snapshotInterval; ContainerPathMsg[] observed; }
+struct PointMsg { uint32 key; uint32 offset; byte type; }
+struct SelectionMsg { byte kind; PointMsg anchor; PointMsg focus; uint32[] nodes; uint32 table; bool dirty; }
+struct ClipboardEntryMsg { string mime; string value; }
+struct ModifyTargetMsg { byte kind; PointMsg anchor; PointMsg focus; bool dirty; bool backward; }
+struct MarkedSelectionMsg { uint32 format; string style; PointMsg anchor; }
+struct RangeSelectionMsg { PointMsg anchor; PointMsg focus; uint32 format; string style; }
+message SelectionChangeMsg { 1 -> bool tripleClick; 2 -> bool domRangeSameNode; 3 -> MarkedSelectionMsg marked; 4 -> uint32 domAnchorOffset; 5 -> uint32 domFocusOffset; 6 -> RangeSelectionMsg postDeleteRestore; }
+union EditorInputMsg {
+ 1 -> struct EditorCommand { CommandCode command; uint32 a; uint32 b; string text; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
+ 2 -> struct EditorSetState { string json; }
+ 3 -> struct EditorSelection { SelectionMsg selection; SelectionChangeMsg change; }
+ 4 -> struct EditorPaste { SelectionMsg selection; ClipboardEntryMsg[] clipboard; bool hasFiles; string[] htmlNodes; }
+ 5 -> struct EditorInsertText { byte phase; bool hasData; string data; bool hasTransfer; string transfer; uint32 facts; string lastKey; SelectionMsg selection; }
+ 6 -> struct EditorComposition { byte kind; uint32 key; string text; uint32 anchorOffset; uint32 focusOffset; string data; SelectionMsg selection; }
+ 7 -> struct EditorText { uint32 key; uint16[] text; uint32 anchorOffset; uint32 focusOffset; bool compositionEnd; string compositionData; SelectionMsg selection; }
+}
+
+struct PathStepMsg { byte kind; string key; uint32 index; }
+struct ContainerPathMsg { string root; PathStepMsg[] steps; }
+struct DocValueNode { byte kind; string key; float64 num; int64 int; string str; byte[] bytes; uint32 children; }
+struct DocOpMsg { byte kind; ContainerPathMsg path; string key; uint32 index; uint32 len; DocValueNode[] value; }
+struct SessionInputMsg { byte kind; uint32 request; byte code; bool flag; byte[] bytes; uint64[] peers; EditorInputMsg editor; DocOpMsg[] operations; string markId; byte[] anchor; byte[] focus; string expectedText; }
+struct ConnectMsg { string doc; string token; string traceparent; }
+struct WalRecordMsg { uint64 seq; int64 createdAt; string user; bool foreign; bool quarantined; bool delivered; byte[] bytes; }
+struct OwnerRowsMsg { string owner; WalRecordMsg[] records; }
+struct LocalStateMsg { byte[] snapshot; string coversOwner; uint64 coversSeq; OwnerRowsMsg[] orphans; OwnerRowsMsg[] assist; }
+struct StorageOpMsg { byte kind; string doc; string owner; string user; string from; uint64 seq; uint64 through; int64 before; bool retry; bool terminal; WalRecordMsg record; byte[] snapshot; string coversOwner; uint64 coversSeq; }
+struct AttrMsg { string key; byte kind; string text; uint64 unsigned; int64 signed; bool flag; }
+struct TelemetryMsg { uint64 span; byte kind; string name; string outcome; bool error; AttrMsg[] attrs; uint64 parent; }
+struct NodeCursorMsg { string nodeId; byte[] cursor; }
+struct DocEventMsg { byte kind; ContainerPathMsg path; DocOpMsg[] changes; }
+enum ClosedReason : byte { None = 0; Stopped = 1; Unauthorized = 2; Corrupt = 3; }
+enum SaveReason : byte { None = 0; Undelivered = 1; Storage = 2; ReadOnly = 3; Poison = 4; Gap = 5; Rebasing = 6; }
+struct ViewEffectMsg { ClosedReason closedReason; SaveReason saveReason; byte kind; uint32 request; uint32 code; uint32 detail; bool flag; string text; SelectionMsg selection; uint32 format; string style; string[] keys; DocValueNode[] values; DocEventMsg[] events; ContainerPathMsg[] paths; }
+struct QueryMsg { byte kind; uint32 key; string text; uint32 flags; }
+struct QueryReplyMsg { string text; uint32 count; uint32[] keys; string[] nodes; PointMsg[] points; }
+struct ClipboardMsg { string html; string lexical; string plain; }
+struct TypeRowMsg { uint32 index; string name; byte kind; }
+struct TypeTableMsg { TypeRowMsg[] rows; }
+struct ListenerRowMsg { string command; uint32 priority; }
+struct ListenerTableMsg { ListenerRowMsg[] rows; }
+struct RouteMsg { string doc; byte kind; uint32 conn; byte access; uint32 code; byte[] frame; }
