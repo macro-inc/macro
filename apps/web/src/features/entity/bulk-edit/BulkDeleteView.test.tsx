@@ -4,7 +4,7 @@ import { For, type JSX, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import type { EntityData } from '../types/entity';
-import { BulkDeleteView } from './BulkDeleteView';
+import { BulkDeleteView, focusDeleteConfirmation } from './BulkDeleteView';
 
 const mutateAsync = vi.hoisted(() => vi.fn());
 vi.mock('../queries/dss', () => ({
@@ -173,5 +173,73 @@ describe('BulkDeleteView partial failure', () => {
     expect(screen.getByTestId('failed')).toBeTruthy();
     expect(screen.getByTestId('deleted')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('BulkDeleteView keyboard confirmation', () => {
+  it('confirms on Enter, including when Cancel is focused', async () => {
+    mutateAsync.mockResolvedValue([true, true]);
+    const { onFinish, onCancel } = mount();
+    const input = document.createElement('input');
+    document.body.append(input);
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.body, { key: 'Enter', shiftKey: true });
+    fireEvent.keyDown(document.body, { key: 'Enter', repeat: true });
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Cancel' }), {
+      key: 'Enter',
+    });
+    await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(mutateAsync).toHaveBeenCalledExactlyOnceWith([failed, deleted]);
+    input.remove();
+  });
+
+  it('ignores Enter while a deletion is already in flight', async () => {
+    let resolveDelete: (value: boolean[]) => void = () => {};
+    mutateAsync.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDelete = resolve;
+      })
+    );
+    const { onFinish } = mount();
+    const confirm = screen.getByRole('button', {
+      name: /^Delete (item|\d+ items)$/,
+    });
+    fireEvent.keyDown(confirm, { key: 'Enter' });
+    fireEvent.keyDown(confirm, { key: 'Enter' });
+    expect(mutateAsync).toHaveBeenCalledOnce();
+    resolveDelete([true, true]);
+    await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
+    expect(mutateAsync).toHaveBeenCalledOnce();
+  });
+
+  it('focuses Delete when the dialog opens', () => {
+    const content = document.createElement('div');
+    content.tabIndex = -1;
+    const preview = document.createElement('button');
+    preview.textContent = 'Preview';
+    const confirm = document.createElement('button');
+    confirm.textContent = 'Delete item';
+    confirm.setAttribute('data-confirm-delete', '');
+    content.append(preview, confirm);
+    document.body.append(content);
+    preview.focus();
+
+    const event = new Event('focusScope.autoFocusOnMount', {
+      cancelable: true,
+    });
+    content.addEventListener(
+      'focusScope.autoFocusOnMount',
+      focusDeleteConfirmation
+    );
+    content.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(confirm);
+    content.remove();
   });
 });

@@ -8,7 +8,11 @@ import {
   type Setter,
   Show,
 } from 'solid-js';
-import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
+import {
+  BulkDeleteView,
+  focusDeleteConfirmation,
+  type PartialDeleteHandler,
+} from './BulkDeleteView';
 import {
   BulkMoveToProjectView,
   type MovedFolder,
@@ -53,6 +57,9 @@ const BulkEditEntityModalContent = (props: {
           handleCancel();
         }
         props.setIsOpen(open);
+      }}
+      onOpenAutoFocus={(event) => {
+        if (props.view === 'delete') focusDeleteConfirmation(event);
       }}
     >
       <Show

@@ -744,7 +744,8 @@ Tasks. Every project offers `Open in new split` (disabled when no split fits),
 `Copy Link` (the Overview link), `Copy ID`, and `Share`, which opens the same
 Share menu as the project's top bar. Edit access adds `Rename`, which opens a
 name dialog, and the `Set status` and `Set priority` submenus; owners also get
-`Delete`, which confirms first and leaves the project's tasks in place.
+`Delete`, which confirms first. Enter confirms, and Escape or Cancel dismisses.
+The project's tasks stay in place.
 Right-clicking one of several checked rows acts on the whole selection and
 offers only `Set status`, `Set priority`, and, when you own every project,
 `Delete`. A partially failed delete keeps only the failed projects in the
@@ -916,7 +917,9 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+then confirm **Delete**. Enter confirms that dialog, including when it asks
+about one task; Escape or Cancel dismisses it. With GraphQL Soup enabled,
+selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
