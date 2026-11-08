@@ -25,6 +25,9 @@ impl ForeignNode {
             | ForeignHook::CanMergeWith.bit()
             | ForeignHook::CanReplaceWith.bit()
             | ForeignHook::CanInsertAfter.bit()
+            | ForeignHook::Indent.bit()
+            | ForeignHook::TextContent.bit()
+            | ForeignHook::ExcludeFromCopy.bit()
             | ForeignHook::CanIndent.bit()
             | ForeignHook::IsShadowRoot.bit()
             | ForeignHook::CanInsertTextBefore.bit()
@@ -152,6 +155,16 @@ impl ForeignNode {
         hook: ForeignHook,
         nodes: &[NodeKey],
     ) -> Override<bool> {
+        self.read(node, hook, |callback, snapshot| {
+            callback.predicate(snapshot, node.key, hook, nodes, &[])
+        })
+    }
+    fn read<T: Default>(
+        &self,
+        node: NodeView<'_>,
+        hook: ForeignHook,
+        read: impl FnOnce(&Callback, &ForeignReadSnapshot) -> Result<T, Error>,
+    ) -> Override<T> {
         if self.overrides.load(Ordering::SeqCst) & hook.bit() == 0 {
             return Override::Inherit;
         }
@@ -165,7 +178,7 @@ impl ForeignNode {
             Some(callback) => node
                 .state
                 .snapshot_for_foreign_read()
-                .and_then(|snapshot| callback.predicate(&snapshot, node.key, hook, nodes)),
+                .and_then(|snapshot| read(&callback, &snapshot)),
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         };
         match result {
@@ -175,7 +188,7 @@ impl ForeignNode {
                 // only continue through checked reads until its Result barrier.
                 // The caller's operation remains active through JS reentry.
                 match ForeignReadOperation::defer(error) {
-                    Ok(()) => Override::Value(false),
+                    Ok(()) => Override::Value(T::default()),
                     Err(_) => Override::Inherit,
                 }
             }
@@ -244,6 +257,49 @@ impl ForeignHooks for ForeignNode {
         other: NodeKey,
     ) -> Override<bool> {
         self.predicate(node, ForeignHook::CanInsertAfter, &[other])
+    }
+
+    fn exclude_from_copy(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        destination: Option<CopyDestination>,
+    ) -> Override<bool> {
+        self.read(node, ForeignHook::ExcludeFromCopy, |callback, snapshot| {
+            let destination = match destination {
+                Some(CopyDestination::Clone) => json!("clone"),
+                Some(CopyDestination::Html) => json!("html"),
+                None => json!({"$undef":true}),
+            };
+            callback.predicate(
+                snapshot,
+                node.key,
+                ForeignHook::ExcludeFromCopy,
+                &[],
+                &[destination],
+            )
+        })
+    }
+    fn indent(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<u32> {
+        self.read(node, ForeignHook::Indent, |callback, snapshot| {
+            let value = callback.scalar(snapshot, node.key, ForeignHook::Indent)?;
+            let number = value
+                .as_f64()
+                .ok_or(Error::Invariant("getIndent must return a number"))?;
+            if number.fract() != 0.0 || !(0.0..=u32::MAX as f64).contains(&number) {
+                return Err(Error::Invariant("getIndent must return a u32"));
+            }
+            Ok(number as u32)
+        })
+    }
+    fn text_content(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<String> {
+        self.read(node, ForeignHook::TextContent, |callback, snapshot| {
+            callback
+                .scalar(snapshot, node.key, ForeignHook::TextContent)?
+                .as_str()
+                .map(str::to_owned)
+                .ok_or(Error::Invariant("getTextContent must return a string"))
+        })
     }
 
     fn adjust_export_json(
