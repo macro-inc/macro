@@ -478,8 +478,8 @@ async fn run_server() -> anyhow::Result<()> {
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
-                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                    project::outbound::PgInitiativeRepo::new(db.clone()),
                 ))
                 .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(

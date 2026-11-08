@@ -44,7 +44,7 @@ properties, and activity.
 
 ## Checks
 
-- `cargo test -p initiative --all-features` (`SQLX_OFFLINE` unset).
+- `cargo test -p project --all-features` (`SQLX_OFFLINE` unset).
 
 ## Related
 

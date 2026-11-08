@@ -51,7 +51,7 @@ pub async fn resolve_initiative<E: SoupEntityEdges>(
     let id = parse_id(initiative_id, "initiativeId")?;
     load_initiative(ctx, id)
         .await?
-        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
+        .ok_or_else(|| graphql_error(project::domain::models::InitiativeError::NotFound))
 }
 
 /// Resolve visible tasks from an authorized initiative.

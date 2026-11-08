@@ -17,7 +17,7 @@ processing = [
   "dep:macro_event_broker",
   "dep:macro_event_topics",
   "dep:models_properties",
-  "dep:projects",
+  "dep:folder",
   "dep:properties",
   "dep:rdkafka",
   "dep:rootcause",
@@ -109,7 +109,7 @@ pdfium-render = { workspace = true, optional = true }
 properties = { workspace = true, features = [
   "outbound",
 ], optional = true }
-projects = { workspace = true, optional = true }
+folder = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 rust-embed = "8.6.0"

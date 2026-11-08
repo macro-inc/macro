@@ -1241,8 +1241,8 @@ async fn run() -> anyhow::Result<()> {
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
                 .with_initiatives(
-                    initiative::domain::lookup::InitiativeLookup::new(
-                        initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                    project::domain::lookup::InitiativeLookup::new(
+                        project::outbound::PgInitiativeRepo::new(pool.clone()),
                     ),
                     ai_tools::build_properties_service(pool.clone(), entity_access.clone()),
                 )
@@ -1260,8 +1260,8 @@ async fn run() -> anyhow::Result<()> {
     let message_service: Arc<dyn messages::domain::api::MessageServiceApi> = Arc::new(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
-                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                    initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                    project::outbound::PgInitiativeRepo::new(pool.clone()),
                 ))
                 .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
             messages::domain::effects::MessageEffects::new(

@@ -126,10 +126,6 @@ use github_pull_requests::{
 };
 use graphql_scheduled_action::ScheduledActionGraphqlContext;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
-use initiative::{
-    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
-    outbound::PgInitiativeRepo,
-};
 use lexical_client::LexicalClient;
 use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -147,6 +143,10 @@ use notification::domain::service::{
 };
 use notification_outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
+use project::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use projects_hex::{
     domain::service::ProjectServiceImpl,
     inbound::axum_router::ProjectRouterState,
@@ -511,9 +511,7 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_event_broker(macro_event_broker.clone())
         .with_initiative_assignees(Arc::new(
-            initiative::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(
-                db.clone(),
-            )),
+            project::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(db.clone())),
         )),
     );
 
@@ -1312,8 +1310,8 @@ async fn run_server() -> anyhow::Result<()> {
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
         messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())
             .with_initiatives(
-                initiative::domain::lookup::InitiativeLookup::new(
-                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                project::domain::lookup::InitiativeLookup::new(
+                    project::outbound::PgInitiativeRepo::new(db.clone()),
                 ),
                 properties_service.clone(),
             )
@@ -1342,8 +1340,8 @@ async fn run_server() -> anyhow::Result<()> {
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
-                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                    project::outbound::PgInitiativeRepo::new(db.clone()),
                 ))
                 .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
@@ -1675,14 +1673,14 @@ async fn run_server() -> anyhow::Result<()> {
             initiative_description::InitiativeDescriptionSurfacesAdapter::new(
                 collab_surface_service.clone(),
             ),
-            Arc::new(initiative::outbound::resources::ProjectResources::new(
+            Arc::new(project::outbound::resources::ProjectResources::new(
                 properties_service.clone(),
                 system_properties_service.clone(),
                 entity_access_service.clone(),
             )),
         )
         .with_event_publisher(Arc::new(
-            initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
+            project::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
                 macro_event_broker.clone(),
             ),
         )),
@@ -2481,7 +2479,7 @@ async fn run_server() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            project::domain::personal_activity::ProjectVisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
                 entity_access_service.clone(),
             ),

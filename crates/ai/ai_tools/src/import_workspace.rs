@@ -12,6 +12,7 @@ use documents::domain::notion_markdown::{NotionMarkdown, NotionPageLink, NotionU
 use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
+use folder::domain::ports::ProjectService as _;
 use import::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, SharedEntity,
     SourceDates, TeamMember,
@@ -20,7 +21,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use projects::domain::ports::ProjectService as _;
 use uuid::Uuid;
 
 #[cfg(test)]

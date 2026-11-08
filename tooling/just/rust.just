@@ -100,13 +100,13 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/documents/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/projects/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/folder/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/foreign_entity/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/platform/stream/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_access_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/integrations/github/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/initiative/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/project/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/billing/referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai/memory/.env

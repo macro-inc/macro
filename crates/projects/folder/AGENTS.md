@@ -63,7 +63,7 @@ soft delete/restore/purge, and bulk upload into a project tree.
 
 ## Checks
 
-- `cargo test -p projects` (`SQLX_OFFLINE` unset; requires local MacroDB).
+- `cargo test -p folder` (`SQLX_OFFLINE` unset; requires local MacroDB).
 
 ## Related
 

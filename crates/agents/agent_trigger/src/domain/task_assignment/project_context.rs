@@ -3,8 +3,8 @@
 use agent_session::domain::error::{AgentSessionError, Result};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
-use initiative::domain::{events::InitiativeEventActor, lookup::InitiativeReader};
 use messages::domain::service::MessageWrite;
+use project::domain::{events::InitiativeEventActor, lookup::InitiativeReader};
 use trigger_context::ProjectRef;
 
 use crate::domain::project_assignment::{ProjectAssignmentAccess, ProjectMemberships};

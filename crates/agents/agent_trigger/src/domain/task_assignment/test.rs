@@ -381,7 +381,7 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         MockImplicitTriggerJudge::new(),
         history,
     );
-    let project_id = initiative::domain::models::InitiativeId::generate();
+    let project_id = project::domain::models::InitiativeId::generate();
     let mut context = MockTaskAssignmentContext::new();
     context
         .expect_task_brief()

@@ -1,7 +1,7 @@
 use async_graphql::ID;
 use graphql_properties::GraphqlSetPropertyValue;
-use initiative::domain::models::{CreateInitiativeRequest, InitialPropertyValue};
 use models_properties::api::requests::SetPropertyValue;
+use project::domain::models::{CreateInitiativeRequest, InitialPropertyValue};
 use uuid::Uuid;
 
 use super::{CreateInitiativeInput, InitialPropertyValueInput};

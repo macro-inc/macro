@@ -8,8 +8,8 @@ use entity_access::domain::models::{
     AccessError, AccessLevel, BotReceiptScope, Entity, EntityPermission, EntityType,
     RequiredPermission,
 };
-use initiative::domain::models::{InitiativeBasic, InitiativeError, InitiativeId};
 use macro_user_id::user_id::MacroUserIdStr;
+use project::domain::models::{InitiativeBasic, InitiativeError, InitiativeId};
 use properties::{EditReceipt, ViewReceipt};
 use std::{collections::HashMap, pin::Pin};
 use trigger_context::ProjectRef;

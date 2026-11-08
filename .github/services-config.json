@@ -122,7 +122,7 @@
         "crates/notifications/model_notifications/**",
         "crates/comms/call/**",
         "crates/integrations/github/**",
-        "crates/projects/initiative/**",
+        "crates/projects/project/**",
         "crates/email/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",

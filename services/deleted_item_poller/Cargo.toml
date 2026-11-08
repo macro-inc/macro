@@ -21,7 +21,7 @@ macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
 model_owner = { workspace = true }
-projects = { workspace = true }
+folder = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, features = [

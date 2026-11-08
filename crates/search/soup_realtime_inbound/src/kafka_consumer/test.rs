@@ -21,6 +21,7 @@ use email::domain::events::{
     ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadTrashedMetadata, ThreadsReindexReason,
     ThreadsReindexRequestedMetadata,
 };
+use folder::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::events::{
@@ -29,7 +30,6 @@ use messages::domain::events::{
 };
 use messages::domain::models::SimpleMention;
 use model_owner::Owner;
-use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
 };
@@ -394,7 +394,7 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
 fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() {
     let id = Uuid::now_v7();
     let purged = InitiativeTopicEvent::Purged {
-        initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+        initiative_id: project::domain::models::InitiativeId::from_uuid(id),
     };
     let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
         entity_id: id.to_string(),
@@ -999,7 +999,7 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
 
 #[test]
 fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
-    use initiative::domain::{events::InitiativeChange, models::InitiativeId};
+    use project::domain::{events::InitiativeChange, models::InitiativeId};
 
     let id = InitiativeId::from_uuid(Uuid::from_u128(42));
     for event in [

@@ -79,7 +79,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 message_parent = { workspace = true }
 
 [dev-dependencies]
-initiative = { workspace = true, features = ["postgres"] }
+project = { workspace = true, features = ["postgres"] }
 macro_db_migrator = { workspace = true }
 models_permissions = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

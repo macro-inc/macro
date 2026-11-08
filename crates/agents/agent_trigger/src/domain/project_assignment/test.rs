@@ -4,10 +4,10 @@ use chrono::Utc;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, RequiredPermission,
 };
-use initiative::domain::events::InitiativeEventActor;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use models_properties::shared::EntityReference;
+use project::domain::events::InitiativeEventActor;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("assigner@example.com").unwrap()

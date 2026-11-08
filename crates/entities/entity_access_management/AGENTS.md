@@ -26,7 +26,7 @@ events — adding/removing an entity from a project, and moving a project.
 
 - Depends on: `macro_user_id`, `model_entity`, `models_entity_access_management`,
   `models_permissions`, `entity_access_db_utils` (feature `outbound`).
-- Used by: `crates/email/email`, `crates/projects/projects`, `crates/comms/chat`, `crates/documents/documents`,
+- Used by: `crates/email/email`, `crates/projects/folder`, `crates/comms/chat`, `crates/documents/documents`,
   `crates/macro_db_client`, `services/document_storage_service`,
   `services/email_service`.
 

@@ -109,7 +109,7 @@ import = { workspace = true }
 import_notion = { workspace = true }
 import_linear = { workspace = true }
 import_jira = { workspace = true }
-initiative = { workspace = true, features = ["messages", "postgres"] }
+project = { workspace = true, features = ["messages", "postgres"] }
 jev_classifier = { workspace = true, features = ["decisions", "outbound"] }
 kafka_util = { workspace = true }
 lexical_client = { workspace = true }

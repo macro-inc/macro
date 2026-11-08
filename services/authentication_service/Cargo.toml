@@ -44,7 +44,7 @@ crm = { workspace = true, features = ["lookup"] }
 agent_api_keys = { workspace = true }
 ai_billing = { workspace = true }
 ai_usage = { workspace = true }
-initiative = { workspace = true, features = ["messages", "postgres"] }
+project = { workspace = true, features = ["messages", "postgres"] }
 codex_connection = { workspace = true }
 codex_cloud_agents = { workspace = true }
 cursor_api_key = { workspace = true }

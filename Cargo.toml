@@ -183,8 +183,8 @@ members = [
   "crates/platform/upstream_error",
   "crates/platform/worker_rs_otel",
   "crates/predicate_index",
-  "crates/projects/initiative",
   "crates/projects/initiative_description",
+  "crates/projects/project",
   "crates/projects/task_dedup",
   "crates/search/activity",
   "crates/search/attention_feed",
@@ -747,6 +747,7 @@ favorites = { path = "crates/entities/favorites" }
 feature_flags = { path = "crates/platform/feature_flags" }
 fig_engine = { path = "crates/engines/fig_engine", default-features = false }
 filter_ast = { path = "crates/types/filter_ast" }
+folder = { path = "crates/projects/folder", default-features = false }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
 form_id = { path = "crates/types/form_id" }
 forms = { path = "crates/databases/forms" }
@@ -794,7 +795,6 @@ import_jira = { path = "crates/integrations/import_jira" }
 import_linear = { path = "crates/integrations/import_linear" }
 import_notion = { path = "crates/integrations/import_notion" }
 import_tracker = { path = "crates/integrations/import_tracker" }
-initiative = { path = "crates/projects/initiative", default-features = false }
 initiative_description = { path = "crates/projects/initiative_description" }
 invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
@@ -887,9 +887,9 @@ pipedream_mcp = { path = "crates/ai/pipedream_mcp" }
 pptx_engine = { path = "crates/engines/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }
 preview_gateway_url = { path = "crates/platform/service_urls/preview_gateway_url" }
+project = { path = "crates/projects/project", default-features = false }
 project_id = { path = "crates/types/project_id" }
-projects = { path = "crates/projects/projects", default-features = false }
-projects_hex = { package = "projects", path = "crates/projects/projects" }
+projects_hex = { package = "folder", path = "crates/projects/folder" }
 prompt = { path = "crates/agents/prompt" }
 properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }

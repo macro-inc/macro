@@ -13,9 +13,9 @@ use databases::domain::events::DatabaseMacroEvent;
 use documents_hex::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
 use forms::domain::events::FormMacroEvent;
-use initiative::domain::events::InitiativeMacroEvent;
 use macro_event_broker::MacroEvent as _;
 use messages::outbound::broker::MessageMacroEvent;
+use project::domain::events::InitiativeMacroEvent;
 use projects_hex::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 

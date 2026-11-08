@@ -8,12 +8,12 @@ use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService}
 use import::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, TrackerTaskRelations,
 };
-use initiative::domain::models::{
-    CreateInitiativeRequest, InitiativeId, MAX_INITIATIVE_NAME_GRAPHEMES,
-};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
+use project::domain::models::{
+    CreateInitiativeRequest, InitiativeId, MAX_INITIATIVE_NAME_GRAPHEMES,
+};
 use system_properties::SystemPropertyKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;

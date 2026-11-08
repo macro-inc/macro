@@ -50,6 +50,7 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService as _;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use folder::inbound::toolset::ProjectToolContext;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -68,7 +69,6 @@ use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification_inbound::ai_tool::NotificationToolContext;
-use projects::inbound::toolset::ProjectToolContext;
 use properties_inbound::toolset::PropertiesToolContext;
 use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
@@ -284,8 +284,8 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
 > {
     messages::domain::service::MessageService::new(
         messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
-            .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                project::outbound::PgInitiativeRepo::new(pool.clone()),
             ))
             .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         effects,
@@ -413,8 +413,8 @@ fn message_service_with_side_effects(
             messages::domain::delivery::DiscussionDelivery::new(
                 messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
                     .with_initiatives(
-                        initiative::domain::lookup::InitiativeLookup::new(
-                            initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                        project::domain::lookup::InitiativeLookup::new(
+                            project::outbound::PgInitiativeRepo::new(pool.clone()),
                         ),
                         build_properties_service(pool.clone(), Arc::new(access.clone())),
                     )
@@ -1326,8 +1326,8 @@ fn properties_service_with_events(
             Some(NoOpNotificationService),
         )
         .with_initiative_assignees(Arc::new(
-            initiative::domain::assignees::InitiativeAssignees::new(
-                initiative::outbound::PgInitiativeRepo::new(pool),
+            project::domain::assignees::InitiativeAssignees::new(
+                project::outbound::PgInitiativeRepo::new(pool),
             ),
         ))
         .with_event_broker(broker),
@@ -1493,14 +1493,14 @@ pub type ToolChatService =
 /// Upload, content-hash, and search-cleanup ports are unwired — project
 /// tools only create, read, and move projects, never run upload or purge
 /// flows.
-pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
-    projects::outbound::PgProjectRepo<PgBotsRepo>,
-    projects::domain::ports::UnavailableProjectUploadUrlPort,
-    projects::domain::ports::UnavailableBulkUploadRequestPort,
-    projects::domain::ports::UnavailableShaCounterPort,
+pub type ToolProjectService = folder::domain::service::ProjectServiceImpl<
+    folder::outbound::PgProjectRepo<PgBotsRepo>,
+    folder::domain::ports::UnavailableProjectUploadUrlPort,
+    folder::domain::ports::UnavailableBulkUploadRequestPort,
+    folder::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
-    projects::domain::ports::UnavailableProjectSearchIndexer,
-    projects::domain::ports::UnavailableFiledItemsUnfiler,
+    folder::domain::ports::UnavailableProjectSearchIndexer,
+    folder::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1526,19 +1526,19 @@ pub fn build_project_tool_context(
     email_service: Arc<ToolUserEmailService>,
     databases_service: Arc<ToolDatabasesService>,
 ) -> ToolProjectToolContext {
-    let project_service = projects::domain::service::ProjectServiceImpl::new(
-        projects::outbound::PgProjectRepo::new(
+    let project_service = folder::domain::service::ProjectServiceImpl::new(
+        folder::outbound::PgProjectRepo::new(
             pool.clone(),
             OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
         ),
-        projects::domain::ports::UnavailableProjectUploadUrlPort,
-        projects::domain::ports::UnavailableBulkUploadRequestPort,
-        projects::domain::ports::UnavailableShaCounterPort,
+        folder::domain::ports::UnavailableProjectUploadUrlPort,
+        folder::domain::ports::UnavailableBulkUploadRequestPort,
+        folder::domain::ports::UnavailableShaCounterPort,
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
-        projects::domain::ports::UnavailableProjectSearchIndexer,
-        projects::domain::ports::UnavailableFiledItemsUnfiler,
+        folder::domain::ports::UnavailableProjectSearchIndexer,
+        folder::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );
@@ -2052,7 +2052,7 @@ pub type ToolMcpServerToolContext =
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
 pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    project::domain::personal_activity::ProjectVisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         ToolEntityAccessService,
     >,
@@ -2064,7 +2064,7 @@ pub fn build_activity_tool_context(
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolActivityToolContext {
     activity::inbound::toolset::ActivityToolContext::new(
-        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+        project::domain::personal_activity::ProjectVisibleActivityReads::new(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
             entity_access_service.clone(),
         ),

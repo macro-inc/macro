@@ -122,10 +122,6 @@ use github_pull_requests::{
         s3_patch_store::S3GithubPullRequestPatchStore,
     },
 };
-use initiative::{
-    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
-    outbound::PgInitiativeRepo,
-};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
@@ -137,6 +133,10 @@ use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification_outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
+use project::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use projects_hex::{
     domain::service::ProjectServiceImpl,
     inbound::axum_router::ProjectRouterState,
@@ -283,7 +283,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
 pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    project::domain::personal_activity::ProjectVisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         EntityAccessService,
     >,
@@ -548,7 +548,7 @@ pub(crate) type DssMessagesState =
 /// Document discussion delivery shared by the message service and PDF annotation edits.
 pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDelivery<
     messages::outbound::pg_discussion_context::ParentDiscussionContext<
-        initiative::domain::lookup::InitiativeLookup<initiative::outbound::PgInitiativeRepo>,
+        project::domain::lookup::InitiativeLookup<project::outbound::PgInitiativeRepo>,
         PropertiesService,
     >,
     messages::outbound::entity_access_audience::EntityAccessMessageAudience<EntityAccessService>,

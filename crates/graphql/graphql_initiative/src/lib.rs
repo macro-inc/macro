@@ -22,7 +22,7 @@ pub use objects::{GraphqlInitiativeSharePermission, GraphqlInitiativeTasksPage};
 pub use query::{resolve_initiative, resolve_initiative_tasks};
 
 use async_graphql::ErrorExtensions;
-use initiative::domain::models::InitiativeError;
+use project::domain::models::InitiativeError;
 
 /// Preserve actionable domain failures while hiding infrastructure details.
 fn graphql_error(error: InitiativeError) -> async_graphql::Error {

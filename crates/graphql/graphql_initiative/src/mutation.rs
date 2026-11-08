@@ -49,7 +49,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
             detail.id.as_uuid(),
         )
         .await?
-        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
+        .ok_or_else(|| graphql_error(project::domain::models::InitiativeError::NotFound))
     }
 
     /// Update project fields; owner-only sharing and membership policy remains in the domain.
@@ -73,7 +73,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
             detail.id.as_uuid(),
         )
         .await?
-        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
+        .ok_or_else(|| graphql_error(project::domain::models::InitiativeError::NotFound))
     }
 
     /// Idempotently ensure the collaborative description surface of an initiative the viewer

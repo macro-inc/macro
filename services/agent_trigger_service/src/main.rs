@@ -170,14 +170,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
         EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
-        initiative::domain::lookup::InitiativeLookup::new(
-            initiative::outbound::PgInitiativeRepo::new(pool.clone()),
-        ),
+        project::domain::lookup::InitiativeLookup::new(project::outbound::PgInitiativeRepo::new(
+            pool.clone(),
+        )),
     );
     let message_reader = Arc::new(messages::domain::service::MessageService::new(
         PgMessageRepository::new(pool.clone())
-            .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                project::outbound::PgInitiativeRepo::new(pool.clone()),
             ))
             .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         messages::domain::ports::NoMessageEventPublisher,
@@ -189,8 +189,8 @@ async fn run() -> anyhow::Result<()> {
         ParentNameReader::new(
             PgChannelsRepo::new(pool.clone()),
             documents,
-            initiative::domain::lookup::InitiativeLookup::new(
-                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            project::domain::lookup::InitiativeLookup::new(
+                project::outbound::PgInitiativeRepo::new(pool.clone()),
             ),
             crm::outbound::lookup::PgCrmParentReader::new(pool.clone()),
             call::outbound::pg_call_repo::PgCallRepo::new(
