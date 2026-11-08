@@ -20,6 +20,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Read records through `useCallRecordQuery`; keep storage and SDK contracts unchanged.
 - Read discussion through `CallDiscussionHistory`'s source slot; preserve channel authorization and canonical call-chat roots.
 - Keep one media element across summary, transcript, chat and pinned controls; preserve idle-control visibility, menu focus and native volume state.
+- Animate each control surface by its own height with 240ms transform/opacity transitions; keep controls mounted and reduce motion to the fade only.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
 - Let CallRecordingBody own the floating details SidePanel.Layout below the full-width header; keep the details toggle in that header.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.
@@ -40,7 +41,7 @@ From `apps/web`:
 - `bun run test -- src/features/block-call src/features/channel/Call/chat/CallChatHistory.test.tsx src/components/app/side-panel/SidePanel.test.tsx src/components/ui/components/ProgressPill.test.ts --maxWorkers=1`
 - `bun run type-check`
 - From the repository root: `just check full`
-- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging and floating-card geometry, themes, navigation and overlapping card state.
+- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging, control frame timing and floating-card geometry, themes, navigation and overlapping card state.
 - Exercise desktop, 680px and 480px panes, and 390x844 touch with an authorized saved call; follow `docs/agent-guide/calls.md`.
 
 ## Related

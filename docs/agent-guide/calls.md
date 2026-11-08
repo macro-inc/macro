@@ -87,7 +87,8 @@ element. Chat jump chips use message time relative to recording start and appear
 only within the known recording duration. Attachments retain their usual cards.
 There is no caption control without a caption track or synthetic speaker video
 layer over the recorded composite. After 2.5 seconds of idle playback, controls
-slide down and fade out over 200ms and the cursor hides, including in fullscreen.
+slide down by their own height and fade out over 240ms, and the cursor hides,
+including in fullscreen. Only transform and opacity animate; the page stays still.
 Movement, focus or touch brings them back; pause, control hover, control focus and
 open menus keep them visible. Reduced motion uses only the fade. Speed uses a dropdown, and volume opens a vertical slider above the mute
 button on hover or focus. Clicking the icon still toggles mute. Both sliders keep

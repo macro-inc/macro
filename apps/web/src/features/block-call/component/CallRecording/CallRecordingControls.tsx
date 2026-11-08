@@ -19,6 +19,9 @@ import {
   type RecordingPlayback,
 } from '../../primitives/recording-playback';
 
+const CONTROL_MOTION =
+  'transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none';
+
 function DesktopRecordingControls(props: {
   playback: RecordingPlayback;
   visibility: RecordingControlsVisibility;
@@ -49,7 +52,13 @@ function DesktopRecordingControls(props: {
     <div
       ref={controlsRef}
       data-recording-controls
-      class="pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-surface/95 px-3 pb-2 pt-1"
+      class={`${CONTROL_MOTION} absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-surface/95 px-3 pb-2 pt-1`}
+      classList={{
+        'opacity-0 pointer-events-none transform-[translateY(100%)]':
+          !props.visibility.visible(),
+        'opacity-100 pointer-events-auto transform-[translateY(0)]':
+          props.visibility.visible(),
+      }}
     >
       <RecordingScrubber playback={props.playback} />
       <div class="flex flex-wrap items-center gap-1">
@@ -307,30 +316,51 @@ function RecordingScrubber(props: { playback: RecordingPlayback }) {
   );
 }
 
-function MobileRecordingControls(props: { playback: RecordingPlayback }) {
+function MobileRecordingControls(props: {
+  playback: RecordingPlayback;
+  visibility: RecordingControlsVisibility;
+}) {
   return (
     <>
       <div class="pointer-events-none absolute inset-0 flex items-center justify-center pb-12">
-        <Button
-          class="pointer-events-auto"
-          variant="secondary"
-          size="icon-xl"
-          aria-label={
-            props.playback.paused()
-              ? t('calls.detailPlay')
-              : t('calls.detailPause')
-          }
-          onClick={props.playback.toggle}
+        <div
+          class={CONTROL_MOTION}
+          classList={{
+            'opacity-0 pointer-events-none transform-[translateY(100%)]':
+              !props.visibility.visible(),
+            'opacity-100 pointer-events-auto transform-[translateY(0)]':
+              props.visibility.visible(),
+          }}
         >
-          <Show
-            when={props.playback.paused()}
-            fallback={<PauseIcon class="size-7" />}
+          <Button
+            variant="secondary"
+            size="icon-xl"
+            aria-label={
+              props.playback.paused()
+                ? t('calls.detailPlay')
+                : t('calls.detailPause')
+            }
+            onClick={props.playback.toggle}
           >
-            <PlayIcon class="size-7" />
-          </Show>
-        </Button>
+            <Show
+              when={props.playback.paused()}
+              fallback={<PauseIcon class="size-7" />}
+            >
+              <PlayIcon class="size-7" />
+            </Show>
+          </Button>
+        </div>
       </div>
-      <div class="pointer-events-auto absolute inset-x-0 bottom-0 bg-surface/95 px-3 pb-2">
+      <div
+        data-recording-controls
+        class={`${CONTROL_MOTION} absolute inset-x-0 bottom-0 bg-surface/95 px-3 pb-2`}
+        classList={{
+          'opacity-0 pointer-events-none transform-[translateY(100%)]':
+            !props.visibility.visible(),
+          'opacity-100 pointer-events-auto transform-[translateY(0)]':
+            props.visibility.visible(),
+        }}
+      >
         <div class="flex items-center gap-2 text-xs tabular-nums">
           <span class="mr-auto">
             {formatVideoTimestamp(props.playback.time())}
@@ -359,10 +389,7 @@ export function CallRecordingControls(props: {
 }) {
   return (
     <div
-      class="pointer-events-none absolute inset-0 transition-[translate,opacity] duration-200 ease-out motion-reduce:translate-y-0"
-      classList={{
-        'opacity-0 translate-y-full': !props.visibility.visible(),
-      }}
+      class="pointer-events-none absolute inset-0"
       inert={!props.visibility.visible()}
       aria-hidden={!props.visibility.visible()}
     >
@@ -375,7 +402,10 @@ export function CallRecordingControls(props: {
           />
         }
       >
-        <MobileRecordingControls playback={props.playback} />
+        <MobileRecordingControls
+          playback={props.playback}
+          visibility={props.visibility}
+        />
       </Show>
     </div>
   );

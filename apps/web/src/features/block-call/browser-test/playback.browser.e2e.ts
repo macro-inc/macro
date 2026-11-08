@@ -116,10 +116,11 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.clock.fastForward(3000);
     await expect(controls).toHaveAttribute('aria-hidden', 'true');
     await expect(player).toHaveCSS('cursor', 'none');
-    await expect(controls).toHaveCSS(
-      'translate',
-      reducedMotion === 'reduce' ? '0px' : '0px 100%'
+    await expect(player.locator('[data-recording-controls]')).toHaveCSS(
+      'opacity',
+      '0'
     );
+    await expect(controls).toHaveAttribute('inert', '');
     await video.hover({ position: { x: 25, y: 25 } });
     await expect(controls).toHaveAttribute('aria-hidden', 'false');
     const pause = page.getByRole('button', { name: 'Pause', exact: true });
