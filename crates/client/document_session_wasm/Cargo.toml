@@ -27,6 +27,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# HostSubscriber exports INFO and above; DEBUG/TRACE never reach the host.
+tracing = { workspace = true, features = ["release_max_level_info"] }
+
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]
 
