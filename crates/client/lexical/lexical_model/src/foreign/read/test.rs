@@ -135,6 +135,10 @@ fn read_only_peers_reject_pipeline_and_publication_before_callbacks_or_commit_id
     let snapshot = tx.view().snapshot_for_foreign_read()?;
     snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
         let publication = peer.editor.suspend_version;
+        assert!(matches!(
+            peer.selection_transform(text),
+            Err(Error::ForeignReadOnly)
+        ));
         assert!(matches!(peer.flush(), Err(Error::ForeignReadOnly)));
         assert!(matches!(
             peer.flush_with(FlushMode::NormalizeOnly),

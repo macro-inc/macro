@@ -794,3 +794,52 @@ fn original_hook_arguments_are_consumed_once_and_restore_after_nested_calls_and_
     );
     Ok(())
 }
+#[test]
+fn first_previous_selection_and_point_captures_survive_rollback_of_a_later_update() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut context = Context::default();
+    let index = crate::api::index();
+    let previous = index
+        .binary_search(&"lexical.$getPreviousSelection")
+        .expect("previous") as u32;
+    let current = index
+        .binary_search(&"lexical.$getSelection")
+        .expect("current") as u32;
+    let anchor = index.binary_search(&"get:anchor").expect("anchor") as u32;
+    let offset = index.binary_search(&"get:offset").expect("offset") as u32;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(2)))?;
+    tx.flush()?;
+    context.finish_update(&tx)?;
+    context.publish(tx.commit()?.next)?;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let capture = tx.view().snapshot_for_foreign_read()?;
+    let old = context
+        .callbacks()
+        .with_read_scope(&capture, |scope| scope.call(previous, json!([]), None))?;
+    let point = context.call(&mut tx, anchor, json!([]), Some(old.clone()))?;
+    let new = context.call(&mut tx, current, json!([]), None)?;
+    assert_ne!(old["$sel"], new["$sel"]);
+    drop(tx);
+    context.discard_update()?;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    assert_eq!(
+        context.call(&mut tx, previous, json!([]), None)?["$sel"],
+        old["$sel"]
+    );
+    assert_eq!(context.call(&mut tx, offset, json!([]), Some(point))?, 1);
+    assert!(context.call(&mut tx, anchor, json!([]), Some(new)).is_err());
+    drop(tx);
+    context.discard_update()?;
+    Ok(())
+}

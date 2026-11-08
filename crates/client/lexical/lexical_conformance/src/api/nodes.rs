@@ -40,6 +40,10 @@ pub(crate) fn call(
         return Ok(result);
     }
     match method {
+        "selectionTransform" => {
+            tx.selection_transform(key)?;
+            return Ok(undefined());
+        }
         "getListType" => {
             return Ok(serde_json::to_value(
                 view.get_or_err::<lexical_rich_nodes::list::ListNode>(key)?

@@ -119,6 +119,8 @@ Use host_foreign for the currently wired mutable text and structural hooks. Regi
 
 Structural hosting covers append, splice, remove, setIndent, updateFromJSON and resetOnCopyNodeFrom. Preserve variadic append versus nested splice arrays, and encode model-triggered node arguments with the same callback identity store. Node-returning replace/insertAfter/insertBefore/createParentElementNode hooks validate results through the shared captured identity store; unit hooks ignore arbitrary returns. Pure hooks still require their own adapters.
 
-Mutable insertNewAfter/collapseAtStart callbacks receive the existing selection slot handle; static transform callbacks run through the same exact transaction frame. Optional node returns accept null and reject undefined; collapse results use JS truthiness. Full selection-transform, pure and lifecycle hosting remain unfinished.
+Mutable insertNewAfter/collapseAtStart callbacks receive the existing selection slot handle; static transform callbacks run through the same exact transaction frame. Optional node returns accept null and reject undefined; collapse results use JS truthiness. Full pure and clone hosting and class construction remain unfinished.
 
 Static importJSON callbacks use HostNodeMutation with a null node and one serialized-node argument. Invoke the factory in the exact mutable callback scope and require a live encoded node result; the model imports children and invokes virtual append after the factory returns. Explicit native-super import construction remains unfinished.
+
+Mutable selectionTransform callbacks receive the previous committed object and current active object. Consume original indexed arguments before encoding fallback selections; native-super bypasses one vtable call. Pipeline focus dispatch follows the live focus after the anchor callback.

@@ -120,4 +120,6 @@ Use CallbackContext::with_read_scope for a whole pure callback, keeping one guar
 
 Route lexical.$parseSerializedNode through Transaction::import_node and the normal captured-node encoder; recursive children and virtual append belong to the model import algorithm, never a second shim tree builder.
 
+Register the committed selection before the update rollback backup; getPreviousSelection reuses that object token. Own its selection and point handles with the committed version, and reuse existing token slots during hydration. Indexed selectionTransform uses the guarded model vtable; preserve original arguments before computing model-triggered previous/current fallback values.
+
 Gate Session commit_prepared's implicit pipeline pass with Transaction::needs_flush, matching model commit. Explicit flush remains unconditional; a write or queued update after flushing requires another pass.

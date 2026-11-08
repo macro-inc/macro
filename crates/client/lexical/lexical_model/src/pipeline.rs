@@ -97,7 +97,7 @@ impl Transaction<'_> {
             .map(|range| range.anchor);
         let mut anchor_key = None;
         if let Some(Point::Text { key, .. }) = anchor {
-            self.run_selection_transform(key)?;
+            self.selection_transform(key)?;
             anchor_key = Some(key);
         }
         // The anchor hook may move the live focus, including to a newly created node.
@@ -106,7 +106,7 @@ impl Transaction<'_> {
             .map(|range| range.focus)
             && Some(key) != anchor_key
         {
-            self.run_selection_transform(key)?;
+            self.selection_transform(key)?;
         }
         if !self.dirty_leaves.is_empty() || !self.dirty_elements.is_empty() {
             if mode == FlushMode::NormalizeOnly
@@ -147,7 +147,9 @@ impl Transaction<'_> {
         }
         Ok(())
     }
-    fn run_selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
+    /// Run one node's virtual selection transform in the current mutable update.
+    pub fn selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
+        self.guard_write()?;
         let index = self.type_index(key).ok_or(Error::PointNodeNotFound(key))?;
         (self.pending.registry.vtable(index).selection_transform)(self, key)
     }
