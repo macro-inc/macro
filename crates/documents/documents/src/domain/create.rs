@@ -16,7 +16,7 @@ use model_owner::CreationPrincipal;
 use sha2::{Digest, Sha256};
 use shared_types::document::FileType;
 
-use models_permissions::share_permission::LinkShareState;
+use permissions_types::share_permission::LinkShareState;
 
 use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::models::{

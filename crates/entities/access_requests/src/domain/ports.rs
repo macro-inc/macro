@@ -1,7 +1,7 @@
 //! Persistence and delivery boundaries. Transactions carry no SQL types inward.
 use super::models::*;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::{share_permission::access_level::AccessLevel, sharing::SharingFacts};
+use permissions_types::{share_permission::access_level::AccessLevel, sharing::SharingFacts};
 use uuid::Uuid;
 
 /// One serialized entity workflow. Dropping it without commit rolls back.

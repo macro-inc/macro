@@ -42,7 +42,7 @@ use entity_mutation::{
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};

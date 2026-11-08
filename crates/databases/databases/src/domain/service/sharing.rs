@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::sharing::{DatabaseSharingRepo, DatabaseSharingService, SharingWrite};
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
     access_level::AccessLevel as ShareAccessLevel,
     channel_share_permission::UpdateOperation,

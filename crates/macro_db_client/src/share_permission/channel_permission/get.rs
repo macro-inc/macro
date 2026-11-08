@@ -1,5 +1,5 @@
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermissionRow;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::ChannelSharePermissionRow;
 
 /// Retrieves all ChannelSharePermission rows for a specific channel ID
 /// This is useful for identifying all items shared with a particular channel
@@ -35,7 +35,7 @@ pub async fn get_channel_share_permissions_by_channel_id(
 #[cfg(test)]
 mod tests {
     use crate::share_permission::channel_permission::get::get_channel_share_permissions_by_channel_id;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("channel_share_permissions")))]
     async fn test_get_channel_share_permissions_by_channel_id_c1(

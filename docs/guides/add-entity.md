@@ -150,7 +150,7 @@ Postgres repo.
 - **Legacy `SharePermission` storage** is only for initiative-style kinds; new
   kinds keep grants in `entity_access` plus an audience column. If you do use it,
   `share_permission_db_utils::get_share_permission_id` ends in `bail!`, and
-  `models_permissions` needs a `TeamShareCreation` variant.
+  `permissions_types` needs a `TeamShareCreation` variant.
 - **Get the permission model right in the first PR.** Initiatives shipped with
   these gaps and needed a dedicated fix:
   - Return the caller's effective access level from the receipt on every

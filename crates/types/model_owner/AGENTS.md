@@ -21,7 +21,7 @@ ownership. A typed owner reference (`Owner`/`OwnerType`) for Macro entities
 - Owns: the `Owner`/`OwnerType`/`CreationPrincipal` value types and the
   team-audience policy function.
 - Not here: whether an owner actually has access to an entity →
-  `models_permissions`, `entity_access`.
+  `permissions_types`, `entity_access`.
 
 ## Boundaries
 
@@ -29,7 +29,7 @@ ownership. A typed owner reference (`Owner`/`OwnerType`) for Macro entities
 - Used by: nearly every domain crate with typed ownership — `agent_session`,
   `agent_trigger`, `bots`, `channels`, `database_sql_runner`, `documents`,
   `entity_access`, `entity_registry`, `model`, `model_notifications`,
-  `models_permissions`, `models_soup`, `projects`, `scheduled_action`,
+  `permissions_types`, `models_soup`, `projects`, `scheduled_action`,
   `soup`, `teams`, and more.
 
 ## Checks

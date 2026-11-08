@@ -14,7 +14,7 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use shared_types::document::{DocumentBasic, FileType};

@@ -23,7 +23,7 @@ use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication, UserOnly,
     is_agent_run,
 };
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;

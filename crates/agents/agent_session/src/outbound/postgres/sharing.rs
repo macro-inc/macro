@@ -10,7 +10,7 @@ use anyhow::Context;
 use entity_access_db_utils::update_entity_access_channel_share_permissions;
 use entity_kind::EntityType;
 use entity_registry::BotFacts;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
     channel_share_permission::ChannelSharePermission,

@@ -11,7 +11,7 @@ use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 use std::sync::{
     Arc,

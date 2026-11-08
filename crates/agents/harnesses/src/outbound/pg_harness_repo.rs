@@ -17,7 +17,7 @@ use chrono::{DateTime, Utc};
 use entity_access_db_utils::{EntityType, delete_entity_access_rows, team_share};
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 use uuid::Uuid;
 

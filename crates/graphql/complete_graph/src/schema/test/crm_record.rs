@@ -6,8 +6,8 @@ use databases::domain::{
 use entity_access::domain::models::{
     EditAccessLevel, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use models_soup::crm_company::SoupCrmCompany;
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 use super::*;
 

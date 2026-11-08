@@ -106,7 +106,7 @@ fn sharing(input: serde_json::Value) -> UpdateSharing {
 
 #[test]
 fn test_update_sharing_maps_off_to_disabling_each_share() {
-    use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+    use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 
     let tool = sharing(serde_json::json!({
         "entityType": "document",
@@ -133,7 +133,7 @@ fn test_update_sharing_maps_off_to_disabling_each_share() {
 
 #[test]
 fn test_update_sharing_maps_grants_to_levels() {
-    use models_permissions::share_permission::{
+    use permissions_types::share_permission::{
         LinkShare, access_level::AccessLevel, channel_share_permission::UpdateOperation,
     };
 

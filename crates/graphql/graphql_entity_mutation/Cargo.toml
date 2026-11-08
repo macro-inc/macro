@@ -11,7 +11,7 @@ graphql_common = { workspace = true }
 graphql_permission = { workspace = true }
 graphql_soup = { workspace = true }
 entity_kind = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 

@@ -16,7 +16,7 @@
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, RequiredPermission};
 use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 
 use crate::{EntityMutationEffect, EntityMutationErrorCode};
 

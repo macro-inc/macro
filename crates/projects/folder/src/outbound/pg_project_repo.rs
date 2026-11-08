@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use model_owner::Owner;
-use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 use shared_types::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
@@ -323,7 +323,7 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     async fn get_project_share_permission(
         &self,
         project_id: &str,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2, Self::Err> {
+    ) -> Result<permissions_types::share_permission::SharePermissionV2, Self::Err> {
         share::get_project_share_permission(&self.pool, project_id).await
     }
 
@@ -331,8 +331,7 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     async fn get_team_share_facts(
         &self,
         project_id: &str,
-    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, ProjectError>
-    {
+    ) -> Result<permissions_types::share_permission::team_share::TeamShareFacts, ProjectError> {
         team_share::get_team_share_facts(&self.pool, project_id).await
     }
 

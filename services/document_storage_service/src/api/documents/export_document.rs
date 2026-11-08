@@ -17,7 +17,7 @@ use shared_types::{
     response::{ErrorResponse, GenericErrorResponse},
 };
 
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

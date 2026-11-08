@@ -372,7 +372,7 @@ use shared_types::user::{
                         PatchUserOnboardingRequest,
 
                         // Teams
-                        models_permissions::share_permission::LinkShare,
+                        permissions_types::share_permission::LinkShare,
                         TeamRole,
                         TeamMember,
                         Team,

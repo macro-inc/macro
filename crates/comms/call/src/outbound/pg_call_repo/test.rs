@@ -15,11 +15,11 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

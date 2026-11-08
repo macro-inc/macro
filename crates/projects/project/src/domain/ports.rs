@@ -8,8 +8,8 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
-use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use permissions_types::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
+use permissions_types::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use crate::domain::models::{
     CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic, InitiativeDetail,

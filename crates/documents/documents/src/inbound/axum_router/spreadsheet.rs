@@ -195,7 +195,7 @@ pub async fn create_spreadsheet_handler<
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     project: ProjectBodyAccessLevelExtractorV2<
-        models_permissions::share_permission::access_level::EditAccessLevel,
+        permissions_types::share_permission::access_level::EditAccessLevel,
         CreateSpreadsheetRequest,
         Svc,
         Auth,

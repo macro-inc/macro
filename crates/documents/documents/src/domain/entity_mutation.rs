@@ -14,7 +14,7 @@ use entity_mutation::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use shared_types::document::DocumentBasic;
 
 use crate::domain::ports::sync::DocumentSyncPort;

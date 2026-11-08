@@ -1,6 +1,6 @@
 use utoipa::ToSchema;
 
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]

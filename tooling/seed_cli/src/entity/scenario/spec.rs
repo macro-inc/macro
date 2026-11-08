@@ -12,7 +12,7 @@ mod test;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use models_permissions::share_permission::LinkShare;
+use permissions_types::share_permission::LinkShare;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;

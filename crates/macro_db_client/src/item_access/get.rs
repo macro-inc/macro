@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 /// A record from entity_access representing a user's access to an entity.
 #[derive(Debug, Clone, PartialEq, Eq)]

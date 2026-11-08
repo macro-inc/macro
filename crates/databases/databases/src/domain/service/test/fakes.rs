@@ -31,11 +31,11 @@ pub(super) struct World {
     pub(super) awareness: Vec<(DatabaseId, String, bool, Awareness)>,
     /// Simulate the gateway refusing an awareness relay.
     pub(super) awareness_relay_fails: bool,
-    pub(super) share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
+    pub(super) share_updates: Vec<Vec<permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
     /// The owner's team, which a team share goes to.
     pub(super) owner_team: Option<Uuid>,
     /// The team share and its revision.
-    pub(super) team_share: Option<models_permissions::share_permission::team_share::TeamShareGrant>,
+    pub(super) team_share: Option<permissions_types::share_permission::team_share::TeamShareGrant>,
     pub(super) team_share_revision: i64,
     /// Simulate the team facts changing between authorization and the write.
     pub(super) team_share_goes_stale: bool,

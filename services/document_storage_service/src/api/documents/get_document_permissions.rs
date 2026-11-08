@@ -8,7 +8,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
 use shared_types::response::GenericErrorResponse;
 use shared_types::version::ApiVersionEnum;
 use sqlx::PgPool;

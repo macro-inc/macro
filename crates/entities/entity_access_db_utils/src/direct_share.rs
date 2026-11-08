@@ -2,7 +2,7 @@
 use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::{
+use permissions_types::{
     share_permission::access_level::AccessLevel,
     sharing::{SharingFacts, SharingTeamRole},
 };

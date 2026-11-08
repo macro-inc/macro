@@ -12,7 +12,7 @@ use messages::domain::{
     ports::MessageError,
     service::MessageWrite,
 };
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::{DocumentBasic, FileType};
 use uuid::Uuid;
 

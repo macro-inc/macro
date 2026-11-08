@@ -16,7 +16,7 @@ use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 use sqlx::PgPool;

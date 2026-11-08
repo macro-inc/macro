@@ -26,7 +26,7 @@ use shared_types::{
     response::{GenericResponse, PresignedUrl},
 };
 
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

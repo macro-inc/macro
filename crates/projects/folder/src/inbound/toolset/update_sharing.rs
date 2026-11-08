@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use entity_kind::{Entity, EntityType};
 use entity_mutation::{DuplicateEntity, MoveEntity, UpdateEntitySharePolicy};
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},

@@ -16,7 +16,7 @@ use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+use permissions_types::share_permission::{LinkShare, access_level::AccessLevel};
 
 use super::apply;
 use super::spec::{ScenarioSpec, ShareLevel};

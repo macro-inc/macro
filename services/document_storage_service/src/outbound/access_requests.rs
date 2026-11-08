@@ -8,7 +8,6 @@ use model_notifications::{
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
     RuntimeAccessRemovedMetadata, StoppedAgent,
 };
-use models_permissions::share_permission::access_level::AccessLevel;
 use notification::domain::{
     models::{
         SendNotificationRequestBuilder,
@@ -16,6 +15,7 @@ use notification::domain::{
     },
     service::{NotificationIngress, NotificationReader},
 };
+use permissions_types::share_permission::access_level::AccessLevel;
 use rootcause::prelude::IntoRootcause;
 use std::{collections::HashSet, sync::Arc};
 

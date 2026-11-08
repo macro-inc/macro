@@ -1,6 +1,6 @@
 use crate::DocumentStorageServiceClient;
 use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::thread::response::GetThreadUserAccessLevelResponse;
 
 impl DocumentStorageServiceClient {

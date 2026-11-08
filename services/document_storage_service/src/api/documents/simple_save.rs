@@ -14,7 +14,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use s3_key::build_cloud_storage_bucket_document_key;
 use serde::Deserialize;
 use shared_types::document::response::DocumentResponseMetadata;

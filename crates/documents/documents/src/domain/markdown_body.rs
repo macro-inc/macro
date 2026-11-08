@@ -6,7 +6,7 @@ use super::ai_edit::{ensure_markdown, worker_token};
 use super::models::DocumentError;
 use super::ports::editing::{EditingWorkerService, MarkdownWrite};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::DocumentBasic;
 
 #[cfg(test)]

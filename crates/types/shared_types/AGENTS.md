@@ -22,13 +22,13 @@ authentication — one of the most widely depended-on crates in the backend.
 - Owns: the shared request/response and storage-facing models for documents,
   items, folders, projects, chat, threads, annotations, and authentication.
 - Not here: message/discussion models → `messages`; typed ownership →
-  `model_owner`; entity permissions → `models_permissions`; properties →
+  `model_owner`; entity permissions → `permissions_types`; properties →
   `models_properties`.
 
 ## Boundaries
 
 - Depends on: `entity_kind`, `model_owner`, `model_file_type`, `model_user`,
-  `models_permissions`, `pagination_types`, `bulk_upload_types`.
+  `permissions_types`, `pagination_types`, `bulk_upload_types`.
 - Used by: dozens of services and crates — `agent_harness`, `agent_tools`,
   `authentication_service(_client)`, `chat`, `collab_surface`,
   `document_storage_service(_client)`, `documents`, `email_service(_client)`,

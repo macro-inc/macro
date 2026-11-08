@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use bot_id::{BotId, NonSystemBotId};
 use entity_access::domain::models::{BotReceiptScope, Entity, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::response::DocumentResponseMetadata;
 use uuid::Uuid;
 

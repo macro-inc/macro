@@ -13,7 +13,7 @@ macro_authorization = { workspace = true, default-features = true, features = ["
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 opentelemetry = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

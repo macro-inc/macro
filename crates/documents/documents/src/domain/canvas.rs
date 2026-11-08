@@ -13,7 +13,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -17,7 +17,7 @@ use uuid::Uuid;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use notification::domain::models::apple::VoipPushPayload;
 
-use models_permissions::share_permission::team_share::TeamShareFacts;
+use permissions_types::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
     CallPeople, CallRecordPage, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,

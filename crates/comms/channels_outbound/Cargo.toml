@@ -22,7 +22,7 @@ item_filters = { workspace = true, features = ["native"] }
 macro_uuid = { workspace = true }
 entity_kind = { workspace = true }
 model_notifications = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 notification_hex = { workspace = true }
 recursion = { workspace = true }
 share_permission_db_utils = { workspace = true }

@@ -1,5 +1,5 @@
 use bot_id::BotId;
-use models_permissions::share_permission::TeamLinkShareDefault;
+use permissions_types::share_permission::TeamLinkShareDefault;
 
 use super::*;
 

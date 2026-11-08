@@ -22,7 +22,7 @@ model_file_type = { workspace = true, features = ["utoipa"] }
 model_user = { workspace = true }
 bulk_upload_types = { workspace = true }
 pagination_types = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }

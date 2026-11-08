@@ -7,12 +7,12 @@ use entity_access_db_utils::team_share::direct_level;
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cow_str::CowLike;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareGrant, TeamShareLevel, TeamShareRequest,
     authorize_team_share,
 };
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

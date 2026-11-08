@@ -3,8 +3,8 @@ use entity_access_db_utils::{
     insert_entity_access_row,
 };
 use entity_kind::Entity;
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareCreation,
 };
 use share_permission_db_utils::team_share;

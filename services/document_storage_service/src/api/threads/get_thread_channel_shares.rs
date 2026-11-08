@@ -5,7 +5,7 @@ use crate::{
 use axum::{Json, extract::State, http::StatusCode};
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use entity_mutation::EntityMutationErrorCode;
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
 
 /// List a thread owner's grants to channels they participate in.
 #[utoipa::path(

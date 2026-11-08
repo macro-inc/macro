@@ -1,5 +1,5 @@
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::{Executor, Postgres, Transaction};
 
 use super::ChannelSharePermissionParamaters;
@@ -92,7 +92,7 @@ where
 mod tests {
     use super::*;
     use anyhow::Context;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("channel_share_permissions")))]
     async fn test_insert_channel_share_permission(
