@@ -48,26 +48,26 @@ pub fn of_paths(repo: &Path, paths: &[&str]) -> Result<String> {
 
 /// Move a finished `tmp` into place at `entry` without ever removing a
 /// complete entry (`is_complete`), which another checkout may have installed
-/// meanwhile and may be reading. A rename onto a non-empty directory fails, so
-/// the rename goes first; only an incomplete leftover is removed before one
-/// retry.
+/// meanwhile and may be reading. Installs of one key are serialized by a lock
+/// file beside it, so only the holder may remove an incomplete leftover, and
+/// nobody can complete it while the holder decides. Readers take no lock: an
+/// entry only ever appears complete, through a rename.
 pub fn install_entry(tmp: &Path, entry: &Path, is_complete: impl Fn(&Path) -> bool) -> Result<()> {
-    if std::fs::rename(tmp, entry).is_ok() {
-        return Ok(());
+    let lock_path = entry.with_extension("lock");
+    let lock = std::fs::File::create(&lock_path)
+        .with_context(|| format!("creating {}", lock_path.display()))?;
+    lock.lock()
+        .with_context(|| format!("locking {}", lock_path.display()))?;
+
+    if is_complete(entry) {
+        return std::fs::remove_dir_all(tmp).with_context(|| format!("removing {}", tmp.display()));
     }
-    if !is_complete(entry) {
-        let _ = std::fs::remove_dir_all(entry);
-        if std::fs::rename(tmp, entry).is_ok() {
-            return Ok(());
-        }
+    if entry.exists() {
+        std::fs::remove_dir_all(entry)
+            .with_context(|| format!("removing the incomplete {}", entry.display()))?;
     }
-    anyhow::ensure!(
-        is_complete(entry),
-        "could not move {} into place at {}",
-        tmp.display(),
-        entry.display()
-    );
-    std::fs::remove_dir_all(tmp).with_context(|| format!("removing {}", tmp.display()))
+    std::fs::rename(tmp, entry)
+        .with_context(|| format!("moving {} into place at {}", tmp.display(), entry.display()))
 }
 
 pub fn git(repo: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {

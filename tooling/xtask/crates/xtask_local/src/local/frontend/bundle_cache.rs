@@ -205,6 +205,8 @@ fn prune(root: &Path, keep: &str) {
     let mut used: Vec<(std::time::SystemTime, PathBuf)> = entries
         .flatten()
         .filter(|entry| entry.file_name() != keep)
+        // Entries are directories; their install locks sit beside them.
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .filter_map(|entry| {
             let path = entry.path();
             let modified = std::fs::metadata(path.join("index.html"))
@@ -220,6 +222,7 @@ fn prune(root: &Path, keep: &str) {
         let old = modified.elapsed().is_ok_and(|age| age > max_age);
         if old || index + 1 >= MAX_ENTRIES {
             let _ = std::fs::remove_dir_all(path);
+            let _ = std::fs::remove_file(path.with_extension("lock"));
         }
     }
 }

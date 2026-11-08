@@ -284,7 +284,9 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if entry.file_name() == keep {
+        // Snapshots are directories; their install locks sit beside them.
+        let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+        if entry.file_name() == keep || !is_dir {
             continue;
         }
         let manifest = path.join("manifest.json");
@@ -297,6 +299,7 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
             .is_some_and(|age| age > max_age);
         if unused {
             let _ = std::fs::remove_dir_all(&path);
+            let _ = std::fs::remove_file(path.with_extension("lock"));
         }
     }
 }
