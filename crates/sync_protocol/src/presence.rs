@@ -1,6 +1,6 @@
 //! Clock-injected EphemeralStore, vendored from loro-internal 1.16.2 awareness.rs.
 //! Copyright Loro contributors, MIT license (see presence/LICENSE).
-//! Only clock injection, imports and API documentation differ from upstream.
+//! Changes from upstream: clock injection, imports, documentation and read-only expiry inspection.
 use crate::time::UnixMillis;
 use loro::LoroValue;
 use loro_internal::{sync::Mutex, SubscriberSetWithQueue, Subscription};
@@ -132,6 +132,21 @@ impl EphemeralStore {
     /// in Rust; call it on your own schedule.
     pub fn remove_outdated(&self, now: UnixMillis) {
         self.inner.remove_outdated(now)
+    }
+
+    /// Earliest supplied wall time at which an entry can expire, including tombstones.
+    /// Past-due entries remain scheduled until [`Self::remove_outdated`] removes them.
+    pub fn next_expiry(&self) -> Option<UnixMillis> {
+        let timeout = self
+            .inner
+            .timeout
+            .load(std::sync::atomic::Ordering::Relaxed);
+        self.inner
+            .states
+            .lock()
+            .values()
+            .map(|state| UnixMillis(state.timestamp.saturating_add(timeout).saturating_add(1)))
+            .min()
     }
 
     /// Read all non-tombstone values without expiring them.

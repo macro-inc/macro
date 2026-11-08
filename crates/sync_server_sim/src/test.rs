@@ -662,3 +662,179 @@ fn native_loro_envelopes_allow_export_chunks_but_keep_other_fields_exact() {
     );
     assert!(compare_effects(&extra, &effects(&large)).is_err());
 }
+
+#[test]
+fn cold_forks_include_only_confirmed_writes_and_are_isolated() {
+    let ports = SimPorts::new();
+    ports.set_gate(GateMode::Held);
+    block_on(ports.put_pending_operation(&OperationId::new("first".into()), b"a")).unwrap();
+    assert!(ports.fork_durable().storage_dump().is_empty());
+    let first = ports.write_generation();
+    ports.confirm_through(first);
+    let cold = ports.fork_durable();
+    assert_eq!(cold.storage_dump()["o/first"], serde_json::json!([97]));
+    block_on(cold.put_pending_operation(&OperationId::new("cold".into()), b"b")).unwrap();
+    assert!(!ports.storage_dump().contains_key("o/cold"));
+    block_on(ports.put_pending_operation(&OperationId::new("later".into()), b"c")).unwrap();
+    assert!(!cold.storage_dump().contains_key("o/later"));
+}
+
+#[test]
+fn completed_write_evidence_excludes_failed_attempts_and_matches_generations() {
+    let ports = SimPorts::new();
+    ports.set_gate(GateMode::Held);
+    ports.set_operation_error("storage.put", Some("unavailable".into()));
+    assert!(
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"a")).is_err()
+    );
+    assert!(ports.take_completed_puts().is_empty());
+    assert!(
+        ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "storage.put")
+    );
+    ports.set_operation_error("storage.put", None);
+    block_on(ports.put_pending_operation(&OperationId::new("ok".into()), b"b")).unwrap();
+    assert_eq!(
+        ports.take_completed_puts(),
+        [(
+            "o/ok".into(),
+            serde_json::json!([98]),
+            ports.write_generation()
+        )]
+    );
+    assert!(ports.take_completed_puts().is_empty());
+}
+
+#[test]
+fn relative_faults_count_across_capabilities_without_matching_clock_reads() {
+    let ports = SimPorts::new();
+    block_on(ports.put_pending_operation(&OperationId::new("before".into()), b"a")).unwrap();
+    ports.fault_after_calls(1, Fault::Error("planned".into()));
+    Clock::unix_time(&ports);
+    block_on(ports.pending_operations()).unwrap();
+    assert!(
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"b")).is_err()
+    );
+    assert!(!ports.storage_dump().contains_key("o/failed"));
+    block_on(ports.put_pending_operation(&OperationId::new("after".into()), b"c")).unwrap();
+}
+
+#[test]
+fn successful_send_enqueues_exclude_failed_attempts_and_precede_gate_release() {
+    let ports = SimPorts::new();
+    ports.accept(&socket()).unwrap();
+    ports.set_gate(GateMode::Held);
+    block_on(ports.put_pending_operation(&OperationId::new("held".into()), b"x")).unwrap();
+    ports.set_operation_error("connections.send_binary", Some("unavailable".into()));
+    assert!(ports.send_binary(&socket(), &[1, 2]).is_err());
+    assert!(ports.take_queued_sends().is_empty());
+    ports.set_operation_error("connections.send_binary", None);
+    ports.send_binary(&socket(), &[1, 3]).unwrap();
+    let queued = ports.take_queued_sends();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].value["frame"], serde_json::json!([1, 3]));
+    assert!(
+        !ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "send")
+    );
+    ports.confirm_through(ports.write_generation());
+    assert!(ports.take_queued_sends().is_empty());
+    assert!(
+        ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "send")
+    );
+}
+
+#[test]
+fn completed_close_evidence_excludes_failed_attempts_and_retains_wire_code() {
+    let ports = SimPorts::new();
+    ports.accept(&socket()).unwrap();
+    ports.set_operation_error("connections.close", Some("unavailable".into()));
+    assert!(
+        ports
+            .close(&socket(), CloseReason::SessionFrozenOrRetired)
+            .is_err()
+    );
+    assert!(ports.take_completed_closes().is_empty());
+    ports.set_operation_error("connections.close", None);
+    ports
+        .close(&socket(), CloseReason::SessionFrozenOrRetired)
+        .unwrap();
+    assert_eq!(ports.take_completed_closes(), [(socket(), 1008)]);
+    assert!(ports.take_completed_closes().is_empty());
+}
+
+#[test]
+fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots() {
+    block_on(async {
+        let ports = SimPorts::new();
+        ports.set_gate(GateMode::Held);
+        let id = OperationId::new("same-key".into());
+        ports.put_pending_operation(&id, b"first").await.unwrap();
+        let first = ports.write_generation();
+        ports.put_pending_operation(&id, b"later").await.unwrap();
+        ports.confirm_through(first);
+        let cold = ports.fork_durable();
+        assert_eq!(
+            cold.pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"first"
+        );
+        assert_eq!(
+            ports
+                .pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"later"
+        );
+        ports.recover();
+        assert_eq!(
+            ports
+                .pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"first"
+        );
+
+        ports.set_gate(GateMode::Held);
+        SnapshotStore::put(&ports, &key(), b"first snapshot")
+            .await
+            .unwrap();
+        let first = ports.write_generation();
+        SnapshotStore::put(&ports, &key(), b"later snapshot")
+            .await
+            .unwrap();
+        ports.confirm_through(first);
+        assert_eq!(
+            SnapshotStore::get(&ports.fork_durable(), &key())
+                .await
+                .unwrap(),
+            b"first snapshot"
+        );
+        assert_eq!(
+            SnapshotStore::get(&ports, &key()).await.unwrap(),
+            b"later snapshot"
+        );
+        ports.recover();
+        assert_eq!(
+            SnapshotStore::get(&ports, &key()).await.unwrap(),
+            b"first snapshot"
+        );
+    });
+}

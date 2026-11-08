@@ -37,3 +37,6 @@ Shared, worker-free wire types for document collaboration and sync routing.
 
 - Keep edition 2021: the pinned generated Rust uses earlier match ergonomics.
 - Keep this crate excluded from hakari; workspace-hack is not wasm-safe.
+
+Presence `next_expiry` inspects all retained timestamps, including past-due entries
+and tombstones; removal expires strictly after the configured timeout.

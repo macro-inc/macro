@@ -5203,6 +5203,17 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "doc_sync_core": [
+      "crates/client/doc_sync_core",
+      "crates/cowlike",
+      "crates/document_id",
+      "crates/macro_user_id",
+      "crates/sync_doc_id",
+      "crates/sync_protocol"
+    ],
+    "document_id": [
+      "crates/document_id"
+    ],
     "document_storage_service": [
       "crates/access_requests",
       "crates/account_manager",
@@ -10227,6 +10238,9 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
+    "lexical_node_id": [
+      "crates/lexical_node_id"
+    ],
     "load-test": [
       "crates/macro_env_var",
       "crates/workspace-hack",
@@ -14148,6 +14162,10 @@
       "crates/stream",
       "crates/workspace-hack"
     ],
+    "sync_doc_id": [
+      "crates/document_id",
+      "crates/sync_doc_id"
+    ],
     "sync_protocol": [
       "crates/sync_protocol"
     ],
@@ -14225,6 +14243,18 @@
       "crates/remote_env_var",
       "crates/sync_service",
       "crates/workspace-hack"
+    ],
+    "sync_sim": [
+      "crates/client/doc_sync_core",
+      "crates/cowlike",
+      "crates/document_id",
+      "crates/macro_sync_service_jwt",
+      "crates/macro_user_id",
+      "crates/sync_doc_id",
+      "crates/sync_protocol",
+      "crates/sync_server_core",
+      "crates/sync_server_sim",
+      "crates/sync_sim"
     ],
     "system_properties": [
       "crates/cowlike",

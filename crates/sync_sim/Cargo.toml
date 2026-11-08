@@ -1,0 +1,33 @@
+[package]
+name = "sync_sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+doc_sync_core.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
+sync_server_core.workspace = true
+sync_server_sim.workspace = true
+macro_sync_service_jwt.workspace = true
+uuid_value.workspace = true
+loro.workspace = true
+bebop.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+postcard.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+specta.workspace = true
+specta-serde.workspace = true
+specta-typescript.workspace = true
+macro_env_var = { path = "../macro_env_var" }
+sync_router = { path = "../sync_router" }
+tokio.workspace = true
+tokio-util.workspace = true
+anyhow.workspace = true
