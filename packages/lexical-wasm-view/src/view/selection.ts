@@ -89,7 +89,7 @@ export function sameSelection(
     );
   return true;
 }
-function domPoint(
+export function domPoint(
   view: EditorView,
   point: Point
 ): { node: Node; offset: number } | null {
@@ -137,4 +137,43 @@ export function writeSelection(
   )
     return;
   dom.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+}
+
+/** LSEL-50: make a forward DOM range without moving the browser selection. */
+export function createDOMRange(
+  view: EditorView,
+  anchor: Point,
+  focus: Point
+): Range | null {
+  const start = domPoint(view, anchor),
+    end = domPoint(view, focus);
+  if (!start || !end) return null;
+  const range = view.root.ownerDocument.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  if (
+    range.collapsed &&
+    (start.node !== end.node || start.offset !== end.offset)
+  ) {
+    range.setStart(end.node, end.offset);
+    range.setEnd(start.node, start.offset);
+  }
+  return range;
+}
+/** LSEL-51: suppress nested/duplicate client rectangles. */
+export function createRectsFromDOMRange(range: Range): readonly DOMRect[] {
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.height > 0
+  );
+  return rects.filter(
+    (rect, index) =>
+      !rects.some(
+        (other, at) =>
+          at < index &&
+          other.left <= rect.left &&
+          other.right >= rect.right &&
+          other.top <= rect.top &&
+          other.bottom >= rect.bottom
+      )
+  );
 }

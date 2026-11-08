@@ -18,7 +18,8 @@ Application factory/preset and plugin wiring live in the later app integration.
 HTML import loads on paste/drop. Code highlighting is an optional lazy module at
 `view/code-highlight`, using Prism and CSS highlights without model mutations.
 The host styles `::highlight(code-<namespace>-<token>)`. A namespace must be unique
-per live editor. Table DOM helpers are exported for host resize/picker UI.
+per live editor. Remote cursor points are resolved by Rust; overlays measure only
+in animation frames after apply and follow scroll/resize. Table DOM helpers are exported for host resize/picker UI.
 
 View algorithms are retargeted from Lexical 0.45.0 commit
 `0cfcc169296723e07de2396cd42ea3434b5b79ed`; upstream MIT license is included.

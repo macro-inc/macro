@@ -13,6 +13,8 @@ The host supplies identities and both clocks and executes the returned effects.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Use `EditorSurface::view_diff` for a cold repaint without resetting sync/history.
 - Surface imports queue view effects in the same output as their sync input.
+- Resolve awareness cursors against the live projection; publish changed point sets
+  after local/remote edits and clear them on expiry without exposing native handles.
 - Hold composing-paragraph remote imports only in the live editor; keep the canonical
   sync/WAL/ack document current and publish local IME edits immediately. End the
   hold at composition end, 3 seconds or 64 new imports; merge through Loro.
