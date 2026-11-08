@@ -63,3 +63,11 @@ local-e2e-all *ARGS:
 # Start and seed the stack, then open Playwright UI mode.
 local-e2e-ui *ARGS:
   tooling/scripts/run-local-e2e.sh --suite web --ui -- "$@"
+
+# Macro instances on the local k3s cluster (infra/platform,
+# docs/design/kubernetes-platform.md).
+#   just platform up [name]            # create or update; https://<name>.localhost:9443/app/
+#   just platform dev email-service    # rebuild one service, roll only its pod
+#   just platform down [name]
+platform *ARGS:
+  {{ xtask }} platform "$@"

@@ -1,0 +1,33 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
+name: check generated workflows
+on:
+  pull_request:
+    paths:
+    - tooling/xtask/**
+    - crates/macro_event_topics/**
+    - .github/workflows/**
+    - .gitea/workflows/**
+    - .github/kafka-cluster-topics.json
+jobs:
+  check-workflows:
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: verify workflows are up to date
+      run: cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check
+    - name: verify kafka cluster topics are up to date
+      run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true

@@ -12,16 +12,67 @@ use super::resources;
 /// Provision all LocalStack resources idempotently. Blocking entry point: spins
 /// up a Tokio runtime so the orchestrator stays synchronous.
 pub fn provision(instance: &Instance) -> Result<()> {
+    provision_with(
+        instance,
+        &UploadNotificationTarget::Sqs,
+        &AwsKey::localstack(),
+    )
+}
+
+/// The key provisioning signs with. LocalStack accepts any; the platform's
+/// backends verify the instance's own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwsKey {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+}
+
+impl AwsKey {
+    /// The values the code-defined local env gives services.
+    pub fn localstack() -> Self {
+        Self {
+            access_key_id: "test".into(),
+            secret_access_key: "test".into(),
+        }
+    }
+}
+
+/// Where the doc-storage bucket's ObjectCreated notifications go.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UploadNotificationTarget {
+    /// LocalStack: straight to the upload-finalizer SQS queue.
+    Sqs,
+    /// An S3 server's own notification target (RustFS: a webhook that
+    /// forwards to the queue), named by its ARN.
+    Target(String),
+}
+
+/// [`provision`] with an explicit upload-notification target.
+pub fn provision_with(
+    instance: &Instance,
+    target: &UploadNotificationTarget,
+    key: &AwsKey,
+) -> Result<()> {
     let url = format!("http://localhost:{}/", instance.port(Port::LocalStack));
+    provision_at(&url, target, key)
+}
+
+/// [`provision_with`] against an explicit endpoint (an in-cluster Job).
+pub fn provision_at(url: &str, target: &UploadNotificationTarget, key: &AwsKey) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("building tokio runtime")?;
-    rt.block_on(provision_async(&url))
+    rt.block_on(provision_async(url, target, key))
 }
 
-async fn provision_async(url: &str) -> Result<()> {
-    let cfg = macro_aws_config::local_aws_config(url).await;
+async fn provision_async(url: &str, target: &UploadNotificationTarget, key: &AwsKey) -> Result<()> {
+    let cfg = macro_aws_config::local_aws_config_with_credentials(
+        url,
+        &key.access_key_id,
+        &key.secret_access_key,
+    )
+    .await;
 
     let sqs = aws_sdk_sqs::Client::new(&cfg);
     let ddb = aws_sdk_dynamodb::Client::new(&cfg);
@@ -45,7 +96,7 @@ async fn provision_async(url: &str) -> Result<()> {
     k?;
 
     // Dependent: wire doc-storage ObjectCreated -> document-upload-finalizer-queue.
-    wire_upload_finalizer(&sqs, &s3).await?;
+    wire_upload_finalizer(&sqs, &s3, target).await?;
     Ok(())
 }
 
@@ -271,9 +322,17 @@ async fn create_tables(ddb: &aws_sdk_dynamodb::Client) -> Result<()> {
 
 /// Configure doc-storage S3 ObjectCreated events to publish to the upload
 /// finalizer SQS queue (mirrors `tooling/just/local_stack.just`).
-async fn wire_upload_finalizer(sqs: &aws_sdk_sqs::Client, s3: &aws_sdk_s3::Client) -> Result<()> {
+async fn wire_upload_finalizer(
+    sqs: &aws_sdk_sqs::Client,
+    s3: &aws_sdk_s3::Client,
+    target: &UploadNotificationTarget,
+) -> Result<()> {
     let queue_url = resources::queue_url(resources::UPLOAD_FINALIZER_QUEUE);
     let queue_arn = resources::queue_arn(resources::UPLOAD_FINALIZER_QUEUE);
+    let target_arn = match target {
+        UploadNotificationTarget::Sqs => queue_arn.clone(),
+        UploadNotificationTarget::Target(arn) => arn.clone(),
+    };
     let source_arn = format!("arn:aws:s3:::{}", resources::DOC_STORAGE_BUCKET);
 
     let policy = serde_json::json!({
@@ -299,7 +358,7 @@ async fn wire_upload_finalizer(sqs: &aws_sdk_sqs::Client, s3: &aws_sdk_s3::Clien
         .queue_configurations(
             s3_types::QueueConfiguration::builder()
                 .id("document-upload-finalizer")
-                .queue_arn(&queue_arn)
+                .queue_arn(&target_arn)
                 .events(s3_types::Event::from("s3:ObjectCreated:*"))
                 .build()
                 .context("building queue notification config")?,
@@ -311,6 +370,27 @@ async fn wire_upload_finalizer(sqs: &aws_sdk_sqs::Client, s3: &aws_sdk_s3::Clien
         .send()
         .await
         .context("configuring doc-storage notifications")?;
+
+    // On the platform, bulk-upload staging also reaches its trigger, which production
+    // wires with an EventBridge rule. LocalStack has no such rule to stand in for.
+    if let UploadNotificationTarget::Target(target_arn) = target {
+        let config = s3_types::NotificationConfiguration::builder()
+            .queue_configurations(
+                s3_types::QueueConfiguration::builder()
+                    .id("bulk-upload-trigger")
+                    .queue_arn(target_arn)
+                    .events(s3_types::Event::from("s3:ObjectCreated:*"))
+                    .build()
+                    .context("building bulk-upload notification config")?,
+            )
+            .build();
+        s3.put_bucket_notification_configuration()
+            .bucket(resources::BULK_UPLOAD_STAGING_BUCKET)
+            .notification_configuration(config)
+            .send()
+            .await
+            .context("configuring bulk-upload staging notifications")?;
+    }
     Ok(())
 }
 

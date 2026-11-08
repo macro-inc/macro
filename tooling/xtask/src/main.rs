@@ -12,8 +12,8 @@
 //! compiles.
 //!
 //! The nested `cargo run` is pinned to the workspace via `--manifest-path`
-//! (derived from this crate's own location at compile time) rather than by
-//! changing the working directory. That makes it work no matter where the
+//! (derived from this crate's own location) rather than by changing the working
+//! directory. That makes it work no matter where the
 //! launcher was invoked from — including outside the workspace, as CI does via
 //! `cargo run --manifest-path .../tooling/xtask/Cargo.toml -- <command>` — while
 //! leaving the command's own working directory unchanged, so relative path
@@ -26,9 +26,18 @@
 use std::process::{Command, exit};
 
 /// The workspace root manifest, resolved from this launcher crate's location
-/// (`<workspace>/tooling/xtask`) at compile time so the nested `cargo run`
-/// resolves the workspace from any cwd.
-const WORKSPACE_MANIFEST: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml");
+/// (`<workspace>/tooling/xtask`) so the nested `cargo run` resolves the workspace
+/// from any cwd. `cargo run` sets the variable at runtime; prefer that, because
+/// sccache can serve a build from another checkout whose path is compiled in.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "This is not application runtime code"
+)]
+fn workspace_manifest() -> String {
+    let dir = std::env::var("CARGO_MANIFEST_DIR")
+        .unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string());
+    format!("{dir}/../../Cargo.toml")
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -66,7 +75,7 @@ fn main() {
     let status = Command::new(cargo)
         .arg("run")
         .arg("--manifest-path")
-        .arg(WORKSPACE_MANIFEST)
+        .arg(workspace_manifest())
         .arg("-p")
         .arg(package)
         .arg("--")

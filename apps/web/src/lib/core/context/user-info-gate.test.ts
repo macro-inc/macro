@@ -13,7 +13,16 @@ beforeEach(() => {
     })
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+it('checks identity under bearer token auth, which sets no login hint', async () => {
+  vi.stubEnv('VITE_ENABLE_BEARER_TOKEN_AUTH', 'true');
+  const { shouldQueryUserInfo } = await import('./user-info-gate');
+  expect(shouldQueryUserInfo()).toBe(true);
+});
 
 it('checks shared dev credentials on a fresh preview origin without a local login marker', async () => {
   window.location.hostname = 'branch-abc123.preview.macro.com';

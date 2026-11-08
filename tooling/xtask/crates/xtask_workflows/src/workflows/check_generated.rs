@@ -14,6 +14,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**"),
     xtask_paths::repo_glob!("crates/macro_event_topics/**"),
     xtask_paths::repo_glob!(".github/workflows/**"),
+    xtask_paths::repo_glob!(".gitea/workflows/**"),
     xtask_paths::repo_glob!(".github/kafka-cluster-topics.json"),
 ];
 

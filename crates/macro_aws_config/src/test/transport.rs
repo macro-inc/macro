@@ -20,7 +20,7 @@ async fn s3_default_transport_works_without_the_legacy_rustls_feature() {
         .expect(1)
         .mount(&server)
         .await;
-    let config = local_aws_config(&server.uri()).await;
+    let config = local_aws_config_with_credentials(&server.uri(), "test", "test").await;
     let client = aws_sdk_s3::Client::from_conf(
         aws_sdk_s3::config::Builder::from(&config)
             .force_path_style(true)
@@ -48,8 +48,22 @@ async fn sqs_default_transport_works_without_the_legacy_rustls_feature() {
         .expect(1)
         .mount(&server)
         .await;
-    let config = local_aws_config(&server.uri()).await;
+    let config = local_aws_config_with_credentials(&server.uri(), "test", "test").await;
     let client = aws_sdk_sqs::Client::new(&config);
     let result = client.list_queues().send().await.unwrap();
     assert_eq!(result.queue_urls(), ["http://localhost/fixture-queue"]);
+}
+
+#[tokio::test]
+async fn local_config_signs_without_credentials_in_the_environment() {
+    use aws_credential_types::provider::ProvideCredentials;
+
+    let config = local_aws_config("http://127.0.0.1:1").await;
+    let credentials = config
+        .credentials_provider()
+        .expect("a credentials provider")
+        .provide_credentials()
+        .await
+        .expect("credentials, from the environment or the test fallback");
+    assert!(!credentials.access_key_id().is_empty());
 }

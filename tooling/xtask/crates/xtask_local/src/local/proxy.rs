@@ -91,22 +91,62 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
 /// non-inventory routes, the mode's static-file block, the optional
 /// static-frontend block, then the tail.
 fn caddyfile(mode: Mode, static_frontend: bool) -> String {
+    caddyfile_for(mode, static_frontend, Flavor::Compose)
+}
+
+/// Where the generated Caddyfile runs. The routes are identical; only the
+/// listener and the upstream host names differ.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flavor {
+    /// The compose `proxy` container: HTTPS with the machine certificate, the
+    /// local preview listener, and compose service names as upstreams.
+    Compose,
+    /// A Kubernetes namespace (`cargo x env`): plain HTTP on `:8080` behind the
+    /// cluster ingress, which terminates TLS, and DNS-1035 Service names
+    /// (compose names with `_` → `-`) as upstreams.
+    Kubernetes,
+}
+
+impl Flavor {
+    /// The upstream host for an inventory service under this flavor.
+    pub fn upstream(self, compose_name: &str) -> String {
+        match self {
+            Flavor::Compose => compose_name.to_owned(),
+            Flavor::Kubernetes => compose_name.replace('_', "-"),
+        }
+    }
+}
+
+/// [`caddyfile`] for an explicit [`Flavor`].
+pub fn caddyfile_for(mode: Mode, static_frontend: bool, flavor: Flavor) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
         STATIC_FILE_DEV
+    };
+    // The platform's S3 server verifies presigned signatures, which cover the
+    // host the service signed for, not the instance's public one.
+    let static_block = match flavor {
+        Flavor::Compose => static_block.to_owned(),
+        Flavor::Kubernetes => static_block.replace(
+            "reverse_proxy localstack:4566\n",
+            "reverse_proxy localstack:4566 {\n            header_up Host localstack:4566\n        }\n",
+        ),
     };
     let mailpit_block = if static_frontend && mode.spec().runs_local_infra {
         MAILPIT_ROUTE
     } else {
         ""
     };
-    let frontend_block = if static_frontend {
+    let frontend_block = if static_frontend && flavor == Flavor::Kubernetes {
+        // The edge image names its bundle's store path in MACRO_FRONTEND.
+        FRONTEND_STATIC.replace("/srv/frontend", "{$MACRO_FRONTEND}")
+    } else if static_frontend {
         FRONTEND_STATIC.to_owned()
     } else {
         FRONTEND_VITE.replace("BACKEND_PREFIXES", &frontend_path_prefixes().join(" "))
     };
-    let preview_block = if mode.spec().runs_local_infra {
+    let preview_block = if mode.spec().runs_local_infra && flavor == Flavor::Compose {
         "\nhttps://*.preview.localhost:8443 {\n    tls internal\n    reverse_proxy agent_harness_service:8111\n}\n"
     } else {
         ""
@@ -125,9 +165,13 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
         ""
     };
     let special_routes = SPECIAL_ROUTES.replace("SYNC_ORIGIN_HEADER", sync_origin);
+    let head = match flavor {
+        Flavor::Compose => CADDY_HEAD,
+        Flavor::Kubernetes => CADDY_HEAD_KUBERNETES,
+    };
     format!(
-        "{CADDY_HEAD}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}",
-        routes = service_routes(mode)
+        "{head}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}",
+        routes = service_routes(mode, flavor)
     )
 }
 
@@ -138,7 +182,7 @@ const DEV_GATEWAY_ORIGIN: &str = "https://dev-gateway.macro.com";
 /// Generate the reverse-proxy routes for every inventoried service that exposes
 /// a path prefix. The inventory is the single source, so adding a service's
 /// proxy route is one field there — not a hand-edit here that can drift.
-fn service_routes(mode: Mode) -> String {
+fn service_routes(mode: Mode, flavor: Flavor) -> String {
     let mut out = String::new();
     for svc in inventory::RUST_SERVICES {
         let Some(prefix) = svc.path_prefix else {
@@ -147,7 +191,7 @@ fn service_routes(mode: Mode) -> String {
         if svc.in_mode(mode) {
             out.push_str(&local_route_block(
                 prefix,
-                svc.compose_name,
+                &flavor.upstream(svc.compose_name),
                 svc.is_websocket,
             ));
         } else if mode == Mode::Dev && svc.in_mode(Mode::Local) {
@@ -156,10 +200,11 @@ fn service_routes(mode: Mode) -> String {
             out.push_str(&dev_gateway_route_block(prefix, svc.is_websocket));
         }
     }
+    let harness = flavor.upstream("agent_harness_service");
     for prefix in ["/preview", "/scheduled-action", "/cognition", "/mcp"] {
         if mode == Mode::Local {
             let matcher = matcher_name(prefix);
-            out.push_str(&format!("    {matcher} path {prefix} {prefix}/*\n    handle {matcher} {{\n        reverse_proxy agent_harness_service:8080\n    }}\n"));
+            out.push_str(&format!("    {matcher} path {prefix} {prefix}/*\n    handle {matcher} {{\n        reverse_proxy {harness}:8080\n    }}\n"));
         } else {
             out.push_str(&dev_gateway_route_block(prefix, false));
         }
@@ -221,6 +266,17 @@ const CADDY_HEAD: &str = r#"# GENERATED by `cargo x` — do not edit.
 :{$PROXY_PORT} {
     tls /etc/caddy/certs/server.pem /etc/caddy/certs/server-key.pem
     # Caddy requires the block body on its own lines (no single-line `{ ... }`).
+"#;
+
+/// The Kubernetes listener: plain HTTP on the pod port. The cluster ingress
+/// terminates TLS (the dev-CA wildcard on kind, ACM on EKS) and forwards here.
+const CADDY_HEAD_KUBERNETES: &str = r#"# GENERATED by `cargo x env` — do not edit.
+{
+    auto_https off
+    admin off
+}
+
+:8080 {
 "#;
 
 /// Reflect any `Origin` on the local proxy. Preflight is answered here so

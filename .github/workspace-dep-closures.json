@@ -10082,6 +10082,17 @@
       "crates/macro_env_var",
       "crates/workspace-hack"
     ],
+    "kms_gateway": [
+      "crates/macro_config",
+      "crates/macro_config_derive",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_tower_layers",
+      "crates/remote_env_var",
+      "crates/workspace-hack",
+      "services/kms_gateway"
+    ],
     "lambda_client": [
       "crates/lambda_client",
       "crates/workspace-hack"
@@ -12114,6 +12125,18 @@
     "psd_engine": [
       "crates/fig_engine",
       "crates/psd_engine"
+    ],
+    "queue_gateway": [
+      "crates/kafka_util",
+      "crates/macro_config",
+      "crates/macro_config_derive",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_tower_layers",
+      "crates/remote_env_var",
+      "crates/workspace-hack",
+      "services/queue_gateway"
     ],
     "rate_limit": [
       "crates/rate_limit",
