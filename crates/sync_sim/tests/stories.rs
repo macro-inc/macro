@@ -41,3 +41,6 @@ mod failed_persistence;
 
 #[path = "stories/confirmed_gap.rs"]
 mod confirmed_gap;
+
+#[path = "stories/gap_parent.rs"]
+mod gap_parent;

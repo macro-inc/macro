@@ -65,6 +65,10 @@ Read-only epoch boundaries: storage_capabilities tests retain old-user parked ro
 across reopen, reject missing row/parking evidence, and enforce CommentOnly server coverage.
 
 `confirmed_gap::confirmed_foreign_rows_above_a_parked_gap_stay_quiet` retains the
-complete literal197, checks quiet replay and independently removes live delivery
-and cold-server proof. `revoked_memory_ai_retains_its_own_parked_edits` removes actual
+complete literal197 and checks quiet replay. The native unit
+`actual_delivery_above_a_true_gap_requires_both_core_and_cold_proof` independently
+removes live delivery and cold-server proof while a genuinely missing row stays parked. `revoked_memory_ai_retains_its_own_parked_edits` removes actual
 parked intervals and parking metadata separately; both mutations must fail edit survival.
+
+`gap_parent::adopted_history_with_a_server_parent_survives_cold_recovery` retains
+literal414 and checks actual delivery after the server supplies an adopted row's parent.
