@@ -7,7 +7,8 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Foreign nodes/callbacks and read-only API scopes are not wired yet.
+- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms use scoped current-hook reborrows; foreign node classes, commands and read-only API scopes are not wired yet.
+- `src/host_callbacks.rs`: single-threaded JS transform ownership, exact-owner scoped reborrows, callback identity dedup and opaque exception transport. Never recover an ancestor transaction pointer or hold a metadata lock over JS.
 - `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
 - `examples/export_host_types.rs`: generate/check the Specta packet declaration with the web formatter.
 - `src/debug.rs`: actual export-entry, logical payload-byte and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
@@ -71,5 +72,14 @@ node types fail explicitly. The development commit packet is versioned separatel
 from its unchanged S1 flat diff. Its metadata currently covers base record fields;
 foreign payloads and NodeState identity descriptors still need the full host.
 Publication currently precedes packet encoding. Make delivery/encoding failure
-and chained-commit state/version/tag ownership explicit before enabling foreign
-callbacks or model follow-up queues through this host.
+and chained-commit state/version/tag ownership explicit before enabling foreign-class
+commit-time hooks or model follow-up queues through this host.
+
+Transform registrations share the original JS function identity. Registration and
+unregistration inside a callback use its current transaction; type-transform
+snapshots remain owned by the model. Exception values stay opaque and are returned
+unchanged after normal Rust rollback, including undefined. Do not inspect error
+properties or use JS throw intrinsics that bypass Rust destructors. Registration
+dirties attached types in the current transaction, or queues that
+work for the next explicit begin_update when idle. Scheduling that update, nested
+editor.update queues and commit listeners still belong to the future shim.

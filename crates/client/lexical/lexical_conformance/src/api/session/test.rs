@@ -353,6 +353,7 @@ fn configured_context_transform_reenters_the_owned_session_and_commits_once() ->
                 let node = self
                     .callback
                     .call(tx, get, json!([key.to_string()]), None)?;
+                assert_eq!(self.callback.node(tx, key)?["$h"], node["$h"]);
                 if self
                     .callback
                     .call(tx, content, json!([]), Some(node.clone()))?

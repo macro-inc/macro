@@ -1,10 +1,10 @@
 //! Native-core indexed host boundary; JS callback adapters build on the same lease.
 use super::{compat::KEYS, debug, host_packet::HostCommitPacket};
-use lexical_conformance::api::{self, Session};
+use lexical_conformance::api::{self, CallbackContext, Context, Session};
 use lexical_model::*;
 use serde::Deserialize;
 use serde_json::Value;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
@@ -35,6 +35,10 @@ struct Call {
 #[wasm_bindgen]
 pub struct EditorHandle {
     session: RefCell<Option<Session>>,
+    callbacks: CallbackContext,
+    owner: Arc<()>,
+    errors: super::host_callbacks::Errors,
+    transforms: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_callbacks::Transform>)>>,
     _lifetime: debug::LiveEditor,
 }
 
@@ -50,6 +54,13 @@ impl Drop for Lease<'_> {
     }
 }
 impl EditorHandle {
+    fn with_callback_session<T>(
+        &self,
+        operation: impl FnOnce(&mut Session) -> Result<T, lexical_conformance::replay::ReplayError>,
+    ) -> Result<T, JsValue> {
+        let result = self.with_session(|session| Ok(operation(session)))?;
+        result.map_err(|error| self.errors.convert(error))
+    }
     fn with_session<T>(
         &self,
         operation: impl FnOnce(&mut Session) -> Result<T, JsError>,
@@ -65,12 +76,12 @@ impl EditorHandle {
     }
 }
 
-fn from_js(value: JsValue) -> Result<Value, JsError> {
+pub(super) fn from_js(value: JsValue) -> Result<Value, JsError> {
     let value = serde_wasm_bindgen::from_value(value).map_err(debug::error)?;
     debug::json_payload(&value);
     Ok(value)
 }
-fn to_js(value: Value) -> Result<JsValue, JsError> {
+pub(super) fn to_js(value: Value) -> Result<JsValue, JsError> {
     let result = serde::Serialize::serialize(
         &value,
         &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
@@ -113,8 +124,15 @@ impl EditorHandle {
             .key_source(KeySource::Shared(KEYS.clone()))
             .build()
             .map_err(debug::error)?;
+        let context = Context::default();
+        let callbacks = context.callbacks();
+        let session = Session::with_context(editor, context).map_err(debug::error)?;
         Ok(debug::returned_handle(Self {
-            session: RefCell::new(Some(Session::new(editor))),
+            session: RefCell::new(Some(session)),
+            callbacks,
+            owner: Arc::new(()),
+            errors: super::host_callbacks::Errors::default(),
+            transforms: RefCell::default(),
             _lifetime: debug::LiveEditor::new(),
         }))
     }
@@ -126,14 +144,15 @@ impl EditorHandle {
             .collect()
     }
     /// Dispatch `{args:[...], this?: encodedHandle}` inside the pending update.
-    pub fn call(&self, api_id: u32, args: JsValue) -> Result<JsValue, JsError> {
+    pub fn call(&self, api_id: u32, args: JsValue) -> Result<JsValue, JsValue> {
         let call: Call = serde_json::from_value(from_js(args)?).map_err(debug::error)?;
-        let result = self.with_session(|session| {
-            session
-                .call(api_id, call.args, call.receiver)
-                .map_err(debug::error)
-        })?;
-        to_js(result)
+        let available = self.session.borrow().is_some();
+        let result = if available {
+            self.with_callback_session(|session| session.call(api_id, call.args, call.receiver))?
+        } else {
+            super::host_callbacks::call(&self.owner, api_id, call.args, call.receiver)?
+        };
+        to_js(result).map_err(Into::into)
     }
     /// Open one unpublished update. Discrete scheduling belongs to the JS host.
     pub fn begin_update(&self, tags: JsValue, discrete: bool) -> Result<(), JsError> {
@@ -148,15 +167,17 @@ impl EditorHandle {
         self.with_session(|session| session.begin_update(tags).map_err(debug::error))
     }
     /// Run normal model normalization and transforms without publishing.
-    pub fn flush(&self) -> Result<(), JsError> {
-        self.with_session(|session| session.flush().map_err(debug::error))
+    pub fn flush(&self) -> Result<(), JsValue> {
+        self.with_callback_session(|session| session.flush())
     }
     /// Publish and encode the flat diff, changed core records and mutation metadata.
-    pub fn commit(&self) -> Result<Vec<u8>, JsError> {
-        let packet = self.with_session(|session| {
-            let commit = session.commit().map_err(debug::error)?;
-            HostCommitPacket::from_commit(&commit, session.committed_version())
-                .map_err(debug::error)
+    pub fn commit(&self) -> Result<Vec<u8>, JsValue> {
+        let packet = self.with_callback_session(|session| {
+            let commit = session.commit()?;
+            Ok(HostCommitPacket::from_commit(
+                &commit,
+                session.committed_version(),
+            )?)
         })?;
         let buffer = postcard::to_stdvec(&packet).map_err(debug::error)?;
         debug::returned_bytes(&buffer);
@@ -167,10 +188,70 @@ impl EditorHandle {
         self.with_session(|session| session.discard_update().map_err(debug::error))
     }
     /// Read captured raw fields without borrowing a model operation across conversion.
-    pub fn read_field(&self, handle: u32, field: &str) -> Result<JsValue, JsError> {
-        let value =
-            self.with_session(|session| session.read_field(handle, field).map_err(debug::error))?;
-        to_js(value)
+    pub fn read_field(&self, handle: u32, field: &str) -> Result<JsValue, JsValue> {
+        let available = self.session.borrow().is_some();
+        let value = if available {
+            self.with_session(|session| session.read_field(handle, field).map_err(debug::error))?
+        } else {
+            super::host_callbacks::read_field(&self.owner, handle, field)?
+        };
+        to_js(value).map_err(Into::into)
+    }
+    /// Register a JS transform in the normal model fixpoint pipeline.
+    pub fn register_transform(
+        &self,
+        type_name: &str,
+        dispatch: js_sys::Function,
+    ) -> Result<u32, JsValue> {
+        let existing = self
+            .transforms
+            .borrow()
+            .values()
+            .find_map(|(_, callback)| callback.matches(&dispatch).then(|| callback.clone()));
+        let callback = match existing {
+            Some(callback) => callback,
+            None => Arc::new(super::host_callbacks::Transform::new(
+                dispatch,
+                self.callbacks.clone(),
+                self.owner.clone(),
+                self.errors.clone(),
+            )?),
+        };
+        let available = self.session.borrow().is_some();
+        let id = if available {
+            self.with_session(|session| {
+                session
+                    .register_transform(type_name, callback.clone())
+                    .map_err(debug::error)
+            })?
+        } else {
+            super::host_callbacks::register(&self.owner, type_name, callback.clone())?
+        };
+        self.transforms
+            .borrow_mut()
+            .insert(id.get(), (id, callback));
+        Ok(debug::returned_handle(id.get()))
+    }
+    /// Remove a registered transform; repeated calls are harmless.
+    pub fn unregister(&self, id: u32) -> Result<(), JsValue> {
+        let registered = self
+            .transforms
+            .borrow()
+            .get(&id)
+            .map(|(registered, _)| *registered);
+        if let Some(registered) = registered {
+            let available = self.session.borrow().is_some();
+            if available {
+                self.with_session(|session| {
+                    session.unregister_transform(registered);
+                    Ok(())
+                })?
+            } else {
+                super::host_callbacks::unregister(&self.owner, registered)?;
+            }
+            self.transforms.borrow_mut().remove(&id);
+        }
+        Ok(())
     }
     /// Release state-owned handles after JS state collection; versions are decimal strings.
     pub fn release_version(&self, version: &str) -> Result<(), JsError> {

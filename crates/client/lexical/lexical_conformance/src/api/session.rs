@@ -12,15 +12,40 @@ pub struct Session {
     editor: Editor,
     pending: Option<PendingUpdate>,
     context: Context,
+    dirty_types: Vec<String>,
 }
 
 impl Session {
+    /// Add a development transform between model operations, including while suspended.
+    pub fn register_transform(
+        &mut self,
+        type_name: &str,
+        callback: std::sync::Arc<dyn lexical_model::ForeignTransform>,
+    ) -> Result<lexical_model::ForeignListenerId> {
+        if self.pending.is_some() {
+            self.with_update(|_, tx| Ok(tx.mark_foreign_type_dirty(type_name)?))?;
+        }
+        let id = self
+            .editor
+            .register_foreign_transform(type_name, callback)?;
+        if self.pending.is_none() && !self.dirty_types.iter().any(|name| name == type_name) {
+            self.dirty_types.push(type_name.to_owned());
+        }
+        Ok(id)
+    }
+
+    /// Remove a previously registered development transform.
+    pub fn unregister_transform(&mut self, id: lexical_model::ForeignListenerId) {
+        self.editor.unregister_foreign_transform(id);
+    }
+
     /// Take ownership of an editor configured by the development host.
     pub fn new(editor: Editor) -> Self {
         Self {
             editor,
             pending: None,
             context: Context::default(),
+            dirty_types: Vec::new(),
         }
     }
 
@@ -35,6 +60,7 @@ impl Session {
             editor,
             pending: None,
             context,
+            dirty_types: Vec::new(),
         })
     }
 
@@ -58,6 +84,14 @@ impl Session {
             ..UpdateOptions::default()
         });
         self.context.begin_update(&mut tx)?;
+        for type_name in &self.dirty_types {
+            if let Err(error) = tx.mark_foreign_type_dirty(type_name) {
+                drop(tx);
+                self.context.discard_update()?;
+                return Err(error.into());
+            }
+        }
+        self.dirty_types.clear();
         self.pending = Some(tx.suspend());
         Ok(())
     }
