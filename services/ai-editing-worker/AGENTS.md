@@ -75,6 +75,9 @@ before touching the edit flow.
 
 ## Gotchas
 
+- Select application list fixtures with `$isTaskListNode`; the worker registry replaces
+  upstream list nodes with `task-list` nodes.
+
 - This worker never deploys without explicit approval — `just deploy-dev` /
   `deploy-prod` run `generate-sandbox` first; don't run them unprompted.
 
