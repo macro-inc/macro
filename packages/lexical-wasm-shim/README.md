@@ -41,3 +41,9 @@ replacements such as spies. Registry ownership is weak at shared prototypes, and
 native non-writable methods and sealed prototypes retain their semantics. This
 metadata is an implementation prerequisite; connection to the facade and Rust
 foreign-node dispatch is still in progress.
+
+The internal backend can now register foreign node metadata and dispatch the five
+mutable text operations to JS through the current model callback lease. Native
+super calls and nested indexed operations use that lease. Other foreign hook bits
+and native class overlays still reject explicitly while their adapters are built;
+the complete prototype-driven class facade remains unfinished.

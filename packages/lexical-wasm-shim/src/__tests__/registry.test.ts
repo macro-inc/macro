@@ -571,3 +571,34 @@ it('includes implicit native ancestors and snapshots class type names once', () 
   expect(calls).toBe(1);
   registry.dispose();
 });
+
+it('recognizes abstract shim bases without calling their throwing getType', () => {
+  class Element {
+    static getType(): string {
+      throw new Error('abstract getType');
+    }
+    isInline() {
+      return false;
+    }
+  }
+  class Custom extends Element {
+    static getType() {
+      return 'abstract-child';
+    }
+  }
+  const catalog = new NativeNodeCatalog([
+    { klass: Element, kind: 'Element', type: null },
+  ]);
+  const registry = new ForeignClassRegistry(catalog, [Custom]);
+  const row = registry.beforeUpdate()[0];
+  expect(row.type).toBe('abstract-child');
+  expect(row.kind).toBe('Element');
+  expect(row.extends).toBeNull();
+  expect(row.ancestry).toEqual([]);
+  expect(row.native).toBe(Element);
+  expect(row.overrides).toBe(0n);
+  expect(() => new ForeignClassRegistry(catalog, [Element])).toThrow(
+    'abstract native bases cannot be registered'
+  );
+  registry.dispose();
+});

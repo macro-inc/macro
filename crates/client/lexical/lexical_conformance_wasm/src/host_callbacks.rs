@@ -342,6 +342,31 @@ impl Callback {
         };
         CURRENT.set(&frame, body)
     }
+    pub(super) fn node_mutation(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+        args: Vec<Value>,
+    ) -> Result<(), Error> {
+        let node = self
+            .context
+            .node(tx, key)
+            .map_err(|error| Error::invariant(error.to_string()))?;
+        let args = self
+            .context
+            .original_arguments(tx, key, hook)
+            .map_err(|error| Error::invariant(error.to_string()))?
+            .unwrap_or(args);
+        let message = serde_json::to_value(super::host_protocol::HostNodeMutation {
+            hook: hook as u8,
+            node,
+            args,
+        })
+        .map_err(|error| Error::invariant(error.to_string()))?;
+        self.with_scope(tx, || self.function.invoke(message, &self.errors))
+    }
+
     pub(super) fn command(
         &self,
         tx: &mut Transaction<'_>,

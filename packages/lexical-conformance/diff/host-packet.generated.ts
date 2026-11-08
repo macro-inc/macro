@@ -13,3 +13,13 @@ export type HostCommitPacket = {
   /**  Whether this transition has model, selection, composition or reconciliation effects. */
   changed: boolean;
 };
+
+/**  One model-owned mutable node operation dispatched to a JS class. */
+export type HostNodeMutation<Node, Arg> = {
+  /**  Index in the model-derived ForeignHook enum. */
+  hook: number;
+  /**  Captured node handle encoded by the shared host identity store. */
+  node: Node;
+  /**  Positional upstream method arguments encoded for the development host. */
+  args: Arg[];
+};

@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { ConformanceBackend, diagnostics } from '../backend/conformance';
+import {
+  ConformanceBackend,
+  diagnostics,
+  foreignHookIndex,
+} from '../backend/conformance';
 
 const collect = global.gc;
 if (collect === undefined)
@@ -128,6 +132,43 @@ test('an unreachable editor with callbacks closing over it releases its Rust fac
     await new Promise<void>((resolve) => setImmediate(resolve));
     collect();
     await collected;
+    expect(diagnostics.liveEditors()).toBe(0);
+  } finally {
+    stop();
+  }
+});
+
+test('unreachable foreign dispatchers closing over an editor release the native facade', async () => {
+  let stop = () => {};
+  const released = new Promise<void>((resolve) => {
+    stop = diagnostics.onCollected(resolve);
+  });
+  (() => {
+    const hook = foreignHookIndex().indexOf('setTextContent');
+    const backend = new ConformanceBackend({
+      namespace: 'foreign callback lifetime',
+      nodes: [
+        {
+          type: 'foreign-cycle',
+          kind: 'Text',
+          extends: 'text',
+          overrides: (1n << BigInt(hook)).toString(),
+        },
+      ],
+    });
+    backend.installForeign('foreign-cycle', (message) => {
+      backend.callNative(
+        'LexicalNode.setTextContent',
+        message.args,
+        message.node
+      );
+    });
+  })();
+  try {
+    expect(diagnostics.liveEditors()).toBe(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    collect();
+    await released;
     expect(diagnostics.liveEditors()).toBe(0);
   } finally {
     stop();

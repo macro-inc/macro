@@ -1,9 +1,17 @@
-import type { HostCommitPacket } from '../../../lexical-conformance/diff/host-packet.generated';
+import type {
+  HostCommitPacket,
+  HostNodeMutation,
+} from '../../../lexical-conformance/diff/host-packet.generated';
 
 export type CommitPacket = HostCommitPacket;
 
 /** Development-only model boundary. Scheduling and JS object handles live above it. */
 export interface ShimBackend {
+  installForeign(
+    type: string,
+    dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown
+  ): void;
+  setForeignMask(type: string, mask: bigint): void;
   beginUpdate(tags: readonly string[], discrete: boolean): void;
   call(name: string, args: readonly unknown[], receiver?: unknown): unknown;
   callNative(

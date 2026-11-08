@@ -6,6 +6,8 @@ export type NodeClass = Function & { readonly prototype: object };
 export interface NativeNodeClass {
   readonly klass: NodeClass;
   readonly kind: NodeKind;
+  /** null marks an abstract shim base with no registered serialized type. */
+  readonly type?: string | null;
 }
 export interface NodeRegistration {
   readonly klass: NodeClass;
@@ -17,7 +19,7 @@ export interface NodeRegistration {
   readonly overrides: bigint;
 }
 interface NativeEntry extends NativeNodeClass {
-  readonly type: string;
+  readonly type: string | null;
   readonly methods: readonly unknown[];
 }
 interface Registration extends Omit<NodeRegistration, 'overrides'> {
@@ -61,13 +63,15 @@ export class NativeNodeCatalog {
     const names = foreignHookIndex();
     if (names.some((name, i) => name !== foreignHooks[i]?.name))
       throw new Error('foreign hook index mismatch');
-    for (const { klass, kind } of classes) {
+    for (const { klass, kind, type: declaredType } of classes) {
       if (this.entries.has(klass))
         throw new TypeError('duplicate native node class');
-      const type = typeName(klass);
-      if (this.types.has(type))
-        throw new TypeError(`duplicate native node type ${type}`);
-      this.types.set(type, klass);
+      const type = declaredType === undefined ? typeName(klass) : declaredType;
+      if (type !== null) {
+        if (this.types.has(type))
+          throw new TypeError(`duplicate native node type ${type}`);
+        this.types.set(type, klass);
+      }
       this.entries.set(
         klass,
         Object.freeze({
@@ -81,7 +85,7 @@ export class NativeNodeCatalog {
   }
 
   typeOf(klass: NodeClass): string | undefined {
-    return this.entries.get(klass)?.type;
+    return this.entries.get(klass)?.type ?? undefined;
   }
 
   nativeType(type: string): NodeClass | undefined {
@@ -250,6 +254,9 @@ export class ForeignClassRegistry {
     const registered = new Map<NodeClass, string>();
     for (const klass of classes) {
       if (registered.has(klass)) continue;
+      const baseline = catalog.nearest(klass);
+      if (baseline.klass === klass && baseline.type === null)
+        throw new TypeError('abstract native bases cannot be registered');
       const type = catalog.typeOf(klass) ?? typeName(klass);
       const previous = byType.get(type) ?? catalog.nativeType(type);
       if (previous !== undefined && previous !== klass)

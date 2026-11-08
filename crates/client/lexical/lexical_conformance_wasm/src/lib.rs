@@ -18,12 +18,17 @@ mod host_callbacks;
 #[cfg(feature = "js-nodes")]
 mod host_commands;
 #[cfg(feature = "js-nodes")]
+mod host_foreign;
+#[cfg(feature = "js-nodes")]
 mod host_input;
 #[cfg(feature = "js-nodes")]
 pub use host::EditorHandle;
 #[cfg(feature = "js-nodes")]
 /// Development commit packet shared with the generated host decoder.
 pub mod host_packet;
+#[cfg(feature = "js-nodes")]
+/// Development JS callback messages shared with generated shim types.
+pub mod host_protocol;
 mod rich;
 pub use rich::RichHandle;
 mod command;
