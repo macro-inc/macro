@@ -27,7 +27,7 @@ between the sandbox and the rest of the product.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
   composer's Auto mode, `POST /agent-mode-choice`, which asks Clef Flash
-  (`jev`) whether a prompt goes to a chat or a coding agent.
+  (`jev_classifier`) whether a prompt goes to a chat or a coding agent.
 
 ## Scope
 
@@ -40,7 +40,7 @@ between the sandbox and the rest of the product.
 ## Boundaries
 
 - Depends on: `agent_session`, `agent_egress`, `agent_runtime_protocol`,
-  `agent_trigger`, `ai_billing`, `jev`.
+  `agent_trigger`, `ai_billing`, `jev_classifier`.
 - Used by: `agent_harness_service` (its sole host).
 
 ## Recipes

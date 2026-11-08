@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use ai_usage::{AiFeature, UsageContext};
-use jev::domain::{Probability, YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{Probability, YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde_json::Value;

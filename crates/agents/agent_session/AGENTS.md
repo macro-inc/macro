@@ -43,7 +43,7 @@ consumer talks to.
 
 ## Boundaries
 
-- Depends on: `agent_runtime_protocol`, `agent_fold`, `jev`, `teams`,
+- Depends on: `agent_runtime_protocol`, `agent_fold`, `jev_classifier`, `teams`,
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent

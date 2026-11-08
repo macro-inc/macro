@@ -64,7 +64,7 @@ pub struct Config {
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for the Jev classifier behind trigger conditions.
     /// Optional: routines cannot save conditions while it is unset.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// PostHog project token for routine run analytics. When unset, runs are
     /// not recorded.
     pub posthog_api_key: agent_harness_service::cognition::config::PosthogApiKey,

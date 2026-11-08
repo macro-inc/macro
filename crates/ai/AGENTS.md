@@ -2,7 +2,7 @@
 
 ## What it is
 
-AI building blocks: the LLM loop (`agent`), the AI tool registry and toolsets, AI projections, attachments, embeddings, image generation, yes/no classification (`jev`), memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
+AI building blocks: the LLM loop (`agent`), the AI tool registry and toolsets, AI projections, attachments, embeddings, image generation, yes/no classification (`jev_classifier`), memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
@@ -20,7 +20,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`dictation`](dictation/AGENTS.md) | Backs voice dictation in document and chat composers: private, transient audio transcription that validates a recording, transcribes it via Whisper, and returns text — … |
 | `embedding` |  |
 | [`image_generation`](image_generation/AGENTS.md) | Belongs to AI tools: generates images from a prompt (with up to three reference images), stores them as static files, and exposes the flow through an AI toolset … |
-| [`jev`](jev/AGENTS.md) | Belongs to automations: yes/no classification of arbitrary JSON against a list of questions, backed by a System One decision model (TypeSafe's Jev or Cloudflare Workers … |
+| [`jev_classifier`](jev_classifier/AGENTS.md) | Belongs to automations: yes/no classification of arbitrary JSON against a list of questions, backed by a System One decision model (TypeSafe's Jev or Cloudflare Workers … |
 | `mcp_select` |  |
 | [`mcp_toolset`](mcp_toolset/AGENTS.md) | Part of agent sessions / AI tooling. |
 | [`memory`](memory/AGENTS.md) | Owns composed AI memory: private explicit preferences, privacy-reviewed professional profiles, and daily activity rolled into calendar weeks, months, and a long-term … |

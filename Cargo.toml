@@ -48,7 +48,7 @@ members = [
   "crates/ai/dictation",
   "crates/ai/embedding",
   "crates/ai/image_generation",
-  "crates/ai/jev",
+  "crates/ai/jev_classifier",
   "crates/ai/mcp_select",
   "crates/ai/mcp_toolset",
   "crates/ai/memory",
@@ -800,7 +800,7 @@ invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
 item-filter-index = { path = "crates/item_filter_index" }
 item_filters = { path = "crates/search/item_filters", default-features = false }
-jev = { path = "crates/ai/jev" }
+jev_classifier = { path = "crates/ai/jev_classifier" }
 kafka_util = { path = "crates/platform/kafka_util" }
 lambda_client = { path = "crates/aws/lambda_client" }
 last_online_tracker = { path = "crates/accounts/last_online_tracker" }

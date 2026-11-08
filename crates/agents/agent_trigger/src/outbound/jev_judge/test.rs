@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use chrono::Utc;
-use jev::domain::{JevError, Probability};
+use jev_classifier::domain::{JevError, Probability};
 use macro_uuid::Uuid;
 use messages::domain::{events::MessageEventAttachment, models::MessageParent};
 
@@ -131,9 +131,10 @@ async fn a_classifier_failure_is_an_error() {
 
 #[test]
 fn every_addressee_question_names_its_agent_and_fits_the_classifier() {
-    let questions = addressee_questions(jev::domain::MAX_QUESTIONS).expect("valid questions");
+    let questions =
+        addressee_questions(jev_classifier::domain::MAX_QUESTIONS).expect("valid questions");
 
-    assert_eq!(questions.len(), jev::domain::MAX_QUESTIONS);
+    assert_eq!(questions.len(), jev_classifier::domain::MAX_QUESTIONS);
     assert!(questions[0].as_str().contains("agent 1"));
     assert!(questions[31].as_str().contains("agent 32"));
 }

@@ -80,7 +80,7 @@ fn default_pipedream_environment() -> String {
 pub struct Config {
     /// Optional TypeSafe key for Command K classification and for routing
     /// unmentioned thread replies to agents.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
     pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
     /// Workers AI token paired with the account ID.

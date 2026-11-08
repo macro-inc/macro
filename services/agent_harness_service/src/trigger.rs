@@ -99,7 +99,8 @@ fn commit_message<M: MacroEventCollection + 'static>(
 }
 
 /// The Jev classifier behind implicit trigger judgement.
-pub type TriggerClassifier = jev::domain::JevClassifier<jev::outbound::SystemOneJev>;
+pub type TriggerClassifier =
+    jev_classifier::domain::JevClassifier<jev_classifier::outbound::SystemOneJev>;
 
 /// Shared domain services retained across trigger-consumer restarts.
 #[derive(Clone)]

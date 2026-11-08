@@ -15,7 +15,7 @@ crm = { workspace = true, features = ["lookup"] }
 call = { workspace = true, features = ["outbound"] }
 agent_session = { workspace = true, default-features = true }
 agent_trigger = { workspace = true, features = ["outbound"] }
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 ai_usage = { workspace = true }
 anyhow = { workspace = true }
 bots = { workspace = true, features = ["outbound", "ports"] }

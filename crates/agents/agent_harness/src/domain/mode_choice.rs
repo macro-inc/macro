@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext};
 use feature_flags::FeatureFlags;
-use jev::domain::{JevError, YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{JevError, YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;
 use tracing::Instrument;

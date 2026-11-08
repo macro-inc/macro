@@ -19,7 +19,7 @@ chrono = { workspace = true }
 connection_gateway_client = { workspace = true }
 doppler-config = { workspace = true }
 email = { workspace = true, features = ["outbound", "ports"] }
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 kafka_util = { workspace = true }
 macro_auth = { workspace = true }
 macro_authorization = { workspace = true, features = ["axum"] }

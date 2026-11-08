@@ -579,11 +579,11 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::SystemOneJev::typesafe)
+        .map(jev_classifier::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
-        .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));
-    let decisions = Arc::new(jev::domain::decisions::DecisionServiceImpl::new(
+        .map(|provider| jev_classifier::domain::JevClassifier::new(provider, recorder.clone()));
+    let decisions = Arc::new(jev_classifier::domain::decisions::DecisionServiceImpl::new(
         decision_classifier,
         admission.clone(),
     ));

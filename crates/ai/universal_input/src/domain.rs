@@ -4,7 +4,7 @@ use std::{future::Future, sync::Arc};
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use jev::domain::{YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

@@ -1,4 +1,4 @@
-# jev
+# jev_classifier
 
 ## What it is
 
@@ -43,7 +43,7 @@ composer's Auto mode.
 
 ## Checks
 
-- `cargo test -p jev --all-features` (`SQLX_OFFLINE` unset).
+- `cargo test -p jev_classifier --all-features` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

@@ -59,7 +59,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
 agent_fold = { workspace = true, default-features = true }
 agent_session = { workspace = true, default-features = true, features = ["test-utils"] }

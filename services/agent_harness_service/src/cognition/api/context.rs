@@ -157,7 +157,7 @@ pub struct ApiContext {
     /// Shared admission for new AI operations, after authorization.
     pub ai_admission: Arc<dyn ai_billing::AiAdmissionService>,
     /// General named decisions, with admission and metering in the Jev domain.
-    pub decisions: Arc<dyn jev::domain::decisions::DecisionService>,
+    pub decisions: Arc<dyn jev_classifier::domain::decisions::DecisionService>,
     /// Bounded, one-call completions without discovery or an agent loop.
     pub tool_free_completions:
         Arc<dyn crate::cognition::service::structured_completion::ToolFreeCompletion>,

@@ -53,7 +53,7 @@ github = { workspace = true, features = [
   "sync",
 ] }
 feature_flags = { workspace = true }
-jev = { workspace = true }
+jev_classifier = { workspace = true }
 macro_env_var = { workspace = true }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { workspace = true }

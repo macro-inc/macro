@@ -2,7 +2,7 @@ use super::*;
 use ai_billing::{AdmissionFuture, DenyReason};
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
-use jev::domain::Probability;
+use jev_classifier::domain::Probability;
 use serde_json::Value;
 use std::sync::Mutex;
 

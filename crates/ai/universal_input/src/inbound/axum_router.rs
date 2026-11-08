@@ -13,7 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use jev::domain::YesNoClassifier;
+use jev_classifier::domain::YesNoClassifier;
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,

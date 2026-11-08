@@ -36,7 +36,7 @@ session that results.
 ## Boundaries
 
 - Depends on: `agent_session`, `ai_billing` (admission, `admission`
-  feature), `messages`, `bots`, `jev` (`outbound`).
+  feature), `messages`, `bots`, `jev_classifier` (`outbound`).
 - Used by: `agent_trigger_service` (its primary host) and `agent_harness`
   (routes triggers it receives via `agent_harness`'s `trigger_router`).
 

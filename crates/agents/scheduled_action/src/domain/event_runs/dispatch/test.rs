@@ -339,8 +339,8 @@ fn conditional(repo: &Repo, filters: serde_json::Value) {
     repo.0.lock().unwrap().configurations[0].filters = serde_json::from_value(filters).unwrap();
 }
 
-fn probability(value: f32) -> jev::domain::Probability {
-    jev::domain::Probability::new(value).unwrap()
+fn probability(value: f32) -> jev_classifier::domain::Probability {
+    jev_classifier::domain::Probability::new(value).unwrap()
 }
 
 fn skipped_condition(repo: &Repo) -> serde_json::Value {
@@ -374,7 +374,7 @@ async fn unmet_condition_skips_with_history_and_never_executes() {
     assert_eq!(
         conditions.calls.lock().unwrap().as_slice(),
         [vec![
-            jev::domain::YesNoQuestion::try_from("Is this urgent?").unwrap()
+            jev_classifier::domain::YesNoQuestion::try_from("Is this urgent?").unwrap()
         ]]
     );
     assert_eq!(

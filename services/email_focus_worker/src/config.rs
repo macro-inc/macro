@@ -26,7 +26,7 @@ pub struct Config {
     /// Authenticates the worker's pushes to the connection gateway.
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for Jev. While it is unset the worker classifies nothing.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// Comma-separated inbox domains to classify, e.g. `macro.com`. Mail from
     /// any other inbox never leaves the system. Empty classifies nothing.
     #[macro_config_default(String::new())]

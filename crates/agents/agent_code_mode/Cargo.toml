@@ -46,7 +46,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 code_execution_core = { workspace = true }
 
 [dev-dependencies]
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { workspace = true }
 agent_session = { workspace = true, features = ["test-utils", "outbound"] }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use jev::domain::JevError;
+use jev_classifier::domain::JevError;
 use macro_authorization::{InternalIdentityClaims, MacroAuthorizationError};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;

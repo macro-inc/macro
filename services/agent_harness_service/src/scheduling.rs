@@ -10,7 +10,7 @@ use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use github::outbound::pg_installation_claims::PgGithubInstallationClaims;
-use jev::{domain::JevClassifier, outbound::SystemOneJev};
+use jev_classifier::{domain::JevClassifier, outbound::SystemOneJev};
 use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{

@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use cognition::domain::{
     DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
 };
-use jev::domain::{JevProvider as _, YesNoQuestion};
+use jev_classifier::domain::{JevProvider as _, YesNoQuestion};
 use rootcause::Report;
 
 /// Each prompt and the entities it should load.
@@ -101,7 +101,7 @@ const LOADED: usize = 4;
 /// The real Jev behind the cognition port, counting its calls and the input
 /// tokens they bill.
 struct RealJev {
-    jev: jev::outbound::SystemOneJev,
+    jev: jev_classifier::outbound::SystemOneJev,
     calls: std::sync::atomic::AtomicU64,
     input_tokens: std::sync::atomic::AtomicU64,
 }
@@ -155,10 +155,12 @@ impl Cognition for RealJev {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "calls TypeSafe's Jev; needs TYPESAFE_API_KEY"]
 async fn entity_route_evaluation() {
-    let key = jev::outbound::TypesafeApiKey::new().expect("TYPESAFE_API_KEY is set");
+    let key = jev_classifier::outbound::TypesafeApiKey::new().expect("TYPESAFE_API_KEY is set");
     let jev = Arc::new(RealJev {
-        jev: jev::outbound::SystemOneJev::typesafe(key.value().expect("TYPESAFE_API_KEY is set"))
-            .expect("a valid TypeSafe key"),
+        jev: jev_classifier::outbound::SystemOneJev::typesafe(
+            key.value().expect("TYPESAFE_API_KEY is set"),
+        )
+        .expect("a valid TypeSafe key"),
         calls: std::sync::atomic::AtomicU64::new(0),
         input_tokens: std::sync::atomic::AtomicU64::new(0),
     });

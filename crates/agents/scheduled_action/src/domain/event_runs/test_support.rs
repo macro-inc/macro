@@ -436,14 +436,14 @@ impl EventExecutor for Executor {
 #[derive(Default)]
 pub struct Conditions {
     pub verdicts: Mutex<VecDeque<Result<ConditionVerdict, ConditionError>>>,
-    pub calls: Mutex<Vec<Vec<jev::domain::YesNoQuestion>>>,
+    pub calls: Mutex<Vec<Vec<jev_classifier::domain::YesNoQuestion>>>,
 }
 impl EventConditionCheck for Conditions {
     async fn check(
         &self,
         owner: &MacroUserIdStr<'static>,
         run: &AuthorizedEventRun,
-        conditions: &[jev::domain::YesNoQuestion],
+        conditions: &[jev_classifier::domain::YesNoQuestion],
     ) -> Result<ConditionVerdict, ConditionError> {
         assert!(run.access.authorizes(owner, &run.pending.event));
         self.calls.lock().unwrap().push(conditions.to_vec());
@@ -452,7 +452,7 @@ impl EventConditionCheck for Conditions {
             .unwrap()
             .pop_front()
             .unwrap_or(Ok(ConditionVerdict::Met(
-                jev::domain::Probability::new(1.0).unwrap(),
+                jev_classifier::domain::Probability::new(1.0).unwrap(),
             )))
     }
 }

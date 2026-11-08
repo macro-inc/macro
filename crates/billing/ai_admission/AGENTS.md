@@ -5,7 +5,7 @@
 AI billing: the admission port (`AiAdmissionService`) that gates user-owned AI
 work, its public errors (`AiAdmissionError`, `DenyReason`) and their HTTP
 contract. Split out of `ai_billing` so crates that only admit AI work, such
-as `jev`, need not compile billing, teams and Stripe.
+as `jev_classifier`, need not compile billing, teams and Stripe.
 
 ## Scope
 
@@ -18,7 +18,7 @@ as `jev`, need not compile billing, teams and Stripe.
 ## Boundaries
 
 - Depends on: `ai_usage` (for `AiFeature`), `macro_user_id`.
-- Used by: `ai_billing` (re-exports everything at its old paths), `jev`.
+- Used by: `ai_billing` (re-exports everything at its old paths), `jev_classifier`.
 
 ## Gotchas
 
