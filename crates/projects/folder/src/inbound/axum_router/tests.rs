@@ -12,6 +12,10 @@ use axum::{
     response::IntoResponse,
 };
 use bot_id::NonSystemBotId;
+use bulk_upload_types::{
+    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
+    UploadFolderProgress, UploadFolderStatus,
+};
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
@@ -29,10 +33,6 @@ use macro_authorization::{
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
-use models_bulk_upload::{
-    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
-    UploadFolderProgress, UploadFolderStatus,
-};
 use models_permissions::share_permission::{
     SharePermissionV2, access_level::AccessLevel as ShareAccessLevel,
 };

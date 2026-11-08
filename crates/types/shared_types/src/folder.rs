@@ -2,7 +2,7 @@ use crate::{document::DocumentMetadata, response::PresignedUrl};
 use std::collections::HashMap;
 
 use crate::document::FileType;
-use models_bulk_upload::S3ObjectInfo;
+use bulk_upload_types::S3ObjectInfo;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

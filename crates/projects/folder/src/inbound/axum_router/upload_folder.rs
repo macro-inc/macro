@@ -4,16 +4,16 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use bulk_upload_types::{
+    MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
+    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
+};
 use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
-};
-use models_bulk_upload::{
-    MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
-    UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
 use project_id::ProjectId;
 use serde::Deserialize;

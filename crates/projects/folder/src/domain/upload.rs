@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use models_bulk_upload::S3ObjectInfo;
+use bulk_upload_types::S3ObjectInfo;
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key};
 use shared_types::document::{DocumentMetadata, FileType};
 use shared_types::folder::{FileSystemNode, FolderItem, S3Destination, S3DestinationMap};

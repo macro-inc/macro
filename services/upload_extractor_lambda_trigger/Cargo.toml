@@ -12,7 +12,7 @@ dynamodb_client = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_aws_config = { workspace = true }
 macro_entrypoint = { workspace = true }
-models_bulk_upload = { workspace = true }
+bulk_upload_types = { workspace = true }
 s3_key = { workspace = true }
 serde = { workspace = true }
 sqs_client = { workspace = true, default-features = true }
