@@ -12,6 +12,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
+- `corpus/dev/README.md`: read-only dev collection, encrypted external cache and count-only scans; corpus replay awaits dev access.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
@@ -24,6 +25,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
 - The recorder owns index.json and upstream/; preserve independently generated fuzz/ artifacts during regeneration and exclude them from recorder file-set checks.
 - Keep unsupported cases in `fixtures/index.json` with a reason; never silently omit them.
+- Keep real dev corpus content only in `/home/wolf/tmp/lexical-port/corpus`; never log it or include it in fixtures, reports or CI artifacts.
 
 ## Checks
 
