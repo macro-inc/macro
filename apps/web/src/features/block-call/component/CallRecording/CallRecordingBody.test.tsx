@@ -4,9 +4,18 @@
 
 import type { CallRecord } from '@service-call/client';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { type ComponentProps, createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CallRecordingBody } from './CallRecordingBody';
+import { RecordingViewProvider } from '../../context/recording-view';
+import { CallRecordingBody as RecordingBody } from './CallRecordingBody';
+
+function CallRecordingBody(props: ComponentProps<typeof RecordingBody>) {
+  return (
+    <RecordingViewProvider callId={props.callId}>
+      <RecordingBody {...props} />
+    </RecordingViewProvider>
+  );
+}
 
 const mocks = vi.hoisted(() => ({
   callAgain: vi.fn(),
@@ -91,6 +100,14 @@ function callRecord(isActive: boolean): CallRecord {
 }
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.callAgain.mockReset();
   mocks.canCallAgain = true;
   mocks.activeCallId = null;
@@ -98,7 +115,10 @@ beforeEach(() => {
   mocks.overlayMode = undefined;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('CallRecordingBody join button', () => {
   it('joins an in-progress call', () => {

@@ -32,6 +32,7 @@ import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { callRecordingDownloadSource } from '../../queries/recording-download';
+import { CallTranscriptButton } from './CallTranscriptButton';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -89,7 +90,12 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
     label: 'Share',
     icon: IconShared,
     action: openShare,
-    buttonComponent: () => <ShareTrigger onClick={openShare} />,
+    buttonComponent: () => (
+      <>
+        <ShareTrigger onClick={openShare} />
+        <CallTranscriptButton />
+      </>
+    ),
     focusTarget: getShareDrawerRecipientInput,
   };
 

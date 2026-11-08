@@ -40,7 +40,7 @@ links still work. A failed load shows Retry.
 ### Saved call detail
 
 On desktop the header keeps the breadcrumb, the call's More menu, Ask Macro,
-combined Share/copy-link control, and side-panel toggle. Calls and Drive use the
+combined Share/copy-link control, Transcript, and the details toggle. Calls and Drive use the
 same More menu for call actions, including rename, recording download and delete.
 The channel appears above the title, with the
 participant avatars before the start/end time range, and Call again on the right.
@@ -51,6 +51,11 @@ stored Markdown, not generated client-side sections.
 The full-width top bar stays above the content, with the standard details toggle.
 Details opens in the existing floating popover below the header, without
 Transcript/Details tabs. On touch it uses the standard details drawer.
+The separate Transcript button directly after Share toggles a right-hand transcript
+panel and stays pressed while open. Opening it changes an active Transcript reading
+tab to Summary; choosing the Transcript tab again remains possible. The button and
+panel are hidden on touch and below 960px of call-pane width; use the reading tab
+there.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone

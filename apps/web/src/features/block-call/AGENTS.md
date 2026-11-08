@@ -25,9 +25,10 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Keep metadata and entity sections on SidePanel's standard floating detail rows and dividers; keep the team-sharing card always visible below metadata, outside collapsible sections.
 - Show read-only team visibility and the starter's resolved display name when sharing is not editable; use the generic starter reason instead of an email fallback, and reserve a disabled switch for pending writes.
 - Put the existing fetched entity-tag pill below title metadata; keep its property reads inside a local Suspense boundary.
-- Keep reading tabs unframed; let the shared Tabs component own the track and selected state.
+- Keep reading tabs visible and unframed at every width; share their state and the independent transcript panel through RecordingViewProvider in both hosts.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
+- Place the Transcript header action after Share, hide it on touch and below 960px, and switch the reading tab to Summary only when opening that panel.
 
 ## Checks
 

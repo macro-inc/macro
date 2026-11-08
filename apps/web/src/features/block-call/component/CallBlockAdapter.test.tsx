@@ -1,7 +1,7 @@
 import type { CallBlockProps } from '@block-call/constants';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallBlockAdapter } from './CallBlockAdapter';
 
 const state = vi.hoisted(() => ({
@@ -68,8 +68,19 @@ vi.mock('./CallRecording/CallRecordingBody', () => ({
     </>
   ),
 }));
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
