@@ -13,9 +13,9 @@ use crate::domain::models::{
     ColumnId, FormId, FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout,
     Widget,
 };
-use models_forms::BookingTarget;
+use forms_types::BookingTarget;
 
-use models_forms::FormSectionKind;
+use forms_types::FormSectionKind;
 
 /// The primary keys a layout's client-minted ids are stored under.
 const LAYOUT_KEYS: [&str; 2] = ["form_sections_pkey", "form_questions_pkey"];

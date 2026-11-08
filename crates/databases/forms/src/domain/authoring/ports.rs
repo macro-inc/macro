@@ -6,7 +6,7 @@ use crate::domain::{
 };
 use databases::domain::models::Viewer;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use models_forms::{FormDetail, FormId, FormLayout};
+use forms_types::{FormDetail, FormId, FormLayout};
 
 /// Forms' existing source-of-truth operations, with conditional authoring writes.
 pub trait AuthoringCore: FormsService + crate::domain::sharing::FormSharingService {
@@ -99,7 +99,7 @@ pub trait AuthoringBooking: Send + Sync + 'static {
     fn check_target(
         &self,
         actor: &Viewer,
-        target: &models_forms::BookingTarget,
+        target: &forms_types::BookingTarget,
     ) -> impl Future<Output = Result<(), super::AuthoringError>> + Send;
 }
 
@@ -108,7 +108,7 @@ impl AuthoringBooking for () {
     async fn check_target(
         &self,
         _actor: &Viewer,
-        _target: &models_forms::BookingTarget,
+        _target: &forms_types::BookingTarget,
     ) -> Result<(), super::AuthoringError> {
         Err(super::AuthoringError::new(
             super::Code::BookingTargetUnavailable,

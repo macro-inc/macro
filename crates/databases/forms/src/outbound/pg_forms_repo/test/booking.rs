@@ -2,7 +2,7 @@
 //! gate rules, and a stored destination the domain could not have written is
 //! refused rather than read past.
 
-use models_forms::{BookingEventTypeId, BookingProfileId, BookingTarget};
+use forms_types::{BookingEventTypeId, BookingProfileId, BookingTarget};
 
 use super::*;
 

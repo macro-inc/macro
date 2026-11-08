@@ -1,7 +1,7 @@
 //! Typed authoring intents and saved outcomes, shared by tools and domain services.
 use databases_types::views::{Conjunction, FilterTest, SetOperator};
 use databases_types::{ColumnId, ColumnKind, OptionId};
-use models_forms::{
+use forms_types::{
     BookingTarget, Form, FormLayout, FormQuestionId, FormSectionId, FormSource, QuestionOption,
     Widget,
 };
@@ -346,7 +346,7 @@ pub enum Change {
     /// Add a section with fresh UUIDs. Existing ids cannot be reused.
     AddSection {
         /// Full typed section. Questions bind saved column ids.
-        section: models_forms::FormSection,
+        section: forms_types::FormSection,
         /// Insert after this section, or first when null.
         after: Option<FormSectionId>,
     },
@@ -367,7 +367,7 @@ pub enum Change {
         /// Questions section to receive it.
         section_id: FormSectionId,
         /// Fresh question UUID and saved column identity.
-        question: models_forms::QuestionLayout,
+        question: forms_types::QuestionLayout,
         /// Previous question or null for first.
         after: Option<FormQuestionId>,
     },
@@ -405,7 +405,7 @@ pub struct NewColumnDraft {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Edit {
     /// Target form.
-    pub form_id: models_forms::FormId,
+    pub form_id: forms_types::FormId,
     /// At most 100 targeted operations; omitted fields survive.
     pub changes: Vec<Change>,
     /// Additive schema operations, applied through DatabasesService. No column deletion/retyping.

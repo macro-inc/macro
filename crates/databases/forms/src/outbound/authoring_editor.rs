@@ -4,7 +4,7 @@ use crate::domain::{
     collaboration::MAXIMUM_DOCUMENT_BYTES,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use models_forms::FormLayout;
+use forms_types::FormLayout;
 
 /// HTTP adapter for the shared worker's Forms codec endpoint.
 pub struct WorkerFormEditor {

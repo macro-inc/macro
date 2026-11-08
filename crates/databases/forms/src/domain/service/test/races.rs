@@ -60,7 +60,7 @@ async fn a_file_question_saved_while_the_form_goes_public_reports_that_only_the_
 
     assert_eq!(
         saved.publication_error,
-        Some(models_forms::FormPublicationProblem::FileUploadNeedsSignIn)
+        Some(forms_types::FormPublicationProblem::FileUploadNeedsSignIn)
     );
     assert_eq!(saved.detail.sections[0].id(), ABOUT_YOU);
     assert_eq!(saved.detail.form.audience, Audience::Public);

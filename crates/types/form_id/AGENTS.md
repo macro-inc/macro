@@ -11,7 +11,7 @@ UUID string on the wire and in every generated schema.
 
 - Depends on: `id_newtype`, `utoipa`, `specta`; `schemars` behind `schema`.
   A hakari traversal exclude.
-- Used by: `models_forms`, which re-exports every id, and through it `forms`.
+- Used by: `forms_types`, which re-exports every id, and through it `forms`.
 
 ## Checks
 

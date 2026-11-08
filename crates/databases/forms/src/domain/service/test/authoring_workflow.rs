@@ -241,7 +241,7 @@ async fn authoring_preserves_human_edits_then_opens_directly_without_response_le
     let ReadResult::Respondent { detail, .. } = respondent else {
         panic!("respondent");
     };
-    assert_eq!(detail.access, models_forms::FormAccess::View);
+    assert_eq!(detail.access, forms_types::FormAccess::View);
     assert_eq!(
         workflow
             .read_form(
@@ -512,7 +512,7 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
 async fn editing_unrelated_questions_preserves_an_existing_private_booking_target() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
-    let booking_id = models_forms::FormSectionId::generate();
+    let booking_id = forms_types::FormSectionId::generate();
     {
         let mut state = world.lock().unwrap();
         state
@@ -527,9 +527,9 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
                 id: booking_id,
                 title: "Book".into(),
                 description: String::new(),
-                target: models_forms::BookingTarget {
-                    profile_id: models_forms::BookingProfileId::generate(),
-                    event_type_id: models_forms::BookingEventTypeId::generate(),
+                target: forms_types::BookingTarget {
+                    profile_id: forms_types::BookingProfileId::generate(),
+                    event_type_id: forms_types::BookingEventTypeId::generate(),
                 },
             });
     }
@@ -582,9 +582,9 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
                 form_id: RSVP_FORM,
                 changes: vec![Change::SetBookingTarget {
                     section_id: booking_id,
-                    target: models_forms::BookingTarget {
-                        profile_id: models_forms::BookingProfileId::generate(),
-                        event_type_id: models_forms::BookingEventTypeId::generate(),
+                    target: forms_types::BookingTarget {
+                        profile_id: forms_types::BookingProfileId::generate(),
+                        event_type_id: forms_types::BookingEventTypeId::generate(),
                     },
                     qualification: Qualification::Advisory,
                 }],
@@ -605,7 +605,7 @@ impl crate::domain::authoring::ports::AuthoringBooking for SchemaEditingBooking 
     async fn check_target(
         &self,
         _: &Viewer,
-        _: &models_forms::BookingTarget,
+        _: &forms_types::BookingTarget,
     ) -> Result<(), AuthoringError> {
         let mut state = self.0.lock().unwrap();
         let table = &mut state.database_mut(RSVP_DATABASE).tables[0];
@@ -664,9 +664,9 @@ async fn edited_question_schema_is_rechecked_after_remote_booking_validation() {
                             id: FormSectionId::generate(),
                             title: "Call".into(),
                             description: String::new(),
-                            target: models_forms::BookingTarget {
-                                profile_id: models_forms::BookingProfileId::generate(),
-                                event_type_id: models_forms::BookingEventTypeId::generate(),
+                            target: forms_types::BookingTarget {
+                                profile_id: forms_types::BookingProfileId::generate(),
+                                event_type_id: forms_types::BookingEventTypeId::generate(),
                             },
                         },
                         after: saved.layout.sections.last().map(FormSection::id),
@@ -1192,7 +1192,7 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
     let column = questions[0].column;
     let mut human = saved.layout.clone();
     human.sections.push(FormSection::Gate {
-        id: models_forms::FormSectionId::generate(),
+        id: forms_types::FormSectionId::generate(),
         title: "Screening".into(),
         description: String::new(),
         message: "Name required".into(),
