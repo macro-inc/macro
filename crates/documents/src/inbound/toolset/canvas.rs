@@ -95,7 +95,7 @@ where
         tokio::select! {
             biased;
             _ = req.cancel.cancelled() => Err(failure(anyhow::anyhow!("Canvas read cancelled."))),
-            result = service.read(receipt, &req.user_id, actor.as_ref(), self.item_ids.clone(), self.format) => result.map_err(failure),
+            result = service.read(receipt, &req.user_id, Some(actor.as_ref()), self.item_ids.clone(), self.format) => result.map_err(failure),
         }
     }
 }
@@ -154,7 +154,7 @@ where
         tokio::select! {
             biased;
             _ = req.cancel.cancelled() => Err(failure(anyhow::anyhow!("Canvas render cancelled."))),
-            result = service.render(receipt, &req.user_id, actor.as_ref(), self.item_ids.clone(), self.crop.clone()) => result.map_err(failure),
+            result = service.render(receipt, &req.user_id, Some(actor.as_ref()), self.item_ids.clone(), self.crop.clone()) => result.map_err(failure),
         }
     }
 }
@@ -195,7 +195,7 @@ where
         tokio::select! {
             biased;
             _ = req.cancel.cancelled() => Err(failure(anyhow::anyhow!("Canvas edit cancelled. ReadCanvas before retrying; earlier edits may have applied."))),
-            result = service.edit(receipt, &req.user_id, actor.as_ref(), self.instructions.clone(), ctx.actor_editor_name()) => result.map_err(failure),
+            result = service.edit(receipt, &req.user_id, Some(actor.as_ref()), self.instructions.clone(), ctx.actor_editor_name()) => result.map_err(failure),
         }
     }
 }
@@ -265,7 +265,7 @@ where
         tokio::select! {
             biased;
             _ = req.cancel.cancelled() => Err(failure(anyhow::anyhow!("Canvas batch cancelled. ReadCanvas before retrying; an already committed edit may have applied."))),
-            result = service.apply(receipt, &req.user_id, actor.as_ref(), request) => result.map_err(failure),
+            result = service.apply(receipt, &req.user_id, Some(actor.as_ref()), request) => result.map_err(failure),
         }
     }
 }

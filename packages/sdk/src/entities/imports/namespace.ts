@@ -60,6 +60,8 @@ export class ImportLedger {
  * Bring Notion, Linear, Jira and Slack content into Macro, tracked in the
  * import ledger so nothing is imported twice.
  *
+ * @routing Use when importing a Notion, Linear or Jira workspace, a single Notion page, or checking what was already imported; not resolving one linked external item, which is foreign entities.
+ *
  * @agent
  * ## Whole workspaces (Notion, Linear, Jira)
  *

@@ -11,12 +11,14 @@ use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification_inbox::domain::{
     models::{
-        InboxChange, InboxDoneOutcome, InboxPage, InboxQuery, InboxRowId, InboxRowTarget,
+        InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
+        InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRowId, InboxRowTarget,
         InboxScope,
     },
     service::NotificationInboxService,
 };
 use soup::domain::models::SoupProjectionHydration;
+use uuid::Uuid;
 
 /// Soup-hydrated inbox changes.
 type Changes = Vec<InboxChange<SoupProjectionHydration>>;
@@ -45,6 +47,22 @@ pub trait NotificationInboxGraphqlService: Send + Sync + 'static {
         viewer: FeedViewer,
         targets: Vec<InboxRowTarget>,
     ) -> BoxFuture<'_, Result<InboxDoneOutcome, FeedError>>;
+
+    /// See [`NotificationInboxService::mark_notification_done`].
+    fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> BoxFuture<'_, Result<InboxNotificationDoneOutcome<SoupProjectionHydration>, FeedError>>;
+
+    /// See [`NotificationInboxService::clear`].
+    fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>>;
 
     /// See [`NotificationInboxService::undo_done`].
     fn undo_done(
@@ -92,6 +110,31 @@ where
         targets: Vec<InboxRowTarget>,
     ) -> BoxFuture<'_, Result<InboxDoneOutcome, FeedError>> {
         Box::pin(NotificationInboxService::mark_done(self, viewer, targets))
+    }
+
+    fn mark_notification_done(
+        &self,
+        viewer: FeedViewer,
+        scope: InboxScope,
+        row: InboxRowId,
+        notification: Uuid,
+    ) -> BoxFuture<'_, Result<InboxNotificationDoneOutcome<SoupProjectionHydration>, FeedError>>
+    {
+        Box::pin(NotificationInboxService::mark_notification_done(
+            self,
+            viewer,
+            scope,
+            row,
+            notification,
+        ))
+    }
+
+    fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>> {
+        Box::pin(NotificationInboxService::clear(self, viewer, request))
     }
 
     fn undo_done(

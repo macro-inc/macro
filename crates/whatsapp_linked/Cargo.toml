@@ -64,5 +64,5 @@ image = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 models_permissions = { path = "../models_permissions" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tower = { workspace = true, features = ["util"] }

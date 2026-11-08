@@ -3,6 +3,7 @@ use crate::domain::{
     events::{WebhookDeletedMetadata, WebhookMacroEvent, WebhookTopicEvent},
     ingestion::WebhookEventIngestionError,
 };
+use call::domain::notification_events::{CallNotificationEvent, CallNotificationMetadata};
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::{ChannelDeletedMetadata, ChannelTopicEvent};
 use documents::domain::events::{DocumentDeletedMetadata, DocumentTopicEvent};
@@ -68,12 +69,30 @@ fn subscribes_to_all_ingestion_topics() {
         [
             "macro.documents",
             "macro.channels",
+            "macro.call_notifications",
             "macro.messages",
             "macro.webhooks",
             "macro.agent_sessions",
             "macro.agent_session_lifecycle"
         ]
     );
+}
+
+#[test]
+fn decodes_call_notifications() {
+    let event = Event::new(CallNotificationEvent::Ended(CallNotificationMetadata::new(
+        Uuid::nil(),
+        None,
+    )));
+    let payload = serde_json::to_vec(&event).expect("serializable");
+
+    let decoded = decode_message("macro.call_notifications", &payload).expect("decodable");
+    match decoded {
+        DeclaredMacroEvent::CallNotificationMacroEvent(decoded) => {
+            assert_eq!(decoded.event(), &event);
+        }
+        _ => panic!("decoded into the wrong topic variant"),
+    }
 }
 
 #[test]
@@ -166,6 +185,12 @@ impl FlakyIngestionService {
 }
 
 impl WebhookEventIngestionService for FlakyIngestionService {
+    async fn ingest_call_notification_event(
+        &self,
+        _event: macro_event_broker::Event<call::domain::notification_events::CallNotificationEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
     async fn ingest_document_event(
         &self,
         _event: Event<DocumentTopicEvent>,

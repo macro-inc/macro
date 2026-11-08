@@ -9,6 +9,8 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
+import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -96,6 +98,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
 
   // Rows here live in the same split as the list, so its rows can drop on them.
   const createDropTarget = createFolderDropTargets();
+  const rootDropTarget = createDropTarget?.(() => null);
 
   const [folderSearch, setFolderSearch] = createSignal('');
 
@@ -200,15 +203,24 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
           </Show>
           <ViewSidebar.Nav aria-label="Folders">
             <DriveLocationMenu location={{ kind: 'folder', id: null }}>
-              <ViewSidebar.Item
-                active={selectedFolder() === null}
-                onClick={() => selectFolder(null)}
+              <div
+                ref={(element) => rootDropTarget?.ref(element)}
+                class={cn(
+                  'rounded-lg',
+                  rootDropTarget?.isOver() &&
+                    'outline-2 -outline-offset-2 outline-accent'
+                )}
               >
-                <ViewSidebar.Icon>
-                  <FolderIcon class="size-4" />
-                </ViewSidebar.Icon>
-                <span>Drive</span>
-              </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={selectedFolder() === null}
+                  onClick={() => selectFolder(null)}
+                >
+                  <ViewSidebar.Icon>
+                    <FolderIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span>Drive</span>
+                </ViewSidebar.Item>
+              </div>
             </DriveLocationMenu>
             <ViewSidebar.Branch>
               <Show
@@ -290,6 +302,27 @@ function DriveImportPromotion() {
   );
 }
 
+/**
+ * Drive's tutorials: Docs, and Spreadsheets and Databases where they're
+ * rolled out. Drive's own video is its list's row. Among several, each item
+ * names its block.
+ */
+function DriveTutorials() {
+  const { tutorials } = useDriveView();
+  return (
+    <ViewSidebar.Nav
+      aria-label={t('tutorials.watchTutorial')}
+      class="empty:hidden"
+    >
+      <For each={tutorials()}>
+        {(id) => (
+          <TutorialSidebarItem tutorial={id} named={tutorials().length > 1} />
+        )}
+      </For>
+    </ViewSidebar.Nav>
+  );
+}
+
 export function DriveSidebar() {
   const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
@@ -319,6 +352,7 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
+        <DriveTutorials />
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

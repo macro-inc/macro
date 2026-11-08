@@ -7,7 +7,8 @@ import {
 } from './draft-storage';
 
 const storageKey = 'routine-composer-draft';
-const expiry = 3 * 60 * 1000;
+// A new routine's page keeps its draft for a day.
+const expiry = 24 * 60 * 60 * 1000;
 const agentId = '0195a096-3d24-7000-8000-000000000001';
 const draft: ScheduleDraft = {
   name: '',

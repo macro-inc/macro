@@ -5,6 +5,13 @@ publish = false
 version = "0.1.0"
 
 [features]
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:serde",
+  "dep:utoipa",
+  "ports",
+]
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:serde", "ports"]
 default = ["ai_tools", "outbound", "ports"]
 outbound = [
@@ -45,6 +52,13 @@ async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 
+# HTTP dependencies
+axum = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
+utoipa = { workspace = true, features = ["chrono"], optional = true }
+
 # Outbound dependencies
 cowlike = { path = "../cowlike", optional = true }
 documents = { path = "../documents", default-features = false, features = ["ports"], optional = true }
@@ -62,5 +76,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+axum = { workspace = true }
+model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tower = { workspace = true, features = ["util"] }

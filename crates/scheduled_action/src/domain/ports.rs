@@ -3,10 +3,11 @@ use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
-    InProgressExecution, LastRun, ListedAction, ScheduledAction, ScheduledActionUpdate,
+    InProgressExecution, ListedAction, RunHistory, ScheduledAction, ScheduledActionUpdate,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -18,7 +19,7 @@ use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
-use trigger_context::RoutineEvent;
+use trigger_context::{RoutineEvent, TriggerContext};
 
 /// Validate configuration syntax and authorize its target before persistence.
 pub trait TaskTargetValidator: Send + Sync + 'static {
@@ -101,12 +102,18 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// When the routine last finished a run and last succeeded, for its code.
+    fn run_history(&self, action_id: &Uuid) -> impl Future<Output = Result<RunHistory>> + Send {
+        let _ = action_id;
+        async { Ok(RunHistory::default()) }
+    }
+
     /// The latest finished run of each action that has one. Ids without runs
     /// are omitted.
     fn last_runs(
         &self,
         action_ids: &[Uuid],
-    ) -> impl Future<Output = Result<HashMap<Uuid, LastRun>>> + Send;
+    ) -> impl Future<Output = Result<HashMap<Uuid, ActionExecutionRecord>>> + Send;
 
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
@@ -203,6 +210,59 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+
+    /// Starter routines whose step is code, to offer when a routine is
+    /// created; none on hosts where code can't be saved.
+    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+
+    /// How the routine's code steps were brought to new SDKs, newest first.
+    fn get_code_upgrades(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+}
+
+/// AI that drafts routines and their steps from people's words.
+pub trait RoutineDraftService: Send + Sync + 'static {
+    /// Draft what `request` asks for, billed to `owner`, naming the items
+    /// `context` lists. A [`super::drafts::Draft::Failed`] says why AI
+    /// couldn't; an error means the request can't be drafted at all.
+    fn draft(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        request: super::drafts::DraftRequest,
+        context: super::drafts::DraftContext,
+    ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
+}
+
+/// The model that drafts routines.
+pub trait DraftModel: Send + Sync + 'static {
+    /// One answer in `completion.schema`'s shape, billed to `owner`; `None`
+    /// when the model gave none, e.g. it failed, timed out or broke the
+    /// schema.
+    fn complete(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        completion: DraftCompletion<'_>,
+    ) -> impl Future<Output = Option<serde_json::Value>> + Send;
+}
+
+/// One request to the drafting model.
+#[derive(Debug, Clone, Copy)]
+pub struct DraftCompletion<'a> {
+    /// What the model is told before the request.
+    pub instructions: &'a str,
+    /// The person's words, or what to fix.
+    pub prompt: &'a str,
+    pub schema: &'a OutputSchema,
+}
+
+/// A JSON schema the model's answer must match.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputSchema {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub schema: serde_json::Value,
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.
@@ -278,6 +338,17 @@ pub enum RoutineRun<'a> {
 }
 
 impl RoutineRun<'_> {
+    pub fn cause(&self) -> trigger_context::origin::RoutineCause {
+        use trigger_context::origin::RoutineCause;
+        match self {
+            Self::Scheduled { .. } => RoutineCause::Scheduled,
+            Self::Manual { .. } => RoutineCause::Manual,
+            Self::Event(run) => RoutineCause::Event {
+                event_id: run.pending.event.event_id().into(),
+            },
+        }
+    }
+
     pub fn event(&self) -> Option<&EventReference> {
         match self {
             Self::Event(run) => Some(&run.pending.event),
@@ -300,6 +371,7 @@ pub trait RoutineEventReader: Send + Sync + 'static {
 pub trait ScheduledAgentRunner: Send + Sync + 'static {
     /// Prepare without starting the task. Remote runners must use the handle's
     /// preallocated IDs and retain established resources before any further await.
+    /// A run that does not start with an agent may establish no resource here.
     /// The handle survives errors and cancellation of this future.
     fn prepare(
         &self,
@@ -309,10 +381,13 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
 
     /// Run to terminal completion, not merely submission. Dropping this future
     /// must signal local session/tool guards; remote cleanup uses `cancel`.
+    /// Record each step's result and any resource on the handle as it happens:
+    /// the handle survives errors and cancellation. `firing` says what started
+    /// the run; an event firing carries the owner's access to the event.
     fn run(
         &self,
         action: &ScheduledAction,
-        handle: &ExecutionHandle,
+        handle: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
@@ -324,6 +399,329 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
         action: &ScheduledAction,
         handle: &ExecutionHandle,
     ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Runs a routine's agent step: at most one per run, under the run handle's
+/// preallocated session and action ids.
+pub trait RoutineAgents: Send + Sync + 'static {
+    /// Open an idle session for `step` as `action`'s owner, listed the way the
+    /// routine says and handed the routine's required `apps`. Record the
+    /// persona on the handle before awaiting, and the transcript as soon as it
+    /// exists, so cleanup and history survive a failed or cancelled preparation.
+    fn prepare(
+        &self,
+        action: &ScheduledAction,
+        step: &routine_program::AgentStep,
+        apps: &[AgentMcpServer],
+        handle: &mut ExecutionHandle,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Deliver `prompt` once to the prepared session, with the structured
+    /// account of what fired the routine when there is one, and wait for its
+    /// outcome. Never replay the prompt after an ambiguous failure.
+    fn run(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        handle: &ExecutionHandle,
+        prompt: String,
+        context: Option<TriggerContext>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Best-effort stop of a session this run opened or tried to open. Safe
+    /// when no agent was involved.
+    fn cancel(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        handle: &ExecutionHandle,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Checks and runs a routine's code steps as its owner, in the process that
+/// holds the SDK executor. Never replay a run after an ambiguous failure:
+/// its writes may have happened.
+pub trait RoutineCode: Send + Sync + 'static {
+    /// The version code is type-checked against now: the SDK and the step
+    /// contract ([`routine_program::code_version`]). `None` when code can't
+    /// run here.
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint>;
+
+    /// Type-check a program's code steps together against [`Self::sdk`] and
+    /// the step contract, each step seeing the outputs of the steps before
+    /// it. The steps with problems, each written as the type checker
+    /// reported it; empty when every step checks.
+    fn check_program(
+        &self,
+        program: &routine_program::RoutineProgram,
+    ) -> impl Future<Output = Result<Vec<StepProblems>, CodeUnavailable>> + Send;
+
+    /// The IANA time zone of `owner`'s primary calendar, when they have one.
+    fn owner_time_zone(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Option<String>> + Send;
+
+    /// Run one code step as `owner`. A dry run sends no writes.
+    fn run(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        run: CodeRun<'_>,
+    ) -> impl Future<Output = CodeOutcome> + Send;
+
+    /// The SDK reference for code that does `task` (entity indexes with
+    /// method signatures), chosen for `user`.
+    fn reference(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> impl Future<Output = Result<String, CodeUnavailable>> + Send;
+
+    /// The SDK declarations of the types `problems` name, for whoever fixes
+    /// the code.
+    fn declarations(&self, problems: &[String]) -> String;
+
+    /// The SDK reference for `symbols`, named as [`Self::reference`]'s
+    /// entity indexes name them, with the types those references name, for
+    /// whoever writes code that uses them: also the indexes of entities
+    /// they belong to that `shown` doesn't hold, and which names the SDK
+    /// doesn't have. Empty when there's nothing to say.
+    fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
+        let _ = (symbols, shown);
+        String::new()
+    }
+
+    /// Rewrite `step`'s source so the problems [`Self::check_program`]
+    /// found go away, keeping what it does, billed to `owner`. `steps` is
+    /// the TypeScript type of the outputs it reads. The model sees the code
+    /// and the problems, never the routine's data. Why it couldn't, for the
+    /// owner.
+    fn rewrite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        step: &routine_program::CodeStep,
+        steps: &str,
+        problems: &[String],
+    ) -> impl Future<Output = Result<String, String>> + Send;
+}
+
+/// A code step that doesn't type-check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepProblems {
+    /// Which code step, counted in program order from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// The problems, as the type checker reported them.
+    pub problems: Vec<String>,
+}
+
+/// Code can't be checked or run right now; the reason is for the owner.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub struct CodeUnavailable(pub String);
+
+/// One code step to run.
+#[derive(Debug, Clone, Copy)]
+pub struct CodeRun<'a> {
+    /// The step.
+    pub step: &'a routine_program::CodeStep,
+    /// `run`, `routine` and `trigger`, as `main` receives them.
+    pub context: &'a serde_json::Value,
+    /// Outputs of earlier steps with ids.
+    pub steps: &'a serde_json::Value,
+    /// Answer every write with an empty result instead of sending it.
+    pub dry_run: bool,
+    /// Who its writes are attributed to.
+    pub acts_as: routine_program::CodeIdentity,
+    /// The routine it belongs to, stamped on its credential so its writes
+    /// never trigger routines.
+    pub routine_id: macro_uuid::Uuid,
+}
+
+/// What one code step did.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CodeOutcome {
+    /// What `main` returned, or why the step failed, for the owner.
+    pub result: Result<serde_json::Value, String>,
+    /// Its SDK calls, in the order they started.
+    pub calls: Vec<routine_program::CallRecord>,
+    /// More calls ran than `calls` records.
+    pub calls_truncated: bool,
+    /// How long it waited for a free slot, when that was a second or more.
+    pub waited_ms: Option<u32>,
+}
+
+/// Hosts without an SDK executor: code steps fail with a reason.
+pub struct NoRoutineCode;
+
+const NO_CODE: &str = "Code steps can't run here: no code executor is configured.";
+
+impl RoutineCode for NoRoutineCode {
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
+        None
+    }
+
+    async fn check_program(
+        &self,
+        _: &routine_program::RoutineProgram,
+    ) -> Result<Vec<StepProblems>, CodeUnavailable> {
+        Err(CodeUnavailable(NO_CODE.to_owned()))
+    }
+
+    async fn owner_time_zone(&self, _: &MacroUserIdStr<'static>) -> Option<String> {
+        None
+    }
+
+    async fn run(&self, _: &MacroUserIdStr<'static>, _: CodeRun<'_>) -> CodeOutcome {
+        CodeOutcome {
+            result: Err(NO_CODE.to_owned()),
+            calls: Vec::new(),
+            calls_truncated: false,
+            waited_ms: None,
+        }
+    }
+
+    async fn reference(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+    ) -> Result<String, CodeUnavailable> {
+        Err(CodeUnavailable(NO_CODE.to_owned()))
+    }
+
+    fn declarations(&self, _: &[String]) -> String {
+        String::new()
+    }
+
+    async fn rewrite(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &routine_program::CodeStep,
+        _: &str,
+        _: &[String],
+    ) -> Result<String, String> {
+        Err(NO_CODE.to_owned())
+    }
+}
+
+/// A host that may not have an executor: `None` behaves like [`NoRoutineCode`].
+impl<Code: RoutineCode> RoutineCode for Option<Code> {
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
+        self.as_ref().and_then(RoutineCode::sdk)
+    }
+
+    async fn check_program(
+        &self,
+        program: &routine_program::RoutineProgram,
+    ) -> Result<Vec<StepProblems>, CodeUnavailable> {
+        match self {
+            Some(code) => code.check_program(program).await,
+            None => NoRoutineCode.check_program(program).await,
+        }
+    }
+
+    async fn owner_time_zone(&self, owner: &MacroUserIdStr<'static>) -> Option<String> {
+        match self {
+            Some(code) => code.owner_time_zone(owner).await,
+            None => None,
+        }
+    }
+
+    async fn run(&self, owner: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        match self {
+            Some(code) => code.run(owner, run).await,
+            None => NoRoutineCode.run(owner, run).await,
+        }
+    }
+
+    async fn reference(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> Result<String, CodeUnavailable> {
+        match self {
+            Some(code) => code.reference(user, task).await,
+            None => NoRoutineCode.reference(user, task).await,
+        }
+    }
+
+    fn declarations(&self, problems: &[String]) -> String {
+        self.as_ref()
+            .map(|code| code.declarations(problems))
+            .unwrap_or_default()
+    }
+
+    fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
+        self.as_ref()
+            .map(|code| code.symbol_references(symbols, shown))
+            .unwrap_or_default()
+    }
+
+    async fn rewrite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        step: &routine_program::CodeStep,
+        steps: &str,
+        problems: &[String],
+    ) -> Result<String, String> {
+        match self {
+            Some(code) => code.rewrite(owner, step, steps, problems).await,
+            None => NoRoutineCode.rewrite(owner, step, steps, problems).await,
+        }
+    }
+}
+
+/// Records how a routine's code was brought to a new SDK. Every write is
+/// fenced by the routine's configuration revision, so an owner's edit made
+/// meanwhile wins.
+pub trait CodeUpgrades: Send + Sync + 'static {
+    /// The code checked as it was: record `sdk` on the routine's task.
+    fn record_checked(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Claim the one rewrite for this routine and SDK. False when another
+    /// run holds it, or it already ended; a claim left running for long by a
+    /// stopped process can be taken over.
+    fn claim_rewrite(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Save a checked rewrite as the routine's task.
+    fn save_rewrite(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+        task: &serde_json::Value,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Pause the routine for its owner, with why and the rewrite that
+    /// failed its checks, if there was one.
+    fn needs_update(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+        reason: &str,
+        proposal: Option<&serde_json::Value>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Up to `limit` enabled routines with code steps last checked against
+    /// another SDK than `sdk`, by id after `after`.
+    fn stale_routines(
+        &self,
+        sdk: &routine_program::SdkFingerprint,
+        after: Option<Uuid>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+
+    /// The routine's upgrades, newest first.
+    fn list_upgrades(
+        &self,
+        action_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
 }
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
@@ -341,13 +739,15 @@ pub enum RunTrigger {
     Event(EventName),
 }
 
-/// Who did a routine run's work.
+/// Who did a routine run's work: a program's agent step, when it has one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunTarget {
     /// A model, prompted directly.
     Model,
     /// One of the owner's agents.
     Agent,
+    /// Only code: no step reaches a model or agent.
+    Steps,
     /// The task could not be read.
     Unknown,
 }

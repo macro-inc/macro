@@ -1,5 +1,7 @@
+import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
+import agentWork from './en/agent-work';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
@@ -19,6 +21,7 @@ import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import tabs from './en/tabs';
+import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
 /**
@@ -27,7 +30,9 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  accountManager,
   agentSetup,
+  agentWork,
   calls,
   channelComposer,
   channelLabels,
@@ -47,5 +52,6 @@ export default {
   settingsNav,
   splitMenu,
   tabs,
+  tutorials,
   viewMenus,
 };

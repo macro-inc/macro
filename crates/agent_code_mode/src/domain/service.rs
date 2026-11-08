@@ -205,6 +205,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             "ReadContent"
                 | "ReadMetadata"
                 | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
@@ -246,6 +254,16 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.booking.
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
@@ -256,6 +274,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
                 // macro.documents.upload(), which sends the bytes through Macro.
@@ -268,7 +290,15 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.web.search() and macro.web.fetch().
                 | "WebSearch"
                 | "WebFetch"
-                // macro.agents.list() and macro.agentSessions.createManaged.
+                // macro.bots and Bot. IssueBotCredential stays: its chat card
+                // mints the secret without the model ever reading it.
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
+                // macro.agents.coding() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
                 // macro.imports.
@@ -279,6 +309,46 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ImportFromNotion"
                 | "ImportFromLinear"
                 | "ImportFromJira"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
+                // macro.agentSessions.byId(): log(), foldedLog(), rename(),
+                // archive(), delete(), prompt(), control() and sharing.
+                | "ReadAgentSession"
+                | "ManageAgentSession"
+                | "ReadAgentSessionSharing"
+                | "UpdateAgentSessionSharing"
+                // macro.databases: list(), schema(), query() and view ops.
+                | "ListDatabases"
+                | "DescribeDatabase"
+                | "QueryDatabase"
+                | "SaveDatabaseView"
+                | "DeleteDatabaseView"
+                // macro.routines.
+                | "CreateRoutine"
+                | "ListRoutines"
+                | "ReadRoutine"
+                | "UpdateRoutine"
+                | "RunRoutine"
+                | "DeleteRoutine"
+                // macro.calendar.event(id).record() and addToCalendar().
+                | "ReadCalendarEvent"
+                | "AddSharedCalendarEvent"
+                // macro.images.generate().
+                | "GenerateImage"
+                // document.copy(), database.duplicate() and project.rename().
+                | "DuplicateItem"
+                | "RenameItem"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
         )
 }
 
