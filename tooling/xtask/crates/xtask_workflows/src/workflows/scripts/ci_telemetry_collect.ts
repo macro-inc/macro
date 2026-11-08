@@ -156,6 +156,8 @@ class Github implements GithubApi {
       throw new Error('GitHub API budget is low');
     }
     this.calls += 1;
+    // The storage hop's response carries no rate headers, so count the call ourselves.
+    if (this.rateRemaining !== null) this.rateRemaining -= 1;
     // The API redirects to signed storage; fetch drops the token on that cross-origin hop.
     const response = await fetch(`${API}/repos/${this.repo}/${path}`, {
       headers: { Authorization: `Bearer ${this.token}` },
