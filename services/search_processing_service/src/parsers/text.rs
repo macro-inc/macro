@@ -5,6 +5,13 @@
 
 use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
 use model::document::FileType;
+use nom::{
+    IResult, Parser,
+    bytes::complete::{tag, take_till1, take_until},
+    character::complete::{multispace0, one_of},
+    combinator::{opt, value},
+    sequence::preceded,
+};
 
 /// How far into an HTML file a `charset` declaration is looked for, as in the
 /// HTML standard's encoding prescan.
@@ -25,16 +32,16 @@ pub fn decode_text(bytes: Vec<u8>, file_type: FileType) -> Option<String> {
         Err(error) => error.into_bytes(),
     };
 
-    let (encoding, bom_length) = Encoding::for_bom(&bytes)
+    let encoding = Encoding::for_bom(&bytes)
+        .map(|(encoding, _)| encoding)
         .or_else(|| {
             is_html(file_type)
                 .then(|| declared_html_charset(&bytes))
                 .flatten()
-                .map(|encoding| (encoding, 0))
         })
-        .unwrap_or((UTF_8, 0));
+        .unwrap_or(UTF_8);
 
-    let (text, had_errors) = encoding.decode_without_bom_handling(&bytes[bom_length..]);
+    let (text, had_errors) = encoding.decode_with_bom_removal(&bytes);
     if had_errors && is_mostly_replacements(&text) {
         return None;
     }
@@ -58,32 +65,19 @@ fn is_html(file_type: FileType) -> bool {
 /// HTML file, as written by `<meta charset>` or a `Content-Type` meta tag. A
 /// declared UTF-16 means UTF-8, since UTF-16 text would have a byte order mark.
 fn declared_html_charset(bytes: &[u8]) -> Option<&'static Encoding> {
-    const CHARSET: &[u8] = b"charset";
+    let head = bytes
+        .get(..CHARSET_PRESCAN_BYTES)
+        .unwrap_or(bytes)
+        .to_ascii_lowercase();
+    let mut input = head.as_slice();
 
-    let head = &bytes[..bytes.len().min(CHARSET_PRESCAN_BYTES)];
-    let lowercase_head = head.to_ascii_lowercase();
-    let mut search_from = 0;
+    while let Ok((after_charset, ())) = past_next_charset(input) {
+        input = after_charset;
 
-    while let Some(position) = lowercase_head[search_from..]
-        .windows(CHARSET.len())
-        .position(|window| window == CHARSET)
-    {
-        search_from += position + CHARSET.len();
-
-        let Some(value) = head[search_from..].trim_ascii_start().strip_prefix(b"=") else {
+        let Ok((_, label)) = charset_label(after_charset) else {
             continue;
         };
-        let value = value.trim_ascii_start();
-        let value = value
-            .strip_prefix(b"\"")
-            .or_else(|| value.strip_prefix(b"'"))
-            .unwrap_or(value);
-        let label_length = value
-            .iter()
-            .position(|byte| byte.is_ascii_whitespace() || b"\"';>/".contains(byte))
-            .unwrap_or(value.len());
-
-        let Some(encoding) = Encoding::for_label(&value[..label_length]) else {
+        let Some(encoding) = Encoding::for_label(label) else {
             continue;
         };
         if encoding == UTF_16LE || encoding == UTF_16BE {
@@ -93,6 +87,25 @@ fn declared_html_charset(bytes: &[u8]) -> Option<&'static Encoding> {
     }
 
     None
+}
+
+/// Skips past the next `charset` in lowercased input.
+fn past_next_charset(input: &[u8]) -> IResult<&[u8], ()> {
+    value((), (take_until(&b"charset"[..]), tag(&b"charset"[..]))).parse(input)
+}
+
+/// The label in `= "windows-1252"`, as it follows a `charset` name.
+fn charset_label(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    preceded(
+        (
+            multispace0,
+            tag(&b"="[..]),
+            multispace0,
+            opt(one_of(&b"\"'"[..])),
+        ),
+        take_till1(|byte: u8| byte.is_ascii_whitespace() || b"\"';>/".contains(&byte)),
+    )
+    .parse(input)
 }
 
 fn is_mostly_replacements(text: &str) -> bool {

@@ -46,6 +46,23 @@ fn every_html_extension_honors_a_meta_charset() {
 }
 
 #[test]
+fn an_uppercase_spaced_charset_declaration_is_honored() {
+    let mut html =
+        b"<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; CHARSET = Windows-1252\">Caf"
+            .to_vec();
+    html.push(0xE9);
+
+    let text = decode_text(html, FileType::Htm);
+
+    assert_eq!(
+        text.as_deref(),
+        Some(
+            "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; CHARSET = Windows-1252\">Café"
+        )
+    );
+}
+
+#[test]
 fn undeclared_invalid_html_keeps_its_valid_text() {
     let mut html = b"<html><title>Quarterly report".to_vec();
     html.push(0x92);
