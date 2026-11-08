@@ -26,6 +26,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_origin: Option<crate::foreign::ReadOrigin>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
@@ -70,6 +72,8 @@ impl<'editor> Transaction<'editor> {
             foreign_read_only: false,
             #[cfg(feature = "foreign-nodes")]
             foreign_read_sources: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_read_origin: None,
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
             #[cfg(feature = "foreign-nodes")]
@@ -119,6 +123,17 @@ impl<'editor> Transaction<'editor> {
             detached_selections: &self.detached,
             #[cfg(feature = "foreign-nodes")]
             source_records: self.foreign_read_sources.as_ref(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_origin: if self.foreign_read_only {
+                self.foreign_read_origin
+                    .as_ref()
+                    .map(crate::foreign::ReadOrigin::borrowed)
+            } else {
+                Some(crate::foreign::ReadOriginRef {
+                    editor: &self.editor.suspend_owner,
+                    update: &self.foreign_update,
+                })
+            },
             state: &self.pending,
             previous_selection,
             composition_key: self.composition_key,
