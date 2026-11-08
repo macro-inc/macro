@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// under names of their own.
 fn apart_from_the_catalog(types: Types) -> Types {
     types.map(|mut named| {
-        if named.module_path.starts_with("models_databases") {
+        if named.module_path.starts_with("databases_types") {
             match named.name.as_ref() {
                 "ColumnKind" => named.name = "OpColumnKind".into(),
                 "EntityKind" => named.name = "OpEntityKind".into(),
