@@ -2,6 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.
 - `bun run check`: check typescript changes 
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
