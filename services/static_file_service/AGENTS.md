@@ -23,7 +23,7 @@ handle upload.
 - Owns: file metadata (DynamoDB), file bytes (S3), presigned upload URLs, and
   the S3-event-driven "mark uploaded" transition.
 - Not here: what entity a file is attached to (document, chat, etc.) — callers
-  pass `models_sfs` references; this service doesn't know its callers' domains.
+  pass `sfs_types` references; this service doesn't know its callers' domains.
 
 ## Upload size
 

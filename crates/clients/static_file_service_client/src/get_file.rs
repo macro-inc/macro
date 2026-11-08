@@ -1,4 +1,4 @@
-use models_sfs::FileMetadata;
+use sfs_types::FileMetadata;
 
 use super::StaticFileServiceClient;
 use anyhow::Result;
