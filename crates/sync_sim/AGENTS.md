@@ -80,6 +80,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Checks
 
+- Run mixed_versions for both the catalog lane and `SYNC_SIM_TS_LORO=legacy`; retain exact child version assertions and compare all content, VV, WAL and wire observations.
+
 - `cargo test -p sync_sim` (includes reusable transaction reference comparisons, FIFO,
   completion/crash, uncertain retry, no-wipe, namespace isolation and lease-order contracts).
   Real browser database identity/async Web Lock conformance belongs to S8 §9.2.
