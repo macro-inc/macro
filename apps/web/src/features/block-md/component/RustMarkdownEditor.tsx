@@ -176,7 +176,7 @@ export default function RustMarkdownEditor(props: {
       aria-readonly={!permissions.canEdit()}
       aria-label="Document content"
       data-input-surface="editor"
-      class="ph-no-capture w-full max-w-full min-h-52"
+      class="ph-no-capture w-full max-w-full min-h-52 md"
       classList={{ 'select-auto': !permissions.canEdit() }}
     />
   );
