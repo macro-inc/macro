@@ -190,8 +190,9 @@ struct DocumentIdPath {
 /// A version route's number. Named, so routes nested under DSS's
 /// `/{version}` prefix, which carry that extra parameter, still extract.
 #[derive(Deserialize)]
-struct VersionPath {
-    number: i32,
+pub struct VersionPath {
+    /// The version number.
+    pub number: i32,
 }
 
 /// Load the artifact document the access extractors read.
