@@ -22,6 +22,8 @@ pub(crate) struct Handled {
     pub imports: Vec<(String, bool, Option<String>)>,
     pub errors: Vec<String>,
     pub undo_applied: Vec<document_session::UndoObservation>,
+    pub projection_faults: Vec<document_session::ProjectionFaultWrite>,
+    pub projection_recoveries: Vec<String>,
 }
 impl Runtime {
     pub fn new(
@@ -96,6 +98,8 @@ impl Runtime {
                     imports: std::mem::take(&mut doc.imports),
                     errors: vec![],
                     undo_applied: vec![],
+                    projection_faults: vec![],
+                    projection_recoveries: vec![],
                 }
             }
             Self::Editor(session) => Self::editor_handle(session, SessionInput::Sync(input), now),
@@ -108,10 +112,29 @@ impl Runtime {
                 imports: vec![],
                 errors: vec![error.to_string()],
                 undo_applied: vec![],
+                projection_faults: vec![],
+                projection_recoveries: vec![],
             };
         }
         session.handle(now, input);
         let output = session.conformance_drain_output();
+        let recovered = output.view.iter().any(|effect| {
+            matches!(
+                effect,
+                ViewEffect::Initialize(document_session::InitialView::Editor { .. })
+            )
+        });
+        let mut errors = Vec::new();
+        let mut projection_recoveries = Vec::new();
+        for effect in output.view {
+            if let ViewEffect::Error(error) = effect {
+                if recovered && matches!(error, document_session::SessionError::Projection(_)) {
+                    projection_recoveries.push(error.to_string());
+                } else {
+                    errors.push(error.to_string());
+                }
+            }
+        }
         Handled {
             out: SyncOutput {
                 io: output.io,
@@ -120,14 +143,9 @@ impl Runtime {
             },
             imports: output.imports,
             undo_applied: output.undo_applied,
-            errors: output
-                .view
-                .into_iter()
-                .filter_map(|view| match view {
-                    ViewEffect::Error(error) => Some(error.to_string()),
-                    _ => None,
-                })
-                .collect(),
+            projection_faults: session.take_projection_fault_writes(),
+            errors,
+            projection_recoveries,
         }
     }
     pub fn add_peers(&mut self, ids: Vec<u64>, now: Now) -> Result<(), Failure> {

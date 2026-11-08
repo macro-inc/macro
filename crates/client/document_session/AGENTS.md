@@ -52,6 +52,9 @@ successful binding. Validate complete generic batches before changing the live d
 
 The `conformance` feature only enables read-only inspection and the development
 example. It is not an application API or a wire/session ABI.
+The separate `test-faults` feature injects malformed local serialization for the
+simulation; never enable it in a shipped artifact. It exposes receipts, not a
+mutable document handle.
 Conformance hosts can inspect immutable SyncCore diagnostics, actual sync/import
 observations, actual undo/redo removals before projection repair, and independent
 reconstructed editor state. Missing/uninspectable identities invalidate conformance;

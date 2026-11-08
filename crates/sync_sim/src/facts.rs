@@ -449,6 +449,42 @@ pub enum Fact {
         /// Client.
         client: ClientName,
     },
+    /// An observed malformed local projection write from a faulty test build.
+    ProjectionFaultWrite {
+        /// Document receiving the bad operations.
+        doc: DocIx,
+        /// Producing client.
+        client: ClientName,
+        /// Exact client incarnation; reconnects/reopens cannot inherit an exemption.
+        session: SessionId,
+        /// Actual native node-map container.
+        node: String,
+        /// Actual author.
+        peer: u64,
+        /// Counter range start.
+        start: i32,
+        /// Counter range end.
+        end: i32,
+        /// Previous persisted type.
+        previous: String,
+        /// Incorrect persisted type.
+        written: String,
+    },
+    /// A visible projection error followed by an actual full editor resync.
+    ProjectionRecovered {
+        /// Receiving client.
+        client: ClientName,
+        /// Receiving incarnation.
+        session: SessionId,
+        /// Actual route.
+        doc: DocIx,
+        /// Visible surface diagnostic.
+        error: String,
+        /// Newly imported operation intervals from before/after versions.
+        spans: Vec<IdSpan>,
+        /// Actual observed document version, including an author's prior own fault.
+        vv: Vv,
+    },
     /// Queued inputs resumed.
     Thawed {
         /// Client.
