@@ -48,6 +48,8 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 - `bun run plaintext|search|cognition <document-id>` against the local stack's
   `lexical_service` (port 8096) to sanity-check an endpoint end to end.
 
+- The synchronous HTML shim installs and restores HTMLElement, DocumentFragment, Text and Node alongside the DOM so list and table export guards work in headless mode.
+
 ## Gotchas
 
 - Called only internally, authenticated by `x-internal-auth-key`

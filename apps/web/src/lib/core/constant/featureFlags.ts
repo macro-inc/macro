@@ -1059,3 +1059,9 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+/** First editor-model integration stays opt-in until browser acceptance passes. */
+export const rustEditorModel = defineFlag({
+  key: 'rust-editor-model',
+  env: 'ENABLE_RUST_EDITOR_MODEL',
+});

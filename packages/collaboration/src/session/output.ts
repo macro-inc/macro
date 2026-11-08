@@ -1,4 +1,9 @@
-import { ABI_MAJOR, DIFF_FORMAT_VERSION, ViewEffectMsg } from './abi.generated';
+import {
+  ABI_MAJOR,
+  DIFF_FORMAT_VERSION,
+  FLAG_HANDLED,
+  ViewEffectMsg,
+} from './abi.generated';
 
 export const Flag = {
   View: 1,
@@ -6,6 +11,7 @@ export const Flag = {
   WakeChanged: 4,
   NeedPeerIds: 8,
   Error: 16,
+  Handled: FLAG_HANDLED,
 } as const;
 export interface Effect {
   tag: number;

@@ -16,6 +16,8 @@ Cloudflare Durable Objects and native simulation.
 - `src/domain/state.rs`, `operation_log.rs`: explicit-clock imports and ordered persistence.
 - `src/domain/document.rs`, `permissions.rs`: update validation and verified grant policy.
 
+- `src/comment_gate.rs`: optional shared in-process CommentGate implementation; no HTML feature or runtime dependency.
+
 ## Boundaries
 
 - Depend on pure domain types and pinned Loro; never Worker, Tokio, sockets, HTTP or environment.

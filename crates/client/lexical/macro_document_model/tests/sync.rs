@@ -5,6 +5,72 @@ use macro_document_model::{nodes::*, sync::*, *};
 use serde_json::json;
 
 #[test]
+fn mirror_null_fields_round_trip_without_changing_plain_json_or_checked_false() {
+    for checked in [None, Some(serde_json::Value::Null), Some(json!(false))] {
+        let mut item = json!({"type":"listitem","version":1,"value":1,"children":[{"type":"text","version":1,"text":"todo"} ]});
+        if let Some(value) = &checked {
+            item["checked"] = value.clone();
+        }
+        let raw = serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[{"type":"task-list","version":1,"tag":"ul","start":1,"listType":if checked == Some(json!(false)) { "check" } else { "bullet" },"children":[item]}]}})).unwrap();
+        let mut editor = preset_builder(EditorType::MarkdownSync)
+            .initial_state(raw)
+            .build()
+            .unwrap();
+        let plain = lexical_loro::synced_json(editor.state(), &lexical_loro::PlainPolicy).unwrap();
+        let expected = if checked == Some(json!(false)) {
+            json!(false)
+        } else {
+            serde_json::Value::Null
+        };
+        let stored = lexical_loro::synced_json(editor.state(), &MACRO_SYNC_POLICY).unwrap();
+        assert_eq!(
+            stored.root["children"][0]["children"][0]["checked"],
+            expected
+        );
+        if expected.is_null() {
+            assert!(
+                !plain.root["children"][0]["children"][0]
+                    .as_object()
+                    .unwrap()
+                    .contains_key("checked")
+            );
+        }
+        let doc = loro::LoroDoc::new();
+        doc.set_peer_id(7).unwrap();
+        let mut projection =
+            lexical_loro::LoroProjection::initialize(&doc, editor.state(), &MACRO_SYNC_POLICY, 0)
+                .unwrap();
+        let (_, commit) = editor
+            .update(|tx| {
+                let key = tx.view().all_text_nodes(NodeKey::ROOT).next().unwrap();
+                tx.text(key)?.set_text_content("edited")?;
+                Ok(())
+            })
+            .unwrap();
+        projection
+            .local_commit(&doc, &[commit], lexical_loro::LOCAL_ORIGIN, 1)
+            .unwrap();
+        let remote = loro::LoroDoc::new();
+        remote.set_peer_id(8).unwrap();
+        remote
+            .import(&doc.export(loro::ExportMode::Snapshot).unwrap())
+            .unwrap();
+        let state = lexical_loro::reconstruct_state(&remote, &MACRO_SYNC_POLICY).unwrap();
+        assert_eq!(
+            state.root["children"][0]["children"][0]["checked"],
+            expected
+        );
+        let reopened = preset_builder(EditorType::MarkdownSync)
+            .initial_state(state)
+            .build()
+            .unwrap();
+        lexical_loro::LoroProjection::attach(&remote, reopened.state(), &MACRO_SYNC_POLICY)
+            .unwrap();
+        assert_eq!(reopened.state().root_text_content().as_ref(), "edited");
+    }
+}
+
+#[test]
 fn synced_view_keeps_coowners_and_content_but_drops_local_status_and_completion() -> Result<()> {
     let mut editor = export_builder().build()?;
     let raw = serde_json::from_value(

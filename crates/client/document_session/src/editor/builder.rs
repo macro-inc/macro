@@ -9,16 +9,21 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
         .node::<link::LinkNode>()
         .node::<link::AutoLinkNode>()
         .node::<mark::MarkNode>();
-    register_editor_commands(
-        table::register_table(builder, &table::TableConfig::default())
-            .extension_state(NodeIdIndex::default()),
+    with_session_plugins(
+        table::register_table(builder, &table::TableConfig::default()),
+        peer,
     )
-    .plugin(NodeIds(peer))
 }
 
 /// Install editing commands without registering nodes or allocating node identities.
 pub fn register_editor_commands(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(RichCommands)
+}
+
+/// Install session commands and durable identity tracking over a supplied registry.
+pub fn with_session_plugins(builder: EditorBuilder, peer: u64) -> EditorBuilder {
+    register_editor_commands(builder.extension_state(NodeIdIndex::default()))
+        .plugin(NodeIds(peer))
 }
 
 pub(super) static ID: StateKey<String> = StateKey::new("id", |value| {

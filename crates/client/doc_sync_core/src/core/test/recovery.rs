@@ -1,6 +1,82 @@
 use super::*;
 
 #[test]
+fn imported_shallow_history_can_persist_at_its_confirmed_causal_frontier() {
+    let ancestor = Doc::new(9);
+    ancestor.edit("base");
+    let server = Doc::new(10);
+    server.loro.import(&ancestor.snapshot()).unwrap();
+    server.edit("head");
+    let confirmed = server.loro.oplog_frontiers();
+    let shallow = server
+        .loro
+        .export(loro::ExportMode::shallow_snapshot(&confirmed))
+        .unwrap();
+    let loaded = Doc::new(11);
+    loaded.loro.import(&shallow).unwrap();
+    assert!(
+        loaded
+            .loro
+            .export(loro::ExportMode::shallow_snapshot(
+                &loaded.oplog_vv().get_frontiers()
+            ))
+            .is_err()
+    );
+
+    let mut h = Harness::new(TransportKind::None, Persistence::Durable);
+    h.start();
+    let load = h.storage_id();
+    h.send(SyncInput::Storage(StorageEvent::Loaded {
+        id: load,
+        result: Ok(empty()),
+    }));
+    h.send(SyncInput::Seed {
+        kind: SeedKind::Remote,
+        snapshot: shallow,
+    });
+    h.send(SyncInput::Ready);
+    h.append();
+    let append = h.storage_id();
+    h.done(append);
+    h.at(5000, SyncInput::Tick);
+    let bytes = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Storage {
+                op: StorageOp::SnapshotSave { bytes, .. },
+                ..
+            } => Some(bytes),
+            _ => None,
+        })
+        .expect("a shallow server seed must remain persistable after local typing");
+    assert_eq!(h.doc.calls.borrow().snapshots.last(), Some(&confirmed));
+    let reopened = Doc::new(12);
+    reopened.loro.import(bytes).unwrap();
+    assert_eq!(reopened.loro.get_text("text").to_string(), "baseheadx");
+    let base = server.oplog_vv();
+    server.edit("remote");
+    let remote = server
+        .loro
+        .export(loro::ExportMode::updates(&base))
+        .unwrap();
+    let imported = reopened.loro.import(&remote).unwrap();
+    assert!(
+        imported.pending.is_none(),
+        "concurrent remote history remains readable above the confirmed root"
+    );
+    let reference = Doc::new(13);
+    reference.loro.import(&h.doc.snapshot()).unwrap();
+    reference.loro.import(&remote).unwrap();
+    assert_eq!(
+        reopened.loro.get_text("text").to_string(),
+        reference.loro.get_text("text").to_string()
+    );
+    assert_eq!(reopened.oplog_vv(), reference.oplog_vv());
+}
+
+#[test]
 fn s7_006_snapshot_runs_only_for_changed_vector() {
     let mut h = Harness::running(TransportKind::None, Persistence::Durable);
     h.at(5000, SyncInput::Tick);

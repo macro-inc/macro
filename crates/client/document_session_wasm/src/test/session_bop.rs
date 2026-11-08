@@ -251,6 +251,7 @@ fn sample_type_row_msg() -> wire::TypeRowMsg {
         index: 7,
         name: "fixture 😀 é".into(),
         kind: 0,
+        flags: 7,
     }
 }
 fn sample_type_table_msg() -> wire::TypeTableMsg {
@@ -608,6 +609,36 @@ fn input_output_round_trip() {
         let decoded = wire::EditorInputMsg::deserialize(&data).unwrap();
         assert_eq!(value, decoded);
         cases.push(serde_json::json!({"name":"EditorInputMsg.EditorText","bytes":data}));
+    }
+    {
+        let value = wire::EditorInputMsg::EditorKeyDown {
+            code: 8,
+            mods: 4,
+            key: "Backspace".into(),
+            command: wire::CommandCode::DeleteWord,
+            argument: 0,
+            selection: sample_selection_msg(),
+            target: sample_modify_target_msg(),
+            character_target: sample_modify_target_msg(),
+        };
+        let data = bytes(&value).unwrap();
+        assert_eq!(wire::EditorInputMsg::deserialize(&data).unwrap(), value);
+        cases.push(serde_json::json!({"name":"EditorInputMsg.EditorKeyDown","bytes":data}));
+    }
+    {
+        let value = wire::EditorInputMsg::EditorApplication {
+            name: "group-b.node-transform".into(),
+            json: "\"heading1\"".into(),
+            generation: 3,
+            selection: sample_selection_msg(),
+            keyboard: false,
+            key: "".into(),
+            mods: 0,
+            code: 0,
+        };
+        let data = bytes(&value).unwrap();
+        assert_eq!(wire::EditorInputMsg::deserialize(&data).unwrap(), value);
+        cases.push(serde_json::json!({"name":"EditorInputMsg.EditorApplication","bytes":data}));
     }
     let path = directory.join("messages.json");
     let json = serde_json::to_string_pretty(&cases).unwrap() + "\n";

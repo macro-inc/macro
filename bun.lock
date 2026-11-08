@@ -95,6 +95,7 @@
         "@macro-inc/email-renderer": "workspace:*",
         "@macro-inc/graphics": "workspace:*",
         "@macro-inc/lexical-core": "workspace:*",
+        "@macro-inc/lexical-wasm-view": "workspace:*",
         "@macro-inc/machine": "workspace:*",
         "@macro-inc/observability": "workspace:*",
         "@macro-inc/spreadsheet": "workspace:*",
@@ -359,6 +360,36 @@
         "@types/flat": "^5.0.5",
         "@types/linkify-it": "^5.0.0",
         "@types/yargs": "^17.0.35",
+      },
+    },
+    "packages/lexical-wasm-view": {
+      "name": "@macro-inc/lexical-wasm-view",
+      "version": "0.1.0",
+      "dependencies": {
+        "@macro-inc/collaboration": "workspace:*",
+        "@macro-inc/observability": "workspace:*",
+        "prismjs": "^1.30.0",
+        "solid-js": "^1.9.7",
+      },
+      "devDependencies": {
+        "@lexical/code": "0.45.0",
+        "@lexical/headless": "0.45.0",
+        "@lexical/html": "0.45.0",
+        "@lexical/link": "0.45.0",
+        "@lexical/list": "0.45.0",
+        "@lexical/mark": "0.45.0",
+        "@lexical/rich-text": "0.45.0",
+        "@lexical/table": "0.45.0",
+        "@playwright/test": "1.62.0",
+        "@types/node": "^24.8.0",
+        "@types/prismjs": "^1.26.5",
+        "jsdom": "^26.1.0",
+        "lexical": "0.45.0",
+        "loro-crdt": "1.17.1",
+        "typescript": "^5.9.3",
+        "vite": "^6.4.1",
+        "vite-plugin-solid": "^2.11.8",
+        "vitest": "5.0.1",
       },
     },
     "packages/loro-mirror": {
@@ -1339,6 +1370,8 @@
 
     "@macro-inc/lexical-core": ["@macro-inc/lexical-core@workspace:packages/lexical-core"],
 
+    "@macro-inc/lexical-wasm-view": ["@macro-inc/lexical-wasm-view@workspace:packages/lexical-wasm-view"],
+
     "@macro-inc/machine": ["@macro-inc/machine@workspace:packages/machine"],
 
     "@macro-inc/observability": ["@macro-inc/observability@workspace:packages/observability"],
@@ -1942,6 +1975,8 @@
     "@types/node": ["@types/node@24.13.3", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q=="],
 
     "@types/papaparse": ["@types/papaparse@5.5.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA=="],
+
+    "@types/prismjs": ["@types/prismjs@1.26.6", "", {}, "sha512-vqlvI7qlMvcCBbVe0AKAb4f97//Hy0EBTaiW8AalRnG/xAN5zOiWWyrNqNXeq8+KAuvRewjCVY1+IPxk4RdNYw=="],
 
     "@types/request": ["@types/request@2.48.13", "", { "dependencies": { "@types/caseless": "*", "@types/node": "*", "@types/tough-cookie": "*", "form-data": "^2.5.5" } }, "sha512-FGJ6udDNUCjd19pp0Q3iTiDkwhYup7J8hpMW9c4k53NrccQFFWKRho6hvtPPEhnXWKvukfwAlB6DbDz4yhH5Gg=="],
 

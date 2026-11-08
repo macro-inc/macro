@@ -150,9 +150,136 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
                 },
                 other => other,
             };
-            Input::Command {
-                command,
+            let selection = selection(&s, generation)?;
+            match b {
+                0 => Input::Command { command, selection },
+                1 => Input::Batch(vec![
+                    Input::Composition {
+                        event: CompositionEvent::Clear,
+                        selection,
+                    },
+                    Input::Command {
+                        command,
+                        selection: ViewSelection::KeepModel,
+                    },
+                ]),
+                _ => return Err(BoundaryError::Invalid("command composition flags")),
+            }
+        }
+        wire::EditorInputMsg::EditorKeyDown {
+            code,
+            mods,
+            key: name,
+            command: c,
+            argument,
+            selection: s,
+            target,
+            character_target,
+        } => {
+            if mods > 63 {
+                return Err(BoundaryError::Invalid("targeted key flags"));
+            }
+            let target = modify(target, generation)?;
+            let character_target = modify(character_target, generation)?;
+            if matches!(
+                c,
+                wire::CommandCode::DeleteCharacter
+                    | wire::CommandCode::DeleteWord
+                    | wire::CommandCode::DeleteLine
+            ) && argument > 1
+            {
+                return Err(BoundaryError::Invalid("key direction"));
+            }
+            let routed = match c {
+                wire::CommandCode::FormatText => command(c as u32, argument, 0, None)?,
+                wire::CommandCode::DeleteCharacter => Command::DeleteCharacter {
+                    direction: if argument == 0 {
+                        EditDirection::Backward
+                    } else {
+                        EditDirection::Forward
+                    },
+                    target,
+                },
+                wire::CommandCode::DeleteWord => Command::DeleteWord {
+                    direction: if argument == 0 {
+                        EditDirection::Backward
+                    } else {
+                        EditDirection::Forward
+                    },
+                    target,
+                    character_target,
+                },
+                wire::CommandCode::DeleteLine => Command::DeleteLine {
+                    direction: if argument == 0 {
+                        EditDirection::Backward
+                    } else {
+                        EditDirection::Forward
+                    },
+                    target,
+                    character_target,
+                },
+                _ => return Err(BoundaryError::Invalid("targeted key command")),
+            };
+            Input::KeyDown {
+                event: KeyEvent {
+                    key: name.into(),
+                    code: code.to_string().into(),
+                    shift: mods & 1 != 0,
+                    alt: mods & 2 != 0,
+                    ctrl: mods & 4 != 0,
+                    meta: mods & 8 != 0,
+                    repeat: mods & 16 != 0,
+                    is_composing: mods & 32 != 0,
+                },
+                routed: Some(routed),
+                routed_prevent_default: true,
                 selection: selection(&s, generation)?,
+            }
+        }
+        wire::EditorInputMsg::EditorApplication {
+            name,
+            json,
+            generation: submitted,
+            selection: s,
+            keyboard,
+            key: logical,
+            mods,
+            code,
+        } => {
+            if submitted != generation {
+                return Err(BoundaryError::Invalid("application command generation"));
+            }
+            if mods > 63 {
+                return Err(BoundaryError::Invalid("application key flags"));
+            }
+            let event = keyboard.then(|| KeyEvent {
+                key: logical.into(),
+                code: code.to_string().into(),
+                shift: mods & 1 != 0,
+                alt: mods & 2 != 0,
+                ctrl: mods & 4 != 0,
+                meta: mods & 8 != 0,
+                repeat: mods & 16 != 0,
+                is_composing: mods & 32 != 0,
+            });
+            // The application surface owns its append-only group decoder registration.
+            let command = macro_document_model::surface::decode_command(
+                &name,
+                &json,
+                generation,
+                event.as_ref(),
+            )?
+            .ok_or(BoundaryError::Invalid("application command name"))?;
+            let selection = selection(&s, generation)?;
+            if let Some(event) = event {
+                Input::KeyDown {
+                    event,
+                    routed: Some(command),
+                    routed_prevent_default: true,
+                    selection,
+                }
+            } else {
+                Input::Command { command, selection }
             }
         }
         wire::EditorInputMsg::EditorSetState { json } => Input::SetState {
@@ -252,6 +379,7 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
                     focus: (focus_offset != u32::MAX).then_some(Utf16Offset(focus_offset)),
                     data,
                 },
+                2 => CompositionEvent::Clear,
                 _ => return Err(BoundaryError::Invalid("composition kind")),
             },
             selection: selection(&s, generation)?,

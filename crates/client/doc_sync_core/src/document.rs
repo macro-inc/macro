@@ -7,6 +7,10 @@ pub trait SyncDoc {
     /// Current operation-log version vector, including imported history.
     fn oplog_vv(&self) -> loro::VersionVector;
 
+    /// Current causal DAG heads, captured only when establishing a confirmed base.
+    /// Version-vector peer heads may name collected history below a shallow root.
+    fn oplog_frontiers(&self) -> loro::Frontiers;
+
     /// Import remote bytes. For an editor, this runs the projection and queues the
     /// resulting view diff inside the session.
     fn import_remote(
@@ -20,7 +24,7 @@ pub trait SyncDoc {
     fn export_local(&self, since: &loro::VersionVector) -> Result<Option<Vec<u8>>, ExportFailure>;
 
     /// `shallow-snapshot` at `at`: the frontiers of the last completed convergence (a
-    /// server-confirmed base, S-1'), never `oplog_frontiers()` (Δ from engine.ts
+    /// server-confirmed base, S-1'), never the current frontier at persistence time (Δ from engine.ts
     /// `persistSnapshot`). Ops after `at` stay in the snapshot as history above the root, so a
     /// concurrent remote op made after the base imports without a rebase.
     fn export_shallow_snapshot(&self, at: &loro::Frontiers) -> Result<Vec<u8>, ExportFailure>;

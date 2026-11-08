@@ -30,6 +30,7 @@ binding = "DOCUMENT_SNAPSHOT_BUCKET"
 bucket_name = "document-snapshot-bucket-dev"
 
 [vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "http://localhost:8092"
 DSS_URL = "http://localhost:8086"
@@ -60,6 +61,7 @@ new_sqlite_classes = ["DocumentSyncSession"]
 name = "sync-service-playground"
 
 [env.playground.vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PLAYGROUND"
 DOCUMENT_PERMISSIONS_SECRET = "local"
 ENVIRONMENT = "development"
@@ -100,6 +102,7 @@ new_sqlite_classes = ["DocumentSyncSession"]
 name = "sync-service-dev3"
 
 [env.dev.vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
 ENVIRONMENT = "development"
 # The proxy injects the Datadog key; the exporter appends the signal path.
@@ -141,6 +144,7 @@ new_sqlite_classes = ["DocumentSyncSession"]
 name = "sync-service-prod2"
 
 [env.prod.vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
 ENVIRONMENT = "production"
 # The proxy injects the Datadog key; the exporter appends the signal path.

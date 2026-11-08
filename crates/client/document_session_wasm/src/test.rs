@@ -4,6 +4,121 @@ use doc_sync_core::*;
 use document_session::*;
 use lexical_model::*;
 #[test]
+fn macro_session_opens_persisted_task_lists_and_projects_typing() {
+    use std::sync::Arc;
+    let context = macro_document_model::DocumentContext {
+        clock: macro_document_model::NodeClock(Arc::new(|| 1794052800000)),
+        random: macro_document_model::NodeRandom(Arc::new({
+            let next = std::sync::atomic::AtomicU8::new(7);
+            move |size| vec![next.fetch_add(1, std::sync::atomic::Ordering::Relaxed); size]
+        })),
+        host: macro_document_model::NodeHost::default(),
+        keys: KeySource::default(),
+        editor_created: None,
+    };
+    let snapshot =
+        macro_document_model::snapshot::markdown_to_loro_snapshot("- todo", &context).unwrap();
+    let config = wire::SessionConfigMsg {
+        doc: "macro-list-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Edit,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut machine = machine::Machine::create_macro(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        1794052800000.0,
+    )
+    .unwrap();
+    machine.sync(SyncInput::Start, 0.0, None).unwrap();
+    machine
+        .sync(
+            SyncInput::Seed {
+                kind: SeedKind::Optimistic,
+                snapshot: snapshot.clone(),
+            },
+            1.0,
+            None,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert!(
+        session
+            .last_output()
+            .view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Initialize(_))),
+        "{:?}",
+        session
+            .last_output()
+            .view
+            .iter()
+            .filter_map(|effect| if let ViewEffect::Error(error) = effect {
+                Some(error.to_string())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>()
+    );
+    assert!(!session
+        .last_output()
+        .view
+        .iter()
+        .any(|effect| matches!(effect, ViewEffect::Error(_))));
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo"
+    );
+    let key = session
+        .surface()
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .unwrap();
+    let selection = ViewSelection::Range {
+        anchor: Point::text(key, Utf16Offset(5)),
+        focus: Point::text(key, Utf16Offset(5)),
+        resolution_dirty: false,
+    };
+    machine
+        .editor(
+            Input::TextFromView {
+                key,
+                text: "todo!".into(),
+                anchor: Some(Utf16Offset(5)),
+                focus: Some(Utf16Offset(5)),
+                composition_end: false,
+                composition_data: None,
+                selection,
+            },
+            2.0,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo!"
+    );
+}
+#[test]
 fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
     let config = wire::SessionConfigMsg {
         doc: "fixture-document".into(),
@@ -78,7 +193,97 @@ fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
         panic!("editor")
     };
     assert_eq!(&*s.surface().state().root_text_content(), "a😀");
+    let flags = m
+        .editor(
+            Input::TextFromView {
+                key: NodeKey::ROOT,
+                text: "invalid element edit".into(),
+                anchor: None,
+                focus: None,
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::KeepModel,
+            },
+            4.0,
+        )
+        .unwrap();
+    assert_ne!(flags & 1, 0);
+    let word = |i: usize| u32::from_le_bytes(m.output[i * 4..i * 4 + 4].try_into().unwrap());
+    assert_eq!(
+        word(8),
+        1,
+        "non-text keys receive a full repair, never Remove"
+    );
+    let machine::Session::Editor(s) = &m.session else {
+        panic!("editor")
+    };
+    assert_eq!(&*s.surface().state().root_text_content(), "a😀");
 }
+#[test]
+fn rejected_dom_text_has_an_authoritative_patch_even_without_a_model_change() {
+    let config = wire::SessionConfigMsg {
+        doc: "dom-text-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Read,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut m = machine::Machine::create(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        0.0,
+        true,
+    )
+    .unwrap();
+    m.sync(SyncInput::Start, 0.0, Some(0.0)).unwrap();
+    m.sync(
+        SyncInput::Seed {
+            kind: SeedKind::Optimistic,
+            snapshot: vec![],
+        },
+        1.0,
+        Some(1.0),
+    )
+    .unwrap();
+    // The DOM supplied an edit after permission was lost. No commit is made,
+    // but the view still needs a real correction rather than an acknowledgement.
+    let key = editor_input::key(1, m.generation());
+    let flags = m
+        .editor(
+            Input::TextFromView {
+                key,
+                text: "uncommitted".into(),
+                anchor: None,
+                focus: None,
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::KeepModel,
+            },
+            2.0,
+        )
+        .unwrap();
+    assert_ne!(flags & 1, 0);
+    let word = |i: usize| u32::from_le_bytes(m.output[i * 4..i * 4 + 4].try_into().unwrap());
+    assert_eq!(
+        word(8),
+        1,
+        "stale key requires an authoritative full repair"
+    );
+    assert_eq!(word(9), u32::MAX, "rejection never claims the DOM matches");
+}
+
 #[test]
 fn opcode_numbers_match_every_model_variant() {
     assert_eq!(
@@ -209,7 +414,7 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer).unwrap();
+    output::encode(&output, false, &mut buffer, None).unwrap();
     let word = |i: usize| u32::from_le_bytes(buffer[i * 4..i * 4 + 4].try_into().unwrap());
     assert_eq!(word(6 + 4), 2, "both patches survive in one flat diff");
     let end = 24 + word(3) as usize * 4 + word(4) as usize;
@@ -324,12 +529,146 @@ fn closed_and_unsaved_reasons_survive_the_view_boundary() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer).unwrap();
+    output::encode(&output, false, &mut buffer, None).unwrap();
     let len = u32::from_le_bytes(buffer[36..40].try_into().unwrap()) as usize;
     let status = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).unwrap();
     assert_eq!(status.closed_reason, wire::ClosedReason::Unauthorized);
     assert_eq!(status.save_reason, wire::SaveReason::ReadOnly);
     assert!(status.flag);
+}
+
+#[test]
+fn targeted_key_input_preserves_consuming_model_listener_precedence() {
+    struct Keys;
+    impl Plugin for Keys {
+        fn name(&self) -> &'static str {
+            "keys"
+        }
+        fn commands(&self) -> &[CommandRegistration] {
+            &[
+                CommandRegistration {
+                    command: CommandKind::KeyDown,
+                    priority: CommandPriority::Critical,
+                    placement: Placement::Before,
+                },
+                CommandRegistration {
+                    command: CommandKind::FormatText,
+                    priority: CommandPriority::Editor,
+                    placement: Placement::After,
+                },
+                CommandRegistration {
+                    command: CommandKind::DeleteCharacter,
+                    priority: CommandPriority::Editor,
+                    placement: Placement::After,
+                },
+            ]
+        }
+        fn handle(
+            &self,
+            tx: &mut Transaction<'_>,
+            command: &Command,
+        ) -> Result<Handled, lexical_model::Error> {
+            match command {
+                Command::KeyDown(_) => Ok(Handled::Yes),
+                Command::FormatText(format) => {
+                    tx.format_text(*format, None)?;
+                    Ok(Handled::Yes)
+                }
+                Command::DeleteCharacter { direction, target } => {
+                    tx.delete_character(*direction, target.clone())?;
+                    Ok(Handled::Yes)
+                }
+                _ => Ok(Handled::No),
+            }
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .plugin(Keys)
+        .build()
+        .unwrap();
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let t = tx.create_text("abc")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[t.key()])?;
+            tx.select_end(t)?;
+            Ok(t.key())
+        })
+        .unwrap();
+    let point = |offset| wire::PointMsg {
+        key: key.index(),
+        offset,
+        _type: 0,
+    };
+    let input = wire::EditorInputMsg::EditorKeyDown {
+        code: 8,
+        mods: 4,
+        key: "Backspace".into(),
+        command: wire::CommandCode::DeleteCharacter,
+        argument: 0,
+        selection: wire::SelectionMsg {
+            kind: 2,
+            anchor: point(3),
+            focus: point(3),
+            nodes: vec![],
+            table: 0,
+            dirty: false,
+        },
+        target: wire::ModifyTargetMsg {
+            kind: 1,
+            anchor: point(3),
+            focus: point(2),
+            dirty: false,
+            backward: true,
+        },
+        character_target: wire::ModifyTargetMsg {
+            kind: 0,
+            anchor: point(3),
+            focus: point(3),
+            dirty: false,
+            backward: true,
+        },
+    };
+    let mut formatting = input.clone();
+    if let wire::EditorInputMsg::EditorKeyDown {
+        command,
+        argument,
+        key,
+        code,
+        ..
+    } = &mut formatting
+    {
+        *command = wire::CommandCode::FormatText;
+        *argument = 3;
+        *key = "u".into();
+        *code = 85;
+    }
+    let input = editor_input::input(input, key.generation()).unwrap();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1)).unwrap();
+    assert_eq!(core.state().view().text_content(key), "abc");
+    core.apply(
+        editor_input::input(formatting, key.generation()).unwrap(),
+        HistoryTime(2),
+    )
+    .unwrap();
+    assert_eq!(
+        core.state()
+            .selection()
+            .and_then(Selection::as_range)
+            .unwrap()
+            .format,
+        TextFormat::empty()
+    );
 }
 
 #[test]
@@ -365,4 +704,193 @@ fn adoption_boundary_preserves_the_exact_loaded_selection() {
     assert_eq!(row.user, "fixture-user");
     assert!(row.delivered && row.foreign && row.quarantined);
     assert_eq!(row.bytes, [0, 255, 1]);
+}
+
+#[test]
+fn application_command_admission_rejects_stale_generations_and_applies_typed_policy() {
+    let mut editor = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("typed")?;
+            tx.append(p, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.select_end(text)?;
+            Ok(text.key())
+        })
+        .expect("seed");
+    let point = wire::PointMsg {
+        key: key.index(),
+        offset: 5,
+        _type: 0,
+    };
+    let envelope = wire::EditorInputMsg::EditorApplication {
+        name: "group-b.node-transform".into(),
+        json: "\"heading1\"".into(),
+        generation: key.generation(),
+        selection: wire::SelectionMsg {
+            kind: 2,
+            anchor: point,
+            focus: point,
+            nodes: vec![],
+            table: 0,
+            dirty: false,
+        },
+        keyboard: false,
+        key: "".into(),
+        mods: 0,
+        code: 0,
+    };
+    let mut stale = envelope.clone();
+    if let wire::EditorInputMsg::EditorApplication { generation, .. } = &mut stale {
+        *generation = generation.saturating_add(1);
+    }
+    assert!(matches!(
+        editor_input::input(stale, key.generation()),
+        Err(BoundaryError::Invalid("application command generation"))
+    ));
+    assert_eq!(editor.state().view().text_content(NodeKey::ROOT), "typed");
+    let input = editor_input::input(envelope, key.generation()).expect("typed input");
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1))
+        .expect("application admission");
+    let first = core
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("block");
+    assert!(core
+        .state()
+        .view()
+        .is::<lexical_rich_nodes::heading::HeadingNode>(first));
+    assert_eq!(core.state().view().text_content(NodeKey::ROOT), "typed");
+}
+
+#[test]
+fn application_enter_clears_empty_typing_style_without_a_generic_keydown_listener() {
+    let builder = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    );
+    let mut editor = document_session::with_session_plugins(builder, 1)
+        .build()
+        .expect("surface");
+    assert!(editor
+        .listener_table()
+        .levels(CommandKind::KeyDown)
+        .is_none());
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("bold")?;
+            tx.append(p, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            let mut range = RangeSelection::collapsed(Point::text(text, Utf16Offset(4)));
+            range.format = TextFormat::BOLD;
+            range.style = "color: red".into();
+            tx.set_selection(Some(Selection::Range(range)))?;
+            Ok(text.key())
+        })
+        .expect("seed");
+    let input = editor_input::input(
+        wire::EditorInputMsg::EditorApplication {
+            name: "group-b.key".into(),
+            json: "null".into(),
+            generation: key.generation(),
+            selection: wire::SelectionMsg {
+                kind: 0,
+                anchor: wire::PointMsg {
+                    key: 0,
+                    offset: 0,
+                    _type: 1,
+                },
+                focus: wire::PointMsg {
+                    key: 0,
+                    offset: 0,
+                    _type: 1,
+                },
+                nodes: vec![],
+                table: 0,
+                dirty: false,
+            },
+            keyboard: true,
+            key: "Enter".into(),
+            mods: 0,
+            code: 13,
+        },
+        key.generation(),
+    )
+    .expect("key envelope");
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1)).expect("enter");
+    let blocks = core
+        .state()
+        .view()
+        .children_keys(NodeKey::ROOT)
+        .expect("blocks");
+    assert_eq!(blocks.len(), 2);
+    assert_eq!(core.state().view().text_content(blocks[0]), "bold");
+    assert_eq!(core.state().view().text_content(blocks[1]), "");
+    let range = core
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.format, TextFormat::empty());
+    assert_eq!(range.style.as_ref(), "");
+}
+
+#[test]
+fn application_host_request_keeps_its_typed_payload_in_the_existing_effect_envelope() {
+    let mut editor = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let mut payload = ClipboardPayload {
+        has_files: true,
+        ..ClipboardPayload::default()
+    };
+    payload.data.insert("application/x-macro-paste-facts".into(), serde_json::json!({"request":37,"plainOnly":false,"hasFileEntries":true,"mobileImageRecovery":false}).to_string());
+    let (_, commit) = editor
+        .dispatch(&Command::Paste(payload))
+        .expect("file request");
+    let event = commit.events.first().expect("event").clone();
+    let output = SessionOutput {
+        view: vec![ViewEffect::Editor(Effect::PluginEvent(event))],
+        ..SessionOutput::default()
+    };
+    let mut buffer = vec![];
+    output::encode(&output, false, &mut buffer, None).expect("effect bytes");
+    let len = u32::from_le_bytes(buffer[36..40].try_into().expect("length")) as usize;
+    let effect = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).expect("effect");
+    assert_eq!(effect.kind, 6);
+    assert_eq!(effect.code, 9);
+    assert_eq!(effect.text, "group-b.file-paste");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&effect.style).expect("payload"),
+        serde_json::json!({"request":37})
+    );
 }

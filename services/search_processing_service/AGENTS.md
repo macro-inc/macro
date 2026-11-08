@@ -52,3 +52,6 @@ Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
 ## Related
 
 - Docs: this directory's `README.md` · Rules: `.agents/rules/rust/architecture.md`
+
+The sync-indexing mode regression uses real local database metadata plus
+hand-written Lexical/raw-source and storage boundaries, and rejects S3 fallback.

@@ -6,7 +6,7 @@ use lexical_model::*;
 use loro::{LoroDoc, UndoManager};
 use std::sync::Arc;
 mod builder;
-pub use builder::{default_editor_builder, register_editor_commands};
+pub use builder::{default_editor_builder, register_editor_commands, with_session_plugins};
 static PLAIN: PlainPolicy = PlainPolicy;
 
 /// Annotation constructor supplied by the editor's application registry.
@@ -62,6 +62,7 @@ pub struct EditorSurface {
     availability: HistoryAvailability,
     #[cfg(feature = "conformance")]
     pub(crate) undo_applied: Vec<crate::UndoObservation>,
+    handled: Handled,
     cursor: Option<lexical_loro::SelectionCursors>,
     #[cfg(feature = "test-faults")]
     pub(crate) wrong_next_type: bool,
@@ -90,6 +91,7 @@ impl EditorSurface {
             availability: HistoryAvailability::default(),
             #[cfg(feature = "conformance")]
             undo_applied: Vec::new(),
+            handled: Handled::No,
             cursor: None,
             #[cfg(feature = "test-faults")]
             wrong_next_type: false,
@@ -137,6 +139,10 @@ impl EditorSurface {
     /// Static command subscriptions read once by the view at initialization.
     pub fn listener_table(&self) -> &ListenerTable {
         self.core.editor().listener_table()
+    }
+    /// Propagation result from the last admitted local command.
+    pub fn command_handled(&self) -> Handled {
+        self.handled
     }
     /// Collaborative undo/redo availability.
     pub fn history(&self) -> HistoryAvailability {
@@ -187,7 +193,7 @@ impl EditorSurface {
             drop(load_guard);
             let _view = tracing::info_span!("view.initialize").entered();
             view.push(ViewEffect::Initialize(InitialView::Editor {
-                diff: self.empty_diff()?,
+                diff: self.view_diff()?,
                 state: self.core.state().to_json()?,
             }));
             return Ok(());
@@ -268,7 +274,8 @@ impl EditorSurface {
         self.resynced = true;
         Ok(())
     }
-    fn empty_diff(&self) -> Result<Diff, SessionError> {
+    /// Complete view patch relative to an empty editor, without changing state.
+    pub fn view_diff(&self) -> Result<Diff, SessionError> {
         let mut empty = Self::builder(&self.config, self.config.mode, 0).build()?;
         let (_, mut commit) = empty.update(|_| Ok(()))?;
         commit.next = self.core.state().clone();
@@ -336,6 +343,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
+        self.handled = Handled::No;
         let cold_span = match &input {
             Input::SetState { .. } => Some(tracing::info_span!(
                 "editor.set_state",
@@ -386,6 +394,7 @@ impl EditorSurface {
                         ..
                     }
             );
+            self.handled = Handled::Yes;
             let undo = self.undo.as_mut().ok_or(SessionError::NotReady)?;
             undo.group_end();
             self.group_active = false;
@@ -476,6 +485,7 @@ impl EditorSurface {
             self.group_active = false;
             self.item_started = None;
             self.history_ready = true;
+            self.handled = Handled::Yes;
             self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
             self.history_changed(view);
             return Ok(false);
@@ -521,7 +531,10 @@ impl EditorSurface {
         }
         let failed = result.is_err();
         match result {
-            Ok(output) => Self::output(output, view),
+            Ok(output) => {
+                self.handled = output.handled;
+                Self::output(output, view);
+            }
             Err(error) => {
                 if let (Some(first), Some(last)) = (error.committed.first(), error.committed.last())
                 {
@@ -549,6 +562,17 @@ impl EditorSurface {
         });
     }
     fn output(output: Output, view: &mut Vec<ViewEffect>) {
+        let mut tags = Vec::new();
+        for tag in output.commits.iter().flat_map(|commit| commit.tags.iter()) {
+            let tag = tag.to_string();
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+        if !tags.is_empty() {
+            view.push(ViewEffect::CommitTags(tags));
+        }
+
         for effect in &output.effects {
             if let Effect::FollowUpFailed { plugin, kind, .. } = effect {
                 tracing::error!(

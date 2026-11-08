@@ -1,11 +1,15 @@
+import { waitForFeatureFlag } from '@app/lib/analytics/wait-for-feature-flag';
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import {
+  ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  rustEditorModel,
+} from '@core/constant/featureFlags';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
-import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
+import { createMarkdownConnection } from './queries/markdown-connection';
 
 export const definition = defineBlock({
   name: 'md',
@@ -31,6 +35,7 @@ export const definition = defineBlock({
       }
 
       return parentSpan.span('doc.load', async (loadSpan) => {
+        const rustEditorEnabled = await waitForFeatureFlag(rustEditorModel);
         const context = await loadSpan.span('doc.load.context', () =>
           fetchSyncDocumentOpenContext(documentId)
         );
@@ -38,15 +43,14 @@ export const definition = defineBlock({
           loadSpan.error('load context failed');
           return err(context.error);
         }
-        const { token, authorization, documentMetadata, userAccessLevel } =
-          context.value;
+        const { documentMetadata, userAccessLevel } = context.value;
         loadSpan.setAttr('doc.context.cached', context.value.fromCache);
 
-        const { source: syncSource, doInitialSync } = createSyncServiceSource(
-          source.id,
-          token,
-          authorization,
-          parentSpan
+        const connection = await createMarkdownConnection(
+          documentId,
+          context.value,
+          parentSpan,
+          rustEditorEnabled
         );
 
         // HACK: unfortunately, most blocks still rely on a dssFile for things like
@@ -69,8 +73,13 @@ export const definition = defineBlock({
         return ok({
           dssFile: fileWithoutBlob,
           userAccessLevel,
-          syncSource,
-          doInitialSync,
+          connection,
+          ...(connection.type === 'sync'
+            ? {
+                syncSource: connection.source,
+                doInitialSync: connection.doInitialSync,
+              }
+            : {}),
           documentMetadata,
         });
       });

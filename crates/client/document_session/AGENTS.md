@@ -8,16 +8,23 @@ The host supplies identities and both clocks and executes the returned effects.
 ## Boundaries
 
 - Keep storage, transports, timers and identity generation outside this crate.
+- Read `last_output` to encode committed effects without processing another input.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
+- Use `EditorSurface::view_diff` for a cold repaint without resetting sync/history.
 - Surface imports queue view effects in the same output as their sync input.
 - Restore headless remote cursors through the private model-selection command;
   keep rejecting view-selection inputs in headless EditorCore.
+- Resolve awareness cursors against the live projection; publish changed point sets
+  after local/remote edits and clear them on expiry without exposing native handles.
+- Hold composing-paragraph remote imports only in the live editor; keep the canonical
+  sync/WAL/ack document current and publish local IME edits immediately. End the
+  hold at composition end, 3 seconds or 64 new imports; merge through Loro.
 - Use the supplied editor factory for live editors and headless comment forks.
   Supply its matching comment-node constructor for fresh-peer staging; the default
-  creates MarkNode. Application registry/policy wiring belongs to macro_document_model
-  (WP-28/29). Install register_editor_commands with application-owned node/identity
-  registration; default_editor_builder retains the standalone registry and identities.
+  creates MarkNode. Application registry/policy wiring belongs to macro_document_model.
+- Install register_editor_commands when the application owns identities; use
+  with_session_plugins for session identity tracking over a supplied registry.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping.
@@ -42,7 +49,7 @@ successful binding. Validate complete generic batches before changing the live d
 ## Start here
 
 - `src/session.rs`: shared lifecycle, SyncDoc lending adapter and ordered output drain.
-- `src/editor.rs`: initialization, immediate remote repair and deterministic Loro grouping.
+- `src/editor.rs`: initialization, remote repair and deterministic Loro grouping.
 - `src/editor/builder.rs`: default registry, command handlers and persistent node-id index.
 - `src/generic/validate.rs`: semantic shadow validation before any native operation.
 - `src/generic/surface.rs`: native event collection and observed-path replacement handling.

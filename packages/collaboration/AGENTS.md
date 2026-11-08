@@ -16,6 +16,7 @@ SessionExecutor executes effects; Rust owns retry, backoff, WAL and permission p
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
+Round native wake delays up and rearm unchanged deadlines after early browser ticks; a fired host timeout must not strand native snapshot or reconnect work.
 Attribute only unowned v1 rows without a user to the current user, identically
 during load and conditional adoption; never relabel an owned session row.
 Hold the source owner's lease during adoption and the shared snapshot lock while
@@ -41,3 +42,11 @@ Build document_session_wasm before session tests; do not rebuild its artifact wh
 Vitest is reading it. Use PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH for system Chromium.
 The 20 executor goldens come from the native record_effect_traces example; verify
 with CHECK_SESSION_TRACES=1 rather than refreshing expected callbacks during tests.
+
+The paired session ABI is major 2: type rows include predicate flags, editor
+Initialize is an explicit view marker, and command results use `FLAG_HANDLED`.
+`SessionExecutor.run` completion callbacks run after output application. DOM text
+rejection returns authoritative repair/error output, including malformed UTF-16.
+
+`ExecutorOptions.onStatus` observes native connection/save status for application
+chrome; keep retry, authorization and persistence decisions in the native core.

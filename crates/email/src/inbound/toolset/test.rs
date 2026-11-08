@@ -460,3 +460,57 @@ async fn a_label_named_both_ways_or_not_at_all_fails_before_any_provider_acts() 
         );
     }
 }
+
+#[tokio::test]
+async fn markdown_email_list_body_uses_the_selected_route_in_every_mode() {
+    use crate::domain::ports::{NoOpEmailService, NoOpGmailTokenProvider};
+    use lexical_client::test_utils::FakeLexical;
+    use std::sync::Arc;
+
+    let html = "<ul><li><span style=\"white-space:pre-wrap\">one</span></li><li><span style=\"white-space:pre-wrap\">two</span></li></ul>";
+    for mode in ["http", "in_process", "shadow"] {
+        let backend = FakeLexical::new(
+            "",
+            vec![(
+                "POST",
+                "/html",
+                serde_json::json!({"html":html,"text":"one\n\ntwo"}),
+            )],
+        )
+        .await;
+        let context = EmailToolContext::new(
+            Arc::new(NoOpEmailService),
+            Arc::new(NoOpGmailTokenProvider),
+            Arc::new(unreachable_access::UnreachableAccessService),
+            Arc::new(backend.client(&format!("html={mode}"))),
+        );
+        let body = context.render_body("- one\n- two").await.unwrap();
+        assert_eq!(URL_SAFE_NO_PAD.decode(body.html).unwrap(), html.as_bytes());
+        assert_eq!(body.text.as_deref(), Some("one\n\ntwo"));
+        assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+        assert_eq!(backend.raw_reads(), 0);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires explicitly configured isolated local stack and OTLP collector"]
+async fn local_stack_email_list_body() -> anyhow::Result<()> {
+    use crate::domain::ports::{NoOpEmailService, NoOpGmailTokenProvider};
+    use lexical_client::test_utils::{LocalStack, trace_local};
+    use std::sync::Arc;
+    let stack = LocalStack::load()?;
+    let context = EmailToolContext::new(
+        Arc::new(NoOpEmailService),
+        Arc::new(NoOpGmailTokenProvider),
+        Arc::new(unreachable_access::UnreachableAccessService),
+        Arc::new(stack.lexical),
+    );
+    let (_, trace_id) = trace_local("email.render_body", async {
+        let body = context.render_body("- one\n- two").await.map_err(|error| error.internal_error)?;
+        assert_eq!(URL_SAFE_NO_PAD.decode(body.html)?, b"<ul><li><span style=\"white-space:pre-wrap\">one</span></li><li><span style=\"white-space:pre-wrap\">two</span></li></ul>");
+        assert_eq!(body.text.as_deref(), Some("one\n\ntwo"));
+        Ok(())
+    }).await?;
+    println!("email local Tempo trace: {trace_id}");
+    Ok(())
+}

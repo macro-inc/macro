@@ -244,7 +244,7 @@ impl SyncCore {
                 self.seeded = true;
                 self.seed_wait_deadline = None;
                 self.deferred_seed = None;
-                self.confirmed_base = doc.oplog_vv().get_frontiers();
+                self.confirmed_base = doc.oplog_frontiers();
                 self.wal.logged_vv = doc.oplog_vv();
                 self.snapshot_vv = doc.oplog_vv();
                 let replayed = self.replay(now, doc, out);
@@ -689,8 +689,7 @@ impl SyncCore {
                 // The old document's dependency queue was replaced. WAL replay
                 // below can introduce pending history belonging to the new one.
                 self.pending_import = false;
-                self.confirmed_base =
-                    confirmed_base.unwrap_or_else(|| doc.oplog_vv().get_frontiers());
+                self.confirmed_base = confirmed_base.unwrap_or_else(|| doc.oplog_frontiers());
                 self.registered_peers.retain(|p| *p != peer);
                 self.registered_peers.insert(0, peer);
                 self.presence_key = Some(self.local_presence_key(peer));

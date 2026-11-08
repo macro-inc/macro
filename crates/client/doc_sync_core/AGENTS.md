@@ -56,6 +56,7 @@ identities come from callers; transport and durable storage run outside this cra
   resets and probes. Use `allocate_comment_peer` before staging a comment fork.
 - `SyncDoc::probe_import` receives a fresh supplied peer; set it before importing
   the server snapshot into the throwaway document. Never mutate the live document.
+- Capture `SyncDoc::oplog_frontiers` at the existing seed/convergence/reset confirmation points; version-vector peer heads can name collected history, and persistence must never advance the confirmed cutoff to current local edits.
 - Presence expiry is a wall timestamp from the port; the core translates it to
   the monotonic timer using the latest host-supplied `Now`.
 - A timed-out adoption remains correlated until its transaction result arrives:
@@ -110,6 +111,7 @@ must match the core's reserved sequences and retained payload order. Reload afte
 failed adoption/orphan reads through the ordinary retry timer; never reuse stale
 adoption payload reservations or change other owners' retained bytes.
 Keep scheduled load retries busy until the real reload completes.
+
 
 When reset/rebase retains unacknowledged own rows, request complete retained server
 history with the existing empty-VV RequestSince. Build and validate server history

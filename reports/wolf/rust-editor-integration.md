@@ -36,3 +36,27 @@ The latest full rerun must determine whether this or another invariant fails.
 
 No deployment, production access, stash, branch rewrite, push or pull
 request was performed. Only synthetic local test services are used.
+
+
+## Priority enabled-editor preview merge
+
+The full matrix was interrupted for the requested preview before its final
+verdict; incomplete commands are not passes. `wolf/plugins-group-b` tip
+`56bb6b4cc6` is integrated, including the flag and EditorView branches.
+
+Seventeen conflict paths were resolved: application/session/sync/projection
+and collaboration guides; both WASM/readme and differential documentation;
+session editor, builder and test module declarations; Macro sync policy;
+Loro version differential runner; persisted simulation seeds; dependency
+hashes; regenerated WASM declarations; size script and S4 budget rows.
+Both command-builder helpers, test modules and regression seeds remain.
+Macro source own-undefined aliases canonicalize to their source null form on
+both sides, preserving strict comparisons and all underlying Loro values.
+The application session supplies its matching CommentNode constructor.
+Dependency hashes use the incoming values provisionally, pending actual
+post-merge install verification.
+
+The production WASM compiled and declarations were regenerated. Raw size is
+6,782,069 bytes; Brotli size is **1,552,476 bytes**. The unchanged provisional
+1,130,000-byte gate therefore **fails by 422,476 bytes**. No size tuning or cap
+increase was applied. Focused session and Lexical tests are running at two jobs.
