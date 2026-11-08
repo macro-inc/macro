@@ -6,6 +6,10 @@ The inventory IDs refer to S6 revision R2, sections 1 and 5.2. Each link is a re
 
 Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone storage. `kv_bytes` additionally applies DurableKv’s Uint8Array conversion. The normalizer checks callback-local port/output order, independent per-socket delivery order, clock count/kinds, alarm delays and exact bytes except decoded awareness timestamps. Test client entropy is seeded; worker clocks and UUIDs are not substituted.
 
+Worker export goldens use Loro 1.17.1. Cross-version checks import legacy 1.16.3
+peer bytes, and native replay retains semantic snapshot equivalence. Golden
+refreshes preserve the byte-exact Worker comparator and migration digest checks.
+
 | ID | Representative transcript |
 | --- | --- |
 | E1 | [hibernation.test/H1_restores_the_websocket_tag_after_eviction.jsonl](hibernation.test/H1_restores_the_websocket_tag_after_eviction.jsonl) |
