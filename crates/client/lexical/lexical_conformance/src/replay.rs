@@ -5,6 +5,8 @@ use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 mod bindings;
+mod carets;
+pub(crate) use carets::{CaretBindings, IteratorValue};
 mod initial;
 mod records;
 mod selections;
@@ -71,17 +73,12 @@ pub struct Replayer {
     pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
-    pub(crate) carets: Vec<crate::api::caret::CaretValue>,
-    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
-    pub(crate) caret_origins: HashMap<usize, Value>,
-    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
+    pub(crate) carets: CaretBindings,
     pub(crate) bindings: Bindings,
     pub(crate) record_ids: RecordIdentities,
     pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
     pub(crate) committed_version: u64,
-    pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
-    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
     pub(crate) selections: SelectionBindings,
     pub(crate) tapes: Vec<crate::fixture::Tape>,
