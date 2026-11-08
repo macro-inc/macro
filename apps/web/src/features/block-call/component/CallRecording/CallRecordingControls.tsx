@@ -106,22 +106,24 @@ function DesktopRecordingControls(props: {
           >
             {state().rate()}×
           </Dropdown.Trigger>
-          <Dropdown.Content mount={menuMount()} class="min-w-28">
-            <Dropdown.RadioGroup
-              value={String(state().rate())}
-              onChange={(value) => state().setRate(Number(value))}
-            >
-              <For each={RECORDING_PLAYBACK_RATES}>
-                {(rate) => (
-                  <Dropdown.RadioItem value={String(rate)} closeOnSelect>
-                    <span class="flex-1">{rate}×</span>
-                    <Dropdown.ItemIndicator>
-                      <CheckIcon class="size-4" />
-                    </Dropdown.ItemIndicator>
-                  </Dropdown.RadioItem>
-                )}
-              </For>
-            </Dropdown.RadioGroup>
+          <Dropdown.Content mount={menuMount()} class="min-w-40">
+            <Dropdown.Group>
+              <Dropdown.RadioGroup
+                value={String(state().rate())}
+                onChange={(value) => state().setRate(Number(value))}
+              >
+                <For each={RECORDING_PLAYBACK_RATES}>
+                  {(rate) => (
+                    <Dropdown.RadioItem value={String(rate)} closeOnSelect>
+                      <span class="flex-1">{rate}×</span>
+                      <Dropdown.ItemIndicator>
+                        <CheckIcon class="size-3.5 text-accent" />
+                      </Dropdown.ItemIndicator>
+                    </Dropdown.RadioItem>
+                  )}
+                </For>
+              </Dropdown.RadioGroup>
+            </Dropdown.Group>
           </Dropdown.Content>
         </Dropdown>
         <RecordingVolume

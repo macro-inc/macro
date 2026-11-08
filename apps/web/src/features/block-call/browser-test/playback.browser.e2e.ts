@@ -160,3 +160,72 @@ test('touch first wakes hidden controls and the next picture tap pauses', async 
     await context.close();
   }
 });
+
+for (const theme of ['light', 'dark']) {
+  test(`speed menu matches the main sort dropdown (${theme})`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/src/features/block-call/browser-test/playback.html?theme=${theme}&reference=sort`
+    );
+    const speed = page.getByRole('button', {
+      name: 'Playback speed',
+      exact: true,
+    });
+    await speed.click();
+    const menu = page.getByRole('menu');
+    await menu.evaluate((element) =>
+      Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished)
+      )
+    );
+    const dimensions = await menu
+      .getByRole('menuitemradio')
+      .first()
+      .evaluate((item) => {
+        const style = getComputedStyle(item);
+        return {
+          height: item.getBoundingClientRect().height,
+          padding: style.padding,
+          fontSize: style.fontSize,
+        };
+      });
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d50-${theme}-speed.png`,
+      });
+    await menu
+      .getByRole('menuitemradio', { name: '1.5×', exact: true })
+      .click();
+    await expect(page.locator('video')).toHaveJSProperty('playbackRate', 1.5);
+    await expect(speed).toBeFocused();
+    await page
+      .getByRole('button', { name: 'Reference sort', exact: true })
+      .click();
+    await menu.evaluate((element) =>
+      Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished)
+      )
+    );
+    const reference = await menu
+      .getByRole('menuitemradio')
+      .first()
+      .evaluate((item) => {
+        const style = getComputedStyle(item);
+        return {
+          height: item.getBoundingClientRect().height,
+          padding: style.padding,
+          fontSize: style.fontSize,
+        };
+      });
+    expect(dimensions).toEqual(reference);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d50-${theme}-main-sort.png`,
+      });
+  });
+}

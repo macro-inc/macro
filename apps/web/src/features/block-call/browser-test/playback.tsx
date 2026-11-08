@@ -1,9 +1,23 @@
 import '../../../index.css';
-import { createSignal } from 'solid-js';
+import { ListSortDropdown } from '@app/components/view-shell/ListDropdowns';
+import {
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+} from '@app/features/theme/constants';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { CallRecordingVideo } from '../component/CallRecording/CallRecordingVideo';
-import { createRecordingPlayback } from '../primitives/recording-playback';
+import {
+  createRecordingPlayback,
+  RECORDING_PLAYBACK_RATES,
+} from '../primitives/recording-playback';
 import clip from './clip.webm?url';
+
+const params = new URLSearchParams(location.search);
+applyTheme(
+  params.get('theme') === 'light' ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME
+);
 
 // Mirror the application shell's input-modality markers.
 document.addEventListener(
@@ -43,6 +57,17 @@ function PlaybackFixture() {
       <button type="button" class="mt-6" id="outside">
         Outside player
       </button>
+      <Show when={params.get('reference') === 'sort'}>
+        <ListSortDropdown
+          label="Reference sort"
+          value={String(playback.rate())}
+          options={RECORDING_PLAYBACK_RATES.map((rate) => ({
+            id: String(rate),
+            label: `${rate}×`,
+          }))}
+          onChange={(rate) => playback.setRate(Number(rate))}
+        />
+      </Show>
     </main>
   );
 }
