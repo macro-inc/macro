@@ -15,7 +15,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem` (both from `features/video-tutorials`, each once its video is in the catalog).
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -59,7 +59,11 @@ document, and stays in the file tabs. Verify moving one into a nested folder
 shared with another user, that user opening it from the folder, and moving it
 back to root, by **Remove from folder** or a drop on the sidebar's **Drive**
 row. Each move toasts success once: databases and forms have no Soup record, so
-the move's result carries no cache patch for them. Databases have no view history and do not appear in **Recent** or
+the move's result carries no cache patch for them. Deleting a folder trashes the
+documents and chats inside it but returns its databases and forms (and those in
+its subfolders) to the root, without the sharing the folder passed down; they show
+no folder chip, even after a reload, and restoring the folder does not file them
+again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 

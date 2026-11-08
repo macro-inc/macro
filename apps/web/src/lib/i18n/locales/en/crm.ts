@@ -60,6 +60,12 @@ export default {
   pipelineTrackCompanies: 'Companies',
   pipelineTrackContacts: 'Contacts',
   pipelineTrackGeneric: 'Generic',
+  pipelineTrackCompaniesDescription:
+    'One row per company, for deals, accounts, or partners.',
+  pipelineTrackContactsDescription:
+    'One row per person, for hiring, outreach, or follow-ups.',
+  pipelineTrackGenericDescription:
+    'Rows you name yourself, not linked to a company or contact.',
   addEntry: 'Add entry',
   customerContact: 'Customer / Contact',
   searchCustomerContact: 'Search customers and contacts...',

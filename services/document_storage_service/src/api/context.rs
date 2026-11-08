@@ -481,6 +481,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer<DssEventBroker>,
+    crate::outbound::filed_items::FiledItemsUnfilerAdapter,
     DssEventBroker,
 >;
 
