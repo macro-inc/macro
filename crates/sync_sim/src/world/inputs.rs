@@ -223,10 +223,15 @@ impl Sim {
         };
         let callback = server.step(SimServer::now(self.clock.wall(0), self.clock.now), input);
         let accepted = callback.accepted;
+        let failed_upgrade = !accepted
+            && callback.effects.iter().any(|effect| {
+                effect.operation == "connections.accept"
+                    && effect.value.as_str() == Some(socket.as_str())
+            });
         if accepted && !callback.crashed {
             if let Some(link) = self.net.links.get_mut(&key) {
                 link.open = true;
-                link.socket = Some(socket);
+                link.socket = Some(socket.clone());
             }
             self.input(
                 &key.0,
@@ -249,7 +254,14 @@ impl Sim {
                 },
             )?;
         }
-        self.callback(doc, callback)
+        self.callback(doc, callback)?;
+        // An accepted server half may precede a fallible metadata write. If the
+        // upgrade fails, the runtime closes that half even though no client link
+        // opened. Run the actual close callback before removing runtime membership.
+        if failed_upgrade {
+            self.server_input(doc, Input::Runtime(ServerInput::Close(socket)))?;
+        }
+        Ok(())
     }
     fn deliver(
         &mut self,

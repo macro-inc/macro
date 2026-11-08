@@ -220,16 +220,33 @@ fn corrupt_update(frame: &[u8], direction: Direction) -> Option<Vec<u8>> {
         } else {
             return None;
         }
-    } else if let Ok(sync_protocol::FromRemote::RemoteUpdate { .. }) =
-        sync_protocol::FromRemote::deserialize(bytes)
-    {
-        sync_protocol::FromRemote::RemoteUpdate {
-            update: SliceWrapper::from_cooked(&corrupt),
-        }
-        .serialize(&mut result)
-        .ok()?;
     } else {
-        return None;
+        let message = match sync_protocol::FromRemote::deserialize(bytes).ok()? {
+            sync_protocol::FromRemote::RemoteUpdate { .. } => {
+                sync_protocol::FromRemote::RemoteUpdate {
+                    update: SliceWrapper::from_cooked(&corrupt),
+                }
+            }
+            sync_protocol::FromRemote::RemoteSnapshot { .. } => {
+                sync_protocol::FromRemote::RemoteSnapshot {
+                    snapshot: SliceWrapper::from_cooked(&corrupt),
+                }
+            }
+            sync_protocol::FromRemote::RemoteUpdateSince { vv, .. } => {
+                sync_protocol::FromRemote::RemoteUpdateSince {
+                    update: SliceWrapper::from_cooked(&corrupt),
+                    vv,
+                }
+            }
+            sync_protocol::FromRemote::RemoteInitialSync { awareness, .. } => {
+                sync_protocol::FromRemote::RemoteInitialSync {
+                    snapshot: SliceWrapper::from_cooked(&corrupt),
+                    awareness,
+                }
+            }
+            _ => return None,
+        };
+        message.serialize(&mut result).ok()?;
     }
     Some(result)
 }

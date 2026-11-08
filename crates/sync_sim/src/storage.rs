@@ -38,6 +38,7 @@ pub struct SimStorage {
     pub(crate) user: String,
     pub(crate) seeded_docs: BTreeSet<SyncDocId>,
     recent: Vec<DurableWrite>,
+    pub(crate) corruptions: Vec<(SyncDocId, WalOwner, WalSeq)>,
     next_id: u64,
     tails: BTreeMap<SyncDocId, u64>,
     latency: (crate::Millis, crate::Millis),
@@ -63,6 +64,7 @@ impl SimStorage {
             user: "user-0".into(),
             seeded_docs: BTreeSet::new(),
             recent: Vec::new(),
+            corruptions: Vec::new(),
             next_id: 0,
             tails: BTreeMap::new(),
             latency: profile.latency,
@@ -115,8 +117,9 @@ impl SimStorage {
                 }
             }
             StorageFault::CorruptRow => {
-                if let Some(row) = self.durable.entries.values_mut().next() {
+                if let Some((key, row)) = self.durable.entries.iter_mut().next() {
                     row.record.bytes = vec![0];
+                    self.corruptions.push(key.clone());
                 }
             }
             StorageFault::Uncertain { next } => self.uncertain = next,
@@ -490,7 +493,12 @@ impl SimStorage {
                 );
             }
             StorageOp::SnapshotDelete { doc } => {
-                self.durable.snapshots.remove(doc);
+                if self.durable.snapshots.remove(doc).is_some() {
+                    facts.push(Fact::SnapshotDeleted {
+                        profile: profile.clone(),
+                        doc: doc.clone(),
+                    });
+                }
             }
             StorageOp::Load { .. } | StorageOp::LoadOrphans { .. } => {}
         }

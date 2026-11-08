@@ -23,9 +23,39 @@ pub struct Event {
     /// Observed fact, never a projected expectation.
     pub fact: Fact,
 }
+/// Telemetry instruction phase, preserving start versus scheduled-event evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum TelemetryPhase {
+    /// Span creation.
+    Start,
+    /// Point event.
+    Event,
+    /// Span completion.
+    End,
+}
 /// Semantic observations at client, transport, storage and server boundaries.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Fact {
+    /// Exact row actually damaged by an injected storage fault, before any adoption.
+    WalCorrupted {
+        /// Durable storage namespace.
+        profile: ProfileName,
+        /// Document identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Owner at corruption time.
+        owner: WalOwner,
+        /// Sequence at corruption time.
+        seq: WalSeq,
+    },
+    /// An actual token-fetch effect, before its scheduled completion.
+    TokenRequested {
+        /// Requesting client.
+        client: ClientName,
+        /// Requesting session.
+        session: SessionId,
+        /// Core attempt identity.
+        attempt: u32,
+    },
     /// Partition state, so expiry queries can locate the precise virtual interval.
     Partition {
         /// Affected client.
@@ -182,6 +212,13 @@ pub enum Fact {
         /// Chatter-origin bytes.
         foreign: bool,
     },
+    /// A requested snapshot delete actually removed a stored snapshot.
+    SnapshotDeleted {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact document key.
+        doc: doc_sync_core::SyncDocId,
+    },
     /// Browser durable completion.
     WalDurable {
         /// Profile.
@@ -331,6 +368,8 @@ pub enum Fact {
     },
     /// Core telemetry, retained verbatim with ordered attributes.
     Telemetry {
+        /// Actual instruction phase.
+        phase: TelemetryPhase,
         /// Client.
         client: ClientName,
         /// Event name.

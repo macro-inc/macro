@@ -100,6 +100,10 @@ impl SimClock {
                 | Pending::RouterToken(..) | Pending::RouteConnect(..) => true,
         })
     }
+    pub(crate) fn clear_directory_heals(&mut self, doc: DocIx) {
+        self.queue
+            .retain(|_, event| !matches!(event, Pending::HealDirectory(key) if *key == doc));
+    }
     pub(crate) fn clear_client_wakes(&mut self, client: &ClientName) {
         self.queue
             .retain(|_, event| !matches!(event, Pending::Wake(name, _, _) if name == client));

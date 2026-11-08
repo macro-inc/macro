@@ -128,10 +128,16 @@ impl RunStats {
                         multi_tab.insert(profile.clone());
                     }
                 }
-                Fact::Telemetry { name, .. } if name == "doc.sync.reset" => self.resets += 1,
-                Fact::Telemetry { name, .. } if name == "doc.sync.catchup" => {
-                    self.converge_rounds += 1
-                }
+                Fact::Telemetry {
+                    name,
+                    phase: TelemetryPhase::Start,
+                    ..
+                } if name == "doc.sync.reset" => self.resets += 1,
+                Fact::Telemetry {
+                    name,
+                    phase: TelemetryPhase::Start,
+                    ..
+                } if name == "doc.sync.catchup" => self.converge_rounds += 1,
                 Fact::Server { operation }
                     if operation == "crashed" || operation == "Hibernate" =>
                 {

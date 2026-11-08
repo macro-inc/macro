@@ -170,13 +170,39 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
             if before.is_none_or(|view| !view.contains_key(&key)) {
                 continue;
             }
+            // A suspended receiver cannot run expiry callbacks. Defer only
+            // this observation until its actual thaw (which delivers a Tick),
+            // rather than forgiving stale presence after it resumes.
+            let frozen = outcome
+                .events
+                .iter()
+                .take_while(|event| event.at.0 <= deadline)
+                .filter_map(|event| match &event.fact {
+                    Fact::Frozen { client } if client == target => Some(true),
+                    Fact::Thawed { client } | Fact::Opened { client, .. } if client == target => {
+                        Some(false)
+                    }
+                    _ => None,
+                })
+                .last()
+                .unwrap_or(false);
+            let receiver_deadline = if frozen {
+                match outcome.events.iter().find(|event| event.at.0 > deadline && matches!(&event.fact,
+                    Fact::Thawed { client } | Fact::Opened { client, .. } | Fact::Crashed { client } | Fact::Closed { client }
+                    if client == target)) {
+                    Some(Event { at, fact: Fact::Thawed { .. } }) => at.0,
+                    _ => continue,
+                }
+            } else {
+                deadline
+            };
             let at_deadline = outcome
                 .events
                 .iter()
                 .rev()
                 .find_map(|event| match &event.fact {
                     Fact::PresenceChanged { client, remote }
-                        if client == target && event.at.0 <= deadline =>
+                        if client == target && event.at.0 <= receiver_deadline =>
                     {
                         Some(remote)
                     }
@@ -185,7 +211,9 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
             if at_deadline.is_some_and(|view| view.contains_key(&key)) {
                 return Err(Failure::new(
                     "presence_expires",
-                    format!("{target:?} retained {source:?}/{key} past {deadline}"),
+                    format!(
+                        "{target:?} retained {source:?}/{key} past receiver deadline{receiver_deadline}"
+                    ),
                 ));
             }
         }

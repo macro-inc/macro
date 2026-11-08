@@ -187,6 +187,26 @@ pub fn no_persisted_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
         if expired(outcome, profile, &rows, doc) {
             continue;
         }
+        // Orchestrator corruption ruling: only the exact fault-damaged row,
+        // through its actual adoption aliases, may remain absent if retained
+        // quarantined and unacknowledged. Acknowledged-edit checks stay strict.
+        let key = document_key(doc, &outcome.config);
+        let corrupted = outcome.events.iter().any(|event| {
+            matches!(&event.fact,
+            Fact::WalCorrupted { profile: scope, doc: target, owner, seq }
+            if scope == profile && target.as_str() == key && rows.contains(&(*owner, *seq)))
+        });
+        let retained = outcome.finals.profiles.get(profile).is_some_and(|store| {
+            store.entries.iter().any(|((target, owner, seq), row)| {
+                target.as_str() == key
+                    && rows.contains(&(*owner, *seq))
+                    && row.record.quarantined
+                    && !row.delivered
+            })
+        });
+        if corrupted && retained {
+            continue;
+        }
         let spans = outcome
             .events
             .iter()
@@ -331,7 +351,35 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
         }
     }
     for (profile, store) in &outcome.finals.profiles {
-        for ((doc, _, _), row) in &store.entries {
+        for ((doc, owner, seq), row) in &store.entries {
+            // Durable delivery is a contiguous prefix. A live owner can have an
+            // exact acknowledged row above a parked gap, without persisting a
+            // false prefix over that gap.
+            let acknowledged = outcome
+                .finals
+                .clients
+                .values()
+                .any(|client| client.alive && *owner == WalOwner::Session(client.session))
+                && outcome.events.iter().any(|event| match &event.fact {
+                    Fact::PushSent {
+                        client,
+                        update,
+                        rows,
+                        ..
+                    } => {
+                        rows.contains(&(*owner, *seq))
+                            && outcome.events.iter().any(|event| {
+                                matches!(&event.fact,
+                            Fact::AckReceived { client: receiver, update: id }
+                            if receiver == client && id == update)
+                            })
+                            && outcome.finals.clients.get(client).is_some_and(|client| {
+                                client.profile == *profile
+                                    && document_key(client.doc, &outcome.config) == doc.as_str()
+                            })
+                    }
+                    _ => false,
+                });
             let writable = outcome.finals.clients.values().any(|client| {
                 client.alive
                     && client.terminal.is_none()
@@ -340,7 +388,7 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
                     && client.access == Access::Edit
                     && document_key(client.doc, &outcome.config) == doc.to_string()
             });
-            if writable && !row.delivered && !row.record.quarantined {
+            if writable && !row.delivered && !row.record.quarantined && !acknowledged {
                 return Err(Failure::new(
                     "all_wals_drained",
                     format!("{profile:?} has an undelivered orphan/foreign row"),
