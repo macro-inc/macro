@@ -15,7 +15,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
-use cowlike::CowLike;
+use cow_str::CowLike;
 use futures::{StreamExt, stream::SplitStream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;

@@ -8,4 +8,4 @@ pub mod error;
 pub mod lowercased;
 pub mod user_id;
 
-pub use cowlike;
+pub use cow_str;

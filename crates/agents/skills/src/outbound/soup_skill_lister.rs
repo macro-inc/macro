@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use cowlike::CowLike;
+use cow_str::CowLike;
 use document_sub_type::DocumentSubType;
 use email::domain::models::PreviewView;
 use filter_ast::Expr;

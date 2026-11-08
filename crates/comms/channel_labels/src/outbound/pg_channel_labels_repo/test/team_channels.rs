@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::ChannelLabelRule;
-use cowlike::CowLike;
+use cow_str::CowLike;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn only_eligible_team_channels_can_be_assigned_or_moved_during_creation(pool: PgPool) {

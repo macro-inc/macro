@@ -2,7 +2,7 @@
 
 //! Bot identity primitives.
 
-use cowlike::{ArcCowStr, CowLike};
+use cow_str::{ArcCowStr, CowLike};
 use nom::{
     Finish, IResult, Parser,
     bytes::complete::tag,
@@ -12,7 +12,7 @@ use nom::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub use cowlike;
+pub use cow_str;
 
 #[cfg(test)]
 mod test;

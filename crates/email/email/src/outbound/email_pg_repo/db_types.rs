@@ -5,7 +5,7 @@ use crate::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
-use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use sqlx::Type;
 use uuid::Uuid;
 

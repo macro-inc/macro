@@ -1,6 +1,6 @@
 use super::append_attachment_to_chat::append_attachment_to_chat;
 use crate::history::{upsert_item_last_accessed, upsert_user_history};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model::{IDWithTimeStamps, chat::NewChatAttachment};
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;

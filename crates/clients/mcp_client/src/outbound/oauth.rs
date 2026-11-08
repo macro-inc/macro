@@ -6,7 +6,7 @@ use crate::domain::models::{
 use crate::domain::ports::{McpServerStore, OAuthClient, OAuthStateStore, PendingAuth};
 #[cfg(feature = "providers")]
 use crate::domain::provider_registry::PreRegisteredProviders;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use rmcp::transport::auth::{
     AuthorizationManager, AuthorizationMetadata, CredentialStore as _, InMemoryCredentialStore,
     InMemoryStateStore, OAuthClientConfig, StateStore as _, StoredAuthorizationState,

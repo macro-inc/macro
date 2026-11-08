@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use chrono::TimeZone;
 use import_notion::domain::model::{NotionOption, NotionParent};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 use super::*;
 

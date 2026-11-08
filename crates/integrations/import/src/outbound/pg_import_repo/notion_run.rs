@@ -7,7 +7,7 @@ use std::time::Duration;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
 use import_notion::domain::model::ImportScope;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 

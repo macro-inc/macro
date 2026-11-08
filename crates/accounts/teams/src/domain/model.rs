@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use macro_user_id::{
-    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+    cow_str::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
 use model_user::Language;
 use models_permissions::share_permission::LinkShare;

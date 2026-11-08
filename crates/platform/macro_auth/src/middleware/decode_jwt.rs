@@ -12,7 +12,7 @@ use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use macro_env::Environment;
 use macro_env_var::{VarNameErr, env_var};
-use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{cow_str::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use remote_env_var::{LocalOrRemoteSecret, SecretManager};
 use thiserror::Error;
 

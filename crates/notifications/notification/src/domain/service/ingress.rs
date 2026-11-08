@@ -28,7 +28,7 @@ use crate::domain::ports::{
 };
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};

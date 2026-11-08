@@ -16,7 +16,7 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 futures = { workspace = true }
 hmac = { workspace = true }
 kafka_util = { workspace = true, optional = true }

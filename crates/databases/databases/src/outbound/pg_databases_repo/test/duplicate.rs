@@ -5,7 +5,7 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use models_databases::views::{LaneKey, NewView, ViewLayout, ViewQuery};
 use models_databases::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, OpResult, OptionRef,

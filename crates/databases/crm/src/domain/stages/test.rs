@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole,
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use system_properties::StageOption;
 
 use super::*;

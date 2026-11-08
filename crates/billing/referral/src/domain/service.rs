@@ -6,7 +6,7 @@ mod test;
 use std::{collections::HashSet, ops::Deref};
 
 use macro_user_id::{
-    cowlike::CowLike,
+    cow_str::CowLike,
     email::{EmailStr, ReadEmailParts},
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},

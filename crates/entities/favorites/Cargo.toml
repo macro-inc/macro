@@ -29,7 +29,7 @@ axum = { workspace = true, optional = true }
 # repeated query keys into a vector; `axum::extract::Query` keeps only one.
 axum-extra = { workspace = true, optional = true, features = ["query"] }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }

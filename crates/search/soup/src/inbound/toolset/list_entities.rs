@@ -40,7 +40,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use cowlike::CowLike;
+use cow_str::CowLike;
 use std::collections::HashMap;
 use std::sync::Arc;
 

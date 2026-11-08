@@ -20,7 +20,7 @@ use macro_auth::{
     headers::AccessTokenExtractor,
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use serde::Deserialize;

@@ -19,7 +19,7 @@ use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use cowlike::CowLike;
+use cow_str::CowLike;
 use lru::LruCache;
 use macro_user_id::user_id::MacroUserIdStr;
 

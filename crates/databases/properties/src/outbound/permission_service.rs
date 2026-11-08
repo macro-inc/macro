@@ -7,7 +7,7 @@ use entity_access::domain::models::{
     EntityType as AccessEntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;

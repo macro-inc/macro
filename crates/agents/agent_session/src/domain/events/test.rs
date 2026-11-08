@@ -1,7 +1,7 @@
 use super::*;
 use bots::domain::models::BotId;
 
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use serde_json::json;
 
 fn owner() -> MacroUserIdStr<'static> {

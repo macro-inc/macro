@@ -2284,7 +2284,7 @@ dependencies = [
  "async-stream",
  "base64 0.22.1",
  "chrono",
- "cowlike",
+ "cow_str",
  "email",
  "email_thread_id",
  "entity_access",
@@ -3679,7 +3679,7 @@ dependencies = [
 name = "bot_id"
 version = "0.1.0"
 dependencies = [
- "cowlike",
+ "cow_str",
  "nom 8.0.0",
  "serde",
  "sqlx",
@@ -4420,7 +4420,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
- "cowlike",
+ "cow_str",
  "entity_access",
  "macro_authorization",
  "macro_db_migrator",
@@ -5281,7 +5281,7 @@ dependencies = [
  "connection_gateway_client",
  "connection_gateway_models",
  "cool_asserts",
- "cowlike",
+ "cow_str",
  "dashmap",
  "doppler-config",
  "ensure_exists",
@@ -5699,7 +5699,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
-name = "cowlike"
+name = "cow_str"
 version = "0.1.0"
 dependencies = [
  "either",
@@ -8670,7 +8670,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "chrono",
- "cowlike",
+ "cow_str",
  "entity_access",
  "http-body-util",
  "macro_authorization",
@@ -9041,7 +9041,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "cool_asserts",
- "cowlike",
+ "cow_str",
  "item_filters",
  "macro_user_id",
  "mockall",
@@ -9529,7 +9529,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "connection_gateway_client",
- "cowlike",
+ "cow_str",
  "document_sub_type",
  "documents",
  "entity_access",
@@ -13258,7 +13258,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
- "cowlike",
+ "cow_str",
  "doppleganger",
  "nom 8.0.0",
  "serde",
@@ -13926,7 +13926,7 @@ dependencies = [
 name = "model_entity"
 version = "0.1.0"
 dependencies = [
- "cowlike",
+ "cow_str",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -14517,7 +14517,7 @@ dependencies = [
  "aquamarine",
  "broadcast",
  "chrono",
- "cowlike",
+ "cow_str",
  "either",
  "futures",
  "hex",
@@ -14572,7 +14572,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "cowlike",
+ "cow_str",
  "hmac 0.12.1",
  "http-body-util",
  "macro_authorization",
@@ -14628,7 +14628,7 @@ dependencies = [
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "chrono",
- "cowlike",
+ "cow_str",
  "futures",
  "hmac 0.12.1",
  "kafka_util",
@@ -19501,7 +19501,7 @@ dependencies = [
  "axum",
  "chrono",
  "cognition",
- "cowlike",
+ "cow_str",
  "document_sub_type",
  "documents",
  "email",
@@ -19711,7 +19711,7 @@ dependencies = [
  "channels",
  "chrono",
  "cool_asserts",
- "cowlike",
+ "cow_str",
  "crm",
  "document_sub_type",
  "either",

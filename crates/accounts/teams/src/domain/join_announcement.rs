@@ -9,7 +9,7 @@ mod test;
 
 use std::collections::HashSet;
 
-use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use model_notifications::ColleagueJoinedMacro;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};

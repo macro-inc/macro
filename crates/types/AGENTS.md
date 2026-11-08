@@ -20,7 +20,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`chat_id`](chat_id/AGENTS.md) | Shared type for AI chat: `ChatId`, the `TEXT` id of a chat, as a `nutype` String newtype (CS-10). |
 | [`chat_message`](chat_message/AGENTS.md) | Part of AI: the role (`Role`) and content (`ChatMessageContent`, `AssistantMessagePart`) of a stored AI chat message, shared by the agent loop, the chat domain, and the … |
 | `connection_gateway_models` |  |
-| `cowlike` |  |
+| `cow_str` |  |
 | `document_sub_type` |  |
 | [`entity_basic_types`](entity_basic_types/AGENTS.md) | Shared types: the `DocumentBasic`, `ChatBasic` and `BasicProject` rows that db queries load and `entity_access`'s axum extractors read from request extensions. |
 | `filter_ast` |  |

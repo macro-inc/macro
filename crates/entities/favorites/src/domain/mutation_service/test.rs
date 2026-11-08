@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Mutex};
 
 use chrono::Utc;
-use cowlike::CowLike;
+use cow_str::CowLike;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity as AccessEntity,

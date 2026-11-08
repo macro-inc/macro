@@ -11,7 +11,7 @@ use crate::domain::models::{
 use crate::domain::ports::{ImportError, ImportRepo, Result};
 use agent_session::domain::notifications::NotificationWriter;
 use chrono::{DateTime, Utc};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{PgConnection, PgPool};
 use std::collections::HashSet;

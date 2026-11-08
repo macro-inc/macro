@@ -9,7 +9,7 @@ use std::time::Duration;
 use email_formatting::EmailDigestNotification;
 use hmac::{Hmac, Mac};
 use macro_env::Environment;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::ChannelMessageSendMetadata;

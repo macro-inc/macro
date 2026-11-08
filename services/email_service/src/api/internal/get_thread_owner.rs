@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use models_email::service::thread::GetThreadOwnerResponse;

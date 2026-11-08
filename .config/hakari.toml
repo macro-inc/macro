@@ -110,7 +110,7 @@ workspace-members = [
     "message_parent",
     "macro_uuid",
     "non_empty",
-    "cowlike",
+    "cow_str",
     # database_sql_engine: the SQL-subset parser/compiler for Macro databases runs in
     # the browser (cache worker) as well as in services, so it must stay
     # wasm-safe.

@@ -9,7 +9,7 @@ use ai_billing::domain::{
     BillingRepo, BillingServiceImpl, BillingTeam, EntitlementSource, PaymentGateway, PlanTier,
     SeatPlanTransition, TeamSeat, TeamSeats, UsageReader,
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
 use crate::domain::{

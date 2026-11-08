@@ -1,6 +1,6 @@
 use super::*;
 use entity_access_outbound::PgAccessRepository;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use std::sync::Arc;
 
 #[sqlx::test(

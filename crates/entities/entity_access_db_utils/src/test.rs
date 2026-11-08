@@ -1,5 +1,5 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_uuid::Uuid;
 use model_entity::EntityType;
 use model_owner::{Owner, OwnerType};

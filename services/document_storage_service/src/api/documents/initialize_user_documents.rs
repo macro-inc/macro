@@ -6,7 +6,7 @@ use axum::{
 use futures::StreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use model::{
     document::BasicDocument,
     response::{ErrorResponse, GenericErrorResponse, GenericSuccessResponse},

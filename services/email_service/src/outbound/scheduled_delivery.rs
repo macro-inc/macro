@@ -19,7 +19,7 @@ use email::domain::send_attempt::{PreparedSendContentUnavailable, SendSnapshot};
 use email_api_client_core::models::{EmailApiError, PreparedSendMessage, SendRequest, SentIds};
 use email_db_client::messages::scheduled::delivery::{self, DeliveryClaim};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBroker, MacroEventBrokerService};
-use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::cow_str::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{attachment::AttachmentDraft, link::Link, message::MessageToSend};
 use std::time::Instant;

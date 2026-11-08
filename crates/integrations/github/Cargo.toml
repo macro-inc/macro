@@ -48,7 +48,7 @@ anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 connection_gateway_client = { workspace = true, optional = true }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 documents = { workspace = true, features = [
   "ports",
 ], optional = true }

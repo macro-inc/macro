@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 

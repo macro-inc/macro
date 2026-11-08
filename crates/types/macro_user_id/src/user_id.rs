@@ -1,6 +1,6 @@
 //! Module defines the [MacroUserId] and the methods to read the email
 use crate::{
-    cowlike::{ArcCowStr, CowLike},
+    cow_str::{ArcCowStr, CowLike},
     email::{Email, ReadEmailParts, email},
     error::ParseErr,
     lowercased::Lowercase,

@@ -2,7 +2,7 @@ use crate::outbound::pg_soup_repo::unexpanded::{
     by_cursor::unexpanded_generic_cursor_soup, by_ids::unexpanded_soup_by_ids,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use models_pagination::Identify;
 use models_pagination::{PaginateOn, Query, SimpleSortMethod};

@@ -1743,7 +1743,7 @@ impl ToolEntityCreator {
                 Some(team_id),
                 members
                     .into_iter()
-                    .map(|member| macro_user_id::cowlike::CowLike::into_owned(member.user_id))
+                    .map(|member| macro_user_id::cow_str::CowLike::into_owned(member.user_id))
                     .collect(),
             ),
             Err(e) => {

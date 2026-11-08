@@ -23,7 +23,7 @@ postgres = ["dep:sqlx", "outbound"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 entity_access = { workspace = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }

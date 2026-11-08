@@ -6,7 +6,7 @@ use axum::{
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserId};
 use model::authentication::github_token::GithubAccessToken;
 use model::response::ErrorResponse;
 

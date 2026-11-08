@@ -204,7 +204,7 @@ members = [
   "crates/types/channel_id",
   "crates/types/chat_id",
   "crates/types/chat_message",
-  "crates/types/cowlike",
+  "crates/types/cow_str",
   "crates/types/database_id",
   "crates/types/document_id",
   "crates/types/email_thread_id",
@@ -700,7 +700,7 @@ contacts_inbound = { path = "crates/comms/contacts_inbound", default-features = 
 contacts_outbound = { path = "crates/comms/contacts_outbound" }
 contacts_service_url = { path = "crates/platform/service_urls/contacts_service_url" }
 convert_service_url = { path = "crates/platform/service_urls/convert_service_url" }
-cowlike = { path = "crates/types/cowlike" }
+cow_str = { path = "crates/types/cow_str" }
 crm = { path = "crates/databases/crm", default-features = false }
 cursor_api_key = { path = "crates/agents/cursor_api_key" }
 cursor_cloud_agents = { path = "crates/agents/cursor_cloud_agents" }

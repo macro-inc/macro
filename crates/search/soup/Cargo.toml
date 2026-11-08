@@ -52,7 +52,7 @@ channels = { workspace = true, features = [
   "list",
 ] }
 chrono = { workspace = true }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 crm = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 either = { workspace = true }

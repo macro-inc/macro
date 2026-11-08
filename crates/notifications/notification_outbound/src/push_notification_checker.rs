@@ -1,6 +1,6 @@
 //! This module provides an implementation of [PushNotificationChecker] which is a wrapper over some T which is a [NotificationRepository]
 //!
-use cowlike::CowLike;
+use cow_str::CowLike;
 use notification::domain::{
     models::email_notification_digest::ports::PushNotificationChecker,
     ports::NotificationRepository,

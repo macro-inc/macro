@@ -6,7 +6,7 @@ use import_notion::domain::model::{
     NotionOption, NotionParent, NotionUser, PageMarkdown, Paged, SearchHit, SearchObject,
 };
 use import_notion::domain::ports::NotionError;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 use super::*;
 use crate::domain::models::{ImportKind, NotionDecision, NotionTaskFields};

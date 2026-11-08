@@ -1,6 +1,6 @@
 //! Queries for a team's shareable invite link.
 
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 
 use crate::domain::model::{TeamError, TeamInviteLinkTeam, TeamInviteLinkToken};

@@ -10,7 +10,7 @@ backend.
 ## Start here
 
 - `src/user_id.rs` (+ `src/user_id/tests.rs`): `MacroUserId<T>` — generic over
-  its string storage (`cowlike::CowLike`), parsed with `nom`.
+  its string storage (`cow_str::CowLike`), parsed with `nom`.
 - `src/email.rs` (+ `src/email/tests.rs`): the email-part parser and `Email<T>`.
 - `src/lowercased.rs`: case-normalization wrapper used for lookups/comparisons.
 - `src/error.rs`: `ParseErr`.
@@ -23,7 +23,7 @@ backend.
 
 ## Boundaries
 
-- Depends on: `cowlike` (generic Cow-like string storage), `doppleganger`,
+- Depends on: `cow_str` (generic Cow-like string storage), `doppleganger`,
   `nom`.
 - Used by: essentially everywhere a user id crosses a function
   boundary; a change to the parser or `Debug`/`PartialEq` semantics is
