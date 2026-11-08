@@ -77,6 +77,7 @@ impl Sim {
         let heartbeat = self.config.session.heartbeat.interval.0.max(1);
         let mut presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
         let mut presence_lifetimes = None;
+        let mut published_at_idle = false;
         let mut held_since = None;
         let mut settled_clients = BTreeSet::new();
         while self.clock.now <= deadline && !self.budget_hit {
@@ -96,10 +97,14 @@ impl Sim {
                     .collect::<Vec<_>>(),
                 self.presence_route_epochs(),
             );
-            if self.presence.is_none()
-                && (presence_lifetimes.as_ref() != Some(&lifetimes)
-                    || self.clock.now < self.presence_expiry_ready_at())
+            if presence_lifetimes.as_ref() != Some(&lifetimes)
+                || (self.presence.is_none() && self.clock.now < self.presence_expiry_ready_at())
             {
+                // A changed source invalidates an earlier candidate snapshot;
+                // heartbeat restarts alone keep the first view of this lifetime.
+                self.presence = None;
+                held_since = None;
+                published_at_idle = false;
                 presence_lifetimes = Some(lifetimes);
                 presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
                 self.resend_healing_presence(deadline)?;
@@ -148,6 +153,16 @@ impl Sim {
                     if let Some(at) = self.clock.issued_presence_until(direction) {
                         self.advance(at.min(deadline).saturating_sub(self.clock.now));
                     }
+                    continue;
+                }
+                if !published_at_idle {
+                    // Initial publications may age out while data work drains.
+                    // After that work and old FIFO publications finish, issue
+                    // one fresh real selection before certifying the first view.
+                    // This fixed phase never consults expected presence values.
+                    published_at_idle = true;
+                    presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
+                    self.resend_healing_presence(deadline)?;
                     continue;
                 }
                 if held_since.is_none() {

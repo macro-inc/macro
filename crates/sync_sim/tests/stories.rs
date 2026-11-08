@@ -56,3 +56,6 @@ mod lost_update;
 
 #[path = "stories/presence_replacement.rs"]
 mod presence_replacement;
+
+#[path = "stories/idle_presence.rs"]
+mod idle_presence;

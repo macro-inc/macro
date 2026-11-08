@@ -91,3 +91,7 @@ Presence retirement and replacement: lifecycle cases cover opposite bounded sour
 receiver clocks, strict stale-key mutation, AI fixed-key death, and peer replacement
 with periodic refresh disabled. `presence_replacement` retains literal259. Actual
 ClockSkew facts define the signed clock spread for strict expiry deadlines.
+
+`idle_presence::late_data_quiescence_republishes_before_observing_presence` retains
+literal157: a positive receiver clock can expire the entry-time selection before
+late data ACKs drain. One fixed fresh-publication phase follows preliminary idle.
