@@ -4,7 +4,7 @@ use lexical_model::*;
 use serde_json::{Value, json};
 pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value) -> Result<()> {
     if let Some(old) = r.selections.take_active()?
-        && let Some(selection) = tx.selection().cloned()
+        && let Some(selection) = tx.selection().map(Selection::snapshot_for_foreign_read)
     {
         r.selections.set_slot(old, tx.detach_selection(selection))?;
     }
@@ -13,7 +13,9 @@ pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value
         return Ok(());
     }
     let id = integer(&value["$selection"])? as usize;
-    let selection = tx.selection_at(r.selections.slot(id)?)?.cloned();
+    let selection = tx
+        .selection_at(r.selections.slot(id)?)?
+        .map(Selection::snapshot_for_foreign_read);
     tx.set_selection(selection)?;
     r.selections.set_slot(id, SelectionSlot::Active)?;
     r.selections.set_active(Some(id))?;
@@ -69,7 +71,7 @@ pub(crate) fn call(
     let slot = r.selections.slot(id)?;
     let selection = tx
         .selection_at(slot)?
-        .cloned()
+        .map(Selection::snapshot_for_foreign_read)
         .ok_or_else(|| fail("empty selection handle"))?;
     let active = r.selections.active()?;
     match method {

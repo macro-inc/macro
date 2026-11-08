@@ -108,7 +108,12 @@ impl SelectionBindings {
     }
 
     pub fn values(&self) -> Result<Vec<Option<Selection>>> {
-        Ok(self.lock()?.values.clone())
+        Ok(self
+            .lock()?
+            .values
+            .iter()
+            .map(|selection| selection.as_ref().map(Selection::snapshot_for_foreign_read))
+            .collect())
     }
 
     pub fn replace_values(&self, values: Vec<Option<Selection>>) -> Result<()> {

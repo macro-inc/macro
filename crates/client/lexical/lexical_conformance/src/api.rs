@@ -1,6 +1,6 @@
 //! Shared upstream API dispatch for recorded fixtures and the development WASM host.
 use crate::replay::{Replayer, Result, fail};
-use lexical_model::{Read, Transaction};
+use lexical_model::{Read, Selection, Transaction};
 use serde_json::Value;
 
 include!(concat!(env!("OUT_DIR"), "/api_index.rs"));
@@ -42,7 +42,7 @@ pub fn call_by_id(
 /// host owns the same identity bookkeeping as a fixture replay.
 pub fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Result<Value> {
     let active = r.selections.active()?;
-    let selection = tx.selection().cloned();
+    let selection = tx.selection().map(Selection::snapshot_for_foreign_read);
     let replacements = tx.selection_replacements();
     let result = lexical::call(r, tx, op);
     if replacements != tx.selection_replacements()

@@ -41,3 +41,5 @@ after crossing the WeakRef keep-alive job boundary; do not replace them with pol
 Defer collected-version release through an open update and recheck JS ownership before releasing; keep record metadata until the native release succeeds.
 
 Own exactly one node-handle cache per backend, retained until disposal; never let independent caches release the same model version.
+
+Use selection.test.ts to check captured selection fields across suspension, replacement and rollback against the real backend.

@@ -523,3 +523,46 @@ fn configured_session_rejects_active_contexts_and_another_editor_binding() -> Re
     }
     Ok(())
 }
+
+#[test]
+fn detached_direction_memo_survives_host_boundaries_but_explicit_clone_clears_it() -> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let create = crate::api::index()
+        .binary_search(&"lexical.$createRangeSelection")
+        .expect("range") as u32;
+    let backward = crate::api::index()
+        .binary_search(&"Selection.isBackward")
+        .expect("backward") as u32;
+    let cached = crate::api::index()
+        .binary_search(&"get:_cachedIsBackward")
+        .expect("cache") as u32;
+    let clone = crate::api::index()
+        .binary_search(&"Selection.clone")
+        .expect("clone") as u32;
+    host.begin_update(TagSet::default())?;
+    let selection = host.call(create, json!([]), None)?;
+    assert_eq!(
+        host.call(backward, json!([]), Some(selection.clone()))?,
+        false
+    );
+    assert_eq!(
+        host.call(cached, json!([]), Some(selection.clone()))?,
+        false
+    );
+    assert!(host.finish_noop()?);
+    host.begin_update(TagSet::default())?;
+    assert_eq!(
+        host.call(cached, json!([]), Some(selection.clone()))?,
+        false
+    );
+    let copy = host.call(clone, json!([]), Some(selection.clone()))?;
+    assert_eq!(host.call(cached, json!([]), Some(copy))?, Value::Null);
+    host.discard_update()?;
+    host.begin_update(TagSet::default())?;
+    assert_eq!(host.call(cached, json!([]), Some(selection))?, false);
+    assert!(host.finish_noop()?);
+    Ok(())
+}

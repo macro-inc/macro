@@ -93,3 +93,5 @@ last committed host version; already published preceding transitions are retaine
 Node indexed dispatch uses model tree queries and predicates for all node kinds.
 Keep element alignment/style/text-format fields distinct from text format/detail,
 and preserve null versus undefined when decoding getFormatFlags alignment.
+
+Preserve selection direction memos in host captures, detached-handle transfers and rollback values; clear them only for explicit upstream selection clones and active update clones.

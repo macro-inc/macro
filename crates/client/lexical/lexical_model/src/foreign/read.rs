@@ -74,23 +74,33 @@ pub struct ForeignReadSnapshot {
     retired_records: crate::state::NodeMap,
 }
 
-// Selection::clone models the upstream clone() method, which clears direction
-// caches. Capturing a read input must preserve the original object's fields.
-fn capture_selection(selection: &Selection) -> Selection {
-    let mut captured = selection.clone();
-    if let (Selection::Range(source), Selection::Range(target)) = (selection, &mut captured) {
-        target.cached_direction = source.cached_direction;
+impl Selection {
+    /// Capture the existing object's fields without invoking upstream `clone()` semantics.
+    /// Unlike an explicit selection clone, host suspension and owned read inputs retain
+    /// the range direction memo, including an intentionally stale read-mode memo.
+    pub fn snapshot_for_foreign_read(&self) -> Self {
+        let mut captured = self.clone();
+        if let (Self::Range(source), Self::Range(target)) = (self, &mut captured) {
+            target.cached_direction = source.cached_direction;
+        }
+        captured
     }
-    captured
 }
 
 impl Clone for ForeignReadSnapshot {
     fn clone(&self) -> Self {
         let mut state = self.state.clone();
-        state.selection = self.state.selection.as_ref().map(capture_selection);
+        state.selection = self
+            .state
+            .selection
+            .as_ref()
+            .map(Selection::snapshot_for_foreign_read);
         Self {
             state,
-            previous_selection: self.previous_selection.as_ref().map(capture_selection),
+            previous_selection: self
+                .previous_selection
+                .as_ref()
+                .map(Selection::snapshot_for_foreign_read),
             composition_key: self.composition_key,
             source_records: self.source_records.clone(),
             origin: self.origin.clone(),
@@ -98,7 +108,7 @@ impl Clone for ForeignReadSnapshot {
             detached: self
                 .detached
                 .iter()
-                .map(|slot| slot.as_ref().map(capture_selection))
+                .map(|slot| slot.as_ref().map(Selection::snapshot_for_foreign_read))
                 .collect(),
         }
     }
@@ -160,17 +170,24 @@ impl ForeignReadSnapshot {
         peer.state = committed.clone();
         let mut tx = peer.transaction();
         tx.pending = self.state.pending();
-        tx.pending.selection = self.state.selection.as_ref().map(capture_selection);
+        tx.pending.selection = self
+            .state
+            .selection
+            .as_ref()
+            .map(Selection::snapshot_for_foreign_read);
         tx.composition_key = self.composition_key;
         tx.foreign_read_only = true;
         tx.foreign_read_sources = Some(self.source_records.clone());
         tx.foreign_read_origin = self.origin.clone();
         tx.foreign_retired_records = self.retired_records.clone();
-        tx.foreign_previous_selection = self.previous_selection.as_ref().map(capture_selection);
+        tx.foreign_previous_selection = self
+            .previous_selection
+            .as_ref()
+            .map(Selection::snapshot_for_foreign_read);
         tx.detached = self
             .detached
             .iter()
-            .map(|slot| slot.as_ref().map(capture_selection))
+            .map(|slot| slot.as_ref().map(Selection::snapshot_for_foreign_read))
             .collect();
         Ok(read(&mut tx))
     }
@@ -198,7 +215,11 @@ impl StateRef<'_> {
     /// captured record without invoking a clone hook or changing the source.
     pub fn snapshot_for_foreign_read(self) -> Result<ForeignReadSnapshot, Error> {
         let mut state = self.state.pending();
-        state.selection = self.state.selection.as_ref().map(capture_selection);
+        state.selection = self
+            .state
+            .selection
+            .as_ref()
+            .map(Selection::snapshot_for_foreign_read);
         let mut source_records = self.source_records.cloned().unwrap_or_default();
         if let Some(projection) = self.native_projection {
             let slot = state
@@ -220,7 +241,9 @@ impl StateRef<'_> {
         }
         Ok(ForeignReadSnapshot {
             state,
-            previous_selection: self.previous_selection.map(capture_selection),
+            previous_selection: self
+                .previous_selection
+                .map(Selection::snapshot_for_foreign_read),
             composition_key: self.composition_key,
             source_records,
             origin: self.foreign_origin.map(ReadOriginRef::capture),
@@ -228,7 +251,7 @@ impl StateRef<'_> {
             detached: self
                 .detached_selections
                 .iter()
-                .map(|slot| slot.as_ref().map(capture_selection))
+                .map(|slot| slot.as_ref().map(Selection::snapshot_for_foreign_read))
                 .collect(),
         })
     }

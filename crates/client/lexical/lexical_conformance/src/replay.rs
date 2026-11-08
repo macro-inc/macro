@@ -506,7 +506,10 @@ impl Replayer {
             .selections
             .slots()?
             .into_iter()
-            .map(|slot| tx.selection_at(slot).map(|s| s.cloned()))
+            .map(|slot| {
+                tx.selection_at(slot)
+                    .map(|s| s.map(Selection::snapshot_for_foreign_read))
+            })
             .collect::<std::result::Result<_, _>>()?;
         self.selections.replace_values(values)
     }
