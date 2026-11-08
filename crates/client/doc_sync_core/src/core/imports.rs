@@ -536,6 +536,9 @@ impl SyncCore {
         self.clear_presence(now, out);
         match doc.replace(&snapshot, peer) {
             Ok(()) => {
+                // The old document's dependency queue was replaced. WAL replay
+                // below can introduce pending history belonging to the new one.
+                self.pending_import = false;
                 self.confirmed_base = doc.oplog_vv().get_frontiers();
                 self.registered_peers.retain(|p| *p != peer);
                 self.registered_peers.insert(0, peer);

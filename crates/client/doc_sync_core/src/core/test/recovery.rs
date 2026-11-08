@@ -613,3 +613,58 @@ fn invalid_checksum_acknowledged_rows_still_use_the_replay_importer() {
     assert_eq!(h.core.wal.entries.front().unwrap().seq, seq);
     assert!(h.core.is_delivered(seq));
 }
+
+#[test]
+fn successful_reset_clears_pending_history_when_no_wal_replay_follows() {
+    let remote = Doc::new(7);
+    remote.edit("first");
+    let vv = remote.oplog_vv();
+    remote.edit("second");
+    let delta = remote.loro.export(loro::ExportMode::updates(&vv)).unwrap();
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&delta),
+    });
+    assert!(h.core.status().pending_import);
+    assert!(h.core.wal.entries.is_empty());
+    h.send(SyncInput::Reset);
+    h.remote(sync_protocol::FromRemote::RemoteSnapshot {
+        snapshot: SliceWrapper::from_cooked(&remote.snapshot()),
+    });
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "firstsecond");
+    assert_eq!(h.core.phase(), Phase::Running);
+    assert!(!h.core.status().pending_import);
+    assert_ne!(h.core.busy(), Some(BusyReason::PendingImport));
+}
+
+#[test]
+fn failed_reset_preserves_pending_history_until_its_dependency_arrives() {
+    let remote = Doc::new(7);
+    remote.edit("first");
+    let base = remote.snapshot();
+    let vv = remote.oplog_vv();
+    remote.edit("second");
+    let delta = remote.loro.export(loro::ExportMode::updates(&vv)).unwrap();
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2]).unwrap();
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&delta),
+    });
+    assert!(h.core.status().pending_import);
+    h.doc.replace_fails = true;
+    h.send(SyncInput::Reset);
+    h.remote(sync_protocol::FromRemote::RemoteSnapshot {
+        snapshot: SliceWrapper::from_cooked(&remote.snapshot()),
+    });
+    assert!(h.core.status().pending_import);
+    assert_eq!(h.core.busy(), Some(BusyReason::PendingImport));
+    assert_eq!(h.doc.peer_id(), 1);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&base),
+    });
+    assert!(!h.core.status().pending_import);
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "firstsecond");
+}

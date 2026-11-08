@@ -12,6 +12,7 @@ including raw server-port bytes. `first.rs.inc` and `second.rs.inc` contain the 
 | chatter dependency;2,122 | chatter::chatter_dependency_survives_writer_crash |
 | frozen assistance;121 | chatter::frozen_tab_rows_are_assisted_before_thaw_and_own_replay_is_idempotent; actual foreign-owner push before thaw |
 | reset flush/window;11,9 | reset::reset_flushes_the_window_and_keeps_edits_made_during_reset |
+| pending flag after replacement;12,16 | rebased_pending::replacement_after_late_history_clears_pending_import; full literal coverage seed8 and minimal real-Loro core regressions |
 | failed reset;12 | reset::corrupt_reset_snapshot_fails_then_a_later_reset_recovers |
 | corrupt local cache;39 | recovery::corrupt_local_snapshot_is_deleted_and_remote_seed_recovers |
 | corrupt WAL/poison;40,122 | recovery::poison_row_is_retained_quarantined_and_later_rows_deliver; exact exemption mutations |
