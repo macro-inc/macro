@@ -11,6 +11,8 @@ pub use routing::{
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";
 pub mod notion;
 pub mod parse_markdown;
+#[cfg(feature = "test-utils")]
+pub mod test_utils;
 pub mod types;
 
 #[derive(Clone)]

@@ -11881,6 +11881,8 @@ dependencies = [
  "lexical_client",
  "messages",
  "rootcause",
+ "serde_json",
+ "tokio",
  "workspace-hack",
 ]
 

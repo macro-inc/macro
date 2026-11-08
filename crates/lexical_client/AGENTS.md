@@ -15,6 +15,7 @@ read or render document content.
 - `routing/snapshot.rs`: separate raw and structural snapshot metrics with request-proven generated fields and ancestry/container checks.
 - `in_process.rs`: blocking model adapters with explicit clock and entropy.
 - `raw_document.rs`: live sync-source port and startup configuration.
+- `test_utils.rs` (`test-utils` feature): hand-written HTTP/raw-source boundaries for caller mode tests; responses stay authored in each test.
 - `README.md`: route groups, provisioning and startup wiring.
 - `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): typed lexical-service HTTP operations.
 - `src/types.rs`: the Lexical node/document types shared with the service.

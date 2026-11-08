@@ -65,3 +65,17 @@ Provision the key in the consuming service Doppler projects' `dev` and `prd`
 configs and `local/lcl_personal` before deploying this required-key change.
 The local `BootStubEnv` fallback supplies the all-HTTP value for `--no-doppler`.
 This work package does not write Doppler or deploy services.
+
+Caller composition reuses the existing sync source in document storage,
+AI tools (including memory), cognition, upload finalization and the markdown
+backfill CLI. The harness shares its configured tools client with scheduling,
+triggers, prompt composition and message delivery. Search processing, the
+standalone trigger host and task-dedup CLIs use `with_sync_from_env()` for their
+new live source: provision an already resolved `SYNC_SERVICE_AUTH_KEY` when
+selecting non-HTTP `markdown` routes there. Other groups need no sync source.
+
+Caller tests enable `test-utils` only as a dev dependency. The hand-written HTTP
+and raw-document fakes count calls independently; authored responses are never
+computed by the implementation under test. Opt-in `local_stack_*` caller probes
+use real services and export their exact trace IDs to OTLP. They require
+`ENVIRONMENT=local` and loopback typed URL overrides, preventing hosted writes.
