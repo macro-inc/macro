@@ -1,4 +1,4 @@
-# ai_engine
+# illustrator_engine
 
 ## What it is
 
@@ -44,10 +44,10 @@ natively and as WebAssembly.
 
 ## Checks
 
-- `cargo test -p ai_engine` (`SQLX_OFFLINE` unset not relevant; no DB).
+- `cargo test -p illustrator_engine` (`SQLX_OFFLINE` unset not relevant; no DB).
 - The `ai_render` CLI (`cli` feature) round-trips and fidelity-scores
   against reference renders — use it after parser/render changes.
 
 ## Related
 
-- Docs: `crates/engines/ai_engine/README.md`
+- Docs: `crates/engines/illustrator_engine/README.md`

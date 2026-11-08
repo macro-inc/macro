@@ -7,7 +7,7 @@
 //! rewritten whole (`write::file`) and updated incrementally
 //! (`write::incremental`), for comparison with another reader.
 //!
-//! `PDF_CORPUS_DIR=… cargo test -p ai_engine --release -- --ignored --nocapture corpus`
+//! `PDF_CORPUS_DIR=… cargo test -p illustrator_engine --release -- --ignored --nocapture corpus`
 
 use super::*;
 use std::path::{Path, PathBuf};
