@@ -54,3 +54,7 @@ pub mod snapshot;
 
 /// Collaborative content policy and draft preservation commands.
 pub mod sync;
+
+/// Optional owned HTML export and htmlparser2-compatible fragment parsing.
+#[cfg(feature = "html")]
+pub mod html;

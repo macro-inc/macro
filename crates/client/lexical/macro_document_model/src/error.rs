@@ -3,6 +3,10 @@ use std::borrow::Cow;
 /// A document-model operation failed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Optional HTML exporter failure.
+    #[cfg(feature = "html")]
+    #[error(transparent)]
+    Html(#[from] lexical_html::Error),
     /// Loro snapshot or projection failure.
     #[error(transparent)]
     Loro(#[from] lexical_loro::ProjectionError),

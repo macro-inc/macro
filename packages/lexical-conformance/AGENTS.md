@@ -20,6 +20,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 ## Boundaries
 
 - Never import the recorder from shipped packages.
+- Keep composer and HTML route oracles in corpus/; compare actual source bytes and check generated mirrors/entities for drift.
 - Keep recorder source patches in `record/hooks.patch`; differential-only patches and observation hooks use a separate disposable source tree.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
 - The recorder owns index.json and upstream/; preserve independently generated fuzz/ artifacts during regeneration and exclude them from recorder file-set checks.

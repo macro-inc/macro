@@ -265,3 +265,8 @@ fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilde
     let builder = builder.node::<AgentContextNode>();
     builder.node::<CursorSystemNotificationNode>()
 }
+
+/// Node class names in the canonical source registration order.
+pub fn supported_node_types() -> impl Iterator<Item = &'static str> {
+    SUPPORTED_REGISTRATIONS.iter().map(|(name, _)| *name)
+}
