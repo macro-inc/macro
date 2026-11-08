@@ -436,3 +436,139 @@ fn partial_ttl_cleanup_cannot_relabel_the_remaining_adopted_payload() {
     assert_eq!(row.record.bytes, vec![4, 5, 6]);
     assert_eq!(row.record.created_at, UnixMillis(200));
 }
+
+#[test]
+fn shared_rollback_matches_owned_history_across_every_mixed_write_cutoff() {
+    for cutoff in 0..=120 {
+        let mut store = SimStorage::new(StorageProfile::fast());
+        let doc = SyncDocId::new("00000000-0000-7000-8000-000000000001".into()).unwrap();
+        let one = SessionId(uuid_value::Uuid::from_u128(1));
+        let two = SessionId(uuid_value::Uuid::from_u128(2));
+        let mut second = append(2);
+        if let StorageOp::WalAppend { record, .. } = &mut second {
+            record.created_at = UnixMillis(200);
+            record.bytes = vec![4, 5, 6];
+        }
+        let mut late = append(12);
+        if let StorageOp::WalAppend { owner, .. } = &mut late {
+            *owner = two;
+        }
+        let ops = [
+            append(1),
+            StorageOp::SnapshotSave {
+                doc: doc.clone(),
+                bytes: vec![7; 16_384],
+                covers: Some((one, WalSeq(1))),
+            },
+            StorageOp::WalMarkDelivered {
+                doc: doc.clone(),
+                owner: one,
+                through: WalSeq(1),
+            },
+            second,
+            StorageOp::SnapshotSave {
+                doc: doc.clone(),
+                bytes: vec![8; 16_384],
+                covers: Some((one, WalSeq(2))),
+            },
+            StorageOp::WalQuarantine {
+                doc: doc.clone(),
+                owner: one,
+                seq: WalSeq(2),
+            },
+            StorageOp::SnapshotDelete { doc: doc.clone() },
+            StorageOp::WalAdopt {
+                doc: doc.clone(),
+                from: WalOwner::Session(one),
+                to: two,
+                first_seq: WalSeq(10),
+                covers: WalSeq(0),
+                expected: Vec::new(),
+            },
+            late,
+            StorageOp::WalDropExpired {
+                doc: doc.clone(),
+                from: WalOwner::Session(two),
+                before: UnixMillis(150),
+            },
+            StorageOp::SnapshotSave {
+                doc: doc.clone(),
+                bytes: vec![9; 16_384],
+                covers: Some((two, WalSeq(11))),
+            },
+        ];
+        let mut owned_history = Vec::new();
+        for (index, mut op) in ops.into_iter().enumerate() {
+            if index == 3 {
+                store.fault(StorageFault::CorruptSnapshot);
+            }
+            if let StorageOp::WalAdopt { expected, .. } = &mut op {
+                *expected = store.image().entries.values().cloned().collect();
+            }
+            let before = store.image().clone();
+            let appended = match &op {
+                StorageOp::WalAppend { owner, record, .. } => Some((*owner, record.seq)),
+                _ => None,
+            };
+            let result = complete(&mut store, op, u64::try_from(index).unwrap() * 10);
+            assert!(matches!(
+                result.event,
+                StorageEvent::Done { result: Ok(()), .. }
+                    | StorageEvent::Adopted { result: Ok(2), .. }
+            ));
+            owned_history.push((store.recent.last().unwrap().at, before, appended));
+        }
+        let profile = ProfileName("profile".into());
+        let delivered_before = store
+            .image()
+            .entries
+            .iter()
+            .filter(|(_, row)| row.delivered)
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        let mut expected = store.image().clone();
+        let mut expected_facts = Vec::new();
+        // Original owned-image rollback algorithm, independent of shared leaves.
+        for (at, before, appended) in owned_history.into_iter().rev() {
+            if at < cutoff {
+                break;
+            }
+            expected = before;
+            if let Some((session, seq)) = appended {
+                expected_facts.push(Fact::WalWriteLost {
+                    profile: profile.clone(),
+                    session,
+                    seq,
+                });
+            }
+        }
+        let mut lost = BTreeMap::<_, Vec<_>>::new();
+        for key in delivered_before {
+            if !expected.entries.get(&key).is_some_and(|row| row.delivered) {
+                lost.entry((key.0, key.1)).or_default().push(key.2);
+            }
+        }
+        expected_facts.extend(
+            lost.into_iter()
+                .map(|((doc, owner), seqs)| Fact::WalDeliveryLost {
+                    profile: profile.clone(),
+                    doc,
+                    owner,
+                    seqs,
+                }),
+        );
+        let actual_facts = store.crash(
+            &CrashMode::PowerLoss {
+                window: crate::Millis(120 - cutoff),
+            },
+            &profile,
+            120,
+        );
+        assert_eq!(store.image(), &expected, "cutoff{cutoff}");
+        assert_eq!(
+            serde_json::to_value(actual_facts).unwrap(),
+            serde_json::to_value(expected_facts).unwrap(),
+            "cutoff{cutoff}"
+        );
+    }
+}

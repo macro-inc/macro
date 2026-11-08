@@ -155,3 +155,9 @@ partial TTL deletion and selection growth/shrink. The expected records are part 
 the Rust storage operation; the server wire protocol is unchanged.
 The pure client retries a real load before reserving a new selection. This Rust
 storage port is distinct from the shipping TS peer's BrowserWAL API.
+
+Rollback history shares only equal immutable row/snapshot leaves under the same
+keys. Preserve every checkpoint/timestamp/append marker and every power-loss cutoff
+and emitted fact. Public images/reads stay owned; restore the oldest popped image
+once after computing the same rollback sequence. Compare with the original owned
+history algorithm across mixed writes, adoption, TTL, corruption and snapshot changes.
