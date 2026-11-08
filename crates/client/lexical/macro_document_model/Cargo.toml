@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+lexical_loro.workspace = true
+rand_chacha.workspace = true
 chrono-tz.workspace = true
 url.workspace = true
 base64.workspace = true
@@ -24,3 +26,8 @@ chrono = { workspace = true }
 nom = { workspace = true }
 urlencoding = { workspace = true }
 strum = { workspace = true }
+
+[dev-dependencies]
+sync_server_core.workspace = true
+loro.workspace = true
+sha2.workspace = true

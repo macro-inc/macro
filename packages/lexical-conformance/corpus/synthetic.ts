@@ -623,7 +623,7 @@ const registries = configurations.map(([name, nodes]) => {
 });
 persist('registries.json', JSON.stringify(registries, null, 2) + '\n');
 persist(
-  'wire-properties.json',
+  '../../src/wire-properties.json',
   JSON.stringify({ classTypes, ownUndefined, classReferences }, null, 2) + '\n'
 );
 console.log(

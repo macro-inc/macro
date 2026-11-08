@@ -13,6 +13,9 @@ pub struct CommentNode {
     /// Stored is draft payload.
     #[serde(default)]
     pub is_draft: bool,
+    /// Missing imported ids fail only when the source reads or exports the ids.
+    #[serde(skip)]
+    pub ids_missing: bool,
 }
 impl NodeType for CommentNode {
     const TYPE: &'static str = "comment-mark";
@@ -24,11 +27,11 @@ impl NodeType for CommentNode {
         super::wire::import_node::<Self>(tx, json)
     }
     fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
-        if !json.contains_key("ids") {
-            return Err(Error::Invariant("Array.from requires an array-like object"));
-        }
+        let missing = !json.contains_key("ids");
         let json = super::wire::own_json(Self::TYPE, json)?;
-        Ok(serde_json::from_value(Value::Object(json))?)
+        let mut node: Self = serde_json::from_value(Value::Object(json))?;
+        node.ids_missing = missing;
+        Ok(node)
     }
 }
 impl ImportPolicy for CommentNode {
@@ -36,6 +39,16 @@ impl ImportPolicy for CommentNode {
     const IMPORT_ELEMENT_DATA: bool = true;
 }
 impl ElementNode for CommentNode {
+    fn adjust_export_json(
+        &self,
+        _: NodeView<'_>,
+        _: &mut SerializedNode,
+    ) -> crate::ModelResult<()> {
+        if self.ids_missing {
+            return Err(Error::Invariant("Array.from requires an array-like object"));
+        }
+        Ok(())
+    }
     type Parent = MarkNode;
     fn as_parent(&self) -> &Self::Parent {
         &self.mark
@@ -71,6 +84,7 @@ pub fn create_comment_node(
         mark: MarkNode { ids },
         thread_id,
         is_draft: is_draft.unwrap_or(false),
+        ids_missing: false,
     })
 }
 /// Text covered by one mark id, rejoining separate top-level blocks in reading order.

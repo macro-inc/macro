@@ -156,3 +156,9 @@ pub fn insert_referenced_paste(tx: &mut Transaction<'_>, content: &str) -> crate
     }
     Ok(())
 }
+
+impl lexical_markdown::MarkdownText for PasteNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.content.as_ref().map(String::as_str)
+    }
+}

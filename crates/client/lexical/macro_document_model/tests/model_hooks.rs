@@ -13,6 +13,7 @@ fn comment_new_after_keeps_its_subtype_and_metadata() -> Result<()> {
         },
         thread_id: Maybe::Value(42),
         is_draft: true,
+        ids_missing: false,
     })?;
     tx.append(p, &[comment.key()])?;
     tx.append(NodeKey::ROOT, &[p.key()])?;

@@ -1,5 +1,6 @@
 //! Exact node registries matching lexical-service and web presets.
 use crate::nodes::*;
+use crate::policy::SearchText;
 use lexical_model::*;
 use lexical_rich_nodes::{
     code::{CodeHighlightNode, CodeNode},
@@ -37,8 +38,15 @@ pub enum EditorConfig {
     Preset(EditorType),
 }
 type NodeRegistration = (&'static str, fn(EditorBuilder) -> EditorBuilder);
-fn register<T: NodeType>(builder: EditorBuilder) -> EditorBuilder {
-    builder.node::<T>()
+fn register<T: NodeType + SearchText>(builder: EditorBuilder) -> EditorBuilder {
+    builder
+        .node::<T>()
+        .node_trait::<T, dyn SearchText>(|node| node)
+}
+fn register_markdown<T: NodeType + SearchText + lexical_markdown::MarkdownText>(
+    builder: EditorBuilder,
+) -> EditorBuilder {
+    register::<T>(builder).node_trait::<T, dyn lexical_markdown::MarkdownText>(|node| node)
 }
 const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
     (CodeNode::TYPE, register::<CodeNode>),
@@ -52,11 +60,14 @@ const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
     (ListItemNode::TYPE, register::<ListItemNode>),
     (QuoteNode::TYPE, register::<QuoteNode>),
     (DocumentMentionNode::TYPE, register::<DocumentMentionNode>),
-    (DocumentCardNode::TYPE, register::<DocumentCardNode>),
-    (PasteNode::TYPE, register::<PasteNode>),
+    (
+        DocumentCardNode::TYPE,
+        register_markdown::<DocumentCardNode>,
+    ),
+    (PasteNode::TYPE, register_markdown::<PasteNode>),
     (UserMentionNode::TYPE, register::<UserMentionNode>),
     (ContactMentionNode::TYPE, register::<ContactMentionNode>),
-    (DateMentionNode::TYPE, register::<DateMentionNode>),
+    (DateMentionNode::TYPE, register_markdown::<DateMentionNode>),
     (
         PullRequestMentionNode::TYPE,
         register::<PullRequestMentionNode>,
@@ -84,7 +95,7 @@ const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
     (CommentNode::TYPE, register::<CommentNode>),
     (SearchMatchNode::TYPE, register::<SearchMatchNode>),
     (EquationNode::TYPE, register::<EquationNode>),
-    (SnapshotNode::TYPE, register::<SnapshotNode>),
+    (SnapshotNode::TYPE, register_markdown::<SnapshotNode>),
     (HorizontalRuleNode::TYPE, register::<HorizontalRuleNode>),
     (DiffNode::TYPE, register::<DiffNode>),
     (DiffInsertNode::TYPE, register::<DiffInsertNode>),
@@ -92,9 +103,12 @@ const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
     (DiffTextNode::TYPE, register::<DiffTextNode>),
     (HtmlRenderNode::TYPE, register::<HtmlRenderNode>),
     (ClassedBlockNode::TYPE, register::<ClassedBlockNode>),
-    (WatermarkNode::TYPE, register::<WatermarkNode>),
-    (ThemeMentionNode::TYPE, register::<ThemeMentionNode>),
-    (TagMentionNode::TYPE, register::<TagMentionNode>),
+    (WatermarkNode::TYPE, register_markdown::<WatermarkNode>),
+    (
+        ThemeMentionNode::TYPE,
+        register_markdown::<ThemeMentionNode>,
+    ),
+    (TagMentionNode::TYPE, register_markdown::<TagMentionNode>),
     (ConnectAppNode::TYPE, register::<ConnectAppNode>),
     (
         AccountManagerRequestNode::TYPE,
@@ -102,7 +116,7 @@ const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
     ),
     (UnknownMentionNode::TYPE, register::<UnknownMentionNode>),
     (AwaitNode::TYPE, register::<AwaitNode>),
-    (MagicChipNode::TYPE, register::<MagicChipNode>),
+    (MagicChipNode::TYPE, register_markdown::<MagicChipNode>),
     (AgentActivityNode::TYPE, register::<AgentActivityNode>),
     (AgentContextNode::TYPE, register::<AgentContextNode>),
     (
@@ -167,6 +181,11 @@ pub fn preset_builder(ty: EditorType) -> EditorBuilder {
         | EditorType::Chat
         | EditorType::Calendar => {
             let builder = register_preset_nodes(Editor::builder(EditorMode::ViewAttached), ty);
+            let builder = if ty == EditorType::MarkdownSync {
+                crate::sync::DraftCommentPlugin::register(builder)
+            } else {
+                builder
+            };
             builder
                 .replace::<CodeNode, CustomCodeNode>(CustomCodeNode::from)
                 .replace::<ListNode, TaskListNode>(TaskListNode::from)
@@ -191,11 +210,11 @@ fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilde
     let builder = builder.node::<ListItemNode>();
     let builder = builder.node::<QuoteNode>();
     let builder = builder.node::<DocumentMentionNode>();
-    let builder = builder.node::<DocumentCardNode>();
-    let builder = builder.node::<PasteNode>();
+    let builder = register_markdown::<DocumentCardNode>(builder);
+    let builder = register_markdown::<PasteNode>(builder);
     let builder = builder.node::<UserMentionNode>();
     let builder = builder.node::<ContactMentionNode>();
-    let builder = builder.node::<DateMentionNode>();
+    let builder = register_markdown::<DateMentionNode>(builder);
     let builder = builder.node::<PullRequestMentionNode>();
     let builder = builder.node::<BookingLinkMentionNode>();
     let builder = builder.node::<AgentSessionMentionNode>();
@@ -222,7 +241,7 @@ fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilde
     let builder = builder.node::<CommentNode>();
     let builder = builder.node::<SearchMatchNode>();
     let builder = builder.node::<EquationNode>();
-    let builder = builder.node::<SnapshotNode>();
+    let builder = register_markdown::<SnapshotNode>(builder);
     let builder = builder.node::<HorizontalRuleNode>();
     let builder = builder.node::<DiffNode>();
     let builder = builder.node::<DiffInsertNode>();
@@ -234,14 +253,14 @@ fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilde
         builder
     };
     let builder = builder.node::<ClassedBlockNode>();
-    let builder = builder.node::<WatermarkNode>();
-    let builder = builder.node::<ThemeMentionNode>();
-    let builder = builder.node::<TagMentionNode>();
+    let builder = register_markdown::<WatermarkNode>(builder);
+    let builder = register_markdown::<ThemeMentionNode>(builder);
+    let builder = register_markdown::<TagMentionNode>(builder);
     let builder = builder.node::<ConnectAppNode>();
     let builder = builder.node::<AccountManagerRequestNode>();
     let builder = builder.node::<UnknownMentionNode>();
     let builder = builder.node::<AwaitNode>();
-    let builder = builder.node::<MagicChipNode>();
+    let builder = register_markdown::<MagicChipNode>(builder);
     let builder = builder.node::<AgentActivityNode>();
     let builder = builder.node::<AgentContextNode>();
     builder.node::<CursorSystemNotificationNode>()

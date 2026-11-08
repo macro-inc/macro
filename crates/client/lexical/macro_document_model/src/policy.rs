@@ -62,3 +62,17 @@ pub fn import_with_policy<T: ImportPolicy>(
     )?;
     Ok(key)
 }
+
+// Base registered classes use the ordinary text traversal.
+impl SearchText for lexical_rich_nodes::code::CodeNode {}
+impl SearchText for lexical_rich_nodes::code::CodeHighlightNode {}
+impl SearchText for lexical_rich_nodes::heading::HeadingNode {}
+impl SearchText for lexical_rich_nodes::link::LinkNode {}
+impl SearchText for lexical_rich_nodes::link::AutoLinkNode {}
+impl SearchText for lexical_rich_nodes::list::ListNode {}
+impl SearchText for lexical_rich_nodes::list::ListItemNode {}
+impl SearchText for lexical_rich_nodes::mark::MarkNode {}
+impl SearchText for lexical_rich_nodes::quote::QuoteNode {}
+impl SearchText for lexical_rich_nodes::table::TableNode {}
+impl SearchText for lexical_rich_nodes::table::TableCellNode {}
+impl SearchText for lexical_rich_nodes::table::TableRowNode {}

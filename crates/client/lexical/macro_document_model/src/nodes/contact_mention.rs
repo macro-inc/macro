@@ -60,3 +60,13 @@ impl SearchText for ContactMentionNode {
         Some("".into())
     }
 }
+
+impl ContactMentionNode {
+    /// Validate the source display-name read before a service cache or text projection.
+    pub fn validate_text_content(&self) -> crate::ModelResult<()> {
+        if self.is_company.as_ref() != Some(&true) && !matches!(self.name, Maybe::Value(_)) {
+            return Err(Error::Invariant("contact display name must be a string"));
+        }
+        Ok(())
+    }
+}
