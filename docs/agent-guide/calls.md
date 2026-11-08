@@ -392,6 +392,9 @@ view restores mute; a delayed action never mutes a replacement call. These
 bindings use the app hotkey registry without changing the global shortcut sheet.
 
 Open **Chat** and **Participants** from the button beside the media controls.
+The call discussion reuses the main channel panel and its thread/draft owner.
+Its composer says **Message this call…**, has no reply flag, and still posts into
+the call thread. Call replies render as a flat list without thread connectors.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **Participants** shows the live attendee count on phones and a scrollable roster, including
 you and connected guests but excluding recording agents. Rows show names,

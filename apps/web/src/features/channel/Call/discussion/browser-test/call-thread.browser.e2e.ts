@@ -714,3 +714,72 @@ for (const phone of [false, true]) {
       });
   });
 }
+
+test('rebuilt call panel keeps a long thread, bottom composer and draft across tabs and reopen', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  const { posted } = await open(page, 'panel', {
+    status: { state: 'live' },
+    fullOverlay: true,
+    historyCount: 40,
+    replies: Array.from({ length: 60 }, (_, index) =>
+      reply(
+        `00000000-0000-7000-8000-${(0xb000 + index).toString(16).padStart(12, '0')}`,
+        `Call message ${index + 1}`
+      )
+    ),
+  });
+  const latest = page.getByText('Call message 60', { exact: true });
+  await expect(latest).toBeInViewport({ timeout: 30000 });
+  const scroll = page.locator('[data-channel-scroll]');
+  const composer = page.locator('[data-input-id^="thread-reply-input"]');
+  const editor = composer.locator('[data-markdown-editable]');
+  const checkGeometry = async () => {
+    const metrics = await scroll.evaluate((el) => ({
+      height: el.clientHeight,
+      content: el.scrollHeight,
+      bottom: el.getBoundingClientRect().bottom,
+    }));
+    const box = await composer.boundingBox();
+    expect(metrics.height).toBeGreaterThan(100);
+    expect(metrics.content).toBeGreaterThan(metrics.height);
+    expect(box!.y).toBeGreaterThanOrEqual(metrics.bottom - 1);
+  };
+  await checkGeometry();
+  await expect(
+    page.getByText('Replying in the call thread', { exact: true })
+  ).toHaveCount(0);
+  await editor.fill('A preserved call draft');
+  await scroll.hover();
+  await page.mouse.wheel(0, -300);
+  await expect(latest).not.toBeInViewport();
+  const previous = await scroll.evaluate((el) => el.scrollTop);
+  await page.getByText('Participants', { exact: true }).click();
+  await page.getByText('Chat', { exact: true }).click();
+  await expect
+    .poll(() => scroll.evaluate((el) => el.scrollTop))
+    .toBeCloseTo(previous, 0);
+  await checkGeometry();
+  await page
+    .getByRole('button', { name: 'Close chat and participants' })
+    .first()
+    .click();
+  await page
+    .getByRole('button', { name: 'Open chat and participants' })
+    .click();
+  await expect(editor).toHaveText('A preserved call draft');
+  await expect
+    .poll(() => scroll.evaluate((el) => el.scrollTop))
+    .toBeCloseTo(previous, 0);
+  await checkGeometry();
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/${process.env.CALL_REPRO_PHASE ?? 'L95'}-long-thread.png`,
+    });
+  await page.getByRole('button', { name: /send/i }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+});

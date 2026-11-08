@@ -1006,6 +1006,8 @@ export function Channel(props: ChannelProps) {
                                             }
                                           >
                                             <ChannelThread
+                                              repliesAsRoots={isPanelRoot()}
+                                              hideRail={isPanelRoot()}
                                               rootSlot={
                                                 isCallRow()
                                                   ? () => (
@@ -1275,6 +1277,12 @@ export function Channel(props: ChannelProps) {
                                 threadHasReplies={() =>
                                   (messageById().get(threadId)?.thread
                                     .reply_count ?? 0) > 0
+                                }
+                                plain={!!callPanel}
+                                placeholder={
+                                  callPanel
+                                    ? t('calls.messageThisCall')
+                                    : undefined
                                 }
                                 pinnedLabel={
                                   threadId === callPanel?.rootId

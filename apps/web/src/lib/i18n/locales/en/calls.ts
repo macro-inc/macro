@@ -63,6 +63,7 @@ export default {
     other: 'A call is active · {{count}} messages',
   },
   replyingInCallThread: 'Replying in the call thread',
+  messageThisCall: 'Message this call…',
   callThreadEmpty:
     "No messages yet. Anything you send here is saved to this call's thread in {{channel}}.",
   thisChannel: 'this channel',
