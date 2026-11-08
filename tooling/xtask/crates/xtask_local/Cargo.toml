@@ -46,7 +46,7 @@ serde_yaml = { workspace = true }
 # Parse user-provided `--env-file` overlays.
 dotenvy = { workspace = true }
 # Signal the frontend dev server's whole process group on shutdown.
-libc = "0.2"
+libc = { workspace = true }
 macro_env_var = { path = "../../../../crates/macro_env_var" }
 xtask_paths = { path = "../xtask_paths" }
 # Port windows, subnets and the machine-wide allocation registry.
