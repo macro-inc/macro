@@ -170,7 +170,7 @@ pub struct ActionConfiguration {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub enabled: bool,
     /// Omitted by clients that predate the setting; runs then start unlisted.
@@ -190,7 +190,7 @@ pub struct ActionConfigurationUpdate {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     /// Still sent by clients deployed before the activation endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -289,6 +289,10 @@ pub struct RunInfo {
     /// When the routine's previous finished run started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_at: Option<DateTime<Utc>>,
+    /// Who its code steps' writes were attributed to; absent when it had no
+    /// code steps, and on runs recorded before this was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_acts_as: Option<routine_program::CodeIdentity>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -311,7 +315,7 @@ pub struct ScheduledAction {
     pub configuration_revision: ConfigurationRevision,
     /// Event publication boundary; absent for cron actions.
     pub event_activated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
     /// Next cron firing, absent for event-triggered actions.

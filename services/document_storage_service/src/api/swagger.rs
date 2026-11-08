@@ -106,12 +106,12 @@ use databases::inbound::axum_router::ops::{
     OpRefusalResponse as DatabaseOpRefusalResponse,
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
-use databases::inbound::axum_router::{
-    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
-    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
-};
+use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest};
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
+};
+use databases_sql::inbound::axum_router::{
+    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -135,6 +135,10 @@ use initiative::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
+use initiative::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use initiative::inbound::axum_router::description::InitiativeDescription;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -261,6 +265,23 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_text::get_text_handler,
         documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
+        documents_hex::inbound::axum_router::canvas::canvas_scene_handler,
+        documents_hex::inbound::axum_router::canvas::render_canvas_handler,
+        documents_hex::inbound::axum_router::canvas::apply_canvas_edits_handler,
+        documents_hex::inbound::axum_router::canvas::edit_canvas_with_ai_handler,
+        documents_hex::inbound::axum_router::spreadsheet::create_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::read_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::calculate_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::ai_edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::presentation::read_presentation_handler,
+        documents_hex::inbound::axum_router::presentation::edit_presentation_handler,
+        documents_hex::inbound::axum_router::presentation::copy_presentation_handler,
+        documents_hex::inbound::axum_router::word_document::read_word_document_handler,
+        documents_hex::inbound::axum_router::word_document::edit_word_document_handler,
+        documents_hex::inbound::axum_router::design_files::read_design_handler,
+        documents_hex::inbound::axum_router::design_files::read_photoshop_document_handler,
+        documents_hex::inbound::axum_router::design_files::read_illustrator_document_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
         documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
@@ -333,6 +354,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::profile_picture::set_channel_picture_handler,
         channels::inbound::axum_router::delete_channel_handler,
         channels::inbound::axum_router::add_participants_handler,
+        channels::inbound::axum_router::share_with_channel_handler,
         channels::inbound::axum_router::remove_participants_handler,
         channels::inbound::axum_router::get_channel_join_link_handler,
         channels::inbound::axum_router::join_channel_by_code_handler,
@@ -370,6 +392,7 @@ use utoipa::OpenApi;
         bots::inbound::axum_router::create_agent_handler,
         bots::inbound::axum_router::list_agents_handler,
         bots::inbound::axum_router::update_agent_handler,
+        bots::inbound::axum_router::patch_agent_handler,
         bots::inbound::axum_router::list_bots_handler,
         bots::inbound::axum_router::create_bot_handler,
         bots::inbound::axum_router::get_self_bot_handler,
@@ -533,6 +556,8 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
+        initiative::inbound::axum_router::page::page_initiatives_handler,
+        initiative::inbound::axum_router::description::get_initiative_description_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
@@ -553,7 +578,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
-        databases::inbound::axum_router::saved_queries::save_query_handler,
+        databases_sql::inbound::axum_router::save_query_handler,
         databases::inbound::axum_router::saved_queries::get_query_handler,
         databases::inbound::axum_router::casts::column_casts_handler,
         databases::inbound::axum_router::casts::column_conversion_handler,
@@ -608,10 +633,14 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::update_permissions,
         crm::inbound::pipelines::trash,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_privacy::get_handler,
+        crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::set_contact_name::handler,
+        crm::inbound::axum_router::set_contact_email::handler,
+        crm::inbound::axum_router::set_contact_company::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::get_contact_by_email::handler,
@@ -860,10 +889,16 @@ use utoipa::OpenApi;
             DatabaseQueryDefinition,
             DatabaseSavedQuery,
             DatabaseSaveQueryRequest,
+            DatabaseSaveQueryChart,
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
             InitiativeList,
+            InitiativePage,
+            InitiativePageRow,
+            InitiativePropertySnapshot,
+            InitiativeSort,
+            InitiativeDescription,
             CreateInitiativeRequest,
             InitialPropertyValue,
             UpdateInitiativeRequest,
@@ -963,6 +998,8 @@ use utoipa::OpenApi;
             channels::domain::access_requests::ChannelAccessDecision,
             channels::domain::access_requests::ResolveChannelAccessRequest,
             channels::domain::models::RemoveParticipantsRequest,
+            channels::domain::models::ShareWithChannelRequest,
+            channels::domain::models::ChannelShareEntityType,
             channels::domain::models::GetBatchChannelPreviewRequest,
             channels::domain::models::GetBatchChannelPreviewResponse,
             channels::domain::models::ChannelPreview,
@@ -996,6 +1033,9 @@ use utoipa::OpenApi;
             bots::domain::models::AgentMcpServer,
             bots::domain::models::CreateAgentRequest,
             bots::domain::models::UpdateAgentRequest,
+            bots::domain::models::PatchAgentRequest,
+            bots::domain::models::AgentHarnessSelection,
+            bots::domain::models::AgentChannelSelection,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
@@ -1133,6 +1173,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
+            crm::inbound::axum_router::set_contact_email::SetContactEmailRequest,
+            crm::inbound::axum_router::set_contact_company::SetContactCompanyRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,

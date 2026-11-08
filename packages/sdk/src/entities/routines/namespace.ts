@@ -23,12 +23,17 @@ export class RoutineNamespace {
   }
 
   /**
-   * Create an agent routine. To check on something later, such as a spawned
-   * session or a long job, create a routine instead of waiting in a program.
-   * Set `model`, `agent`, or both. A cron `schedule` has 6 fields (second
-   * minute hour day-of-month month day-of-week) or 7 with a year; a 7-field
-   * schedule that names one date runs once. A rejected routine throws a
-   * `MacroApiError` whose message says what the server refused.
+   * Create a routine: one agent task (`prompt`, with `model`, `agent`, or
+   * both), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only
+   * when the user explicitly asked for it to act, send or post as them. To
+   * check on something later, such as a spawned session or a long job, create
+   * a routine instead of waiting in a program. A cron `schedule` has 6 fields
+   * (second minute hour day-of-month month day-of-week) or 7 with a year; a
+   * 7-field schedule that names one date runs once. A code step's `source`
+   * exports `async function main({ macro, run, trigger, steps, knobs })` and
+   * is type-checked against this SDK when saved. A rejected routine throws a
+   * `MacroApiError` whose message says what the server refused, including
+   * type-check errors.
    *
    * @example
    * // Every ten minutes, in New York time.
@@ -50,6 +55,23 @@ export class RoutineNamespace {
    *   userPrompt: 'Follow up on the review on 3 November 2027.',
    *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
+   * });
+   * // A code step that posts in a channel, disabled until turned on. The
+   * // user asked for the post to come from them.
+   * await macro.routines.create({
+   *   name: 'Say hello',
+   *   trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+   *   enabled: false,
+   *   steps: [
+   *     {
+   *       type: 'code',
+   *       title: 'Post hello',
+   *       source: `export async function main({ macro }: StepContext) {
+   *   await macro.channels.byId('<channel id>').send('Hello');
+   * }`,
+   *     },
+   *   ],
+   *   dangerouslyOperateAsUser: true,
    * });
    */
   async create(options: RoutineOptions): Promise<Routine> {

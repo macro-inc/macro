@@ -6,7 +6,11 @@ Ask Macro in the Drive header and standalone title menu attaches the canvas to t
 Documents owns `ReadCanvas` and `EditCanvas`, checked view/edit receipts, native
 file-type validation, scoped actor-bearing document tokens, AI admission and
 usage metering. Its existing tool context registers them for chat, agent
-sessions and MCP; the toolset framework is unchanged.
+sessions and MCP; the toolset framework is unchanged. The SDK reaches the same
+`CanvasService` over DSS (`POST /documents/{id}/canvas/scene`, `render`, `edits`,
+`ai-edit`) through `document.canvas()`; renders there are stored as the caller's
+static files rather than returned inline, and code mode hides every canvas tool
+but `RenderCanvas`.
 
 `POST /canvas` on the AI editing worker joins the initialized shared scene using
 the collaboration manager, sync engine and WAL. The model reads stable IDs,

@@ -309,3 +309,49 @@ async fn envelope_round_trip_preserves_correlation_and_legacy_events_default_to_
         None
     );
 }
+
+#[tokio::test]
+async fn event_built_for_a_routine_run_carries_its_routine() {
+    let routine_id = Uuid::from_u128(0x7001);
+    let attribution = agent_correlation::context::Attribution {
+        correlation_id: None,
+        routine_id: Some(routine_id),
+    };
+
+    let event =
+        agent_correlation::context::scope_attribution(attribution, async { example_event() }).await;
+
+    assert_eq!(event.routine_id, Some(routine_id));
+    assert_eq!(
+        serde_json::to_value(&event).unwrap(),
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000001",
+            "schema_version": 1,
+            "routine_id": "00000000-0000-0000-0000-000000007001",
+            "event_type": "example.created",
+            "metadata": {
+                "name": "hello",
+                "count": 7,
+            },
+        })
+    );
+    let decoded = ExampleMacroEvent::decode("msg-123", &serde_json::to_vec(&event).unwrap())
+        .expect("routine event decodes");
+    assert_eq!(decoded.event().routine_id, Some(routine_id));
+}
+
+#[test]
+fn event_without_routine_id_decodes() {
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000001",
+        "schema_version": 1,
+        "event_type": "example.created",
+        "metadata": { "name": "hello", "count": 7 },
+    });
+
+    let decoded =
+        ExampleMacroEvent::decode("msg-123", &serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    assert_eq!(decoded.event(), &example_event());
+    assert_eq!(decoded.event().routine_id, None);
+}

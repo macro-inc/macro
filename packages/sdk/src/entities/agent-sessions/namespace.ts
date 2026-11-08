@@ -22,16 +22,15 @@ import {
  *
  * Do repository and coding work yourself when you can. Start another agent session only when the user asks for one, or the work needs a repository runtime you do not have.
  *
- * Start sessions from ExecuteCode. macro.agents.list() returns the user's own configurable agents; choose by name and instructions, preferring an agent the user named, and pass it as `agent` to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use the default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
+ * Start sessions from ExecuteCode. For coding work, macro.agents.coding() lists the coding personas the user can start right now, built-in ones such as Cursor included; for a chat agent, macro.agents.list() lists the user's configurable agents. Choose by name, description and instructions, preferring an agent the user named, and pass its `agent` handle to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use Macro's default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
  *
  * ```javascript
  * export async function main({macro}) {
- *   const agents = await macro.agents.list();
- *   const names = await Promise.all(agents.map((agent) => agent.name()));
- *   const agent = agents[names.indexOf('Web maintainer')];
- *   if (!agent) return {data: {error: 'No agent named Web maintainer', available: names}};
+ *   const coding = await macro.agents.coding();
+ *   const chosen = coding.find((option) => option.name === 'Cursor');
+ *   if (!chosen) return {data: {error: 'Cursor is not connected', available: coding.map((option) => option.name)}};
  *   const session = await macro.agentSessions.createManaged({
- *     agent,
+ *     agent: chosen.agent,
  *     repoUrl: 'https://github.com/acme/web',
  *     prompt: 'Fix the login redirect loop in acme/web. ...',
  *   });
@@ -51,9 +50,10 @@ export class AgentSessionNamespace {
 
   /**
    * Create a managed session as `agent` when one is named, otherwise the
-   * deployment's default coding persona. List personas with
-   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
-   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * deployment's default persona. Take `agent` from
+   * {@link AgentNamespace.coding} (coding personas, Cursor included) or
+   * {@link AgentNamespace.list} (configurable agents); never construct one
+   * from an id. Unknown or inaccessible personas fail. `model` and `instructions`
    * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
    * and it starts as Cursor.
    */

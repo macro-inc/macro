@@ -145,6 +145,7 @@ fn maps_macro_api_token_claims() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_correlation_id: None,
         agent_session_id: None,
+        routine_id: None,
         agent_id: None,
         agent_via: None,
         agent_via_kind: None,
@@ -170,6 +171,7 @@ fn maps_signed_agent_without_changing_owner_identity() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_correlation_id: None,
         agent_session_id: None,
+        routine_id: None,
         agent_id: Some(agent.as_uuid()),
         agent_via: Some("Claude Code".into()),
         agent_via_kind: Some(McpClientKind::ClaudeCode),
@@ -221,6 +223,7 @@ fn ignores_a_client_label_without_a_signed_agent() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
         agent_correlation_id: None,
         agent_session_id: None,
+        routine_id: None,
         agent_id: None,
         agent_via: Some("Claude Code".into()),
         agent_via_kind: Some(McpClientKind::ClaudeCode),
