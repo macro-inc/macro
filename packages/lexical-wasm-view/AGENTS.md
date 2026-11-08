@@ -28,12 +28,14 @@ shares this view through EditorPort; it does not supply production model code.
 - Handle session effect kind 9 before painting: end native composition and suppress
   its redundant synchronous input/end events; Rust already merged the accepted text.
 
+Keep table pointer selection tied to its pointer id; cancel it on pointercancel or loss of editability, and leave touch selection to the long-press adapter.
+
 Keep drag source validity tied to documentRevision; selection-only commits do not invalidate a drag. Lazy clipboard imports retain the broader revision guard.
 
 ## Checks
 
 - `bun run check`, `bun run test`, `bun run test:browser`
-- `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste and nested-editor ownership under both plugin registration orders.
+- `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
 - Browser tests launch their own headless Chromium; never connect to a person's
   browser or the shared CDP instance. No existing-server reuse.

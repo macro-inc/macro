@@ -228,6 +228,7 @@ test('touch swipe changes the list only on release and preserves nested content'
         bubbles: true,
         pointerId: 1,
         pointerType: 'touch',
+        isPrimary: true,
         clientX: rect.left + 110,
         clientY: rect.top + 8,
       })
@@ -241,6 +242,7 @@ test('touch swipe changes the list only on release and preserves nested content'
         bubbles: true,
         pointerId: 1,
         pointerType: 'touch',
+        isPrimary: true,
         clientX: rect.left + 110,
         clientY: rect.top + 8,
       })
@@ -309,5 +311,273 @@ test('a nested editor owns its paste drop before the parent capture handlers', a
   });
   expect(counters.child).toEqual({ admissions: 1, queries: 0, nodeQueries: 0 });
   expect(await page.evaluate(() => window.groupB.first.json())).toBe(before);
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+const tableState = JSON.stringify({
+  root: {
+    type: 'root',
+    version: 1,
+    children: [
+      {
+        type: 'table',
+        version: 1,
+        children: [
+          ['A', 'B'],
+          ['C', 'D'],
+        ].map((cells) => ({
+          type: 'tablerow',
+          version: 1,
+          children: cells.map((text) => ({
+            type: 'tablecell',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text }],
+              },
+            ],
+          })),
+        })),
+      },
+    ],
+  },
+});
+
+test('native table borders resize live with one snapshot and Escape restores unset row height', async ({
+  page,
+}) => {
+  await page.evaluate((state) => {
+    window.groupB.first.set(state);
+    window.groupB.first.resetCounters();
+  }, tableState);
+  const cell = page.locator('#first td').first();
+  const rect = await cell.boundingBox();
+  const secondRect = await page.locator('#first td').nth(1).boundingBox();
+  if (!rect || !secondRect) throw new Error('Missing cell layout');
+  await page.mouse.move(rect.x + rect.width - 1, rect.y + rect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(rect.x + rect.width + 49, rect.y + rect.height / 2);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.groupB.first.nodes().find((node) => node.type === 'table')
+            ?.props.colWidths
+      )
+    )
+    .toEqual([rect.width + 50, secondRect.width]);
+  const counters = await page.evaluate(() => window.groupB.first.counters());
+  expect(counters.queries).toBe(1);
+  expect(counters.nodeQueries).toBe(0);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  expect(
+    await page.evaluate(
+      () =>
+        window.groupB.first.nodes().find((node) => node.type === 'table')?.props
+          .colWidths
+    )
+  ).toEqual([120, 120]);
+
+  const rowCell = await cell.boundingBox();
+  if (!rowCell) throw new Error('Missing row layout');
+  await page.evaluate(() => window.groupB.first.resetCounters());
+  await page.mouse.move(
+    rowCell.x + rowCell.width / 2,
+    rowCell.y + rowCell.height - 1
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    rowCell.x + rowCell.width / 2,
+    rowCell.y + rowCell.height + 39
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.groupB.first.nodes().find((node) => node.type === 'tablerow')
+            ?.props.height
+      )
+    )
+    .toBeGreaterThan(33);
+  expect(
+    (await page.evaluate(() => window.groupB.first.counters())).queries
+  ).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.groupB.first.json())).not.toContain(
+    '"height":'
+  );
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('native touch table selection leaves scrolling alone and extends only after a long press', async ({
+  page,
+}) => {
+  await page.evaluate((state) => {
+    window.groupB.first.set(state);
+    window.groupB.first.resetCounters();
+  }, tableState);
+  await page.clock.install();
+  await page.evaluate(() => {
+    const cell = document.querySelector('#first td');
+    if (!cell) throw new Error('Missing cell');
+    cell.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 77,
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+        bubbles: true,
+      })
+    );
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 77,
+        clientX: 100,
+        clientY: 120,
+        bubbles: true,
+      })
+    );
+  });
+  await page.clock.runFor(401);
+  expect(await page.evaluate(() => window.groupB.first.counters())).toEqual({
+    admissions: 0,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  await expect(
+    page.locator('#first [data-lexical-table-selected]')
+  ).toHaveCount(0);
+  await page.evaluate(() => {
+    const cell = document.querySelector('#first td');
+    if (!cell) throw new Error('Missing cell');
+    const rect = cell.getBoundingClientRect();
+    cell.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 78,
+        button: 0,
+        clientX: rect.x + 30,
+        clientY: rect.y + 15,
+        bubbles: true,
+      })
+    );
+  });
+  await page.clock.runFor(250);
+  await page.evaluate(() => {
+    const cell = [...document.querySelectorAll('#first td')].at(-1);
+    if (!cell) throw new Error('Missing secondary cell');
+    cell.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerType: 'touch',
+        isPrimary: false,
+        pointerId: 79,
+        button: 0,
+        bubbles: true,
+      })
+    );
+    document.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerType: 'touch',
+        isPrimary: false,
+        pointerId: 79,
+        bubbles: true,
+      })
+    );
+  });
+  await page.clock.runFor(151);
+  await expect(
+    page.locator('#first [data-lexical-table-selected]')
+  ).toHaveCount(1);
+  await page.evaluate(() => {
+    const cell = [...document.querySelectorAll('#first td')].at(-1);
+    if (!cell) throw new Error('Missing last cell');
+    const rect = cell.getBoundingClientRect();
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 78,
+        clientX: rect.x + 30,
+        clientY: rect.y + 15,
+        bubbles: true,
+      })
+    );
+    document.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerType: 'touch',
+        isPrimary: true,
+        pointerId: 78,
+        bubbles: true,
+      })
+    );
+  });
+  await expect(
+    page.locator('#first [data-lexical-table-selected]')
+  ).toHaveCount(4);
+  expect(await page.evaluate(() => window.groupB.first.counters())).toEqual({
+    admissions: 2,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('cancelled, foreign-pointer and readonly cell drags submit no table selection', async ({
+  page,
+}) => {
+  await page.evaluate((state) => {
+    window.groupB.first.set(state);
+    window.groupB.first.resetCounters();
+  }, tableState);
+  await page.evaluate(() => {
+    const cells = document.querySelectorAll('#first td');
+    const first = cells.item(0),
+      last = cells.item(3);
+    const down = () =>
+      first.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          pointerType: 'pen',
+          pointerId: 91,
+          button: 0,
+          bubbles: true,
+        })
+      );
+    const move = (pointerId: number) =>
+      last.dispatchEvent(
+        new PointerEvent('pointermove', {
+          pointerType: 'pen',
+          pointerId,
+          bubbles: true,
+        })
+      );
+    down();
+    move(92);
+    document.dispatchEvent(
+      new PointerEvent('pointercancel', { pointerId: 91 })
+    );
+    move(91);
+    down();
+    window.groupB.first.editable(false);
+    move(91);
+    window.groupB.first.editable(true);
+    move(91);
+  });
+  expect(await page.evaluate(() => window.groupB.first.counters())).toEqual({
+    admissions: 0,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  await expect(
+    page.locator('#first [data-lexical-table-selected]')
+  ).toHaveCount(0);
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
