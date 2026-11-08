@@ -268,17 +268,10 @@ pub trait PeerDirectory {
 pub trait CommentGate {
     /// Adapter-specific failure without thread-safety requirements.
     type Error: std::error::Error + 'static;
-    /// **The gate stays an HTTP port in this pass (R2).** Production: lexical-service
-    /// `/comment-only-change` over HTTP, unchanged; the sync-service adapter
-    /// (`outbound/lexical_service.rs` after C9) implements this port and owns the 4.5 s timeout
-    /// and the `comment_gate.check` span (`outcome`, `error.kind`, `ms`, `document.id`).
-    /// The fuzz sim uses `InProcessCommentGate` (in `sync_sim`, dev-only, over
-    /// `macro_document_model`), trusted only while the S8 §13 parity test passes. No in-process
-    /// production gate ships in this pass: S3's route-group-3 edit of `socket/protocol.rs:387`
-    /// targets a file C16 deletes and is superseded. A later flip, after PR 5/6, is its own PR
-    /// that implements this port in-process in `sync_server_core` behind a feature, selected by
-    /// a Worker `[env.*.vars]` value in every env block plus `wrangler.docker.toml`; the sim then
-    /// reuses that one impl (CS-26) and the S8 §13 parity test becomes the flip gate.
+    /// Validate proposed roots without granting permission on failure. The Worker
+    /// selects HTTP (default), in-process or comparison-only shadow at startup.
+    /// `crate::comment_gate::InProcessCommentGate` supplies the optional shared
+    /// implementation behind `in-process-gate`; the HTTP adapter owns its timeout.
     fn is_comment_only_change(
         &self,
         change: &RootChange,
