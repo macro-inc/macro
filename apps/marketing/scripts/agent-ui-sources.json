@@ -68,7 +68,7 @@
       "consumer": "ProductAgentsPage.tsx memory copy"
     },
     {
-      "path": "crates/ai/ai_tools/src/lib.rs",
+      "path": "crates/ai/agent_tools/src/lib.rs",
       "blob": "30d01f6aad7aea8a7e1fc356b921ede9d2a05ccf",
       "consumer": "ProductAgentsPage.tsx MCP copy"
     },

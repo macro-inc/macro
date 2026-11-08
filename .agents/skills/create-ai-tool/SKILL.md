@@ -31,29 +31,29 @@ The context must be `Clone` and derivable from the parent `ToolServiceContext` v
 
 If the tool's dependencies are already available in an existing context (e.g. it only needs `Arc<ToolScribe>`), you can use that context directly — no new struct needed.
 
-## Step 3: Add the toolset to `all_tools` in the ai_tools crate
+## Step 3: Add the toolset to `all_tools` in the agent_tools crate
 
-Edit `crates/ai_tools/src/lib.rs`:
+Edit `crates/agent_tools/src/lib.rs`:
 - Import your toolset function and context type
 - Add `.add_tool::<YourTool, YourContext>()` or `.add_subtoolset::<YourToolContext>(your_toolset())` to the `all_tools()` function
 
 ## Step 4: Add the context to ToolServiceContext
 
-Edit `crates/ai_tools/src/tool_context.rs`:
+Edit `crates/agent_tools/src/tool_context.rs`:
 - Add any new type aliases for your service implementations (follow the `Tool*` naming pattern)
 - Add your tool context field to the `ToolServiceContext` struct
 - Implement `FromRef<ToolServiceContext>` for your context if needed (or derive it — the struct uses `#[derive(FromRef)]`)
 
 ## Step 5: Wire up env vars and service construction
 
-Edit `crates/ai_tools/src/build_context.rs`:
+Edit `crates/agent_tools/src/build_context.rs`:
 - Add any new env vars to the `env_var!` or `maybe_env_var!` blocks
 - Construct your service/context in `build_tool_service_context_from_env`
 - Add it to the returned `ToolServiceContext`
 
 ## Step 6: Update infra (if new env vars or AWS resources are needed)
 
-Edit `infra/packages/shared/src/ai_tools.ts`:
+Edit `infra/packages/shared/src/agent_tools.ts`:
 - Add new env vars to the `envVars` array in `getAiToolsInfra()`
 - Add any new secret ARNs, queue ARNs, or bucket ARNs to the respective arrays
 - Add any new Pulumi stack references needed to resolve the values
@@ -63,7 +63,7 @@ Edit `infra/packages/shared/src/ai_tools.ts`:
 Run from the repository root:
 ```bash
 cargo fmt
-cargo clippy -p ai_tools
+cargo clippy -p agent_tools
 cargo test -p <your_domain_crate>
 ```
 
@@ -76,7 +76,7 @@ Run from `apps/web/`:
 bun gen-tools
 ```
 
-This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
+This builds `crates/agent_tools/src/bin/gen_tool_schemas.rs`, generates `crates/agent_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
 
 ## Step 9: Check what frontend UI is needed
 

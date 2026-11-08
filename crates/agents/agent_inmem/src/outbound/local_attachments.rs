@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use agent::{AgentError, StreamPart};
+use agent_loop::{AgentError, StreamPart};
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, AttachmentService, Attachments};
 use futures::future::BoxFuture;

@@ -1,4 +1,4 @@
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use agent_session::domain::model::AgentSessionId;
 
 use super::{DOCS_PER_SESSION_BYTES, SessionDocs, inject};

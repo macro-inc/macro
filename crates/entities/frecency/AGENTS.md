@@ -15,7 +15,7 @@ changes, so new code should name the layer crate it needs.
 
 - Used by: the composition roots (`document_storage_service`,
   `agent_harness_service`, `email_service`, `connection_gateway`),
-  `ai_tools`, and the test builds of `email`, `soup` and `reminders`.
+  `agent_tools`, and the test builds of `email`, `soup` and `reminders`.
 
 ## Checks
 

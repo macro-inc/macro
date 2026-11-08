@@ -40,7 +40,7 @@ composer's Auto mode.
   (Auto mode choice, Clef Flash), `agent_session` (whether to retitle a
   session after a turn, TypeSafe), `agent_trigger` (routing unmentioned
   thread replies to agent sessions), `memory` (the privacy judge,
-  TypeSafe, wired by `ai_tools`).
+  TypeSafe, wired by `agent_tools`).
 
 ## Checks
 

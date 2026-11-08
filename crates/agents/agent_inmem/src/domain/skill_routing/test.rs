@@ -1,5 +1,5 @@
 use super::*;
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 
 fn skill(id: u128) -> LoadedSkill {

@@ -183,14 +183,14 @@ use webhook::{
 pub(crate) type DssEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
 
 /// The notification service behind the GraphQL mutations that change a
-/// notification's state. Unlike [`ai_tools::ToolNotificationService`], it
+/// notification's state. Unlike [`agent_tools::ToolNotificationService`], it
 /// publishes each change, so the viewer's other sessions and the server's
 /// own live feeds and unread counts hear a read or a done made here.
 pub(crate) type GraphqlNotificationWriter =
     notification::domain::service::NotificationReaderService<
         notification_outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        ai_tools::ToolNotificationQueue,
-        ai_tools::NoOpSnsEndpointManager,
+        agent_tools::ToolNotificationQueue,
+        agent_tools::NoOpSnsEndpointManager,
         notification_outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher<
             DssEventBroker,
         >,
@@ -233,8 +233,8 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
 
 pub(crate) type DssPipelineWorkflowState =
     crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
-        ai_tools::ToolPipelineWorkflows,
-        ai_tools::ToolCrmTransferService,
+        agent_tools::ToolPipelineWorkflows,
+        agent_tools::ToolCrmTransferService,
         AuthorizationService,
     >;
 
@@ -294,7 +294,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     FavoritesMutationServiceType,
     DssChannelService,
     GraphqlNotificationWriter,
-    Arc<ai_tools::ToolNotificationService>,
+    Arc<agent_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
     Arc<FavoritesServiceType>,
@@ -527,7 +527,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<
                 NotificationIngressType,
                 NotificationReaderCompletion<
-                    ai_tools::ToolNotificationService,
+                    agent_tools::ToolNotificationService,
                     notification_outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
@@ -544,8 +544,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    agent_tools::PipedreamMcpAppCatalog,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -988,7 +992,7 @@ pub(crate) struct ApiContext {
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
-    pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_reader: Arc<agent_tools::ToolNotificationService>,
     pub graphql_notification_writer: Arc<GraphqlNotificationWriter>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,

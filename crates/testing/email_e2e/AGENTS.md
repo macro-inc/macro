@@ -143,7 +143,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   (which queues it configures) is not exercised. `SendEmail` defers to a
   composer; `SendConfirmedEmail` sends. Give a sending tool the base64url
   HTML a composer exports, since no Markdown renderer is started. The test
-  file needs `#![recursion_limit = "256"]`. See `tests/ai_tools.rs`.
+  file needs `#![recursion_limit = "256"]`. See `tests/agent_tools.rs`.
 - Search (a stack with `search`): `user.search(&request)` is `POST /search`
   with the body the web app sends; wait for a search to find the mail,
   since indexing follows the sync. The index and the indexer's consumer

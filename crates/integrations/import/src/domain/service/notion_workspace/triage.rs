@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use agent::Message;
-use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
+use agent_loop::Message;
+use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
 use futures::{FutureExt, Stream, StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -168,7 +168,7 @@ pub(in crate::domain::service) fn decide<'a, Admit, AdmitFuture>(
     admit: Admit,
     recorder: &'a dyn ai_usage::UsageRecorder,
     usage: ai_usage::UsageContext,
-    model: agent::PredefinedModel,
+    model: agent_loop::PredefinedModel,
 ) -> impl Stream<Item = HashMap<String, Verdict>> + Send + 'a
 where
     Admit: Fn() -> AdmitFuture + Send + Sync + 'a,
@@ -207,7 +207,7 @@ async fn decide_batch(
     sharing: NotionSharing,
     recorder: &dyn ai_usage::UsageRecorder,
     usage: ai_usage::UsageContext,
-    model: agent::PredefinedModel,
+    model: agent_loop::PredefinedModel,
 ) -> anyhow::Result<Vec<Verdict>> {
     let prompt = format!(
         "Decide what to do with each of these {} workspace objects.\n\n```json\n{}\n```",

@@ -1,6 +1,6 @@
 //! Bounded tool-free completions using the shared agent completion path.
 
-use agent::{
+use agent_loop::{
     MeteringContext,
     structured_output::{CompletionThinking, DynamicSchema},
 };
@@ -118,10 +118,10 @@ impl ToolFreeCompletion for ToolFreeCompletionService {
             None => UsageContext::new(self.feature, owner),
         };
         self.run(async move {
-            agent::structured_output::dynamic_structured_completion_thinking(
+            agent_loop::structured_output::dynamic_structured_completion_thinking(
                 request.model,
                 &request.system_prompt,
-                vec![agent::Message::user(request.prompt)],
+                vec![agent_loop::Message::user(request.prompt)],
                 request.schema,
                 request.thinking,
                 recorder.as_ref(),

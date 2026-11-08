@@ -4,7 +4,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use agent::{Message, PredefinedModel};
+use agent_loop::{Message, PredefinedModel};
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use document_sub_type::DocumentSubType;
@@ -62,7 +62,7 @@ impl DraftModel for RouterDraftModels {
         owner: &MacroUserIdStr<'static>,
         call: DraftCall<'_>,
     ) -> Result<String, DraftCallError> {
-        agent::complete_with_history_and_params(
+        agent_loop::complete_with_history_and_params(
             PredefinedModel::Fast.to_string(),
             call.system,
             vec![Message::user(call.prompt.to_owned())],

@@ -14,7 +14,7 @@ mod eval;
 #[cfg(test)]
 mod test;
 
-/// One privacy rule from `prompt::privacy`, asked as a yes/no question whose
+/// One privacy rule from `agent_prompts::privacy`, asked as a yes/no question whose
 /// "yes" means the content breaks the rule. Change `privacy.md` and these
 /// questions together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, IntoStaticStr)]

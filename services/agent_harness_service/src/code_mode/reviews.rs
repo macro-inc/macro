@@ -34,8 +34,8 @@ pub struct Actions<S, L, H> {
     /// Where each save is announced to the session's viewers.
     pub log: L,
     pub harness: Arc<H>,
-    pub context: ai_tools::ToolServiceContext,
-    pub tools: Arc<ai_tools::AiToolSet>,
+    pub context: agent_tools::ToolServiceContext,
+    pub tools: Arc<agent_tools::AiToolSet>,
 }
 #[async_trait]
 impl<S, L, H> ReviewActions for Actions<S, L, H>
@@ -187,7 +187,7 @@ where
 }
 
 impl<S, L, H> Actions<S, L, H> {
-    fn import_service(&self) -> Result<&ai_tools::ToolImportService, CodeModeError> {
+    fn import_service(&self) -> Result<&agent_tools::ToolImportService, CodeModeError> {
         self.context
             .import_tool_context
             .service

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use agent::{AgentLoop, StreamPart, to_rig_messages};
-use ai_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
+use agent_loop::{AgentLoop, StreamPart, to_rig_messages};
+use agent_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
 use async_trait::async_trait;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -27,7 +27,11 @@ impl AgentLoopResponder {
             toolset: tools.toolset,
             // The channel rules go last so they are the freshest instructions the
             // model reads; ahead of the tool prompt they were often ignored.
-            system_prompt: format!("{}\n{}", tools.prompt, prompt::channel_mention::PROMPT),
+            system_prompt: format!(
+                "{}\n{}",
+                tools.prompt,
+                agent_prompts::channel_mention::PROMPT
+            ),
         }
     }
 }
@@ -54,9 +58,9 @@ impl AgentResponder for AgentLoopResponder {
             )
             .await;
 
-        let messages = vec![agent::types::ChatMessage {
-            role: agent::types::Role::User,
-            content: agent::types::ChatMessageContent::Text(prompt),
+        let messages = vec![agent_loop::types::ChatMessage {
+            role: agent_loop::types::Role::User,
+            content: agent_loop::types::ChatMessageContent::Text(prompt),
             attachments: None,
         }];
 

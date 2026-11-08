@@ -27,7 +27,7 @@ and read the top entities. The Postgres storage is
   services are behind the `ports` feature; `mock` adds mockall mocks.
 - Used by: `channels`, `email`, `soup` (models and ports only), the adapter
   crates, and through the `frecency` facade the composition roots and
-  `ai_tools`.
+  `agent_tools`.
 
 ## Recipes
 

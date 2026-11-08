@@ -2,7 +2,7 @@ use crate::cognition::model::stream::SendChatMessagePayload;
 
 use crate::cognition::model::chats::ChatResponse;
 
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use anyhow::Result;
 use attachment::{AttachmentContent, AttachmentPart, Attachments, FormattedParts, TextOrImage};
 use model_entity::EntityType;

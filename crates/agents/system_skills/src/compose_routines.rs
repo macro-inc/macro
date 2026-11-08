@@ -10,7 +10,7 @@
 //! is the routine-tools part alone, for hosts without code, without the
 //! code-step contract `CreateRoutine`'s description carries.
 
-use prompt::{ComposedPrompt, StaticPrompt};
+use agent_prompts::{ComposedPrompt, StaticPrompt};
 
 use crate::SystemSkill;
 

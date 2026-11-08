@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use agent::types::AssistantMessagePart;
+use agent_loop::types::AssistantMessagePart;
 use ai_toolset::ToolKind;
 use ai_toolset::schema::generate_validated_input_schema;
 use database_sql_runner::toolset::{QueryDatabase, SaveDatabaseQuery};
@@ -78,7 +78,7 @@ struct DatabaseTools {
 
 fn database_tools() -> &'static DatabaseTools {
     static TOOLS: LazyLock<DatabaseTools> = LazyLock::new(|| DatabaseTools {
-        kinds: ai_tools::database_tools()
+        kinds: agent_tools::database_tools()
             .tools
             .into_iter()
             .map(|(name, tool)| (name, tool.annotations.kind))

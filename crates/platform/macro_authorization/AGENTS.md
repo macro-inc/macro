@@ -32,7 +32,7 @@ by policy.
 - Depends on: `macro_auth` (outbound JWT validation), `bot_id`, `bearer_token`,
   `harness_id`, `model_user`, `model_error_response`.
 - Used by: essentially every
-  authenticated HTTP surface (`agent_session`, `agent_harness`, `ai_tools`,
+  authenticated HTTP surface (`agent_session`, `agent_harness`, `agent_tools`,
   `bots`, `calendar_events`, `channels`, `chat`, `documents`, ...).
 
 ## Recipes

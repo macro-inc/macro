@@ -19,7 +19,7 @@ delete events.
 
 - Depends on: `notification` (domain), `macro_authorization` (axum).
 - Used by: `services/notification_service`, `services/agent_harness_service`,
-  `ai_tools`.
+  `agent_tools`.
 
 ## Tool contracts
 

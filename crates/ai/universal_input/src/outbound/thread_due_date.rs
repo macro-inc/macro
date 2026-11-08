@@ -4,8 +4,8 @@ use crate::domain::InputError;
 use crate::domain::temporal::thread_due_date::{
     DueDateUsage, ExtractedFacts, ThreadDueDateRequest, ThreadFactExtractor, ThreadFacts,
 };
-use agent::structured_output::{DynamicSchema, validate_schema};
-use agent::{Message, complete_with_history_and_params};
+use agent_loop::structured_output::{DynamicSchema, validate_schema};
+use agent_loop::{Message, complete_with_history_and_params};
 use ai_usage::{UsageAmount, UsageContext, UsageEvent, UsageRecorder, UsageTracking};
 use schemars::generate::SchemaSettings;
 use serde_json::{Value, json};

@@ -25,7 +25,7 @@ hexagonal architecture pattern.
 
 - Depends on: `entity_access` (ports), `macro_authorization` (inbound),
   `model_entity`, `cow_str`.
-- Used by: `graphql_favorite`, `ai_tools`, `complete_graph`, `soup`,
+- Used by: `graphql_favorite`, `agent_tools`, `complete_graph`, `soup`,
   `document_storage_service`, `authentication_service`.
 
 ## Recipes

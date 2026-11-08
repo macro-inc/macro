@@ -5,7 +5,7 @@
 //! their client derives from the fold itself, and the next call retries.
 
 use crate::domain::activity_summary::{ActivityDigest, ActivitySummarizer};
-use agent::{Message, complete_with_history_and_params};
+use agent_loop::{Message, complete_with_history_and_params};
 use ai_usage::{UsageContext, UsageRecorder};
 use std::sync::Arc;
 

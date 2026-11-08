@@ -15,7 +15,7 @@ changes, so new code should name the layer crate it needs.
 
 - Used by: the composition roots (`contacts_service`,
   `document_storage_service`, `authentication_service`, `email_service`,
-  `agent_harness_service`) and `ai_tools`.
+  `agent_harness_service`) and `agent_tools`.
 
 ## Checks
 

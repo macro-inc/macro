@@ -1,0 +1,18 @@
+{
+  "old_tools": "crates/ai_tools",
+  "old_prompt": "crates/prompt",
+  "grouped_tools": "crates/ai/ai_tools",
+  "grouped_prompt": "crates/ai/prompt",
+  "current_tools": "crates/ai/agent_tools",
+  "current_prompt": "crates/agents/agent_prompts",
+  "ambiguous_tools": "crates/agent_tools",
+  "wildcard_workspace": "[workspace]\nmembers = [\"crates/*\"]\n",
+  "excluded_ambiguous_workspace": "[workspace]\nmembers = [\"crates/*\"]\nexclude = [\"crates/agent_tools\"]\n",
+  "old_prompt_manifest": "crates/prompt/Cargo.toml",
+  "inherited_tools_workspace": "[workspace]\nmembers = [\"driver\"]\n[workspace.dependencies]\nold_alias = { package = \"ai_tools\", path = \"crates/ai_tools\" }\n",
+  "old_tools_manifest": "crates/ai_tools/Cargo.toml",
+  "excluded_inherited_members": "members = [\"driver\"]\nexclude = [\"crates/ai_tools\"]",
+  "inherited_prompt_dependency": "[workspace.dependencies]\nhistorical-prompt = { package = \"prompt\", path = \"crates/prompt\" }\n",
+  "old_examples": "crates/ai_tools/examples",
+  "old_example": "crates/ai_tools/examples/asv_reconstruct.rs"
+}

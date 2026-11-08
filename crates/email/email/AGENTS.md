@@ -102,7 +102,7 @@ tools — hexagonal, heavily feature-gated.
   `entity_access_db_utils` (optional, feature `outbound`), `calendar_events`
   (optional, feature `calendar_invitations`), `sqs_client` (optional, feature
   `sqs`; it must not depend back on this crate).
-- Used by: many crates and services, including `ai_tools`, `graphql_email`,
+- Used by: many crates and services, including `agent_tools`, `graphql_email`,
   `teams`, `database_sql_runner`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
 
@@ -442,7 +442,7 @@ tools — hexagonal, heavily feature-gated.
   is `None` on snapshots saved before it was recorded, where a series looks
   like a single event, so those cannot be added to a calendar.
 - The feature matrix (`ports`/`inbound`/`outbound`/`http_client`/`s3`/
-  `gmail_token`/`ai_tools`/`attachment`/`calendar_invitations`/`axum`) gates
+  `gmail_token`/`agent_tools`/`attachment`/`calendar_invitations`/`axum`) gates
   most modules; check `Cargo.toml`'s `[features]` block for which one a new
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the

@@ -99,9 +99,9 @@ async fn turn(
         Some(instructions),
         None,
     );
-    let messages = vec![agent::types::ChatMessage {
-        content: agent::types::ChatMessageContent::Text(prompt.to_owned()),
-        role: agent::types::Role::User,
+    let messages = vec![agent_loop::types::ChatMessage {
+        content: agent_loop::types::ChatMessageContent::Text(prompt.to_owned()),
+        role: agent_loop::types::Role::User,
         attachments: None,
     }];
     send(native, system_prompt, &messages).await.0
@@ -112,10 +112,10 @@ async fn turn(
 async fn send(
     native: &NativeTools,
     system_prompt: SystemPrompt,
-    messages: &[agent::types::ChatMessage],
+    messages: &[agent_loop::types::ChatMessage],
 ) -> (
     Vec<(u64, u64, u64)>,
-    Vec<agent::types::AssistantMessagePart>,
+    Vec<agent_loop::types::AssistantMessagePart>,
 ) {
     let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = Arc::new(DeferredToolSet::new(
         native.for_turn(false),
@@ -124,7 +124,7 @@ async fn send(
     let user = MacroUserIdStr::try_from_email("cache-measure@macro.com").unwrap();
     let usage = UsageContext::new(AiFeature::AgentSession, user);
     let recorded = Arc::new(RecordedUsage::default());
-    let metering = agent::MeteringContext::tracking_only(recorded.clone(), usage.clone());
+    let metering = agent_loop::MeteringContext::tracking_only(recorded.clone(), usage.clone());
     let parts = metering
         .scope(async {
             let mut session = AgentLoop::new(Arc::new(ai_usage::NoOpUsageRecorder))
@@ -137,10 +137,10 @@ async fn send(
                 )
                 .await;
             let mut stream = session
-                .send_message(agent::to_rig_messages(messages))
+                .send_message(agent_loop::to_rig_messages(messages))
                 .await
                 .unwrap();
-            let mut accumulator = agent::StreamAccumulator::new();
+            let mut accumulator = agent_loop::StreamAccumulator::new();
             while let Some(part) = stream.next().await {
                 accumulator.push(part.unwrap());
             }
@@ -244,7 +244,7 @@ async fn measure_prompt_cache_turns() {
     // A long first request stands in for the history a real session carries
     // into its later turns.
     let history = "The quarterly plan covers documents, tasks and email threads.\n".repeat(2000);
-    let mut messages: Vec<agent::types::ChatMessage> = Vec::new();
+    let mut messages: Vec<agent_loop::types::ChatMessage> = Vec::new();
     let mut requests: Vec<String> = Vec::new();
     for (index, prompt) in prompts.iter().enumerate() {
         let prompt = if index == 0 {
@@ -268,16 +268,16 @@ async fn measure_prompt_cache_turns() {
             None,
         );
         requests.push(prompt.clone());
-        messages.push(agent::types::ChatMessage {
-            content: agent::types::ChatMessageContent::Text(prompt),
-            role: agent::types::Role::User,
+        messages.push(agent_loop::types::ChatMessage {
+            content: agent_loop::types::ChatMessageContent::Text(prompt),
+            role: agent_loop::types::Role::User,
             attachments: None,
         });
         let received = session_docs.add(session_id, &requests, sdk_docs);
         // The model's copy, as each turn rebuilds it from the log.
-        let mut model_copy: Vec<agent::types::ChatMessage> = messages
+        let mut model_copy: Vec<agent_loop::types::ChatMessage> = messages
             .iter()
-            .map(|message| agent::types::ChatMessage {
+            .map(|message| agent_loop::types::ChatMessage {
                 content: message.content.clone(),
                 role: message.role,
                 attachments: None,
@@ -294,9 +294,9 @@ async fn measure_prompt_cache_turns() {
                 read * 100 / (input + read + write)
             );
         }
-        messages.push(agent::types::ChatMessage {
-            content: agent::types::ChatMessageContent::AssistantMessageParts(parts),
-            role: agent::types::Role::Assistant,
+        messages.push(agent_loop::types::ChatMessage {
+            content: agent_loop::types::ChatMessageContent::AssistantMessageParts(parts),
+            role: agent_loop::types::Role::Assistant,
             attachments: None,
         });
     }

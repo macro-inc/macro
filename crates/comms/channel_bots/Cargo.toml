@@ -6,9 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 ai_billing = { workspace = true }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 ai_usage = { workspace = true }
-ai_tools = { workspace = true }
+agent_tools = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -22,7 +22,7 @@ futures = { workspace = true }
 lexical_client = { workspace = true }
 macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["ports"] }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

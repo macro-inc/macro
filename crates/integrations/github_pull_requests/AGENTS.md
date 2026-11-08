@@ -29,7 +29,7 @@ lists visible PRs.
 
 - Depends on: `foreign_entity` (ports/outbound), `git_patch` (diff parsing/schema).
 - Used by: `github` (re-exports this crate's models), `soup`, `soup_realtime_inbound`,
-  `agent_changes`, `ai_tools`, `memory`, `document_storage_service`,
+  `agent_changes`, `agent_tools`, `memory`, `document_storage_service`,
   `document_cognition_service`, `authentication_service`, `mcp_service`,
   `agent_harness_service`.
 

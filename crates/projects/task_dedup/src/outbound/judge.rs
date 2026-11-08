@@ -1,7 +1,7 @@
 //! Duplicate judge adapters.
 
-use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
-use agent::{Message, PredefinedModel};
+use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
+use agent_loop::{Message, PredefinedModel};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

@@ -38,8 +38,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
-use agent::{Message, PredefinedModel};
+use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
+use agent_loop::{Message, PredefinedModel};
 use anyhow::{Context as _, Result, bail};
 use clap::Parser;
 use futures::StreamExt;

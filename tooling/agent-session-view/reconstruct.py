@@ -260,7 +260,29 @@ def reconstruction_packages(path):
     for role, candidates in found.items():
         if len(candidates) != 1:
             raise ReconstructionFailed(f"target checkout requires exactly one {role} package; found {len(candidates)}")
-    return {role: candidates[0] for role, candidates in found.items()}
+    packages = {role: candidates[0] for role, candidates in found.items()}
+    tools = load(packages["tools"]["directory"] / "Cargo.toml")
+    names = set()
+    for table in [tools, *tools.get("target", {}).values()]:
+        for key, dependency in table.get("dependencies", {}).items():
+            if not isinstance(dependency, dict):
+                continue
+            base = packages["tools"]["directory"]
+            if dependency.get("workspace"):
+                dependency = workspace.get("dependencies", {}).get(key, {})
+                base = path
+            if not isinstance(dependency, dict) or dependency.get("package", key) != packages["prompt"]["package"]:
+                continue
+            if "path" not in dependency or (base / dependency["path"]).resolve() != packages["prompt"]["directory"]:
+                raise ReconstructionFailed("target prompt dependency must resolve to its local workspace member")
+            visible = key.replace("-", "_") if "package" in dependency else packages["prompt"]["library"]
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", visible):
+                raise ReconstructionFailed("invalid target prompt dependency alias")
+            names.add(visible)
+    if len(names) != 1:
+        raise ReconstructionFailed(f"target tools requires exactly one visible prompt dependency; found {len(names)}")
+    packages["prompt"]["library"] = names.pop()
+    return packages
 
 
 def prepare_example(path, packages):

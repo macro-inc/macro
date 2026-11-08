@@ -16,7 +16,7 @@ agent tools (any model, any host) and cognition's `POST /web/search` and
   and the tools (their schemars titles are the tool names).
 - `src/outbound/tavily.rs`: typed reqwest client for `/search` and `/extract`.
 - `src/inbound/axum_router.rs`: routes, `ActingUser` auth, per-user hourly limit.
-- `src/inbound/toolset.rs`: the agent tools; `ai_tools` builds their context.
+- `src/inbound/toolset.rs`: the agent tools; `agent_tools` builds their context.
 
 ## Scope
 
@@ -27,7 +27,7 @@ agent tools (any model, any host) and cognition's `POST /web/search` and
 
 - Swap or add a vendor: implement `SearchProvider` in `src/outbound/<vendor>.rs`
   → seed its `ai_pricing` row (a migration) → construct it in
-  `ai_tools::build_web_search_provider_from_env`.
+  `agent_tools::build_web_search_provider_from_env`.
 
 ## Checks
 

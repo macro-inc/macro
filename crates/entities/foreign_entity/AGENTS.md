@@ -26,7 +26,7 @@ third-party system, following the hexagonal architecture pattern.
 
 - Depends on: `entity_access` (ports), `item_filters`, `models_pagination`.
 - Used by: `github_pull_requests`, `github`, `soup`, `documents`, `memory`,
-  `ai_tools`, `document_storage_service`, `document_cognition_service`,
+  `agent_tools`, `document_storage_service`, `document_cognition_service`,
   `authentication_service`, `mcp_service`.
 
 ## Recipes

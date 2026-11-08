@@ -35,7 +35,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - `src/inbound/axum_router.rs`: HTTP routes for server management and the
   OAuth callback.
 - `src/inbound/toolset.rs`: the `ConnectMcpServer` AI tool, wired through
-  `ai_tools` where the MCP credentials key is configured.
+  `agent_tools` where the MCP credentials key is configured.
 - `src/outbound/guarded_http.rs`: `McpHttp`, the address-guarded clients every
   connection to a user's server goes through (`agent_egress` reuses them).
 - `src/outbound/`: `oauth.rs` (RMCP-backed OAuth), `pg_server_repo.rs`
@@ -53,7 +53,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - Depends on: `agent`, `ai_toolset`, `authentication_service_client`,
   `macro_authorization` (feature `axum`),
   `macro_user_id`, `rmcp`.
-- Used by: `agent_egress`, `agent_harness`, `ai_tools`, `mcp_select`,
+- Used by: `agent_egress`, `agent_harness`, `agent_tools`, `mcp_select`,
   `onboarding`.
 
 ## Checks

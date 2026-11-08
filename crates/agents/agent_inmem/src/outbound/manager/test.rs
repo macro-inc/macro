@@ -5,10 +5,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent::StreamPart;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_fold::domain::log::Message;
 use agent_fold::domain::service::FoldedMessageService;
+use agent_loop::StreamPart;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams};
@@ -1390,7 +1390,7 @@ async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
                  service_name,
                  tool_name,
                  display_name,
-             }| agent::McpInfo {
+             }| agent_loop::McpInfo {
                 service: service_name,
                 tool_name,
                 display_name,
@@ -1435,29 +1435,29 @@ async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::Thinking("Add the row first.".to_owned()),
         StreamPart::Content("Adding it".to_owned()),
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-sheets".to_owned(),
             name: sheets.clone(),
             json: serde_json::json!({"sheet": "Q4", "values": ["a", "b"]}),
             mcp: routed(&sheets),
         }),
-        StreamPart::ToolResponse(agent::ToolResponse::Json {
+        StreamPart::ToolResponse(agent_loop::ToolResponse::Json {
             id: "call-sheets".to_owned(),
             json: serde_json::json!({"row": 7}),
             name: sheets.clone(),
         }),
-        StreamPart::ToolCallStarted(agent::ToolCallStart {
+        StreamPart::ToolCallStarted(agent_loop::ToolCallStart {
             id: "call-code".to_owned(),
             name: execute_code.clone(),
             mcp: routed(&execute_code),
         }),
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-code".to_owned(),
             name: execute_code.clone(),
             json: serde_json::json!({"code": "return 1 + 1"}),
             mcp: routed(&execute_code),
         }),
-        StreamPart::ToolResponse(agent::ToolResponse::Json {
+        StreamPart::ToolResponse(agent_loop::ToolResponse::Json {
             id: "call-code".to_owned(),
             json: serde_json::json!({"result": 2}),
             name: execute_code.clone(),
@@ -1497,7 +1497,7 @@ async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
             entry,
             HistoryEntry::Assistant(parts) if parts.iter().any(|part| matches!(
                 part,
-                agent::types::AssistantMessagePart::McpToolCall { name, service, .. }
+                agent_loop::types::AssistantMessagePart::McpToolCall { name, service, .. }
                     if name == "ExecuteCode" && service == "macro_internal"
             ))
         )),
@@ -1550,15 +1550,15 @@ impl TurnEngine for FailingMidCallEngine {
     fn run_turn(
         &self,
         _request: crate::domain::engine::TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
             let _ = parts
-                .send(Ok(StreamPart::ToolCall(agent::ToolCall {
+                .send(Ok(StreamPart::ToolCall(agent_loop::ToolCall {
                     id: "call-code".to_owned(),
                     name: "mcp__macro_internal__ExecuteCode".to_owned(),
                     json: serde_json::json!({"code": "return 1"}),
-                    mcp: Some(agent::McpInfo {
+                    mcp: Some(agent_loop::McpInfo {
                         service: "macro_internal".to_owned(),
                         tool_name: "ExecuteCode".to_owned(),
                         display_name: None,
@@ -1566,7 +1566,7 @@ impl TurnEngine for FailingMidCallEngine {
                 })))
                 .await;
             let _ = parts
-                .send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                .send(Err(agent_loop::AgentError::Other(anyhow::anyhow!(
                     "the provider went away"
                 ))))
                 .await;
@@ -1586,14 +1586,14 @@ impl TurnEngine for FailingEngine {
     fn run_turn(
         &self,
         _request: crate::domain::engine::TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
             let _ = parts
                 .send(Ok(StreamPart::Content("Looking into it".to_owned())))
                 .await;
             let _ = parts
-                .send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                .send(Err(agent_loop::AgentError::Other(anyhow::anyhow!(
                     "the provider went away"
                 ))))
                 .await;
@@ -1712,18 +1712,18 @@ impl TurnEngine for HeldCallEngine {
     fn run_turn(
         &self,
         _request: crate::domain::engine::TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(4);
         let started = self.started.lock().expect("unpoisoned").take();
         let proceed = self.proceed.lock().expect("unpoisoned").take();
-        let execute_code = agent::McpInfo {
+        let execute_code = agent_loop::McpInfo {
             service: "macro_internal".to_owned(),
             tool_name: "ExecuteCode".to_owned(),
             display_name: None,
         };
         tokio::spawn(async move {
             let _ = parts
-                .send(Ok(StreamPart::ToolCall(agent::ToolCall {
+                .send(Ok(StreamPart::ToolCall(agent_loop::ToolCall {
                     id: "call-code".to_owned(),
                     name: "mcp__macro_internal__ExecuteCode".to_owned(),
                     json: serde_json::json!({"code": "execution.views.present(view)"}),
@@ -1735,11 +1735,13 @@ impl TurnEngine for HeldCallEngine {
                 let _ = proceed.await;
             }
             let _ = parts
-                .send(Ok(StreamPart::ToolResponse(agent::ToolResponse::Json {
-                    id: "call-code".to_owned(),
-                    json: serde_json::json!({"status": "succeeded"}),
-                    name: "mcp__macro_internal__ExecuteCode".to_owned(),
-                })))
+                .send(Ok(StreamPart::ToolResponse(
+                    agent_loop::ToolResponse::Json {
+                        id: "call-code".to_owned(),
+                        json: serde_json::json!({"status": "succeeded"}),
+                        name: "mcp__macro_internal__ExecuteCode".to_owned(),
+                    },
+                )))
                 .await;
             let _ = parts
                 .send(Ok(StreamPart::Content("Here it is.".to_owned())))

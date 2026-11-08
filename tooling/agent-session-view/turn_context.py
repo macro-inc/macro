@@ -19,7 +19,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 # (file, constant) pairs holding the names of tools whose schemas go out with
 # every request.
 EAGER_SOURCES = [
-    ("crates/ai/ai_tools/src/lib.rs", "EAGER_TOOLS"),
+    ("crates/ai/agent_tools/src/lib.rs", "EAGER_TOOLS"),
     ("crates/agents/agent_inmem/src/rig_engine.rs", "EAGER_INTERNAL_MCP_TOOLS"),
 ]
 INTERNAL_PREFIX = "mcp__macro_internal__"

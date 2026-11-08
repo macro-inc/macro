@@ -47,7 +47,7 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
 /// the skill-following rules appended. How each area of Macro works is the
-/// SDK's `@agent` guidance, which `ai_tools` composes after this. Says nothing about
+/// SDK's `@agent` guidance, which `agent_tools` composes after this. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&skills::PROMPT);

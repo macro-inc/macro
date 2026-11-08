@@ -22,7 +22,7 @@ authenticating with the internal API key header instead of a user JWT.
 
 - Depends on: `models_search` (request/response types), `macro_tower_layers`
   (trace propagation).
-- Used by: `ai_tools`, `memory`, `skills`, `document_cognition_service`,
+- Used by: `agent_tools`, `memory`, `skills`, `document_cognition_service`,
   `mcp_service`, `agent_harness_service` (routine drafts' name lookup).
 
 ## Recipes

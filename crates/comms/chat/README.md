@@ -71,7 +71,7 @@ via `PgChatRepo` directly and does not emit `chat.updated`.
 Only the document cognition service (DCS) HTTP chat router, the DCS
 stream-side implicit chat creation, and the DCS `MessageServiceImpl` publish
 to Kafka. The `ChatServiceImpl` instances in mcp_service, memory, and
-ai_tools agent contexts and in the DCS chat tool context use the
+agent_tools agent contexts and in the DCS chat tool context use the
 `NoopMacroEventBroker` default and do not publish.
 
 This crate provides production only; it adds no chat-event consumer.

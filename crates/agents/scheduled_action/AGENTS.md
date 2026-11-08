@@ -361,7 +361,7 @@ each run.
   it. Without PostHog configured, no one has it and the host starts no event
   intake.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
-  `crates/agents/agent_session`, `ai_tools`; Jev condition evaluation → `crates/ai/jev_classifier`.
+  `crates/agents/agent_session`, `agent_tools`; Jev condition evaluation → `crates/ai/jev_classifier`.
 
 ## Boundaries
 

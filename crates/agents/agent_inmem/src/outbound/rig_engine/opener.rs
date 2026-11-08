@@ -10,8 +10,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, Message, ReasoningEffort, StreamPart};
+use agent_loop::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
+use agent_loop::{AgentLoop, Message, ReasoningEffort, StreamPart};
 use ai_toolset::AsyncToolCollection;
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt as _;
@@ -82,9 +82,9 @@ pub(super) fn spawn(
         "The conversation so far. Write the first line of the reply to the last message.\n\n{}",
         transcript(messages)
     ));
-    let metering = agent::MeteringContext::current();
+    let metering = agent_loop::MeteringContext::current();
     tokio::spawn(
-        agent::MeteringContext::carry(metering, async move {
+        agent_loop::MeteringContext::carry(metering, async move {
             let agent_loop = AgentLoop::new(recorder)
                 .with_model(MODEL)
                 .with_reasoning_effort(ReasoningEffort::None)

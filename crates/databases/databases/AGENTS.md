@@ -37,7 +37,7 @@ service with Axum, agent-tool and Postgres adapters.
 - Used by: `database_sql_runner` (agent SQL), `crm` and `forms` (own storage via
   `DatabaseStorage`, no `database_entities` row), `database_webhooks` (writes
   as its creator, re-checked through the `CreatorAccess` port and its
-  `outbound::entity_access_creators` adapter), `ai_tools`, `complete_graph`,
+  `outbound::entity_access_creators` adapter), `agent_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
 
 ## Recipes

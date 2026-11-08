@@ -9,7 +9,7 @@
   [x] tab in agents
   [x] cron entity
   [x] view of stuff + history
-[~] Put tool context building in `ai_tools`
+[~] Put tool context building in `agent_tools`
   *cancer*
 [x] Live Updates 
   [x] Show when running
@@ -24,7 +24,7 @@
 # punt
 [] Stream agent 
   - Stream is the same as DCS
-[] Fix noops in `ai_tools`
+[] Fix noops in `agent_tools`
 [] Make an infra file for tools that configures tools the same everywhere they're needed
 [] Real unified list for history
 [~] Sharing / permissions
