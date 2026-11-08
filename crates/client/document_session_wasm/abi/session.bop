@@ -14,6 +14,8 @@ struct ModifyTargetMsg { byte kind; PointMsg anchor; PointMsg focus; bool dirty;
 struct MarkedSelectionMsg { uint32 format; string style; PointMsg anchor; }
 struct RangeSelectionMsg { PointMsg anchor; PointMsg focus; uint32 format; string style; }
 message SelectionChangeMsg { 1 -> bool tripleClick; 2 -> bool domRangeSameNode; 3 -> MarkedSelectionMsg marked; 4 -> uint32 domAnchorOffset; 5 -> uint32 domFocusOffset; 6 -> RangeSelectionMsg postDeleteRestore; }
+// EditorCommand b=1 clears composition before the command; b=0 preserves it.
+// EditorComposition kind: 0 start, 1 end, 2 clear without admitting DOM text.
 union EditorInputMsg {
  1 -> struct EditorCommand { CommandCode command; uint32 a; uint32 b; string text; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
  2 -> struct EditorSetState { string json; }
@@ -21,6 +23,7 @@ union EditorInputMsg {
  4 -> struct EditorPaste { SelectionMsg selection; ClipboardEntryMsg[] clipboard; bool hasFiles; string[] htmlNodes; }
  5 -> struct EditorInsertText { byte phase; bool hasData; string data; bool hasTransfer; string transfer; uint32 facts; string lastKey; SelectionMsg selection; }
  6 -> struct EditorComposition { byte kind; uint32 key; string text; uint32 anchorOffset; uint32 focusOffset; string data; SelectionMsg selection; }
+ 8 -> struct EditorKeyDown { uint32 code; uint32 mods; string key; CommandCode command; uint32 argument; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
  7 -> struct EditorText { uint32 key; uint16[] text; uint32 anchorOffset; uint32 focusOffset; bool compositionEnd; string compositionData; SelectionMsg selection; }
 }
 

@@ -609,6 +609,21 @@ fn input_output_round_trip() {
         assert_eq!(value, decoded);
         cases.push(serde_json::json!({"name":"EditorInputMsg.EditorText","bytes":data}));
     }
+    {
+        let value = wire::EditorInputMsg::EditorKeyDown {
+            code: 8,
+            mods: 4,
+            key: "Backspace".into(),
+            command: wire::CommandCode::DeleteWord,
+            argument: 0,
+            selection: sample_selection_msg(),
+            target: sample_modify_target_msg(),
+            character_target: sample_modify_target_msg(),
+        };
+        let data = bytes(&value).unwrap();
+        assert_eq!(wire::EditorInputMsg::deserialize(&data).unwrap(), value);
+        cases.push(serde_json::json!({"name":"EditorInputMsg.EditorKeyDown","bytes":data}));
+    }
     let path = directory.join("messages.json");
     let json = serde_json::to_string_pretty(&cases).unwrap() + "\n";
     if record {

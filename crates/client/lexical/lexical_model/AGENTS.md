@@ -34,6 +34,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data.
 - Pure Rust model; no network, database, runtime or browser dependencies.
+- Use CompositionEvent::Clear for Android ownership reset; it preserves text and
+  restores anchor typing style without CompositionEnd semantics.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.

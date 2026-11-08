@@ -433,3 +433,52 @@ fn transformed_browser_text_reconciles_instead_of_eliding_a_mismatch() {
             .any(|effect| matches!(effect, Effect::SetViewSelection { .. }))
     );
 }
+
+#[test]
+fn android_composition_clear_keeps_text_and_restores_anchor_typing_style() {
+    let mut editor = Editor::builder(EditorMode::ViewAttached).build().unwrap();
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let t = tx.create_text("漢字")?;
+            tx.text(t)?
+                .set_format(TextFormat::BOLD)?
+                .set_style("color: red")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[t.key()])?;
+            tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+                Point::text(t, Utf16Offset(2)),
+            ))))?;
+            tx.set_composition_key(Some(t.key()))?;
+            Ok(t.key())
+        })
+        .unwrap();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    for time in [1, 31] {
+        core.apply(
+            Input::Composition {
+                event: CompositionEvent::Clear,
+                selection: ViewSelection::KeepModel,
+            },
+            HistoryTime(time),
+        )
+        .unwrap();
+        assert_eq!(core.composition(), Composition::Idle);
+        assert_eq!(core.state().view().text_content(key), "漢字");
+        let range = core
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .unwrap();
+        assert_eq!(range.format, TextFormat::BOLD);
+        assert_eq!(range.style.as_ref(), "color: red");
+    }
+}
