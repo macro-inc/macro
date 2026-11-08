@@ -48,6 +48,9 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   repair forged inputs. Keep workerd digest bytes exact.
 - `fork_durable` opens an isolated cold view; `take_completed_puts` and
   `take_delivery_proofs` expose success/generation evidence without changing port effects.
+  Durable generations share immutable value/snapshot buffers; writes replace leaves,
+  and public reads/dumps return owned copies. Confirming an older generation must
+  preserve its exact pre-overwrite content through cold recovery.
   `take_queued_sends` and `take_completed_closes` distinguish successful runtime
   actions from failed attempts.
   Fault `"*"` counts calls through the fault-capable boundary, not diagnostic clock reads.
