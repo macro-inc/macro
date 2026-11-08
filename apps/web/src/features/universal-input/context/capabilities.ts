@@ -48,9 +48,6 @@ export interface InputDisplay {
   rosterLoading(): boolean;
   connectAgent(agent: RosterAgent): void;
   createAgent(): void;
-  agentsEnabled(): boolean;
-  models(): { id: string; label: string }[];
-  model(): string;
   attachmentCount(): number;
   clearAttachments(): void;
 }

@@ -7,7 +7,6 @@ import {
   $getRoot,
   createEditor,
 } from 'lexical';
-import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeBase64Utf8 } from '../email-compose/core/decode-base64';
@@ -15,10 +14,8 @@ import { createInputActions } from './actions';
 import { fieldsSchema, type Submission } from './core/input';
 
 const mocks = vi.hoisted(() => ({
-  agents: false,
   attachments: [] as object[],
   replace: vi.fn(),
-  pending: vi.fn(),
   session: vi.fn(),
   history: vi.fn(),
   note: vi.fn(),
@@ -26,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   taskSnapshot: vi.fn(),
   taskValues: {} as Record<string, PropertyApiValues>,
   taskDefinitions: new Map<string, PropertyDefinition>(),
-  chat: vi.fn(),
   saveEmail: vi.fn(),
   sendEmail: vi.fn(),
   connectGoogle: vi.fn(),
@@ -54,11 +50,10 @@ vi.mock('@components/app/split-layout/layout', () => ({
   }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.agents }),
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  enableChatV3Agents: {},
   enableProjects: {},
 }));
 vi.mock('@property/tags', () => ({ useLocalDocTags: vi.fn() }));
@@ -105,9 +100,6 @@ vi.mock('@core/component/AI/context', () => ({
       },
     },
   }),
-}));
-vi.mock('@core/component/AI/signal/pendingSend', () => ({
-  setPendingSendData: mocks.pending,
 }));
 vi.mock('@app/features/agents-view/queries/composer-prompt', () => ({
   buildAgentPrompt: async ({ content }: { content: string }) => content,
@@ -191,7 +183,7 @@ vi.mock('@queries/history/history', () => ({
   useUpsertToHistoryMutation: () => ({ mutate: mocks.history }),
 }));
 vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: { createChat: mocks.chat },
+  cognitionApiServiceClient: {},
 }));
 vi.mock('@app/features/calendar-view/calendar-navigation', () => ({
   calendarViewContent: (params: object) => ({
@@ -232,14 +224,12 @@ async function execute(snapshot: Submission) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.agents = false;
   mocks.attachments = [];
   mocks.note.mockResolvedValue({ documentId: 'note' });
   mocks.task.mockResolvedValue({ documentId: 'task' });
   mocks.taskSnapshot.mockResolvedValue({ documentId: 'task' });
   mocks.taskValues = {};
   mocks.taskDefinitions = new Map();
-  mocks.chat.mockResolvedValue(ok({ id: 'chat' }));
   mocks.session.mockReturnValue('session');
   mocks.saveEmail.mockResolvedValue({
     draftId: 'draft',
@@ -270,19 +260,7 @@ describe('destination adapters', () => {
       }
     });
   });
-  it('starts legacy AI with the original text and attachments', async () => {
-    const result = await execute(input('ai'));
-    expect(mocks.pending).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'Original **Markdown**' })
-    );
-    expect(mocks.replace).not.toHaveBeenCalled();
-    result.open?.();
-    expect(mocks.replace).toHaveBeenCalledWith({
-      next: { type: 'chat', id: 'chat' },
-    });
-  });
-  it('starts the existing agent session when enabled', async () => {
-    mocks.agents = true;
+  it('starts an agent session for AI', async () => {
     const result = await execute(input('ai'));
     expect(mocks.session).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -290,7 +268,6 @@ describe('destination adapters', () => {
         submitSurface: 'other',
       })
     );
-    expect(mocks.chat).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     result.open?.();
     expect(mocks.replace).toHaveBeenCalledOnce();
