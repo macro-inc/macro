@@ -9,19 +9,19 @@ use std::cell::RefCell;
 // the existing serde decoder and accounting; this does not stringify values.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(inline_js = r#"
-export function lexicalSnapshotExport(value) {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+export function lexicalSnapshotResult(value, requireObject) {
+    if (requireObject && (value === null || typeof value !== 'object' || Array.isArray(value))) {
         throw new Error('exportJSON must return an object');
     }
     const path = new WeakSet();
     function copy(value) {
         if (value === null || typeof value !== 'object') {
             if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
-                throw new TypeError('exportJSON contains a non-JSON value');
+                throw new TypeError('node hook result contains a non-JSON value');
             }
             return value;
         }
-        if (path.has(value)) throw new TypeError('exportJSON contains a cycle');
+        if (path.has(value)) throw new TypeError('node hook result contains a cycle');
         path.add(value);
         let result;
         if (Array.isArray(value)) {
@@ -37,8 +37,11 @@ export function lexicalSnapshotExport(value) {
 }
 "#)]
 extern "C" {
-    #[wasm_bindgen(catch, js_name = lexicalSnapshotExport)]
-    fn snapshot_export(value: &JsValue) -> Result<JsValue, JsValue>;
+    #[wasm_bindgen(catch, js_name = lexicalSnapshotResult)]
+    pub(super) fn snapshot_result(
+        value: &JsValue,
+        require_object: bool,
+    ) -> Result<JsValue, JsValue>;
 }
 
 impl BoundFunction {
@@ -49,7 +52,7 @@ impl BoundFunction {
             let result = self
                 .function
                 .call1(&JsValue::UNDEFINED, &message)
-                .and_then(|value| snapshot_export(&value));
+                .and_then(|value| snapshot_result(&value, true));
             match result {
                 Ok(value) => crate::host::from_js(value)
                     .map_err(|error| Error::invariant(format!("{error:?}"))),

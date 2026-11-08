@@ -327,7 +327,11 @@ impl BoundFunction {
         #[cfg(target_arch = "wasm32")]
         {
             let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
-            match self.function.call1(&JsValue::UNDEFINED, &argument) {
+            let result = self
+                .function
+                .call1(&JsValue::UNDEFINED, &argument)
+                .and_then(|value| read::snapshot_result(&value, false));
+            match result {
                 Ok(value) if value.is_undefined() => Ok(serde_json::json!({"$undef":true})),
                 Ok(value) => crate::host::from_js(value)
                     .map_err(|error| Error::invariant(format!("{error:?}"))),
