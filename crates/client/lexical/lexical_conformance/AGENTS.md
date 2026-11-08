@@ -109,3 +109,7 @@ Keep conformance.createForeignNode an internal development constructor in the sh
 Preserve original encoded indexed-hook arguments in exact node/hook scopes before native normalization; consume once at JS dispatch and restore guards on every exit. Native-super installs no original-argument frame, so nested virtual calls receive their actual model arguments. Retain owned JSON only, with no transaction borrow or lock across host calls.
 
 Resolve hosted node return values with CallbackContext::returned_node in the exact active update. Require a known captured node handle whose key still exists; reject raw keys, non-node values and stale callback capabilities.
+
+CallbackContext::selection encodes an existing active or detached transaction slot in the shared selection identity store without cloning or activating it. Preserve the exact callback update capability and reuse prior slot handles.
+
+Synchronize selection slot bindings by model object tokens before/after dispatch and when encoding callback selections. Reuse tokens when hydrating host values, including read frames and explicit reactivation; never infer replacement identity solely from the resettable selection_replacements counter or snapshot old values after callbacks.
