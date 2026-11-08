@@ -13,6 +13,8 @@ use anyhow::{Context, Result};
 
 mod bundle_cache;
 
+use super::content_key;
+
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
@@ -214,13 +216,14 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
     }
 
     let key = bundle_cache::key(&repo_root(), &cmd)?;
-    let bundle = match bundle_cache::lookup(&key)? {
-        Some(cached) => {
+    // Held until the bundle is staged, so pruning can't remove it first.
+    let (bundle, _reading) = match bundle_cache::lookup(&key)? {
+        Some((cached, reading)) => {
             stage.note(&format!(
                 "frontend unchanged: reusing bundle {}",
                 &key[..12]
             ));
-            cached
+            (cached, reading)
         }
         None => {
             stage.run("Building frontend bundle", &mut cmd)?;
@@ -236,7 +239,9 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                 cached = Some(bundle_cache::store(&key, &dist)?);
                 Ok(())
             })?;
-            cached.context("frontend bundle was not cached")?
+            let cached = cached.context("frontend bundle was not cached")?;
+            let reading = content_key::read_lock(&cached)?;
+            (cached, reading)
         }
     };
     stage.run_step("Staging frontend bundle", || {

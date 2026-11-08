@@ -101,10 +101,11 @@ fn an_installed_entry_is_never_replaced_by_a_concurrent_install() {
     std::fs::remove_dir_all(&root).unwrap();
 }
 
-/// Pruning takes the key's install lock: a key being installed is skipped,
-/// and the lock file outlives the entry so every installer locks the same file.
+/// Pruning takes the key's lock exclusively and only tries it: a key being
+/// installed or read is skipped, an entry used since it was listed is kept,
+/// and the lock file outlives the entry so everyone locks the same file.
 #[test]
-fn pruning_skips_a_key_being_installed_and_keeps_its_lock() {
+fn pruning_skips_a_key_being_installed_or_read_and_keeps_its_lock() {
     let root = std::env::temp_dir().join(format!("content-key-prune-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
@@ -113,11 +114,26 @@ fn pruning_skips_a_key_being_installed_and_keeps_its_lock() {
 
     let installer = std::fs::File::create(&lock_path).unwrap();
     installer.lock().unwrap();
-    assert!(!prune_entry(&entry), "a key under install is not pruned");
+    assert!(
+        !prune_entry(&entry, |_| true),
+        "a key under install is not pruned"
+    );
+    drop(installer);
+
+    let reader = read_lock(&entry).unwrap();
+    assert!(
+        !prune_entry(&entry, |_| true),
+        "a key being read is not pruned"
+    );
+    drop(reader);
+
+    assert!(
+        !prune_entry(&entry, |_| false),
+        "an entry used since listing is kept"
+    );
     assert!(complete(&entry));
 
-    drop(installer);
-    assert!(prune_entry(&entry));
+    assert!(prune_entry(&entry, |_| true));
     assert!(!entry.exists());
     assert!(lock_path.exists(), "the lock file stays");
     std::fs::remove_dir_all(&root).unwrap();

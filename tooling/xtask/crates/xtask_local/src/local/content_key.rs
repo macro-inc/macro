@@ -74,17 +74,28 @@ pub fn install_entry(tmp: &Path, entry: &Path, is_complete: impl Fn(&Path) -> bo
         .with_context(|| format!("moving {} into place at {}", tmp.display(), entry.display()))
 }
 
-/// Remove a cache entry while holding its install lock, so pruning never races
-/// an install of the same key. A key someone is installing is skipped. The
-/// lock file stays: removing it would let a later installer lock a new file
-/// while another still holds the old one. Readers take no lock; they mark an
-/// entry used before reading it, which keeps it from being pruned.
-pub fn prune_entry(entry: &Path) -> bool {
+/// Hold a key's lock shared while reading its entry (a snapshot restore, a
+/// bundle being staged), so pruning can't remove it meanwhile. Released when
+/// the returned file drops.
+pub fn read_lock(entry: &Path) -> Result<std::fs::File> {
+    let lock_path = entry.with_extension("lock");
+    let lock = std::fs::File::create(&lock_path)
+        .with_context(|| format!("creating {}", lock_path.display()))?;
+    lock.lock_shared()
+        .with_context(|| format!("locking {}", lock_path.display()))?;
+    Ok(lock)
+}
+
+/// Remove a cache entry if `still_prunable` holds once its lock is taken.
+/// The lock is exclusive and only tried, so a key someone is installing or
+/// reading is skipped. The lock file stays: removing it would let a later
+/// installer lock a new file while another still holds the old one.
+pub fn prune_entry(entry: &Path, still_prunable: impl Fn(&Path) -> bool) -> bool {
     let lock_path = entry.with_extension("lock");
     let Ok(lock) = std::fs::File::create(&lock_path) else {
         return false;
     };
-    if lock.try_lock().is_err() {
+    if lock.try_lock().is_err() || !still_prunable(entry) {
         return false;
     }
     std::fs::remove_dir_all(entry).is_ok()

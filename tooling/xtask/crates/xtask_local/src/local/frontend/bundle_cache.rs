@@ -134,9 +134,14 @@ fn collect_files(repo: &Path, rel: &str, out: &mut Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// The cached bundle for `key`, if one is stored.
-pub fn lookup(key: &str) -> Result<Option<PathBuf>> {
+/// The cached bundle for `key`, if one is stored, with the read lock that
+/// keeps it from being pruned until the caller has staged it.
+pub fn lookup(key: &str) -> Result<Option<(PathBuf, std::fs::File)>> {
     let entry = root_dir()?.join(key);
+    if !entry.join("index.html").exists() {
+        return Ok(None);
+    }
+    let reading = content_key::read_lock(&entry)?;
     if !entry.join("index.html").exists() {
         return Ok(None);
     }
@@ -144,7 +149,7 @@ pub fn lookup(key: &str) -> Result<Option<PathBuf>> {
         .append(true)
         .open(entry.join("index.html"))
         .and_then(|file| file.set_modified(std::time::SystemTime::now()));
-    Ok(Some(entry))
+    Ok(Some((entry, reading)))
 }
 
 /// Store a finished build under `key`, then drop old entries. Another checkout
@@ -198,6 +203,12 @@ pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 
 /// Remove entries unused for [`UNUSED_DAYS`], then the least recently used
 /// beyond [`MAX_ENTRIES`]. Best effort: a failure only leaves disk in use.
+fn last_used(entry: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(entry.join("index.html"))
+        .and_then(|meta| meta.modified())
+        .ok()
+}
+
 fn prune(root: &Path, keep: &str) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -209,10 +220,8 @@ fn prune(root: &Path, keep: &str) {
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .filter_map(|entry| {
             let path = entry.path();
-            let modified = std::fs::metadata(path.join("index.html"))
-                .or_else(|_| entry.metadata())
-                .and_then(|meta| meta.modified())
-                .ok()?;
+            let modified = last_used(&path)
+                .or_else(|| entry.metadata().and_then(|meta| meta.modified()).ok())?;
             Some((modified, path))
         })
         .collect();
@@ -221,7 +230,10 @@ fn prune(root: &Path, keep: &str) {
     for (index, (modified, path)) in used.iter().enumerate() {
         let old = modified.elapsed().is_ok_and(|age| age > max_age);
         if old || index + 1 >= MAX_ENTRIES {
-            content_key::prune_entry(path);
+            // Unless someone used it since it was listed.
+            content_key::prune_entry(path, |path| {
+                last_used(path).is_some_and(|now| now == *modified)
+            });
         }
     }
 }

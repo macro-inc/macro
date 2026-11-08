@@ -178,7 +178,10 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
     stage.run_step(
         &format!("Restoring init snapshot ({})", plan.short_key()),
         || {
-            // Before reading, so pruning sees the snapshot as in use.
+            // Held while reading, so pruning can't remove it meanwhile. A
+            // read-only baked store (MACRO_STACK_SNAPSHOT_DIR) can't hold a lock
+            // file, and nothing prunes it, so restore without one there.
+            let _reading = super::content_key::read_lock(&dir).ok();
             mark_used(&dir);
             for (archive, _) in &pairs {
                 if !dir.join(archive).exists() {
@@ -276,6 +279,12 @@ fn mark_used(dir: &std::path::Path) {
         .and_then(|file| file.set_modified(std::time::SystemTime::now()));
 }
 
+fn last_used(snapshot: &std::path::Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(snapshot.join("manifest.json"))
+        .and_then(|meta| meta.modified())
+        .ok()
+}
+
 /// Delete snapshots unused for [`UNUSED_DAYS`], and temp dirs that old (left by
 /// a save that crashed). Best effort: a failure only leaves disk in use.
 fn prune_unused(root: &std::path::Path, keep: &str) {
@@ -290,16 +299,16 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
         if entry.file_name() == keep || !is_dir {
             continue;
         }
-        let manifest = path.join("manifest.json");
-        let used = std::fs::metadata(&manifest)
-            .or_else(|_| entry.metadata())
-            .and_then(|meta| meta.modified());
+        let used =
+            last_used(&path).or_else(|| entry.metadata().and_then(|meta| meta.modified()).ok());
         let unused = used
-            .ok()
             .and_then(|used| used.elapsed().ok())
             .is_some_and(|age| age > max_age);
         if unused {
-            super::content_key::prune_entry(&path);
+            // Unless a restore marked it used since.
+            super::content_key::prune_entry(&path, |path| {
+                last_used(path).is_some_and(|used| used.elapsed().is_ok_and(|age| age > max_age))
+            });
         }
     }
 }
