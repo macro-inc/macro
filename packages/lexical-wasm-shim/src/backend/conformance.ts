@@ -138,6 +138,18 @@ export class ConformanceBackend implements ShimBackend {
       )
     );
   }
+  /** Nearest native ancestor only; an older prototype cannot be selected yet. */
+  callNative(
+    name: string,
+    args: readonly unknown[],
+    receiver: unknown
+  ): unknown {
+    const id = api.get(name);
+    if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
+    return this.enter((handle) =>
+      handle.call_native(id, { args, this: receiver })
+    );
+  }
   flush(): void {
     this.enter((handle) => handle.flush());
   }

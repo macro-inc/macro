@@ -6,6 +6,11 @@ export type CommitPacket = HostCommitPacket;
 export interface ShimBackend {
   beginUpdate(tags: readonly string[], discrete: boolean): void;
   call(name: string, args: readonly unknown[], receiver?: unknown): unknown;
+  callNative(
+    name: string,
+    args: readonly unknown[],
+    receiver: unknown
+  ): unknown;
   flush(): void;
   finishNoop(): boolean;
   commit(): CommitPacket;

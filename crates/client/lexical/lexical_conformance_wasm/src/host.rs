@@ -160,6 +160,21 @@ impl EditorHandle {
         };
         to_js(result).map_err(Into::into)
     }
+    /// Invoke the nearest native ancestor hook using the indexed call envelope.
+    /// Explicit targeting of an older native prototype is not supported here.
+    pub fn call_native(&self, api_id: u32, args: JsValue) -> Result<JsValue, JsValue> {
+        let call: Call = serde_json::from_value(from_js(args)?).map_err(debug::error)?;
+        let receiver = call
+            .receiver
+            .ok_or_else(|| debug::error("native-super needs a receiver"))?;
+        let available = self.session.borrow().is_some();
+        let result = if available {
+            self.with_callback_session(|session| session.call_native(api_id, call.args, receiver))?
+        } else {
+            super::host_callbacks::call_native(&self.owner, api_id, call.args, receiver)?
+        };
+        to_js(result).map_err(Into::into)
+    }
     /// Open one unpublished update. Discrete scheduling belongs to the JS host.
     pub fn begin_update(&self, tags: JsValue, discrete: bool) -> Result<(), JsError> {
         let tags: Vec<String> = serde_json::from_value(from_js(tags)?).map_err(debug::error)?;
