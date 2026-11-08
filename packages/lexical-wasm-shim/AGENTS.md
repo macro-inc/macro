@@ -80,3 +80,5 @@ Use state-read.test.ts for real WASM associated reads: old/current graphs, lates
 Exercise hosted isInline with original arguments, read guards, native super, opaque returns/throws, no later callback after failure, nested caught failures and fixed text/line-break inline flags. Keep remaining pure hooks disabled until their failure and mutation paths are verified.
 
 Use hosting-empty.test.ts for native child-removal dispatch of canBeEmpty, native super and falsy returns. After a throw, the child remains detached while the empty parent stays attached until an explicit later edit.
+
+Use hosting-predicates.test.ts for individual no-argument boolean hook dispatch/native-super literals, and hosting-format-predicate.test.ts for native range-format denial, throw suppression and recovery.
