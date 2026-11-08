@@ -1,6 +1,41 @@
 import Prism from 'prismjs';
 import type { EditorView } from './editor-view';
 
+const highlights = new WeakMap<
+  Document,
+  Map<string, Map<symbol, readonly Range[]>>
+>();
+function publish(
+  view: EditorView,
+  name: string,
+  owner: symbol,
+  ranges: readonly Range[]
+): void {
+  const doc = view.root.ownerDocument;
+  const window = doc.defaultView;
+  if (!window?.CSS.highlights || !window.Highlight) return;
+  let names = highlights.get(doc);
+  if (!names) {
+    names = new Map();
+    highlights.set(doc, names);
+  }
+  let owners = names.get(name);
+  if (!owners) {
+    owners = new Map();
+    names.set(name, owners);
+  }
+  if (ranges.length) owners.set(owner, ranges);
+  else owners.delete(owner);
+  if (owners.size)
+    window.CSS.highlights.set(
+      name,
+      new window.Highlight(...[...owners.values()].flat())
+    );
+  else {
+    window.CSS.highlights.delete(name);
+    names.delete(name);
+  }
+}
 interface TokenRange {
   readonly type: string;
   readonly start: number;
@@ -32,10 +67,16 @@ function tokenRanges(
 }
 /** Call from the host's lazy editor path. Never changes model nodes. */
 export function installCodeHighlighting(view: EditorView): () => void {
+  const browser = view.root.ownerDocument.defaultView;
+  if (!browser) throw new Error('Highlighting requires an owning window');
+  const window = browser;
+  const hasIdle = typeof window.requestIdleCallback === 'function';
   const pending = new Set<number>();
   const painted = new Map<number, Map<string, Range[]>>();
   const names = new Set<string>();
+  const owner = Symbol();
   let idle: number | null = null;
+  let frame: number | null = null;
   let disposed = false;
   function dirty(key: number): void {
     for (
@@ -50,8 +91,12 @@ export function installCodeHighlighting(view: EditorView): () => void {
     }
   }
   function schedule(): void {
-    if (idle !== null || !pending.size || disposed) return;
-    idle = requestIdleCallback(paint);
+    if (frame !== null || idle !== null || !pending.size || disposed) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = null;
+      if (hasIdle) idle = window.requestIdleCallback(paint);
+      else paint();
+    });
   }
   function paint(): void {
     idle = null;
@@ -105,7 +150,7 @@ export function installCodeHighlighting(view: EditorView): () => void {
       painted.set(key, ranges);
     }
     if ('highlights' in CSS) {
-      for (const name of names) CSS.highlights.delete(name);
+      for (const name of names) publish(view, name, owner, []);
       names.clear();
       const all = new Map<string, Range[]>();
       for (const [key, tokens] of painted) {
@@ -118,14 +163,17 @@ export function installCodeHighlighting(view: EditorView): () => void {
       }
       for (const [type, ranges] of all) {
         const name = `code-${view.options.namespace}-${type}`;
-        CSS.highlights.set(name, new Highlight(...ranges));
+        publish(view, name, owner, ranges);
         names.add(name);
       }
     }
     schedule();
   }
   const detach = view.onCommit((info) => {
-    for (const key of info.keys) dirty(key);
+    for (const key of info.keys) {
+      if (!view.node(key) && painted.has(key)) pending.add(key);
+      else dirty(key);
+    }
     schedule();
   });
   for (const node of view.mirror.values()) dirty(node.key);
@@ -133,7 +181,8 @@ export function installCodeHighlighting(view: EditorView): () => void {
   return () => {
     disposed = true;
     detach();
-    if (idle !== null) cancelIdleCallback(idle);
-    for (const name of names) CSS.highlights.delete(name);
+    if (idle !== null) window.cancelIdleCallback(idle);
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    for (const name of names) publish(view, name, owner, []);
   };
 }

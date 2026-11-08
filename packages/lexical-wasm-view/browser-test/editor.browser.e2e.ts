@@ -25,7 +25,20 @@ declare global {
         recreateSlot(): void;
         stats: { mounts: number; unmounts: number };
       };
+      drag(): {
+        events: string[];
+        keys: readonly number[];
+        payload: string;
+        caret: boolean;
+      };
+      capturedMimes: { mime: string; value: string }[];
+      second(nested: boolean, state?: string): Promise<void>;
+      highlights(): Promise<void>;
+      disposeFirstHighlight(): void;
+      closeSecond(): Promise<void>;
+      pasteCustom(): Promise<boolean>;
       presence(visible: boolean): void;
+      pasteHTML(html: string): Promise<boolean>;
       reset(text: string): void;
       selectEnd(): void;
       text(): string;
@@ -336,5 +349,124 @@ test('remote cursor overlays paint after apply without moving local selection', 
   await expect(page.locator('[data-remote-cursor="fixture-peer"]')).toHaveCount(
     0
   );
+  expect(await page.evaluate(() => window.fixture.text())).toBe('a');
+});
+
+test('nested theme classes style headings, text and stored code tokens', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { richState } = await import('./states');
+    window.fixture.setState(JSON.stringify(richState));
+  });
+  await expect(page.locator('#editor h2')).toHaveClass('theme-h2');
+  await expect(page.locator('#editor .theme-bold')).toHaveText('Bold');
+  await expect(page.locator('#editor .theme-keyword')).toHaveText('const');
+});
+
+test('lazy HTML paste cannot write into a changed selection or document', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  let requested: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const loading = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  await page.route(/\/src\/view\/html-import\.ts(?:\?|$)/, async (route) => {
+    requested();
+    await held;
+    await route.continue();
+  });
+  const paste = page.evaluate(() =>
+    window.fixture.pasteHTML('<p>stale paste</p>')
+  );
+  await loading;
+  await page.keyboard.type('x');
+  release();
+  expect(await paste).toBe(false);
+  expect(await page.evaluate(() => window.fixture.text())).toBe('ax');
+});
+
+test('structural DOM mutations restore keyed nodes without a model crossing', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.count();
+    const root = document.getElementById('editor');
+    const paragraph = root?.querySelector('p');
+    if (!root || !paragraph) throw new Error('Missing mutation fixture');
+    paragraph.remove();
+    root.append(document.createTextNode('foreign'));
+    paragraph.querySelector('[data-lexical-text]')?.firstChild?.remove();
+  });
+  await expect(page.locator('#editor')).toHaveText('a');
+  const result = await page.evaluate(() => ({
+    text: window.fixture.mirrorText(),
+    calls: window.fixture.metrics.calls,
+    errors: window.fixture.errors,
+  }));
+  expect(result).toEqual({ text: 'a', calls: 0, errors: [] });
+});
+
+test('paste forwards every MIME entry to the session', async ({ page }) => {
+  expect(await page.evaluate(() => window.fixture.pasteCustom())).toBe(true);
+  expect(
+    await page.evaluate(() => window.fixture.capturedMimes)
+  ).toContainEqual({
+    mime: 'application/x-view-fixture',
+    value: 'custom-payload',
+  });
+  await expect(page.locator('#editor')).toHaveText('ax');
+});
+
+test('a nested editor owns selection and input without parent model calls', async ({
+  page,
+}) => {
+  await page.evaluate(() => window.fixture.second(true));
+  await page.evaluate(() => window.fixture.count());
+  await page.keyboard.type('x');
+  await expect(page.locator('[data-second-editor]')).toHaveText('nx');
+  expect(await page.evaluate(() => window.fixture.metrics.calls)).toBe(0);
+  expect(await page.evaluate(() => window.fixture.text())).toBe('a');
+  await page.evaluate(() => window.fixture.closeSecond());
+});
+
+test('highlight owners sharing a namespace retain each other ranges on disposal', async ({
+  page,
+}) => {
+  const { richState } = await import('./states');
+  await page.evaluate(async (state) => {
+    window.fixture.setState(JSON.stringify(state));
+    await window.fixture.second(false, JSON.stringify(state));
+    await window.fixture.highlights();
+  }, richState);
+  await expect(page.locator('#editor code[data-line-count]')).toHaveCount(1);
+  await expect(
+    page.locator('[data-second-editor] code[data-line-count]')
+  ).toHaveCount(1);
+  expect(
+    await page.evaluate(() => CSS.highlights.get('code-fixture-keyword')?.size)
+  ).toBe(2);
+  await page.evaluate(() => window.fixture.disposeFirstHighlight());
+  expect(
+    await page.evaluate(() => CSS.highlights.get('code-fixture-keyword')?.size)
+  ).toBe(1);
+  await page.evaluate(() => window.fixture.closeSecond());
+  expect(
+    await page.evaluate(() => CSS.highlights.has('code-fixture-keyword'))
+  ).toBe(false);
+});
+
+test('drag lifecycle carries internal keys to the application move handler', async ({
+  page,
+}) => {
+  const drag = await page.evaluate(() => window.fixture.drag());
+  expect(drag.events).toEqual(['start', 'over', 'internal', 'end']);
+  expect(drag.keys).toHaveLength(1);
+  expect(JSON.parse(drag.payload).keys).toEqual(drag.keys);
+  expect(drag.caret).toBe(false);
   expect(await page.evaluate(() => window.fixture.text())).toBe('a');
 });

@@ -7,10 +7,47 @@ import {
   CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import { DragAccess } from './drag';
 import type { EditorView } from './editor-view';
 import { readSelection, resolvePoint, sameSelection } from './selection';
 import { selectionMessage } from './session-port';
 import type { ViewSelection } from './types';
+
+const documents = new WeakMap<
+  Document,
+  { listeners: Map<Node, () => void>; dispatch: () => void }
+>();
+function registerSelectionChange(
+  root: HTMLElement,
+  listener: () => void
+): () => void {
+  const doc = root.ownerDocument;
+  let entry = documents.get(doc);
+  if (!entry) {
+    const listeners = new Map<Node, () => void>();
+    const dispatch = () => {
+      for (let node = doc.activeElement; node; node = node.parentElement) {
+        const listener = listeners.get(node);
+        if (listener) {
+          listener();
+          return;
+        }
+      }
+    };
+    entry = { listeners, dispatch };
+    documents.set(doc, entry);
+    doc.addEventListener('selectionchange', dispatch);
+  }
+  const current = entry;
+  current.listeners.set(root, listener);
+  return () => {
+    current.listeners.delete(root);
+    if (!current.listeners.size) {
+      doc.removeEventListener('selectionchange', current.dispatch);
+      documents.delete(doc);
+    }
+  };
+}
 
 /** EVT-14/15: mirror policy plus the two facts only the DOM can provide. */
 export function shouldPreventDefaultAndInsertText(
@@ -38,17 +75,13 @@ export function shouldPreventDefaultAndInsertText(
       const dom = view.getElementByKey(node.key)?.firstChild;
       if (domSelection?.anchorNode !== dom) facts |= 2;
       const parent = node.parent === null ? null : view.node(node.parent);
-      const nodeFlags = view.mirror.type(node.typeIndex).flags;
-      const parentFlags = parent
-        ? view.mirror.type(parent.typeIndex).flags
-        : undefined;
+      const nodeFlags = view.flags(node);
+      const parentFlags = parent ? view.flags(parent) : undefined;
       const siblings = parent?.children ?? [];
       const previousKey = siblings[siblings.indexOf(node.key) - 1];
       const previous =
         previousKey === undefined ? null : view.node(previousKey);
-      const previousFlags = previous
-        ? view.mirror.type(previous.typeIndex).flags
-        : undefined;
+      const previousFlags = previous ? view.flags(previous) : undefined;
       const before =
         anchor.offset === 0 &&
         (nodeFlags?.canInsertTextBefore === false ||
@@ -135,6 +168,8 @@ export function registerEvents(view: EditorView): {
   const root = view.root,
     doc = root.ownerDocument;
   const listeners: (() => void)[] = [];
+  const drag = new DragAccess(view);
+  listeners.push(() => drag.dispose());
   let composing = false;
   let endingComposition = false;
   let composingKey: number | null = null;
@@ -378,7 +413,7 @@ export function registerEvents(view: EditorView): {
     );
   });
   const selectionChange = () => {
-    if (EditorViewFromDOM(doc.activeElement) !== view) return;
+    if (!doc.activeElement || !view.ownsSelection(doc.activeElement)) return;
     const selection = readSelection(view);
     if (
       !sameSelection(selection, view.selection().selection) &&
@@ -388,39 +423,11 @@ export function registerEvents(view: EditorView): {
       lastSubmittedSelection = readSelection(view);
     }
   };
-  function EditorViewFromDOM(node: Node | null) {
-    return node && root.contains(node) ? view : null;
-  }
-  doc.addEventListener('selectionchange', selectionChange);
-  listeners.push(() =>
-    doc.removeEventListener('selectionchange', selectionChange)
-  );
-  const paste = async (clipboard: DataTransfer, selection: ViewSelection) => {
-    const html = clipboard.getData('text/html');
-    const lexical = clipboard.getData('application/x-lexical-editor');
-    const plain = clipboard.getData('text/plain');
-    const htmlNodes =
-      html && !lexical
-        ? (await import('./html-import')).importHTML(html, doc, view.registry)
-        : [];
-    if (!root.isConnected) return;
-    view.port.input(
-      EditorInputMsg.fromEditorPaste({
-        selection: selectionMessage(selection),
-        clipboard: [
-          { mime: 'text/plain', value: plain },
-          { mime: 'text/html', value: html },
-          { mime: 'application/x-lexical-editor', value: lexical },
-        ],
-        hasFiles: clipboard.files.length > 0,
-        htmlNodes,
-      })
-    );
-  };
+  listeners.push(registerSelectionChange(root, selectionChange));
   for (const name of ['copy', 'cut'] as const)
     listen(name, (event) => {
       if (!event.clipboardData) return;
-      const data = view.port.clipboard(name === 'cut' ? 1 : 0);
+      const data = view.clipboard.formats(name === 'cut' ? 1 : 0);
       event.clipboardData.setData('text/html', data.html);
       event.clipboardData.setData('text/plain', data.plain);
       event.clipboardData.setData('application/x-lexical-editor', data.lexical);
@@ -431,7 +438,9 @@ export function registerEvents(view: EditorView): {
     if (view.runViewCommand('Paste', event, 'before')) return;
     if (!event.clipboardData) return;
     event.preventDefault();
-    paste(event.clipboardData, readSelection(view)).catch(view.options.onError);
+    view.clipboard
+      .paste(event.clipboardData, readSelection(view))
+      .catch(view.options.onError);
   });
   listen('click', (event) => {
     if (view.runViewCommand('Click', event, 'before')) return;
@@ -439,10 +448,7 @@ export function registerEvents(view: EditorView): {
       event.target instanceof Node ? view.keyFromDOM(event.target) : null;
     if (key !== null && view.node(key)?.kind === 'decorator') {
       const node = view.node(key);
-      if (
-        node &&
-        view.mirror.type(node.typeIndex).flags?.isKeyboardSelectable !== false
-      )
+      if (node && view.flags(node)?.isKeyboardSelectable !== false)
         view.port.selectionFromView({ kind: 'node', keys: [key] });
     }
     view.runViewCommand('Click', event, 'after');
@@ -456,18 +462,11 @@ export function registerEvents(view: EditorView): {
   listen('blur', (event) => {
     view.runViewCommand('Blur', event, 'before');
   });
-  listen('dragover', (event) => event.preventDefault());
+  listen('dragstart', (event) => drag.start(event));
+  listen('dragover', (event) => drag.over(event));
+  listen('dragend', (event) => drag.end(event));
   listen('drop', (event) => {
-    if (view.runViewCommand('Drop', event, 'before')) return;
-    if (!event.dataTransfer) return;
-    event.preventDefault();
-    const range = doc.caretRangeFromPoint(event.clientX, event.clientY);
-    let selection = readSelection(view);
-    if (range) {
-      const point = resolvePoint(view, range.startContainer, range.startOffset);
-      if (point) selection = { kind: 'range', anchor: point, focus: point };
-    }
-    paste(event.dataTransfer, selection).catch(view.options.onError);
+    drag.drop(event).catch(view.options.onError);
   });
   return {
     dispose: () => {

@@ -45,6 +45,7 @@ fn start_composition(session: &mut DocumentSession<EditorSurface>, key: NodeKey)
             .iter()
             .any(|effect| matches!(effect, ViewEffect::Error(_)))
     );
+    assert!(out.view.iter().any(|effect| matches!(effect, ViewEffect::CommitTags(tags) if tags.iter().any(|tag| tag == "composition-start"))));
 }
 
 fn composing_text(
@@ -523,6 +524,43 @@ fn durable_wal_and_ack_complete_while_remote_editor_import_is_held() {
     assert_eq!(
         local.surface().state().view().text_content(key),
         "遠a😀b漢字"
+    );
+    local.assert_projection_consistent();
+}
+
+#[test]
+fn overdue_timer_admits_current_dom_text_before_merging_remote_edits() {
+    let (base, snapshot) = editor_seed();
+    let mut local = session_editor(Access::Edit, TransportKind::Direct, snapshot);
+    connect(&mut local);
+    let key = text_key(&local);
+    start_composition(&mut local, key);
+    let remote = lexical_loro::fork_doc(&base, 60).unwrap();
+    native_text(&remote, 0).insert(0, "遠").unwrap();
+    remote.commit();
+    let update = remote
+        .export(ExportMode::updates(&base.oplog_vv()))
+        .unwrap();
+    wire(
+        &mut local,
+        sync_protocol::FromRemote::RemoteUpdate {
+            update: bebop::SliceWrapper::from_cooked(&update),
+        },
+        10,
+    );
+    // No Tick arrives while the browser is throttled. Its next composition
+    // input contains pre-merge DOM text and still must preserve the peer edit.
+    composing_text(&mut local, key, "a😀b漢字入力", 4000, false);
+    assert!(
+        local
+            .last_output()
+            .view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::EndComposition))
+    );
+    assert_eq!(
+        local.surface().state().view().text_content(key),
+        "遠a😀b漢字入力"
     );
     local.assert_projection_consistent();
 }

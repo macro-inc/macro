@@ -310,7 +310,13 @@ export class Mirror {
           if (!unique.has(child) && this.records.get(child)?.parent === key)
             update(child, { parent: null });
         }
-        for (const child of next) update(child, { parent: key });
+        for (const child of next) {
+          const record = get(child);
+          if (record.parent !== key) {
+            update(child, { parent: key });
+            if (record.kind === 'element') props.add(child);
+          }
+        }
         update(key, { children: next });
         children.add(key);
       } else if (op === DiffOpcode.Text) {

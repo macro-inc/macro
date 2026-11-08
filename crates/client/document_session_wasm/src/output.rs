@@ -127,6 +127,10 @@ pub(crate) fn encode(
                 };
                 m.flag = status.pending_import;
             }
+            ViewEffect::CommitTags(tags) => {
+                m.kind = 11;
+                m.keys.clone_from(tags);
+            }
             ViewEffect::Cursors(peers) => {
                 let mut marker = view(10);
                 marker.flag = true;

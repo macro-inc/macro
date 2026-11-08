@@ -5,6 +5,7 @@
  */
 import {
   NodeViewRegistry,
+  themeClass,
   type NodeView,
   type RenderContext,
 } from '../registry';
@@ -121,16 +122,61 @@ function elementProps(node: ViewNode, dom: HTMLElement): void {
       dom.setAttribute('data-highlight-language', props.language);
   }
 }
+function elementClasses(node: ViewNode, ctx: RenderContext): string {
+  const props = node.props();
+  if (node.type === 'heading')
+    return themeClass(ctx.theme, 'heading', tag(node));
+  if (node.type === 'list' || node.type === 'task-list') {
+    const listTag = props.listType === 'number' ? 'ol' : 'ul';
+    let depth = 0;
+    for (
+      let parent = node.parent === null ? null : ctx.view.node(node.parent);
+      parent;
+      parent = parent.parent === null ? null : ctx.view.node(parent.parent)
+    ) {
+      if (parent.type === 'list' || parent.type === 'task-list') depth++;
+    }
+    return [
+      themeClass(ctx.theme, 'list', listTag),
+      themeClass(ctx.theme, 'list', listTag + 'Depth', String(depth)),
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+  if (node.type === 'listitem')
+    return [
+      themeClass(ctx.theme, 'list', 'listitem'),
+      typeof props.checked === 'boolean'
+        ? themeClass(
+            ctx.theme,
+            'list',
+            props.checked ? 'listitemChecked' : 'listitemUnchecked'
+          )
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  if (node.type === 'tablecell')
+    return [
+      themeClass(ctx.theme, 'tableCell'),
+      props.headerState ? themeClass(ctx.theme, 'tableCellHeader') : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  const name = node.type === 'tablerow' ? 'tableRow' : node.type;
+  return themeClass(ctx.theme, name);
+}
 const element: NodeView = {
   createDOM(node, ctx) {
     const dom = ctx.document.createElement(tag(node));
-    if (ctx.theme[node.type]) dom.className = ctx.theme[node.type];
+    dom.className = elementClasses(node, ctx);
     elementProps(node, dom);
     return dom;
   },
-  updateDOM(previous, next, dom) {
+  updateDOM(previous, next, dom, ctx) {
     if (tag(previous) !== tag(next)) return true;
     elementProps(next, dom);
+    dom.className = elementClasses(next, ctx);
     return false;
   },
 };
@@ -157,7 +203,7 @@ function textProperties(
   ]
     .filter(Boolean)
     .join(' ');
-  const classes = [ctx.theme.text ?? ''];
+  const classes = [themeClass(ctx.theme, 'text')];
   for (const [bit, name] of [
     [1, 'bold'],
     [2, 'italic'],
@@ -165,8 +211,19 @@ function textProperties(
     [8, 'underline'],
     [16, 'code'],
   ] as const) {
-    if (format & bit && ctx.theme[name]) classes.push(ctx.theme[name]);
+    if (format & bit)
+      classes.push(
+        themeClass(ctx.theme, 'text', name) || themeClass(ctx.theme, name)
+      );
   }
+  if (node.type === 'code-highlight')
+    classes.push(
+      themeClass(
+        ctx.theme,
+        'codeHighlight',
+        String(node.props().highlightType ?? '')
+      )
+    );
   dom.className = classes.filter(Boolean).join(' ');
   dom.setAttribute('data-lexical-text', 'true');
 }
@@ -179,7 +236,11 @@ const text: NodeView = {
   },
   updateDOM(previous, next, dom, ctx) {
     if (textTag(previous) !== textTag(next)) return true;
-    if (previous.textProps !== next.textProps) textProperties(next, dom, ctx);
+    if (
+      previous.textProps !== next.textProps ||
+      previous.propsJSON !== next.propsJSON
+    )
+      textProperties(next, dom, ctx);
     const child = dom.firstChild;
     if (!child || child.nodeType !== 3)
       throw new Error('Missing DOM text node');
