@@ -1,8 +1,11 @@
-import type { CatalogEntry } from '@service-scheduled-action/generated/schemas';
+import type {
+  CatalogEntry,
+  CodeStep,
+} from '@service-scheduled-action/generated/schemas';
 import type { RoutineTemplate } from '../core/routine-templates';
 import { catalogTemplate } from '../queries/catalog';
 
-const codeStep = (title: string) => ({
+const codeStep = (title: string): CodeStep & { type: 'code' } => ({
   type: 'code',
   title,
   summary: '',

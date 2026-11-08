@@ -16,6 +16,9 @@ name: Export CI telemetry
     - Build Rust CI Image
     - Build Web App
     - Build macOS DMG
+    - CI Gate Reminder
+    - CI Gate for Forks
+    - CI Gate Label Check
     - CLA
     - Cancel Stuck Cloud Storage Deploys
     - Cleanup Preview
@@ -24,6 +27,7 @@ name: Export CI telemetry
     - Deploy CLA Worker
     - Deploy FusionAuth Instance
     - Deploy Lexical Service
+    - Deploy Observability
     - Deploy Production Release
     - Deploy Service (Generic)
     - Deploy Sync Service
@@ -35,6 +39,7 @@ name: Export CI telemetry
     - Export Datadog observability definitions
     - Migrate Macro Database
     - Native Check Label
+    - PR CI
     - PR Privacy Check
     - Publish Android to Google Play
     - Publish SDK
@@ -115,7 +120,7 @@ jobs:
     - name: Collect push, job and step events
       if: always()
       run: |
-        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
         // Turn one completed workflow run into CI telemetry events, as an OTLP logs file.
         //
         // Runs in the privileged exporter without the ingestion token. Everything here is
@@ -709,7 +714,7 @@ jobs:
         }
 
         await main();
-        TELEMETRY_SCRIPT
+        NODE_SCRIPT
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -742,7 +747,7 @@ jobs:
     - name: Send push, job and step events
       if: always()
       run: |
-        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'
+        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
         // Send the collected CI telemetry to the OTLP logs route. Best effort, never fails the job.
 
         import { existsSync, readFileSync } from 'node:fs';
@@ -817,7 +822,7 @@ jobs:
         }
 
         await main();
-        TELEMETRY_SCRIPT
+        NODE_SCRIPT
       shell: bash
       env:
         CI_TELEMETRY_EVENTS: ${{ runner.temp }}/ci-telemetry-events.json

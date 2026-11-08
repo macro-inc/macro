@@ -2496,6 +2496,10 @@
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
           },
+          "inviterName": {
+            "type": ["string", "null"],
+            "description": "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+          },
           "isAgent": {
             "type": "boolean",
             "description": "Whether the invite creates an agent account."

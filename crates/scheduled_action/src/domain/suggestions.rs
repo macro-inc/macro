@@ -5,6 +5,13 @@
 //! values ([`decode`]), or describe a request the drafter writes when the
 //! person accepts it. A suggestion becomes a routine only when the person
 //! saves it, with `suggestion_id` pointing back.
+//!
+//! Suggestions are generated on a schedule, never by reading them: a read
+//! returns what is stored and marks the person active, and the host's sweep
+//! ([`RoutineSuggestionService::sweep`]) generates for active, flagged people
+//! whose suggestions are due through [`GenerateSuggestions::generate_for`].
+//! The person can still ask for a generation now (`refresh`), as onboarding
+//! does once their inbox is connected.
 
 pub mod decode;
 pub mod model;
@@ -26,13 +33,15 @@ use tokio_util::task::TaskTracker;
 use tracing::Instrument;
 
 use self::decode::{RawAnswer, answer_schema};
-use self::model::{GenerationStatus, RoutineSuggestions, StoredGeneration, SuggestionPick};
-use self::ports::{RoutineSuggestionApi, SuggestionRepo, SuggestionSources};
+use self::model::{
+    GenerationOutcome, GenerationStatus, RoutineSuggestions, StoredGeneration, SuggestionPick,
+};
+use self::ports::{
+    GenerateSuggestions, RoutineSuggestionApi, SuggestionModel, SuggestionRepo, SuggestionSources,
+};
 use self::prompt::{ExistingRoutine, PromptData, SYSTEM_PROMPT, WorkspaceSignals, user_prompt};
 use super::models::ActionPolicyError;
-use super::ports::{
-    CodeRun, DraftCompletion, DraftModel, OutputSchema, RoutineCode, ScheduledActionService,
-};
+use super::ports::{CodeRun, RoutineCode, ScheduledActionService};
 
 #[cfg(test)]
 mod test;
@@ -42,19 +51,28 @@ pub const ROUTINE_SUGGESTIONS_FLAG: &str = "enable-routine-suggestions";
 /// Suggestions are regenerated this long after the last, even when nothing
 /// they read changed.
 pub const REFRESH_AFTER: TimeDelta = TimeDelta::days(7);
-/// A failed generation is retried on the next read after this long.
+/// A failed generation is retried by a sweep after this long.
 pub const RETRY_FAILED_AFTER: TimeDelta = TimeDelta::minutes(15);
 /// A generation running longer than this is presumed dead (its process
 /// stopped) and may be started again.
 pub const RECLAIM_GENERATING_AFTER: TimeDelta = TimeDelta::minutes(5);
 /// Inbox messages a generation reads.
 pub const INBOX_MESSAGES: u16 = 40;
+/// People are generated for while they read their suggestions this
+/// recently; the model never reads the mail of someone who stopped.
+pub const ACTIVE_FOR: TimeDelta = TimeDelta::days(14);
+/// How often a sweep looks at each active person to see whether what their
+/// suggestions read changed.
+pub const CHECK_EVERY: TimeDelta = TimeDelta::hours(1);
+/// People one sweep looks at, and how many it generates for at once.
+pub const SWEEP_BATCH: u16 = 25;
+const SWEEP_CONCURRENCY: usize = 4;
 
 /// Reads the person's workspace as they can see it, as a dry run.
 const SIGNALS_SOURCE: &str = include_str!("suggestions/signals.ts");
 
-/// Whether reading `stored` at `now`, when its inputs are now `inputs`,
-/// should start a generation.
+/// Whether `stored`, whose inputs are now `inputs`, is due a generation at
+/// `now`.
 pub fn needs_generation(
     stored: Option<&StoredGeneration>,
     inputs: &str,
@@ -64,6 +82,7 @@ pub fn needs_generation(
         return true;
     };
     match stored.status {
+        GenerationStatus::Pending => true,
         GenerationStatus::Generating => stored.started_at < now - RECLAIM_GENERATING_AFTER,
         GenerationStatus::Failed => stored.started_at < now - RETRY_FAILED_AFTER,
         GenerationStatus::Ready => {
@@ -94,7 +113,18 @@ fn has_condition(routine: &CatalogRoutine) -> bool {
         })
 }
 
-/// Serves each person's suggestions and generates them in the background.
+/// What one sweep did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SweepReport {
+    /// Active people it looked at.
+    pub checked: usize,
+    /// Generations it ran that stored new suggestions.
+    pub generated: usize,
+    /// Generations it ran that failed.
+    pub failed: usize,
+}
+
+/// Serves each person's suggestions and generates them.
 pub struct RoutineSuggestionService<Actions, Repo, Sources, Code, Model, Flags> {
     generation: Generation<Actions, Repo, Sources, Code, Model>,
     flags: Option<Flags>,
@@ -109,12 +139,13 @@ where
     Repo: SuggestionRepo,
     Sources: SuggestionSources,
     Code: RoutineCode,
-    Model: DraftModel,
-    Flags: FeatureFlags,
+    Model: SuggestionModel,
+    Flags: FeatureFlags + 'static,
 {
-    /// Generations run on `tasks` and stop at `shutdown`; a stopped one is
-    /// started again after [`RECLAIM_GENERATING_AFTER`]. Without `flags`
-    /// suggestions are off for everyone.
+    /// Generations the person asks for run on `tasks`; every generation
+    /// stops at `shutdown`, and a stopped one is started again after
+    /// [`RECLAIM_GENERATING_AFTER`]. Without `flags` suggestions are off for
+    /// everyone.
     #[expect(clippy::too_many_arguments, reason = "each port is its own adapter")]
     pub fn new(
         actions: Arc<Actions>,
@@ -145,26 +176,28 @@ where
     async fn answer(
         &self,
         user: &MacroUserIdStr<'static>,
-        status: GenerationStatus,
-        generated_at: Option<DateTime<Utc>>,
+        stored: Option<StoredGeneration>,
     ) -> Result<RoutineSuggestions> {
         let mut suggestions = self.generation.repo.open(user).await?;
         for suggestion in &mut suggestions {
             suggestion.safe_default = safe_default(&suggestion.pick);
         }
         Ok(RoutineSuggestions {
-            status,
-            generated_at,
+            status: stored
+                .as_ref()
+                .map_or(GenerationStatus::Pending, |stored| stored.status),
+            generated_at: stored.and_then(|stored| stored.generated_at),
             suggestions,
         })
     }
 
-    #[tracing::instrument(name = "routine.suggestions_flag", err, skip_all)]
-    async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
+    /// Whether suggestions are on for the person; off when flags can't be
+    /// read.
+    async fn enabled(&self, user: &MacroUserIdStr<'_>) -> bool {
         let Some(flags) = &self.flags else {
-            bail!(ActionPolicyError::NotFound);
+            return false;
         };
-        let enabled = flags
+        flags
             .load(user)
             .await
             .inspect_err(|error| {
@@ -173,30 +206,46 @@ where
                     "feature flags unavailable; routine suggestions stay off"
                 );
             })
-            .is_ok_and(|snapshot| snapshot.is_enabled(ROUTINE_SUGGESTIONS_FLAG));
-        if !enabled {
+            .is_ok_and(|snapshot| snapshot.is_enabled(ROUTINE_SUGGESTIONS_FLAG))
+    }
+
+    #[tracing::instrument(name = "routine.suggestions_flag", err, skip_all)]
+    async fn require_flag(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
+        if !self.enabled(user).await {
             bail!(ActionPolicyError::NotFound);
         }
         Ok(())
     }
 
-    async fn start(&self, user: &MacroUserIdStr<'static>, now: DateTime<Utc>) -> Result<()> {
+    /// Claims a generation for the person; its id, or none when another is
+    /// running.
+    async fn claim(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
+        let now = Utc::now();
         let generation_id = Uuid::now_v7();
         let claimed = self
             .generation
             .repo
             .claim(user, generation_id, now, now - RECLAIM_GENERATING_AFTER)
             .await?;
-        if claimed {
-            self.spawn(user.clone(), generation_id);
-        }
-        Ok(())
+        Ok(claimed.then_some(generation_id))
     }
 
     fn spawn(&self, user: MacroUserIdStr<'static>, generation_id: Uuid) {
-        // A child of the request's span, so the read and the generation it
-        // started stay one trace.
-        let span = tracing::info_span!(
+        // A child of the request's span, so the refresh and the generation
+        // it started stay one trace.
+        let span = Self::generation_span(&user, generation_id);
+        let generation = self.generation.clone();
+        let shutdown = self.shutdown.clone();
+        self.tasks.spawn(
+            async move {
+                run_until_stopped(&generation, &shutdown, &user, generation_id).await;
+            }
+            .instrument(span),
+        );
+    }
+
+    fn generation_span(user: &MacroUserIdStr<'static>, generation_id: Uuid) -> tracing::Span {
+        tracing::info_span!(
             "routine.suggestions.generate",
             user_id = %user.as_ref(),
             %generation_id,
@@ -205,20 +254,98 @@ where
             dropped_suggestions = tracing::field::Empty,
             dropped_knob_values = tracing::field::Empty,
             outcome = tracing::field::Empty,
-        );
-        let generation = self.generation.clone();
-        let shutdown = self.shutdown.clone();
-        self.tasks.spawn(
-            async move {
-                tokio::select! {
-                    () = shutdown.cancelled() => {
-                        tracing::Span::current().record("outcome", "cancelled");
-                    }
-                    () = generation.run(&user, generation_id) => {}
-                }
+        )
+    }
+
+    /// One pass of the scheduler: looks at up to [`SWEEP_BATCH`] active
+    /// people not looked at in the last [`CHECK_EVERY`], and generates for
+    /// those whose suggestions are due (none yet, a week old, an inbox, tool
+    /// or routine added or removed, or a failure a while ago).
+    #[tracing::instrument(name = "routine.suggestions.sweep", skip(self), fields(checked = tracing::field::Empty, generated = tracing::field::Empty, failed = tracing::field::Empty), err)]
+    pub async fn sweep(&self, now: DateTime<Utc>) -> Result<SweepReport> {
+        let people = self
+            .generation
+            .repo
+            .take_checks(now - ACTIVE_FOR, now - CHECK_EVERY, now, SWEEP_BATCH)
+            .await?;
+        let checked = people.len();
+        // Chunks rather than a stream: a stream's closure makes the future
+        // fail `Send` in the host's spawned sweep (a rustc limitation).
+        let mut outcomes: Vec<Option<GenerationOutcome>> = Vec::with_capacity(checked);
+        for chunk in people.chunks(SWEEP_CONCURRENCY) {
+            let mut batch = Vec::with_capacity(chunk.len());
+            for user in chunk {
+                batch.push(self.generate_if_due(user, now));
             }
-            .instrument(span),
-        );
+            outcomes.extend(futures::future::join_all(batch).await);
+        }
+        let report = SweepReport {
+            checked,
+            generated: outcomes
+                .iter()
+                .filter(|outcome| **outcome == Some(GenerationOutcome::Ready))
+                .count(),
+            failed: outcomes
+                .iter()
+                .filter(|outcome| **outcome == Some(GenerationOutcome::Failed))
+                .count(),
+        };
+        let span = tracing::Span::current();
+        span.record("checked", report.checked);
+        span.record("generated", report.generated);
+        span.record("failed", report.failed);
+        Ok(report)
+    }
+
+    async fn generate_if_due(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        now: DateTime<Utc>,
+    ) -> Option<GenerationOutcome> {
+        let stored = self
+            .generation
+            .repo
+            .generation(user)
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "reading a suggestion generation failed"),
+            )
+            .ok()?;
+        let inputs = self.generation.inputs(user).await;
+        if !needs_generation(stored.as_ref(), &inputs, now) {
+            return None;
+        }
+        self.generate_for(user)
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "generating routine suggestions failed"),
+            )
+            .ok()
+    }
+}
+
+impl<Actions, Repo, Sources, Code, Model, Flags> GenerateSuggestions
+    for RoutineSuggestionService<Actions, Repo, Sources, Code, Model, Flags>
+where
+    Actions: ScheduledActionService,
+    Repo: SuggestionRepo,
+    Sources: SuggestionSources,
+    Code: RoutineCode,
+    Model: SuggestionModel,
+    Flags: FeatureFlags + 'static,
+{
+    async fn generate_for(&self, user: &MacroUserIdStr<'static>) -> Result<GenerationOutcome> {
+        if !self.enabled(user).await {
+            return Ok(GenerationOutcome::Off);
+        }
+        let Some(generation_id) = self.claim(user).await? else {
+            return Ok(GenerationOutcome::Running);
+        };
+        Ok(
+            run_until_stopped(&self.generation, &self.shutdown, user, generation_id)
+                .instrument(Self::generation_span(user, generation_id))
+                .await,
+        )
     }
 }
 
@@ -229,45 +356,31 @@ where
     Repo: SuggestionRepo,
     Sources: SuggestionSources,
     Code: RoutineCode,
-    Model: DraftModel,
+    Model: SuggestionModel,
     Flags: FeatureFlags + 'static,
 {
-    /// The person's suggestions. Starts a generation when there are none yet,
-    /// what they read changed (an inbox or tool connected, routines added or
-    /// removed), the last are older than [`REFRESH_AFTER`], or the last
-    /// attempt failed a while ago. Earlier suggestions show meanwhile.
-    #[tracing::instrument(name = "routine.suggestions.read", skip(self), fields(user_id = %user.as_ref(), started = tracing::field::Empty), err)]
+    /// The person's stored suggestions. Reading never generates them: it
+    /// marks the person active, and a first read leaves a pending generation
+    /// for the scheduler's next sweep.
+    #[tracing::instrument(name = "routine.suggestions.read", skip(self), fields(user_id = %user.as_ref()), err)]
     async fn suggestions(&self, user: &MacroUserIdStr<'static>) -> Result<RoutineSuggestions> {
         self.require_flag(user).await?;
-        let now = Utc::now();
+        self.generation.repo.seen(user, Utc::now()).await?;
         let stored = self.generation.repo.generation(user).await?;
-        let inputs = self.generation.inputs(user).await;
-        let start = needs_generation(stored.as_ref(), &inputs, now);
-        tracing::Span::current().record("started", start);
-        let status = if start {
-            self.start(user, now).await?;
-            GenerationStatus::Generating
-        } else {
-            stored
-                .as_ref()
-                .map_or(GenerationStatus::Generating, |stored| stored.status)
-        };
-        self.answer(user, status, stored.and_then(|stored| stored.generated_at))
-            .await
+        self.answer(user, stored).await
     }
 
-    /// Starts a generation now, unless one is already running.
+    /// Starts a generation now in the background, unless one is running.
     #[tracing::instrument(name = "routine.suggestions.refresh", skip(self), fields(user_id = %user.as_ref()), err)]
     async fn refresh(&self, user: &MacroUserIdStr<'static>) -> Result<RoutineSuggestions> {
         self.require_flag(user).await?;
         let stored = self.generation.repo.generation(user).await?;
-        self.start(user, Utc::now()).await?;
-        self.answer(
-            user,
-            GenerationStatus::Generating,
-            stored.and_then(|stored| stored.generated_at),
-        )
-        .await
+        if let Some(generation_id) = self.claim(user).await? {
+            self.spawn(user.clone(), generation_id);
+        }
+        let mut answer = self.answer(user, stored).await?;
+        answer.status = GenerationStatus::Generating;
+        Ok(answer)
     }
 
     /// The person isn't interested in suggestion `id`; it isn't suggested
@@ -280,6 +393,29 @@ where
         }
         Ok(())
     }
+}
+
+/// Runs a claimed generation until it ends or the process stops, recording
+/// its outcome on the current span.
+async fn run_until_stopped<Actions, Repo, Sources, Code, Model>(
+    generation: &Generation<Actions, Repo, Sources, Code, Model>,
+    shutdown: &CancellationToken,
+    user: &MacroUserIdStr<'static>,
+    generation_id: Uuid,
+) -> GenerationOutcome
+where
+    Actions: ScheduledActionService,
+    Repo: SuggestionRepo,
+    Sources: SuggestionSources,
+    Code: RoutineCode,
+    Model: SuggestionModel,
+{
+    let outcome = tokio::select! {
+        () = shutdown.cancelled() => GenerationOutcome::Cancelled,
+        outcome = generation.run(user, generation_id) => outcome,
+    };
+    tracing::Span::current().record("outcome", outcome.as_ref());
+    outcome
 }
 
 /// Whether `pick` may be switched on before its owner changes anything: only
@@ -324,7 +460,7 @@ where
     Repo: SuggestionRepo,
     Sources: SuggestionSources,
     Code: RoutineCode,
-    Model: DraftModel,
+    Model: SuggestionModel,
 {
     /// A fingerprint of what a generation would read that changes when the
     /// person connects an inbox or tool, or adds or removes a routine.
@@ -362,18 +498,16 @@ where
         digest.iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
-    async fn run(&self, user: &MacroUserIdStr<'static>, generation_id: Uuid) {
-        let span = tracing::Span::current();
+    async fn run(&self, user: &MacroUserIdStr<'static>, generation_id: Uuid) -> GenerationOutcome {
         let inputs = self.inputs(user).await;
         let suggestions = match self.generate(user).await {
             Ok(suggestions) => suggestions,
             Err(error) => {
-                span.record("outcome", "failed");
                 tracing::warn!(error = ?error, "routine suggestion generation failed");
                 let _ = self.repo.fail(user, generation_id).await.inspect_err(
                     |error| tracing::error!(error = ?error, "marking routine suggestions failed"),
                 );
-                return;
+                return GenerationOutcome::Failed;
             }
         };
         match self
@@ -381,14 +515,14 @@ where
             .complete(user, generation_id, &inputs, &suggestions, Utc::now())
             .await
         {
-            Ok(true) => span.record("outcome", "ready"),
+            Ok(true) => GenerationOutcome::Ready,
             // A refresh or a reclaim took over; its result wins.
-            Ok(false) => span.record("outcome", "superseded"),
+            Ok(false) => GenerationOutcome::Superseded,
             Err(error) => {
                 tracing::error!(error = ?error, "storing routine suggestions");
-                span.record("outcome", "store_failed")
+                GenerationOutcome::Failed
             }
-        };
+        }
     }
 
     async fn generate(
@@ -415,21 +549,9 @@ where
             workspace: &workspace,
             tools: &tools,
         });
-        let schema = OutputSchema {
-            name: "RoutineSuggestions",
-            description: "Catalog routines and requests picked for this person.",
-            schema: answer_schema(),
-        };
         let answer = self
             .model
-            .complete(
-                user,
-                DraftCompletion {
-                    instructions: SYSTEM_PROMPT,
-                    prompt: &prompt,
-                    schema: &schema,
-                },
-            )
+            .complete(user, SYSTEM_PROMPT, &prompt, &answer_schema())
             .instrument(tracing::info_span!("routine.suggestions.model"))
             .await
             .ok_or_else(|| anyhow::anyhow!("the model gave no answer"))?;
@@ -499,6 +621,9 @@ where
                     context: &context,
                     steps: &json!({}),
                     dry_run: true,
+                    acts_as: routine_program::CodeIdentity::Agent,
+                    // Stamped on its credential; a dry run writes nothing.
+                    routine_id: Uuid::now_v7(),
                 },
             )
             .await;

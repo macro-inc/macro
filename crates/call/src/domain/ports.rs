@@ -2,9 +2,11 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
+use futures::stream::BoxStream;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
+use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 
@@ -33,9 +35,9 @@ use super::models::{
     CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
-    VoipPushPayloadRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, JoinCallRequest, LeaveCallResponse,
+    LiveCallParticipant, LiveCallParticipantsResponse, LiveCallsResponse, RingStatusResponse,
+    RtcRoom, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -43,6 +45,39 @@ use super::models::{
 pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
+
+    /// Whether this account may enter this live call as a participant.
+    fn can_join_call(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Live calls this account may enter, across channels and invitations.
+    fn list_joinable_calls(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Call>, Self::Err>> + Send;
+
+    /// Whether this account is an agent account.
+    fn is_agent_account(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Persist the authenticated client kind on a live participant.
+    fn set_participant_client(
+        &self,
+        call_id: &Uuid,
+        user_id: &str,
+        client: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Atomically archive a call whose only active participants have been programs for 60 seconds.
+    fn archive_call_if_program_only(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
     /// Persist an owner-bound room reservation and discard expired reservation metadata.
     fn insert_meeting_preparation(
@@ -559,8 +594,33 @@ pub trait CallRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
-/// Storage port for generating signed recording GET URLs and deleting objects.
+/// Limit call creation by authenticated account before ringing others.
+pub trait CallStartLimiter: Send + Sync {
+    /// Consume one start attempt.
+    fn check<'a>(
+        &'a self,
+        user_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CallError>> + Send + 'a>>;
+}
+
+/// A recording returned as a sequence of byte chunks.
+pub struct RecordingDownload {
+    /// MIME type of the stored recording.
+    pub content_type: String,
+    /// Size of the stored recording in bytes.
+    pub content_length: u64,
+    /// Bytes streamed from storage, without loading the full recording.
+    pub chunks: BoxStream<'static, anyhow::Result<Vec<u8>>>,
+}
+
+/// Storage port for reading, signing and deleting recording objects.
 pub trait RecordingStorage: Send + Sync + 'static {
+    /// Open a recording for streaming. Returns `None` if the object is absent.
+    fn open_recording(
+        &self,
+        recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<RecordingDownload>>> + Send;
+
     /// Generate a storage- or distribution-signed GET URL for a recording key.
     ///
     /// The key is in `UUID/TIMESTAMP.ext` format. Implementations must
@@ -601,6 +661,16 @@ pub trait RecordingStorage: Send + Sync + 'static {
 }
 
 impl<T: RecordingStorage> RecordingStorage for Option<T> {
+    async fn open_recording(
+        &self,
+        recording_key: &str,
+    ) -> anyhow::Result<Option<RecordingDownload>> {
+        match self {
+            Some(inner) => inner.open_recording(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
     async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
         match self {
             Some(inner) => inner.presign_recording_url(recording_key).await,
@@ -705,11 +775,42 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
     ) -> impl Future<Output = anyhow::Result<Option<Vec<MeetingRtcParticipant>>>> + Send;
 
+    /// Full live room roster with media state.
+    fn list_live_participants(
+        &self,
+        room_name: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<LiveCallParticipant>>>> + Send;
+
     /// Generate an access token for a participant to join a room.
     fn generate_token<'a>(
         &self,
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Mint a room token with a display name for a person.
+    fn generate_named_token<'a>(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
+        name: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Mint a token for a program, identifying its client in RTC attributes.
+    fn generate_program_token<'a>(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'a>,
+        program: &str,
+        name: Option<String>,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Mint a room token for a bot without treating it as a user.
+    fn generate_bot_token(
+        &self,
+        room_name: &str,
+        bot_id: bot_id::BotId,
+        name: Option<String>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Mint a room-scoped token for a validated non-account guest.
@@ -724,6 +825,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
         &self,
         room_name: &str,
         guest_id: GuestId,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Remove a bot from a room.
+    fn remove_bot(
+        &self,
+        room_name: &str,
+        bot_id: bot_id::BotId,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Build VoIP payloads for native incoming-call delivery.
@@ -777,6 +884,11 @@ pub trait CallRtcClient: Send + Sync + 'static {
 /// Service interface for call operations.
 #[cfg_attr(test, mockall::automock)]
 pub trait CallService: Send + Sync + 'static {
+    /// Whether explicit programmatic call routes are enabled for this caller.
+    fn programmatic_calls_enabled<'a>(
+        &self,
+        caller: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = bool> + Send;
     /// Reserve an empty room without creating a call, recording, or inviting anyone.
     fn prepare_meeting<'a>(
         &self,
@@ -864,6 +976,15 @@ pub trait CallService: Send + Sync + 'static {
         token: MeetingToken,
         actor: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+    /// Join with an explicit policy for other calls and RTC connections.
+    fn join_meeting_with_options<'a>(
+        &self,
+        token: MeetingToken,
+        actor: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+        agent_attributed: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
     /// Join as a non-account guest with a server-generated identity.
     fn join_meeting_guest(
         &self,
@@ -907,6 +1028,51 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Explicit start or join of a channel call.
+    fn start_call<'a>(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Join an existing live call without creating one.
+    fn join_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+
+    /// Leave only this call, never a newer call in the same channel.
+    fn leave_call<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Ring state for an authenticated account.
+    fn get_call_ring_state<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<RingStatusResponse, CallError>> + Send;
+
+    /// All live calls this account may join.
+    fn get_live_calls<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LiveCallsResponse, CallError>> + Send;
+
+    /// Connected people in a live call, with the same access as join.
+    fn get_call_participants<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<LiveCallParticipantsResponse, CallError>> + Send;
 
     /// Leave or end a call. Removes the user; if last participant, also deletes the room and call.
     fn leave_or_end_call<'a>(
@@ -973,6 +1139,12 @@ pub trait CallService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
+
+    /// Stream a recording after checking the same access as the call record.
+    fn get_call_recording(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<RecordingDownload, CallError>> + Send;
 
     /// Delete a [`CallRecord`] the caller has channel-member access to.
     ///
@@ -1218,6 +1390,13 @@ impl VoiceRepository for NoOpVoiceRepository {
     ) -> Result<Option<Uuid>, Self::Err> {
         Ok(None)
     }
+}
+
+/// Per-caller availability of explicit programmatic call routes.
+#[async_trait::async_trait]
+pub trait ProgrammaticCallGate: Send + Sync + 'static {
+    /// Return false when the flag is disabled or unavailable.
+    async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
 }
 
 /// Whether new channel calls discuss in a channel thread, and creating that thread.

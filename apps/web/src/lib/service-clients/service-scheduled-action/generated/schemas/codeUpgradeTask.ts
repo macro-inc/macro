@@ -5,9 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { CodeUpgradeTaskAnyOf } from './codeUpgradeTaskAnyOf';
+import type { RoutineTask } from './routineTask';
 
-/**
- * The saved rewrite, or the rewrite that failed its checks.
- */
-export type CodeUpgradeTask = CodeUpgradeTaskAnyOf | null;
+export type CodeUpgradeTask = null | RoutineTask;

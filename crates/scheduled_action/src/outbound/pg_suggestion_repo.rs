@@ -104,6 +104,56 @@ impl SuggestionRepo for PgSuggestionRepo {
         .transpose()
     }
 
+    async fn seen(&self, user: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO routine_suggestion_generation
+                (user_id, status, generation_id, started_at, seen_at)
+            VALUES ($1, 'pending', $2, $3, $3)
+            ON CONFLICT (user_id) DO UPDATE SET seen_at = EXCLUDED.seen_at
+            "#,
+            user.as_ref(),
+            Uuid::now_v7(),
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn take_checks(
+        &self,
+        active_since: DateTime<Utc>,
+        checked_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+        limit: u16,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        // SKIP LOCKED: sweeps on other replicas take other people.
+        let rows = sqlx::query_scalar!(
+            r#"
+            UPDATE routine_suggestion_generation g SET checked_at = $3
+            FROM (
+                SELECT user_id FROM routine_suggestion_generation
+                WHERE seen_at >= $1 AND (checked_at IS NULL OR checked_at < $2)
+                ORDER BY checked_at NULLS FIRST
+                LIMIT $4
+                FOR UPDATE SKIP LOCKED
+            ) due
+            WHERE g.user_id = due.user_id
+            RETURNING g.user_id
+            "#,
+            active_since,
+            checked_before,
+            now,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|id| Ok(MacroUserIdStr::try_from(id)?))
+            .collect()
+    }
+
     async fn claim(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -114,8 +164,8 @@ impl SuggestionRepo for PgSuggestionRepo {
         // One statement, so two readers can't both start a generation.
         let claimed = sqlx::query!(
             r#"
-            INSERT INTO routine_suggestion_generation (user_id, status, generation_id, started_at)
-            VALUES ($1, 'generating', $2, $3)
+            INSERT INTO routine_suggestion_generation (user_id, status, generation_id, started_at, seen_at)
+            VALUES ($1, 'generating', $2, $3, $3)
             ON CONFLICT (user_id) DO UPDATE
             SET status = 'generating', generation_id = EXCLUDED.generation_id,
                 started_at = EXCLUDED.started_at

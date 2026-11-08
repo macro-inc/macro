@@ -109,8 +109,10 @@ export type AppEvents = {
     /** How many of those the user removed before creating the team. */
     invites_removed?: number;
     used_domain_suggestion?: boolean;
-    /** Whether people on the work domain may join, which also sends the notice. */
+    /** Whether people on the work domain may join. */
     allow_domain_join?: boolean;
+    /** Whether the domain notice was requested; only with domain join. */
+    notify_domain?: boolean;
   };
   /**
    * The flow finished (free, premium, or plan skipped) with a rollup of
@@ -260,6 +262,31 @@ export type AppEvents = {
   channel_reaction: {
     emoji: string;
     action: 'add' | 'remove';
+  };
+
+  // In-product tutorial videos (the pinned row at the top of an inbox).
+  tutorial_video: {
+    /** `macro-<id>` for each id in features/video-tutorials/core/tutorial-id.ts. */
+    tutorial:
+      | 'macro-mail'
+      | 'macro-home'
+      | 'macro-chat'
+      | 'macro-tasks'
+      | 'macro-docs'
+      | 'macro-spreadsheets'
+      | 'macro-databases'
+      | 'macro-canvas'
+      | 'macro-drive'
+      | 'macro-crm'
+      | 'macro-calendar'
+      | 'macro-calls'
+      | 'macro-agents'
+      | 'macro-macrod'
+      | 'macro-github'
+      | 'macro-scheduling'
+      | 'macro-whatsapp';
+    /** `support_clicked`: the dialog's "Talk to us" link under the video. */
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
   };
 
   // --- Calls ---------------------------------------------------------------

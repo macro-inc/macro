@@ -208,6 +208,10 @@ pub enum SessionPurpose {
         /// Listed or unlisted, from the routine's setting.
         visibility: SessionVisibility,
     },
+    /// Work a person asked for that runs out of sight, its result read
+    /// elsewhere: a routine draft. Hidden, started by the person, and it
+    /// notifies nobody (see [`AgentSession::is_background`]).
+    Background,
 }
 
 impl SessionPurpose {
@@ -236,6 +240,7 @@ impl SessionPurpose {
             Self::AgentDm => hide_agent_dms,
             Self::Standalone => thread_id.is_some(),
             Self::Dispatched => false,
+            Self::Background => true,
             Self::Routine { visibility } => return visibility,
         };
         if hidden {
@@ -250,7 +255,7 @@ impl SessionPurpose {
         match self {
             Self::Dispatched => SessionSource::Agent,
             Self::Routine { .. } => SessionSource::Routine,
-            Self::Standalone | Self::Warm | Self::AgentDm => SessionSource::User,
+            Self::Standalone | Self::Warm | Self::AgentDm | Self::Background => SessionSource::User,
         }
     }
 }
@@ -274,7 +279,7 @@ impl SessionPurpose {
 #[strum(serialize_all = "snake_case")]
 pub enum SessionSource {
     /// A person, directly or through something they did: a prompt, a
-    /// mention, or an assignment.
+    /// mention, an assignment, or asking for a routine draft.
     #[default]
     User,
     /// Another agent, which dispatched the session on its owner's behalf.
@@ -357,6 +362,9 @@ pub struct CreateAgentSessionParams {
     /// replayed from a recording, or created without a sandbox, has nothing to
     /// store here.
     pub egress_token_hash: Option<String>,
+    /// What opened the session, written with the session's row. `Unknown`
+    /// writes nothing: an unclaimed warm session has no cause yet.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Who or what archived a session.
@@ -428,6 +436,8 @@ pub struct AgentSession {
     pub task_id: Option<String>,
     /// Who started the session.
     pub source: SessionSource,
+    /// What opened the session. `Unknown` when nothing recorded it.
+    pub origin: trigger_context::TriggerOrigin,
     /// Where the session is shown.
     pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session
@@ -458,6 +468,23 @@ impl AgentSession {
     /// Whether the session is archived and therefore read-only.
     pub fn is_archived(&self) -> bool {
         self.archived.is_some()
+    }
+
+    /// Whether the session is work its owner asked for that runs out of
+    /// sight (a routine draft): started by them at their request, hidden, and
+    /// opened from no message, so no list, search or thread leads to it.
+    /// Nobody is told about its turns, and the routine scheduler that opened
+    /// it may delete it.
+    pub fn is_background(&self) -> bool {
+        self.source == SessionSource::User
+            && self.visibility == SessionVisibility::Hidden
+            && self.thread_id.is_none()
+            && self.originating_message_id.is_none()
+            && matches!(
+                &self.origin,
+                trigger_context::TriggerOrigin::Requested { by }
+                    if self.owner_id.as_user() == Some(by)
+            )
     }
 
     /// The user this session runs as; see [`session_owner_user`].

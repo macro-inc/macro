@@ -1,5 +1,5 @@
 import type { RedirectLocation } from '@core/util/authRedirect';
-import { ok } from 'neverthrow';
+import { err, ok, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   setPostLoginRedirect: vi.fn(),
   toastFailure: vi.fn(),
   syncLoginStorage: vi.fn(),
+  reloadHolds: 0,
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -54,6 +55,14 @@ vi.mock('@core/util/fetchWithToken', () => ({
 vi.mock('@core/util/cookies', () => ({
   syncLoginStorage: mocks.syncLoginStorage,
 }));
+vi.mock('@core/util/reloadForNewerBuild', () => ({
+  holdAutomaticReload: () => {
+    mocks.reloadHolds++;
+    return () => {
+      mocks.reloadHolds--;
+    };
+  },
+}));
 vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: mocks.invalidateAllAfterLogin,
 }));
@@ -76,6 +85,7 @@ beforeEach(() => {
   mocks.openDesktopAuthSession.mockResolvedValue({ success: true });
   mocks.servers['auth-service'] = proxyAuthHost;
   mocks.location.state = undefined;
+  mocks.reloadHolds = 0;
   mocks.createNativeAuthSession.mockReturnValue({
     callbackUrl: 'macro://android-auth/test-attempt',
     authenticate: mocks.authenticate,
@@ -230,7 +240,86 @@ describe('useSsoLogin', () => {
       expect(mocks.invalidateAllAfterLogin).toHaveBeenCalledOnce();
       expect(mocks.initEmailLink).toHaveBeenCalledOnce();
       expect(window.location.href).toBe(loginUrl);
-      expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
+      expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
+      expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
+        'posthog',
+      ]);
     }
   );
+
+  // An app update reload can land on the native sign-in at any point, not
+  // only while the sheet is open. A document that reloads after the session
+  // code is redeemed but before the login hint is down never checks identity
+  // and shows sign-in over the new session.
+  it('holds reloads until the redeemed native session has left the login hint', async () => {
+    mocks.nativeMobile = true;
+    const heldAt: Record<string, boolean> = {};
+    mocks.sessionLogin.mockImplementation(async () => {
+      heldAt.redeem = mocks.reloadHolds > 0;
+      return ok(undefined);
+    });
+    mocks.syncLoginStorage.mockImplementation(() => {
+      heldAt.hint = mocks.reloadHolds > 0;
+    });
+    // Record the hold as each later step finishes, not as it starts.
+    mocks.invalidateAllAfterLogin.mockImplementation(async () => {
+      await Promise.resolve();
+      heldAt.refresh = mocks.reloadHolds > 0;
+    });
+    mocks.initEmailLink.mockImplementation(() =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          await Promise.resolve();
+          heldAt.emailLink = mocks.reloadHolds > 0;
+        })()
+      )
+    );
+
+    await useSsoLogin()('google');
+
+    expect(heldAt).toEqual({
+      redeem: true,
+      hint: true,
+      refresh: true,
+      emailLink: true,
+    });
+    expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
+    // The identity refetch can take a while; the hint must not wait for it.
+    expect(mocks.syncLoginStorage.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.invalidateAllAfterLogin.mock.invocationCallOrder[0]
+    );
+    expect(mocks.reloadHolds).toBe(0);
+  });
+
+  it('leaves no login hint when the native session code is not redeemed', async () => {
+    mocks.nativeMobile = true;
+    mocks.sessionLogin.mockResolvedValue(
+      err([{ code: 'HTTP_ERROR', message: 'invalid session code' }])
+    );
+
+    await useSsoLogin()('google');
+
+    expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
+    expect(mocks.invalidateAllAfterLogin).not.toHaveBeenCalled();
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Sign-in failed. Please try again.'
+    );
+    expect(mocks.reloadHolds).toBe(0);
+  });
+
+  it('releases the hold without signing in when the sheet is canceled', async () => {
+    mocks.nativeMobile = true;
+    mocks.authenticate.mockResolvedValue({
+      success: false,
+      error: 'User canceled login',
+    });
+
+    await useSsoLogin()('google');
+
+    expect(mocks.sessionLogin).not.toHaveBeenCalled();
+    expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.reloadHolds).toBe(0);
+  });
 });

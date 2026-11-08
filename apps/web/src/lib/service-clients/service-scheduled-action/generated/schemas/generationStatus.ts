@@ -14,6 +14,7 @@ export type GenerationStatus =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const GenerationStatus = {
+  pending: 'pending',
   generating: 'generating',
   ready: 'ready',
   failed: 'failed',

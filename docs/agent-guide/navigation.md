@@ -378,9 +378,13 @@ Drive's **New** menu (in the sidebar and after the header's Sort and Filter
 buttons; beside the title in narrow layouts) is headed
 **Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
 the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
-dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
-the folder to the open folder's list, and shows a toast with **Open**. Every other
-item opens as an inline detail in the open folder or tab once created
+dialog with `Untitled folder` preselected; creating keeps Drive where it is and adds
+the folder to the open folder's list. Creation and completed folder uploads show
+a compact toast with a success check, a folder icon beside **&lt;folder name&gt;
+created/uploaded**, and **Open**, without a separate description.
+Failed folder submissions retain separate **Retry** actions on desktop, even when
+their failure titles match; each action restores its own unfinished draft.
+Every other item opens as an inline detail in the open folder or tab once created
 (`/app/drive/folder/<uuid>/spreadsheet/<uuid>`, `/app/drive/database/<uuid>`),
 the same as opening an existing file: the Drive sidebar stays mounted and no
 loading pane replaces Drive. Databases and forms opened from Drive's list or
@@ -1166,8 +1170,11 @@ routine: it doesn't start the agent or notify anyone.
 routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
-label it Finance and make a task to pay it", using the workspace's label, tag,
-channel, folder, people and agent names), **Templates** (with
+label it Finance and make a task to pay it", finding the labels, tags,
+channels, folders, people and agents it names with the user's access; one it
+can't find, or that matches several, is left for the user to pick, and
+anything it had to create for the routine, such as a new database, is listed
+on the review), **Templates** (with
 `enable-routine-starter-templates` on; the scheduler's routine catalog,
 `GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
 tasks**, **Morning brief**, **Share updates** only where AI decisions are
@@ -1320,8 +1327,10 @@ written through the API with base instructions shows them above the step as
 **Saved instructions that run first**); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No
 connections added** with **Add connection**; and **Runs & notifications** has
-**Show runs in Home and Agents** and **Runs as** (the owner, whose access steps
-and AI use). There is no details panel: next run sits beside **Trigger**, the
+**Show runs in Home and Agents**, **Runs as** (the owner, whose access steps
+and AI use) and, when the routine has a code step, **Act as me** (off by
+default; when on, posts, emails and comments from code steps appear as written
+by the owner, with no Agent badge; **Ask AI** steps stay the agent's). There is no details panel: next run sits beside **Trigger**, the
 last run under the title, and a routine made from a template links to it there
 (**From a template ↗**). The **Run options** menu
 contains **Turn on** / **Turn off** and **Copy prompt**, which copies the
@@ -1334,7 +1343,8 @@ and a line with the rest, failures in red. Runs a trigger's condition skipped
 read **Condition not met · 12% likely yes** or **Condition couldn’t be
 checked**; consecutive skips collapse into one **N skipped by the condition**
 row with **Show**. The newest run with steps is open on the right: its title,
-time, outcome and how long it took, then a timeline with each AI decision and
+time, outcome, how long it took and, for runs with code steps, **Code acted as
+you** or **Code acted as the agent**, then a timeline with each AI decision and
 its probability bar, each action with a check or a cross and its reason, and
 **Open conversation** when the run had an agent session. Below 720px the list
 shows alone and a run opens full width with a **Runs** back button. A run that
@@ -1788,9 +1798,9 @@ The Move to folder picker is a command menu, like Snooze, over the same folder l
 
 On desktop, a split showing a folder (Drive's folder route or a folder split) accepts rows dragged from another split and moves them with the same mutation as the picker. Dragging a selected row carries the whole selection, the drag card counts it, and a successful move clears that selection; a failed one keeps it for a retry. Dragging an unselected row carries only that row. The pane shows **Move N items to this folder** only when the drop would work: every row passes Move to folder's owner and type rules, at least one row isn't already there, no folder would land inside itself, the row didn't start in that split, and Alt isn't held, since that marks the drag as a copy. The header still offers **Open in this split**. Other drop targets (composers, documents, canvases) still take only the grabbed row.
 
-Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
+Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row takes rows that sit in a folder and moves them back to the root, with **Remove from folder**'s toasts.
 
-Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open**.
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with primary **Open** and, on desktop with room for another split, secondary **Open split** to its left. Desktop shows a close icon instead of Dismiss. Either navigation action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open** and retain swipe dismissal.
 
 ### Native update-required dialog
 

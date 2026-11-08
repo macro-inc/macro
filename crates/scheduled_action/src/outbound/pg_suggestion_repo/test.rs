@@ -179,3 +179,58 @@ async fn a_new_generation_replaces_open_suggestions_but_keeps_dismissed_and_acce
         .unwrap();
     assert_eq!(reread.suggestion_id, Some(open[1].id));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sweeps_take_people_who_read_recently_each_once_per_interval(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let repo = PgSuggestionRepo::new(pool);
+    let (a, b) = (user(USER_A), user(USER_B));
+    let now = Utc::now();
+    let active_since = now - TimeDelta::days(14);
+    let checked_before = now - TimeDelta::hours(1);
+
+    // Nobody read their suggestions: nobody to look at.
+    assert!(
+        repo.take_checks(active_since, checked_before, now, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    // A first read leaves a pending generation, and reading again keeps it.
+    repo.seen(&a, now).await.unwrap();
+    repo.seen(&a, now).await.unwrap();
+    let pending = repo.generation(&a).await.unwrap().unwrap();
+    assert_eq!(pending.status, GenerationStatus::Pending);
+    // B read a month ago.
+    repo.seen(&b, now - TimeDelta::days(30)).await.unwrap();
+
+    // Two sweeps at once take different people: A goes to one of them.
+    let (first, second) = tokio::join!(
+        repo.take_checks(active_since, checked_before, now, 10),
+        repo.take_checks(active_since, checked_before, now, 10),
+    );
+    let mut taken = [first.unwrap(), second.unwrap()].concat();
+    taken.sort_by(|x, y| x.as_ref().cmp(y.as_ref()));
+    assert_eq!(taken, [a.clone()]);
+    // Looked at, so not again within the interval.
+    assert!(
+        repo.take_checks(active_since, checked_before, now, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let later = now + TimeDelta::hours(2);
+    assert_eq!(
+        repo.take_checks(active_since, later - TimeDelta::hours(1), later, 10)
+            .await
+            .unwrap(),
+        [a.clone()]
+    );
+    // A pending generation can be claimed.
+    assert!(
+        repo.claim(&a, Uuid::now_v7(), now, now - TimeDelta::minutes(5))
+            .await
+            .unwrap()
+    );
+}

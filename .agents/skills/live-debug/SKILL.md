@@ -10,7 +10,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # Live debugging
 
-`just run_local` and `just stack up` start the LGTM collector by default and
+`just run_local` starts the LGTM collector by default and
 the agent browser with `--with-chrome` (both global: one per machine, shared
 across instances, left running):
 
@@ -30,7 +30,13 @@ Every Rust service exports spans AND its `tracing` events (as correlated log
 records) over OTLP. The frontend exports browser spans through the proxy and
 propagates `traceparent`, so one trace covers browser → proxy → services.
 Wiring happens at stack start: if you start a collector by hand, restart the
-stack to pick it up.
+stack to pick it up (`just run_local stop`, then `just run_local`, both with
+`--instance <name>`; the data stays).
+
+Start the stack from a shell with no terminal or with `--detach`, and read
+`just run_local status --json`. After a Rust edit, `just run_local rebuild` reloads
+only what changed. `just run_local logs` shows the last job's log, and `--service
+<name>` a service's (`frontend` is Vite).
 
 ## Query telemetry (prefer APIs over the Grafana UI)
 

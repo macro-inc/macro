@@ -76,6 +76,8 @@ pub struct CheckedSuggestion {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum GenerationStatus {
+    /// None generated yet: the scheduler generates the first soon.
+    Pending,
     /// A generation is running; earlier suggestions still show.
     Generating,
     /// The last generation finished.
@@ -104,4 +106,22 @@ pub struct RoutineSuggestions {
     pub generated_at: Option<DateTime<Utc>>,
     /// Best first within each surface.
     pub suggestions: Vec<RoutineSuggestion>,
+}
+
+/// What asking for a generation did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum GenerationOutcome {
+    /// Suggestions are off for the person.
+    Off,
+    /// Another generation is running; it is left to finish.
+    Running,
+    /// New suggestions are stored.
+    Ready,
+    /// It failed; the earlier suggestions stay.
+    Failed,
+    /// A newer generation took over; its result wins.
+    Superseded,
+    /// The process is stopping.
+    Cancelled,
 }

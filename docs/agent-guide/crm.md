@@ -4,13 +4,16 @@
 
 On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
-only when pipelines are enabled; disabled until the team's CRM is enabled). The
+only when pipelines are enabled). The new-pipeline dialog's type menu
+(**Companies**, **Contacts**, **Generic**) shows the same icon, title and
+one-line description rows, with a check on the selected type. The
 **Records** section lists **Companies**, **People**, **Sales Tasks**, **Sales Email**,
 **Sales Notes**, and **Sales Calls**, in that order; Pipelines and
 Lists follow. Record-detail tabs keep their unprefixed names.
 There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
+The Companies list starts with the Customers `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
 Opening a company or contact row in Companies or People clears its blue unread
 dot, including desktop preview activation, keyboard opening, and phone navigation.
@@ -109,7 +112,7 @@ header matches Tasks: title, filter group, view-options group (sort, group,
 display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 
-People lists contacts across every CRM-enabled team the viewer belongs to, from
+People lists contacts across every team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
 duplicate full email addresses (case-insensitive) to one contact; contacts
 without an email never collapse. Hidden contacts
@@ -183,11 +186,36 @@ forward instead. Touch devices keep the standalone record pages; a Customers
 record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
-a person's Company link gives `People > <contact> > <company>`. Opening a record
+a person's **Go to company** action gives `People > <contact> > <company>`. Opening a record
 already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
+Contact properties use Tasks-style pills in the header and **Record details**.
+**Add email** appears only when the address is absent. Save adds the address;
+Cancel or Escape discards the draft, and invalid input stays open. Populated
+addresses are read-only: no replacement, clearing or additional email identity.
+
+Only contacts with a known personal-provider email can link or switch company.
+Their company pill opens the Tasks singleton picker; on touch, select a company
+then **Done**. Cancel keeps the original relation. There is no unlink action.
+Company-email and email-less contacts keep a read-only company value. The separate
+**Go to company** action opens an existing company, including for read-only
+contacts; Shift-click opens a separate split on desktop.
+
+Pending controls prevent duplicate saves; rejected edits retain their draft for
+retry. The server enforces add-only email and personal-provider eligibility.
+Another contact with the address in the same team rejects the change without
+merging; restricted matches return generic feedback. Foreign-team destinations
+and new links to archived companies are rejected.
+
+Edits preserve contact ID, team, discussions, references, interaction dates and
+archive state. Restore a visible child through its archived company before
+moving it. Personal-email sync reuses a unique existing contact, preserving its
+chosen company through sent/received refreshes and source cleanup. Ambiguous
+matches are left unchanged. CRM settings and domain admission still apply.
+Existing email replacement and alias/history redesign are outside this version.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 On phones and tablets, the current section appears as a labeled header island
@@ -389,10 +417,9 @@ The sidebar's Records and Lists sections can also collapse independently.
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
 rows in a generic pipeline, in the shared records editor. They have their own identity, ownership and sharing; their
 storage does not appear as a separate database in navigation.
-**New pipeline** is disabled until the team's CRM is enabled. For a new team,
-use **Open CRM settings** in the empty state to enable CRM, then use the back
-arrow to return to Customers and create a pipeline. Verify this with a newly created team as well as
-an existing CRM-enabled team.
+**New pipeline** is available as soon as the user belongs to a team; email
+contribution consent is not required. Verify this with a newly created team
+as well as an existing team.
 Choose **New pipeline**, enter a name in the dialog's first row, pick
 **Companies** (the default), **Contacts**, or **Generic** from the record-type pill, and tick
 **Share with my team** to share it (unticked keeps it private). **Create
@@ -561,34 +588,46 @@ another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
 
-Its **Email sync** section (shown while CRM is on) has **Keep personal emails
-out** (on by default) and **Blocked domains**. With the toggle off, mail you
-send to someone on a personal provider (gmail.com, outlook.com, …) adds them as
-a contact without a company; mail they send you only updates a contact that
-already exists. Vendor, brand and bulk-sender domains stay out. Turning the
-toggle back on only stops future sync; contacts it already added stay.
-Blocking a domain (typed, or selected from a company's current domains)
-stops email sync for it and hides the company that owns it, that company's
-people, and contacts without a company at that domain; unblocking shows them
-again once none of the company's domains remain blocked. Contacts without a
-company reappear when their own domain is unblocked. A contact attached to a
-company follows that company's domains, so
-blocking `gmail.com` does not hide a Gmail address filed under another company.
-A new contact added by hand without a company at an already blocked domain
-stays visible; a later block operation for that domain hides it.
-Selecting a company attempts each of its current domains separately. Controls
-stay disabled until all requests settle. Successful domains remain blocked;
-failed domains stay listed with **Retry failed domains**, even if the company
-disappears from the picker. Verify an early request failure followed by a later
-success, then retry only the failed domains without undoing successful blocks.
-After blocking or unblocking, verify that already-cached company lists and
-contact suggestions refresh to the new visibility without reloading the app,
-including a previously hidden company returning after unblocking.
-Only admins and owners change either; members see them read-only.
-Contacts without a company never grant team access to email threads, but
-hiding one (by hand or by blocking its domain) suppresses that team's
-CRM-derived thread access for members. Independent ownership, delegation,
-sharing, and other eligible team grants still apply.
+CRM is available without contributing email. The banner **Your emails aren’t
+contributing to CRM** opens **Review and opt in**. The dialog shows the exact
+connected primary mailbox, **Team blacklist**, and **My blacklist** before
+**Share my emails with CRM**. Opt-in shares full content from all available
+historical and future messages, excluding blocked threads. The same controls
+are in CRM settings and **Email contribution settings** on a company. A
+changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
+cannot opt in.
+
+Any member can add a team domain; only team admins/owners can remove one.
+Personal domains affect only that member's mailbox. Domains include subdomains;
+a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
+Blocking hides previously shared matching threads on subsequent CRM reads.
+Another teammate's permitted copy may still appear when only a personal block
+applies. **Stop sharing my emails** withdraws that mailbox's contributions.
+Company/contact records, references, pipelines and archive state remain intact.
+Both **Team** and **Me** email tabs honor consent and exclusions; normal inbox
+access remains available.
+
+The **Email sync** section retains **Keep personal emails out** (on by default).
+With it off, eligible mail sent to a personal-provider address adds a contact
+without a company only when no same-team identity exists; otherwise sent and
+received mail refresh the unique existing contact without changing its chosen
+company. A selected company with email sync disabled suppresses interaction and
+source updates while preserving the manual record. Both paths require the
+mailbox owner's exact-primary contribution consent and eligible stored history.
+Manual add-email and company link/switch remain available without consent and
+never enable sync or enroll a mailbox. Vendor, brand
+and bulk-sender filters still apply. Turning the filter back on stops future
+capture without deleting contacts. The existing admin **Blocked domains**
+controls use the same team exclusions as the privacy dialog. Blocking or
+unblocking never archives or restores records. A partially failed multi-domain
+change retains successful blocks and offers **Retry failed domains**.
+
+Contacts without a company add no CRM thread-access grant. Archiving one
+suppresses its team's CRM-derived grant; independent ownership, delegation,
+sharing, and other eligible team grants still apply. Verify consent, withdrawal,
+team/personal exclusions, retry behavior and scrolling for ordinary members and
+admins on desktop and phone. Use owned local fixtures for all sharing mutations;
+hosted data is read-only for verification.
 
 `Export` opens options for companies. Choose Current view
 (respects filters/search) or All records across views (each visible record once), then

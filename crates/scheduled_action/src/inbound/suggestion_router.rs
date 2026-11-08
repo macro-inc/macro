@@ -66,7 +66,7 @@ where
     tag = "scheduled actions",
     operation_id = "list_routine_suggestions",
     responses(
-        (status = 200, body = RoutineSuggestions, description = "Routines picked for the caller, best first per surface; starts a generation when they are due"),
+        (status = 200, body = RoutineSuggestions, description = "The routines stored for the caller, best first per surface; reading never generates them (the scheduler does)"),
         (status = 401, body = String),
         (status = 404, body = String, description = "Routine suggestions are off for the caller"),
         (status = 500, body = String),

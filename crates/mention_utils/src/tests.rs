@@ -313,6 +313,37 @@ fn parse_date_mention_missing_display_format() {
 }
 
 #[test]
+fn parse_date_mention_bare_date_body() {
+    // Models sometimes write the date itself as the body instead of the JSON
+    // object; the app renders that as a chip, so plain text must too.
+    let input = "due <m-date-mention>2026-11-13</m-date-mention>";
+    let result = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(result.0, [
+        TextSegment::Plain("due "),
+        TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
+    ] => {
+        assert_eq!(display_format.as_ref(), "Nov 13, 2026");
+    });
+}
+
+#[test]
+fn parse_date_mention_bare_timestamp_body() {
+    let input = "<m-date-mention>2026-11-13T15:00:00-05:00</m-date-mention>";
+    let result = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(result.0, [
+        TextSegment::Xml(XmlTag::Date(ParsedDateMention { display_format })),
+    ] => {
+        assert_eq!(display_format.as_ref(), "Nov 13, 2026, 3:00 PM");
+    });
+}
+
+#[test]
+fn parse_date_mention_impossible_bare_date() {
+    let input = "<m-date-mention>2026-02-30</m-date-mention>";
+    assert!(ParsedXmlText::parse(input).is_err());
+}
+
+#[test]
 fn parse_date_mention_invalid_json() {
     let input = r#"<m-date-mention>{broken</m-date-mention>"#;
     let result = ParsedXmlText::parse(input);

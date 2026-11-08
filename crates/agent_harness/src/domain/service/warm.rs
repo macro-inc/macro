@@ -192,6 +192,7 @@ where
                             bot_id,
                             &model,
                             instructions.as_deref(),
+                            &request.origin,
                         )
                         .await?,
                 ),
@@ -264,6 +265,12 @@ where
                     (false, SessionSource::Agent) => {
                         agent_session::domain::model::SessionPurpose::Dispatched
                     }
+                    // Asked for out of sight, such as a routine draft.
+                    (false, SessionSource::User)
+                        if request.visibility == SessionVisibility::Hidden =>
+                    {
+                        agent_session::domain::model::SessionPurpose::Background
+                    }
                     (false, SessionSource::User) => {
                         agent_session::domain::model::SessionPurpose::Standalone
                     }
@@ -290,6 +297,7 @@ where
                 instructions,
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
+                origin: request.origin,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -448,6 +456,7 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,
             prompt: None,

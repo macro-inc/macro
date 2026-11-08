@@ -44,6 +44,12 @@ pub struct PrepareRoutineSession {
     /// schedulers omit it along with `source`.
     #[serde(default)]
     pub visibility: SessionVisibility,
+    /// What opened the session. Older schedulers omit it.
+    #[serde(
+        default,
+        skip_serializing_if = "trigger_context::TriggerOrigin::is_unknown"
+    )]
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// A verified, persisted session ready for its first prompt.
@@ -97,6 +103,15 @@ pub enum RoutineActionStatus {
     Succeeded,
     /// The initial turn explicitly ended unsuccessfully.
     Failed(RoutineFailureReason),
+}
+
+/// How much a session did, without what: for its opener's telemetry.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutineActivity {
+    /// Tool calls the agent made, across every turn.
+    pub tool_calls: u32,
+    /// Turns the session ran.
+    pub turns: u32,
 }
 
 /// Why the action has not established completion.

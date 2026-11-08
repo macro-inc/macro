@@ -7,8 +7,8 @@ use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, Schedule,
-    ScheduledAction,
+    AlreadyRunningError, CreatedItem, InProgressExecution, ListedAction, OwnerNotUserError,
+    RoutineCheck, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -84,6 +84,17 @@ impl From<ListedAction> for ScheduledActionResponse {
             ..Self::from(listed.action)
         }
     }
+}
+
+/// A routine to check, as the create body takes it.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckRoutineRequest {
+    pub routine: ActionConfiguration,
+    /// What a routine draft's session created for the routine to use, such as
+    /// the database it writes to; kept with its draft for the person to see.
+    #[serde(default)]
+    pub created: Vec<CreatedItem>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -183,6 +194,10 @@ where
             "/scheduled-actions/{id}/code-upgrades",
             get(list_code_upgrades::<S, Svc, Auth>),
         )
+        .route(
+            "/scheduled-actions/check",
+            post(check_action::<S, Svc, Auth>),
+        )
         .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
 }
@@ -250,6 +265,47 @@ pub struct CreateActionQuery {
     /// The routine suggestion it is saved from, recorded on the routine.
     #[param(value_type = Option<String>, format = Uuid)]
     pub suggestion_id: Option<Uuid>,
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/check",
+    tag = "scheduled actions",
+    operation_id = "check_scheduled_action",
+    request_body = CheckRoutineRequest,
+    responses(
+        (status = 200, body = RoutineCheck),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+        (status = 503, body = String),
+    )
+)]
+/// What saving this routine would find wrong, without saving it: the same
+/// checks as creating it. A routine draft's session hands its draft back
+/// this way.
+pub async fn check_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<CheckRoutineRequest>, JsonRejection>,
+) -> Result<Json<RoutineCheck>, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(CheckRoutineRequest { routine, created }) =
+        body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    // The code-mode invocation the credential names, already validated
+    // against its session at the router's boundary.
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .check_action(&principal, routine, created, correlation)
+            .await?,
+    ))
 }
 
 #[utoipa::path(

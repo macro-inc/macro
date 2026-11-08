@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RefreshRoutineSuggestionsData, RefreshRoutineSuggestionsErrors, RefreshRoutineSuggestionsResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RefreshRoutineSuggestionsData, RefreshRoutineSuggestionsErrors, RefreshRoutineSuggestionsResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -78,6 +78,22 @@ export class Sdk extends HeyApiClient {
 
     public routineCatalog<ThrowOnError extends boolean = false>(options: Options<RoutineCatalogData, ThrowOnError>): RequestResult<RoutineCatalogResponses, RoutineCatalogErrors, ThrowOnError> {
         return (options.client ?? this.client).get<RoutineCatalogResponses, RoutineCatalogErrors, ThrowOnError>({ url: '/scheduled-actions/catalog', ...options });
+    }
+
+    /**
+     * What saving this routine would find wrong, without saving it: the same
+     * checks as creating it. A routine draft's session hands its draft back
+     * this way.
+     */
+    public checkScheduledAction<ThrowOnError extends boolean = false>(options: Options<CheckScheduledActionData, ThrowOnError>): RequestResult<CheckScheduledActionResponses, CheckScheduledActionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CheckScheduledActionResponses, CheckScheduledActionErrors, ThrowOnError>({
+            url: '/scheduled-actions/check',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     public draftRoutine<ThrowOnError extends boolean = false>(options: Options<DraftRoutineData, ThrowOnError>): RequestResult<DraftRoutineResponses, DraftRoutineErrors, ThrowOnError> {

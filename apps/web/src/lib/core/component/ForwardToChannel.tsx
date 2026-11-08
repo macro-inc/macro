@@ -516,11 +516,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       }
 
       if (targets.length > 1) {
-        toast.success('Messages sent successfully');
+        toast.success('Messages sent');
       } else {
         const result = results[0];
         if (result) {
-          toast.success('Message sent successfully', {
+          toast.success('Message sent', {
+            dismissStyle: 'icon',
             actions: [
               {
                 label: 'View in channel',
