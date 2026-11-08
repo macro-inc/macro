@@ -1604,6 +1604,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "archery"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ca55ee147b1926dbea904f50fe4902494e97bc742205abbbf10c709e43815f"
+
+[[package]]
 name = "arcstr"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7999,6 +8005,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b5343afd4a8365a643ac588dab4cf234a190c7f6c88c9f6dd6ffe00837661b7"
 
 [[package]]
+name = "escape8259"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f1f0d310082fd5de539d4f41601182241147498444a7695c520288a0cdbead6"
+
+[[package]]
 name = "etcetera"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10625,7 +10637,7 @@ checksum = "d0acd33ff0285af998aaf9b57342af478078f53492322fafc47450e09397e0e9"
 dependencies = [
  "bitmaps",
  "rand_core 0.6.4",
- "rand_xoshiro",
+ "rand_xoshiro 0.6.0",
  "serde",
  "sized-chunks",
  "typenum",
@@ -10759,6 +10771,27 @@ dependencies = [
  "utoipa-swagger-ui",
  "workspace-hack",
 ]
+
+[[package]]
+name = "imbl"
+version = "7.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46bad832b9b463ed9398b8506488cc2e3b897a9d44f13af115f382aac71f4fec"
+dependencies = [
+ "archery",
+ "equivalent",
+ "imbl-sized-chunks",
+ "rand_core 0.9.5",
+ "rand_xoshiro 0.7.0",
+ "version_check",
+ "wide",
+]
+
+[[package]]
+name = "imbl-sized-chunks"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a0813be332553f857953298749fa19549e8b61b80589757c29b4e2a804fa9c6"
 
 [[package]]
 name = "imgref"
@@ -11734,14 +11767,100 @@ dependencies = [
  "agent_fold",
  "anyhow",
  "base64 0.22.1",
+ "lazy-regex",
+ "macro_config",
  "macro_tower_layers",
  "messages",
+ "nom 8.0.0",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "trigger_context",
+ "wiremock",
  "workspace-hack",
+]
+
+[[package]]
+name = "lexical_conformance"
+version = "0.1.0"
+dependencies = [
+ "lexical_markdown",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "libtest-mimic",
+ "macro_document_composers",
+ "macro_document_model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "lexical_conformance_wasm"
+version = "0.1.0"
+dependencies = [
+ "lexical_loro",
+ "lexical_markdown",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "macro_document_composers",
+ "macro_document_model",
+ "regress",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "lexical_html"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "lexical_model",
+ "nom 8.0.0",
+ "regress",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "lexical_loro"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "proptest",
+ "rustc-hash 2.1.2",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "lexical_markdown"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "lexical_rich_nodes",
+ "libtest-mimic",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -11756,6 +11875,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_model"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "imbl",
+ "indexmap 2.14.0",
+ "nom 8.0.0",
+ "proptest",
+ "rustc-hash 2.1.2",
+ "ryu-js",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "lexical_node_id"
 version = "0.1.0"
 dependencies = [
@@ -11764,6 +11902,34 @@ dependencies = [
  "serde_json",
  "sqlx",
  "utoipa",
+]
+
+[[package]]
+name = "lexical_rich_nodes"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "indexmap 2.14.0",
+ "lexical_html",
+ "lexical_model",
+ "phf 0.13.1",
+ "regress",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "lexical_workspace_tests"
+version = "0.1.0"
+dependencies = [
+ "loro",
+ "regress",
+ "rootcause",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -11851,6 +12017,18 @@ checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "libtest-mimic"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14e6ba06f0ade6e504aff834d7c34298e5155c6baca353cc6a4aaff2f9fd7f33"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap",
+ "escape8259",
 ]
 
 [[package]]
@@ -12116,9 +12294,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e86dea63b66576db244cbc3a40bdb17517263c93f318e2fbe08aca3be1192cb"
+checksum = "410c939fe3bee34b8ed61f7aea93201fb136629f685ffa557039c4d9952f9988"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -12132,9 +12310,9 @@ dependencies = [
 
 [[package]]
 name = "loro-common"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2146b353a56b0a743f8643725cb9f42dfe209665939b59db901ecea732a3ab29"
+checksum = "bd3f7afbafc4db85aefe9620e7e99fa49c974477563904f226ae96fc9674eade"
 dependencies = [
  "arbitrary",
  "enum-as-inner 0.6.1",
@@ -12162,9 +12340,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.16.2"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5806b65ee68c3ae7891959dd968898860dab74fbf6498b312de9b548dce5ec"
+checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -12209,9 +12387,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841e206d3749fd14f23e64985be230dad2b2199da1d381c44c3dd0d2b9583fcc"
+checksum = "c7331ebe6902effeb0c3d52aba9e30fb0118bc926faed6f3848487aab40c1a4e"
 dependencies = [
  "bytes",
  "ensure-cov",
@@ -12467,6 +12645,52 @@ dependencies = [
  "sqlx",
  "tokio",
  "workspace-hack",
+]
+
+[[package]]
+name = "macro_document_composers"
+version = "0.1.0"
+dependencies = [
+ "lexical_markdown",
+ "lexical_model",
+ "macro_document_model",
+ "serde",
+ "serde_json",
+ "trigger_context",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_document_model"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "document_id",
+ "indexmap 2.14.0",
+ "lexical_html",
+ "lexical_loro",
+ "lexical_markdown",
+ "lexical_model",
+ "lexical_node_id",
+ "lexical_rich_nodes",
+ "logos",
+ "loro",
+ "mention_date",
+ "nom 8.0.0",
+ "rand_chacha 0.9.0",
+ "regress",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "sync_server_core",
+ "thiserror 2.0.18",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]
@@ -12978,14 +13202,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mention_date"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "bot_id",
  "channel_sender",
  "cool_asserts",
- "lazy-regex",
  "macro_user_id",
+ "mention_date",
  "nom 8.0.0",
  "serde",
  "serde_json",
@@ -16382,6 +16613,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_xoshiro"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f703f4665700daf5512dcca5f43afa6af89f09db47fb56be587f80636bda2d41"
+dependencies = [
+ "rand_core 0.9.5",
+]
+
+[[package]]
 name = "rapidhash"
 version = "4.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16735,6 +16975,13 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "regress"
+version = "0.12.0"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "reminders"
@@ -17450,6 +17697,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "ryu-js"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d056b875a9d2e6cb9a61d127afee9ac5999b9f87bcb32079d1318e505be714"
+
+[[package]]
 name = "s3_client"
 version = "0.1.0"
 dependencies = [
@@ -17470,6 +17723,15 @@ dependencies = [
  "urlencoding",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "safe_arch"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b02de82ddbe1b636e6170c21be622223aea188ef2e139be0a5b219ec215323"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
@@ -22412,6 +22674,16 @@ checksum = "5d4a4db5077702ca3015d3d02d74974948aba2ad9e12ab7df718ee64ccd7e97d"
 dependencies = [
  "libredox",
  "wasite",
+]
+
+[[package]]
+name = "wide"
+version = "0.7.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce5da8ecb62bcd8ec8b7ea19f69a51275e91299be594ea5cc6ef7819e16cd03"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
 ]
 
 [[package]]

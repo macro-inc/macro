@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+    "test": [
+      "defineExtension",
+      "infers the expected type (config inference)"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical.defineExtension",
+      "args": [
+        {
+          "config": {
+            "number": 123
+          },
+          "name": "test"
+        }
+      ],
+      "ret": {
+        "config": {
+          "number": 123
+        },
+        "name": "test"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

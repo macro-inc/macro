@@ -1,0 +1,968 @@
+//! Strict interpreter: every operation, return value and snapshot is checked.
+use crate::config::validate_config;
+use crate::{fixture::Fixture, snapshot, test_nodes};
+use lexical_model::*;
+use serde_json::{Value, json};
+use std::collections::HashMap;
+mod editors;
+mod host;
+pub(crate) mod protocol;
+use protocol::validate_operation;
+mod initial;
+
+/// A malformed fixture, unsupported operation, or observable oracle mismatch.
+#[derive(Debug, thiserror::Error)]
+pub enum ReplayError {
+    /// Observable replay mismatch with operation context.
+    #[error("{0}")]
+    Mismatch(String),
+    /// Model operation failed.
+    #[error(transparent)]
+    Model(#[from] lexical_model::Error),
+    /// A rich-node operation failed.
+    #[error(transparent)]
+    Rich(#[from] lexical_rich_nodes::Error),
+    /// A markdown operation failed.
+    #[error(transparent)]
+    Markdown(#[from] lexical_markdown::Error),
+    /// A Macro document operation failed.
+    #[error(transparent)]
+    Macro(#[from] macro_document_model::Error),
+    /// An operation requires the upstream ambient editor callback.
+    #[error(
+        "Unable to find an active editor. This method can only be used synchronously during the callback of editor.update(), editor.read(), or editor.getEditorState().read(..., {{editor}}). Detected on the page: 1 compatible editor(s) with version \"0.45.0+git\""
+    )]
+    NoActiveEditor,
+    /// Invalid fixture JSON.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    /// Native source failed.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+pub(crate) type Result<T> = std::result::Result<T, ReplayError>;
+pub(crate) fn fail(message: impl Into<String>) -> ReplayError {
+    ReplayError::Mismatch(message.into())
+}
+pub(crate) fn undefined() -> Value {
+    json!({"$undef":true})
+}
+pub(crate) fn integer(value: &Value) -> Result<u64> {
+    value
+        .as_u64()
+        .ok_or_else(|| fail(format!("expected integer: {value}")))
+}
+pub(crate) fn string(value: &Value) -> Result<&str> {
+    value
+        .as_str()
+        .ok_or_else(|| fail(format!("expected string: {value}")))
+}
+
+/// Owns one fixture's identities, persistent versions and callback tapes.
+#[derive(Default)]
+pub struct Replayer {
+    pub(crate) rich_text_registered: bool,
+    pub(crate) tab_indent: Option<Option<u32>>,
+    pub(crate) code_highlight: bool,
+    pub(crate) d6_collapse_code_highlight: bool,
+    pub(crate) code_prism_registered: bool,
+    pub(crate) d6_handle_keys: HashMap<String, String>,
+    pub(crate) d6_oracle_max_key: u32,
+    pub(crate) d6_model_body: std::collections::HashSet<NodeKey>,
+    pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
+    pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
+    pub(crate) in_callback: bool,
+    pub(crate) carets: Vec<crate::api::caret::CaretValue>,
+    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
+    pub(crate) caret_origins: HashMap<usize, Value>,
+    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
+    pub(crate) handles: HashMap<String, Value>,
+    pub(crate) keys: HashMap<String, NodeKey>,
+    pub(crate) next_record: u64,
+    pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
+    pub(crate) version: u64,
+    pub(crate) record_version: u64,
+    pub(crate) states: HashMap<(u64, u64), EditorState>,
+    pub(crate) editor_id: u64,
+    pub(crate) key_counter: SharedKeyCounter,
+    host_tape: std::sync::Arc<std::sync::Mutex<host::HostTape>>,
+    pub(crate) saved_states: Vec<EditorState>,
+    pub(crate) saved_editor_states: HashMap<(u64, u64), usize>,
+    pub(crate) committed_version: u64,
+    pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
+    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
+    pub(crate) read_state: Option<EditorState>,
+    pub(crate) selections: Vec<SelectionSlot>,
+    pub(crate) selection_values: Vec<Option<Selection>>,
+    pub(crate) active_selection: Option<usize>,
+    pub(crate) tapes: Vec<crate::fixture::Tape>,
+    pub(crate) tape_positions: Vec<usize>,
+    pub(crate) updates: Vec<Value>,
+    pub(crate) causes: Vec<Value>,
+    pub(crate) pending_editor_random: Vec<f64>,
+    pub(crate) clock: f64,
+    pub(crate) list_indent: Option<u8>,
+    pub(crate) on_update: Vec<Value>,
+    pub(crate) node_clock: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    pub(crate) tick: u64,
+    pub(crate) attached: bool,
+    pub(crate) pending_writes: bool,
+    /// Enforce exact upstream key allocation, in addition to bijective identity.
+    pub strict_keys: bool,
+    pub(crate) pending_install: Option<Commit>,
+    pub(crate) pending_command: bool,
+    pub(crate) microtasks: std::collections::VecDeque<Value>,
+}
+impl Replayer {
+    /// Replay all trace operations and final state; no original JS executes.
+    pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
+        if fixture.schema != 2
+            || fixture.tier != "A-rec"
+            || (!fixture.partial
+                && (fixture.initial["editorState"] != Value::Null
+                    || fixture.initial["selection"] != Value::Null))
+        {
+            return Err(fail("unsupported fixture initialization"));
+        }
+        self.list_indent = fixture
+            .normalize
+            .iter()
+            .any(|n| n == "listIndent: 2")
+            .then_some(2);
+        self.d6_collapse_code_highlight = fixture.source.repo == "lexical"
+            && fixture.source.file
+                == "packages/lexical-code-prism/src/__tests__/unit/LexicalCodeNodeTabs.test.ts"
+            && fixture.trace.iter().any(|op| {
+                op["op"] == "plugin" && op["name"] == "@lexical/code-prism.registerCodeHighlighting"
+            });
+        for normalization in &fixture.normalize {
+            match normalization.as_str() {
+                "listIndent: 2" => self.markdown_options.list_indent = 2,
+                "codeHighlight" => self.code_highlight = true,
+                "d6_collapse_code_highlight" if self.d6_collapse_code_highlight => {}
+                _ => {
+                    return Err(fail(format!(
+                        "unimplemented declared normalization: {normalization}"
+                    )));
+                }
+            }
+        }
+        if !fixture.partial
+            && fixture
+                .initial
+                .as_object()
+                .is_none_or(|initial| initial.len() != 2)
+        {
+            return Err(fail("unsupported initial fields"));
+        }
+        if fixture.source.version != "0.45.0"
+            || !(fixture.source.repo == "lexical"
+                || (fixture.source.repo == "macro"
+                    && fixture.source.file.starts_with("packages/lexical-core/")))
+        {
+            return Err(fail("unsupported upstream version/repository"));
+        }
+        if fixture.trace.iter().any(|op| op["op"] == "createEditor") {
+            validate_config(&fixture.config)?;
+        } else if fixture.config != json!({}) {
+            return Err(fail("configuration without an editor"));
+        }
+        if !fixture.outcome_differs.is_empty() {
+            return Err(fail("unimplemented development/production outcome policy"));
+        }
+        if !fixture
+            .source
+            .recorded_with
+            .starts_with("lexical-conformance@")
+        {
+            return Err(fail("unknown recorder build"));
+        }
+        self.keys.insert("root".into(), NodeKey::ROOT);
+        self.tapes = fixture.tapes.clone();
+        self.tape_positions = vec![0; fixture.tapes.len()];
+        let mut editor = None;
+        let mut editors = HashMap::new();
+        let mut sessions = HashMap::new();
+        let mut last_created = None;
+        let mut scratch = test_nodes::builder()
+            .key_source(KeySource::Shared(self.key_counter.clone()))
+            .extension_state(self.model_clock())
+            .extension_state(self.document_context().random)
+            .build()
+            .map_err(|e| fail(e.to_string()))?;
+        let mut i = 0;
+        while i < fixture.trace.len() {
+            let op = &fixture.trace[i];
+            validate_operation(op)?;
+            if let Some(id) = self.operation_editor(op)?
+                && id != self.editor_id
+            {
+                if op["op"] != "createEditor" && !editors.contains_key(&id) {
+                    return Err(fail(format!("unknown editor id {id}")));
+                }
+                if let Some(previous) = editor.take() {
+                    editors.insert(self.editor_id, previous);
+                    sessions.insert(self.editor_id, self.take_editor_session());
+                }
+                editor = editors.remove(&id);
+                let session = sessions.remove(&id).unwrap_or_default();
+                self.install_editor_session(session);
+                self.editor_id = id;
+            }
+            let kind = string(&op["op"])?;
+            let host_end = if kind == "update" {
+                None
+            } else {
+                self.prepare_host_call(&fixture.trace, i)?
+            };
+            let result = match kind {
+                "entropy" | "clock" | "tick" => {
+                    let mut tx = scratch.transaction();
+                    self.execute(op, &mut tx)
+                }
+                "createEditor" => {
+                    if editor.is_some() {
+                        return Err(fail("duplicate editor id"));
+                    }
+                    validate_config(&op["config"])?;
+                    self.attached = op["config"]["rootElement"] == true;
+                    let expected_draws = if op["config"]["namespaceGenerated"] == true {
+                        2
+                    } else {
+                        1
+                    };
+                    if self.pending_editor_random.len() != expected_draws {
+                        return Err(fail("editor namespace/id entropy count mismatch"));
+                    }
+                    self.pending_editor_random.clear();
+                    let nodes = op["config"]["nodes"]
+                        .as_array()
+                        .ok_or_else(|| fail("configured nodes"))?
+                        .iter()
+                        .map(|node| string(node).map(str::to_owned))
+                        .collect::<Result<Vec<_>>>()?;
+                    let mut builder = test_nodes::configured_builder(&nodes, self.attached)?;
+                    for replacement in op["config"]["replacements"]
+                        .as_array()
+                        .ok_or_else(|| fail("replacement array"))?
+                    {
+                        builder = match (replacement["replace"]["$klass"].as_str(), replacement["withKlass"]["$klass"].as_str()) {
+                            (Some("code"), Some("custom-code")) => builder.replace::<lexical_rich_nodes::code::CodeNode, macro_document_model::nodes::CustomCodeNode>(macro_document_model::nodes::CustomCodeNode::from),
+                            (Some("list"), Some("task-list")) => builder.replace::<lexical_rich_nodes::list::ListNode, macro_document_model::nodes::TaskListNode>(macro_document_model::nodes::TaskListNode::from),
+                            _ => return Err(fail("unimplemented configured replacement/plugin")),
+                        };
+                    }
+                    let mut ed = builder
+                        .key_source(KeySource::Shared(self.key_counter.clone()))
+                        .extension_state(self.model_clock())
+                        .extension_state(self.document_context().random)
+                        .build()
+                        .map_err(|e| fail(e.to_string()))?;
+                    if let Some(ret) = op.get("ret") {
+                        self.compare(ret, &json!({"$editor":self.editor_id}))?;
+                    }
+                    last_created = Some(self.editor_id);
+                    if fixture.partial {
+                        self.restore_initial(&mut ed, &fixture.initial)?;
+                    }
+                    editor = Some(ed);
+                    Ok(())
+                }
+                "call"
+                    if matches!(
+                        op["fn"].as_str(),
+                        Some("LexicalEditor.parseEditorState" | "LexicalEditor.setEditorState")
+                    ) =>
+                {
+                    let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
+                    self.editor_call(op, ed)
+                }
+                "update" | "commit" if self.pending_install.is_some() => {
+                    if kind == "update" {
+                        let cause = if self.pending_command {
+                            "listener-enqueued"
+                        } else {
+                            "setEditorState"
+                        };
+                        if op["cause"] != cause || op["calls"] != json!([]) {
+                            return Err(fail("unexpected state-install update"));
+                        }
+                        self.updates.push(op["id"].clone());
+                        if !self.causes.contains(&op["cause"]) {
+                            self.causes.push(op["cause"].clone());
+                        }
+                        Ok(())
+                    } else {
+                        let commit = self
+                            .pending_install
+                            .take()
+                            .ok_or_else(|| fail("state install commit"))?;
+                        self.pending_command = false;
+                        self.version += 1;
+                        self.record_version = self.version;
+                        self.compare(&op["updates"], &json!(self.updates))?;
+                        self.compare(&op["causes"], &json!(self.causes))?;
+                        if op["index"] != self.version {
+                            return Err(fail("state install commit index"));
+                        }
+                        self.committed_version = self.version;
+                        self.states
+                            .insert((self.editor_id, self.version), commit.next.clone());
+                        snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
+                        self.updates.clear();
+                        self.causes.clear();
+                        Ok(())
+                    }
+                }
+                "update" | "commit" => {
+                    if kind == "commit" && self.version != 0 {
+                        return Err(fail("commit without a pending update"));
+                    }
+                    let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
+                    self.version += 1;
+                    self.record_version = self.version;
+                    let mut tx = ed.transaction();
+                    self.begin_slots(&mut tx, true);
+                    self.pending_writes = false;
+                    if kind == "commit" && self.version == 1 && self.attached {
+                        tx.mark_dirty(NodeKey::ROOT)?;
+                        tx.add_tag(UpdateTag::HistoryMerge);
+                    }
+                    loop {
+                        let pending = &fixture.trace[i];
+                        if pending["op"] == "commit" {
+                            self.capture_slots(&tx)?;
+                            let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
+                            self.compare(&pending["updates"], &Value::Array(self.updates.clone()))?;
+                            self.compare(&pending["causes"], &Value::Array(self.causes.clone()))?;
+                            if pending["index"] != self.version {
+                                return Err(fail("commit index mismatch"));
+                            }
+                            self.committed_version = self.version;
+                            self.states
+                                .insert((self.editor_id, self.version), commit.next.clone());
+                            snapshot::compare(
+                                self,
+                                &pending["snapshot"],
+                                &commit.next,
+                                Some(&commit),
+                            )?;
+                            self.updates.clear();
+                            self.causes.clear();
+                            break;
+                        }
+                        let host_end = if pending["op"] == "update" {
+                            self.prepare_host_call(&fixture.trace, i)?
+                        } else {
+                            None
+                        };
+                        self.execute(pending, &mut tx)
+                            .map_err(|e| fail(format!("op {i}: {e}")))?;
+                        if let Some(end) = host_end {
+                            self.finish_host_call()?;
+                            i = end - 1;
+                        }
+                        if pending["op"] == "update"
+                            && pending["opts"]["discrete"] == true
+                            && self.pending_writes
+                        {
+                            let next = fixture.trace[i + 1..]
+                                .iter()
+                                .find(|next| !matches!(next["op"].as_str(), Some("clock" | "log")));
+                            if next.is_none_or(|next| next["op"] != "commit") {
+                                return Err(fail(
+                                    "discrete update lacks immediate commit boundary",
+                                ));
+                            }
+                        }
+                        let next_update = fixture
+                            .trace
+                            .get(i + 1..)
+                            .and_then(|tail| {
+                                tail.iter().find(|next| {
+                                    !matches!(next["op"].as_str(), Some("clock" | "log"))
+                                })
+                            })
+                            .is_some_and(|next| next["op"] == "update");
+                        if pending["op"] == "update"
+                            && !self.pending_writes
+                            && (pending["opts"]["discrete"] == true || !next_update)
+                            && self.on_update.is_empty()
+                        {
+                            self.capture_slots(&tx)?;
+                            let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
+                            if !commit.is_noop() {
+                                return Err(fail("unexpected tag-only commit"));
+                            }
+                            self.version -= 1;
+                            self.updates.clear();
+                            self.causes.clear();
+                            self.pending_writes = false;
+                            break;
+                        }
+                        i += 1;
+                        if i == fixture.trace.len() {
+                            self.capture_slots(&tx)?;
+                            let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
+                            if !commit.is_noop() {
+                                return Err(fail("unconsumed nonempty commit"));
+                            }
+                            self.version -= 1;
+                            break;
+                        }
+                    }
+                    Ok(())
+                }
+                "call" if op["fn"] == "LexicalEditor.dispatchCommand" => {
+                    let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
+                    let mut tx = ed.transaction();
+                    self.begin_slots(&mut tx, false);
+                    self.execute(op, &mut tx)?;
+                    self.capture_slots(&tx)?;
+                    self.pending_install = Some(tx.commit()?);
+                    self.pending_command = true;
+                    Ok(())
+                }
+                "plugin"
+                    if op["name"]
+                        == "@lexical/react/LexicalTabIndentationPlugin.registerTabIndentation" =>
+                {
+                    crate::api::tab::register(self, &op["args"])
+                }
+                "plugin" if op["name"] == "@lexical/code-prism.registerCodeHighlighting" => {
+                    if op["args"] != json!([{"$ed":0}]) {
+                        return Err(fail("Prism plugin arguments"));
+                    }
+                    self.code_prism_registered = true;
+                    Ok(())
+                }
+                "plugin" => {
+                    if op["name"] != "@lexical/rich-text.registerRichText"
+                        || op["args"] != json!([{"$ed":0}])
+                    {
+                        return Err(fail(format!(
+                            "unmapped plugin registration: {}",
+                            op["name"]
+                        )));
+                    }
+                    self.rich_text_registered = true;
+                    Ok(())
+                }
+                "call" | "read" | "log" => {
+                    let ed = editor.as_mut().unwrap_or(&mut scratch);
+                    // resetRandomKey can precede editor construction.
+                    if kind == "call" && op["fn"] == "lexical/LexicalUtils.resetRandomKey" {
+                        self.key_counter.reset()?;
+                        self.compare(&op["ret"], &undefined())
+                    } else {
+                        let mut tx = ed.transaction();
+                        self.begin_slots(&mut tx, false);
+                        self.execute(op, &mut tx)
+                    }
+                }
+                _ => Err(fail(format!("unmapped operation: {kind}"))),
+            };
+            result.map_err(|e| fail(format!("op {i} {kind}: {e}")))?;
+            if let Some(end) = host_end {
+                self.finish_host_call()?;
+                i = end;
+            } else {
+                i += 1;
+            }
+        }
+        if let Some(last) = last_created {
+            let ed = if last == self.editor_id {
+                editor.as_ref()
+            } else {
+                editors.get(&last)
+            }
+            .ok_or_else(|| fail("missing final editor"))?;
+            snapshot::compare(self, &fixture.r#final, ed.state(), None)?;
+        } else {
+            self.compare(&fixture.r#final, &Value::Null)?;
+        }
+        if sessions
+            .values()
+            .any(protocol::EditorSession::has_pending_work)
+        {
+            return Err(fail("unconsumed secondary-editor work"));
+        }
+        if !self.on_update.is_empty() {
+            return Err(fail("unconsumed update callbacks"));
+        }
+        if !self.microtasks.is_empty() {
+            return Err(fail("unconsumed microtask callback"));
+        }
+        if !self.pending_editor_random.is_empty() {
+            return Err(fail("unconsumed editor entropy"));
+        }
+        for (position, tape) in self.tape_positions.iter().zip(&self.tapes) {
+            if *position != tape.invocations.len() {
+                return Err(fail("missing callback tape invocations"));
+            }
+        }
+        Ok(())
+    }
+    // These inputs belong to upstream editor bookkeeping, not sans-I/O node
+    // algorithms: editor ids draw Math.random; commit scheduling reads performance.
+    // Consume their protocol explicitly, without claiming a model entropy read.
+    fn host_input(&mut self, op: &Value) -> Result<()> {
+        match string(&op["op"])? {
+            "entropy" => {
+                if op["src"] != "random" || self.pending_editor_random.len() >= 2 {
+                    return Err(fail("unsupported entropy draw"));
+                }
+                let value = op["v"]
+                    .as_f64()
+                    .filter(|v| *v >= 0.0 && *v < 1.0)
+                    .ok_or_else(|| fail("invalid editor random draw"))?;
+                self.pending_editor_random.push(value);
+            }
+            "clock" => {
+                if op["src"] == "date" {
+                    self.node_clock
+                        .store(integer(&op["t"])?, std::sync::atomic::Ordering::Relaxed);
+                    return Ok(());
+                }
+                if op["src"] != "perf" {
+                    return Err(fail("unsupported clock source"));
+                }
+                let value = op["t"]
+                    .as_f64()
+                    .filter(|v| v.is_finite() && *v >= self.clock)
+                    .ok_or_else(|| fail("invalid scheduling clock"))?;
+                self.clock = value;
+            }
+            "tick" => {
+                if integer(&op["n"])? != self.tick {
+                    return Err(fail("tick order mismatch"));
+                }
+                if !matches!(
+                    op["reason"].as_str(),
+                    Some("microtask" | "read-flush" | "onUpdate" | "await")
+                ) {
+                    return Err(fail("unsupported batching boundary"));
+                }
+                self.tick += 1;
+            }
+            _ => return Err(fail("invalid host input")),
+        }
+        Ok(())
+    }
+    pub(crate) fn execute(&mut self, op: &Value, tx: &mut Transaction<'_>) -> Result<()> {
+        validate_operation(op)?;
+        match string(&op["op"])? {
+            "call" => {
+                let selection = tx.selection().cloned();
+                let replacements = tx.selection_replacements();
+                let result = crate::api::lexical::call(self, tx, op);
+                if replacements != tx.selection_replacements()
+                    && let Some(id) = self.active_selection.take()
+                    && let Some(selection) = selection
+                {
+                    self.selections[id] = tx.detach_selection(selection);
+                }
+                if let Some(expected) = op.get("throws") {
+                    match result {
+                        Ok(value) => {
+                            Err(fail(format!("expected exception {expected}, got {value}")))
+                        }
+                        Err(error @ ReplayError::NoActiveEditor) => self.compare(
+                            expected,
+                            &json!({"name":"Error", "message":error.to_string()}),
+                        ),
+                        Err(ReplayError::Model(error)) => self.compare(
+                            expected,
+                            &json!({"name":"Error", "message":error.to_string()}),
+                        ),
+                        Err(other) => Err(other),
+                    }
+                } else {
+                    let actual = result?;
+                    self.compare(op.get("ret").unwrap_or(&undefined()), &actual)
+                        .map_err(|e| fail(format!("{}: {e}", op["fn"])))
+                }
+            }
+            "update" => {
+                if let Some(callback) = op["opts"].get("onUpdate") {
+                    self.on_update.push(callback.clone());
+                }
+                if op["cause"] != "test"
+                    && !(self.rich_text_registered
+                        && op["cause"] == "listener-enqueued"
+                        && op["calls"] == json!([]))
+                {
+                    return Err(fail("unimplemented plugin cascade"));
+                }
+                self.updates.push(op["id"].clone());
+                if !self.causes.contains(&op["cause"]) {
+                    self.causes.push(op["cause"].clone());
+                }
+                if let Some(selection) = op.get("selectionAtBegin") {
+                    return Err(fail(format!("unimplemented view selection: {selection}")));
+                }
+                if let Some(tag) = op["opts"]["tag"].as_str() {
+                    tx.add_tag(tag.parse().map_err(|_| fail("tag"))?);
+                }
+                if let Some(tags) = op["opts"]["tag"].as_array() {
+                    for tag in tags {
+                        tx.add_tag(string(tag)?.parse().map_err(|_| fail("tag"))?);
+                    }
+                }
+
+                let result = self.execute_calls(&op["calls"], tx).and_then(|()| {
+                    if self.code_prism_registered {
+                        crate::api::tab::initialize_code_language(tx)?;
+                    }
+                    self.pending_writes |= tx.has_dirty_nodes()
+                        || tx.selection() != tx.committed_state().selection()
+                        || tx.selection().is_some_and(Selection::is_dirty);
+                    tx.flush_with(if op["opts"]["skipTransforms"] == true {
+                        FlushMode::NormalizeOnly
+                    } else {
+                        FlushMode::Transforms
+                    })
+                    .map_err(Into::into)
+                });
+                if op.get("error").is_some() {
+                    return Err(fail(format!("unimplemented update rollback: {result:?}")));
+                }
+                result
+            }
+            "read" => {
+                let previous = self.read_state.take();
+                self.read_state = if let Some(state) = op.get("state") {
+                    let decoded = self.decode(state)?;
+                    Some(self.saved_states[integer(&decoded["$snapshot"])? as usize].clone())
+                } else if self.updates.is_empty() {
+                    Some(tx.committed_state().clone())
+                } else {
+                    None
+                };
+                let result = self.execute_calls(&op["calls"], tx);
+                self.read_state = previous;
+                result
+            }
+            "tick" => {
+                self.host_input(op)?;
+                while let Some(callback) = self.microtasks.pop_front() {
+                    self.invoke_tape(tx, &callback, &[])?;
+                }
+                Ok(())
+            }
+            "clock" | "entropy" => self.host_input(op),
+            "log" => {
+                if !matches!(op["level"].as_str(), Some("warn" | "error")) {
+                    return Err(fail("unsupported advisory log level"));
+                }
+                string(&op["message"])?;
+                Ok(())
+            }
+            other => Err(fail(format!("unmapped operation: {other}"))),
+        }
+    }
+    pub(crate) fn invoke_tape(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        callback: &Value,
+        args: &[Value],
+    ) -> Result<Value> {
+        let id = integer(&callback["$tape"])? as usize;
+        let position = self
+            .tape_positions
+            .get_mut(id)
+            .ok_or_else(|| fail("unknown callback tape"))?;
+        let invocation = self
+            .tapes
+            .get(id)
+            .and_then(|tape| tape.invocations.get(*position))
+            .cloned()
+            .ok_or_else(|| fail("extra callback invocation"))?;
+        *position += 1;
+        self.compare(&Value::Array(invocation.args), &Value::Array(args.to_vec()))?;
+        self.execute_calls(&Value::Array(invocation.calls), tx)?;
+        if let Some(error) = invocation.throws {
+            return Err(fail(format!("callback threw: {error}")));
+        }
+        self.decode(invocation.ret.as_ref().unwrap_or(&undefined()))
+    }
+    pub(crate) fn execute_calls(&mut self, calls: &Value, tx: &mut Transaction<'_>) -> Result<()> {
+        let previous = self.in_callback;
+        self.in_callback = true;
+        let result = self.execute_callback_calls(calls, tx);
+        self.in_callback = previous;
+        result
+    }
+    fn execute_callback_calls(&mut self, calls: &Value, tx: &mut Transaction<'_>) -> Result<()> {
+        let calls = calls.as_array().ok_or_else(|| fail("expected calls"))?;
+        let mut index = 0;
+        while index < calls.len() {
+            let end = self.prepare_host_call(calls, index)?;
+            self.execute(&calls[index], tx)
+                .map_err(|error| fail(format!("call {index}: {error}")))?;
+            if let Some(end) = end {
+                self.finish_host_call()?;
+                index = end;
+            } else {
+                index += 1;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn decode(&self, value: &Value) -> Result<Value> {
+        if let Some(object) = value.as_object() {
+            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
+                if let Some(id) = object.get(tag) {
+                    return self
+                        .handles
+                        .get(&format!("{tag}:{id}"))
+                        .cloned()
+                        .ok_or_else(|| fail(format!("unknown handle {tag}:{id}")));
+                }
+            }
+            if let Some(raw) = object.get("$key") {
+                let _ = raw;
+                let key = self
+                    .keys
+                    .get(string(&object["raw"])?)
+                    .ok_or_else(|| fail("unknown key"))?;
+                return Ok(json!({"$nodeKey":key_wire(*key)}));
+            }
+            let mut decoded = serde_json::Map::new();
+            for (key, value) in object {
+                decoded.insert(key.clone(), self.decode(value)?);
+            }
+            return Ok(Value::Object(decoded));
+        }
+        if let Some(array) = value.as_array() {
+            return array.iter().map(|v| self.decode(v)).collect();
+        }
+        Ok(value.clone())
+    }
+    pub(crate) fn compare(&mut self, expected: &Value, actual: &Value) -> Result<()> {
+        if let Some(object) = expected.as_object() {
+            for (tag, actual_tag) in [
+                ("$h", "$node"),
+                ("$ed", "$editor"),
+                ("$state", "$snapshot"),
+                ("$sel", "$selection"),
+                ("$pt", "$point"),
+                ("$caret", "$caretValue"),
+                ("$iterator", "$iteratorValue"),
+            ] {
+                if let Some(id) = object.get(tag) {
+                    if actual.get(actual_tag).is_none() {
+                        return Err(fail(format!("expected {tag} object, got {actual}")));
+                    }
+                    let binding = format!("{tag}:{id}");
+                    if let Some(bound) = self.handles.get(&binding) {
+                        if bound != actual {
+                            return Err(fail(format!(
+                                "identity mismatch {binding}: {bound} != {actual}"
+                            )));
+                        }
+                    } else {
+                        if tag == "$caret" {
+                            for field in ["type", "direction"] {
+                                if object.get(field) != actual.get(field) {
+                                    return Err(fail(format!("caret {field} mismatch")));
+                                }
+                            }
+                            if let Some(origin) = object.get("origin") {
+                                self.compare(origin, &actual["origin"])?;
+                            }
+                            for field in ["caret", "distance"] {
+                                if let Some(expected) = object.get(field) {
+                                    self.compare(expected, &actual[field])?;
+                                }
+                            }
+                        }
+                        if tag == "$sel" && object.get("kind") != actual.get("kind") {
+                            return Err(fail("selection kind mismatch"));
+                        }
+                        if tag == "$h" {
+                            if !["key", "type", "ver"]
+                                .iter()
+                                .all(|key| object.contains_key(*key))
+                            {
+                                return Err(fail("new node handle lacks identity metadata"));
+                            }
+                            if let Some(typ) = object.get("type")
+                                && typ != &actual["type"]
+                                && !(self.d6_collapse_code_highlight
+                                    && self.code_prism_registered
+                                    && typ == "code-highlight"
+                                    && actual["type"] == "text"
+                                    && self.d6_model_leaves.contains(&node_key(actual)?))
+                            {
+                                return Err(fail(format!(
+                                    "node type: {typ} != {}",
+                                    actual["type"]
+                                )));
+                            }
+                            if let Some(ver) = object.get("ver")
+                                && ver != &actual["ver"]
+                            {
+                                return Err(fail(format!(
+                                    "node version: {ver} != {}",
+                                    actual["ver"]
+                                )));
+                            }
+                            if let Some(raw) = object.get("key") {
+                                self.bind_key(string(raw)?, node_key(actual)?)?;
+                                if self.d6_collapse_code_highlight && self.code_prism_registered {
+                                    self.d6_handle_keys
+                                        .insert(binding.clone(), string(raw)?.to_owned());
+                                }
+                            }
+                        }
+                        if self
+                            .handles
+                            .iter()
+                            .any(|(other, value)| other.starts_with(tag) && value == actual)
+                        {
+                            return Err(fail(format!("distinct oracle handles alias {binding}")));
+                        }
+                        self.handles.insert(binding, actual.clone());
+                    }
+                    return Ok(());
+                }
+            }
+            if object.contains_key("$key") {
+                let key = if actual.get("$nodeKey").is_some() {
+                    key_index(&actual["$nodeKey"])?
+                } else if let Some(raw) = actual.as_str() {
+                    if raw == "root" {
+                        NodeKey::ROOT
+                    } else {
+                        key_index(&json!(
+                            raw.parse::<u32>().map_err(|_| fail("actual key string"))?
+                        ))?
+                    }
+                } else {
+                    return Err(fail(format!("expected key got {actual}")));
+                };
+                return self.bind_key(string(&object["raw"])?, key);
+            }
+            let a = actual
+                .as_object()
+                .ok_or_else(|| fail(format!("object mismatch: {expected} != {actual}")))?;
+            if object.len() != a.len() {
+                return Err(fail(format!(
+                    "object shape mismatch: {expected} != {actual}"
+                )));
+            }
+            for (key, value) in object {
+                self.compare(
+                    value,
+                    a.get(key)
+                        .ok_or_else(|| fail(format!("missing field {key}")))?,
+                )?;
+            }
+            return Ok(());
+        }
+        if let Some(array) = expected.as_array() {
+            let a = actual
+                .as_array()
+                .ok_or_else(|| fail(format!("array mismatch: {expected} != {actual}")))?;
+            if array.len() != a.len() {
+                return Err(fail(format!(
+                    "array length mismatch: {expected} != {actual}"
+                )));
+            }
+            for (e, a) in array.iter().zip(a) {
+                self.compare(e, a)?;
+            }
+            return Ok(());
+        }
+        if expected != actual {
+            return Err(fail(format!("value mismatch: {expected} != {actual}")));
+        }
+        Ok(())
+    }
+    pub(crate) fn bind_key(&mut self, raw: &str, key: NodeKey) -> Result<()> {
+        if self.strict_keys && raw != key.to_string() {
+            return Err(fail(format!(
+                "strict key allocation mismatch: {raw} != {key}"
+            )));
+        }
+        if let Some(existing) = self.keys.get(raw) {
+            if *existing != key {
+                return Err(fail(format!(
+                    "key bijection mismatch: {raw} {existing} != {key}"
+                )));
+            }
+        } else {
+            if self.keys.values().any(|other| *other == key) {
+                return Err(fail(format!(
+                    "key bijection is not injective: {raw} -> {key}"
+                )));
+            }
+            self.keys.insert(raw.into(), key);
+        }
+        Ok(())
+    }
+    pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
+        let node = view.node_or_err(key)?;
+        let pointer = std::ptr::from_ref(node.base()) as usize;
+        let (version, identity) = if let Some(record) = self.records.get(&(key, pointer)) {
+            *record
+        } else {
+            let identity = self.next_record;
+            self.next_record += 1;
+            let record = (self.record_version, identity);
+            self.records.insert((key, pointer), record);
+            record
+        };
+        Ok(
+            json!({"$node":key_wire(key),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
+        )
+    }
+    pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Value {
+        if tx.selection().is_none() {
+            return Value::Null;
+        }
+        if let Some(id) = self.active_selection {
+            return json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}});
+        }
+        let id = self.selections.len();
+        self.selections.push(SelectionSlot::Active);
+        self.selection_values.push(None);
+        self.active_selection = Some(id);
+        json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}})
+    }
+}
+pub(crate) fn key_wire(key: NodeKey) -> u64 {
+    (u64::from(key.generation()) << 32) | u64::from(key.index())
+}
+pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
+    let encoded = integer(value)?;
+    Ok(NodeKey::from_parts(KeyParts {
+        generation: (encoded >> 32) as u32,
+        index: (encoded & u64::from(u32::MAX)) as u32,
+    }))
+}
+pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
+    key_index(&value["$node"])
+}
+
+#[cfg(test)]
+mod test;
+
+fn materialize_keys(value: &mut Value) -> Result<()> {
+    if value.get("$nodeKey").is_some() {
+        *value = json!(key_index(&value["$nodeKey"])?.to_string());
+    } else if let Some(object) = value.as_object_mut() {
+        for child in object.values_mut() {
+            materialize_keys(child)?;
+        }
+    } else if let Some(array) = value.as_array_mut() {
+        for child in array {
+            materialize_keys(child)?;
+        }
+    }
+    Ok(())
+}

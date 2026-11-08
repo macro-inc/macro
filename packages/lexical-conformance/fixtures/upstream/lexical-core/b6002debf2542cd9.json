@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/external-chat-references.test.ts",
+    "test": [
+      "External chat references in channel messages",
+      "keeps the external chat entity type on an authored reference"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/message-references.messageReference",
+      "args": [
+        "external_chat",
+        "01a16445-9fdc-7bb1-80b4-8935a1243c98"
+      ],
+      "ret": {
+        "entityType": "external_chat",
+        "entityId": "01a16445-9fdc-7bb1-80b4-8935a1243c98"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

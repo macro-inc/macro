@@ -27,7 +27,7 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::{DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl};
+use macro_service_urls::{DocumentStorageServiceUrl, StaticFileServiceUrl};
 use messages::domain::api::MessageServiceApi;
 use messages::outbound::pg_message_repo::PgMessageRepository;
 use properties::{
@@ -118,7 +118,7 @@ pub struct TriggerServices {
 pub async fn supervise(
     pool: PgPool,
     kafka_brokers: String,
-    internal_api_key: String,
+    lexical: LexicalClient,
     document_storage_service_auth_key: String,
     services: TriggerServices,
 ) {
@@ -126,7 +126,7 @@ pub async fn supervise(
         if let Err(error) = run(
             pool.clone(),
             kafka_brokers.clone(),
-            internal_api_key.clone(),
+            lexical.clone(),
             document_storage_service_auth_key.clone(),
             services.clone(),
         )
@@ -141,7 +141,7 @@ pub async fn supervise(
 async fn run(
     pool: PgPool,
     kafka_brokers: String,
-    internal_api_key: String,
+    lexical: LexicalClient,
     document_storage_service_auth_key: String,
     services: TriggerServices,
 ) -> anyhow::Result<()> {
@@ -151,7 +151,6 @@ async fn run(
         admission,
         messages,
     } = services;
-    let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
     let documents = DocumentStorageServiceClient::new(
         document_storage_service_auth_key,
         DocumentStorageServiceUrl::new()?.to_string(),

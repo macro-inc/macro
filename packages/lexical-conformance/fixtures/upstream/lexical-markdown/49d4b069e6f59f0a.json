@@ -1,0 +1,467 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "$convertSelectionToMarkdownString",
+      "converts full selection to markdown"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "link"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+      },
+      "list": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+      },
+      "listitem": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+      },
+      "quote": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+      },
+      "code": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+      },
+      "link": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "link"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+          },
+          "list": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+          },
+          "listitem": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+          },
+          "code": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+          },
+          "link": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Hello World"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.select",
+          "args": [
+            0
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$sel": 5,
+            "kind": "range"
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Hello World",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 3,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 3,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 11,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "Hello World",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            3
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              4,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 6
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertSelectionToMarkdownString",
+          "args": [
+            [
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.HEADING"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.QUOTE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.CODE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.INLINE_CODE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.LINK"
+              }
+            ],
+            {
+              "$sel": 5
+            }
+          ],
+          "ret": "Hello World"
+        }
+      ],
+      "state": {
+        "$state": 6
+      },
+      "opts": {
+        "editor": {
+          "$ed": 0
+        }
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Hello World",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 3,
+          "raw": "2"
+        },
+        "path": [
+          0,
+          0
+        ],
+        "offset": 0,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 3,
+          "raw": "2"
+        },
+        "path": [
+          0,
+          0
+        ],
+        "offset": 11,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "Hello World",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2"
+    ]
+  }
+}

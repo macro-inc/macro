@@ -1,0 +1,28 @@
+[package]
+name = "lexical_conformance_wasm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["js-nodes"]
+js-nodes = ["lexical_model/foreign-nodes"]
+
+[dependencies]
+lexical_loro.workspace = true
+macro_document_model = { workspace = true, default-features = false, features = ["html"] }
+macro_document_composers.workspace = true
+thiserror.workspace = true
+lexical_model.workspace = true
+lexical_rich_nodes.workspace = true
+lexical_markdown.workspace = true
+regress.workspace = true
+wasm-bindgen.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+
+[build-dependencies]
+serde_json.workspace = true

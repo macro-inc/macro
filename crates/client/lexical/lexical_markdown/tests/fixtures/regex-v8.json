@@ -1,0 +1,6424 @@
+{
+  "upstream": "0.45.0",
+  "node": "24.18.0",
+  "patterns": [
+    {
+      "name": "CHECK_LIST",
+      "source": "^(\\s*)(?:[-*+]\\s)?\\s?(\\[(\\s|x)?\\])\\s",
+      "flags": "i"
+    },
+    {
+      "name": "CODE_END",
+      "source": "^[ \\t]*`{3,}$",
+      "flags": ""
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "source": "^[ \\t]*```[^`]+(?:(?:`{1,2}|`{4,})[^`]+)*```(?:[^`]|$)",
+      "flags": ""
+    },
+    {
+      "name": "CODE_SPAN",
+      "source": "(^|[^\\\\`])(`)((?:\\\\`|[^`])+?)(`)(?!`)",
+      "flags": ""
+    },
+    {
+      "name": "CODE_START",
+      "source": "^([ \\t]*`{3,})([\\w-]+)?[ \\t]?",
+      "flags": ""
+    },
+    {
+      "name": "HEADING",
+      "source": "^(#{1,6})\\s",
+      "flags": ""
+    },
+    {
+      "name": "LINK",
+      "source": "(?:\\[([^[\\]]*(?:\\[[^[\\]]*\\][^[\\]]*)*)\\])(?:\\((?:([^()\\s]+)(?:\\s\"((?:[^\"]*\\\\\")*[^\"]*)\"\\s*)?)\\))$",
+      "flags": ""
+    },
+    {
+      "name": "LINK_IMPORT",
+      "source": "(?:\\[(.+?)\\])(?:\\((?:([^()\\s]+)(?:\\s\"((?:[^\"]*\\\\\")*[^\"]*)\"\\s*)?)\\))",
+      "flags": ""
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "source": "^(\\s{0,3}\\d+)(\\.\\s)",
+      "flags": ""
+    },
+    {
+      "name": "ORDERED_LIST",
+      "source": "^(\\s*)(\\d{1,})\\.\\s",
+      "flags": ""
+    },
+    {
+      "name": "QUOTE",
+      "source": "^>\\s",
+      "flags": ""
+    },
+    {
+      "name": "TABLE_ROW",
+      "source": "^(?:\\|)(.+)(?:\\|)\\s?$",
+      "flags": ""
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "source": "^(\\| ?:?-*:? ?)+\\|\\s?$",
+      "flags": ""
+    },
+    {
+      "name": "TAG_END",
+      "source": "^</[a-z_][\\w-]*\\s*>",
+      "flags": "i"
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "source": "(?:^</[a-z_][\\w-]*\\s*>)$",
+      "flags": "i"
+    },
+    {
+      "name": "TAG_START",
+      "source": "^<[a-z_][\\w-]*(?:\\s[^<>]*)?/?>",
+      "flags": "i"
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "source": "(?:^<[a-z_][\\w-]*(?:\\s[^<>]*)?/?>)$",
+      "flags": "i"
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "source": "^(\\s*)[-*+]\\s",
+      "flags": ""
+    }
+  ],
+  "cases": [
+    {
+      "name": "CHECK_LIST",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "  [X] check",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "  [X] ",
+            "  ",
+            "[X]",
+            "X"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "CHECK_LIST",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_END",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "```js\n😀\n```",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "```js\n😀\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "```\ncode\n```\nNext line",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "```\ncode\n```\n"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SINGLE_LINE",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "😀`code`",
+      "matches": [
+        {
+          "index": 1,
+          "groups": [
+            "�`code`",
+            "�",
+            "`",
+            "code",
+            "`"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "**bold `code` end**",
+      "matches": [
+        {
+          "index": 6,
+          "groups": [
+            " `code`",
+            " ",
+            "`",
+            "code",
+            "`"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": [
+        {
+          "index": 18,
+          "groups": [
+            " `code`",
+            " ",
+            "`",
+            "code",
+            "`"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_SPAN",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "```js\n😀\n```",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "```js",
+            "```",
+            "js"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_START",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "```\ncode\n```\nNext line",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "```",
+            "```",
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CODE_START",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "CODE_START",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "# heading",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "# ",
+            "#"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "HEADING",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "HEADING",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "[a](https://example.com \"title\")",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "[a](https://example.com \"title\")",
+            "a",
+            "https://example.com",
+            "title"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LINK",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "[a](https://example.com \"title\")",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "[a](https://example.com \"title\")",
+            "a",
+            "https://example.com",
+            "title"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "LINK_IMPORT",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "7. item",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "7. ",
+            "7",
+            ". "
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "LIST_ESCAPE",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "7. item",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "7. ",
+            "",
+            "7"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "ORDERED_LIST",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "QUOTE",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "| a |",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "| a |",
+            " a "
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "| :-: |",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "| :-: |",
+            " :-: "
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "| :-: |",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "| :-: |",
+            "| :-: "
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TABLE_ROW_DIVIDER",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_END_AT_END",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "<span>",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<span>"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START",
+      "text": "<my_tag x=\"y\">",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<my_tag x=\"y\">"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<MyComponent>"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<div>"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<span>",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<span>"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<my_tag x=\"y\">",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "<my_tag x=\"y\">"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "- list",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "TAG_START_AT_END",
+      "text": "A\n   \nB",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ſ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "K",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "İ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ı",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ẞ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ςΣσ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ͅ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "Ꭰꭰ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "😀x",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "😀`code`",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "𐐀a",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "á",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<ſpan>",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<Kbd>",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<span>",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<my_tag x=\"y\">",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "# heading",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "[a](https://example.com \"title\")",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "**bold `code` end**",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "\\*literal\\*",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "```js\n😀\n```",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "- list",
+      "matches": [
+        {
+          "index": 0,
+          "groups": [
+            "- ",
+            ""
+          ]
+        }
+      ]
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "  [X] check",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "7. item",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "| a |",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "| :-: |",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "a\r\nb",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "a b",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "﻿x",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "x",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "foo   \nbar",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "foo  \nbar",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "foo   \n\nbar",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "   foo\n\nbar",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "```\ncode\n```\nNext line",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "Hello\n   world   ",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "foo\nbar  \nbaz",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "Hello\nworld",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "<div>\ncontent\n</div>\nafter",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "A1\n     \nA2",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "foo\\\nbar",
+      "matches": []
+    },
+    {
+      "name": "UNORDERED_LIST",
+      "text": "A\n   \nB",
+      "matches": []
+    }
+  ],
+  "formats": [
+    {
+      "text": "",
+      "match": null
+    },
+    {
+      "text": "ſ",
+      "match": null
+    },
+    {
+      "text": "K",
+      "match": null
+    },
+    {
+      "text": "İ",
+      "match": null
+    },
+    {
+      "text": "ı",
+      "match": null
+    },
+    {
+      "text": "ẞ",
+      "match": null
+    },
+    {
+      "text": "ςΣσ",
+      "match": null
+    },
+    {
+      "text": "ͅ",
+      "match": null
+    },
+    {
+      "text": "ﬀﬁﬂﬃﬄﬅﬆ",
+      "match": null
+    },
+    {
+      "text": "Ꭰꭰ",
+      "match": null
+    },
+    {
+      "text": "😀x",
+      "match": null
+    },
+    {
+      "text": "😀`code`",
+      "match": {
+        "start": 2,
+        "end": 8,
+        "tag": "`",
+        "content": "code"
+      }
+    },
+    {
+      "text": "𐐀a",
+      "match": null
+    },
+    {
+      "text": "á",
+      "match": null
+    },
+    {
+      "text": "<ſpan>",
+      "match": null
+    },
+    {
+      "text": "<Kbd>",
+      "match": null
+    },
+    {
+      "text": "<span>",
+      "match": null
+    },
+    {
+      "text": "<my_tag x=\"y\">",
+      "match": null
+    },
+    {
+      "text": "# heading",
+      "match": null
+    },
+    {
+      "text": "[a](https://example.com \"title\")",
+      "match": null
+    },
+    {
+      "text": "**bold `code` end**",
+      "match": {
+        "start": 0,
+        "end": 19,
+        "tag": "**",
+        "content": "bold `code` end"
+      }
+    },
+    {
+      "text": "a_b_c a*b*c **bold `code` end** ~~gone~~ ==hi==",
+      "match": {
+        "start": 19,
+        "end": 25,
+        "tag": "`",
+        "content": "code"
+      }
+    },
+    {
+      "text": "\\*literal\\*",
+      "match": null
+    },
+    {
+      "text": "```js\n😀\n```",
+      "match": null
+    },
+    {
+      "text": "- list",
+      "match": null
+    },
+    {
+      "text": "  [X] check",
+      "match": null
+    },
+    {
+      "text": "7. item",
+      "match": null
+    },
+    {
+      "text": "| a |",
+      "match": null
+    },
+    {
+      "text": "| :-: |",
+      "match": null
+    },
+    {
+      "text": "a\r\nb",
+      "match": null
+    },
+    {
+      "text": "a b",
+      "match": null
+    },
+    {
+      "text": "﻿x",
+      "match": null
+    },
+    {
+      "text": "x",
+      "match": null
+    },
+    {
+      "text": "\n| a | b |\n| --- | --- |\n| c | d |\n",
+      "match": null
+    },
+    {
+      "text": "foo   \nbar",
+      "match": null
+    },
+    {
+      "text": "foo  \nbar",
+      "match": null
+    },
+    {
+      "text": "foo   \n\nbar",
+      "match": null
+    },
+    {
+      "text": "   foo\n\nbar",
+      "match": null
+    },
+    {
+      "text": "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+      "match": null
+    },
+    {
+      "text": "<MyComponent>Line 1\nSome Text</MyComponent>",
+      "match": null
+    },
+    {
+      "text": "```\ncode\n```\nNext line",
+      "match": null
+    },
+    {
+      "text": "Hello\n   world   ",
+      "match": null
+    },
+    {
+      "text": "foo\nbar  \nbaz",
+      "match": null
+    },
+    {
+      "text": "Hello\nworld",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.HEADING",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.QUOTE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.CODE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.INLINE_CODE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_STAR",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH",
+      "match": null
+    },
+    {
+      "text": "@lexical/markdown/MarkdownTransformers.LINK",
+      "match": null
+    },
+    {
+      "text": "<div>\ncontent\n</div>\nafter",
+      "match": null
+    },
+    {
+      "text": "A1\n     \nA2",
+      "match": null
+    },
+    {
+      "text": "foo\\\nbar",
+      "match": null
+    },
+    {
+      "text": "A\n   \nB",
+      "match": null
+    }
+  ],
+  "ledger": [
+    {
+      "reason": "lone-surrogate",
+      "inputUnits": [
+        55296
+      ],
+      "runs": [
+        {
+          "name": "CHECK_LIST",
+          "matches": []
+        },
+        {
+          "name": "CODE_END",
+          "matches": []
+        },
+        {
+          "name": "CODE_SINGLE_LINE",
+          "matches": []
+        },
+        {
+          "name": "CODE_SPAN",
+          "matches": []
+        },
+        {
+          "name": "CODE_START",
+          "matches": []
+        },
+        {
+          "name": "HEADING",
+          "matches": []
+        },
+        {
+          "name": "LINK",
+          "matches": []
+        },
+        {
+          "name": "LINK_IMPORT",
+          "matches": []
+        },
+        {
+          "name": "LIST_ESCAPE",
+          "matches": []
+        },
+        {
+          "name": "ORDERED_LIST",
+          "matches": []
+        },
+        {
+          "name": "QUOTE",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW_DIVIDER",
+          "matches": []
+        },
+        {
+          "name": "TAG_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_END_AT_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_START",
+          "matches": []
+        },
+        {
+          "name": "TAG_START_AT_END",
+          "matches": []
+        },
+        {
+          "name": "UNORDERED_LIST",
+          "matches": []
+        }
+      ],
+      "decision": "S3 §2.9 R-5: raw input cannot cross the Rust UTF-8 boundary; excluded comparison"
+    },
+    {
+      "reason": "lone-surrogate",
+      "inputUnits": [
+        57343
+      ],
+      "runs": [
+        {
+          "name": "CHECK_LIST",
+          "matches": []
+        },
+        {
+          "name": "CODE_END",
+          "matches": []
+        },
+        {
+          "name": "CODE_SINGLE_LINE",
+          "matches": []
+        },
+        {
+          "name": "CODE_SPAN",
+          "matches": []
+        },
+        {
+          "name": "CODE_START",
+          "matches": []
+        },
+        {
+          "name": "HEADING",
+          "matches": []
+        },
+        {
+          "name": "LINK",
+          "matches": []
+        },
+        {
+          "name": "LINK_IMPORT",
+          "matches": []
+        },
+        {
+          "name": "LIST_ESCAPE",
+          "matches": []
+        },
+        {
+          "name": "ORDERED_LIST",
+          "matches": []
+        },
+        {
+          "name": "QUOTE",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW_DIVIDER",
+          "matches": []
+        },
+        {
+          "name": "TAG_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_END_AT_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_START",
+          "matches": []
+        },
+        {
+          "name": "TAG_START_AT_END",
+          "matches": []
+        },
+        {
+          "name": "UNORDERED_LIST",
+          "matches": []
+        }
+      ],
+      "decision": "S3 §2.9 R-5: raw input cannot cross the Rust UTF-8 boundary; excluded comparison"
+    },
+    {
+      "reason": "lone-surrogate",
+      "pattern": "CODE_SPAN",
+      "text": "😀`code`",
+      "index": 1,
+      "group": 0,
+      "units": [
+        56832,
+        96,
+        99,
+        111,
+        100,
+        101,
+        96
+      ],
+      "decision": "S3 §2.9 R-5: capture decodes lone surrogates as U+FFFD"
+    },
+    {
+      "reason": "lone-surrogate",
+      "pattern": "CODE_SPAN",
+      "text": "😀`code`",
+      "index": 1,
+      "group": 1,
+      "units": [
+        56832
+      ],
+      "decision": "S3 §2.9 R-5: capture decodes lone surrogates as U+FFFD"
+    }
+  ]
+}

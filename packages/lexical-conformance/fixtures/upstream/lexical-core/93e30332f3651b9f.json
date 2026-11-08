@@ -1,0 +1,550 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/list-transformers.test.ts",
+    "test": [
+      "custom ordered-list transformer",
+      "imports and exports a markdown list that starts after 1"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "6. Reply"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Reply",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "z5GQuaI5"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  },
+                  "checked": {
+                    "$undef": true
+                  },
+                  "value": 6
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "task-list",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "listType": "number",
+              "start": 6,
+              "tag": "ol"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        174,
+        136,
+        55,
+        26,
+        18,
+        81,
+        33,
+        181
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        149,
+        97,
+        67,
+        192,
+        238,
+        45,
+        85,
+        251
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Reply",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "z5GQuaI5"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  },
+                  "checked": {
+                    "$undef": true
+                  },
+                  "value": 6
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "task-list",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "listType": "number",
+              "start": 6,
+              "tag": "ol"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Reply",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "z5GQuaI5"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                },
+                "checked": {
+                  "$undef": true
+                },
+                "value": 6
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "listType": "number",
+            "start": 6,
+            "tag": "ol"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Reply",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "z5GQuaI5"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                },
+                "checked": {
+                  "$undef": true
+                },
+                "value": 6
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "listType": "number",
+            "start": 6,
+            "tag": "ol"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Reply",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "z5GQuaI5"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "listitem",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              },
+              "checked": {
+                "$undef": true
+              },
+              "value": 6
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "task-list",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "listType": "number",
+          "start": 6,
+          "tag": "ol"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Reply",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "z5GQuaI5"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "listitem",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              },
+              "checked": {
+                "$undef": true
+              },
+              "value": 6
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "task-list",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "listType": "number",
+          "start": 6,
+          "tag": "ol"
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Reply",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "z5GQuaI5"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "listitem",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              },
+              "checked": {
+                "$undef": true
+              },
+              "value": 6
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "task-list",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "listType": "number",
+          "start": 6,
+          "tag": "ol"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.serializedEditorStateToMarkdown",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Reply",
+                        "type": "text",
+                        "version": 1,
+                        "$": {
+                          "id": "z5GQuaI5"
+                        }
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "kI0PCq-Q"
+                    },
+                    "checked": {
+                      "$undef": true
+                    },
+                    "value": 6
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "task-list",
+                "version": 1,
+                "$": {
+                  "id": "XVzrpx_u"
+                },
+                "listType": "number",
+                "start": 6,
+                "tag": "ol"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1,
+            "$": {
+              "id": "Dn8oR1js"
+            }
+          }
+        }
+      ],
+      "ret": "6. Reply"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.388584918808192
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5480471786577255
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
