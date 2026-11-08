@@ -68,7 +68,7 @@
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
       routineStartersFilter =
-        path: _type: builtins.match ".*/crates/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
+        path: _type: builtins.match ".*/crates/agents/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
       # Rust templates (askama, minijinja) include their stylesheets, such as
       # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
       # stylesheets under Rust crates and services: matching every `.css` would
