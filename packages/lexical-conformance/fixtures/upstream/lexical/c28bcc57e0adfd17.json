@@ -1,0 +1,3346 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+    "test": [
+      "LexicalCaret",
+      "Ordering",
+      "$getCommonAncestor",
+      "trivial node checks"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "paragraph text"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "link text"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$createLinkNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "link",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "item 1"
+          ],
+          "ret": {
+            "$h": 6,
+            "key": "5",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "item 2"
+          ],
+          "ret": {
+            "$h": 7,
+            "key": "6",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "7",
+            "type": "listitem",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 9,
+            "key": "8",
+            "type": "listitem",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListNode",
+          "args": [
+            "bullet"
+          ],
+          "ret": {
+            "$h": 10,
+            "key": "9",
+            "type": "list",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 11,
+            "key": "10",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 12,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 8
+          },
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 9
+          },
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.append",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "this": {
+            "$h": 10
+          },
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "this": {
+            "$h": 12
+          },
+          "ret": {
+            "$h": 12
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "paragraph text",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "link text",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "item 1",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "item 2",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 2
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "paragraph textlink text\n\nitem 1\n\nitem 2\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "elements": [
+            [
+              4,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              9,
+              true
+            ],
+            [
+              10,
+              false
+            ],
+            [
+              11,
+              true
+            ],
+            [
+              12,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getChildCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 13,
+            "type": "child",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 14,
+            "type": "sibling",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCaretRange",
+          "args": [
+            {
+              "$caret": 13
+            },
+            {
+              "$caret": 14
+            }
+          ],
+          "ret": {
+            "$sel": 15,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 16,
+              "type": "child",
+              "origin": {
+                "$h": 5
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 17,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 18,
+              "type": "child",
+              "origin": {
+                "$h": 4
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 19,
+              "type": "sibling",
+              "origin": {
+                "$h": 3
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 20,
+              "type": "sibling",
+              "origin": {
+                "$h": 4
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 21,
+              "type": "sibling",
+              "origin": {
+                "$h": 5
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 22,
+              "type": "child",
+              "origin": {
+                "$h": 10
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 23,
+              "type": "child",
+              "origin": {
+                "$h": 8
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 24,
+              "type": "sibling",
+              "origin": {
+                "$h": 6
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 25,
+              "type": "sibling",
+              "origin": {
+                "$h": 8
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 26,
+              "type": "child",
+              "origin": {
+                "$h": 9
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 27,
+              "type": "sibling",
+              "origin": {
+                "$h": 7
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 28,
+              "type": "sibling",
+              "origin": {
+                "$h": 9
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 29,
+              "type": "sibling",
+              "origin": {
+                "$h": 10
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 30,
+              "type": "child",
+              "origin": {
+                "$h": 11
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 31,
+              "type": "sibling",
+              "origin": {
+                "$h": 11
+              },
+              "direction": "next"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 16
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 17
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 2
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 2
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 2
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 17
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 2
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 5
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 17
+          },
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 5
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 18
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 3
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 19
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 4
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 19
+          },
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 4
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 4
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 20
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 5
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 20
+          },
+          "args": [],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 5
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 5
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 21
+          },
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 21
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 6
+            },
+            {
+              "$h": 6
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 6
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 6
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 6
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 24
+          },
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 6
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 8
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 24
+          },
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 6
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 8
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 8
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 25
+          },
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 10
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 10
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 25
+          },
+          "args": [],
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 10
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 10
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 7
+            },
+            {
+              "$h": 7
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 7
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 7
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 7
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 27
+          },
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 9
+            },
+            {
+              "$h": 7
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 9
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 27
+          },
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 7
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 9
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 9
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 9
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 9
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 28
+          },
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 10
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 10
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 28
+          },
+          "args": [],
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 9
+            },
+            {
+              "$h": 10
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 10
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 10
+            },
+            {
+              "$h": 10
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 10
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 10
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 29
+          },
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 10
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 29
+          },
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isSiblingCaret",
+          "args": [
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 11
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 11
+            },
+            "type": "same"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 11
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.getParentAtCaret",
+          "args": [],
+          "this": {
+            "$caret": 31
+          },
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "ancestor"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:origin",
+          "this": {
+            "$caret": 31
+          },
+          "args": [],
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCommonAncestor",
+          "args": [
+            {
+              "$h": 11
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "ret": {
+            "commonAncestor": {
+              "$h": 12
+            },
+            "type": "descendant"
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "paragraph text",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "link text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": null,
+                "url": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "item 1",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "item 2",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "paragraph textlink text\n\nitem 1\n\nitem 2\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ]
+  }
+}

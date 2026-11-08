@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "fuzz",
+    "seed": 19088743,
+    "profile": "upstream"
+  },
+  "commands": [
+    {
+      "kind": "InsertText",
+      "text": "\ud83d\udc69\u200d\ud83d\udc69\u200d\ud83d\udc67"
+    },
+    {
+      "kind": "TextFromView",
+      "path": [
+        0,
+        0
+      ],
+      "text": "\ud83d\udc69Z\u00a0\u200d\ud83d\udc69\u200d\ud83d\udc67",
+      "anchor": 4,
+      "focus": 4,
+      "compositionEnd": false
+    },
+    {
+      "kind": "Select",
+      "anchor": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 6,
+        "type": "text"
+      },
+      "focus": {
+        "path": [
+          0,
+          0
+        ],
+        "offset": 6,
+        "type": "text"
+      }
+    },
+    {
+      "kind": "InsertRawText",
+      "text": "\u2028\ud83d\ude00a"
+    }
+  ],
+  "policy": {
+    "rule": "S1 D-6/Q6",
+    "outcome": "reject-surrogate-splitting-edit",
+    "reason": "Upstream accepts lone surrogates; S1 requires atomic rejection. This is an explicit profile boundary, not a parity case."
+  }
+}

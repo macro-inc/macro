@@ -1,0 +1,341 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/date-mention-import.test.ts",
+    "test": [
+      "date mention import",
+      "imports a chip whose body is a bare timestamp"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-date-mention>2026-11-13T15:00:00-05:00</m-date-mention>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "date-mention",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  },
+                  "date": "2026-11-13T15:00:00-05:00",
+                  "displayFormat": "Nov 13, 2026, 3:00 PM",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        174,
+        136,
+        55,
+        26,
+        18,
+        81,
+        33,
+        181
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "date-mention",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  },
+                  "date": "2026-11-13T15:00:00-05:00",
+                  "displayFormat": "Nov 13, 2026, 3:00 PM",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "date-mention",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                },
+                "date": "2026-11-13T15:00:00-05:00",
+                "displayFormat": "Nov 13, 2026, 3:00 PM",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "date-mention",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                },
+                "date": "2026-11-13T15:00:00-05:00",
+                "displayFormat": "Nov 13, 2026, 3:00 PM",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "type": "date-mention",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              },
+              "date": "2026-11-13T15:00:00-05:00",
+              "displayFormat": "Nov 13, 2026, 3:00 PM",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "children": [
+            {
+              "type": "date-mention",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              },
+              "date": "2026-11-13T15:00:00-05:00",
+              "displayFormat": "Nov 13, 2026, 3:00 PM",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "date-mention",
+            "version": 1,
+            "$": {
+              "id": "kI0PCq-Q"
+            },
+            "date": "2026-11-13T15:00:00-05:00",
+            "displayFormat": "Nov 13, 2026, 3:00 PM",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

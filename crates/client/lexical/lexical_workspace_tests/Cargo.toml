@@ -1,0 +1,12 @@
+[package]
+name = "lexical_workspace_tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dev-dependencies]
+regress = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+loro = { workspace = true }
+rootcause = { workspace = true }

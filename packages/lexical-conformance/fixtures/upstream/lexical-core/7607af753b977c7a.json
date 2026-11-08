@@ -1,0 +1,384 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply with segments",
+      "keeps the view a step presented through the message and back"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "link": false,
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "activity",
+                "turn": 3,
+                "segment": 0,
+                "rows": [
+                  {
+                    "id": "view_1",
+                    "label": "Present view",
+                    "status": "completed",
+                    "card": {
+                      "kind": "view",
+                      "view": {
+                        "title": "Your week",
+                        "widgets": []
+                      }
+                    }
+                  }
+                ],
+                "sealed": true
+              }
+            ]
+          }
+        }
+      ],
+      "ret": "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":0,\"rows\":[{\"id\":\"view_1\",\"label\":\"Present view\",\"status\":\"completed\",\"card\":{\"kind\":\"view\",\"view\":{\"title\":\"Your week\",\"widgets\":[]}}}],\"sealed\":true}</m-agent-activity>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":0,\"rows\":[{\"id\":\"view_1\",\"label\":\"Present view\",\"status\":\"completed\",\"card\":{\"kind\":\"view\",\"view\":{\"title\":\"Your week\",\"widgets\":[]}}}],\"sealed\":true}</m-agent-activity>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 3,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "view_1",
+                  "label": "Present view",
+                  "status": "completed",
+                  "card": {
+                    "kind": "view",
+                    "view": {
+                      "title": "Your week",
+                      "widgets": []
+                    }
+                  }
+                }
+              ],
+              "sealed": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.05054362863302231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3695183543022722
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        198,
+        142,
+        4,
+        163,
+        64,
+        108,
+        151,
+        214
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        60,
+        251,
+        220,
+        83,
+        174,
+        136,
+        55,
+        26
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 3,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "view_1",
+                  "label": "Present view",
+                  "status": "completed",
+                  "card": {
+                    "kind": "view",
+                    "view": {
+                      "title": "Your week",
+                      "widgets": []
+                    }
+                  }
+                }
+              ],
+              "sealed": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "view_1",
+                "label": "Present view",
+                "status": "completed",
+                "card": {
+                  "kind": "view",
+                  "view": {
+                    "title": "Your week",
+                    "widgets": []
+                  }
+                }
+              }
+            ],
+            "sealed": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "view_1",
+                "label": "Present view",
+                "status": "completed",
+                "card": {
+                  "kind": "view",
+                  "view": {
+                    "title": "Your week",
+                    "widgets": []
+                  }
+                }
+              }
+            ],
+            "sealed": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 3,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "view_1",
+              "label": "Present view",
+              "status": "completed",
+              "card": {
+                "kind": "view",
+                "view": {
+                  "title": "Your week",
+                  "widgets": []
+                }
+              }
+            }
+          ],
+          "sealed": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 3,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "view_1",
+              "label": "Present view",
+              "status": "completed",
+              "card": {
+                "kind": "view",
+                "view": {
+                  "title": "Your week",
+                  "widgets": []
+                }
+              }
+            }
+          ],
+          "sealed": true
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "Cq-QXVzr"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 3,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "view_1",
+            "label": "Present view",
+            "status": "completed",
+            "card": {
+              "kind": "view",
+              "view": {
+                "title": "Your week",
+                "widgets": []
+              }
+            }
+          }
+        ],
+        "sealed": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":0,\"rows\":[{\"id\":\"view_1\",\"label\":\"Present view\",\"status\":\"completed\",\"card\":{\"kind\":\"view\",\"view\":{\"title\":\"Your week\",\"widgets\":[]}}}],\"sealed\":true}</m-agent-activity>"
+      ],
+      "ret": ""
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 base64.workspace = true
 bebop.workspace = true
-loro.workspace = true
+loro_server.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

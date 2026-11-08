@@ -1,0 +1,1439 @@
+mod change_store;
+pub(crate) mod loro_dag;
+mod pending_changes;
+
+use crate::sync::{AtomicUsize, Mutex};
+use bytes::Bytes;
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::rc::Rc;
+use std::sync::Arc;
+use tracing::trace_span;
+
+use self::change_store::iter::MergedChangeIter;
+use self::pending_changes::{PendingChanges, PendingChangesRollback};
+use super::arena::{SharedArena, SharedArenaRollback};
+use crate::change::{get_sys_timestamp, Change, Lamport, Timestamp};
+use crate::configure::Configure;
+use crate::container::idx::ContainerIdx;
+use crate::container::list::list_op;
+use crate::dag::{Dag, DagUtils, MeetAsBase};
+use crate::diff_calc::DiffMode;
+use crate::encoding::decode_oplog;
+use crate::encoding::{ImportStatus, ParsedHeaderAndBody};
+use crate::history_cache::ContainerHistoryCache;
+use crate::id::{Counter, PeerID, ID};
+use crate::op::{FutureInnerContent, ListSlice, RawOpContent, RemoteOp, RichOp};
+use crate::span::{HasCounterSpan, HasLamportSpan};
+use crate::version::{Frontiers, ImVersionVector, VersionVector};
+use crate::LoroError;
+use change_store::{BlockOpRef, ChangeStoreRollback};
+use loro_common::{ContainerType, HasIdSpan, IdLp, IdSpan};
+use rle::{HasLength, RleVec, Sliceable};
+use rustc_hash::FxHashSet;
+use smallvec::SmallVec;
+
+pub use self::loro_dag::{AppDag, AppDagNode, FrontiersNotIncluded};
+pub use change_store::{BlockChangeRef, ChangeStore};
+
+/// [OpLog] store all the ops i.e. the history.
+/// It allows multiple [AppState] to attach to it.
+/// So you can derive different versions of the state from the [OpLog].
+/// It allows us to build a version control system.
+///
+/// The causal graph should always be a DAG and complete, so two versions always have a replay base (at worst the empty version).
+/// If deps are missing, we can't import the change. It will be put into the `pending_changes`.
+pub struct OpLog {
+    pub(crate) dag: AppDag,
+    pub(crate) arena: SharedArena,
+    visible_op_count: Arc<AtomicUsize>,
+    change_store: ChangeStore,
+    history_cache: Mutex<ContainerHistoryCache>,
+    /// Pending changes that haven't been applied to the dag.
+    /// A change can be imported only when all its deps are already imported.
+    /// Key is the ID of the missing dep
+    pub(crate) pending_changes: PendingChanges,
+    /// Whether we are importing a batch of changes.
+    /// If so the Dag's frontiers won't be updated until the batch is finished.
+    pub(crate) batch_importing: bool,
+    pub(crate) configure: Configure,
+    /// The uncommitted change, it's a placeholder for the change
+    /// that is being edited in pre-commit callback.
+    pub(crate) uncommitted_change: Option<Change>,
+    pub(crate) import_rollback: Option<ImportRollback>,
+}
+
+pub(crate) struct ImportRollback {
+    old_vv: VersionVector,
+    arena: SharedArenaRollback,
+    change_store: ChangeStoreRollback,
+    pending: PendingChangesRollback,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct ImportChangesPreflight {
+    pub applies_to_dag: bool,
+    pub has_deps_before_shallow_root: bool,
+    pub needs_state_apply_rollback: bool,
+}
+
+impl std::fmt::Debug for OpLog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OpLog")
+            .field("dag", &self.dag)
+            .field("pending_changes", &self.pending_changes)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Counts falls from the multi-head critical version search back to the
+    /// single-head whole-DAG descent. Test observability only; thread-local
+    /// so concurrently running tests cannot disturb each other's counts
+    /// (diff calc runs on the importing thread).
+    pub(crate) static CRITICAL_BASE_FALLBACK_COUNT: std::cell::Cell<u64> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// Result of [`OpLog::latest_critical_version_below_meet`].
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CriticalVersionSearch {
+    /// The greatest critical version ≤ `meet(from, to)`.
+    Found(VersionVector),
+    /// Provably no non-empty critical version ≤ meet exists: the fixpoint
+    /// bottomed out at ∅, and every critical cut ≤ meet survives every
+    /// lowering step, so the single-head descent cannot find one either —
+    /// callers should skip its whole-DAG walk.
+    NoneBelowMeet,
+    /// A change's deps reach below trimmed history; nothing is known. Fall
+    /// back to the single-head descent.
+    Unknown,
+}
+
+/// The replay base [`OpLog::iter_from_replay_base_causally`] chose.
+#[derive(Debug)]
+pub(crate) struct ReplayBase {
+    pub vv: VersionVector,
+    pub diff_mode: DiffMode,
+    /// The base is a *critical version* of `ancestry(from) ∪ ancestry(to)`:
+    /// no event above it is concurrent with any event inside it. Calculators
+    /// that seed their CRDT state with one opaque "unknown" span for
+    /// everything below the base need exactly this property, because such a
+    /// span can never be retreated.
+    pub is_critical: bool,
+    /// `Some` when the import was proved register-only concurrent with
+    /// `from` and replays from it (see `OpLog::register_only_concurrency`):
+    /// every container with an op in the concurrent old history.
+    pub concurrent_containers: Option<FxHashSet<ContainerIdx>>,
+}
+
+impl OpLog {
+    #[inline]
+    pub(crate) fn new(visible_op_count: Arc<AtomicUsize>) -> Self {
+        let arena = SharedArena::new();
+        let cfg = Configure::default();
+        let change_store = ChangeStore::new_mem(&arena, cfg.merge_interval_in_s.clone());
+        Self {
+            visible_op_count,
+            history_cache: Mutex::new(ContainerHistoryCache::new(change_store.clone(), None)),
+            dag: AppDag::new(change_store.clone()),
+            change_store,
+            arena,
+            pending_changes: Default::default(),
+            batch_importing: false,
+            configure: cfg,
+            uncommitted_change: None,
+            import_rollback: None,
+        }
+    }
+
+    #[inline]
+    fn calc_visible_op_count(&self) -> usize {
+        let total = self.dag.vv().values().sum::<i32>() as usize;
+        let shallow = self
+            .dag
+            .shallow_since_vv()
+            .iter()
+            .map(|(_, ops)| *ops)
+            .sum::<i32>() as usize;
+        total - shallow
+    }
+
+    #[inline]
+    pub(crate) fn visible_op_count_exact(&self) -> usize {
+        self.calc_visible_op_count()
+    }
+
+    #[inline]
+    pub(crate) fn refresh_visible_op_count(&self) -> usize {
+        let count = self.calc_visible_op_count();
+        self.visible_op_count
+            .store(count, std::sync::atomic::Ordering::Release);
+        count
+    }
+
+    /// Incrementally bump the cached visible op count for newly applied *local*
+    /// ops. Local ops are always visible (never behind the shallow root), so the
+    /// visible count grows by exactly `delta`. This avoids a per-op full
+    /// recompute via [`Self::calc_visible_op_count`], which iterates the version
+    /// vectors and heap-allocates an `im::HashMap` iterator on every call.
+    #[inline]
+    pub(crate) fn inc_visible_op_count(&self, delta: usize) {
+        self.visible_op_count
+            .fetch_add(delta, std::sync::atomic::Ordering::Release);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cached_visible_op_count(&self) -> usize {
+        self.visible_op_count
+            .load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    #[inline]
+    pub fn dag(&self) -> &AppDag {
+        &self.dag
+    }
+
+    pub fn change_store(&self) -> &ChangeStore {
+        &self.change_store
+    }
+
+    /// Get the change with the given peer and lamport.
+    ///
+    /// If not found, return the change with the greatest lamport that is smaller than the given lamport.
+    pub fn get_change_with_lamport_lte(
+        &self,
+        peer: PeerID,
+        lamport: Lamport,
+    ) -> Option<BlockChangeRef> {
+        let ans = self
+            .change_store
+            .get_change_by_lamport_lte(IdLp::new(peer, lamport))?;
+        debug_assert!(ans.lamport <= lamport);
+        Some(ans)
+    }
+
+    pub fn get_timestamp_of_version(&self, f: &Frontiers) -> Timestamp {
+        let mut timestamp = Timestamp::default();
+        for id in f.iter() {
+            if let Some(change) = self.lookup_change(id) {
+                timestamp = timestamp.max(change.timestamp);
+            }
+        }
+
+        timestamp
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.dag.is_empty() && self.arena.can_import_snapshot()
+    }
+
+    /// This is the **only** place to update the `OpLog.changes`
+    pub(crate) fn insert_new_change(&mut self, change: Change, from_local: bool) {
+        let s = trace_span!(
+            "insert_new_change",
+            id = ?change.id,
+            lamport = change.lamport,
+            deps = ?change.deps
+        );
+        let _enter = s.enter();
+        let rollback_old_vv = self
+            .import_rollback
+            .as_ref()
+            .and_then(|x| (!x.old_vv.is_empty()).then_some(&x.old_vv));
+        self.dag
+            .handle_new_change(&change, from_local, rollback_old_vv);
+        self.history_cache
+            .lock()
+            .insert_by_new_change(&change, true, true);
+        self.register_container_and_parent_link(&change);
+        if let Some(rollback) = self.import_rollback.as_mut() {
+            self.change_store.insert_change_with_rollback(
+                change,
+                true,
+                from_local,
+                &mut rollback.change_store,
+            );
+        } else {
+            self.change_store.insert_change(change, true, from_local);
+        }
+        self.refresh_visible_op_count();
+    }
+
+    pub(crate) fn begin_import_rollback(&mut self) {
+        let arena = self.arena.checkpoint_for_rollback();
+        self.begin_import_rollback_with_arena(arena);
+    }
+
+    pub(crate) fn begin_import_rollback_with_arena(&mut self, arena: SharedArenaRollback) {
+        debug_assert!(self.import_rollback.is_none());
+        let old_vv = self.vv().clone();
+        self.dag.begin_import_rollback();
+        self.import_rollback = Some(ImportRollback {
+            old_vv: old_vv.clone(),
+            arena,
+            change_store: ChangeStoreRollback::new(old_vv),
+            pending: Default::default(),
+        });
+    }
+
+    /// Whether an import rollback scope is currently open.
+    ///
+    /// Scopes cannot nest: [`Self::begin_import_rollback_with_arena`] overwrites the
+    /// journal, and the matching commit/rollback clears it. Callers that may run
+    /// inside another scope (e.g. a blob imported by `LoroDoc::import_batch`) must
+    /// check this first and leave the scope to its owner.
+    pub(crate) fn has_import_rollback(&self) -> bool {
+        self.import_rollback.is_some()
+    }
+
+    pub(crate) fn commit_import_rollback(&mut self) {
+        self.dag.commit_import_rollback();
+        self.import_rollback = None;
+    }
+
+    /// Close an import rollback scope this caller owns: commit it when `keep`,
+    /// roll everything back otherwise. No-op when `owns` is false — the scope
+    /// then belongs to an outer owner such as `import_batch`.
+    pub(crate) fn end_import_rollback(&mut self, owns: bool, keep: bool) {
+        if !owns {
+            return;
+        }
+
+        if keep {
+            self.commit_import_rollback();
+        } else {
+            self.rollback_import();
+        }
+    }
+
+    pub(crate) fn preflight_import_changes(&self, changes: &[Change]) -> ImportChangesPreflight {
+        let mut ans = ImportChangesPreflight::default();
+        for change in changes {
+            if change.ctr_end() <= self.vv().get(&change.id.peer).copied().unwrap_or(0) {
+                continue;
+            }
+
+            if self.dag.import_deps_before_shallow_root(&change.deps) {
+                ans.has_deps_before_shallow_root = true;
+                continue;
+            }
+
+            if self
+                .dag
+                .get_change_lamport_from_deps(&change.deps)
+                .is_none()
+            {
+                continue;
+            }
+
+            ans.applies_to_dag = true;
+            if change.ops.iter().any(|op| {
+                matches!(
+                    op.container.get_type(),
+                    ContainerType::List | ContainerType::Tree
+                )
+            }) {
+                ans.needs_state_apply_rollback = true;
+            }
+        }
+
+        // Any newly applied change can unlock pending changes whose ops are not
+        // visible in `changes`, so include pending in the rollback decision.
+        // Keep this narrow: text/map-only pending changes cannot return a
+        // state-apply error, and forcing rollback there adds lock traffic to
+        // small sync/import workloads.
+        //
+        // Scan pending last, and only when it can still change the answer:
+        // `has_state_apply_rollback_ops` walks every parked change and every op in
+        // it, while a blob that only parks (deps not here yet) leaves
+        // `applies_to_dag` false. Evaluating it eagerly made a batch of N
+        // out-of-order blobs quadratic, since each blob re-scanned the pending set
+        // the earlier blobs had grown.
+        if ans.applies_to_dag
+            && !ans.needs_state_apply_rollback
+            && self.pending_changes.has_state_apply_rollback_ops()
+        {
+            ans.needs_state_apply_rollback = true;
+        }
+
+        #[cfg(test)]
+        if ans.applies_to_dag {
+            ans.needs_state_apply_rollback = true;
+        }
+
+        ans
+    }
+
+    pub(crate) fn rollback_import(&mut self) {
+        let Some(rollback) = self.import_rollback.take() else {
+            return;
+        };
+
+        self.change_store.rollback_import(rollback.change_store);
+        self.dag.rollback_import();
+        rollback.pending.rollback(&mut self.pending_changes);
+        self.history_cache.lock().free_all();
+        self.arena.rollback(rollback.arena);
+        self.refresh_visible_op_count();
+    }
+
+    pub(crate) fn reset_to_empty_for_failed_snapshot_import(
+        &mut self,
+        arena_checkpoint: SharedArenaRollback,
+    ) {
+        let arena = self.arena.clone();
+        let configure = self.configure.clone();
+        arena.rollback(arena_checkpoint);
+        let change_store = ChangeStore::new_mem(&arena, configure.merge_interval_in_s.clone());
+        self.history_cache = Mutex::new(ContainerHistoryCache::new(change_store.clone(), None));
+        self.dag = AppDag::new(change_store.clone());
+        self.change_store = change_store;
+        self.pending_changes = Default::default();
+        self.batch_importing = false;
+        self.configure = configure;
+        self.uncommitted_change = None;
+        self.import_rollback = None;
+        self.visible_op_count
+            .store(0, std::sync::atomic::Ordering::Release);
+    }
+
+    #[inline(always)]
+    pub(crate) fn with_history_cache<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut ContainerHistoryCache) -> R,
+    {
+        let mut history_cache = self.history_cache.lock();
+        f(&mut history_cache)
+    }
+
+    pub fn has_history_cache(&self) -> bool {
+        self.history_cache.lock().has_cache()
+    }
+
+    pub fn free_history_cache(&self) {
+        let mut history_cache = self.history_cache.lock();
+        history_cache.free();
+    }
+
+    #[cfg(test)]
+    #[allow(dead_code)]
+    pub(crate) fn pending_changes_len(&self) -> usize {
+        self.pending_changes.len()
+    }
+
+    /// Import a change.
+    ///
+    /// Pending changes that haven't been applied to the dag.
+    /// A change can be imported only when all its deps are already imported.
+    /// Key is the ID of the missing dep
+    ///
+    /// # Err
+    ///
+    /// - Return Err(LoroError::UsedOpID) when the change's id is occupied
+    /// - Return Err(LoroError::DecodeError) when the change's deps are missing
+    pub(crate) fn import_local_change(&mut self, change: Change) -> Result<(), LoroError> {
+        self.insert_new_change(change, true);
+        Ok(())
+    }
+
+    /// Trim the known part of change
+    pub(crate) fn trim_the_known_part_of_change(&self, change: Change) -> Option<Change> {
+        let Some(&end) = self.dag.vv().get(&change.id.peer) else {
+            return Some(change);
+        };
+
+        if change.id.counter >= end {
+            return Some(change);
+        }
+
+        if change.ctr_end() <= end {
+            return None;
+        }
+
+        let offset = (end - change.id.counter) as usize;
+        Some(change.slice(offset, change.atom_len()))
+    }
+
+    #[allow(unused)]
+    fn check_id_is_not_duplicated(&self, id: ID) -> Result<(), LoroError> {
+        let cur_end = self.dag.vv().get(&id.peer).cloned().unwrap_or(0);
+        if cur_end > id.counter {
+            return Err(LoroError::UsedOpID { id });
+        }
+
+        Ok(())
+    }
+
+    /// Ensure the new change is greater than the last peer's id and the counter is continuous.
+    ///
+    /// It can be false when users use detached editing mode and use a custom peer id.
+    // This method might be slow and can be optimized if needed in the future.
+    pub(crate) fn check_change_greater_than_last_peer_id(
+        &self,
+        peer: PeerID,
+        counter: Counter,
+        deps: &Frontiers,
+    ) -> Result<(), LoroError> {
+        if counter == 0 {
+            return Ok(());
+        }
+
+        if !self.configure.detached_editing() {
+            return Ok(());
+        }
+
+        let mut max_last_counter = -1;
+        for dep in deps.iter() {
+            let dep_vv = self
+                .dag
+                .get_vv(dep)
+                .ok_or(LoroError::FrontiersNotFound(dep))?;
+            max_last_counter = max_last_counter.max(dep_vv.get(&peer).cloned().unwrap_or(0) - 1);
+        }
+
+        if counter != max_last_counter + 1 {
+            return Err(LoroError::ConcurrentOpsWithSamePeerID {
+                peer,
+                last_counter: max_last_counter,
+                current: counter,
+            });
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn next_id(&self, peer: PeerID) -> ID {
+        let cnt = self.dag.vv().get(&peer).copied().unwrap_or(0);
+        ID::new(peer, cnt)
+    }
+
+    pub(crate) fn vv(&self) -> &VersionVector {
+        self.dag.vv()
+    }
+
+    pub(crate) fn frontiers(&self) -> &Frontiers {
+        self.dag.frontiers()
+    }
+
+    /// - Ordering::Less means self is less than target or parallel
+    /// - Ordering::Equal means versions equal
+    /// - Ordering::Greater means self's version is greater than target
+    pub fn cmp_with_frontiers(&self, other: &Frontiers) -> Ordering {
+        self.dag.cmp_with_frontiers(other)
+    }
+
+    /// Compare two [Frontiers] causally.
+    ///
+    /// If one of the [Frontiers] are not included, it will return [FrontiersNotIncluded].
+    #[inline]
+    pub fn cmp_frontiers(
+        &self,
+        a: &Frontiers,
+        b: &Frontiers,
+    ) -> Result<Option<Ordering>, FrontiersNotIncluded> {
+        self.dag.cmp_frontiers(a, b)
+    }
+
+    pub(crate) fn get_min_lamport_at(&self, id: ID) -> Lamport {
+        self.get_change_at(id).map(|c| c.lamport).unwrap_or(0)
+    }
+
+    pub(crate) fn get_lamport_at(&self, id: ID) -> Option<Lamport> {
+        self.get_change_at(id)
+            .map(|c| c.lamport + (id.counter - c.id.counter) as Lamport)
+    }
+
+    pub(crate) fn iter_ops(&self, id_span: IdSpan) -> impl Iterator<Item = RichOp<'static>> + '_ {
+        let change_iter = self.change_store.iter_changes(id_span);
+        change_iter.flat_map(move |c| RichOp::new_iter_by_cnt_range(c, id_span.counter))
+    }
+
+    pub(crate) fn iter_changes(
+        &self,
+        id_span: IdSpan,
+    ) -> impl Iterator<Item = BlockChangeRef> + '_ {
+        self.change_store.iter_changes(id_span)
+    }
+
+    pub(crate) fn get_max_lamport_at(&self, id: ID) -> Lamport {
+        self.get_change_at(id)
+            .map(|c| {
+                let change_counter = c.id.counter as u32;
+                c.lamport + c.ops().last().map(|op| op.counter).unwrap_or(0) as u32 - change_counter
+            })
+            .unwrap_or(Lamport::MAX)
+    }
+
+    pub fn get_change_at(&self, id: ID) -> Option<BlockChangeRef> {
+        self.change_store.get_change(id)
+    }
+
+    pub(crate) fn set_uncommitted_change(&mut self, change: Change) {
+        self.uncommitted_change = Some(change);
+    }
+
+    pub(crate) fn get_uncommitted_change_in_span(
+        &self,
+        id_span: IdSpan,
+    ) -> Option<Cow<'_, Change>> {
+        self.uncommitted_change.as_ref().and_then(|c| {
+            if c.id_span() == id_span {
+                Some(Cow::Borrowed(c))
+            } else if let Some((start, end)) = id_span.get_slice_range_on(&c.id_span()) {
+                Some(Cow::Owned(c.slice(start, end)))
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_deps_of(&self, id: ID) -> Option<Frontiers> {
+        self.get_change_at(id).map(|c| {
+            if c.id.counter == id.counter {
+                c.deps.clone()
+            } else {
+                Frontiers::from_id(id.inc(-1))
+            }
+        })
+    }
+
+    pub fn get_remote_change_at(&self, id: ID) -> Option<Change<RemoteOp<'static>>> {
+        let change = self.get_change_at(id)?;
+        Some(convert_change_to_remote(&self.arena, &change))
+    }
+
+    pub(crate) fn import_unknown_lamport_pending_changes(
+        &mut self,
+        remote_changes: Vec<Change>,
+        would_affect: Option<&mut crate::version::VersionRange>,
+    ) -> crate::version::VersionRange {
+        self.extend_pending_changes_with_unknown_lamport(remote_changes, would_affect)
+    }
+
+    /// lookup change by id.
+    ///
+    /// if id does not included in this oplog, return None
+    pub(crate) fn lookup_change(&self, id: ID) -> Option<BlockChangeRef> {
+        self.change_store.get_change(id)
+    }
+
+    #[inline(always)]
+    pub(crate) fn export_change_store_from(&self, vv: &VersionVector, f: &Frontiers) -> Bytes {
+        self.change_store
+            .export_from(vv, f, self.vv(), self.frontiers())
+    }
+
+    #[inline(always)]
+    pub(crate) fn export_change_store_in_range(
+        &self,
+        vv: &VersionVector,
+        f: &Frontiers,
+        to_vv: &VersionVector,
+        to_frontiers: &Frontiers,
+    ) -> Bytes {
+        self.change_store.export_from(vv, f, to_vv, to_frontiers)
+    }
+
+    #[inline(always)]
+    pub(crate) fn export_blocks_from<W: std::io::Write>(&self, vv: &VersionVector, w: &mut W) {
+        self.change_store
+            .export_blocks_from(vv, self.shallow_since_vv(), self.vv(), w)
+    }
+
+    #[inline(always)]
+    pub(crate) fn export_blocks_in_range<W: std::io::Write>(&self, spans: &[IdSpan], w: &mut W) {
+        self.change_store.export_blocks_in_range(spans, w)
+    }
+
+    pub(crate) fn fork_changes_up_to(&self, frontiers: &Frontiers) -> Option<Bytes> {
+        let vv = self.dag.frontiers_to_vv(frontiers)?;
+        Some(
+            self.change_store
+                .fork_changes_up_to(self.dag.shallow_since_vv(), frontiers, &vv),
+        )
+    }
+
+    #[inline(always)]
+    pub(crate) fn decode(&mut self, data: ParsedHeaderAndBody) -> Result<ImportStatus, LoroError> {
+        decode_oplog(self, data)
+    }
+
+    /// Containers that have at least one op inside `spans`.
+    ///
+    /// Only `op.container` is needed, so this scans the borrowed changes
+    /// directly instead of materializing a cloned RichOp per op.
+    pub(crate) fn containers_in_spans(
+        &self,
+        spans: impl Iterator<Item = IdSpan>,
+    ) -> FxHashSet<ContainerIdx> {
+        let mut containers = FxHashSet::default();
+        // Consecutive ops overwhelmingly share a container; skip the hash
+        // probe when it hasn't changed.
+        let mut last_container = None;
+        for span in spans {
+            for change in self.change_store.iter_changes(span) {
+                let start_counter = span.counter.min().max(change.id.counter);
+                let end_counter = span.counter.norm_end();
+                let start = change
+                    .ops
+                    .binary_search_by(|op| op.ctr_last().cmp(&start_counter))
+                    .unwrap_or_else(|e| e);
+                for op in &change.ops.vec()[start..] {
+                    if op.counter >= end_counter {
+                        break;
+                    }
+
+                    if last_container != Some(op.container) {
+                        containers.insert(op.container);
+                        last_container = Some(op.container);
+                    }
+                }
+            }
+        }
+
+        containers
+    }
+
+    /// For `to ⊇ from`: the old-parent frontiers of every entry change of the
+    /// new region `to − from` that does not causally cover all of `from`.
+    ///
+    /// An entry change is a new change (or the new suffix of a change that
+    /// straddles `from`) whose causal parents — explicit deps plus the
+    /// implicit same-peer predecessor — are all old. Every new event is a
+    /// descendant of some entry change, so `⋂ Events(parents)` over the
+    /// uncovered entries is causally before the whole new region and only
+    /// `Events(from)` outside it can be concurrent with a new op.
+    ///
+    /// This is the version-vector form of the DAG's
+    /// `new_region_uncovered_entry_parents` (see
+    /// `docs/critical-version-spec.md` L12): it only scans the new changes
+    /// and answers coverage with cached version vectors, so it costs
+    /// `O(|new changes|)` instead of a lamport-pruned ancestor walk. An empty
+    /// vector means the `ImportGreaterUpdates` contract holds outright;
+    /// `None` means trimmed history got in the way.
+    fn uncovered_entry_parents(
+        &self,
+        from: &VersionVector,
+        from_frontiers: &Frontiers,
+        to: &VersionVector,
+    ) -> Option<Vec<Frontiers>> {
+        let mut uncovered = Vec::new();
+        for (peer, span) in from.diff(to).forward.iter() {
+            let id_span = IdSpan::new(*peer, span.start, span.end);
+            for change in self.change_store.iter_changes(id_span) {
+                let start = change.id.counter.max(span.start);
+                let parents = if start > change.id.counter {
+                    // The change straddles `from`; the new suffix only has
+                    // the implicit predecessor as parent.
+                    Frontiers::from_id(ID::new(*peer, start - 1))
+                } else {
+                    let mut parents = change.deps().clone();
+                    if change.id.counter > 0 {
+                        let prev = ID::new(*peer, change.id.counter - 1);
+                        if !parents.contains(&prev) {
+                            parents.push(prev);
+                        }
+                    }
+                    parents
+                };
+
+                // The everyday shape: the change depends on exactly the
+                // current frontiers. Covered without touching any version vector.
+                if &parents == from_frontiers {
+                    continue;
+                }
+
+                if !parents.iter().all(|id| from.includes_id(id)) {
+                    // Not an entry change; it inherits coverage through its
+                    // new parents.
+                    continue;
+                }
+
+                let parents_vv = self.dag.frontiers_to_vv(&parents)?;
+                if !parents_vv.includes_vv(from) {
+                    uncovered.push(parents);
+                }
+            }
+        }
+
+        Some(uncovered)
+    }
+
+    /// Decide whether an import whose new region `to − from` is concurrent
+    /// with part of `from` can still be replayed from `from`.
+    ///
+    /// `entry_parents` comes from [`OpLog::uncovered_entry_parents`]: the old
+    /// history that is causally before the *whole* new region is
+    /// `⋂ Events(parents)`, so the old ops that may be concurrent with a new op
+    /// are `Events(from) − ⋂ Events(parents)`.
+    ///
+    /// Sequence and tree containers need every concurrent op of the same
+    /// container as context, so a container with ops on both sides forces the
+    /// conservative replay. Map and counter are registers: a counter diff is
+    /// a commutative sum, and a map diff can be resolved per key from the
+    /// history cache without positional context, so concurrency on them is
+    /// harmless. (The map must NOT be resolved by comparing lamports against
+    /// the current state: persisted state drops metadata for deleted roots and
+    /// dead containers, so the diff calculator is told to use the history
+    /// cache for these containers, see `DiffCalculator::calc_diff_internal`.)
+    ///
+    /// Returns the containers touched by the concurrent old history when the
+    /// overlap is register-only, `None` otherwise.
+    fn register_only_concurrency(
+        &self,
+        from: &VersionVector,
+        to: &VersionVector,
+        entry_parents: &[Frontiers],
+    ) -> Option<FxHashSet<ContainerIdx>> {
+        // ⋂ Events(parents) as a version vector: per-peer minimum.
+        let mut causal_past = from.clone();
+        for parents in entry_parents {
+            let parents_vv = self.dag.frontiers_to_vv(parents)?;
+            causal_past.retain(|peer, end| {
+                let bound = parents_vv.get(peer).copied().unwrap_or(0);
+                *end = (*end).min(bound);
+                *end > 0
+            });
+        }
+
+        // A shallow snapshot may retain changes that are concurrent with its
+        // root (independent peer chains, for example), and `from` counts the
+        // trimmed ops below the root. If `concurrent_old` would reach into
+        // that trimmed history we cannot see which containers it touched, so
+        // the decision has to stay with the DAG.
+        if !causal_past.includes_vv(&self.dag.shallow_since_vv().to_vv()) {
+            return None;
+        }
+
+        let concurrent_old = causal_past.diff(from).forward;
+        let old_containers = self.containers_in_spans(
+            concurrent_old
+                .iter()
+                .map(|(peer, span)| IdSpan::new(*peer, span.start, span.end)),
+        );
+        if old_containers.is_empty() {
+            return Some(old_containers);
+        }
+
+        let new_region = from.diff(to).forward;
+        let new_containers = self.containers_in_spans(
+            new_region
+                .iter()
+                .map(|(peer, span)| IdSpan::new(*peer, span.start, span.end)),
+        );
+        let harmless = old_containers
+            .iter()
+            .filter(|idx| new_containers.contains(idx))
+            .all(|idx| match idx.get_type() {
+                ContainerType::Map => true,
+                #[cfg(feature = "counter")]
+                ContainerType::Counter => true,
+                _ => false,
+            });
+        harmless.then_some(old_containers)
+    }
+
+    /// The latest critical version below `from ∩ to`: the greatest causally
+    /// closed `V ⊆ from ∩ to` such that every op in `(from ∪ to) − V` is
+    /// causally after every op in `V`. "Causally after" is measured in the
+    /// ancestry the replay hands the diff calculators — a change's recorded
+    /// deps plus the author's own earlier ops — which is exactly what a
+    /// calculator trusting the base relies on. Unlike
+    /// `dag::latest_single_head_critical_version` the result may be
+    /// multi-head, which is what makes it usable on the criss-cross DAG that
+    /// continuous two-peer sync produces — there every merge point has two
+    /// heads, so the single-head descent walks to genesis and returns nothing.
+    ///
+    /// Method: start at the meet `min(from, to)` — the largest candidate — and
+    /// lower it to a fixpoint. `V` is critical iff for every change of the
+    /// region above it, the context of the change's first op above `V`
+    /// covers `V` (the change's later ops only add to that context). Each
+    /// violating change lowers `V` to the intersection with that context,
+    /// which preserves every critical cut below `V`, so the fixpoint is the
+    /// greatest critical version ≤ the meet (spec L13). Lowering cannot
+    /// change a verdict already reached — a context that covered `V` covers
+    /// the smaller one, and the violator covers the lowered `V` by
+    /// construction — it only exposes the spans between the old and the new
+    /// `V`, which go on a worklist; a change is examined once per lowering
+    /// that moves its peer's cut into it. The scan is thus bounded by the
+    /// replay it enables, which walks the same region and computes the same
+    /// contexts, so it needs no budget of its own.
+    pub(crate) fn latest_critical_version_below_meet(
+        &self,
+        from: &VersionVector,
+        to: &VersionVector,
+        merged: &VersionVector,
+    ) -> CriticalVersionSearch {
+        use CriticalVersionSearch::*;
+
+        // An intersection of two causally closed sets is causally closed, so
+        // `min(from, to)` is a version, and it is the meet of the two.
+        let mut v = from.intersection(to);
+        if v.is_empty() {
+            return NoneBelowMeet;
+        }
+
+        let mut pending: Vec<IdSpan> = v.diff_iter(merged).1.collect();
+        while let Some(span) = pending.pop() {
+            for change in self.change_store.iter_changes(span) {
+                // The context of the change's first op above `v`, as
+                // `iter_from_replay_base_causally` computes it for the
+                // replay: the recorded deps plus the same-peer prefix.
+                let Some(mut ctx) = self.dag.frontiers_to_vv(&change.deps) else {
+                    // The deps reach below trimmed history; nothing can be
+                    // proved from here.
+                    return Unknown;
+                };
+                let cut = v.get(&change.id.peer).copied().unwrap_or(0);
+                let first_above = change.id.counter.max(cut);
+                ctx.extend_to_include_end_id(ID::new(change.id.peer, first_above));
+
+                if !ctx.includes_vv(&v) {
+                    let above = v.clone();
+                    v.intersect_with(&ctx);
+                    if v.is_empty() {
+                        return NoneBelowMeet;
+                    }
+                    pending.extend(v.diff_iter(&above).1);
+                }
+            }
+        }
+
+        Found(v)
+    }
+
+    /// Iterates causally over all changes between the replay base (the meet
+    /// from `find_meet_and_mode` when it is valid for the diff mode, else a
+    /// critical version below it in the Eg-walker sense, see
+    /// `docs/critical-version-spec.md`) and the merged version of `from`/`to`.
+    ///
+    /// Tht iterator will include a version vector when the change is applied
+    ///
+    /// returns: (replay_base, iterator)
+    ///
+    /// Note: the change returned by the iterator may include redundant ops at the beginning, you should trim it by yourself.
+    /// You can trim it by the provided counter value. It should start with the counter.
+    ///
+    /// If frontiers are provided, it will be faster (because we don't need to calculate it from version vector
+    ///
+    /// The third item is `Some(containers)` when part of the new region is
+    /// concurrent with `from` but the oplog proved the concurrency
+    /// register-only (see [`OpLog::register_only_concurrency`]); the replay
+    /// then starts at `from` in `ImportGreaterUpdates` mode. The set lists
+    /// every container with an op in the concurrent old history: the diff
+    /// calculator resolves those from history and treats them as "source not
+    /// in op context", and may trust `from` as the base for everything else.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn iter_from_replay_base_causally(
+        &self,
+        from: &VersionVector,
+        from_frontiers: &Frontiers,
+        to: &VersionVector,
+        to_frontiers: &Frontiers,
+    ) -> (
+        ReplayBase,
+        impl Iterator<
+                Item = (
+                    BlockChangeRef,
+                    (Counter, Counter),
+                    Rc<RefCell<VersionVector>>,
+                ),
+            > + '_,
+    ) {
+        let mut merged_vv = from.clone();
+        merged_vv.merge(to);
+        loro_common::debug!("to_frontiers={:?} vv={:?}", &to_frontiers, to);
+        let mut concurrent_containers = None;
+        let mut register_only_base = None;
+        if to > from {
+            // `to ⊇ from`, but some new ops may be concurrent with part of
+            // `from`. The DAG walk must then assume the worst and retreat
+            // to a critical version; with container knowledge we can often
+            // prove the concurrency harmless and replay from `from`
+            // without touching the DAG at all.
+            if let Some(entry_parents) = self.uncovered_entry_parents(from, from_frontiers, to) {
+                if !entry_parents.is_empty() {
+                    if let Some(containers) =
+                        self.register_only_concurrency(from, to, &entry_parents)
+                    {
+                        concurrent_containers = Some(containers);
+                        register_only_base = Some(from_frontiers.clone());
+                    }
+                }
+            }
+        }
+
+        let (meet, mut diff_mode) = if let Some(base) = register_only_base {
+            (MeetAsBase::Valid(base), DiffMode::ImportGreaterUpdates)
+        } else {
+            self.dag.find_meet_and_mode(from_frontiers, to_frontiers)
+        };
+        if diff_mode == DiffMode::Checkout && to > from {
+            diff_mode = DiffMode::Import;
+        }
+
+        let shallow_since_vv = self.dag.shallow_since_vv().to_vv();
+        let mut replay_base_is_critical = false;
+        let mut replay_base_frontiers = match meet {
+            MeetAsBase::Valid(meet) => meet,
+            MeetAsBase::NeedsCriticalRetreat => {
+                // Some event above the meet is concurrent with it. Retreat to
+                // a critical version — the latest *multi-head* one when we
+                // can find it, because the single-head descent is both a
+                // whole-DAG walk and, on the criss-cross DAG that continuous
+                // two-peer sync produces, doomed to return the empty version.
+                let descend = || {
+                    #[cfg(test)]
+                    CRITICAL_BASE_FALLBACK_COUNT.with(|c| c.set(c.get() + 1));
+                    self.dag
+                        .latest_single_head_critical_version(from_frontiers, to_frontiers)
+                };
+                match self.latest_critical_version_below_meet(from, to, &merged_vv) {
+                    CriticalVersionSearch::Found(v) => {
+                        // Only replay from the version whose criticality was
+                        // proved. A shallow doc cannot replay from below its
+                        // seed version, and a cut assembled from recorded
+                        // deps plus the author's own prefix is causally
+                        // closed only when those deps cover that prefix
+                        // (spec axiom A6, which imported data is not checked
+                        // against) — a version that fails to round-trip
+                        // through frontiers is not one. Both are left to the
+                        // descent, as before.
+                        let f = self.dag.vv_to_frontiers(&v);
+                        let seed = self
+                            .dag
+                            .frontiers_to_vv(self.dag.shallow_since_frontiers())
+                            .unwrap();
+                        if v.includes_vv(&seed) && self.dag.frontiers_to_vv(&f).as_ref() == Some(&v)
+                        {
+                            replay_base_is_critical = true;
+                            f
+                        } else {
+                            descend()
+                        }
+                    }
+                    CriticalVersionSearch::NoneBelowMeet => {
+                        // ∅ is trivially critical (spec D8b), and the
+                        // single-head descent provably cannot find a better
+                        // cut (spec L13(ii); under A6, where its ancestry
+                        // coincides with the replay's) — skip its whole-DAG
+                        // walk.
+                        Frontiers::default()
+                    }
+                    CriticalVersionSearch::Unknown => descend(),
+                }
+            }
+        };
+
+        let mut replay_base_vv = self.dag.frontiers_to_vv(&replay_base_frontiers).unwrap();
+        replay_base_is_critical |= replay_base_vv.is_empty();
+        if !replay_base_vv.includes_vv(&shallow_since_vv) {
+            // The replay base cannot point before shallow history because those
+            // ops are no longer available to the causal iterator.
+            replay_base_frontiers = self.dag.shallow_since_frontiers().clone();
+            replay_base_vv = self
+                .dag
+                .frontiers_to_vv(&replay_base_frontiers)
+                .unwrap_or(shallow_since_vv);
+            replay_base_is_critical = false;
+        }
+
+        // go from the replay base to merged_vv
+        let diff = replay_base_vv.diff(&merged_vv).forward;
+        let mut iter = self.dag.iter_causal(replay_base_frontiers, diff);
+        let mut node = iter.next();
+        let mut cur_cnt = 0;
+        let vv = Rc::new(RefCell::new(VersionVector::default()));
+        (
+            ReplayBase {
+                vv: replay_base_vv.clone(),
+                diff_mode,
+                is_critical: replay_base_is_critical,
+                concurrent_containers,
+            },
+            std::iter::from_fn(move || {
+                if let Some(inner) = &node {
+                    let mut inner_vv = vv.borrow_mut();
+                    // FIXME: PERF: it looks slow for large vv, like 10000+ entries
+                    inner_vv.clear();
+                    self.dag.ensure_vv_for(&inner.data);
+                    inner_vv.extend_to_include_vv(inner.data.vv.get().unwrap().iter());
+                    let peer = inner.data.peer;
+                    let cnt = inner
+                        .data
+                        .cnt
+                        .max(cur_cnt)
+                        .max(replay_base_vv.get(&peer).copied().unwrap_or(0));
+                    let dag_node_end = (inner.data.cnt + inner.data.len as Counter)
+                        .min(merged_vv.get(&peer).copied().unwrap_or(0));
+                    let change = self.change_store.get_change(ID::new(peer, cnt)).unwrap();
+
+                    if change.ctr_end() < dag_node_end {
+                        cur_cnt = change.ctr_end();
+                    } else {
+                        node = iter.next();
+                        cur_cnt = 0;
+                    }
+
+                    inner_vv.extend_to_include_end_id(change.id);
+
+                    Some((change, (cnt, dag_node_end), vv.clone()))
+                } else {
+                    None
+                }
+            }),
+        )
+    }
+
+    pub fn len_changes(&self) -> usize {
+        self.change_store.change_num()
+    }
+
+    pub fn diagnose_size(&self) -> SizeInfo {
+        let mut total_changes = 0;
+        let mut total_ops = 0;
+        let mut total_atom_ops = 0;
+        let total_dag_node = self.dag.total_parsed_dag_node();
+        self.change_store.visit_all_changes(&mut |change| {
+            total_changes += 1;
+            total_ops += change.ops.len();
+            total_atom_ops += change.atom_len();
+        });
+
+        println!("total changes: {}", total_changes);
+        println!("total ops: {}", total_ops);
+        println!("total atom ops: {}", total_atom_ops);
+        println!("total dag node: {}", total_dag_node);
+        SizeInfo {
+            total_changes,
+            total_ops,
+            total_atom_ops,
+            total_dag_node,
+        }
+    }
+
+    pub(crate) fn iter_changes_peer_by_peer<'a>(
+        &'a self,
+        from: &VersionVector,
+        to: &VersionVector,
+    ) -> impl Iterator<Item = BlockChangeRef> + 'a {
+        let spans: Vec<_> = from.diff_iter(to).1.collect();
+        spans
+            .into_iter()
+            .flat_map(move |span| self.change_store.iter_changes(span))
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn iter_changes_causally_rev<'a>(
+        &'a self,
+        from: &VersionVector,
+        to: &VersionVector,
+    ) -> impl Iterator<Item = BlockChangeRef> + 'a {
+        MergedChangeIter::new_change_iter_rev(self, from, to)
+    }
+
+    pub fn get_timestamp_for_next_txn(&self) -> Timestamp {
+        if self.configure.record_timestamp() {
+            get_timestamp_now_txn()
+        } else {
+            0
+        }
+    }
+
+    #[inline(never)]
+    pub(crate) fn idlp_to_id(&self, id: loro_common::IdLp) -> Option<ID> {
+        let change = self.change_store.get_change_by_lamport_lte(id)?;
+
+        if change.lamport > id.lamport || change.lamport_end() <= id.lamport {
+            return None;
+        }
+
+        Some(ID::new(
+            change.id.peer,
+            (id.lamport - change.lamport) as Counter + change.id.counter,
+        ))
+    }
+
+    #[allow(unused)]
+    pub(crate) fn id_to_idlp(&self, id_start: ID) -> IdLp {
+        let change = self.get_change_at(id_start).unwrap();
+        let lamport = change.lamport + (id_start.counter - change.id.counter) as Lamport;
+        let peer = id_start.peer;
+        loro_common::IdLp { peer, lamport }
+    }
+
+    /// NOTE: This may return a op that includes the given id, not necessarily start with the given id
+    pub(crate) fn get_op_that_includes(&self, id: ID) -> Option<BlockOpRef> {
+        let change = self.get_change_at(id)?;
+        change.get_op_with_counter(id.counter)
+    }
+
+    pub(crate) fn split_span_based_on_deps(&self, id_span: IdSpan) -> Vec<(IdSpan, Frontiers)> {
+        let peer = id_span.peer;
+        let mut counter = id_span.counter.min();
+        let span_end = id_span.counter.norm_end();
+        let mut ans = Vec::new();
+
+        while counter < span_end {
+            let id = ID::new(peer, counter);
+            let node = self.dag.get(id).unwrap();
+
+            let f = if node.cnt == counter {
+                node.deps.clone()
+            } else if counter > 0 {
+                id.inc(-1).into()
+            } else {
+                unreachable!()
+            };
+
+            let cur_end = node.cnt + node.len as Counter;
+            let len = cur_end.min(span_end) - counter;
+            ans.push((id.to_span(len as usize), f));
+            counter += len;
+        }
+
+        ans
+    }
+
+    #[inline]
+    pub fn compact_change_store(&mut self) {
+        self.change_store
+            .flush_and_compact(self.dag.vv(), self.dag.frontiers());
+    }
+
+    #[inline]
+    pub fn change_store_kv_size(&self) -> usize {
+        self.change_store.kv_size()
+    }
+
+    pub fn encode_change_store(&self) -> bytes::Bytes {
+        self.change_store
+            .encode_all(self.dag.vv(), self.dag.frontiers())
+    }
+
+    pub fn check_dag_correctness(&self) {
+        self.dag.check_dag_correctness();
+    }
+
+    pub fn shallow_since_vv(&self) -> &ImVersionVector {
+        self.dag.shallow_since_vv()
+    }
+
+    pub fn shallow_since_frontiers(&self) -> &Frontiers {
+        self.dag.shallow_since_frontiers()
+    }
+
+    pub fn is_shallow(&self) -> bool {
+        !self.dag.shallow_since_vv().is_empty()
+    }
+
+    pub fn get_greatest_timestamp(&self, frontiers: &Frontiers) -> Timestamp {
+        let mut max_timestamp = Timestamp::default();
+        for id in frontiers.iter() {
+            let change = self.get_change_at(id).unwrap();
+            if change.timestamp > max_timestamp {
+                max_timestamp = change.timestamp;
+            }
+        }
+
+        max_timestamp
+    }
+}
+
+#[derive(Debug)]
+pub struct SizeInfo {
+    pub total_changes: usize,
+    pub total_ops: usize,
+    pub total_atom_ops: usize,
+    pub total_dag_node: usize,
+}
+
+pub(crate) fn convert_change_to_remote(
+    arena: &SharedArena,
+    change: &Change,
+) -> Change<RemoteOp<'static>> {
+    let mut ops = RleVec::new();
+    for op in change.ops.iter() {
+        for op in local_op_to_remote(arena, op) {
+            ops.push(op);
+        }
+    }
+
+    Change {
+        ops,
+        id: change.id,
+        deps: change.deps.clone(),
+        lamport: change.lamport,
+        timestamp: change.timestamp,
+        commit_msg: change.commit_msg.clone(),
+    }
+}
+
+pub(crate) fn local_op_to_remote(
+    arena: &SharedArena,
+    op: &crate::op::Op,
+) -> SmallVec<[RemoteOp<'static>; 1]> {
+    let container = arena.get_container_id(op.container).unwrap();
+    let mut contents: SmallVec<[_; 1]> = SmallVec::new();
+    match &op.content {
+        crate::op::InnerContent::List(list) => match list {
+            list_op::InnerListOp::Insert { slice, pos } => match container.container_type() {
+                loro_common::ContainerType::Text => {
+                    let str = arena
+                        .slice_str_by_unicode_range(slice.0.start as usize..slice.0.end as usize);
+                    contents.push(RawOpContent::List(list_op::ListOp::Insert {
+                        slice: ListSlice::RawStr {
+                            unicode_len: str.chars().count(),
+                            str: Cow::Owned(str),
+                        },
+                        pos: *pos,
+                    }));
+                }
+                loro_common::ContainerType::List | loro_common::ContainerType::MovableList => {
+                    contents.push(RawOpContent::List(list_op::ListOp::Insert {
+                        slice: ListSlice::RawData(Cow::Owned(
+                            arena.get_values(slice.0.start as usize..slice.0.end as usize),
+                        )),
+                        pos: *pos,
+                    }))
+                }
+                _ => unreachable!(),
+            },
+            list_op::InnerListOp::InsertText {
+                slice,
+                unicode_len: len,
+                unicode_start: _,
+                pos,
+            } => match container.container_type() {
+                loro_common::ContainerType::Text => {
+                    contents.push(RawOpContent::List(list_op::ListOp::Insert {
+                        slice: ListSlice::RawStr {
+                            unicode_len: *len as usize,
+                            str: Cow::Owned(std::str::from_utf8(slice).unwrap().to_owned()),
+                        },
+                        pos: *pos as usize,
+                    }));
+                }
+                _ => unreachable!(),
+            },
+            list_op::InnerListOp::Delete(del) => {
+                contents.push(RawOpContent::List(list_op::ListOp::Delete(*del)))
+            }
+            list_op::InnerListOp::StyleStart {
+                start,
+                end,
+                key,
+                value,
+                info,
+            } => contents.push(RawOpContent::List(list_op::ListOp::StyleStart {
+                start: *start,
+                end: *end,
+                key: key.clone(),
+                value: value.clone(),
+                info: *info,
+            })),
+            list_op::InnerListOp::StyleEnd => {
+                contents.push(RawOpContent::List(list_op::ListOp::StyleEnd))
+            }
+            list_op::InnerListOp::Move {
+                from,
+                elem_id: from_id,
+                to,
+            } => contents.push(RawOpContent::List(list_op::ListOp::Move {
+                from: *from,
+                elem_id: *from_id,
+                to: *to,
+            })),
+            list_op::InnerListOp::Set { elem_id, value } => {
+                contents.push(RawOpContent::List(list_op::ListOp::Set {
+                    elem_id: *elem_id,
+                    value: value.clone(),
+                }))
+            }
+        },
+        crate::op::InnerContent::Map(map) => {
+            let value = map.value.clone();
+            contents.push(RawOpContent::Map(crate::container::map::MapSet {
+                key: map.key.clone(),
+                value,
+            }))
+        }
+        crate::op::InnerContent::Tree(tree) => contents.push(RawOpContent::Tree(tree.clone())),
+        crate::op::InnerContent::Future(f) => match f {
+            #[cfg(feature = "counter")]
+            crate::op::FutureInnerContent::Counter(c) => contents.push(RawOpContent::Counter(*c)),
+            FutureInnerContent::Unknown { prop, value } => {
+                contents.push(crate::op::RawOpContent::Unknown {
+                    prop: *prop,
+                    value: (**value).clone(),
+                })
+            }
+        },
+    };
+
+    let mut ans = SmallVec::with_capacity(contents.len());
+    for content in contents {
+        ans.push(RemoteOp {
+            container: container.clone(),
+            content,
+            counter: op.counter,
+        })
+    }
+    ans
+}
+
+pub(crate) fn get_timestamp_now_txn() -> Timestamp {
+    (get_sys_timestamp() as Timestamp + 500) / 1000
+}
+
+#[cfg(test)]
+mod visible_op_count_tests {
+    use crate::{cursor::PosType, loro::ExportMode, LoroDoc};
+
+    /// The cached `visible_op_count` (bumped incrementally for local ops, and
+    /// the only value read in release builds where `can_lock_in_this_thread`
+    /// returns false) must always equal a from-scratch recompute.
+    #[test]
+    fn cached_visible_op_count_matches_exact() {
+        let doc = LoroDoc::new();
+        let text = doc.get_text("text");
+        let mut txn = doc.txn().unwrap();
+        for i in 0..50 {
+            text.insert_with_txn(&mut txn, i, "a", PosType::Unicode)
+                .unwrap();
+        }
+        txn.commit().unwrap();
+        {
+            let oplog = doc.oplog().lock();
+            assert_eq!(
+                oplog.cached_visible_op_count(),
+                oplog.visible_op_count_exact(),
+                "after local edits"
+            );
+        }
+
+        // Import keeps the cached count exact via full refresh; subsequent local
+        // edits then increment from that exact base.
+        let doc2 = LoroDoc::new();
+        doc2.import(&doc.export(ExportMode::all_updates()).unwrap())
+            .unwrap();
+        let text2 = doc2.get_text("text");
+        let mut txn2 = doc2.txn().unwrap();
+        text2
+            .insert_with_txn(&mut txn2, 0, "bbb", PosType::Unicode)
+            .unwrap();
+        txn2.commit().unwrap();
+        {
+            let oplog = doc2.oplog().lock();
+            assert_eq!(
+                oplog.cached_visible_op_count(),
+                oplog.visible_op_count_exact(),
+                "after import + local edits"
+            );
+        }
+    }
+}

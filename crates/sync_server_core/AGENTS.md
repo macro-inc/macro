@@ -44,3 +44,6 @@ Cloudflare Durable Objects and native simulation.
 - After an import/persistence error, discard the cached document before another read
   or update can expose unpersisted causal parents. Retain operation-log IDs and keys;
   reload the snapshot and pending durable prefix, including partially completed writes.
+
+The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
+separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.

@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "fuzz",
+    "seed": 73129,
+    "path": "0",
+    "profile": "upstream"
+  },
+  "commands": [
+    {
+      "kind": "SelectionFromView",
+      "anchor": {
+        "path": [],
+        "offset": 1,
+        "type": "element"
+      },
+      "focus": {
+        "path": [],
+        "offset": 1,
+        "type": "element"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "state": {
+        "root": {
+          "children": [
+            {
+              "children": [],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1
+        }
+      },
+      "selection": {
+        "type": "range",
+        "anchor": {
+          "path": [
+            0
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "focus": {
+          "path": [
+            0
+          ],
+          "offset": 0,
+          "type": "element"
+        },
+        "format": 0,
+        "style": "",
+        "backward": false
+      },
+      "text": "",
+      "keys": [
+        {
+          "path": [],
+          "key": "root"
+        },
+        {
+          "path": [
+            0
+          ],
+          "key": "1"
+        }
+      ],
+      "commit": null,
+      "error": null
+    }
+  ],
+  "actual": {
+    "state": {
+      "root": {
+        "children": [
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "focus": {
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "format": 0,
+      "style": "",
+      "backward": false
+    },
+    "text": "",
+    "keys": [
+      {
+        "path": [],
+        "key": "root"
+      },
+      {
+        "path": [
+          0
+        ],
+        "key": "1"
+      }
+    ],
+    "commit": {
+      "dirtyLeaves": [],
+      "dirtyElements": [],
+      "normalized": [],
+      "mutations": [],
+      "tags": []
+    },
+    "error": null
+  }
+}

@@ -10,7 +10,8 @@
       "**/*.{ts,tsx,js,jsx,json}",
       "!**/*.d.ts",
       "!**/node_modules",
-      "!src/sync-service/generated"
+      "!src/sync-service/generated",
+      "!!**/abi.generated.ts"
     ]
   }
 }

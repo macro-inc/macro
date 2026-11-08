@@ -97,6 +97,7 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
   // Replay/recovery state (see seanaye/feat/ws-replay-buffer)
   private lastSeq = 0;
   private recovering = false;
+  private recoveryTask?: Promise<void>;
   private queued: ReplayEnvelope[] = [];
   private deliver?: (envelope: ReplayEnvelope) => void;
   private visibilityHandler?: () => void;
@@ -311,7 +312,15 @@ export class TauriWebSocketWrapper implements MinimalWebSocket {
    * missed range (gap), the connection is force-closed so the upper layer
    * reconnects and resyncs.
    */
-  private async recover(): Promise<void> {
+  /** Await buffered native messages before a session handles Visible. */
+  recover(): Promise<void> {
+    this.recoveryTask ??= this.performRecovery().finally(() => {
+      this.recoveryTask = undefined;
+    });
+    return this.recoveryTask;
+  }
+
+  private async performRecovery(): Promise<void> {
     if (
       this.socketId === null ||
       this._readyState !== this.OPEN ||

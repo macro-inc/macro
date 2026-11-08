@@ -1,0 +1,31 @@
+[package]
+name = "document_session"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+doc_sync_core.workspace = true
+lexical_model.workspace = true
+lexical_rich_nodes.workspace = true
+lexical_loro.workspace = true
+loro.workspace = true
+imbl.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rootcause.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+uuid_value.workspace = true
+sync_protocol.workspace = true
+bebop.workspace = true
+serde.workspace = true
+proptest.workspace = true
+
+[features]
+conformance = []
+
+[[example]]
+name = "collab"
+required-features = ["conformance"]

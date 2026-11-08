@@ -1,0 +1,110 @@
+//! This file contains the methods to maintain the parent-child relationship in Loro.
+//! The child-parent relationship is established when the child container is created.
+//! It won't be changed. So the depth of a container is fixed.
+//!
+//!
+
+use loro_common::{ContainerID, LoroValue};
+use smallvec::SmallVec;
+
+use crate::{
+    arena::SharedArena,
+    change::Change,
+    container::{list::list_op::ListOp, map::MapSet},
+    op::{ListSlice, Op, RawOp, RawOpContent},
+    DocState, OpLog,
+};
+
+impl OpLog {
+    /// Establish the link between the child container and the parent container.
+    /// This relationship will never be broken.
+    /// It's used at the entry of creating new ops to ensure all the valid containers
+    /// in Loro are properly linked.
+    pub(super) fn register_container_and_parent_link(&self, change: &Change) {
+        let arena = &self.arena;
+        register_container_and_parent_link(arena, change);
+    }
+}
+
+pub(super) fn register_container_and_parent_link(arena: &SharedArena, change: &Change) {
+    for op in change.ops.iter() {
+        op.content.visit_created_children(arena, &mut |c| {
+            let idx = arena.register_container(c);
+            arena.set_parent(idx, Some(op.container));
+        });
+    }
+}
+
+impl DocState {
+    /// This is used in txn to short cut the process of applying an op to the state.
+    /// So the op here has not been registered on the oplog yet.
+    pub(super) fn set_container_parent_by_raw_op(&self, raw_op: &RawOp) {
+        let container = raw_op.container;
+        match &raw_op.content {
+            RawOpContent::List(op) => {
+                if let ListOp::Insert {
+                    slice: ListSlice::RawData(list),
+                    ..
+                } = op
+                {
+                    let list = match list {
+                        std::borrow::Cow::Borrowed(list) => list.iter(),
+                        std::borrow::Cow::Owned(list) => list.iter(),
+                    };
+                    for value in list {
+                        if let LoroValue::Container(c) = value {
+                            let idx = self.arena.register_container(c);
+                            self.arena.set_parent(idx, Some(container));
+                        }
+                    }
+                }
+                if let ListOp::Set {
+                    elem_id: _,
+                    value: LoroValue::Container(c),
+                } = op
+                {
+                    let idx = self.arena.register_container(c);
+                    self.arena.set_parent(idx, Some(container));
+                }
+            }
+            RawOpContent::Map(MapSet { key: _, value }) => {
+                if let Some(LoroValue::Container(c)) = value {
+                    let idx = self.arena.register_container(c);
+                    self.arena.set_parent(idx, Some(container));
+                }
+            }
+            RawOpContent::Tree(tree) => {
+                let target = tree.target();
+                // create associated metadata container
+                // TODO: maybe we could create map container only when setting metadata
+                let container_id = target.associated_meta_container();
+                let child_idx = self.arena.register_container(&container_id);
+                self.arena.set_parent(child_idx, Some(container));
+            }
+            #[cfg(feature = "counter")]
+            RawOpContent::Counter(_) => {}
+            RawOpContent::Unknown { .. } => {}
+        }
+    }
+
+    /// Create store entries for the containers this local op brings alive.
+    ///
+    /// Full snapshot export no longer walks the alive-container graph, so "every referenced
+    /// container has a store entry" must hold by construction: an empty child inserted via
+    /// `insert_container` would otherwise only exist inside its parent's value and be skipped
+    /// by `flush`.
+    ///
+    /// Mergeable markers are deliberately NOT handled here: an ensured-but-empty mergeable
+    /// child has no independent existence — the parent map's marker is its single source of
+    /// truth, and materializing a store entry for it would keep `has_container` true after the
+    /// marker is removed (see `loro_get_container_for_deleted_mergeable_children`).
+    pub(super) fn ensure_containers_created_by_op(&mut self, op: &Op) {
+        let mut to_ensure: SmallVec<[ContainerID; 2]> = SmallVec::new();
+        op.content
+            .visit_created_children(&self.arena, &mut |c| to_ensure.push(c.clone()));
+
+        for id in to_ensure {
+            self.ensure_container(&id);
+        }
+    }
+}

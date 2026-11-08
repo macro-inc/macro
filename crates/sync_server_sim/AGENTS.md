@@ -75,3 +75,6 @@ recovered from wire timestamps. Runtime enumeration order must retain exact live
 socket membership. Read-only Room diagnostics expose no mutable Loro handle.
 - `src/persistence_test.rs` checks failed first writes versus durable pending/failed
   archive writes, same-time log identities and actual cold replay after cache invalidation.
+
+The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
+separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.

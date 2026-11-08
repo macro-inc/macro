@@ -13,6 +13,7 @@ import { browserslist, version } from './package.json';
 import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
 import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
+import { documentSessionAssets } from './scripts/document-session-assets';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
@@ -272,9 +273,16 @@ function esbuildTargets(queries: readonly string[]): string[] {
 
 /** Hashed assets the first screen needs; index.html requests them while it parses. */
 const HTML_PRELOADS = [
-  // The app waits for Loro to initialize before rendering.
+  // Only one model binary occupies this slot; flag-off builds keep Loro.
+  {
+    file: /(^|\/)document_session_wasm_bg-[\w-]+\.wasm$/,
+    as: 'fetch',
+    type: 'application/wasm',
+    session: true,
+  },
   {
     file: /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/,
+    session: false,
     as: 'fetch',
     type: 'application/wasm',
   },
@@ -290,7 +298,7 @@ const HTML_PRELOADS = [
  * Adds `<link rel="preload">` for HTML_PRELOADS, so their downloads start with
  * the HTML instead of after the entry runs.
  */
-function htmlPreloads(): Plugin {
+function htmlPreloads(session: boolean): Plugin {
   let base = '/';
   return {
     name: 'html-preloads',
@@ -303,6 +311,7 @@ function htmlPreloads(): Plugin {
       handler(_html, ctx) {
         const files = Object.keys(ctx.bundle ?? {});
         return HTML_PRELOADS.flatMap((preload) => {
+          if ('session' in preload && preload.session !== session) return [];
           const file = files.find((fileName) => preload.file.test(fileName));
           if (!file) return [];
           return [
@@ -324,7 +333,9 @@ function htmlPreloads(): Plugin {
   };
 }
 
-export const createAppViteConfig = (): UserConfigFn => {
+export const createAppViteConfig = (
+  options: { documentSessionPreload?: boolean } = {}
+): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
     const NO_MINIFY = process.env.NO_MINIFY === 'true';
@@ -349,7 +360,8 @@ export const createAppViteConfig = (): UserConfigFn => {
         solid(),
         wasm(),
         loroAsyncWasm(),
-        htmlPreloads(),
+        htmlPreloads(options.documentSessionPreload ?? false),
+        documentSessionAssets(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
