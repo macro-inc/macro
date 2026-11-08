@@ -133,3 +133,5 @@ Session::read_state reads a retained immutable version with its editor associate
 Retain newly created selection values from published-state reads independently of a surrounding pending rollback. Preserve their IDs and ordinary fields; never let surviving historical-version handles alias truncated or reused selection indices.
 
 Indexed calls, captured-field reads and Session update/commit bodies bracket ForeignReadOperation. Check deferred failures before selection synchronization, encoding, captures and publication; nested calls isolate caught exceptions without granting new editor authority. Finish the entire commit workflow result, including cleanup and early failures, so a secondary error cannot replace the first deferred failure.
+
+The indexed lexical.$copyNode entry delegates to Transaction.copy_node, preserving the normal clone and reset hooks, fresh keys and empty child/parent links.

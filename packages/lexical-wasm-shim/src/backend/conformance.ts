@@ -1,5 +1,8 @@
 import { decodeHostPacket } from '../../../lexical-conformance/diff/host-packet';
-import type { HostNodeMutation } from '../../../lexical-conformance/diff/host-packet.generated';
+import type {
+  HostCloneNode,
+  HostNodeMutation,
+} from '../../../lexical-conformance/diff/host-packet.generated';
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
 import { foreignHooks } from '../hooks.generated';
 import type { ShimBackend } from './index';
@@ -86,6 +89,27 @@ export const diagnostics = {
   },
 };
 
+/** Clone construction has owned inputs and cannot masquerade as an installed handle. */
+export function isCloneNode(
+  value: unknown
+): value is HostCloneNode<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || !('$clone' in value))
+    return false;
+  const stage = value.$clone;
+  return (
+    stage !== null &&
+    typeof stage === 'object' &&
+    'key' in stage &&
+    typeof stage.key === 'string' &&
+    'type' in stage &&
+    typeof stage.type === 'string' &&
+    'fields' in stage &&
+    stage.fields !== null &&
+    typeof stage.fields === 'object' &&
+    !Array.isArray(stage.fields)
+  );
+}
+
 function isNodeMutation(
   value: unknown
 ): value is HostNodeMutation<unknown, unknown> {
@@ -101,8 +125,9 @@ function isNodeMutation(
     ((value.node === null && foreignHooks[value.hook]?.name === 'importJSON') ||
       (value.node !== null &&
         typeof value.node === 'object' &&
-        '$h' in value.node &&
-        typeof value.node.$h === 'number')) &&
+        (('$h' in value.node && typeof value.node.$h === 'number') ||
+          (foreignHooks[value.hook]?.name === 'afterCloneFrom' &&
+            isCloneNode(value.node))))) &&
     'args' in value &&
     Array.isArray(value.args)
   );

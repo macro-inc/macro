@@ -148,3 +148,5 @@ Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain origi
 Native rich-node registrations omit kind and reject foreign behavior; host/native.rs selects their existing Rust implementations. Registrations with kind remain foreign even when their type matches a package node.
 
 Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and excludeFromCopy destinations. Scalar hooks require their declared primitive type; reject objects without getters/coercion, invalid u32 indents, and preserve opaque throws/recovery.
+
+afterCloneFrom receives a generated $clone staging descriptor and original node handle over an owned read peer; it returns initialized own fields before record installation. Never treat staging metadata as a live writable handle. Clone errors use the active fallible failure barrier.
