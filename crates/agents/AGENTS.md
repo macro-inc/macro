@@ -22,6 +22,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`agent_harness`](agent_harness/AGENTS.md) | Part of agent sessions: orchestrates sandboxed coding-agent sessions end to end — provisioning containers, speaking to each coding-agent runtime (Cursor, Codex), routing … |
 | [`agent_inmem`](agent_inmem/AGENTS.md) | Part of agent sessions: the lightweight alternative to `agent_harness`'s sandboxed containers — serves the agent side of ACP in-process, running the same agentic loop … |
 | [`agent_preview`](agent_preview/AGENTS.md) | Part of agent sessions: lets an agent session's dev server be viewed live by other people. |
+| [`agent_prompts`](agent_prompts/AGENTS.md) | Part of the agent sessions feature. |
 | [`agent_runtime_protocol`](agent_runtime_protocol/AGENTS.md) | Part of agent sessions: the outer wire protocol every coding-agent transport (sandboxed containers, in-process, and the Cursor/Codex cloud-agent adapters) speaks — … |
 | [`agent_session`](agent_session/AGENTS.md) | Part of agent sessions: the coding-agent session entity itself — lifecycle, control, sharing, and the Postgres/HTTP surface every agent-harness consumer talks to. |
 | [`agent_session_realtime`](agent_session_realtime/AGENTS.md) | Part of agent sessions: fans out newly appended agent session log frames, from the harness' Redis Stream to whoever is subscribed over GraphQL, so an open session view … |
@@ -41,7 +42,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`harnessd_protocol`](harnessd_protocol/AGENTS.md) | The wire types of `harnessd`, the agent sign-in daemon on a Macro computer: JSON lines the control plane writes to `harnessd` over `Fleet::exec`, and the lines it … |
 | [`harnesses`](harnesses/AGENTS.md) | Belongs to agent sessions: registration for user-run agent harnesses (macrod), called machines in the product. |
 | [`hosted_runtimes`](hosted_runtimes/AGENTS.md) | Macro computers: hosted VMs a team buys, each running macrod so it shows up in Settings → Runtimes like a paired machine. |
-| [`prompt`](prompt/AGENTS.md) | Part of the agent sessions feature. |
+| [`macrod`](macrod/AGENTS.md) (package `coding_agent_worker`) | Part of agent sessions: `macrod`, the agent harness daemon operators run on their own machine — serves a registered harness's agent sessions, bridges the local ACP … |
 | [`routine_program`](routine_program/AGENTS.md) | Routines: the typed program a routine runs. |
 | [`routines`](routines/AGENTS.md) | Part of the agent sessions feature. |
 | [`scheduled_action`](scheduled_action/AGENTS.md) | Serves agent sessions' automations ("routines"): the reusable domain and adapters for scheduled and event-triggered agent automations — cron-style schedules plus … |

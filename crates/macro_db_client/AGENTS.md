@@ -45,7 +45,7 @@ lists and content save responses retain the stored appearance alongside ordinary
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
-  `permissions_types`, `entity_access_management_types`, `model`, `entity_kind`.
+  `permissions_types`, `entity_access_management_types`, `shared_types`, `entity_kind`.
 - Used by: most Rust services and several domain crates (e.g. `documents`,
   `agent_tools`, `authentication_service`, `email_service`); a query here is
   widely shared — check callers before changing a function's signature.
