@@ -150,23 +150,31 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
             if target == source || !client.alive || client.doc != doc {
                 continue;
             }
+            // Expiry belongs to the receiver epoch that actually observed the
+            // key. A receiver already dead before this source fault cannot tick;
+            // never carry an old incarnation's view across a later Opened.
+            let Some(receiver_open) = outcome.events[..index].iter().rposition(
+                |event| matches!(&event.fact, Fact::Opened { client, .. } if client == target),
+            ) else {
+                continue;
+            };
+            if outcome.events[receiver_open..index].iter().any(|event|
+                matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client } if client == target)) { continue; }
             // A network-only partition does not disconnect BroadcastChannel peers.
             if matches!(event.fact, Fact::Partition { .. }) && client.profile == *source_profile {
                 continue;
             }
             if outcome.events.iter().skip(index + 1).any(|event| event.at.0 <= deadline && matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client } if client == target)) { continue }
-            let before =
-                outcome
-                    .events
-                    .iter()
-                    .take(index)
-                    .rev()
-                    .find_map(|event| match &event.fact {
-                        Fact::PresenceChanged { client, remote } if client == target => {
-                            Some(remote)
-                        }
-                        _ => None,
-                    });
+            let before = outcome
+                .events
+                .iter()
+                .take(index)
+                .skip(receiver_open)
+                .rev()
+                .find_map(|event| match &event.fact {
+                    Fact::PresenceChanged { client, remote } if client == target => Some(remote),
+                    _ => None,
+                });
             if before.is_none_or(|view| !view.contains_key(&key)) {
                 continue;
             }

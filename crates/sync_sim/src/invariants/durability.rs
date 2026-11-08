@@ -178,7 +178,9 @@ pub fn no_persisted_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
                             } if owner == session => Some(*access),
                             _ => None,
                         });
-                    identity && access == Some(Access::Edit)
+                    let durable = outcome.events.iter().any(|event| matches!(&event.fact,
+                        Fact::Opened { session: owner, kind: ClientKind::Tab, .. } if owner == session));
+                    identity && durable && access == Some(Access::Edit)
                 });
         if !recovery {
             continue;
@@ -296,7 +298,15 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                             && (peer.access != Access::Edit || (corruption && reason == "Poison"))
                     })
             });
-            if parked || expired(outcome, profile, &rows, doc) {
+            // A stopped tab has no later Crashed fact, but a profile power loss
+            // can still roll back its exact recent durable row. Keep the join
+            // document/profile/owner/sequence scoped; ACK checks remain strict.
+            let rolled_back = outcome.events.iter().any(|event| {
+                matches!(&event.fact,
+                Fact::WalWriteLost { profile: scope, session, seq }
+                if scope == profile && rows.contains(&(WalOwner::Session(*session), *seq)))
+            });
+            if parked || rolled_back || expired(outcome, profile, &rows, doc) {
                 exempt.extend(row_spans.clone());
             }
         }
@@ -385,6 +395,7 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
                     && client.terminal.is_none()
                     && client.profile == *profile
                     && client.user == row.record.user.0
+                    && client.kind == ClientKind::Tab
                     && client.access == Access::Edit
                     && document_key(client.doc, &outcome.config) == doc.to_string()
             });

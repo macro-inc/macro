@@ -37,6 +37,10 @@ including raw server-port bytes. `first.rs.inc` and `second.rs.inc` contain the 
 | form presence;104,105 | transport::form_presence_refreshes_while_idle_and_remains_saved |
 | AI;108,113,114 | lifecycle::ai_worker_is_hidden_and_flush_is_loud_while_partitioned; existing ai_close_flushes_then_lingers_before_clearing |
 | skew;90 | lifecycle::clock_skew_presence_keeps_the_document_safe |
+| stopped-tab power loss;R-6 | lifecycle::power_loss_after_stop_exempts_only_the_row_actually_rolled_back; exact loss/wrong-profile and strict ACK mutations |
+| fixed host access;3,80 | storage_capabilities::initial_read_and_comment_hosts_skip_document_edits_until_reopened_writable; rejected edits never mutate Loro |
+| durable recovery capability;25,82,114 | storage_capabilities::{memory_ai_does_not_make_a_readonly_browser_a_wal_recovery_opportunity,writable_browser_recovers_parked_rows_while_memory_ai_is_present}; actual durable Tab required for browser WAL |
+| receiver lifecycle expiry;104 | lifecycle::receiver_crashed_before_source_has_no_stale_live_presence_obligation; removing receiver death still fails |
 | power loss;R-6 | lifecycle::power_loss_window_reports_exact_lost_writes |
 
 ## Pending editor/session producers
