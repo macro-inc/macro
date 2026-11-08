@@ -17,6 +17,8 @@ Storage remains compatible with v1 macro-document-wal and macro-document-snapsho
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
 Round native wake delays up and rearm unchanged deadlines after early browser ticks; a fired host timeout must not strand native snapshot or reconnect work.
+Attribute only unowned v1 rows without a user to the current user, identically
+during load and conditional adoption; never relabel an owned session row.
 Hold the source owner's lease during adoption and the shared snapshot lock while
 checking covers and moving WAL rows; reject changed selections without mutation.
 Prune only delivered rows covered by the current matching-owner snapshot, under

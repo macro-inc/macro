@@ -84,6 +84,11 @@ impl SimStorage {
     pub fn image(&self) -> &StoreImage {
         &self.durable
     }
+    // During healed settlement there is no rollback. Any newly completed write
+    // can change the next orphan load's selection, even if no client lifetime changes.
+    pub(crate) fn completed_writes(&self) -> usize {
+        self.recent.len()
+    }
     /// Conservative cache eviction, distinct from a core-requested corrupt snapshot delete.
     /// Returns false while any undelivered WAL row still needs this document's cache.
     pub fn evict_snapshot(&mut self, doc: &SyncDocId) -> bool {

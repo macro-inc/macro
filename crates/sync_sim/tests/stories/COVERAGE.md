@@ -115,3 +115,10 @@ The generator's explicit assertions and real regression seed remain in T0.
 
 - `idle_orphans`: full quiet-window counterexample, fixed real Visible rescan before
   capture, exact retained row/snapshot metadata remains checked.
+
+`quiet_adoption::delayed_orphan_adoption_drains_before_quiet` retains literal
+9486392389341030173. A later snapshot write changes orphan eligibility after the
+first idle scan. Settlement repeats real Visible recovery after completed durable
+write progress, drains actual adoption, and preserves every strict invariant and
+exact replay. Failed-adoption load retries remain core InFlight work; no additional
+orphan deletion or invariant exemption is introduced.

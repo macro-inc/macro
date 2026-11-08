@@ -94,8 +94,12 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   Once data work and old publications drain, issue one fresh selection and finite
   FIFO barrier pair so bounded skew cannot expire the entry-time publication
   before the first view. Heartbeat restarts alone do not replace that view. At preliminary idle, also
-  deliver one real Visible rescan per lifetime and drain its adoption/snapshot
-  effects before capture; quiet still compares exact final storage metadata.
+  deliver a real Visible rescan and drain its adoption/snapshot effects before
+  capture. Repeat after observed completed durable writes change the selection;
+  reset the candidate hold, retaining deadline/event limits. The current rollback
+  history's write count is a watermark only during healed Settle, which performs
+  no rollback or truncation. Never consult invariant results to trigger a rescan;
+  quiet still compares exact final storage metadata.
 - Record actual partition/offline losses on exact open socket generations, including
   packets lost at delivery. Preserve evidence across explicit Heal. During Settle,
   close only affected generations still open through real direct/router callbacks;
@@ -214,3 +218,9 @@ keys. Preserve every checkpoint/timestamp/append marker and every power-loss cut
 and emitted fact. Public images/reads stay owned; restore the oldest popped image
 once after computing the same rollback sequence. Compare with the original owned
 history algorithm across mixed writes, adoption, TTL, corruption and snapshot changes.
+
+The workspace test profile optimizes xxhash byte hashing, measured in real cold
+snapshot checksum validation and exact trace hashing. Debug assertions and
+overflow checks stay enabled; production profiles and hash algorithms do not
+change. Prebuild before timing a warm T0 run and retain all256 shrinking cases,
+500 coverage seeds, every story/peer and every invariant.
