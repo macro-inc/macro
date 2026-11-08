@@ -1,7 +1,3 @@
-import init, {
-  EditorSession,
-} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
-import { NOOP_SPAN } from '@macro-inc/observability';
 import {
   ABI_MAJOR,
   Access,
@@ -10,31 +6,34 @@ import {
   SessionInputMsg,
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  type ExecutorOptions,
+  SessionExecutor,
+} from '@macro-inc/collaboration/session/executor';
+import { emptyInput } from '@macro-inc/collaboration/session/input';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
+import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
+import { NOOP_SPAN } from '@macro-inc/observability';
+import init, {
+  EditorSession,
+} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { mountSessionView } from '../src/session-view';
 import {
-  SessionExecutor,
-  type ExecutorOptions,
-} from '@macro-inc/collaboration/session/executor';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
-import { selectionMessage } from '../src/view/session-port';
-import { emptyInput } from '@macro-inc/collaboration/session/input';
-import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
-import { EditorView } from '../src/view/editor-view';
-import { SessionPort } from '../src/view/session-port';
-import { createBuiltinRegistry } from '../src/view/node-views/builtins';
-import {
-  DRAG_START_COMMAND,
-  DRAG_OVER_COMMAND,
   DRAG_END_COMMAND,
+  DRAG_OVER_COMMAND,
+  DRAG_START_COMMAND,
   INTERNAL_DROP_COMMAND,
 } from '../src/view/drag';
+import { EditorView } from '../src/view/editor-view';
+import { createBuiltinRegistry } from '../src/view/node-views/builtins';
 import type { ViewSink } from '../src/view/port';
+import { SessionPort, selectionMessage } from '../src/view/session-port';
+import type { TypeRow } from '../src/view/types';
 import {
   fixtureTypes,
   registerFixtureViews,
   renderFixture,
 } from './render-fixture';
-import type { TypeRow } from '../src/view/types';
 
 await init();
 const root = document.getElementById('editor');
@@ -394,7 +393,7 @@ const fixture = {
   undo: () => port.command(CommandCode.Undo),
   redo: () => port.command(CommandCode.Redo),
   errors,
-  crossings: new Array<string>(),
+  crossings: [] as string[],
   metrics: { calls: 0, nodeCalls: 0, selectionWrites: 0, textWrites: 0 },
   count() {
     fixture.metrics.calls =

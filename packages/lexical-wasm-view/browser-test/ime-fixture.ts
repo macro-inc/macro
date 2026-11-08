@@ -1,7 +1,3 @@
-import init, {
-  EditorSession,
-} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
-import { LoroDoc, LoroMap, LoroMovableList, LoroText } from 'loro-crdt/base64';
 import {
   ABI_MAJOR,
   Access,
@@ -17,10 +13,14 @@ import {
   FromRemote,
 } from '@macro-inc/collaboration/sync-service/generated/schema';
 import { intoFrames } from '@macro-inc/collaboration/websocket/platform/framing/frames';
+import { LoroDoc, LoroMap, LoroMovableList, LoroText } from 'loro-crdt/base64';
+import init, {
+  EditorSession,
+} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { EditorView } from '../src/view/editor-view';
-import { SessionPort } from '../src/view/session-port';
 import { createBuiltinRegistry } from '../src/view/node-views/builtins';
 import type { ViewSink } from '../src/view/port';
+import { SessionPort } from '../src/view/session-port';
 
 await init();
 const root = document.getElementById('editor');

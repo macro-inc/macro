@@ -1,9 +1,9 @@
 import type {
   EditorInputMsg,
-  IViewEffectMsg,
   IClipboardMsg,
   IQueryMsg,
   IQueryReplyMsg,
+  IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
 

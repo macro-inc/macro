@@ -4,15 +4,26 @@
  * LexicalMutations.ts observation and LexicalUpdates.ts listener ordering.
  * Pin: Lexical 0.45.0 / 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
-import { batch, createComponent, createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
+
 import {
   CommandCode,
   EditorInputMsg,
   type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import { batch, createComponent, createSignal } from 'solid-js';
+import { render } from 'solid-js/web';
+import { ClipboardAccess } from './clipboard';
+import type {
+  ViewCommand,
+  ViewCommandPriority,
+  ViewListener,
+} from './commands';
+import { registerEvents } from './events';
 import { Mirror } from './mirror';
 import type { EditorPort, TextFromView, ViewSink } from './port';
+import { PresenceLayer } from './presence';
+import { BulkQueries } from './queries';
 import type {
   EditorThemeClasses,
   ElementDOMSlot,
@@ -20,27 +31,17 @@ import type {
   RenderContext,
 } from './registry';
 import { readSelection, sameSelection, writeSelection } from './selection';
+import { selectionMessage } from './session-port';
+import { TableObserver } from './table/observer';
 import type {
   AppliedDiff,
   MutationKind,
   NodeKey,
-  ViewNode,
-  ViewSelectionInfo,
-  ViewSelection,
   TypeFlags,
+  ViewNode,
+  ViewSelection,
+  ViewSelectionInfo,
 } from './types';
-import { registerEvents } from './events';
-import { BulkQueries } from './queries';
-import { TableObserver } from './table/observer';
-import type {
-  ViewCommand,
-  ViewCommandPriority,
-  ViewListener,
-} from './commands';
-import { selectionMessage } from './session-port';
-import { ClipboardAccess } from './clipboard';
-import { PresenceLayer } from './presence';
-import { Telemetry, type Span } from '@macro-inc/observability';
 
 const roots = new WeakMap<Node, EditorView>();
 export interface CommitInfo {
@@ -177,7 +178,8 @@ export class EditorView implements ViewSink {
     options: ViewOptions
   ): EditorView {
     if (roots.has(root)) throw new Error('Editor root is already mounted');
-    const span = options.parentSpan?.span('view.mount') ?? Telemetry.span('editor.open');
+    const span =
+      options.parentSpan?.span('view.mount') ?? Telemetry.span('editor.open');
     try {
       return span.run(
         () => new EditorView(root, port, registry, options, span)
@@ -298,7 +300,8 @@ export class EditorView implements ViewSink {
   ): void {
     if (this.disposed) throw new Error('Diff applied to a disposed view');
     for (const effect of effects) {
-      if (effect.kind === 2) this.options.onError(new Error(effect.text || 'Editor session failed'));
+      if (effect.kind === 2)
+        this.options.onError(new Error(effect.text || 'Editor session failed'));
     }
     const initialize = effects.some((effect) => effect.kind === 8);
     const paste = effects.some(
