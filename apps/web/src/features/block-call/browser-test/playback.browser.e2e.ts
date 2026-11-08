@@ -1,5 +1,57 @@
 import { expect, test } from '@playwright/test';
 
+for (const theme of ['light', 'dark']) {
+  test(`shows mute while dragging to zero and restores the speaker above zero (${theme})`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/src/features/block-call/browser-test/playback.html?theme=${theme}`
+    );
+    const video = page.locator('video');
+    await expect(video).toHaveJSProperty('readyState', 4);
+    const mute = page.getByRole('button', { name: 'Mute', exact: true });
+    await mute.hover();
+    const slider = page.getByRole('slider', { name: 'Volume', exact: true });
+    await expect(slider).toBeVisible();
+    const thumb = await slider.boundingBox();
+    const track = await page
+      .getByRole('dialog', { name: 'Volume' })
+      .locator('[data-orientation="vertical"]')
+      .filter({ has: slider })
+      .last()
+      .boundingBox();
+    if (!thumb || !track) throw new Error('Missing volume geometry');
+    const x = thumb.x + thumb.width / 2;
+    await page.mouse.move(x, thumb.y + thumb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, track.y + track.height + 8, { steps: 16 });
+    await expect(video).toHaveJSProperty('volume', 0);
+    await expect(
+      page.getByRole('button', { name: 'Unmute', exact: true })
+    ).toBeVisible();
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d51-${theme}-zero.png`,
+      });
+    await page.mouse.move(x, track.y + track.height / 2, { steps: 10 });
+    await expect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.volume))
+      .toBeGreaterThan(0);
+    await expect(mute).toBeVisible();
+    await page.mouse.up();
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d51-${theme}-audible.png`,
+      });
+    await mute.click();
+    await expect(video).toHaveJSProperty('muted', true);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d51-${theme}-muted.png`,
+      });
+  });
+}
+
 test('drags volume, clicks the track, and adjusts with arrow keys without closing the popover', async ({
   page,
 }) => {

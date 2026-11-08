@@ -9,6 +9,7 @@ import FullscreenIcon from '@icon/system/regular/corners-out.svg';
 import PauseIcon from '@icon/system/regular/pause.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
 import VolumeIcon from '@icon/system/regular/speaker-high.svg';
+import MutedVolumeIcon from '@icon/system/regular/speaker-slash.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button, Dropdown, Slider } from '@ui';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
@@ -214,7 +215,9 @@ function RecordingVolume(props: {
           }
         }}
       >
-        <VolumeIcon class="size-4" classList={{ 'opacity-50': silent() }} />
+        <Show when={silent()} fallback={<VolumeIcon class="size-4" />}>
+          <MutedVolumeIcon class="size-4" />
+        </Show>
       </Popover.Anchor>
       <Popover.Portal mount={props.mount}>
         <Popover.Content
