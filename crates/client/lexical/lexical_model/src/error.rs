@@ -255,6 +255,15 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// Runtime parent is missing, cyclic, or has another storage kind.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown or incompatible foreign parent {parent} for {type_name}")]
+    UnknownForeignParent {
+        /// Runtime type being registered.
+        type_name: &'static str,
+        /// Parent type name.
+        parent: &'static str,
+    },
     /// Command behavior was installed more than once.
     #[error("plugin {name} registered twice")]
     DuplicatePlugin {

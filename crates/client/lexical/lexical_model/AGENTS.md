@@ -49,7 +49,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
-- Reserved `foreign-nodes` exposes development-only peer editors and fresh seeded-state restoration (explicit key layout, validated selection, next allocator key) for the conformance facade; JS node hosting remains a later layer.
+- Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
+- Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
+- Clone hooks run before projected mutable access. Invalid native parent fields from infallible clones reject flush and publication; snapshots retain their previous values.
 
 - Accepted text splices acquire writable records even for unchanged content; equal set_text_content remains a no-op.
 - Raw element splices preserve surviving parent offsets; sibling insertion/removal APIs adjust their own source and destination endpoints.

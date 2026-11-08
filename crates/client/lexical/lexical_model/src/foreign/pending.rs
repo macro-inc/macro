@@ -29,12 +29,14 @@ pub struct PendingUpdate {
     work: WorkCounters,
     detached: Vec<Option<Selection>>,
     selection_replacements: u64,
+    native_projection: Option<super::projection::NativeProjection>,
 }
 
 impl Transaction<'_> {
     /// Detach without flushing or publishing the pending update.
     pub fn suspend(self) -> PendingUpdate {
         PendingUpdate {
+            native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
             version: self.editor.suspend_version,
             extensions: self.extensions,
@@ -71,6 +73,7 @@ impl Editor {
             return Err(Error::StaleSuspendedUpdate);
         }
         Ok(Transaction {
+            native_projection: update.native_projection,
             editor: self,
             extensions: update.extensions,
             events: update.events,

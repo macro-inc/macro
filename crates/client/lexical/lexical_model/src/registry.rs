@@ -45,6 +45,9 @@ pub struct TypeTableRow {
 }
 /// Public metadata of a registered node type.
 pub struct RegisteredNode {
+    /// Runtime node definition; absent for statically registered Rust nodes.
+    #[cfg(feature = "foreign-nodes")]
+    pub foreign: Option<Arc<ForeignNodeType>>,
     /// Dense registry index.
     pub index: NodeTypeIndex,
     /// Serialized name.
@@ -237,6 +240,12 @@ impl EditorBuilder {
         self.table_selection_hooks = Some(Arc::new(hooks));
         self
     }
+    /// Register a development runtime node type in builder order.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn foreign_node(mut self, node: ForeignNodeType) -> Self {
+        self.vtables.push(crate::foreign::dispatch::vtable(node));
+        self
+    }
     /// Register a node type in builder order.
     pub fn node<Node: NodeType>(mut self) -> Self {
         self.vtables.push(Node::Kind::vtable());
@@ -352,9 +361,17 @@ impl EditorBuilder {
                 }
             }
             registry.by_name.insert(v.type_name, index);
-            registry.by_type.insert(v.type_id, index);
+            #[cfg(feature = "foreign-nodes")]
+            let is_foreign = v.foreign.is_some();
+            #[cfg(not(feature = "foreign-nodes"))]
+            let is_foreign = false;
+            if !is_foreign {
+                registry.by_type.insert(v.type_id, index);
+            }
             registry.nodes.push(RegisteredNode {
                 index,
+                #[cfg(feature = "foreign-nodes")]
+                foreign: v.foreign.clone(),
                 type_name: v.type_name,
                 class_name: v.class_name,
                 kind: v.kind,
@@ -367,6 +384,8 @@ impl EditorBuilder {
                 flags: None,
             });
         }
+        #[cfg(feature = "foreign-nodes")]
+        crate::foreign::registry::resolve_parents(&mut registry)?;
         for (original, replacement, with) in self.replacements {
             let a = *registry
                 .by_type
