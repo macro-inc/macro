@@ -8,5 +8,6 @@ export default defineConfig({
     setupFiles: ['./src/__tests__/setup.ts'],
     environment: 'node',
     maxWorkers: 1,
+    execArgv: ['--expose-gc'],
   },
 });

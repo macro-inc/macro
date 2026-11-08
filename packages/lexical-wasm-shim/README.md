@@ -23,4 +23,10 @@ without publishing or leaking tags into later work, while detached API values
 remain usable. Disposal cancels queued work and releases the model after any
 active callback returns.
 
+The backend owns registered JS callbacks and passes weak forwarding functions into
+Rust. This avoids an editor → Rust → callback → editor retention cycle while
+keeping callbacks alive as long as their JS editor is reachable. Unreachable
+backends release their Rust facades through a finalizer. The lifetime tests force
+GC and await that release event; explicit disposal is idempotent.
+
 The production view lives in `lexical-wasm-view`; DOM code belongs there.

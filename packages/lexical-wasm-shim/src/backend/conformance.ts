@@ -6,6 +6,25 @@ let initialized = false;
 let api: ReadonlyMap<string, number>;
 const commands = new WeakMap<object, string>();
 let nextCommand = 0;
+type Callback = (argument: unknown) => unknown;
+const collectionListeners = new Set<() => void>();
+const active: ConformanceBackend[] = [];
+const editors = new FinalizationRegistry<wasm.EditorHandle>((handle) => {
+  handle.free();
+  for (const listener of [...collectionListeners]) listener();
+});
+
+// Rust retains this bridge, so it must not strongly retain the JS callback
+// that can close over the editor. The backend owns registered callbacks in JS.
+function weakCallback(callback: Callback): Callback {
+  const reference = new WeakRef(callback);
+  return (argument) => {
+    const target = reference.deref();
+    if (target === undefined)
+      throw new Error('registered callback was collected');
+    return target(argument);
+  };
+}
 
 function commandIdentity(command: object): string {
   let id = commands.get(command);
@@ -34,50 +53,84 @@ export const diagnostics = {
   bytes: () => wasm.debug_boundary_bytes(),
   resetCounters: () => wasm.debug_reset_counters(),
   resetKeys: () => wasm.reset_key_counter(),
+  onCollected(listener: () => void): () => void {
+    collectionListeners.add(listener);
+    return () => {
+      collectionListeners.delete(listener);
+    };
+  },
 };
 
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
   private readonly handle: wasm.EditorHandle;
+  private readonly callbacks = new Map<number, Callback>();
+  private readonly bridges = new WeakMap<Callback, Callback>();
+  private disposed = false;
 
   constructor(config: unknown) {
     if (!initialized) throw new Error('conformance WASM is not initialized');
     this.handle = new wasm.EditorHandle(config);
+    editors.register(this, this.handle, this);
+  }
+  private bridge(callback: Callback): Callback {
+    let bridge = this.bridges.get(callback);
+    if (bridge === undefined) {
+      bridge = weakCallback(callback);
+      this.bridges.set(callback, bridge);
+    }
+    return bridge;
+  }
+  private enter<T>(body: (handle: wasm.EditorHandle) => T): T {
+    // The JS owner must survive synchronous GC in a callback, even if a caller
+    // no longer uses its backend reference after entering the native operation.
+    active.push(this);
+    try {
+      return body(this.handle);
+    } finally {
+      active.pop();
+    }
   }
   beginUpdate(tags: readonly string[], discrete: boolean): void {
-    this.handle.begin_update(tags, discrete);
+    this.enter((handle) => handle.begin_update(tags, discrete));
   }
   call(name: string, args: readonly unknown[], receiver?: unknown): unknown {
     const id = api.get(name);
     if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
-    return this.handle.call(
-      id,
-      receiver === undefined ? { args } : { args, this: receiver }
+    return this.enter((handle) =>
+      handle.call(
+        id,
+        receiver === undefined ? { args } : { args, this: receiver }
+      )
     );
   }
   flush(): void {
-    this.handle.flush();
+    this.enter((handle) => handle.flush());
   }
   finishNoop(): boolean {
-    return this.handle.finish_noop();
+    return this.enter((handle) => handle.finish_noop());
   }
   commit() {
-    return decodeHostPacket(this.handle.commit());
+    return decodeHostPacket(this.enter((handle) => handle.commit()));
   }
   discard(): void {
-    this.handle.discard_update();
+    this.enter((handle) => handle.discard_update());
   }
   readField(handle: number, field: string): unknown {
-    return this.handle.read_field(handle, field);
+    return this.enter((editor) => editor.read_field(handle, field));
   }
   releaseVersion(version: string): void {
-    this.handle.release_version(version);
+    this.enter((handle) => handle.release_version(version));
   }
   registerTransform(
     type: string,
     dispatch: (node: unknown) => unknown
   ): number {
-    return this.handle.register_transform(type, dispatch);
+    const id = this.enter((handle) =>
+      handle.register_transform(type, this.bridge(dispatch))
+    );
+    this.callbacks.set(id, dispatch);
+    return id;
   }
   registerListener(
     command: object,
@@ -86,19 +139,35 @@ export class ConformanceBackend implements ShimBackend {
   ): number {
     if (!Number.isInteger(priority) || priority < 0 || priority > 4)
       throw new Error('invalid command priority');
-    return this.handle.register_listener(
-      commandIdentity(command),
-      priority,
-      dispatch
+    const id = this.enter((handle) =>
+      handle.register_listener(
+        commandIdentity(command),
+        priority,
+        this.bridge(dispatch)
+      )
     );
+    this.callbacks.set(id, dispatch);
+    return id;
   }
   dispatchCommand(command: object, payload: unknown): boolean {
-    return this.handle.dispatch_command(commandIdentity(command), payload);
+    return this.enter((handle) =>
+      handle.dispatch_command(commandIdentity(command), payload)
+    );
   }
   unregister(id: number): void {
-    this.handle.unregister(id);
+    this.enter((handle) => handle.unregister(id));
+    const callback = this.callbacks.get(id);
+    // A synchronous model listener snapshot can still invoke an unregistered
+    // callback later in this job. Keep its JS owner through that callback phase.
+    queueMicrotask(() => {
+      if (this.callbacks.get(id) === callback) this.callbacks.delete(id);
+    });
   }
   dispose(): void {
-    this.handle.free();
+    if (this.disposed) return;
+    this.enter((handle) => handle.free());
+    this.disposed = true;
+    editors.unregister(this);
+    this.callbacks.clear();
   }
 }
