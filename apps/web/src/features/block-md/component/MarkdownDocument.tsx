@@ -1,4 +1,5 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createLoroManager,
@@ -44,6 +45,7 @@ import { HistoryProvider } from '../history/HistoryContext';
 import { HistoryWorkspace } from '../history/HistoryWorkspace';
 import { stampLoroSnapshotState } from '../observability';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
+import { MarkdownEditor } from './MarkdownEditor';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { Notebook } from './Notebook';
 
@@ -295,7 +297,7 @@ export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
   autoFocus?: boolean;
 };
 
-const RustMarkdownEditor = lazy(() => import('./RustMarkdownEditor'));
+const SessionMarkdownEditor = lazy(() => import('./SessionMarkdownEditor'));
 
 export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
   const { documentSource, documentId } = useMarkdownDocument();
@@ -309,10 +311,15 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
         {(source) => (
           <Suspense>
             <TraceFlow name="editor.open" key={documentId}>
-              <RustMarkdownEditor
-                context={source.context}
-                autoFocus={props.autoFocus ?? false}
-                onReady={props.onDataReady}
+              <MarkdownDocumentNotebook
+                {...props}
+                body={(options) => (
+                  <SessionMarkdownEditor
+                    context={source.context}
+                    autoFocus={options.autoFocus}
+                    onReady={props.onDataReady}
+                  />
+                )}
               />
             </TraceFlow>
           </Suspense>
@@ -330,7 +337,7 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
 }
 
 function LegacyMarkdownDocumentContent(props: MarkdownDocumentContentProps) {
-  const { documentId: getDocumentId, state } = useMarkdownDocument();
+  const { documentId: getDocumentId } = useMarkdownDocument();
   const documentId = getDocumentId();
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
@@ -340,6 +347,29 @@ function LegacyMarkdownDocumentContent(props: MarkdownDocumentContentProps) {
 
   useMarkdownSnapshotIngest(loroManager, props);
 
+  const resolveAppLink = useMacroMentionLinkResolver();
+  return (
+    <MarkdownDocumentNotebook
+      {...props}
+      body={(options) => (
+        <MarkdownEditor
+          loroManager={loroManager}
+          autoFocusOnMount={options.autoFocus}
+          resolveAppLink={resolveAppLink}
+          showLexicalStateDebugger={options.showStateDebugger}
+          onLexicalStateDebuggerClose={options.closeStateDebugger}
+        />
+      )}
+    />
+  );
+}
+
+function MarkdownDocumentNotebook(
+  props: MarkdownDocumentContentProps & {
+    body: Parameters<typeof Notebook>[0]['body'];
+  }
+) {
+  const { documentId, state } = useMarkdownDocument();
   return (
     <div class="w-full grow overflow-hidden relative" data-block-content>
       <Scroll
@@ -354,8 +384,8 @@ function LegacyMarkdownDocumentContent(props: MarkdownDocumentContentProps) {
           <Suspense>
             <TraceFlow name="doc.editor">
               <Notebook
-                loroManager={loroManager}
-                documentId={documentId}
+                body={props.body}
+                documentId={documentId()}
                 hotkeyScope={props.hotkeyScope}
                 autoFocus={props.autoFocus ?? false}
               />

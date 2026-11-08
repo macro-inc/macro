@@ -978,7 +978,9 @@ document_session_wasm when documentSessionPreload is selected. Do not preload bo
 
 Resolve `rust-editor-model` before constructing the document body owner in both
 block and Drive loaders; keep SessionExecutor/EditorView imports lazy and the
-flag-off CollabProvider path intact. Keep the selected model for that open
+flag-off CollabProvider path intact. Mount both body engines inside the same
+Notebook and MarkdownEditorChrome; keep document layout and status UI out of
+RustMarkdownEditor. Keep the selected model for that open
 session and reopen after a flag change. Reuse account/epoch-fenced metadata for
 flagged browser offline opens; fetch fresh reconnect credentials and invalidate
 that epoch before logout clearing.
