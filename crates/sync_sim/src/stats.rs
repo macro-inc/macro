@@ -143,6 +143,7 @@ impl RunStats {
                         multi_tab.insert(profile.clone());
                     }
                 }
+                Fact::ProjectionRecovered { .. } => self.resets += 1,
                 Fact::Telemetry {
                     name,
                     phase: TelemetryPhase::Start,

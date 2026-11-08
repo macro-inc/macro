@@ -38,3 +38,4 @@ Preserve keystroke work counters when changing code-generation or post-processin
 
 Set TMPDIR for cargo. Never edit generated files by hand. Keep package registration,
 preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/justfile.
+Enforce the provisional D5 1,130,000-byte Brotli cap; WP-59 measures actual startup before the budget is tightened.

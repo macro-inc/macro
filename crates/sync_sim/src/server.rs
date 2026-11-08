@@ -84,6 +84,12 @@ impl SimServer {
         let key = SessionKey::new(if surface { format!("surface:{id}") } else { id });
         let ports = SimPorts::new();
         ports.set_now(now);
+        if matches!(
+            seed_spec,
+            SeedDocument::Editor(_) | SeedDocument::StoredEditor(_)
+        ) {
+            ports.set_comment_gate(crate::comment_gate::evaluate);
+        }
         let mut room = SimRoom::new(ports.clone());
         let seed =
             crate::document::seed_snapshots(1 + u64::from(doc.0), fields, now.unix_ms, seed_spec)?;

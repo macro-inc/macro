@@ -61,7 +61,19 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   projection, undo and document; never keep a shadow core or mutable document copy.
 - Capture live synced editor JSON and independently reconstructed persisted JSON.
   Compare both per step and in finals; include editor finals in replay/hash evidence.
-  Remaining M2 command/story and comment-gate producers are listed in COVERAGE.md.
+  Exempt projection consistency only after an actual injected-write receipt for the
+  exact client session incarnation. Keep all healthy projection, convergence and
+  loss checks; reopening never inherits an exemption.
+  Record visible successful projection resync errors with actual imported spans;
+  unexplained errors still fail per-step and final checks. Match an earlier fault
+  receipt on the same document, or its exact author incarnation still observing
+  that bad write. Never accept an armed configuration or arbitrary error text.
+  Remaining M2 command/story producers are listed in COVERAGE.md.
+- Exempt editor convergence only for exact private history covered by valid,
+  unacknowledged ReadOnly parked WAL rows for that profile/document/user. Keep
+  own projection checks strict, show Unsaved(ReadOnly), and require automatic
+  delivery plus strict equality after an explicit write regrant. A parked label
+  without retained bytes never exempts edit loss.
 - Headless inputs always use KeepModel. Install resolved selection through the
   registered model-selection-only command, then dispatch the actual command in
   the same core Batch. SelectionFromView(Range) is rejected in headless mode even
@@ -243,8 +255,11 @@ MacroSyncPolicy and source NodeIdPlugin lengths (web8; AI default11). Supply con
 time from each actual Now before handling input. Seed deterministic constructor
 and transactional identity streams by peer and factory creation ordinal, so a
 rebuild cannot restart a retired identity stream. Keep the staging comment factory
-matched to CommentNode. This registry checkpoint does not establish application
-comment-gate parity; the gate remains a separate required producer.
+matched to CommentNode. Editor rooms install the real fail-closed application comment gate through the
+simulation port, including StoredEditor seeds and cold forks. T0 runs the complete
+20,000-case source gate corpus alongside random sessions. Bind every approved
+partial-import divergence to the unchanged source-row hash, exact native error,
+source verdict and exact captured source parse errors; reject stale entries.
 
 PasteMarkdown imports the committed corpus through lexical_markdown and the source
 ALL_TRANSFORMERS, restores the original selection, then uses the real insert-nodes

@@ -611,3 +611,18 @@ impl DocumentSession<EditorSurface> {
         )?)
     }
 }
+
+#[cfg(feature = "test-faults")]
+impl DocumentSession<EditorSurface> {
+    /// Inject an incorrect node type after the next real local projection commit.
+    /// Simulation only; peers reject this type change through their normal projection.
+    #[doc(hidden)]
+    pub fn inject_wrong_type_on_next_local_projection(&mut self) {
+        self.surface.wrong_next_type = true;
+    }
+    /// Drain receipts from actual malformed writes; arming alone produces no receipt.
+    #[doc(hidden)]
+    pub fn take_projection_fault_writes(&mut self) -> Vec<crate::ProjectionFaultWrite> {
+        std::mem::take(&mut self.surface.projection_fault_writes)
+    }
+}

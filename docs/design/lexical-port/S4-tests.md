@@ -2843,7 +2843,7 @@ arrive up to 20 s late), and `WebAssembly.Memory.buffer.byteLength` recorded alo
 | bulk ops at M and L (F7) | the upper 95% CI bound of the paired ratio (§5.2 method, δ = 0) is ≥ 1.00. The claimed wins are gated: md import at L and `parseEditorState` at L each ≤ 0.5 (upper CI bound) |
 | headless keystroke at L | R > U; the target is under 1 ms, against 8 ms in Chrome and 16–26 ms in node/bun |
 | document open, app cell, L | the §5.2 rule fails with `δ = ln 1.05` |
-| wasm brotli size | > a provisional **1,130 KB** now; D5's budget replaces it once decided |
+| wasm brotli size | > the provisional D5 **1,130,000-byte** cap; WP-59 measures actual startup before this budget is tightened |
 | wasm compile + instantiate | > 50 ms on the gate runner (main-thread, startup-critical) |
 | sync-service Worker bundle | compressed size leaves < 20% headroom under the account's Cloudflare Worker size limit |
 | ai-editing-worker CPU (M4) | CPU ms per replayed session > upstream's on the same testbench cases (paired, §5.2 rule with δ = ln 1.05) |

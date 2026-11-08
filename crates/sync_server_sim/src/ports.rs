@@ -19,6 +19,9 @@ use sync_server_core::domain::{
     types::*,
 };
 
+mod comment;
+pub use comment::CommentEvaluator;
+
 /// An ordered call or delivery at a room port boundary.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Effect {
@@ -105,6 +108,7 @@ struct State {
     entropy: VecDeque<uuid_types::Uuid>,
     next_uuid: u128,
     verdicts: VecDeque<Result<bool, SimError>>,
+    comment_gate: Option<CommentEvaluator>,
     latency: BTreeMap<String, Duration>,
     busy_for: Duration,
 }
@@ -200,10 +204,6 @@ impl SimPorts {
     pub fn seed_entropy(&self, values: impl IntoIterator<Item = uuid_types::Uuid>) {
         self.0.borrow_mut().entropy.extend(values);
     }
-    /// Queue recorded comment-service verdicts; absent verdicts fail closed.
-    pub fn seed_verdicts(&self, values: impl IntoIterator<Item = Result<bool, SimError>>) {
-        self.0.borrow_mut().verdicts.extend(values);
-    }
     /// Replace the deterministic fault schedule.
     pub fn set_faults(&self, faults: FaultSchedule) {
         self.0.borrow_mut().faults = faults;
@@ -240,6 +240,7 @@ impl SimPorts {
             data: state.durable.clone(),
             durable: state.durable.clone(),
             now: state.now,
+            comment_gate: state.comment_gate,
             ..State::default()
         })))
     }
@@ -933,21 +934,6 @@ impl PeerDirectory for SimPorts {
         s.data.blame.retain(|(doc, _), _| doc != document.as_str());
         s.commit_directory();
         Ok(())
-    }
-}
-impl CommentGate for SimPorts {
-    type Error = SimError;
-    async fn is_comment_only_change(&self, change: &RootChange) -> Result<bool, SimError> {
-        self.enter(
-            "comment_gate.check",
-            json!({"before":change.before,"after":change.after}),
-        )
-        .await?;
-        self.0
-            .borrow_mut()
-            .verdicts
-            .pop_front()
-            .unwrap_or(Ok(false))
     }
 }
 impl BackgroundEffects for SimPorts {

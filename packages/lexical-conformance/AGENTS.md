@@ -26,6 +26,8 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Retain S1 D-11 error-mode caret validation in the production differential oracle.
 - Keep recorder source patches in `record/hooks.patch`; differential-only patches and observation hooks use a separate disposable source tree.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
+- Capture real gate-oracle parse-error messages in its separate generated sidecar;
+  preserve canonical oracle rows and bind fail-closed divergence entries exactly.
 - The recorder owns index.json and upstream/; preserve independently generated fuzz/ artifacts during regeneration and exclude them from recorder file-set checks.
 - Keep unsupported cases in `fixtures/index.json` with a reason; never silently omit them.
 - Scope HTML oracle DOM constructors to each call; keep other corpus routes headless and restore host globals.
@@ -52,6 +54,9 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Entropy, node keys, handles and callback tapes reset for every test.
 
 - Keep the S1 D-11 error-mode text-offset guard enabled in the release differential oracle; compare rollback state and identities exactly.
+Keep collab out of the raw-model profile; its app Loro and Lexical bundle aliases
+must come from the independent configuration. Prebuild the native conformance
+collab example before its setup hook; do not relax its timeout.
 The independent `diff/collab.config.mts` profile runs four document-session/current
 TS peers with three fixed 2,000-step seeds and a collaborative undo literal.
 Run it from root with `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`;

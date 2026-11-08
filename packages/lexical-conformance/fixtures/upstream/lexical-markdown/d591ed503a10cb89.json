@@ -8,7 +8,7 @@
       "Markdown",
       "should not select when importing \"\\*This text should **not** be italic*\""
     ],
-    "recordedWith": "lexical-conformance@04aff172e316cc2b09915d3c2c15908126798d835268cf980f6e7547724e2aec"
+    "recordedWith": "lexical-conformance@c2adcbe73f13b41da8cc436c2b7b7003f48fb453eebba81d97cd1ebe81928e80"
   },
   "tier": "A-rec",
   "partial": false,

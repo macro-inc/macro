@@ -26,6 +26,8 @@ proptest.workspace = true
 
 [features]
 conformance = []
+# Simulation-only malformed projection producer; never ship enabled.
+test-faults = []
 
 [[example]]
 name = "collab"

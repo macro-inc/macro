@@ -95,3 +95,9 @@ mod editor_drafts;
 
 #[path = "stories/editor_shortcuts.rs"]
 mod editor_shortcuts;
+
+#[path = "stories/editor_projection_fault.rs"]
+mod editor_projection_fault;
+
+#[path = "stories/editor_readonly.rs"]
+mod editor_readonly;
