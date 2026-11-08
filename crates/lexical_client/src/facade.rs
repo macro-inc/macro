@@ -16,6 +16,7 @@ use trigger_context::TriggerContext;
 pub struct LexicalClient {
     http: HttpLexicalClient,
     modes: RouteModes,
+    raw: Option<std::sync::Arc<dyn crate::RawDocumentSource>>,
 }
 impl LexicalClient {
     /// Construct an explicit all-HTTP client, including for isolated tests.
@@ -23,6 +24,7 @@ impl LexicalClient {
         Self {
             http: HttpLexicalClient::new(internal_auth_key, url),
             modes: RouteModes::default(),
+            raw: None,
         }
     }
     /// Load required route configuration once at a production composition root.
@@ -34,6 +36,53 @@ impl LexicalClient {
     pub fn with_route_modes(mut self, modes: RouteModes) -> Self {
         self.modes = modes;
         self
+    }
+    /// Supply an already configured live document source at the composition root.
+    pub fn with_document_source(
+        mut self,
+        source: std::sync::Arc<dyn crate::RawDocumentSource>,
+    ) -> Self {
+        self.raw = Some(source);
+        self
+    }
+    /// Configure local document exports once at startup using MacroConfig and typed URLs.
+    /// HTTP-only clients do not load or require the sync credential.
+    pub async fn with_sync_from_env(self) -> Result<Self> {
+        if self.modes.mode(crate::RouteGroup::Markdown) == crate::RouteMode::Http {
+            return Ok(self);
+        }
+        let config: crate::raw_document::RawDocumentConfig = macro_config::ConfigLoader::load()?;
+        let config = if matches!(config.environment, macro_env::Environment::Local) {
+            config
+        } else {
+            let aws = Box::pin(macro_aws_config::get_macro_aws_config()).await;
+            let secrets = secretsmanager_client::SecretsManager::new(
+                aws_sdk_secretsmanager::Client::new(&aws),
+            );
+            let environment = config.environment;
+            Box::pin(config.resolve_remote_secrets(environment, &secrets)).await?
+        };
+        let source = sync_service_client::SyncServiceClient::new(
+            config.sync_service_auth_key.as_ref().to_owned(),
+            macro_service_urls::SyncServiceUrl::new()?.to_string(),
+        );
+        Ok(self.with_document_source(std::sync::Arc::new(source)))
+    }
+    async fn export<T: Send + 'static>(
+        &self,
+        document_id: &str,
+        operation: impl FnOnce(&lexical_model::EditorState) -> Result<T> + Send + 'static,
+    ) -> Result<T> {
+        let source = self.raw.as_ref().ok_or(crate::MissingDocumentSource)?;
+        let raw = source.get_raw(document_id).await?;
+        crate::in_process::run(move |context| {
+            let state = macro_document_model::export::parse_export_state(
+                &serde_json::from_str(&raw)?,
+                context,
+            )?;
+            operation(&state)
+        })
+        .await
     }
     async fn dispatch<T: Serialize>(
         &self,
@@ -60,7 +109,16 @@ impl LexicalClient {
             Some(document_id),
             0,
             self.http.parse_markdown(document_id),
-            unavailable("search"),
+            self.export(document_id, |state| {
+                Ok(macro_document_model::export::to_search_text(state)?
+                    .into_iter()
+                    .map(|node| MarkdownParseResult {
+                        node_id: node.node_id,
+                        content: node.content,
+                        raw_content: node.raw_content,
+                    })
+                    .collect())
+            }),
         )
         .await
     }
@@ -72,7 +130,22 @@ impl LexicalClient {
             Some(document_id),
             0,
             self.http.get_markdown(document_id, target),
-            unavailable("markdown"),
+            self.export(document_id, move |state| {
+                let target = match target {
+                    MarkdownTarget::Internal => {
+                        macro_document_model::export::MarkdownTarget::Internal
+                    }
+                    MarkdownTarget::External => {
+                        macro_document_model::export::MarkdownTarget::External
+                    }
+                    MarkdownTarget::Embedding => {
+                        macro_document_model::export::MarkdownTarget::Embedding
+                    }
+                };
+                Ok(macro_document_model::export::to_markdown_text(
+                    state, target, None,
+                )?)
+            }),
         )
         .await
     }
@@ -86,7 +159,15 @@ impl LexicalClient {
             Some(document_id),
             0,
             self.http.get_embedding_markdown(document_id),
-            unavailable("markdown"),
+            self.export(document_id, |state| {
+                Ok(EmbeddingMarkdown::from_client_trusted(
+                    macro_document_model::export::to_markdown_text(
+                        state,
+                        macro_document_model::export::MarkdownTarget::Embedding,
+                        None,
+                    )?,
+                ))
+            }),
         )
         .await
     }
@@ -98,12 +179,17 @@ impl LexicalClient {
         document_id: &str,
         mark_id: &str,
     ) -> Result<Option<CommentMarkContext>> {
+        let mark = mark_id.to_owned();
         self.dispatch(
             Route::CommentMark,
             Some(document_id),
             0,
             self.http.resolve_comment_mark(document_id, mark_id),
-            unavailable("comment_mark"),
+            self.export(document_id, move |state| {
+                crate::in_process::wire(macro_document_model::export::to_comment_mark_context(
+                    state, &mark,
+                )?)
+            }),
         )
         .await
     }
@@ -139,7 +225,13 @@ impl LexicalClient {
             Some(document_id),
             0,
             self.http.parse_cognition_v2(document_id),
-            unavailable("cognitionv2"),
+            self.export(document_id, |state| {
+                Ok(CognitionV2ResponseData {
+                    data: crate::in_process::wire(macro_document_model::export::to_cognition_v2(
+                        state,
+                    )?)?,
+                })
+            }),
         )
         .await
     }
@@ -150,7 +242,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&MarkdownSnapshotRequest { markdown })?.len(),
             self.http.markdown_to_loro_snapshot(markdown),
-            unavailable("snapshot_markdown"),
+            crate::in_process::markdown_snapshot(markdown),
         )
         .await
     }
@@ -164,7 +256,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&HtmlRequest { markdown })?.len(),
             self.http.markdown_to_html(markdown),
-            unavailable("html"),
+            crate::in_process::html(markdown),
         )
         .await
     }
@@ -176,7 +268,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&MentionsRequest { markdown })?.len(),
             self.http.extract_mentions(markdown),
-            unavailable("mentions"),
+            crate::in_process::mentions(markdown),
         )
         .await
     }
@@ -187,7 +279,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&image)?.len(),
             self.http.compose_image_markdown(image),
-            unavailable("image_markdown"),
+            crate::in_process::image(image),
         )
         .await
     }
@@ -204,7 +296,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&AgentAnnouncementRequest { reply_target, chip })?.len(),
             self.http.compose_agent_announcement(reply_target, chip),
-            unavailable("agent_announcement"),
+            crate::in_process::announcement(AgentAnnouncementRequest { reply_target, chip }),
         )
         .await
     }
@@ -221,7 +313,9 @@ impl LexicalClient {
             })?
             .len(),
             self.http.compose_agent_connection_prompt(prompt),
-            unavailable("agent_connection_prompt"),
+            crate::in_process::announcement(AgentConnectionPromptRequest {
+                connection_prompt: prompt,
+            }),
         )
         .await
     }
@@ -233,7 +327,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&AgentChatReplyRequest { chat_reply: reply })?.len(),
             self.http.compose_agent_chat_reply(reply),
-            unavailable("agent_chat_reply"),
+            crate::in_process::announcement(AgentChatReplyRequest { chat_reply: reply }),
         )
         .await
     }
@@ -266,7 +360,13 @@ impl LexicalClient {
                 current_time,
                 trigger,
             ),
-            unavailable("agent_context"),
+            crate::in_process::agent_context(&AgentContextRequest {
+                prompt_markdown,
+                instructions,
+                people,
+                current_time,
+                trigger,
+            }),
         )
         .await
     }
@@ -282,7 +382,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&ExtractReplyRequest { markdown })?.len(),
             self.http.extract_explicit_reply(markdown),
-            unavailable("extract_reply"),
+            crate::in_process::extract_reply(markdown),
         )
         .await
     }
@@ -296,7 +396,7 @@ impl LexicalClient {
             None,
             serde_json::to_vec(&request)?.len(),
             self.http.notion_to_loro_snapshot(request),
-            unavailable("snapshot_notion"),
+            crate::in_process::notion_snapshot(request),
         )
         .await
     }

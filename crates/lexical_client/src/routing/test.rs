@@ -175,10 +175,7 @@ async fn public_client_rejects_unported_mode_without_http_access() {
     let client = crate::LexicalClient::new("test-key".into(), "http://127.0.0.1:1".into())
         .with_route_modes("markdown=in_process".parse().expect("modes"));
     let error = client
-        .get_markdown(
-            "document-test",
-            crate::parse_markdown::MarkdownTarget::Internal,
-        )
+        .parse_markdown_for_ai("document-test")
         .await
         .expect_err("not ported");
     assert_eq!(
@@ -186,7 +183,7 @@ async fn public_client_rejects_unported_mode_without_http_access() {
             .downcast_ref::<NotYetPorted>()
             .expect("typed error")
             .route,
-        "markdown"
+        "cognition"
     );
 }
 

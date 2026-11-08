@@ -18,6 +18,19 @@ strum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 macro_config = { workspace = true }
+macro_document_model = { workspace = true, features = ["html"] }
+macro_document_composers = { workspace = true }
+lexical_model = { workspace = true }
+getrandom = { workspace = true }
+chrono = { workspace = true }
+sync_service_client = { workspace = true }
+macro_service_urls = { workspace = true }
+async-trait = { workspace = true }
+macro_env = { workspace = true }
+remote_env_var = { workspace = true }
+macro_aws_config = { workspace = true }
+secretsmanager_client = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -30,3 +43,4 @@ opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+axum = { workspace = true }
