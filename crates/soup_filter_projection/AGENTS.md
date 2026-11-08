@@ -51,7 +51,7 @@ Soup entity's filterable facts, shared by server and client-side cache code.
   completeness. Property-backed Mail projections use `soup-mail-v6`.
 
 - `default-features = false` (no `models`) is the wasm-safe build; don't add a
-  non-optional dependency on `soup`/`models_soup` outside the `models` feature.
+  non-optional dependency on `soup`/`soup_types` outside the `models` feature.
 - Decoding must stay backward-compatible with every `SOUP_CACHE_PROJECTION_WIRE_VERSION_V*`
   still in the wild — never remove an old decode branch.
 

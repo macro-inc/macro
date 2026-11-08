@@ -6,7 +6,7 @@
 mod test;
 
 use entity_kind::EntityType;
-use models_soup::{item::SoupItem, team::SoupTeam};
+use soup_types::{item::SoupItem, team::SoupTeam};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

@@ -8,7 +8,7 @@ mod test;
 
 use entity_kind::EntityType;
 use model_owner::Owner;
-use models_soup::{harness::SoupHarness, item::SoupItem};
+use soup_types::{harness::SoupHarness, item::SoupItem};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 

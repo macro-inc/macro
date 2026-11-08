@@ -7,14 +7,14 @@ version = "0.1.0"
 [features]
 # Native-only model adapters. Wasm-facing dependents must disable default features.
 default = ["models"]
-models = ["dep:models_soup", "dep:soup", "dep:workspace-hack"]
+models = ["dep:soup_types", "dep:soup", "dep:workspace-hack"]
 
 [dependencies]
 base64 = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true }
 item-filter-index = { workspace = true }
-models_soup = { workspace = true, optional = true }
+soup_types = { workspace = true, optional = true }
 postcard = { workspace = true }
 predicate-index = { workspace = true }
 serde = { workspace = true }

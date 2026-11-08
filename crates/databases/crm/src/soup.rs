@@ -1,7 +1,7 @@
 //! Conversions from CRM records into their Soup wire shapes.
 
 use crate::domain::model::{CrmCompanyForSoup, CrmContactForSoup, CrmDomain};
-use models_soup::{
+use soup_types::{
     crm_company::{SoupCrmCompany, SoupCrmDomain},
     crm_contact::SoupCrmContact,
 };

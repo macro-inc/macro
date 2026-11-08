@@ -8,7 +8,7 @@ transparent `Uuid` newtype (CS-10).
 ## Boundaries
 
 - Depends on: `serde`, `uuid`; `utoipa` behind `schema`.
-- Used by: `models_soup`, which re-exports it.
+- Used by: `soup_types`, which re-exports it.
 
 ## Checks
 

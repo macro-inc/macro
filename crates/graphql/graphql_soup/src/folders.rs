@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_graphql::Context;
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{item::SoupItem, project::SoupProject};
+use soup_types::{item::SoupItem, project::SoupProject};
 
 use crate::objects::{GraphqlSoupEntity, GraphqlSoupProject, SoupEntityEdges};
 

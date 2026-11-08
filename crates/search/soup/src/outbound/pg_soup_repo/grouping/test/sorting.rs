@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
 use chrono::{DateTime, Duration, Utc};
-use models_soup::item::SoupItem;
 use pagination_types::{CursorWithValAndFilter, SortOn};
+use soup_types::item::SoupItem;
 use uuid::Uuid;
 
 const SORTS: [SimpleSortMethod; 4] = [

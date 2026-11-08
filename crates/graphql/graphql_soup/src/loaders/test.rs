@@ -16,7 +16,6 @@ use item_filters::ast::{
     project::ProjectLiteral,
 };
 use model_owner::Owner;
-use models_soup::{document::SoupDocument, email_thread::SoupEmailThreadPreview};
 use pagination_types::{Paginated, PaginatedCursor};
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use soup::domain::{
@@ -26,6 +25,7 @@ use soup::domain::{
     },
     ports::{SoupOutput, SoupService},
 };
+use soup_types::{document::SoupDocument, email_thread::SoupEmailThreadPreview};
 
 use super::*;
 

@@ -3,14 +3,14 @@
 
 pub use document_sub_type::DocumentSubType;
 use item_filter_index::vocabulary;
-#[cfg(feature = "models")]
-use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use predicate_index::{
     ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
     OptimisticProjectionMutation, RecordKey, Token, ValidationError, utc_timestamp_micros,
 };
 #[cfg(feature = "models")]
 use soup::domain::models::SoupProjectionHydration;
+#[cfg(feature = "models")]
+use soup_types::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use thiserror::Error;
 
 pub mod channel;

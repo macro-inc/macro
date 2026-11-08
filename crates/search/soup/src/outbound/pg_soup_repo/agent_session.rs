@@ -13,9 +13,9 @@ use item_filters::ast::{
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
 use model_owner::Owner;
-use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
 use pagination_types::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
+use soup_types::{agent_session::SoupAgentSession, item::SoupItem};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 

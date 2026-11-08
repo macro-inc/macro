@@ -13,7 +13,7 @@ outbound = [
   "dep:activity",
   "dep:cow_str",
   "dep:email",
-  "dep:models_soup",
+  "dep:soup_types",
   "dep:soup",
   "dep:soup_realtime_core",
 ]
@@ -34,7 +34,7 @@ item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_notifications = { workspace = true }
-models_soup = { workspace = true, optional = true }
+soup_types = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

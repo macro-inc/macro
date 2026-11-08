@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use github_pull_requests::domain::models::{PullRequestRef, RepositorySlug};
-use models_soup::agent_session::AgentPullRequestState;
+use soup_types::agent_session::AgentPullRequestState;
 
 use super::*;
 

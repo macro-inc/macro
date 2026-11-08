@@ -1,11 +1,11 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
 use properties_types::{EntityReference, EntityType};
 use search_types::project::{
     ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata, ProjectSearchResult,
 };
+use soup_types::SoupProperty;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;
