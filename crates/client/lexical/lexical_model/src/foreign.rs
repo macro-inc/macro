@@ -4,7 +4,7 @@ mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
 mod read;
 pub use read::{ForeignReadSnapshot, ForeignRecordIdentity};
-pub(crate) use read::{ReadOrigin, ReadOriginRef, RecordIdentityMarker};
+pub(crate) use read::{ReadOrigin, ReadOriginRef, ReadProjections, RecordIdentityMarker};
 
 mod hooks;
 pub use hooks::{ForeignData, ForeignHook, ForeignHooks, ForeignNodeType, Override};

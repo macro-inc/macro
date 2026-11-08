@@ -23,14 +23,21 @@ fn read_hook<Value>(
     inherit: impl FnOnce(&NodeVTable, &dyn Any, NodeView<'_>) -> Value,
 ) -> Value {
     if let Some(payload) = data.downcast_ref::<ForeignPayload>() {
-        let projection = node
-            .state
-            .native_projection
-            .filter(|frame| frame.key == node.key);
+        let captures = super::ReadProjections {
+            projection: node.state.native_projection,
+            parent: node.state.foreign_projections,
+        };
+        let projection = captures.iter().find(|frame| frame.key == node.key);
         let projected = projection.map(|frame| frame.fields(&payload.user));
         let data = projected.as_ref().unwrap_or(&payload.user);
-        let mut node = node;
-        node.state.native_projection = None;
+        let mut node = NodeView {
+            key: node.key,
+            state: StateRef {
+                native_projection: None,
+                foreign_projections: Some(&captures),
+                ..node.state
+            },
+        };
         let mut entry = node
             .state
             .state

@@ -790,3 +790,104 @@ fn retaining_a_record_identity_does_not_retain_the_node_payload() -> Result<(), 
     assert!(identity == identity.clone());
     Ok(())
 }
+
+#[test]
+fn pure_hooks_capture_projected_payloads_without_exposing_native_typed_reads() -> Result<(), Error>
+{
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct Counter {
+        count: u32,
+        observe: Option<u32>,
+    }
+    impl NodeType for Counter {
+        const TYPE: &'static str = "pure-counter";
+        type Kind = ElementKind;
+        impl_default_node!();
+    }
+    impl ElementNode for Counter {
+        element_node_base!();
+        fn is_inline(&self, node: ElementView<'_>) -> bool {
+            if let Some(index) = self.observe {
+                assert!(!node.state.is_inline(NodeKey::from_parts(KeyParts {
+                    generation: 0,
+                    index
+                })));
+            }
+            false
+        }
+    }
+    struct Hooks(Arc<std::sync::Mutex<Vec<ForeignReadSnapshot>>>);
+    impl ForeignHooks for Hooks {
+        fn is_inline(&self, node: NodeView<'_>, data: &ForeignData) -> Override<bool> {
+            assert!(node.state.get::<Counter>(node.key).is_none());
+            self.0
+                .lock()
+                .expect("captures")
+                .push(node.state.snapshot_for_foreign_read().expect("capture"));
+            if data
+                .fields
+                .get("observe")
+                .is_some_and(serde_json::Value::is_u64)
+            {
+                Override::Inherit
+            } else {
+                Override::Value(false)
+            }
+        }
+    }
+    let captures = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Counter>()
+        .foreign_node(ForeignNodeType {
+            type_name: "pure-foreign-counter".into(),
+            class_name: "PureForeignCounter".into(),
+            kind: NodeKind::Element,
+            extends: Some("pure-counter"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks(captures.clone())),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let first = tx.create_foreign("pure-foreign-counter", SerializedNode::new())?;
+    let sibling = tx.create_foreign("pure-foreign-counter", SerializedNode::new())?;
+    let last = tx.create_foreign("pure-foreign-counter", SerializedNode::new())?;
+    tx.set_foreign_field(first, "observe", serde_json::json!(sibling.index()))?;
+    tx.set_foreign_field(sibling, "observe", serde_json::json!(last.index()))?;
+    tx.set_foreign_field(first, "count", serde_json::json!(0))?;
+    tx.set_foreign_field(sibling, "count", serde_json::json!(0))?;
+    let source = tx.view().foreign_record_identity(first)?;
+    crate::foreign::projection::native(&mut tx, first, |_, tx| {
+        tx.get_mut::<Counter>(first)?.count = 7;
+        assert!(!tx.is_inline(first));
+        assert!(!tx.is_inline(sibling));
+        // The ordinary source still has the pre-write-back fields.
+        assert_eq!(tx.foreign_data(first).expect("source").fields["count"], 0);
+        Ok(())
+    })?;
+    let captured = captures.lock().expect("captures").clone();
+    assert_eq!(captured.len(), 5);
+    for snapshot in &captured {
+        assert_eq!(
+            snapshot.foreign_data(first).expect("projected").fields["count"],
+            7
+        );
+        assert_eq!(
+            snapshot.foreign_data(sibling).expect("sibling").fields["count"],
+            0
+        );
+        assert!(source == snapshot.record_identity(first)?);
+        assert!(snapshot.get::<Counter>(first).is_none());
+        snapshot.with_read_transaction(tx.committed_state(), |peer| {
+            assert!(!peer.is_inline(last));
+        })?;
+    }
+    let nested = captures.lock().expect("captures");
+    assert_eq!(nested.len(), 10);
+    assert_eq!(
+        nested[9].foreign_data(first).expect("nested").fields["count"],
+        7
+    );
+    assert_eq!(tx.foreign_data(first).expect("written").fields["count"], 7);
+    Ok(())
+}

@@ -128,6 +128,8 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
             #[cfg(feature = "foreign-nodes")]
+            foreign_projections: None,
+            #[cfg(feature = "foreign-nodes")]
             foreign_native_calls: Some(&self.foreign_native_calls),
             #[cfg(feature = "foreign-nodes")]
             detached_selections: &self.detached,

@@ -72,6 +72,8 @@ impl EditorState {
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             #[cfg(feature = "foreign-nodes")]
+            foreign_projections: None,
+            #[cfg(feature = "foreign-nodes")]
             foreign_native_calls: None,
             #[cfg(feature = "foreign-nodes")]
             detached_selections: &[],

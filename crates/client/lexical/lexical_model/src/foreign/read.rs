@@ -212,6 +212,7 @@ impl Read for ForeignReadSnapshot {
         StateRef {
             state: &self.state,
             native_projection: None,
+            foreign_projections: None,
             foreign_native_calls: self.native_calls.as_ref(),
             source_records: Some(&self.source_records),
             retired_records: Some(&self.retired_records),
@@ -220,6 +221,19 @@ impl Read for ForeignReadSnapshot {
             previous_selection: self.previous_selection.as_ref(),
             composition_key: self.composition_key,
         }
+    }
+}
+
+/// Projections hidden from typed foreign reads but retained for owned captures.
+/// Read-only native fallback can nest another projection without writing back
+/// the invoking native frame, so captures retain the whole lexical stack.
+pub(crate) struct ReadProjections<'state> {
+    pub projection: Option<&'state super::projection::NativeProjection>,
+    pub parent: Option<&'state ReadProjections<'state>>,
+}
+impl<'state> ReadProjections<'state> {
+    pub fn iter(&self) -> impl Iterator<Item = &'state super::projection::NativeProjection> {
+        std::iter::successors(Some(self), |frame| frame.parent).flat_map(|frame| frame.projection)
     }
 }
 
@@ -247,7 +261,16 @@ impl StateRef<'_> {
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
         let mut source_records = self.source_records.cloned().unwrap_or_default();
-        if let Some(projection) = self.native_projection {
+        let projections = self.native_projection.into_iter().chain(
+            self.foreign_projections
+                .into_iter()
+                .flat_map(ReadProjections::iter),
+        );
+        let mut materialized = std::collections::HashSet::new();
+        for projection in projections {
+            if !materialized.insert(projection.key) {
+                continue;
+            }
             let slot = state
                 .nodes
                 .get(&projection.key)
