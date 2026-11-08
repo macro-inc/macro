@@ -12,9 +12,13 @@ pub const DEFAULT_CODE_LANGUAGE: &str = "javascript";
 pub fn get_default_code_language() -> &'static str {
     DEFAULT_CODE_LANGUAGE
 }
-/// Register code blocks and legacy highlight import support without a tokenizer.
+/// Register code blocks and legacy highlight cleanup without a tokenizer.
+/// Register the node classes directly to retain stored orphan highlights.
 pub fn register_code_nodes(builder: EditorBuilder) -> EditorBuilder {
-    builder.node::<CodeNode>().node::<CodeHighlightNode>()
+    builder
+        .node::<CodeNode>()
+        .node::<CodeHighlightNode>()
+        .transform::<CodeHighlightNode>(code_highlight_orphan_transform)
 }
 fn falsy_string_as_none<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
