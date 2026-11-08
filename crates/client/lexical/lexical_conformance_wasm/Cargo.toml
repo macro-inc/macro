@@ -9,9 +9,12 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["js-nodes"]
-js-nodes = ["lexical_model/foreign-nodes"]
+js-nodes = ["lexical_model/foreign-nodes", "dep:lexical_conformance", "dep:postcard", "dep:specta"]
 
 [dependencies]
+lexical_conformance = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
+specta = { workspace = true, optional = true }
 thiserror.workspace = true
 lexical_model.workspace = true
 lexical_rich_nodes.workspace = true
@@ -27,7 +30,13 @@ syn.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+specta-serde.workspace = true
+specta-typescript.workspace = true
 clap.workspace = true
 rootcause.workspace = true
 wasm-encoder.workspace = true
 wasmparser.workspace = true
+
+[[example]]
+name = "export_host_types"
+required-features = ["js-nodes"]

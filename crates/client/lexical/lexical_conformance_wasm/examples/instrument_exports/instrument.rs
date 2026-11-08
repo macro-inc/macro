@@ -26,6 +26,8 @@ pub enum Error {
     Encode(#[from] reencode::Error<Infallible>),
     #[error("{0}")]
     Invalid(&'static str),
+    #[error("export {0} has no generated input descriptor or supported glue policy")]
+    UnsupportedExport(String),
 }
 
 struct Wrapper {
@@ -184,12 +186,13 @@ fn instrument_with(input: &[u8], inputs: &[Input]) -> Result<Vec<u8>, Error> {
                     | "__wbindgen_free"
                     | "__wbindgen_start"
                     | "__externref_table_dealloc"
+                    | "__externref_table_alloc"
+                    | "__externref_drop_slice"
+                    | "__wbindgen_exn_store"
             )
             && !(export.name.starts_with("__wbg_") && export.name.ends_with("_free"))
         {
-            return Err(Error::Invalid(
-                "export has no generated input descriptor or supported glue policy",
-            ));
+            return Err(Error::UnsupportedExport(export.name.to_owned()));
         }
         let signature = &types[functions[export.index as usize] as usize];
         if let Some((_, _, strings, abi)) = descriptor
@@ -200,6 +203,7 @@ fn instrument_with(input: &[u8], inputs: &[Input]) -> Result<Vec<u8>, Error> {
                     .any(|(expected, actual)| match expected {
                         0 => *actual != wasmparser::ValType::I32,
                         1 => *actual != wasmparser::ValType::F64,
+                        2 => *actual != wasmparser::ValType::Ref(wasmparser::RefType::EXTERNREF),
                         _ => true,
                     })
                 || strings.iter().any(|(pointer, length, _)| {

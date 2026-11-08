@@ -84,7 +84,7 @@ pub(crate) fn error(error: impl std::fmt::Display) -> JsError {
 
 // Object keys and values are transferred recursively. Container metadata and
 // null carry no payload; JS numbers use f64, and booleans use one logical byte.
-pub(crate) fn returned_json(value: &serde_json::Value) {
+pub(crate) fn json_payload(value: &serde_json::Value) {
     fn bytes(value: &serde_json::Value) -> u64 {
         match value {
             serde_json::Value::Null => 0,
@@ -99,4 +99,9 @@ pub(crate) fn returned_json(value: &serde_json::Value) {
         }
     }
     add_bytes(bytes(value));
+}
+
+#[cfg(feature = "js-nodes")]
+pub(crate) fn returned_bytes(bytes: &[u8]) {
+    add_bytes(bytes.len() as u64);
 }

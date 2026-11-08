@@ -11,6 +11,13 @@ mod compat;
 pub use compat::text_format_flags;
 #[cfg(feature = "js-nodes")]
 pub use compat::{generate_random_key, reset_key_counter};
+#[cfg(feature = "js-nodes")]
+mod host;
+#[cfg(feature = "js-nodes")]
+pub use host::EditorHandle;
+#[cfg(feature = "js-nodes")]
+/// Development commit packet shared with the generated host decoder.
+pub mod host_packet;
 mod rich;
 pub use rich::RichHandle;
 mod command;

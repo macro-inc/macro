@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "js-nodes")]
-static KEYS: std::sync::LazyLock<lexical_model::SharedKeyCounter> =
+pub(crate) static KEYS: std::sync::LazyLock<lexical_model::SharedKeyCounter> =
     std::sync::LazyLock::new(lexical_model::SharedKeyCounter::new);
 
 /// Restart the shim's shared allocation stream while advancing its key generation.
@@ -38,7 +38,7 @@ pub fn text_format_flags() -> Result<JsValue, JsError> {
     let result = flags
         .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
         .map_err(super::debug::error)?;
-    super::debug::returned_json(&flags);
+    super::debug::json_payload(&flags);
     Ok(result)
 }
 

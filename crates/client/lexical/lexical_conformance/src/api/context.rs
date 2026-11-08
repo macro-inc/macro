@@ -40,6 +40,11 @@ impl Default for Context {
 }
 
 impl Context {
+    /// Version owning the most recently published host records.
+    pub fn committed_version(&self) -> u64 {
+        self.replay.committed_version
+    }
+
     /// Capture a weak callback capability before registering foreign hooks.
     pub fn callbacks(&self) -> CallbackContext {
         CallbackContext::new(&self.frames)

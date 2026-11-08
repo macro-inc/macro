@@ -10166,6 +10166,7 @@
       "crates/client/lexical/lexical_rich_nodes"
     ],
     "lexical_conformance_wasm": [
+      "crates/client/lexical/lexical_conformance",
       "crates/client/lexical/lexical_conformance_wasm",
       "crates/client/lexical/lexical_markdown",
       "crates/client/lexical/lexical_model",

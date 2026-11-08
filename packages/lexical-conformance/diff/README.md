@@ -98,3 +98,16 @@ Container, allocator, pointer/length and generated control metadata carry no
 payload. Reserved raw counter-helper arguments are measurement adjustments.
 The existing raw facades still do not implement the full WP-54 EditorHandle
 contract.
+
+
+`host.test.ts` also exercises the native indexed `EditorHandle`: its API IDs come
+from the Tier A dispatch table, and each call uses `{args: [...], this?: handle}`.
+Updates suspend between calls; flush does not publish, commit returns the existing
+flat diff plus changed base-record/mutation/selection metadata in a development
+postcard envelope, and discard invalidates unpublished handles. Packet TypeScript
+types are generated from Rust with `cargo run -p lexical_conformance_wasm --example
+export_host_types -j4` (add `-- --check` for freshness). The decoder rejects truncated,
+overflowing, invalid-UTF8 and trailing data. Namespace/theme/editability and discrete
+scheduling belong to the JS host. The current constructor accepts only the core
+registry; foreign registration/callbacks, pure indexed reads and the complete shim
+hosting contract remain pending.

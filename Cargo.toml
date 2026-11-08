@@ -227,6 +227,7 @@ ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
 phf = { version = "0.13.1", features = ["macros"] }
+lexical_conformance = { path = "crates/client/lexical/lexical_conformance" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
 lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
