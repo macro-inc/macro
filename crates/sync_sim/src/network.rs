@@ -45,6 +45,9 @@ pub struct SimNetwork {
     pub(crate) partitions: BTreeSet<ClientName>,
     pub(crate) offline: BTreeSet<ClientName>,
     pub(crate) profile: NetProfile,
+    // Exact open generations that actually lost partition/offline traffic.
+    // Keep this evidence across an explicit Heal until settlement consumes it.
+    pub(crate) partition_losses: BTreeSet<LinkKey>,
     drops: Vec<DropRule>,
     corrupt: BTreeSet<(ClientName, Direction)>,
 }
@@ -57,6 +60,7 @@ impl SimNetwork {
             partitions: BTreeSet::new(),
             offline: BTreeSet::new(),
             profile,
+            partition_losses: BTreeSet::new(),
             drops: Vec::new(),
             corrupt: BTreeSet::new(),
         }
@@ -129,6 +133,13 @@ impl SimNetwork {
         *frames = sync_protocol::framing::into_frames(&corrupt[1..], chunk);
         true
     }
+    pub(crate) fn record_partition_loss(&mut self, key: &LinkKey) {
+        if self.links.get(key).is_some_and(|link| link.open)
+            && (self.partitions.contains(&key.0) || self.offline.contains(&key.0))
+        {
+            self.partition_losses.insert(key.clone());
+        }
+    }
     pub(crate) fn transit(
         &mut self,
         key: &LinkKey,
@@ -138,6 +149,7 @@ impl SimNetwork {
         rng: &mut impl Rng,
     ) -> Transit {
         if self.partitions.contains(&key.0) || self.offline.contains(&key.0) {
+            self.record_partition_loss(key);
             return Transit::Dropped;
         }
         if self.profile.break_per_frame > 0.0

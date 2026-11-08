@@ -82,3 +82,7 @@ Online, preserving the real core's pending-attempt retry policy.
 
 `gap_push::resolved_gaps_keep_the_existing_push_contiguous` retains literal280;
 server-backed gap recovery must preserve an outstanding own batch until ACK/timeout.
+
+Affected-link settlement: `lost_update` retains literal40. Transport regressions
+cover exact direct and shared-router recovery, in-flight receive loss, explicit Heal,
+a no-traffic partition, lost ACKs, and an already replaced socket generation.

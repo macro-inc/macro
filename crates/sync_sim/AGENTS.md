@@ -7,7 +7,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Start here
 
-- `src/world.rs`: virtual event executor and script transitions.
+- `src/world.rs`: virtual event executor; `src/world/settle.rs`: healing and quiescence.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/storage_reference.rs`: independent flat-row IndexedDbModel and portable StorageCase/StorageContract suite.
 - `src/network.rs`: FIFO links and injected failures.
@@ -69,6 +69,10 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   presence once per Settle after finite upstream/downstream FIFO publication barriers;
   ignore later refreshes and restart the barriers for new socket/route lifetimes.
   Keep bounded backward clock offsets and wait for publication time to catch up.
+- Record actual partition/offline losses on exact open socket generations, including
+  packets lost at delivery. Preserve evidence across explicit Heal. During Settle,
+  close only affected generations still open through real direct/router callbacks;
+  never reconnect a newer generation, lost-ACK socket, or fault with no lost traffic.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
 - Settlement thaws injected source freezes through the real migration operation and
