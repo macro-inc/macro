@@ -121,6 +121,26 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
+  /** Add an email when absent. Existing addresses cannot be replaced or cleared. */
+  async setEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /** Link or switch a personal-provider contact's company. Unlinking is not supported. */
+  async setCompany(company: Company): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactCompany({
+        path: { contact_id: this.id },
+        body: { companyId: company.id },
+      }),
+    );
+  }
+
   /** The CRM record this contact's discussions hang off. */
   private get commentParent(): CrmCommentParent {
     return { type: 'crm_contact', id: this.id };

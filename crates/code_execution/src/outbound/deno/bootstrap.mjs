@@ -119,7 +119,7 @@ try {
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
-  const macro = new Macro({token: context.token, hosts: context.hosts});
+  const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.

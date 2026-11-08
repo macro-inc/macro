@@ -22,10 +22,16 @@ before touching the edit flow.
   bounded cloned values, never cross-request sockets or promises. `render.ts` uses the configured browser and
   the read-only web `canvas-render.html` bundle; `text-layout.ts` revalidates
   asynchronous measurements before the atomic commit. `POST /canvas`
-  joins an already initialized scene; it never creates a competing seed.
+  joins an already initialized scene; it never creates a competing seed. A
+  direct batch that commits nothing answers 409 `outcome: conflict` (stale
+  revision or changed targets) or 422 `outcome: rejected` (code or validation
+  failed before the commit, `CanvasRejectedError`); anything else is 502 and may
+  have applied.
 - `src/ai-editing/`: the agent loop, prompts, tools, and op queue.
 - `src/endpoints/`: one file per surface — `edit.ts`, `docx.ts`, `forms.ts`,
-  `spreadsheet.ts`, `comment-mark.ts`, `markdown.ts`.
+  `spreadsheet.ts`, `comment-mark.ts`, `markdown.ts`. `spreadsheet.ts` also serves
+  `/spreadsheet/instructions`, the SDK's spreadsheet writer model
+  (`src/spreadsheet/writer.ts`).
 - `src/sync-document.ts`: sync-service's `/state` and revision-checked
   `/update`, shared by spreadsheets and markdown bodies; callers word its typed
   failures for their users.

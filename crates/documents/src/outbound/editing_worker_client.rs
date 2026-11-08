@@ -10,6 +10,34 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
+/// The meaning of a failed spreadsheet worker response: a 400 or 413 is an
+/// invalid request and a 409 a stale revision, both saving nothing; anything
+/// else may follow a save.
+#[cfg(feature = "ai_tools")]
+async fn spreadsheet_error(
+    response: reqwest::Response,
+) -> crate::domain::spreadsheet::SpreadsheetError {
+    use crate::domain::spreadsheet::SpreadsheetError;
+
+    let status = response.status();
+    let body = response
+        .json::<serde_json::Value>()
+        .await
+        .unwrap_or_default();
+    let message = body
+        .get("error")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("Spreadsheet operation failed. Read the workbook again before retrying an edit.")
+        .to_owned();
+    match status {
+        reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::PAYLOAD_TOO_LARGE => {
+            SpreadsheetError::Invalid(message)
+        }
+        reqwest::StatusCode::CONFLICT => SpreadsheetError::RevisionConflict(message),
+        _ => SpreadsheetError::Failed(anyhow::anyhow!("{message} (HTTP {status})")),
+    }
+}
+
 #[cfg(test)]
 mod test;
 
@@ -111,7 +139,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
         artifacts: bool,
-    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
+        use crate::domain::canvas::CanvasError;
         // Sent only when on: a worker that predates the field rejects unknown keys.
         let mut body = serde_json::json!({ "documentId": document_id, "documentToken": document_token.as_str(), "request": request });
         if artifacts {
@@ -126,16 +155,28 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             .timeout(std::time::Duration::from_secs(130))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|error| CanvasError::Failed(error.into()))?;
         let status = response.status();
-        let body: serde_json::Value = response.json().await?;
-        anyhow::ensure!(
-            status.is_success(),
-            "{} (HTTP {status}). Read the canvas before retrying; earlier edits may have applied.",
-            body.get("error")
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|error| CanvasError::Failed(error.into()))?;
+        if !status.is_success() {
+            let error = body
+                .get("error")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Canvas operation failed")
-        );
+                .to_owned();
+            let outcome = body.get("outcome").and_then(serde_json::Value::as_str);
+            return Err(match (status.as_u16(), outcome) {
+                (409, Some("conflict")) => CanvasError::Conflict(error),
+                (422, Some("rejected")) => CanvasError::Rejected(error),
+                _ => CanvasError::Failed(anyhow::anyhow!(
+                    "{error} (HTTP {status}). Read the canvas before retrying; earlier edits may have applied."
+                )),
+            });
+        }
         let usage = body
             .get("usage")
             .and_then(serde_json::Value::as_array)
@@ -163,7 +204,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .get("error")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned),
-            response: serde_json::from_value(body)?,
+            response: serde_json::from_value(body)
+                .map_err(|error| CanvasError::Failed(error.into()))?,
             usage,
         })
     }
@@ -175,7 +217,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        use crate::domain::spreadsheet::SpreadsheetError;
+
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
@@ -189,18 +236,82 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 "request": request,
             }))
             .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response
-                .json::<serde_json::Value>()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        if response.status().is_success() {
+            return response
+                .json()
                 .await
-                .unwrap_or_default();
-            let message = body.get("error").and_then(serde_json::Value::as_str)
-                .unwrap_or("Spreadsheet operation failed. Read the workbook again before retrying an edit.");
-            anyhow::bail!("{message} (HTTP {status})");
+                .map_err(|error| SpreadsheetError::Failed(error.into()));
         }
-        Ok(response.json().await?)
+        Err(spreadsheet_error(response).await)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn spreadsheet_instructions(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        use crate::domain::spreadsheet::{
+            SpreadsheetError, SpreadsheetWriterOutcome, SpreadsheetWriterResult,
+        };
+
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Usage {
+            model: String,
+            input_tokens: u32,
+            output_tokens: u32,
+        }
+        #[derive(serde::Deserialize)]
+        struct Body {
+            #[serde(flatten)]
+            outcome: SpreadsheetWriterOutcome,
+            usage: Vec<Usage>,
+        }
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/spreadsheet/instructions", self.worker_url))
+            .headers(headers)
+            // Above the worker's own 120 s budget, so it reports its outcome.
+            .timeout(std::time::Duration::from_secs(130))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "instructions": instructions,
+            }))
+            .send()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        if !response.status().is_success() {
+            return Err(spreadsheet_error(response).await);
+        }
+
+        let body: Body = response
+            .json()
+            .await
+            .map_err(|error| SpreadsheetError::Failed(error.into()))?;
+        Ok(SpreadsheetWriterResult {
+            outcome: body.outcome,
+            usage: body
+                .usage
+                .into_iter()
+                .map(|usage| EditUsage {
+                    model: usage.model,
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                })
+                .collect(),
+        })
     }
 
     #[cfg(feature = "ai_tools")]
@@ -235,6 +346,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                 .get("error")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("Word document operation failed. Read the document again before retrying an edit.");
+            // The editor refused the request (an unknown id, text not found); nothing changed.
+            if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+                return Err(
+                    crate::domain::word_document::WordDocumentRejected(message.to_owned()).into(),
+                );
+            }
             anyhow::bail!("{message} (HTTP {status})");
         }
         Ok(response.json().await?)

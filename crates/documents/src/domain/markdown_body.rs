@@ -61,7 +61,7 @@ pub async fn read_markdown<Worker: EditingWorkerService>(
     document: &DocumentBasic,
 ) -> Result<DocumentMarkdown, DocumentMarkdownError> {
     ensure_markdown(&access, document)?;
-    let (document_token, _) = worker_token(&access, document, AccessLevel::View, jwt_secret)?;
+    let (document_token, _) = worker_token(&access, AccessLevel::View, jwt_secret)?;
     worker
         .read_markdown(&document.document_id, &document_token)
         .await
@@ -87,7 +87,7 @@ pub async fn write_markdown<Worker: EditingWorkerService>(
     if expected_revision.is_empty() {
         return Err(DocumentError::BadRequest("expectedRevision is empty".to_string()).into());
     }
-    let (document_token, _) = worker_token(&access, document, AccessLevel::Edit, jwt_secret)?;
+    let (document_token, _) = worker_token(&access, AccessLevel::Edit, jwt_secret)?;
     let write = worker
         .write_markdown(
             &document.document_id,

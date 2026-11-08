@@ -19,6 +19,9 @@ consumer talks to.
   same fold run server-side for the SDK and agents.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
+- `src/domain/coding_agents.rs` + `src/inbound/coding_agents.rs`: coding persona
+  discovery and dispatch; `GET /coding-agents` serves the signed-in user's
+  listing to the SDK, the `/internal/coding-agents` commands serve tools.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
   capped to 25 sessions before folding their logs.
 - `src/outbound/postgres.rs`: the session repository.

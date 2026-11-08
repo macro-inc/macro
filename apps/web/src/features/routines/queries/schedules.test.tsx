@@ -29,7 +29,7 @@ const routine: ScheduledAction = {
   owner: 'macro|owner@example.com',
   name: 'Routine',
   kind: 'Agent',
-  task: {},
+  task: { steps: [] },
   trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
   configuration_revision: 1,
   enabled: true,
