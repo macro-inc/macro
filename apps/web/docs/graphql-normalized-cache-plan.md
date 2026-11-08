@@ -1039,8 +1039,11 @@ visible, one dirty refresh after visibility returns, and serialized asynchronous
 reads. Generation resets and explicit/initial reads remain immediate. The
 revision fence still observes every accepted notification before scheduling
 work, so a late persistence acknowledgement cannot regain network authority.
-Predicate snapshots publish revision progress independently of stable row/order
-identities; the Soup adapter memoizes those inputs before materializing rows.
+Predicate queries publish revision progress through a separate `revision`
+accessor. A read with no reset, key, row, retained-key or optimism change
+publishes no new snapshot, so most revisions rerun no list derivation; only
+Soup's memoized network-authority check compares watermarks. The Soup adapter
+memoizes row/order inputs before materializing rows.
 
 Hydration still emits notifications, but a shared cache-core owner may attach
 `unchangedViews`: immutable observation tokens whose displayed windows are proven

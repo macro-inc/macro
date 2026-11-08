@@ -30,7 +30,7 @@ import {
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { QueryRevalidation } from '../../graphql-cache/exchange/optimistic';
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
@@ -396,9 +396,16 @@ export type SoupAstItemsQuery = {
  * for rollout controls; forced GraphQL still falls back safely when unsupported.
  */
 export function useSoupAstItemsQuery(
-  args: Accessor<SoupAstItemsQueryArgs>,
+  queryArgs: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ): SoupAstItemsQuery {
+  // Every transport and getter below reads the arguments. Evaluate a caller's
+  // accessor once per change, and keep equal rebuilt arguments from restarting
+  // the transports beneath.
+  const args = createMemo(queryArgs, undefined, {
+    equals: (previous, next) =>
+      JSON.stringify(previous) === JSON.stringify(next),
+  });
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
 
   const queryEnabled = () => options?.().enabled !== false;

@@ -11,6 +11,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { arrayEquals } from '../../../core/util/compareUtils';
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
@@ -35,8 +36,8 @@ export type LiveQueryRow<T> = {
   identity?: { mutationUuid: string | null; pending: boolean };
 };
 
+/** The rows a view selects. Unchanged by revisions that leave the view as it was. */
 export type LiveQuerySnapshot<T> = {
-  revision: CacheRevision;
   keys: readonly string[];
   records: readonly LiveQueryRow<T>[];
   retainedKeys: readonly string[];
@@ -66,6 +67,9 @@ export function createPredicateQuery<T extends object>(options: {
   query: Accessor<PredicateQueryRequest<T> | undefined>;
 }) {
   const [data, setData] = createSignal<LiveQuerySnapshot<T>>();
+  // The revision the view was last read at. Most revisions change nothing in
+  // a given view, so only readers comparing watermarks track this, not rows.
+  const [revision, setRevision] = createSignal<CacheRevision>();
   const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
   let requestRefresh = () => {};
@@ -79,6 +83,7 @@ export function createPredicateQuery<T extends object>(options: {
   createRenderEffect(
     on([query, options.host], ([request, host]) => {
       setData(undefined);
+      setRevision(undefined);
       setError(undefined);
       if (!request || !host) {
         setStatus('idle');
@@ -203,13 +208,24 @@ export function createPredicateQuery<T extends object>(options: {
                       rows[key] ? [rows[key]] : []
                     );
                   since = revision;
-                  setData({
-                    revision,
-                    keys,
-                    records: orderedRows,
-                    retainedKeys: result.retainedKeys,
-                    optimistic: result.optimistic,
-                  });
+                  setRevision(revision);
+                  const previous = data();
+                  // Patched rows update in place; republishing an identical
+                  // snapshot would rerun every list derivation for nothing.
+                  if (
+                    !previous ||
+                    orderChanged ||
+                    result.upserts.length > 0 ||
+                    result.patches.length > 0 ||
+                    previous.optimistic !== result.optimistic ||
+                    !arrayEquals(previous.retainedKeys, result.retainedKeys)
+                  )
+                    setData({
+                      keys,
+                      records: orderedRows,
+                      retainedKeys: result.retainedKeys,
+                      optimistic: result.optimistic,
+                    });
                   setError(undefined);
                   setStatus('ready');
                 })
@@ -260,6 +276,7 @@ export function createPredicateQuery<T extends object>(options: {
         latest = undefined;
         batch(() => {
           setData(undefined);
+          setRevision(undefined);
           setStatus('loading');
         });
         deferral.request();
@@ -285,5 +302,5 @@ export function createPredicateQuery<T extends object>(options: {
     })
   );
   usePending('soup.cache', () => status() === 'loading');
-  return { data, status, error, refresh: () => requestRefresh() };
+  return { data, revision, status, error, refresh: () => requestRefresh() };
 }

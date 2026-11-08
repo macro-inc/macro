@@ -178,7 +178,7 @@ it('coalesces writes during a read and rejects a superseded snapshot', async () 
   expect(state.requests).toHaveLength(2);
   state.requests[1].resolve({ ...snapshot(), revision: revision('3') });
   await flush();
-  expect(state.query.data()!.revision).toBe('3');
+  expect(state.query.revision()).toBe('3');
 });
 
 it('discards in-flight work on query changes and disposal', async () => {
@@ -257,7 +257,7 @@ it('does not create root performance spans for repeated cache evaluations', asyn
       state.requests[index].resolve(patch(String(index + 1)));
       await flush();
     }
-    expect(state.query.data()?.revision).toBe('101');
+    expect(state.query.revision()).toBe('101');
     expect(span).not.toHaveBeenCalledWith('urql.reconcile', {
       sampling: 'perf',
     });
@@ -286,4 +286,71 @@ it('does not read on cache changes while hidden, then catches up once', async ()
   } finally {
     visibility.mockRestore();
   }
+});
+
+function unchanged(rev: string): LiveQueryUpdate {
+  return {
+    kind: 'live-query',
+    revision: revision(rev),
+    reset: false,
+    upserts: [],
+    patches: [],
+    removed: [],
+    retainedKeys: [],
+    optimistic: false,
+  };
+}
+
+it('publishes no snapshot for revisions that change nothing in the view', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  const published = state.query.data();
+  let snapshots = 0;
+  let revisions = 0;
+  createRoot((dispose) => {
+    cleanups.push(dispose);
+    createComputed(() => {
+      state.query.data();
+      snapshots++;
+    });
+    createComputed(() => {
+      state.query.revision();
+      revisions++;
+    });
+  });
+  for (let index = 2; index <= 51; index++) {
+    state.change(String(index));
+    state.requests[index - 1].resolve(unchanged(String(index)));
+    await flush();
+  }
+  expect(snapshots).toBe(1);
+  expect(state.query.data()).toBe(published);
+  // The watermark still advances, so the next read is a delta from it.
+  expect(revisions).toBe(51);
+  expect(state.query.revision()).toBe('51');
+  state.change('52');
+  expect(state.requests[51].args.liveQuery?.since).toBe('51');
+});
+
+it('publishes a snapshot when only its retained keys or optimism change', async () => {
+  const state = setup();
+  state.requests[0].resolve(snapshot());
+  await flush();
+  const published = state.query.data();
+  state.change('2');
+  state.requests[1].resolve({ ...unchanged('2'), optimistic: true });
+  await flush();
+  expect(state.query.data()).not.toBe(published);
+  expect(state.query.data()?.optimistic).toBe(true);
+  const optimistic = state.query.data();
+  state.change('3');
+  state.requests[2].resolve({
+    ...unchanged('3'),
+    optimistic: true,
+    retainedKeys: ['a'],
+  });
+  await flush();
+  expect(state.query.data()).not.toBe(optimistic);
+  expect(state.query.data()?.retainedKeys).toEqual(['a']);
 });

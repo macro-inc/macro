@@ -1614,6 +1614,86 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('does no list work for cache revisions that change nothing in a maintained view', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_1;
+    const listeners = new Set<(revision: string) => void>();
+    const record = {
+      __typename: 'GraphqlSoupDocument',
+      id: 'doc',
+      type: 'document',
+      name: 'Doc',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+    const key = 'GraphqlSoupDocument:doc';
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        listeners.add(callback);
+        return () => listeners.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async (args) =>
+      args.liveQuery?.release
+        ? { kind: 'unsupported' }
+        : {
+            kind: 'live-query',
+            revision,
+            reset: !args.liveQuery?.since,
+            ...(!args.liveQuery?.since ? { keys: [key] } : {}),
+            upserts: !args.liveQuery?.since ? [{ recordKey: key, record }] : [],
+            patches: [],
+            removed: [],
+            retainedKeys: [],
+            optimistic: false,
+          }
+    );
+    let runs = 0;
+    const state = createRoot((dispose) => {
+      const query = createSoupLiveQuery(() => ({ sortMethod: 'UPDATED_AT' }));
+      createComputed(() => {
+        query.data();
+        query.hasNextPage();
+        query.cachedMail();
+        query.localRevision();
+        query.localOptimistic();
+        query.isLoading();
+        query.cacheMaintained();
+        runs++;
+      });
+      return { dispose, query };
+    });
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [record], next_cursor: null }),
+        { source: 'live-network', revision: REVISION_1 }
+      );
+      await vi.waitFor(() => expect(state.query.cacheStatus()).toBe('ready'));
+      await vi.waitFor(() => expect(state.query.data()?.[0]?.id).toBe('doc'));
+      const rows = state.query.data();
+      const reads = entityFilterMock.mock.calls.length;
+      const settled = runs;
+      for (let index = 2; index <= 21; index++) {
+        revision = String(index);
+        listeners.forEach((listener) => listener(revision));
+        await vi.waitFor(() =>
+          expect(entityFilterMock.mock.calls.length).toBe(reads + index - 1)
+        );
+        await Promise.resolve();
+      }
+      expect(runs).toBe(settled);
+      expect(state.query.data()).toBe(rows);
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      state.dispose();
+    }
+  });
+
   describe('cached response errors before local reconciliation', () => {
     function fixture() {
       const fake = makeFakeClient();

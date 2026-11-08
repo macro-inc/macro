@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/solid-query';
-import { createRoot } from 'solid-js';
+import { createComputed, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const testState = vi.hoisted(() => ({
@@ -323,5 +323,51 @@ describe('Soup refetch transport selection', () => {
     expect(groupedQuery.resetToInitialPage).not.toHaveBeenCalled();
     expect(groupedQuery.refresh).toHaveBeenCalledOnce();
     expect(restRefetch).not.toHaveBeenCalled();
+  });
+
+  it('evaluates its arguments once per change, however many readers it has', () => {
+    testState.graphqlEnabled = true;
+    const [ids, setIds] = createSignal(['a', 'b']);
+    let evaluations = 0;
+    let query: SoupAstItemsQuery | undefined;
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      query = useSoupAstItemsQuery(() => {
+        evaluations++;
+        return { params: {}, body: { ids: ids() } as never };
+      });
+    });
+    const graphqlArgs = vi
+      .mocked(createGraphqlSoupAstItemsQuery)
+      .mock.calls.at(-1)![0];
+    let argumentChanges = 0;
+    createRoot((dispose) => {
+      const previous = disposeRoot;
+      disposeRoot = () => {
+        dispose();
+        previous?.();
+      };
+      createComputed(() => {
+        graphqlArgs();
+        argumentChanges++;
+      });
+    });
+    for (let read = 0; read < 10; read++) {
+      query!.data;
+      query!.isLoading;
+      query!.hasNextPage;
+      query!.transport;
+      graphqlArgs();
+    }
+    expect(evaluations).toBe(1);
+
+    // Rebuilding equal arguments does not restart the transports beneath.
+    setIds(['a', 'b']);
+    expect(evaluations).toBe(2);
+    expect(argumentChanges).toBe(1);
+
+    setIds(['a', 'c']);
+    expect(evaluations).toBe(3);
+    expect(argumentChanges).toBe(2);
   });
 });

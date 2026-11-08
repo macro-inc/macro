@@ -1,4 +1,4 @@
-export function setEquals<T>(a: Set<T>, b: Set<T>): boolean {
+export function setEquals<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
   if (a.size !== b.size) return false;
   for (const item of a.values()) {
     if (!b.has(item)) return false;

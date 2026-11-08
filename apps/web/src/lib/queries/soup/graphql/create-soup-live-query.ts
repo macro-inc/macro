@@ -17,7 +17,7 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
-import { arrayEquals } from '../../../core/util/compareUtils';
+import { arrayEquals, setEquals } from '../../../core/util/compareUtils';
 import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
 import { isResponseFreeNetworkError } from '../../../core/util/request-error';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
@@ -230,7 +230,10 @@ export function createSoupLiveQuery(
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
   let previousInitialInput: GraphqlSoupInput | undefined;
-  let networkAuthorityInput: GraphqlSoupInput | undefined;
+  // Reactive so the memoized authority decision follows it.
+  const [networkAuthorityInput, setNetworkAuthorityInput] = createSignal<
+    GraphqlSoupInput | undefined
+  >();
   // The server page fetched only to keep the server pages as deep as a local
   // Mail list (fetchNextPage). It never takes over from that list.
   let inStepPageIndex: number | undefined;
@@ -288,7 +291,7 @@ export function createSoupLiveQuery(
         setCurrentCacheRevision(revision);
         cacheObservation += 1;
       }
-      networkAuthorityInput = page.input;
+      setNetworkAuthorityInput(page.input);
       setNetworkAuthorityRevision(revision);
       forgetUnpersistedPage(index);
     });
@@ -483,9 +486,9 @@ export function createSoupLiveQuery(
         }
         forgetUnpersistedPage(page.pageIndex);
         if (page.pageIndex !== 0 || !metadata.revision) return;
-        networkAuthorityInput = firstInput;
         cacheObservation += 1;
         batch(() => {
+          setNetworkAuthorityInput(firstInput);
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
           // Keep same-view Mail evidence while checking the new revision.
@@ -663,20 +666,32 @@ export function createSoupLiveQuery(
       return;
     }
     const withoutEmail = options().localReconciliation === 'without-email';
+    const records = liveRecords();
+    const baselineKeys = new Set(
+      serverRecords()
+        .filter(
+          (record) =>
+            !withoutEmail || record.__typename !== 'GraphqlSoupEmailThread'
+        )
+        .map(soupItemKey)
+    );
+    // Row patches republish the snapshot with the same rows. Keep the
+    // projection so its readers do not rerun for fields the rows carry.
+    if (
+      previous?.input === input &&
+      previous.generation === cacheGeneration &&
+      previous.withoutEmail === withoutEmail &&
+      previous.records === records &&
+      setEquals(previous.baselineKeys, baselineKeys)
+    )
+      return previous;
     return {
       input,
       generation: cacheGeneration,
-      baselineKeys: new Set(
-        serverRecords()
-          .filter(
-            (record) =>
-              !withoutEmail || record.__typename !== 'GraphqlSoupEmailThread'
-          )
-          .map(soupItemKey)
-      ),
-      displayedKeys: new Set(liveRecords().map(soupItemKey)),
+      baselineKeys,
+      displayedKeys: new Set(records.map(soupItemKey)),
       withoutEmail,
-      records: liveRecords(),
+      records,
     };
   });
 
@@ -759,7 +774,7 @@ export function createSoupLiveQuery(
       revision === undefined ||
       (!definition.mailView &&
         (maintainedQueryAvailable() ||
-          (networkAuthorityInput === input &&
+          (networkAuthorityInput() === input &&
             networkAuthorityRevision() === revision &&
             !offline() &&
             !query.error?.networkError)))
@@ -982,19 +997,23 @@ export function createSoupLiveQuery(
     }
     return local;
   };
-  const networkIsAuthoritative = (): boolean =>
-    !displayLocalProjection()?.mail?.optimistic &&
-    (hasUnpersistedPages(firstPageInput()) ||
-      // Once the maintained view has caught up, keep its row stores visible.
-      // Switching from network objects on the first edit would strand readers
-      // holding the original row and replace identities during the interaction.
-      ((!maintainedQueryAvailable() ||
-        live.data()?.revision !== currentCacheRevision()) &&
-        !offline() &&
-        !query.error?.networkError &&
-        networkAuthorityInput === firstPageInput() &&
-        networkAuthorityRevision() !== undefined &&
-        networkAuthorityRevision() === currentCacheRevision()));
+  // A memo: it compares cache watermarks, which move on every revision, so its
+  // readers rerun only when the answer flips, not on each cache write.
+  const networkIsAuthoritative = createMemo(
+    (): boolean =>
+      !displayLocalProjection()?.mail?.optimistic &&
+      (hasUnpersistedPages(firstPageInput()) ||
+        // Once the maintained view has caught up, keep its row stores visible.
+        // Switching from network objects on the first edit would strand readers
+        // holding the original row and replace identities during the interaction.
+        ((!maintainedQueryAvailable() ||
+          live.revision() !== currentCacheRevision()) &&
+          !offline() &&
+          !query.error?.networkError &&
+          networkAuthorityInput() === firstPageInput() &&
+          networkAuthorityRevision() !== undefined &&
+          networkAuthorityRevision() === currentCacheRevision()))
+  );
 
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
