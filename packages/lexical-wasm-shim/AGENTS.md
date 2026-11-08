@@ -19,6 +19,8 @@ The package is being assembled; the full lexical export surface is not ready.
 - Keep JS command identity in a WeakMap; diagnostic names are not identities.
 - Keep node/selection identity caches per version, never in a global Map.
 - Keep opaque JS values out of the portable JSON fixture encoding.
+- Keep callback ownership in JS; Rust-retained forwarding functions hold weak callback references so closures cannot keep an editor alive through Rust.
+- Retain unregistered callback owners through the current job for in-flight model snapshots, and defer explicit disposal until active Rust calls return.
 
 ## Checks
 
@@ -30,3 +32,6 @@ The package is being assembled; the full lexical export surface is not ready.
 
 WASM builds are shared with packages/lexical-conformance and fingerprinted there.
 The final lexical facade, foreign classes and production view adapter remain in scope.
+
+Lifetime tests run with --expose-gc and await the actual facade-release notification
+after crossing the WeakRef keep-alive job boundary; do not replace them with polling.
