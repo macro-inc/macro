@@ -45,12 +45,12 @@ pub static STARTERS: LazyLock<Vec<Starter>> = LazyLock::new(|| {
         ),
         starter(
             "updates",
-            "When a task is marked completed, post \"Done: <task name>\" in the updates channel.",
+            "When a task is marked completed, post \"Done: <task name>\" in a channel.",
             "Post the update",
-            "Posts the completed task's name in the updates channel.",
+            "Posts the completed task's name in the channel picked.",
             include_str!("starters/updates.ts"),
             json!([
-                { "type": "text", "name": "channel", "label": "Channel to post in", "value": "updates" },
+                { "type": "entity", "name": "channel", "label": "Channel to post in", "entity_types": ["channel"], "value": null },
             ]),
             "Post \u{201c}Done:\u{201d} and the task's name in {channel}.",
         ),

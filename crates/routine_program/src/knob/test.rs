@@ -129,4 +129,7 @@ fn an_entity_knob_names_only_items_code_can_get_a_handle_for() {
         .is_err()
     );
     assert!(parse(entity(json!(["channel"]), json!("bug-reports"))).is_err());
+    // A starter's knob has nothing picked yet; its owner picks before saving.
+    let unpicked = parse(entity(json!(["channel"]), json!(null))).unwrap();
+    assert_eq!(unpicked.value(), json!(null));
 }

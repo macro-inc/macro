@@ -71,6 +71,7 @@ async fn an_item_is_unusable_when_its_owner_cant_reach_it_and_looked_up_once() {
             step: "Post elsewhere".into(),
             label: "Channel to post in".into(),
             kind: EntityKind::Channel,
+            picked: true,
         }]
     );
     assert_eq!(
@@ -97,4 +98,25 @@ async fn a_failed_lookup_is_an_error_not_a_refusal() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn an_entity_knob_with_nothing_picked_is_never_usable() {
+    let mut step = posting_step("Post bugs", "c1");
+    step["knobs"][0]["value"] = serde_json::Value::Null;
+    let program = RoutineProgram::from_task(&json!({ "steps": [step] })).unwrap();
+    let items = Items::default();
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
+    let unusable = unusable_items(&items, &owner, &program.code_steps())
+        .await
+        .unwrap();
+    assert_eq!(
+        unusable[0].save_problem(),
+        "\"Post bugs\": pick a channel for \"Channel to post in\""
+    );
+    assert_eq!(
+        unusable[0].run_failure(),
+        "No channel is picked for \"Channel to post in\". Pick one in the routine's settings."
+    );
+    assert!(items.lookups.lock().unwrap().is_empty());
 }

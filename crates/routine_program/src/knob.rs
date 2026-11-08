@@ -84,8 +84,10 @@ pub enum Knob {
         label: String,
         /// The kinds of item the owner may pick, at least one, each once.
         entity_types: Vec<EntityKind>,
-        /// The item picked.
-        value: EntityValue,
+        /// The item picked; none yet in a starter, which its owner picks
+        /// before saving.
+        #[serde(default)]
+        value: Option<EntityValue>,
     },
 }
 
@@ -225,14 +227,21 @@ impl Knob {
                 .unwrap_or(Value::Null),
             Self::Boolean { value, .. } => Value::Bool(*value),
             // The runner turns the marked item into the SDK's handle for it.
-            Self::Entity { value, .. } => serde_json::json!({ "$entity": value }),
+            Self::Entity {
+                value: Some(value), ..
+            } => serde_json::json!({ "$entity": value }),
+            Self::Entity { value: None, .. } => Value::Null,
         }
     }
 
-    /// The item an entity knob names.
-    pub fn entity(&self) -> Option<&EntityValue> {
+    /// An entity knob's item, if one is picked, and the kinds it allows.
+    pub fn entity(&self) -> Option<(Option<&EntityValue>, &[EntityKind])> {
         match self {
-            Self::Entity { value, .. } => Some(value),
+            Self::Entity {
+                value,
+                entity_types,
+                ..
+            } => Some((value.as_ref(), entity_types)),
             _ => None,
         }
     }

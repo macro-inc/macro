@@ -276,7 +276,10 @@ fn knob_value(knob: &Knob) -> Result<(), String> {
             if entity_types.is_empty() || distinct.len() != entity_types.len() {
                 return Err("it must allow one or more kinds of item, each once".to_owned());
             }
-            if !entity_types.contains(&value.kind) {
+            if value
+                .as_ref()
+                .is_some_and(|value| !entity_types.contains(&value.kind))
+            {
                 return Err("its value must be one of the kinds it allows".to_owned());
             }
             Ok(())

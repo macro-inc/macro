@@ -25,8 +25,9 @@ export interface CreatedEntity {
  * ### Writing one
  *
  * - Find each item the request names (a channel, person, folder, project, label, tag, agent, database or document) with SDK search, as the user would, paging and refining the search until you find the item itself. The item is the one whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no item has that name, or several do, ask which one rather than guess.
- * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key. A code step uses an item by its id, in a knob.
- * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and use its id. Create nothing else.
+ * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key.
+ * - A code step uses each item it names (the channel it posts in, a person, a folder, a database) through an `entity` knob holding the same kind of reference, `{ type: 'entity', name: 'bugsChannel', label: 'Channel to post in', entity_types: ['channel'], value: { type: 'channel', entity: channel } }`, and its code reads it as that handle (`await knobs.bugsChannel.send(text)`), so the user can pick another item later: never a text knob with its name, and never an id in the code.
+ * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and put its handle in the step's entity knob. Create nothing else.
  * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
  * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
  * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
@@ -88,8 +89,9 @@ export class RoutineNamespace {
    *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
    * });
-   * // A code step that posts in a channel, disabled until turned on. The
-   * // user asked for the post to come from them.
+   * // A code step that posts in a channel the user can swap later, disabled
+   * // until turned on. The user asked for the post to come from them.
+   * // `channel` is the channel the user named, found with `macro.channels.search`.
    * await macro.routines.create({
    *   name: 'Say hello',
    *   trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
@@ -98,9 +100,19 @@ export class RoutineNamespace {
    *     {
    *       type: 'code',
    *       title: 'Post hello',
-   *       source: `export async function main({ macro }: StepContext) {
-   *   await macro.channels.byId('<channel id>').send('Hello');
+   *       source: `export async function main({ knobs }: StepContext) {
+   *   await knobs.channel.send('Hello');
    * }`,
+   *       knobs: [
+   *         {
+   *           type: 'entity',
+   *           name: 'channel',
+   *           label: 'Channel to post in',
+   *           entity_types: ['channel'],
+   *           value: { type: 'channel', entity: channel },
+   *         },
+   *       ],
+   *       sentence: 'Post hello in {channel}.',
    *     },
    *   ],
    *   dangerouslyOperateAsUser: true,

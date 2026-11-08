@@ -378,6 +378,8 @@ fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
     for rule in [
         "never bug-reports-archive",
         "never an id, and never an `ids` key",
+        "through an `entity` knob",
+        "never a text knob with its name, and never an id in the code",
         "Create nothing else.",
         "makes no task today",
         "weekday numbers start at 1 = Sunday",

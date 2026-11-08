@@ -14,40 +14,47 @@ use super::ports::KnobEntities;
 #[cfg(test)]
 pub(crate) mod test;
 
-/// An entity knob whose item its owner can't use.
+/// An entity knob whose item its owner can't use, or that has none picked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnusableItem {
     /// The step's title.
     pub step: String,
     /// The knob's label.
     pub label: String,
-    /// The kind of item it names.
+    /// The kind of item it names, or the first it allows when none is picked.
     pub kind: EntityKind,
+    /// Whether an item is picked at all.
+    pub picked: bool,
 }
 
 impl UnusableItem {
     /// Why saving refuses it.
     pub fn save_problem(&self) -> String {
-        format!(
-            "\"{}\": the {} picked for \"{}\" doesn't exist or you can't open it; pick another",
-            self.step,
-            self.kind.noun(),
-            self.label
-        )
+        let (step, noun, label) = (&self.step, self.kind.noun(), &self.label);
+        if self.picked {
+            format!(
+                "\"{step}\": the {noun} picked for \"{label}\" doesn't exist or you can't open it; pick another"
+            )
+        } else {
+            format!("\"{step}\": pick a {noun} for \"{label}\"")
+        }
     }
 
     /// Why its step failed, for the run's history.
     pub fn run_failure(&self) -> String {
-        format!(
-            "The {} picked for \"{}\" was deleted or you no longer have access to it. Pick another in the routine's settings.",
-            self.kind.noun(),
-            self.label
-        )
+        let (noun, label) = (self.kind.noun(), &self.label);
+        if self.picked {
+            format!(
+                "The {noun} picked for \"{label}\" was deleted or you no longer have access to it. Pick another in the routine's settings."
+            )
+        } else {
+            format!("No {noun} is picked for \"{label}\". Pick one in the routine's settings.")
+        }
     }
 }
 
-/// The entity knobs of `steps` whose item `owner` can't use, in order. Each
-/// item is looked up once.
+/// The entity knobs of `steps` whose item `owner` can't use, or that have
+/// none picked, in order. Each item is looked up once.
 pub async fn unusable_items(
     entities: &dyn KnobEntities,
     owner: &MacroUserIdStr<'static>,
@@ -56,7 +63,18 @@ pub async fn unusable_items(
     let mut usable: HashMap<&EntityValue, bool> = HashMap::new();
     let mut unusable = Vec::new();
     for step in steps {
-        for (label, item) in step.entities() {
+        for (label, item, kinds) in step.entities() {
+            let Some(item) = item else {
+                // Validation guarantees at least one kind.
+                let kind = kinds.first().copied().unwrap_or(EntityKind::Channel);
+                unusable.push(UnusableItem {
+                    step: step.title.trim().to_owned(),
+                    label: label.trim().to_owned(),
+                    kind,
+                    picked: false,
+                });
+                continue;
+            };
             let ok = match usable.get(item) {
                 Some(ok) => *ok,
                 None => {
@@ -70,6 +88,7 @@ pub async fn unusable_items(
                     step: step.title.trim().to_owned(),
                     label: label.trim().to_owned(),
                     kind: item.kind,
+                    picked: true,
                 });
             }
         }

@@ -701,7 +701,49 @@ export type RoutineKnob = {
      * investors, fundraising or finance?".
      */
     value: string;
+} | {
+    /**
+     * The kinds of item the owner may pick, at least one, each once.
+     */
+    entity_types: Array<RoutineKnobEntityType>;
+    /**
+     * What it is, for the owner, e.g. "Channel to post in".
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'entity';
+    /**
+     * The item picked.
+     */
+    value: RoutineKnobEntity;
 };
+
+/**
+ * The item an entity knob names: its kind and id.
+ */
+export type RoutineKnobEntity = {
+    /**
+     * Its id.
+     */
+    id: RoutineKnobEntityId;
+    /**
+     * Its kind.
+     */
+    type: RoutineKnobEntityType;
+};
+
+/**
+ * An item's id: not blank, without spaces, at most 256 characters.
+ */
+export type RoutineKnobEntityId = string;
+
+/**
+ * A kind of item an entity knob names: one Macro's SDK has a handle for.
+ */
+export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user';
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.

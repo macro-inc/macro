@@ -113,11 +113,15 @@ impl CodeStep {
             .collect()
     }
 
-    /// The items its entity knobs name, each with the knob's label.
-    pub fn entities(&self) -> impl Iterator<Item = (&str, &crate::EntityValue)> {
-        self.knobs
-            .iter()
-            .filter_map(|knob| Some((knob.label(), knob.entity()?)))
+    /// Its entity knobs: each one's label, the item picked (if any) and the
+    /// kinds it allows.
+    pub fn entities(
+        &self,
+    ) -> impl Iterator<Item = (&str, Option<&crate::EntityValue>, &[crate::EntityKind])> {
+        self.knobs.iter().filter_map(|knob| {
+            let (value, kinds) = knob.entity()?;
+            Some((knob.label(), value, kinds))
+        })
     }
 }
 

@@ -149,6 +149,64 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+test('an entity knob takes the handle of the item it names and sends its id', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({ ok: true, problems: [], steps: [], routine: {} });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await macro.routines.check({
+    name: 'Post open bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * MON', timezone: 'UTC' },
+    steps: [
+      {
+        type: 'code',
+        title: 'Post open bugs',
+        source:
+          "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); }",
+        knobs: [
+          {
+            type: 'entity',
+            name: 'bugs',
+            label: 'Channel to post in',
+            entity_types: ['channel'],
+            value: { type: 'channel', entity: macro.channels.byId('channel-1') },
+          },
+          { type: 'number', name: 'days', label: 'Days', value: 7 },
+        ],
+      },
+    ],
+  });
+  expect(bodies[0]).toMatchObject({
+    routine: {
+      task: {
+        steps: [
+          {
+            knobs: [
+              {
+                type: 'entity',
+                name: 'bugs',
+                label: 'Channel to post in',
+                entity_types: ['channel'],
+                value: { type: 'channel', id: 'channel-1' },
+              },
+              { type: 'number', name: 'days', label: 'Days', value: 7 },
+            ],
+          },
+        ],
+      },
+    },
+  });
+});
+
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
   let reads = 0;
