@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use cow_str::CowLike;
+use cowlike::CowLike;
 use email::domain::ports::EmailService;
 use rootcause::Report;
 use soup::domain::{

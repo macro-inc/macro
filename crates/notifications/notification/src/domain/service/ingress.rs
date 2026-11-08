@@ -29,7 +29,7 @@ use crate::domain::ports::{
 use crate::domain::service::SendNotificationError;
 use ::futures::future::join_all;
 use entity_kind::Entity;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use pagination_types::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;

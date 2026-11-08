@@ -16,7 +16,7 @@ use entity_access::domain::models::{
 };
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{
-    cow_str::CowLike,
+    cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
     user_id::MacroUserIdStr,

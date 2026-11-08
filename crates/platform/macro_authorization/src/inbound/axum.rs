@@ -20,7 +20,7 @@ use ::axum::{
 };
 use bot_id::BotId;
 use harness_id::HarnessId;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_error_response::ErrorResponse;
 use model_user::UserContext;
 use rootcause::Report;

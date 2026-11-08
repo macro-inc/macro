@@ -1,6 +1,6 @@
 use super::*;
 use import::domain::ports::{ImportError as LedgerError, Result as LedgerResult};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 struct Canonical {
     binding: Option<ledger::ImportSourceBinding>,

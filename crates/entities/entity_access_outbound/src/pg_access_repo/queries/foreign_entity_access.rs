@@ -105,7 +105,7 @@ pub async fn get_foreign_entity_users(
     pool: &PgPool,
     foreign_entity_id: &Uuid,
 ) -> anyhow::Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>> {
-    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
     let users = sqlx::query_scalar!(
         r#"
         SELECT stored_for_id AS "user_id!" FROM foreign_entity

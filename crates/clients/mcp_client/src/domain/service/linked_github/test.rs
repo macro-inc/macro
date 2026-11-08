@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use oauth2::TokenResponse as _;
 use std::sync::Mutex;
 

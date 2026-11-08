@@ -14,7 +14,7 @@ use entity_access::domain::{
 use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use properties::{PropertiesPgRepo, domain::database_cell_writer::DatabaseCellWriter};
 use properties_types::{EntityReference, EntityType, service::property_value::PropertyValue};
 use serde_json::json;

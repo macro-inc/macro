@@ -22,7 +22,7 @@ use super::ports::{
 use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};

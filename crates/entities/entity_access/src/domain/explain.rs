@@ -8,7 +8,7 @@ use crate::domain::{
     ports::{ExplainAccessRepository, ExplainAccessService},
 };
 use macro_user_id::{
-    cow_str::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
+    cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
 };
 
 /// Orchestrates labeled access explanations.

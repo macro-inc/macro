@@ -21,7 +21,7 @@ Chat sidebar, following the standard hexagonal crate layout.
 
 ## Boundaries
 
-- Depends on: `entity_access` (ports), `macro_authorization` (feature `inbound`), `cow_str`.
+- Depends on: `entity_access` (ports), `macro_authorization` (feature `inbound`), `cowlike`.
 - Used by: `services/document_storage_service`, its composition root.
 
 ## Recipes

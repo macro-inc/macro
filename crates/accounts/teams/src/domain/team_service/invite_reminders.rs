@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use crate::domain::team_channels::TeamChannels;
 use entity_kind::EntityType;
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_notifications::{InviteToTeamMetadata, InviteePlan};
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;

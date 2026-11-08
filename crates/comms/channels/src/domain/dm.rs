@@ -1,6 +1,6 @@
 //! Direct-message identity and batch commands.
 
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{MacroUserIdStr, McpServerRecord};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::sync::{Arc, Mutex};
 
 /// In-memory [`McpServerStore`] keyed by user and URL.

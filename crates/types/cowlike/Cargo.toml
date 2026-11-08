@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "cow_str"
+name = "cowlike"
 publish = false
 version = "0.1.0"
 

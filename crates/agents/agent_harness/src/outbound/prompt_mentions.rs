@@ -18,7 +18,7 @@ use entity_access::domain::models::{AccessLevel, EntityType};
 use entity_access::domain::ports::AccessRepository;
 use entity_access_outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 

@@ -34,7 +34,7 @@ use item_filters::ast::{
     LiteralTree,
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use pagination_types::{CreatedAt, Query};
 use recursion::CollapsibleExt;
 use sqlx::{Executor, PgPool, Postgres};

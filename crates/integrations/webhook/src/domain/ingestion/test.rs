@@ -1779,7 +1779,7 @@ fn agent_session_lifecycle_event(
     ) -> agent_session::domain::events::AgentSessionLifecycleEvent,
 ) -> Event<agent_session::domain::events::AgentSessionLifecycleEvent> {
     use agent_session::domain::events::{SessionIdentity, ThreadOrigin};
-    use macro_user_id::cow_str::CowLike as _;
+    use macro_user_id::cowlike::CowLike as _;
 
     Event::new(event(SessionIdentity {
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,

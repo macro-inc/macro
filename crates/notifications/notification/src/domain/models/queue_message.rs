@@ -9,7 +9,7 @@ use crate::domain::models::{
     request::SendNotificationRequest,
 };
 use chrono::{DateTime, Utc};
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::Entity;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;

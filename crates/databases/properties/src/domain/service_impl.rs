@@ -15,7 +15,7 @@ use entity_access::domain::models::{
     RequiredPermission,
 };
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use properties_types::DataType;
 use properties_types::api::requests::SetPropertyValue;

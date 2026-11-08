@@ -11,7 +11,7 @@ use entity_access_db_utils::team_share::{
     delete_direct, direct_level, replace_project_contributions, upsert_direct,
 };
 use entity_kind::{Entity, EntityType};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use model_owner::{
     Owner,

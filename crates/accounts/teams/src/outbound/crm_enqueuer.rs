@@ -14,7 +14,7 @@ use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, DepopulateCrmForUserPayload,
     PopulateCrmForUserPayload,
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 /// SQS adapter for [`CrmEnqueuer`]. Wraps a `sqs_client::SQS` that must
 /// have been built with `.email_backfill_queue(...)` set.

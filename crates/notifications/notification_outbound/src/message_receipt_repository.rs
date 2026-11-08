@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod test;
 
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::email_notification_digest::ports::{
     MessageId, MessageReceiptRepo,

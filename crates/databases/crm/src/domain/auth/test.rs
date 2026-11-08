@@ -92,7 +92,7 @@ fn team_receipt_from_team_receipt_validates_type_and_id() {
 #[test]
 fn team_receipt_hidden_gate_derives_from_team_role() {
     use entity_access::domain::models::{Entity, EntityPermission, MemberTeamRole, TeamRole};
-    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
     let team = team_uuid();
     let user = MacroUserIdStr::parse_from_str("macro|user@example.com")

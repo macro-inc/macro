@@ -1,6 +1,6 @@
 use super::*;
 use ai_billing::domain::{Entitlement, PayerScope};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
 use teams::domain::model::SeatPlan;
 

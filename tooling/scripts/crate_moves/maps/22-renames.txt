@@ -16,7 +16,6 @@ crates/projects/initiative crates/projects/project
 crates/projects/projects crates/projects/folder
 crates/search/models_search crates/search/search_types
 crates/search/models_soup crates/search/soup_types
-crates/types/cowlike crates/types/cow_str
 crates/types/model crates/types/shared_types
 crates/types/model_entity crates/types/entity_kind
 crates/types/models_ai_projection crates/types/ai_projection_types

@@ -6,7 +6,7 @@ use axum::{
 use futures::StreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use model_owner::Owner;
 use permissions_types::share_permission::SharePermissionV2;
 use projects_hex::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};

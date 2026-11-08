@@ -1,4 +1,4 @@
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 use super::super::values::Person;
 use super::*;

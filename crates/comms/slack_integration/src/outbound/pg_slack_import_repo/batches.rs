@@ -2,7 +2,7 @@
 //! No helper writes comms tables. The caller must roll back the entire transaction
 //! on any error, including a failed final fence check, and commit only after finish.
 
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use sqlx::{Postgres, Transaction};
 
 use super::{

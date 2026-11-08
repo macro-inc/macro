@@ -20,7 +20,7 @@ use agent_loop::{PredefinedModel, structured_output::DynamicSchema};
 use agent_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
 use ai_usage::{AiFeature, UsageContext};
 use futures::StreamExt;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 use ai_projections::domain::{
     model::AiProjectionError,

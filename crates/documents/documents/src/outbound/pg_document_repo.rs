@@ -15,7 +15,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_owner::Owner;
 use permissions_types::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
 use shared_types::document::{DocumentBasic, DocumentMetadata};

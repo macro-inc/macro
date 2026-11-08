@@ -33,7 +33,7 @@ use crate::domain::service::{
 };
 use chrono::Utc;
 use entity_kind::{Entity, EntityType};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
 use rootcause::{Report, report};

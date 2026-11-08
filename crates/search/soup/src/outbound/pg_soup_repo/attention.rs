@@ -33,7 +33,7 @@
 //! page; a short page here still means the feed is exhausted.
 
 use activity::Action;
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;

@@ -6,7 +6,7 @@ use aes_gcm::{
     Aes256Gcm,
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
 
 const NONCE_LEN: usize = 12;

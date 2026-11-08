@@ -32,7 +32,7 @@ use macro_authorization::{
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, MacroAuthorizationState, ValidatedIdentity,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use pagination_types::{CreatedAt, PaginateOn, Query};

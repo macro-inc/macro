@@ -15,7 +15,7 @@ use crate::domain::{
 };
 use futures::{StreamExt, stream};
 use macro_user_id::{
-    cow_str::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
+    cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr,
 };
 use tracing::Level;
 use uuid::Uuid;

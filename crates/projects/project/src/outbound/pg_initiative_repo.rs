@@ -11,7 +11,7 @@ mod test;
 use std::str::FromStr;
 
 use entity_kind::{Entity, EntityType};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::access_level::AccessLevel;
 use permissions_types::share_permission::channel_share_permission::ChannelSharePermission;

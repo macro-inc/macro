@@ -8,7 +8,7 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use mockall::Sequence;
 use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;

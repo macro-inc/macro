@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 #[test]
 fn a_team_channel_is_owned_by_the_owner_and_auto_joined() {

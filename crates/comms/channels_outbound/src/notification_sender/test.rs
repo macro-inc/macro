@@ -1,6 +1,6 @@
 use super::*;
 use entity_kind::Entity;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use notification_hex::domain::models::{
     DisabledNotificationType, UserNotificationRow,
     device::DeviceType,

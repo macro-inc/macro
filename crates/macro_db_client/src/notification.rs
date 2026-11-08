@@ -1,6 +1,6 @@
 use anyhow::Context;
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_owner::Owner;
 
 use crate::{chat::get_basic_chat, projects::get_project::get_basic_project::get_basic_project};

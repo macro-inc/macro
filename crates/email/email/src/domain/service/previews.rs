@@ -16,7 +16,7 @@ use frecency_core::{
     ports::FrecencyQueryService,
 };
 use item_filters::ast::email::EmailLiteral;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use pagination_types::{CollectBy, PaginateOn, PaginatedCursor, Query, SimpleSortMethod};
 use std::collections::HashMap;

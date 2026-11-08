@@ -7,7 +7,7 @@ use macro_authorization::{
     MacroUserAuthentication,
 };
 use macro_user_id::{
-    cow_str::CowLike,
+    cowlike::CowLike,
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };

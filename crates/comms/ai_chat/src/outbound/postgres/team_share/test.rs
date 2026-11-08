@@ -1,7 +1,7 @@
 use entity_access::domain::models::AccessError;
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 use permissions_types::share_permission::access_level::AccessLevel;

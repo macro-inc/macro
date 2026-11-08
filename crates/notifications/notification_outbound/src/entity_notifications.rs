@@ -9,7 +9,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use entity_kind::{Entity, EntityType};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use rootcause::Report;
 use sqlx::PgPool;
 

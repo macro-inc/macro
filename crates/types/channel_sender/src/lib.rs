@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
 //! Message author identities: Macro users, bots, and call-scoped guests.
 
-use bot_id::{BotId, BotIdStr, cow_str::CowLike};
+use bot_id::{BotId, BotIdStr, cowlike::CowLike};
 use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

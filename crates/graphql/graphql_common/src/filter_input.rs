@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_graphql::ID;
 use filter_ast::Expr;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
 /// Conversion from a GraphQL filter input tree into a domain filter

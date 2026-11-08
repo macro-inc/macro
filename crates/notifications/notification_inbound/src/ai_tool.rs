@@ -14,7 +14,7 @@ use ai_toolset::{
 };
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::{

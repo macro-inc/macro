@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{ConnectToken, ConnectorOverlay, PipedreamAccount};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::collections::HashMap;
 use std::sync::Mutex;
 

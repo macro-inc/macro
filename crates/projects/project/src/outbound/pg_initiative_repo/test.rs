@@ -7,7 +7,7 @@ mod initial_properties;
 #[cfg(feature = "toolset")]
 mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,

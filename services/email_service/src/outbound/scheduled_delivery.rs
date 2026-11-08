@@ -20,7 +20,7 @@ use email_api_client_core::models::{EmailApiError, PreparedSendMessage, SendRequ
 use email_db_client::messages::scheduled::delivery::{self, DeliveryClaim};
 use email_types::service::{attachment::AttachmentDraft, link::Link, message::MessageToSend};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBroker, MacroEventBrokerService};
-use macro_user_id::cow_str::CowLike as _;
+use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Instant;
 use tokio_util::task::TaskTracker;
