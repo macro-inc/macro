@@ -17,8 +17,8 @@ pub use access_explanation::{
     AccessExplanation, AccessGrant, EmailAttachmentReason, ForeignEntityAuthEntity,
 };
 pub use bot_id::{BotId, BotIdStr};
+pub use entity_access_management_types::EntityAccessSourceType;
 pub use entity_kind::EntityType;
-pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,

@@ -2,7 +2,7 @@
 
 use entity_kind::EntityType;
 
-pub use models_entity_access_management::EntityAccessSourceType;
+pub use entity_access_management_types::EntityAccessSourceType;
 
 /// Errors that can occur in entity_access_management crate.
 #[derive(Debug, thiserror::Error)]
