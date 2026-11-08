@@ -16,6 +16,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/defaults.rs`: host-supplied production session policies.
 - `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
 - `src/source.rs`: complete literal Rust reproductions, including every policy clock.
+- `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
@@ -83,3 +84,13 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   explicit replay story; only this CLI test host reads SIM_SEED. Use Outcome::replay
   for an arbitrary stored script and compare_replay for first-difference evidence.
 - Re-record the Worker suite and require zero normalized transcript differences.
+
+Count actual telemetry span starts separately from scheduling point events. Observe
+successful snapshot deletion, token requests and exact fault-damaged WAL identities.
+Only exempt an actually corrupted row from persisted-edit loss while an exact adoption
+alias remains quarantined/unacknowledged; ACK loss checks remain strict. Above a
+parked gap, count exact live-owner ACK evidence without inventing a durable prefix.
+Read replicas may retain extra private history, but must dominate server VV; equal
+VVs still require equal content. Keep failed accepted socket halves until their real
+close callback completes, then remove runtime membership. Cancel obsolete directory
+heal timers when faults are explicitly healed.

@@ -60,6 +60,11 @@ impl Sim {
                     }
                 }
                 IoEffect::FetchToken { attempt, .. } => {
+                    self.emit(Fact::TokenRequested {
+                        client: name.clone(),
+                        session,
+                        attempt,
+                    });
                     let Some(client) = self.clients.get_mut(name) else {
                         continue;
                     };
@@ -201,6 +206,11 @@ impl Sim {
                     }
                 }
                 IoEffect::Telemetry(record) => {
+                    let phase = match &record.kind {
+                        TelemetryKind::Start { .. } => TelemetryPhase::Start,
+                        TelemetryKind::Event { .. } => TelemetryPhase::Event,
+                        TelemetryKind::End { .. } => TelemetryPhase::End,
+                    };
                     let event_name = match record.kind {
                         TelemetryKind::Start { name } | TelemetryKind::Event { name } => {
                             name.to_string()
@@ -236,10 +246,11 @@ impl Sim {
                                 .into(),
                         });
                     }
-                    if event_name == "doc.sync.rebase" {
+                    if event_name == "doc.sync.rebase" && phase == TelemetryPhase::Start {
                         self.stats.rebases = self.stats.rebases.saturating_add(1);
                     }
                     self.emit(Fact::Telemetry {
+                        phase,
                         client: name.clone(),
                         name: event_name,
                         attributes,
@@ -355,8 +366,8 @@ impl Sim {
         {
             let ranges = updates
                 .iter()
-                .map(|update| spans(update.as_ref()))
-                .collect::<Result<Vec<_>, _>>()?
+                .filter_map(|update| spans(update.as_ref()).ok())
+                .collect::<Vec<_>>()
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>();
@@ -367,24 +378,22 @@ impl Sim {
             let mut own_bytes = 0;
             let mut foreign_bytes = 0;
             for row in &client.core.wal().entries {
-                if client
-                    .core
-                    .wal()
-                    .delivered_through
-                    .is_some_and(|through| row.seq <= through)
-                    || row.superseded
-                {
+                if client.core.is_delivered(row.seq) || row.superseded {
                     continue;
                 }
-                if spans(&row.bytes).is_ok_and(|row_ranges| {
-                    row_ranges.iter().all(|row_range| {
-                        ranges.iter().any(|range| {
-                            range.peer == row_range.peer
-                                && range.start <= row_range.start
-                                && range.end >= row_range.end
+                if updates
+                    .iter()
+                    .any(|bytes| bytes.as_ref() == row.bytes.as_ref())
+                    || spans(&row.bytes).is_ok_and(|row_ranges| {
+                        row_ranges.iter().all(|row_range| {
+                            ranges.iter().any(|range| {
+                                range.peer == row_range.peer
+                                    && range.start <= row_range.start
+                                    && range.end >= row_range.end
+                            })
                         })
                     })
-                }) {
+                {
                     rows.push((doc_sync_core::WalOwner::Session(session), row.seq));
                     if row.foreign {
                         foreign_bytes += u64::try_from(row.bytes.len()).unwrap_or(0);
@@ -402,15 +411,19 @@ impl Sim {
                     if doc != &client.core_doc_id() || row.delivered {
                         continue;
                     }
-                    if spans(&row.record.bytes).is_ok_and(|row_ranges| {
-                        row_ranges.iter().all(|row_range| {
-                            ranges.iter().any(|range| {
-                                range.peer == row_range.peer
-                                    && range.start <= row_range.start
-                                    && range.end >= row_range.end
+                    if updates
+                        .iter()
+                        .any(|bytes| bytes.as_ref() == row.record.bytes.as_slice())
+                        || spans(&row.record.bytes).is_ok_and(|row_ranges| {
+                            row_ranges.iter().all(|row_range| {
+                                ranges.iter().any(|range| {
+                                    range.peer == row_range.peer
+                                        && range.start <= row_range.start
+                                        && range.end >= row_range.end
+                                })
                             })
                         })
-                    }) {
+                    {
                         rows.push((*owner, *seq));
                         foreign_bytes += u64::try_from(row.record.bytes.len()).unwrap_or(0);
                     }

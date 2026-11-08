@@ -200,14 +200,7 @@ impl SimClient {
             .wal()
             .entries
             .iter()
-            .filter(|row| {
-                !row.superseded
-                    && self
-                        .core
-                        .wal()
-                        .delivered_through
-                        .is_none_or(|through| row.seq > through)
-            })
+            .filter(|row| !row.superseded && !self.core.is_delivered(row.seq))
             .count();
         let undelivered = total.saturating_sub(parked.len());
         let terminal = match &self.core.status().connection {

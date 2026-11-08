@@ -509,6 +509,11 @@ impl Sim {
         };
         let callback = server.step(now, input);
         let accepted = callback.accepted;
+        let failed_upgrade = !accepted
+            && callback.effects.iter().any(|effect| {
+                effect.operation == "connections.accept"
+                    && effect.value.as_str() == Some(WebSocketId::new(socket).as_str())
+            });
         let mut pumps = Vec::new();
         if accepted {
             let host = self
@@ -528,6 +533,12 @@ impl Sim {
         }
         self.callback(index, callback)?;
         self.router_actions(profile, pumps)?;
+        if failed_upgrade {
+            self.server_input(
+                index,
+                Input::Runtime(ServerInput::Close(WebSocketId::new(socket))),
+            )?;
+        }
         if !accepted {
             self.route_failed(profile, &doc, epoch)?;
         }

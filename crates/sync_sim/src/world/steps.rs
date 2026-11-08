@@ -26,7 +26,7 @@ impl Sim {
                 };
                 if !client.alive
                     || client.frozen
-                    || client.core.phase() != Phase::Running
+                    || !matches!(client.core.phase(), Phase::Running | Phase::Resetting)
                     || (client.spec.access != Access::Edit && !matches!(op, AbstractOp::Select(_)))
                 {
                     self.emit(Fact::OpSkipped {
@@ -181,7 +181,7 @@ impl Sim {
             }
             Step::Storage { profile, fault } => {
                 self.profiles
-                    .entry(profile)
+                    .entry(profile.clone())
                     .or_insert_with(|| {
                         SimStorage::with_retention(
                             self.config.storage.clone(),
@@ -189,6 +189,19 @@ impl Sim {
                         )
                     })
                     .fault(fault);
+                let corruptions = self
+                    .profiles
+                    .get_mut(&profile)
+                    .map(|store| std::mem::take(&mut store.corruptions))
+                    .unwrap_or_default();
+                for (doc, owner, seq) in corruptions {
+                    self.emit(Fact::WalCorrupted {
+                        profile: profile.clone(),
+                        doc,
+                        owner,
+                        seq,
+                    });
+                }
             }
             Step::Server(step) => self.server_step(step)?,
             Step::Grant {
@@ -693,6 +706,7 @@ impl Sim {
                     }
                 }
                 ServerStep::Heal => {
+                    self.clock.clear_directory_heals(doc);
                     if let Some(server) = self.servers.get_mut(&doc) {
                         server.storage_latency = self.config.server_storage_latency;
                         server.ports.set_faults(FaultSchedule::new());
@@ -709,7 +723,19 @@ impl Sim {
         Ok(())
     }
     fn settle(&mut self) -> Result<(), Failure> {
+        let mut healed = self.net.partitions.clone();
+        for name in self.clients.keys() {
+            if self.net.partitions.contains(&self.network_name(name)) {
+                healed.insert(name.clone());
+            }
+        }
         self.net.heal();
+        for client in healed {
+            self.emit(Fact::Partition {
+                client,
+                partitioned: false,
+            });
+        }
         for store in self.profiles.values_mut() {
             store.fault(StorageFault::Heal);
         }

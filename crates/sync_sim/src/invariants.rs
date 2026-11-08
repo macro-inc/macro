@@ -120,6 +120,24 @@ pub fn all_docs_equal(outcome: &Outcome) -> Result<(), Failure> {
             .servers
             .get(&client.doc)
             .ok_or_else(|| Failure::new("all_docs_equal", "missing server final"))?;
+        // S8 §4.1 requires read-only replicas to cover the server's visible VV.
+        // A revoked writer may also retain private, parked edits, so its VV and
+        // content need not equal the server until write access is regranted.
+        if client.access == Access::Read {
+            if !server
+                .oplog_vv
+                .iter()
+                .all(|(peer, end)| client.oplog_vv.get(peer).copied().unwrap_or(0) >= *end)
+            {
+                return Err(Failure::new(
+                    "all_docs_equal",
+                    format!("{name:?} misses received server history"),
+                ));
+            }
+            if client.oplog_vv != server.oplog_vv {
+                continue;
+            }
+        }
         if client.oplog_vv != server.oplog_vv || client.deep_value != server.deep_value {
             return Err(Failure::new(
                 "all_docs_equal",
