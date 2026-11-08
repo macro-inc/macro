@@ -1,4 +1,4 @@
-use models_properties::service::property_option::PropertyOptionValue;
+use properties_types::service::property_option::PropertyOptionValue;
 use uuid::Uuid;
 
 use super::database_definition_writer::display_order;

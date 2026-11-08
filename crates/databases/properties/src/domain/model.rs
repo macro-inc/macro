@@ -8,11 +8,11 @@ use entity_access::domain::models::{
     RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property::EntityProperty;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
+use properties_types::service::entity_property::EntityProperty;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
 pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;

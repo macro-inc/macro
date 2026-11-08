@@ -66,7 +66,7 @@ export function selectOptionEntries(
 }
 
 /**
- * The stored property payload: models_properties' tagged PropertyValue
+ * The stored property payload: properties_types' tagged PropertyValue
  * (`{"type": "SelectOption", "value": ["uuid"]}` …). Arrives as untyped
  * JSON, so parse defensively — an unrecognized shape renders no label
  * rather than garbage.

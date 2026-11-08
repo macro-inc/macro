@@ -113,7 +113,7 @@ pub trait CompaniesRepository:
     fn activity_property_edges(
         &self,
         scope: super::contact_listing::CrmContactListScope<'_>,
-        entity_types: &[models_properties::EntityType],
+        entity_types: &[properties_types::EntityType],
     ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Idempotently ingest eligible stored mailbox history for a contact.

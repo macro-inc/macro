@@ -10,10 +10,10 @@ use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::EntityType;
-use models_properties::api::requests::SetPropertyValue;
-use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
-use models_properties::shared::EntityReference;
+use properties_types::EntityType;
+use properties_types::api::requests::SetPropertyValue;
+use properties_types::service::{entity_property::EntityProperty, property_value::PropertyValue};
+use properties_types::shared::EntityReference;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 

@@ -64,7 +64,7 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         &self,
         user_id: &str,
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
-        entity_types: &[models_properties::EntityType],
+        entity_types: &[properties_types::EntityType],
     ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Contribute eligible stored history from an explicitly consented mailbox.
@@ -1227,7 +1227,7 @@ where
         &self,
         user_id: &str,
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
-        entity_types: &[models_properties::EntityType],
+        entity_types: &[properties_types::EntityType],
     ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
         let scope = viewer_scope(user_id, access)?;
         self.companies_repository
@@ -1574,7 +1574,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _user_id: &str,
         _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
-        _entity_types: &[models_properties::EntityType],
+        _entity_types: &[properties_types::EntityType],
     ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
         Err(CrmError::InvalidRequest(
             "activity scope unavailable".into(),

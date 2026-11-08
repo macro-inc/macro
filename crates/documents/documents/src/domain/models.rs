@@ -8,7 +8,7 @@ use shared_types::document::response::DocumentResponseMetadata;
 use shared_types::document::{DocumentMetadata, FileType};
 
 use super::response::DocumentResponse;
-use models_properties::api::requests::SetPropertyValue;
+use properties_types::api::requests::SetPropertyValue;
 use shared_types::sync_service::SyncServiceVersionID;
 
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).

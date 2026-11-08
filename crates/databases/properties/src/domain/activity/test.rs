@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use macro_event_broker::Event;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 use super::*;
 use crate::domain::events::EntityPropertyUpdatedMetadata;
@@ -131,7 +131,7 @@ fn delegated_property_update_keeps_the_user_as_subject() {
 
 fn project(id: &str) -> Option<PropertyValue> {
     Some(PropertyValue::EntityRef(vec![
-        models_properties::shared::EntityReference::new(id, PropertyEntityType::Initiative),
+        properties_types::shared::EntityReference::new(id, PropertyEntityType::Initiative),
     ]))
 }
 

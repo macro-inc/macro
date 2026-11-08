@@ -3,13 +3,13 @@ use chrono::{TimeZone, Utc};
 use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use models_properties::service::{
+use properties::PropertyOptionInfo;
+use properties_types::service::{
     property_option::PropertyOptionValue, property_value::PropertyValue,
 };
-use models_properties::{
+use properties_types::{
     DataType, EntityReference, EntityType as PropertyEntityType, PropertyOwner,
 };
-use properties::PropertyOptionInfo;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;

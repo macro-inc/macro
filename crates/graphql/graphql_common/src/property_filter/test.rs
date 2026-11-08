@@ -17,8 +17,8 @@ fn initiative_property_filter_preserves_its_scope() {
         })
     ));
     assert_eq!(
-        GraphqlPropertyEntityType::new(models_properties::EntityType::Initiative).into_model(),
-        models_properties::EntityType::Initiative,
+        GraphqlPropertyEntityType::new(properties_types::EntityType::Initiative).into_model(),
+        properties_types::EntityType::Initiative,
     );
 }
 

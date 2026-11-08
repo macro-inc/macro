@@ -2,9 +2,9 @@
 
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -21,14 +21,14 @@ use crate::domain::model::{
     UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
-use models_properties::DataType;
-use models_properties::EntityPropertyReference;
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::project_metadata::ProjectMetadata;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::service::thread_metadata::ThreadMetadata;
+use properties_types::DataType;
+use properties_types::EntityPropertyReference;
+use properties_types::service::document_metadata::DocumentMetadata;
+use properties_types::service::project_metadata::ProjectMetadata;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::service::thread_metadata::ThreadMetadata;
 
 /// PostgreSQL implementation of PropertiesRepo.
 #[derive(Debug, Clone)]
@@ -489,8 +489,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         task_id: Uuid,
         parent_task_id: Option<Uuid>,
-    ) -> Result<Option<models_properties::service::entity_property::EntityProperty>, Self::Err>
-    {
+    ) -> Result<Option<properties_types::service::entity_property::EntityProperty>, Self::Err> {
         task_property_queries::link_parent_task(&self.pool, task_id, parent_task_id).await
     }
 
@@ -499,8 +498,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         task_id: Uuid,
         subtask_ids: Vec<Uuid>,
-    ) -> Result<Option<models_properties::service::entity_property::EntityProperty>, Self::Err>
-    {
+    ) -> Result<Option<properties_types::service::entity_property::EntityProperty>, Self::Err> {
         task_property_queries::link_subtasks(&self.pool, task_id, subtask_ids).await
     }
 

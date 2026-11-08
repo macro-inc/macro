@@ -1,6 +1,6 @@
 //! CRM association input type.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use uuid::Uuid;
 
 /// CRM companies and contacts to associate with one entity through the

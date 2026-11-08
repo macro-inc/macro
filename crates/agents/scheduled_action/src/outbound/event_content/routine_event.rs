@@ -10,11 +10,11 @@ use email::domain::models::{ContactInfo, ParsedMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::{Message, MessageThread};
-use models_properties::service::{
+use properties::EntityPropertyInfo;
+use properties_types::service::{
     property_change_source::PropertyChangeSource, property_option::PropertyOptionValue,
     property_value::PropertyValue,
 };
-use properties::EntityPropertyInfo;
 use rootcause::Report;
 use shared_types::document::DocumentBasic;
 use system_properties::SystemPropertyKey;

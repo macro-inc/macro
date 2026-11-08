@@ -15,10 +15,10 @@ use entity_access::domain::models::{
 };
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::shared::{DataType, PropertyOwner};
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::shared::{DataType, PropertyOwner};
 use uuid::Uuid;
 
 use super::*;

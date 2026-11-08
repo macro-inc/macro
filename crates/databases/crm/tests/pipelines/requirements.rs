@@ -1,6 +1,6 @@
 use super::*;
 use crm::domain::pipelines::requirements::StageRequirement;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_required_options_is_refused_until_the_rule_is_removed(pool: PgPool) {

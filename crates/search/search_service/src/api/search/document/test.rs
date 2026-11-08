@@ -1,9 +1,9 @@
 use macro_db_client::document::get_document_history::DocumentHistoryInfo;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, shared::PropertyOwner};
 use models_soup::SoupProperty;
 use opensearch_client::search::model::Highlight;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, shared::PropertyOwner};
 
 use super::*;
 

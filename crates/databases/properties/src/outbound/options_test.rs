@@ -7,9 +7,9 @@ use crate::domain::model::{
 };
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityType};
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

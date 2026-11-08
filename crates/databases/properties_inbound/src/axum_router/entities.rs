@@ -16,8 +16,8 @@ use axum::{
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use models_properties::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::api::{PropertyTargetEntityType, PropertyTargetReference, SetPropertyValue};
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -36,8 +36,8 @@ use properties::domain::service::PropertiesService;
 #[cfg(test)]
 mod test;
 
-// Re-export EntityQueryParams from models_properties for convenience
-pub use models_properties::api::EntityQueryParams;
+// Re-export EntityQueryParams from properties_types for convenience
+pub use properties_types::api::EntityQueryParams;
 
 /// Response for document/entity properties endpoint.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

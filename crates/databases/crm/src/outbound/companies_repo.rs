@@ -1150,7 +1150,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     async fn activity_property_edges(
         &self,
         scope: crate::domain::contact_listing::CrmContactListScope<'_>,
-        entity_types: &[models_properties::EntityType],
+        entity_types: &[properties_types::EntityType],
     ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
         self.query_activity_property_edges(scope, entity_types)
             .await

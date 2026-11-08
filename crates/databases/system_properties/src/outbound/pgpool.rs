@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use models_properties::api::PropertyValue;
+use properties_types::api::PropertyValue;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

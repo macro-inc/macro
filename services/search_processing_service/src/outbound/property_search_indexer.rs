@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use models_properties::EntityType;
 use opensearch_client::OpensearchClient;
+use properties_types::EntityType;
 use sqlx::PgPool;
 
 use crate::domain::models::BackfillError;

@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use super::*;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata};
 use crate::domain::models::PropertyInput;
-use models_properties::api::SetPropertyValue;
+use properties_types::api::SetPropertyValue;
 const PRIORITY_PROPERTY: Uuid = Uuid::from_u128(100);
 const INITIAL_PRIORITY: Uuid = Uuid::from_u128(101);
 const EDITED_PRIORITY: Uuid = Uuid::from_u128(102);

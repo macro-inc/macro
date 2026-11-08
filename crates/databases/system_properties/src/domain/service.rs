@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use uuid::Uuid;
 
 #[cfg(test)]

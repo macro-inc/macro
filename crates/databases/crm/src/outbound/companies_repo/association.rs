@@ -4,7 +4,7 @@
 //! Activity excludes hidden records, including for admins. Email consent
 //! and exclusions do not hide CRM records.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use uuid::Uuid;
 
 use super::CompaniesRepositoryImpl;

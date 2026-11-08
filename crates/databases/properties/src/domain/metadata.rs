@@ -5,14 +5,14 @@
 //! shape. They share a special [`METADATA_PROPERTY_ID`] and are marked with
 //! `is_metadata = true`.
 
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::entity_property::EntityProperty;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::project_metadata::ProjectMetadata;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::service::thread_metadata::ThreadMetadata;
-use models_properties::{EntityReference, EntityType};
+use properties_types::service::document_metadata::DocumentMetadata;
+use properties_types::service::entity_property::EntityProperty;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::project_metadata::ProjectMetadata;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::service::thread_metadata::ThreadMetadata;
+use properties_types::{EntityReference, EntityType};
 use uuid::Uuid;
 
 /// Special UUID used for system-generated metadata properties.
@@ -53,7 +53,7 @@ pub fn document_metadata_properties(
     let name = (!document_metadata.name.is_empty()).then_some(document_metadata.name);
     metadata_properties.push(create_metadata_property_str(
         display_names::DOCUMENT_NAME,
-        models_properties::DataType::String,
+        properties_types::DataType::String,
         name,
         entity_type,
     ));
@@ -63,7 +63,7 @@ pub fn document_metadata_properties(
         .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
         display_names::OWNER,
-        models_properties::DataType::Entity,
+        properties_types::DataType::Entity,
         owner,
         entity_type,
         Some(EntityType::User),
@@ -72,7 +72,7 @@ pub fn document_metadata_properties(
     // 3. Created time property
     metadata_properties.push(create_metadata_property_date(
         display_names::CREATED_AT,
-        models_properties::DataType::Date,
+        properties_types::DataType::Date,
         Some(document_metadata.created_at),
         entity_type,
     ));
@@ -80,7 +80,7 @@ pub fn document_metadata_properties(
     // 4. Last updated time property
     metadata_properties.push(create_metadata_property_date(
         display_names::LAST_UPDATED,
-        models_properties::DataType::Date,
+        properties_types::DataType::Date,
         Some(document_metadata.updated_at),
         entity_type,
     ));
@@ -91,7 +91,7 @@ pub fn document_metadata_properties(
         .map(|id| EntityReference::new(id, EntityType::Project));
     metadata_properties.push(create_metadata_property_entity_ref(
         display_names::DOCUMENT_PROJECT,
-        models_properties::DataType::Entity,
+        properties_types::DataType::Entity,
         project,
         entity_type,
         Some(EntityType::Project),
@@ -110,35 +110,35 @@ pub fn thread_metadata_properties(
         // 1. Subject property
         create_metadata_property_str(
             display_names::THREAD_SUBJECT,
-            models_properties::DataType::String,
+            properties_types::DataType::String,
             thread_metadata.subject.clone(),
             entity_type,
         ),
         // 2. Thread Started property
         create_metadata_property_date(
             display_names::THREAD_STARTED,
-            models_properties::DataType::Date,
+            properties_types::DataType::Date,
             thread_metadata.thread_started,
             entity_type,
         ),
         // 3. Last Received property
         create_metadata_property_date(
             display_names::THREAD_LAST_RECEIVED,
-            models_properties::DataType::Date,
+            properties_types::DataType::Date,
             thread_metadata.last_received,
             entity_type,
         ),
         // 4. Last Sent property
         create_metadata_property_date(
             display_names::THREAD_LAST_SENT,
-            models_properties::DataType::Date,
+            properties_types::DataType::Date,
             thread_metadata.last_sent,
             entity_type,
         ),
         // 5. Messages property (count)
         create_metadata_property_number(
             display_names::THREAD_MESSAGES,
-            models_properties::DataType::Number,
+            properties_types::DataType::Number,
             thread_metadata.message_count,
             entity_type,
         ),
@@ -166,13 +166,13 @@ pub fn project_metadata_properties(
     vec![
         create_metadata_property_str(
             display_names::PROJECT_NAME,
-            models_properties::DataType::String,
+            properties_types::DataType::String,
             name,
             entity_type,
         ),
         create_metadata_property_entity_ref(
             display_names::OWNER,
-            models_properties::DataType::Entity,
+            properties_types::DataType::Entity,
             owner,
             entity_type,
             Some(EntityType::User),
@@ -180,20 +180,20 @@ pub fn project_metadata_properties(
         // 3. Created time property
         create_metadata_property_date(
             display_names::CREATED_AT,
-            models_properties::DataType::Date,
+            properties_types::DataType::Date,
             Some(project_metadata.created_at),
             entity_type,
         ),
         // 4. Last updated time property
         create_metadata_property_date(
             display_names::LAST_UPDATED,
-            models_properties::DataType::Date,
+            properties_types::DataType::Date,
             Some(project_metadata.updated_at),
             entity_type,
         ),
         create_metadata_property_entity_ref(
             display_names::PROJECT_PARENT,
-            models_properties::DataType::Entity,
+            properties_types::DataType::Entity,
             parent,
             entity_type,
             Some(EntityType::Project),
@@ -204,7 +204,7 @@ pub fn project_metadata_properties(
 /// Create a metadata property with a string value (e.g., document name, subject)
 pub fn create_metadata_property_str(
     display_name: &str,
-    data_type: models_properties::DataType,
+    data_type: properties_types::DataType,
     value: Option<String>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
@@ -215,7 +215,7 @@ pub fn create_metadata_property_str(
 /// Create a metadata property with a date/timestamp value (e.g., created_at, last_updated)
 pub fn create_metadata_property_date(
     display_name: &str,
-    data_type: models_properties::DataType,
+    data_type: properties_types::DataType,
     value: Option<chrono::DateTime<chrono::Utc>>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
@@ -226,7 +226,7 @@ pub fn create_metadata_property_date(
 /// Create a metadata property with a numeric value (e.g., message count)
 pub fn create_metadata_property_number(
     display_name: &str,
-    data_type: models_properties::DataType,
+    data_type: properties_types::DataType,
     value: i64,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
@@ -243,7 +243,7 @@ pub fn create_metadata_property_number(
 /// Create a metadata property with an entity reference value (e.g., owner, project)
 pub fn create_metadata_property_entity_ref(
     display_name: &str,
-    data_type: models_properties::DataType,
+    data_type: properties_types::DataType,
     value: Option<EntityReference>,
     entity_type: EntityType,
     specific_entity_type: Option<EntityType>,
@@ -262,14 +262,14 @@ pub fn create_metadata_property_entity_ref(
 /// Sets up the property definition with METADATA_PROPERTY_ID and is_metadata=true.
 fn create_metadata_property_inner(
     display_name: &str,
-    data_type: models_properties::DataType,
+    data_type: properties_types::DataType,
     value: Option<PropertyValue>,
     entity_type: EntityType,
     specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
     // Metadata properties are computed on-the-fly and never persisted
     // Use System owner since they don't belong to any user or org
-    let owner = models_properties::PropertyOwner::System;
+    let owner = properties_types::PropertyOwner::System;
 
     let property_definition = PropertyDefinition {
         id: METADATA_PROPERTY_ID,

@@ -5,7 +5,7 @@ use crate::domain::{
     resources::{InitiativeResources, ResourceFuture},
 };
 use entity_access::domain::models::{Entity, EntityAccessAuth};
-use models_properties::api::requests::SetPropertyValue;
+use properties_types::api::requests::SetPropertyValue;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

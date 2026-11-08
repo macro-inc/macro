@@ -1,13 +1,13 @@
 use ai_toolset::{ToolCallError, ToolResult};
 use calendar_events::domain::labels::off_schedule_summary;
 use item_filters::TagFilterMode;
-use models_properties::DataType;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_search::MatchType;
 use models_search::unified::UnifiedSearchResponseItem;
 use models_soup::SoupProperty;
 use properties::PropertiesService as _;
+use properties_types::DataType;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

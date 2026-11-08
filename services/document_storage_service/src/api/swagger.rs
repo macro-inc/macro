@@ -807,9 +807,9 @@ use email_policy::EmailPolicySchemas;
             documents_hex::domain::models::SetSkillDescriptionRequest,
             documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
-            models_properties::api::requests::SetPropertyValue,
-            models_properties::shared::EntityReference,
-            models_properties::shared::EntityType, // Quick create task
+            properties_types::api::requests::SetPropertyValue,
+            properties_types::shared::EntityReference,
+            properties_types::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::error::InvalidStoredPropertyValue;
-use models_properties::EntityReference;
+use properties_types::EntityReference;
 
 fn agent() -> EntityReference {
     EntityReference::new(

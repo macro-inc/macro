@@ -23,7 +23,7 @@ authentication — one of the most widely depended-on crates in the backend.
   items, folders, projects, chat, threads, annotations, and authentication.
 - Not here: message/discussion models → `messages`; typed ownership →
   `model_owner`; entity permissions → `permissions_types`; properties →
-  `models_properties`.
+  `properties_types`.
 
 ## Boundaries
 

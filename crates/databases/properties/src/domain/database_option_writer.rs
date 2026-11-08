@@ -1,7 +1,7 @@
 //! Transactional composition for the options of a database's select and tag
 //! properties, inside the same transaction as its cells.
 
-use models_properties::service::property_option::PropertyOptionValue;
+use properties_types::service::property_option::PropertyOptionValue;
 use uuid::Uuid;
 
 use super::database_cell_writer::DatabaseWriteTransaction;

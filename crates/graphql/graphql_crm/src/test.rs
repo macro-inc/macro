@@ -9,7 +9,7 @@ use databases::domain::models::{Column, ColumnDetail, ColumnId, DatabaseId, RowI
 use databases_types::position::key_between;
 use entity_access::domain::models::AccessLevel;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_properties::{
+use properties_types::{
     DataType,
     service::{
         property_definition::PropertyDefinition,

@@ -6,12 +6,12 @@ use document_sub_type::DocumentSubType;
 use lexical_client::types::MarkdownParseResult;
 use macro_db_client::document::get_document_version_id;
 use model_owner::Owner;
-use models_properties::EntityType;
 use models_search::unified::is_searchable_file_type;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
+use properties_types::EntityType;
 use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,

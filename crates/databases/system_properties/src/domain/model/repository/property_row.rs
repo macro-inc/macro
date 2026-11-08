@@ -1,6 +1,6 @@
 //! Property row for repository persistence.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use uuid::Uuid;
 
 /// A single property row to upsert.

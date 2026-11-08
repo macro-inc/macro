@@ -1,6 +1,6 @@
 use super::*;
 use chrono::Utc;
-use models_properties::PropertyOwner;
+use properties_types::PropertyOwner;
 
 #[test]
 fn descriptor_uses_declared_source_cardinality() {

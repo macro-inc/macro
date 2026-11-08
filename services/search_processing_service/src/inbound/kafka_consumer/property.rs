@@ -1,9 +1,9 @@
 //! Maps property lifecycle events to search-index actions and processes them.
 
 use macro_event_broker::MacroEvent as _;
-use models_properties::EntityType;
 use opensearch_client::OpensearchClient;
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
+use properties_types::EntityType;
 use sqlx::PgPool;
 
 use super::{Attempted, Attempts, Handled};

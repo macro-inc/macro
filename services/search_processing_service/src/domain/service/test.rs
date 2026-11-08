@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use sqs_client::search::{SearchQueueMessage, call::CallRecordMessage};
 use tokio_util::sync::CancellationToken;
 

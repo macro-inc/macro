@@ -9,10 +9,10 @@ use import::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, TrackerTaskRelations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
 use project::domain::models::{
     CreateInitiativeRequest, InitiativeId, MAX_INITIATIVE_NAME_GRAPHEMES,
 };
+use properties_types::{EntityReference, EntityType, api::SetPropertyValue};
 use shared_types::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use system_properties::SystemPropertyKey;
 use unicode_segmentation::UnicodeSegmentation;

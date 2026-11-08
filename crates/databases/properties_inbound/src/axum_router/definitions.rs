@@ -8,10 +8,10 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use models_properties::EntityType;
-use models_properties::api::CreatePropertyDefinitionRequest;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::EntityType;
+use properties_types::api::CreatePropertyDefinitionRequest;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;

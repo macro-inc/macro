@@ -4,9 +4,9 @@
 use super::*;
 use crate::domain::catalog::PropertyType;
 use crate::domain::models::{ConversionRefusal, Misfit, MisfitGroup, RowId};
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::DateRange;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::DateRange;
 
 /// The most characters of a value quoted in a refusal.
 const MAX_EXAMPLE_LEN: usize = 40;
@@ -190,7 +190,7 @@ impl<'a> Converter<'a> {
 
     fn convert_references(
         &self,
-        references: &[models_properties::shared::EntityReference],
+        references: &[properties_types::shared::EntityReference],
     ) -> Result<ConvertedCell, Misfit> {
         if self.target.data_type != DataType::Entity
             || references

@@ -8,15 +8,15 @@
 use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::api::{
+use properties::domain::model::TagScope;
+use properties::{EditReceipt, PropertiesService, TagColor};
+use properties_types::api::{
     AddPropertyOptionRequest, AddStringOptionRequest, CreatePropertyDefinitionRequest,
     CreatePropertyScope, PropertyDataType, SetPropertyValue,
 };
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::{DataType, EntityType};
-use properties::domain::model::TagScope;
-use properties::{EditReceipt, PropertiesService, TagColor};
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::{DataType, EntityType};
 use uuid::Uuid;
 
 use crate::domain::ports::{

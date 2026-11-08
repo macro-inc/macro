@@ -10,7 +10,7 @@ use databases::domain::models::ColumnDetail;
 use entity_access::domain::models::AccessLevel;
 use graphql_common::GraphqlPropertyEntityType;
 use graphql_properties::{GraphqlPropertyDataType, GraphqlPropertyOption, GraphqlPropertyValue};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 /// Which CRM record a pipeline's rows reference.
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]

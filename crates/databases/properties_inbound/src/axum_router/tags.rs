@@ -8,7 +8,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use models_properties::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
+use properties_types::api::{PropertyDefinitionDetailResponse, PropertyOptionResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;

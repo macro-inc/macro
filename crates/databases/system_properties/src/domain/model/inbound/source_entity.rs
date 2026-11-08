@@ -1,6 +1,6 @@
 //! Source entity reference type.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

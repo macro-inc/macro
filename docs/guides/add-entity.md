@@ -190,7 +190,7 @@ Postgres repo.
 
 ## 6. Properties (optional)
 
-- `crates/types/models_properties/src/shared/entity_type.rs` (maps to the Postgres enum
+- `crates/types/properties_types/src/shared/entity_type.rs` (maps to the Postgres enum
   `property_entity_type`; see the enum rule in section 2) and
   `src/api/property_target.rs`.
 - `crates/databases/properties/src/domain/model.rs` (`canonical_entity_type`,

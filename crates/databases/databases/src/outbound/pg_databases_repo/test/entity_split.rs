@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::journal::JournalPlan;
 use crate::domain::models::NewDefinition;
 use crate::domain::ports::DatabaseStorage;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 const SPLIT_UP: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),

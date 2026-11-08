@@ -9,8 +9,8 @@ use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, NewOption, OpResult,
     OptionId, OptionRef, RowId, RowsChange, RowsResult, ViewChange, ViewResult,
 };
-use models_properties::service::property_value::PropertyValue;
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
+use properties_types::service::property_value::PropertyValue;
 
 use super::apply_ops::{Guests, cells, edit, guests, service, viewer};
 use super::*;
