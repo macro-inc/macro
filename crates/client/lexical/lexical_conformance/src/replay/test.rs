@@ -507,3 +507,38 @@ fn inline_markdown_transformer_matches_and_enforces_its_empty_callback_tape() ->
     assert!(Replayer::default().replay(&wrong).is_err());
     Ok(())
 }
+
+#[test]
+fn child_iterators_and_list_accessors_replay_the_upstream_tapes() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-utils/025f7022d7d34247.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-list/9fe56f2f379adf21.json"
+    ))?;
+    Replayer::default().replay(&fixture)
+}
+#[test]
+fn transient_markdown_records_participate_in_the_exact_key_bijection() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/04fd0a335fe6356a.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let commit = fixture
+        .trace
+        .iter_mut()
+        .find(|op| {
+            op["op"] == "commit"
+                && op["snapshot"]["dirty"]["leaves"]
+                    .as_array()
+                    .is_some_and(|leaves| !leaves.is_empty())
+        })
+        .expect("dirty commit");
+    commit["snapshot"]["dirty"]["leaves"]
+        .as_array_mut()
+        .expect("leaves")
+        .push(json!("999999"));
+    assert!(Replayer::default().replay(&fixture).is_err());
+    Ok(())
+}

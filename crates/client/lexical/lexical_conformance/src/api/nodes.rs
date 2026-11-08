@@ -25,6 +25,13 @@ pub(crate) fn call(
         return Ok(result);
     }
     match method {
+        "getListType" => {
+            return Ok(serde_json::to_value(
+                view.get_or_err::<lexical_rich_nodes::list::ListNode>(key)?
+                    .list_type(),
+            )?);
+        }
+
         "getLanguage" => {
             return Ok(view
                 .get::<lexical_rich_nodes::code::CodeNode>(key)
@@ -213,6 +220,16 @@ pub(crate) fn call(
         }
         "getFormat" => return Ok(json!(view.text_data(key)?.format.bits())),
         "getStyle" => return Ok(json!(view.text_data(key)?.style)),
+        "getTextStyle" => return Ok(json!(view.element_data(key)?.text_style)),
+        "getParentKeys" => {
+            let mut keys = Vec::new();
+            let mut parent = view.parent(key);
+            while let Some(key) = parent {
+                keys.push(key_value(key));
+                parent = view.parent(key);
+            }
+            return Ok(json!(keys));
+        }
         _ => {}
     }
     match method {

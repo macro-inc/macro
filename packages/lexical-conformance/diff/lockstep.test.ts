@@ -289,3 +289,45 @@ test('empty root hydration preserves root metadata', async () => {
     u.dispose();
   }
 });
+
+test('cross-block tab replacement retains direction cached by child removal', async () => {
+  await replay([
+    { kind: 'InsertRawText', text: '\nabc' },
+    { kind: 'InsertParagraph' },
+    { kind: 'InsertText', text: 'defgh' },
+    {
+      kind: 'Select',
+      anchor: { path: [0], offset: 1, type: 'element' },
+      focus: { path: [1, 0], offset: 4, type: 'text' },
+    },
+    { kind: 'InsertTab' },
+  ]);
+});
+
+test('identical selected-text replacement still publishes write metadata', async () => {
+  await replay([
+    { kind: 'InsertText', text: 'eא́\u2028א' },
+    {
+      kind: 'Select',
+      anchor: { path: [], offset: 1, type: 'element' },
+      focus: { path: [0, 0], offset: 4, type: 'text' },
+    },
+    { kind: 'InsertText', text: 'א' },
+  ]);
+});
+
+test('D-11 stale text offset rejects and rolls back the complete transaction', async () => {
+  await replay([
+    { kind: 'InsertParagraph' },
+    { kind: 'InsertParagraph' },
+    { kind: 'InsertText', text: 'ahttps://example.com' },
+    { kind: 'FormatText', format: 'bold' },
+    { kind: 'InsertText', text: 'a' },
+    {
+      kind: 'Select',
+      anchor: { path: [0], offset: 0, type: 'element' },
+      focus: { path: [2, 0], offset: 18, type: 'text' },
+    },
+    { kind: 'RemoveText' },
+  ]);
+});

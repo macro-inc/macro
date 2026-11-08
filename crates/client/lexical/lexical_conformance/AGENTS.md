@@ -27,13 +27,13 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; the expanded corpus reports unsupported or divergent markdown cases explicitly.
-- Apply declared D6 projection only to code child JSON and code-range positions; retain exact allocation, alias, dirty, normalized, commit and non-code comparisons. Never create syntax-highlight nodes or fabricate plugin behavior.
+- Apply legacy codeHighlight projection to JSON and code positions only. For fixtures registering Prism, use the named d6_collapse_code_highlight projection described in README.md; replay real code-indentation handlers and never create syntax-highlight nodes.
 - Table node fixtures use concrete table payloads; expanded-corpus gaps remain explicit.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
 - Decode inline markdown transformer objects with their real regexes and checked callback tapes; nullable import matchers disable import matching.
-- Route TabIndentation registration through rich-node tab handlers and preserve critical indent priority over rich text; live Prism registration remains an explicit gap.
+- Route TabIndentation and Prism registration through rich-node tab/code handlers, preserving critical indent priority over code and rich text; leave tokenization to the view.
 - Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
 
 - Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.
