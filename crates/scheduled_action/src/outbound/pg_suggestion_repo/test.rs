@@ -212,7 +212,7 @@ async fn sweeps_take_people_who_read_recently_each_once_per_interval(pool: PgPoo
     );
     let mut taken = [first.unwrap(), second.unwrap()].concat();
     taken.sort_by(|x, y| x.as_ref().cmp(y.as_ref()));
-    assert_eq!(taken, [a.clone()]);
+    assert_eq!(taken, std::slice::from_ref(&a));
     // Looked at, so not again within the interval.
     assert!(
         repo.take_checks(active_since, checked_before, now, 10)
@@ -225,7 +225,7 @@ async fn sweeps_take_people_who_read_recently_each_once_per_interval(pool: PgPoo
         repo.take_checks(active_since, later - TimeDelta::hours(1), later, 10)
             .await
             .unwrap(),
-        [a.clone()]
+        std::slice::from_ref(&a)
     );
     // A pending generation can be claimed.
     assert!(
