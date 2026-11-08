@@ -15317,6 +15317,9 @@
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_ports"
     ],
+    "xtask_local_telemetry": [
+      "tooling/xtask/crates/xtask_local_telemetry"
+    ],
     "xtask_nextest_filter": [
       "tooling/xtask/crates/xtask_graph",
       "tooling/xtask/crates/xtask_nextest_filter",
