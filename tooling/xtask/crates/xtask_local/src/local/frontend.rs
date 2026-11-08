@@ -240,7 +240,15 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                 Ok(())
             })?;
             let cached = cached.context("frontend bundle was not cached")?;
-            let reading = content_key::read_lock(&cached)?;
+            // Pruning never picks the newest bundle, but recheck under the
+            // lock rather than stage from an entry that went away.
+            let reading = content_key::read_lock(&cached)
+                .with_context(|| format!("locking {}", cached.display()))?;
+            anyhow::ensure!(
+                cached.join("index.html").exists(),
+                "frontend bundle {} was removed before it could be staged",
+                cached.display()
+            );
             (cached, reading)
         }
     };

@@ -77,12 +77,9 @@ pub fn install_entry(tmp: &Path, entry: &Path, is_complete: impl Fn(&Path) -> bo
 /// Hold a key's lock shared while reading its entry (a snapshot restore, a
 /// bundle being staged), so pruning can't remove it meanwhile. Released when
 /// the returned file drops.
-pub fn read_lock(entry: &Path) -> Result<std::fs::File> {
-    let lock_path = entry.with_extension("lock");
-    let lock = std::fs::File::create(&lock_path)
-        .with_context(|| format!("creating {}", lock_path.display()))?;
-    lock.lock_shared()
-        .with_context(|| format!("locking {}", lock_path.display()))?;
+pub fn read_lock(entry: &Path) -> std::io::Result<std::fs::File> {
+    let lock = std::fs::File::create(entry.with_extension("lock"))?;
+    lock.lock_shared()?;
     Ok(lock)
 }
 

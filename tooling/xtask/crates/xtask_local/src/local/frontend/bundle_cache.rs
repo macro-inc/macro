@@ -56,14 +56,18 @@ pub fn root_dir() -> Result<PathBuf> {
 /// The key for a bundle built in `repo` by `build`: the command's own env
 /// overrides plus the matching process env, and the inputs' content.
 pub fn key(repo: &Path, build: &Command) -> Result<String> {
-    let mut env: BTreeMap<String, String> = std::env::vars()
-        .filter(|(name, _)| name.starts_with("VITE_") || BUILD_ENV.contains(&name.as_str()))
+    // `vars_os`: `vars` panics on any variable that isn't valid Unicode.
+    let relevant = |name: &std::ffi::OsStr| {
+        let name = name.to_string_lossy();
+        name.starts_with("VITE_") || BUILD_ENV.contains(&name.as_ref())
+    };
+    let mut env: BTreeMap<std::ffi::OsString, std::ffi::OsString> = std::env::vars_os()
+        .filter(|(name, _)| relevant(name))
         .collect();
     for (name, value) in build.get_envs() {
-        let name = name.to_string_lossy().into_owned();
         match value {
-            Some(value) => env.insert(name, value.to_string_lossy().into_owned()),
-            None => env.remove(&name),
+            Some(value) => env.insert(name.to_owned(), value.to_owned()),
+            None => env.remove(name),
         };
     }
 
@@ -75,7 +79,10 @@ pub fn key(repo: &Path, build: &Command) -> Result<String> {
         h.update(arg.as_encoded_bytes());
     }
     for (name, value) in &env {
-        h.update(format!("\0{name}={value}").as_bytes());
+        h.update(b"\0");
+        h.update(name.as_encoded_bytes());
+        h.update(b"=");
+        h.update(value.as_encoded_bytes());
     }
     h.update(content_key::tracked(repo, INPUTS)?);
     for path in ignored_inputs(repo)? {
@@ -141,7 +148,8 @@ pub fn lookup(key: &str) -> Result<Option<(PathBuf, std::fs::File)>> {
     if !entry.join("index.html").exists() {
         return Ok(None);
     }
-    let reading = content_key::read_lock(&entry)?;
+    let reading =
+        content_key::read_lock(&entry).with_context(|| format!("locking {}", entry.display()))?;
     if !entry.join("index.html").exists() {
         return Ok(None);
     }

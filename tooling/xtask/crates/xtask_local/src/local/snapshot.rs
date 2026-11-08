@@ -178,10 +178,26 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
     stage.run_step(
         &format!("Restoring init snapshot ({})", plan.short_key()),
         || {
-            // Held while reading, so pruning can't remove it meanwhile. A
-            // read-only baked store (MACRO_STACK_SNAPSHOT_DIR) can't hold a lock
-            // file, and nothing prunes it, so restore without one there.
-            let _reading = super::content_key::read_lock(&dir).ok();
+            // Held while reading, so pruning can't remove it meanwhile. A store
+            // this user can't write to (a read-only baked
+            // MACRO_STACK_SNAPSHOT_DIR) can't hold a lock file, and for the same
+            // reason this user can't prune it, so restore without one there.
+            let _reading = match super::content_key::read_lock(&dir) {
+                Ok(lock) => Some(lock),
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::PermissionDenied
+                            | std::io::ErrorKind::ReadOnlyFilesystem
+                    ) =>
+                {
+                    None
+                }
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("locking snapshot {}", dir.display()));
+                }
+            };
             mark_used(&dir);
             for (archive, _) in &pairs {
                 if !dir.join(archive).exists() {
