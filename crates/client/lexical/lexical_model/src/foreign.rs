@@ -6,6 +6,9 @@ mod read;
 pub use read::{ForeignReadContext, ForeignReadLease, ForeignReadSnapshot, ForeignRecordIdentity};
 pub(crate) use read::{ReadOrigin, ReadOriginRef, ReadProjections, RecordIdentityMarker};
 
+mod clone;
+pub use clone::ForeignCloneContext;
+
 mod failure;
 pub use failure::ForeignReadOperation;
 

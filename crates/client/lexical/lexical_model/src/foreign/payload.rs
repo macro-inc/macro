@@ -100,7 +100,9 @@ pub(crate) fn clone_payload(
     key: NodeKey,
     original: NodeKey,
     data: &Arc<dyn AnyNodeData>,
+    source: Option<ForeignReadSnapshot>,
 ) -> Option<Arc<dyn AnyNodeData>> {
+    let _scope = super::clone::Scope::enter(source);
     if let Some(payload) = data.as_any().downcast_ref::<ForeignPayload>() {
         let fields = &payload.user;
         let mut entry = registry.node(index);

@@ -181,8 +181,32 @@ impl<'editor> Transaction<'editor> {
         }
         self.pending.remove_record(key);
     }
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn foreign_clone_source(
+        &mut self,
+        key: NodeKey,
+    ) -> Result<Option<ForeignReadSnapshot>, Error> {
+        let record = self
+            .pending
+            .nodes
+            .get_mut(&key)
+            .ok_or(Error::NodeNotFound(key))?;
+        if Arc::strong_count(record) > 1
+            && self
+                .pending
+                .registry
+                .registered(record.type_index)
+                .foreign
+                .is_some()
+        {
+            return self.view().snapshot_for_foreign_read().map(Some);
+        }
+        Ok(None)
+    }
     pub(crate) fn writable(&mut self, key: NodeKey) -> Result<&mut NodeSlot, Error> {
         self.mark_dirty(key)?;
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = self.foreign_clone_source(key)?;
         let slot = self
             .pending
             .nodes
@@ -196,6 +220,7 @@ impl<'editor> Transaction<'editor> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
             #[cfg(feature = "foreign-nodes")]
             ForeignReadOperation::check()?;
@@ -233,6 +258,8 @@ impl<'editor> Transaction<'editor> {
                 .insert(key, DirtyIntent::AncestorOfDirty);
             ancestor = self.parent(key);
         }
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = self.foreign_clone_source(key)?;
         let slot = self
             .pending
             .nodes
@@ -251,6 +278,7 @@ impl<'editor> Transaction<'editor> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
             #[cfg(feature = "foreign-nodes")]
             ForeignReadOperation::check()?;
@@ -492,6 +520,12 @@ impl<'editor> Transaction<'editor> {
             .is_some();
         #[cfg(not(feature = "foreign-nodes"))]
         let foreign = false;
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = if foreign {
+            Some(self.view().snapshot_for_foreign_read()?)
+        } else {
+            None
+        };
         let data = if foreign {
             original.data.clone()
         } else {
@@ -515,6 +549,7 @@ impl<'editor> Transaction<'editor> {
                 copy,
                 key,
                 &original.data,
+                clone_source,
             )
         {
             self.writable(copy)?.data = data;

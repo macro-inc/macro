@@ -303,6 +303,8 @@ impl Transaction<'_> {
         self.retire_foreign_selection();
         self.pending = state.pending();
         for key in self.pending.nodes.keys().copied().collect::<Vec<_>>() {
+            #[cfg(feature = "foreign-nodes")]
+            let clone_source = self.foreign_clone_source(key)?;
             let slot = self
                 .pending
                 .nodes
@@ -315,6 +317,7 @@ impl Transaction<'_> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
             #[cfg(feature = "foreign-nodes")]
             ForeignReadOperation::check()?;
