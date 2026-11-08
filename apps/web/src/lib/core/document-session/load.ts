@@ -1,6 +1,6 @@
 import { Telemetry } from '@macro-inc/observability';
 
-type SessionModule = typeof import('./wasm/document_session_wasm');
+type SessionModule = typeof import('@macro-inc/collaboration/session/wasm');
 let pending: Promise<SessionModule> | undefined;
 /** Main-thread initialization shared by editors; a failed offline fetch may retry. */
 export function loadDocumentSession(): Promise<SessionModule> {

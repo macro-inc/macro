@@ -17,6 +17,8 @@ Storage remains compatible with v1 macro-document-wal and macro-document-snapsho
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
+Keep wasm.generated.d.ts synchronized with wasm-pack; the build recipe copies it
+so clean checkouts can type-check before compiling the binary.
 
 ## Checks
 

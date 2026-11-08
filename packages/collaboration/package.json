@@ -11,6 +11,9 @@
     "./websocket": "./src/websocket/index.ts",
     "./websocket/*": "./src/websocket/*.ts",
     "./session/*": "./src/session/*.ts",
+    "./session/wasm": {
+      "types": "./src/session/wasm.generated.d.ts"
+    },
     "./forms/*": "./src/forms/*.ts"
   },
   "scripts": {
