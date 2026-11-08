@@ -48,6 +48,7 @@ agent_correlation = { workspace = true }
 activity = { workspace = true }
 anyhow = { workspace = true }
 bot_id = { workspace = true }
+channel_id = { workspace = true }
 channel_sender = { workspace = true }
 entity_mutation = { workspace = true, optional = true }
 chrono = { workspace = true }

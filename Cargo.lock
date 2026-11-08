@@ -4423,6 +4423,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "channel_labels"
 version = "0.1.0"
 dependencies = [
@@ -4468,6 +4478,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bot_id",
+ "channel_id",
  "channel_sender",
  "chrono",
  "entity_access",
@@ -4512,6 +4523,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "channel_id",
  "channels",
  "chrono",
  "entity_access",
@@ -14180,6 +14192,7 @@ dependencies = [
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
+ "channel_id",
  "channel_sender",
  "chrono",
  "document_sub_type",
@@ -18287,6 +18300,7 @@ dependencies = [
  "bot_id",
  "bots",
  "call",
+ "channel_id",
  "channel_sender",
  "channels",
  "chrono",

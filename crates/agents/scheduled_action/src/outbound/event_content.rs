@@ -10,6 +10,7 @@ use call::domain::{
     models::{CallError, CallRecord},
     ports::CallRecordReader,
 };
+use channel_id::ChannelId;
 use channels::domain::{
     models::{ChannelMetadata, ChannelType},
     ports::ChannelService,
@@ -234,7 +235,7 @@ where
     ) -> Result<EventContent, Report> {
         let channel = self
             .channels
-            .get_channel_metadata(entity_id(event)?, owner.clone())
+            .get_channel_metadata(ChannelId(entity_id(event)?), owner.clone())
             .await
             .map_err(|error| Report::new(error).into_dynamic())?;
         let Some(message_id) = event.message_id() else {

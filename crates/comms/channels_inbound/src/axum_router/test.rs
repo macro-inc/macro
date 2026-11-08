@@ -4,6 +4,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
+use channel_id::ChannelId;
 use channels::domain::models::{
     Activity, ActivityType, ChannelAttachment, ChannelParticipant, GetOrCreateChannelResponse,
     GetOrCreateDmRequest, GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest,
@@ -276,7 +277,7 @@ impl ChannelService for MockService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
@@ -290,7 +291,7 @@ impl ChannelService for MockService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         Ok(vec![])
     }
@@ -362,7 +363,7 @@ impl ChannelService for ErrorService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
@@ -372,7 +373,7 @@ impl ChannelService for ErrorService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
@@ -408,7 +409,7 @@ impl ChannelService for ParticipantsService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
@@ -422,8 +423,9 @@ impl ChannelService for ParticipantsService {
 
     async fn get_channel_participants(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        let channel_id = channel_id.0;
         Ok(vec![
             ChannelParticipant {
                 channel_id,
@@ -492,7 +494,7 @@ impl ChannelService for JoinLinkService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<ChannelAttachmentType>,
@@ -502,7 +504,7 @@ impl ChannelService for JoinLinkService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         unimplemented!()
     }
@@ -526,8 +528,9 @@ impl ChannelService for JoinLinkService {
 
     async fn get_channel_join_code(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<ChannelJoinCodeResponse, ChannelMutationErr> {
+        let channel_id = channel_id.0;
         self.requested_channel_ids.lock().unwrap().push(channel_id);
         if self.forbidden_channel_ids.contains(&channel_id) {
             return Err(ChannelMutationErr::Forbidden(
@@ -571,9 +574,10 @@ impl ChannelService for RecordingMutationService {
     async fn share_referenced_items_with_channel(
         &self,
         actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let channel_id = channel_id.0;
         let outcome = self.share_outcome.unwrap_or(ReferenceShareOutcome::Shared);
         let results = items
             .iter()
@@ -604,7 +608,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: models_pagination::Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<ChannelAttachmentType>,
@@ -618,7 +622,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         Ok(vec![])
     }
@@ -669,7 +673,7 @@ impl ChannelService for RecordingMutationService {
     async fn delete_channel(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
     }
@@ -677,7 +681,7 @@ impl ChannelService for RecordingMutationService {
     async fn add_participants(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _req: AddParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
@@ -686,7 +690,7 @@ impl ChannelService for RecordingMutationService {
     async fn remove_participants(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
@@ -695,8 +699,9 @@ impl ChannelService for RecordingMutationService {
     async fn join_channel(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         self.joins.lock().unwrap().push((actor, channel_id));
         Ok(())
     }
@@ -704,7 +709,7 @@ impl ChannelService for RecordingMutationService {
     async fn leave_channel(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
     }
@@ -1456,7 +1461,7 @@ impl ChannelService for ActivityService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
@@ -1470,7 +1475,7 @@ impl ChannelService for ActivityService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         Ok(vec![])
     }
