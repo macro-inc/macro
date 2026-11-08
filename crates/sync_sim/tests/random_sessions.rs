@@ -101,3 +101,6 @@ fn random_sessions_converge() {
         .collect::<Vec<_>>();
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+#[path = "gate_parity.rs"]
+mod gate_parity;

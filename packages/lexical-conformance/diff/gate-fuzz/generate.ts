@@ -5,6 +5,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { plugin } from 'bun';
+import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
+
+type GateNode = SerializedLexicalNode & {
+  [field: string]: unknown;
+  children?: GateNode[];
+  text?: string;
+  format?: string | number;
+  style?: string;
+  mode?: string;
+  detail?: number;
+  language?: string;
+  $?: Record<string, unknown>;
+};
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const output = process.argv[2];
@@ -63,7 +76,7 @@ function random() {
   rng ^= rng << 5;
   return rng >>> 0;
 }
-function walk(node, out = []) {
+function walk(node: GateNode, out: GateNode[] = []): GateNode[] {
   if (node && typeof node === 'object') {
     out.push(node);
     if (Array.isArray(node.children))
@@ -71,7 +84,7 @@ function walk(node, out = []) {
   }
   return out;
 }
-function observe(before, after) {
+function observe(before: SerializedEditorState, after: SerializedEditorState) {
   try {
     return {
       commentOnly: isCommentOnlyChange(before, after),
@@ -82,6 +95,17 @@ function observe(before, after) {
     return { throws: true };
   }
 }
+let sourceErrors: string[] = [];
+export type SourceErrorRow = { index: number; errors: string[] };
+const sourceErrorRows: SourceErrorRow[] = [];
+const sourceConsoleError = console.error;
+console.error = (...args: unknown[]) => {
+  sourceErrors.push(
+    args
+      .map((value) => (value instanceof Error ? value.message : String(value)))
+      .join(' ')
+  );
+};
 const lines: string[] = [];
 for (let index = 0; index < 20000; index++) {
   const seed = seedPairs[index % seedPairs.length];
@@ -94,7 +118,9 @@ for (let index = 0; index < 20000; index++) {
   if (index >= 12) {
     const nodes = walk(after.root);
     const node = nodes[random() % nodes.length];
-    const text = nodes.find((value) => value.type === 'text');
+    const text = nodes.find(
+      (value): value is GateNode & { text: string } => value.type === 'text'
+    );
     const mutation = index % 20;
     switch (mutation) {
       case 0:
@@ -136,6 +162,7 @@ for (let index = 0; index < 20000; index++) {
       case 10:
         if (text) {
           const parent = nodes.find((value) => value.children?.includes(text));
+          if (!parent?.children) throw new Error('Text fixture has no parent');
           const at = parent.children.indexOf(text);
           let split = random() % (text.text.length + 1);
           if (
@@ -218,11 +245,15 @@ for (let index = 0; index < 20000; index++) {
         break;
     }
   }
+  sourceErrors = [];
   lines.push(
     JSON.stringify({ index, before, after, expected: observe(before, after) })
   );
+  sourceErrorRows.push({ index, errors: sourceErrors });
 }
+console.error = sourceConsoleError;
 writeFileSync(output, lines.join('\n') + '\n');
+writeFileSync(output + '.errors.json', JSON.stringify(sourceErrorRows));
 console.log(
   `Checked 12 service seeds and generated ${lines.length} gate oracle cases`
 );

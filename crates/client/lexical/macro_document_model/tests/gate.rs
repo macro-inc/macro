@@ -12,6 +12,7 @@ struct Divergence {
     oracle_sha256: String,
     error: String,
     source_comment_only: bool,
+    source_errors: Vec<String>,
 }
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -46,6 +47,23 @@ fn gate_matches_twenty_thousand_service_oracle_cases() -> Result<()> {
         );
     }
     let rows = std::fs::read_to_string(&output).expect("generated oracle");
+    #[derive(Deserialize)]
+    struct SourceErrors {
+        index: usize,
+        errors: Vec<String>,
+    }
+    let mut source_errors: BTreeMap<_, _> = serde_json::from_str::<Vec<SourceErrors>>(
+        &std::fs::read_to_string(format!("{}.errors.json", output.display()))
+            .expect("generated source errors"),
+    )?
+    .into_iter()
+    .map(|row| (row.index, row.errors))
+    .collect();
+    assert_eq!(
+        source_errors.len(),
+        20_000,
+        "complete source error observations"
+    );
     let context = DocumentContext {
         clock: NodeClock(Arc::new(|| 1794052800000)),
         random: NodeRandom(Arc::new(|size| vec![0; size])),
@@ -64,6 +82,9 @@ fn gate_matches_twenty_thousand_service_oracle_cases() -> Result<()> {
     let mut counts = [0; 3];
     for line in rows.lines() {
         let case: Case = serde_json::from_str(line)?;
+        let source_errors = source_errors
+            .remove(&case.index)
+            .expect("exact source error observation");
         let observed = (|| -> Result<Value> {
             let before: SerializedEditorState = serde_json::from_value(case.before.clone())?;
             let after: SerializedEditorState = serde_json::from_value(case.after.clone())?;
@@ -81,7 +102,25 @@ fn gate_matches_twenty_thousand_service_oracle_cases() -> Result<()> {
             1
         };
         counts[count] += 1;
+        let partial = !source_errors.is_empty() && case.expected["commentOnly"].is_boolean();
+        assert_eq!(
+            ledger.contains_key(&case.index),
+            partial,
+            "exact source partial-import ledger at {}",
+            case.index
+        );
         if let Some(entry) = ledger.remove(&case.index) {
+            // Native gate stays fail-closed when the source logs a parse error
+            // and continues with a partial document (M2 gate-parity ruling).
+            assert!(
+                !source_errors.is_empty(),
+                "source no longer logs a parse error"
+            );
+            assert_eq!(
+                source_errors, entry.source_errors,
+                "exact source parse errors at {}",
+                case.index
+            );
             assert_eq!(
                 format!("{:x}", Sha256::digest(line.as_bytes())),
                 entry.oracle_sha256,
@@ -116,6 +155,7 @@ fn gate_matches_twenty_thousand_service_oracle_cases() -> Result<()> {
     )
     .expect("failure artifact");
     assert!(ledger.is_empty(), "unused exact divergence entries");
+    assert!(source_errors.is_empty(), "unused source error observations");
     eprintln!(
         "gate accept/reject/throw: {counts:?}; exact fail-closed divergences: {ledger_count}"
     );

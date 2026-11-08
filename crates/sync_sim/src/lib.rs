@@ -28,6 +28,7 @@ pub use router::SimRouter;
 mod server;
 pub use server::SimServer;
 mod client;
+pub mod comment_gate;
 pub use client::SimClient;
 mod world;
 pub use world::Sim;

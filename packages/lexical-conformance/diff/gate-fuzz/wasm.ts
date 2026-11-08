@@ -4,21 +4,31 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isDeepStrictEqual } from 'node:util';
+import divergenceLedger from '../../../../crates/client/lexical/macro_document_model/tests/corpus/gate-divergences.json';
 import { buildWasm, root } from '../build-wasm';
+import type { SourceErrorRow } from './generate';
 
 buildWasm();
 const wasm = createRequire(import.meta.url)(
   '../../pkg/node/lexical_conformance_wasm.js'
 );
 const ledger = new Map(
-  JSON.parse(
-    readFileSync(
-      root +
-        '/crates/client/lexical/macro_document_model/tests/corpus/gate-divergences.json',
-      'utf8'
-    )
-  ).map((entry) => [entry.index, entry])
+  divergenceLedger.map((entry): [number, typeof entry] => [entry.index, entry])
 );
+const sourceErrorRows: SourceErrorRow[] = JSON.parse(
+  readFileSync(
+    root + '/target/lexical-conformance/gate-oracle.jsonl.errors.json',
+    'utf8'
+  )
+);
+const sourceErrors = new Map(
+  sourceErrorRows.map((entry): [number, string[]] => [
+    entry.index,
+    entry.errors,
+  ])
+);
+if (sourceErrors.size !== 20000)
+  throw new Error('Incomplete source error observations');
 const rows = readFileSync(
   root + '/target/lexical-conformance/gate-oracle.jsonl',
   'utf8'
@@ -32,9 +42,17 @@ for (const line of rows) {
     wasm.gate_compare(JSON.stringify(row.before), JSON.stringify(row.after))
   );
   const entry = ledger.get(row.index);
+  const errors = sourceErrors.get(row.index);
+  if (!errors) throw new Error(`Missing source errors: ${row.index}`);
+  sourceErrors.delete(row.index);
+  const partial =
+    errors.length > 0 && typeof row.expected.commentOnly === 'boolean';
+  if (Boolean(entry) !== partial)
+    throw new Error(`Source partial-import ledger changed: ${row.index}`);
   if (entry) {
     if (
       createHash('sha256').update(line).digest('hex') !== entry.oracleSha256 ||
+      !isDeepStrictEqual(errors, entry.sourceErrors) ||
       observed.error !== entry.error ||
       !isDeepStrictEqual(observed.actual, { throws: true }) ||
       row.expected.commentOnly !== entry.sourceCommentOnly ||
@@ -49,7 +67,7 @@ for (const line of rows) {
     );
   }
 }
-if (ledger.size || rows.length !== 20000)
+if (ledger.size || sourceErrors.size || rows.length !== 20000)
   throw new Error('Incomplete oracle or stale ledger');
 console.log(
   `Actual WASM: ${rows.length} strict gate comparisons, ${divergences} exact fail-closed divergences`
