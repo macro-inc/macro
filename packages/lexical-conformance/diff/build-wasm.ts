@@ -133,6 +133,14 @@ export function buildWasm() {
       '--output',
       path.join(out, 'lexical_conformance_wasm_bg.wasm'),
     ]);
+    // Bindgen emits inline snippets as ESM even for its CommonJS entry point.
+    // Node's require(esm) needs an explicit module boundary for those files.
+    const snippets = path.join(out, 'snippets');
+    if (existsSync(snippets))
+      writeFileSync(
+        path.join(snippets, 'package.json'),
+        JSON.stringify({ private: true, type: 'module' })
+      );
     writeFileSync(
       path.join(out, 'package.json'),
       JSON.stringify({

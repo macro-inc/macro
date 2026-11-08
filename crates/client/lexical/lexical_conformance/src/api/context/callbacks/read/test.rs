@@ -458,3 +458,45 @@ fn read_scope_provenance_rejects_other_editors_and_closed_updates_including_open
     assert!(callback.with_read_scope(&fresh, |_| Ok(())).is_err());
     Ok(())
 }
+
+#[test]
+fn read_peer_encodes_source_records_and_consumes_exact_indexed_arguments() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut context = Context::default();
+    let callback = context.callbacks();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let first = tx.create_text("first")?.key();
+    let second = tx.create_text("second")?.key();
+    let handle = callback.node(&tx, first)?;
+    let capture = tx.view().snapshot_for_foreign_read()?;
+    let _arguments = context.frames.arguments.enter(
+        first,
+        ForeignHook::AdjustExportJson,
+        vec![json!("original")],
+    );
+    callback.with_read_scope(&capture, |scope| {
+        assert_eq!(scope.node(first)?, json!({"$h": handle["$h"]}));
+        assert_eq!(
+            scope.original_arguments(second, ForeignHook::AdjustExportJson)?,
+            None
+        );
+        assert_eq!(
+            scope.original_arguments(first, ForeignHook::AdjustExportJson)?,
+            Some(vec![json!("original")])
+        );
+        assert_eq!(
+            scope.original_arguments(first, ForeignHook::AdjustExportJson)?,
+            None
+        );
+        let id = integer(&handle["$h"])? as u32;
+        assert_eq!(scope.read_field(id, "__text")?, "first");
+        Ok(())
+    })?;
+    assert_eq!(tx.view().text_data(first)?.text.as_str(), "first");
+    drop(tx);
+    context.discard_update()?;
+    Ok(())
+}

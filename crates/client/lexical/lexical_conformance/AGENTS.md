@@ -123,3 +123,5 @@ Route lexical.$parseSerializedNode through Transaction::import_node and the norm
 Register the committed selection before the update rollback backup; getPreviousSelection reuses that object token. Own its selection and point handles with the committed version, and reuse existing token slots during hydration. Indexed selectionTransform uses the guarded model vtable; preserve original arguments before computing model-triggered previous/current fallback values.
 
 Gate Session commit_prepared's implicit pipeline pass with Transaction::needs_flush, matching model commit. Explicit flush remains unconditional; a write or queued update after flushing requires another pass.
+
+CallbackRead::node encodes the captured source record in the shared identity store. Consume original pure-hook arguments through that same read capability, never by borrowing an ancestor transaction.

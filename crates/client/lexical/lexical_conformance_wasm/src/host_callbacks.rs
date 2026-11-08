@@ -6,6 +6,7 @@ use lexical_model::{Error, ForeignListenerId, ForeignTransform, NodeKey, Transac
 use serde_json::Value;
 use std::{cell::Cell, sync::Arc};
 use wasm_bindgen::prelude::*;
+mod read;
 
 #[derive(Clone, Default)]
 pub(super) struct Errors(Arc<std::sync::Mutex<Option<HostValue>>>);

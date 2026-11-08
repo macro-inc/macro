@@ -57,3 +57,5 @@ Selection-bearing `insertNewAfter` and `collapseAtStart` hooks retain active/det
 The internal `$parseSerializedNode` entry uses the model import algorithm. Static `importJSON` dispatches with a null node receiver and validates the returned captured handle; child imports and virtual append run after the factory. Native-super import construction and the full static-class facade remain unfinished.
 
 Mutable `selectionTransform` hooks receive the existing previous committed and current active selection handles; the pipeline follows focus movement made by the anchor hook. `$getPreviousSelection` and its point handles retain committed ownership through later update rollback. The full class facade and ordinary selection freezing remain unfinished.
+
+The backend also hosts `exportJSON` with scoped reentrant reads, native-super, opaque exceptions and write/effect rejection. The read peer still rejects inherited selection value writes and originless committed captures; the other pure hooks and complete class facade remain unfinished.

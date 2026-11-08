@@ -105,6 +105,23 @@ impl CallbackRead<'_, '_> {
         Ok(())
     }
 
+    /// Encode a node from this read capture in the shared handle store.
+    pub fn node(&mut self, key: NodeKey) -> Result<Value> {
+        self.validate()?;
+        let value = self.context.replay.node(self.tx.view(), key)?;
+        self.context.encode(value)
+    }
+
+    /// Consume the invoking indexed method's arguments without borrowing its transaction.
+    pub fn original_arguments(
+        &self,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+    ) -> Result<Option<Vec<Value>>> {
+        self.validate()?;
+        Ok(self.context.frames.arguments.take(key, hook))
+    }
+
     /// Dispatch an indexed read or an operation on a newly owned value.
     /// Model write guards reject node mutations before calling foreign hooks.
     pub fn call(&mut self, id: u32, args: Value, receiver: Option<Value>) -> Result<Value> {
