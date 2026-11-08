@@ -28,6 +28,7 @@ import { Avatar, Button, cn } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import {
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   For,
@@ -225,7 +226,7 @@ export function CallOverlay(props: {
   const hasWork = callWork.hasWork;
   const activeTab = callWork.activeTab;
   const workArrivals = callWork.arrivals;
-  const workTab = () => {
+  const workTab = createMemo(() => {
     if (!hasWork()) return undefined;
 
     return (
@@ -235,7 +236,7 @@ export function CallOverlay(props: {
         isSpeaking={isAccountSpeaking}
       />
     );
-  };
+  });
   const openWork = () => {
     workArrivals.dismiss();
     setFocusChatOnOpen(false);
@@ -298,12 +299,12 @@ export function CallOverlay(props: {
     if (selectedPin() && !activePin()) setSelectedPin(undefined);
   });
 
-  const isAccountSpeaking = (accountId: string) => {
+  function isAccountSpeaking(accountId: string) {
     const participant = participants().find(
       (candidate) => tryMacroId(candidate.identity) === accountId
     );
     return participant ? callCtx.isParticipantSpeaking(participant) : false;
-  };
+  }
 
   const hasAnyScreenShare = () =>
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;

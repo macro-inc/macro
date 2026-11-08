@@ -89,7 +89,7 @@ async function open(
 ) {
   if (scenario.fullOverlay) {
     page.on('pageerror', (error) =>
-      console.error('Fixture error:', error.message)
+      console.error('Fixture error:', error.stack)
     );
   }
   const replies = scenario.replies ?? [];
@@ -804,9 +804,56 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
   await checkGeometry();
   if (process.env.CALL_REPRO_DIR)
     await page.screenshot({
-      path: `${process.env.CALL_REPRO_DIR}/${process.env.CALL_REPRO_PHASE ?? 'L95'}-long-thread.png`,
+      path: `${process.env.CALL_REPRO_DIR}/${process.env.CALL_REPRO_PHASE ?? 'L95'}-${testInfo.project.name}-long-thread.png`,
     });
   await page.getByRole('button', { name: /send/i }).click();
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+});
+
+test('rebuilt call discussion survives the conditional Work tab', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  await open(page, 'panel', {
+    status: { state: 'live' },
+    fullOverlay: true,
+    work: 'present',
+    replies: [
+      reply(
+        '00000000-0000-7000-8000-000000000b01',
+        'Preserved call discussion'
+      ),
+    ],
+  });
+  await expect(
+    page.getByText('Preserved call discussion', { exact: true })
+  ).toBeVisible({ timeout: 30000 });
+  const composer = page.locator('[data-input-id^="thread-reply-input"]');
+  await composer.locator('[data-markdown-editable]').fill('Draft across Work');
+  await page.getByText('Work', { exact: true }).click();
+  await expect(
+    page.getByText('Review the draft', { exact: true })
+  ).toBeVisible();
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/L95-8-work.png`,
+    });
+  await page.getByText('Chat', { exact: true }).click();
+  await expect(
+    page.getByText('Preserved call discussion', { exact: true })
+  ).toBeVisible();
+  await expect(composer.locator('[data-markdown-editable]')).toHaveText(
+    'Draft across Work'
+  );
+  const bottom = await page
+    .locator('[data-channel-scroll]')
+    .evaluate((el) => el.getBoundingClientRect().bottom);
+  expect((await composer.boundingBox())!.y).toBeGreaterThanOrEqual(bottom - 1);
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/L95-8-chat.png`,
+    });
 });
