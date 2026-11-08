@@ -1,14 +1,18 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
-import type { ScheduleDraft } from '@app/features/routines/core/draft';
-import type { Knob } from '@app/features/routines/core/knobs';
-import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
+import type {
+  RoutineSuggestion,
+  RoutineSuggestions,
+} from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { CheckoutTerms } from '../core/checkout';
 import type { EmailAccount } from '../core/email-accounts';
+import type {
+  SuggestionEdits,
+  SuggestionRow,
+} from '../core/routine-suggestions';
 
 /** Data availability as a source reports it; primitives decide presentation. */
 export type Loadable<T> =
@@ -165,8 +169,11 @@ export type OnboardingContext = {
   completeOnboarding(options: { skipped: boolean }): Promise<CompletionResult>;
   /** Routine suggestions are on: the flow ends with the routines step. */
   routineSuggestionsEnabled: Accessor<boolean>;
-  /** Starts picking routines from the inbox and tools connected so far. */
-  warmRoutineSuggestions(): void;
+  /**
+   * Starts AI suggesting routines from the inbox just connected, in this
+   * browser's time zone. The server runs it once per person.
+   */
+  generateRoutineSuggestions(): void;
   createRoutinesStep(): RoutinesStepSource;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
@@ -178,24 +185,20 @@ export type OnboardingContext = {
 
 /** The last step's routine suggestions, and how to turn them on. */
 export type RoutinesStepSource = {
-  /** Undefined until loaded; earlier ones stay while a generation runs. */
-  suggestions: Accessor<RoutineSuggestion[] | undefined>;
-  generating: Accessor<boolean>;
+  /** The scheduler's answer; undefined until first read. */
+  answer: Accessor<RoutineSuggestions | undefined>;
+  /** It couldn't be read, and nothing was read before. */
   failed: Accessor<boolean>;
   refresh(): Promise<unknown>;
-  catalog: Accessor<readonly RoutineTemplate[]>;
+  /** How a suggestion reads; undefined when it can't be built here. */
+  row(suggestion: RoutineSuggestion): SuggestionRow | undefined;
   /**
-   * The routine a catalog suggestion becomes with the person's knob
-   * changes; undefined when the catalog doesn't have it.
+   * Creates it, on, recorded as saved from its suggestion; resolves with the
+   * routine's id and rejects on failure.
    */
-  draft(
-    suggestion: Extract<RoutineSuggestion, { kind: 'starter' }>,
-    edits: Record<string, Knob['value']>
-  ): ScheduleDraft | undefined;
-  /** Creates it, on, recorded as saved from its suggestion; rejects on failure. */
   create(
-    suggestion: Extract<RoutineSuggestion, { kind: 'starter' }>,
-    draft: ScheduleDraft
+    suggestion: RoutineSuggestion,
+    edits: SuggestionEdits
   ): Promise<string>;
 };
 

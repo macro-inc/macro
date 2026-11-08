@@ -79,6 +79,17 @@ export function OnboardingFlowView(props: {
     finishing: finish.finishing,
   });
 
+  // AI starts suggesting routines for the last step as soon as an inbox is
+  // connected; the server runs it once per person, so once here is enough.
+  let generationStarted = false;
+  createEffect(() => {
+    if (generationStarted || !context.routineSuggestionsEnabled()) return;
+    const accounts = emailAccounts.accounts();
+    if (accounts.t !== 'ready' || accounts.value.length === 0) return;
+    generationStarted = true;
+    context.generateRoutineSuggestions();
+  });
+
   // Leaving is the host's decision; the flow only reports why.
   createEffect(() => {
     const status = flow.status();
@@ -140,9 +151,6 @@ export function OnboardingFlowView(props: {
   };
   const advance = (outcome: StepOutcome = 'completed') => {
     if (finish.finishing()) return;
-    // Inbox and tools are connected now: start picking routines for the last step.
-    if (step() === 'tools' && context.routineSuggestionsEnabled())
-      context.warmRoutineSuggestions();
     const next = flow.leave(outcome);
     const skipsTeam = passesTeam(next);
     if (skipsTeam)

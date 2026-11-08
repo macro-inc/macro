@@ -101,6 +101,23 @@ export type AppEvents = {
     recommended: number;
     enabled: number;
     recommended_kept: number;
+    /** Of those turned on, how many AI suggested for the person. */
+    for_you_enabled: number;
+  };
+  /** The last step's list settled: AI finished, or the wait ran out. */
+  onboarding_v4_routines_shown: {
+    shown: number;
+    /** Suggested by AI for the person, not Macro's templates. */
+    for_you: number;
+    on_by_default: number;
+    /** AI gave none in time, so only Macro's templates showed. */
+    fallback: boolean;
+    /** The wait ran out before AI finished. */
+    waited_out: boolean;
+    /** The generation's status when it settled. */
+    status: string;
+    /** From the step opening to AI's first suggestion showing; null if none did. */
+    first_suggestion_ms: number | null;
   };
   /** What happened on the team step. */
   onboarding_v4_team: {

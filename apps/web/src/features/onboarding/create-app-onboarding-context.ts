@@ -1,5 +1,4 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import { useRoutineSuggestionsEnabled } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
@@ -7,6 +6,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { idToDisplayName, idToEmail } from '@core/user/util';
+import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -59,8 +59,9 @@ import {
 import { loadableQuery } from './queries/loadable-query';
 import {
   createAppRoutinesStep,
-  warmRoutineSuggestions,
-} from './queries/routines-step';
+  generateRoutineSuggestions,
+  useRoutineSuggestionsEnabled,
+} from './queries/routine-suggestions';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
 
@@ -414,7 +415,15 @@ export function createAppOnboardingContext(): OnboardingContext {
       return { t: 'completed' };
     },
     routineSuggestionsEnabled,
-    warmRoutineSuggestions,
+    generateRoutineSuggestions: () =>
+      fireAndForget(
+        Telemetry.span('onboarding.routines.generate', async (span) => {
+          const answer = await generateRoutineSuggestions(getDefaultTimezone());
+          span.setAttr('routines.status', answer.status);
+          span.setAttr('routines.suggestions', answer.suggestions.length);
+        }),
+        'onboarding.routines'
+      ),
     createRoutinesStep: createAppRoutinesStep,
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();

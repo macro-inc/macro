@@ -1,11 +1,10 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
-import { starterSuggestionDraft } from '@app/features/routine-suggestions/core/suggestion-draft';
 import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
 import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
 import { TEST_CATALOG } from '@app/features/routines/tests/catalog';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
+import type { RoutineSuggestions } from '@service-scheduled-action/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -19,6 +18,10 @@ import type {
   ViewerState,
 } from '../context/onboarding-context';
 import type { EmailAccount } from '../core/email-accounts';
+import {
+  catalogSuggestionDraft,
+  suggestionByline,
+} from '../core/routine-suggestions';
 import {
   nativeToolSlug,
   onboardingConnectedTools,
@@ -58,8 +61,8 @@ export type FakeOnboardingWorld = {
   accent: string | undefined;
   /** Suggestions are on, so the flow ends with the routines step. */
   routineSuggestionsEnabled: boolean;
-  /** The last step's suggestions; undefined while they're picked. */
-  routineSuggestions: RoutineSuggestion[] | undefined;
+  /** The scheduler's answer; undefined until it is first read. */
+  routineSuggestions: RoutineSuggestions | undefined;
   routineCatalog: RoutineTemplate[];
   /** Suggestions whose routine fails to be created. */
   routineCreateFailures: string[];
@@ -148,7 +151,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookDelayPolls: 1,
     accent: undefined,
     routineSuggestionsEnabled: false,
-    routineSuggestions: [],
+    routineSuggestions: { status: 'none', suggestions: [] },
     routineCatalog: TEST_CATALOG,
     routineCreateFailures: [],
     routinesCreated: [],
@@ -400,31 +403,42 @@ export function createFakeOnboarding(
       return { t: 'completed' };
     },
     routineSuggestionsEnabled: () => world.routineSuggestionsEnabled,
-    warmRoutineSuggestions: () => call('warmRoutineSuggestions'),
+    generateRoutineSuggestions: () => call('generateRoutineSuggestions'),
     createRoutinesStep: () => ({
-      suggestions: () => world.routineSuggestions,
-      generating: () => world.routineSuggestions === undefined,
+      answer: () => world.routineSuggestions,
       failed: () => false,
       refresh: async () => call('refreshRoutineSuggestions'),
-      catalog: () => world.routineCatalog,
-      draft: (suggestion, edits) => {
+      row: (suggestion) => {
+        const byline = suggestionByline(suggestion);
+        const surface = suggestion.surfaces[0] ?? 'agents';
+        if (suggestion.kind === 'routine')
+          return {
+            id: suggestion.id,
+            surface,
+            title: suggestion.routine.name,
+            does: suggestion.routine.description ?? '',
+            byline,
+          };
         const entry = world.routineCatalog.find(
           (routine) => routine.key === suggestion.key
         );
         if (!entry) return undefined;
-        return starterSuggestionDraft(
-          { ...suggestion, knobs: { ...suggestion.knobs, ...edits } },
+        const draft = catalogSuggestionDraft(
+          suggestion,
           entry,
           { ...createEmptyDraft('model'), triggers: [], enabled: true },
-          {
-            target: { kind: 'model', model: 'model' },
-            codeSteps: true,
-            workspace: { tag: [], channel: [], label: [] },
-          }
-        ).draft;
+          { target: { kind: 'model', model: 'model' }, codeSteps: true }
+        );
+        return {
+          id: suggestion.id,
+          surface,
+          title: entry.title,
+          does: draft.description || entry.description,
+          byline,
+        };
       },
-      create: async (suggestion) => {
-        call(`createRoutine:${suggestion.id}`);
+      create: async (suggestion, edits) => {
+        call(`createRoutine:${suggestion.id}:${edits.name}`);
         if (world.routineCreateFailures.includes(suggestion.id))
           throw new Error('create failed');
         update((draft) => {

@@ -1,6 +1,8 @@
+import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CheckoutReturn } from '../core/checkout';
+import type { EmailAccount } from '../core/email-accounts';
 import type { OnboardingStep } from '../core/steps';
 import {
   readSavedStep,
@@ -17,6 +19,54 @@ import {
   stubOnboardingBrowser,
 } from '../tests/render';
 import { OnboardingFlowView } from './onboarding-flow-view';
+
+function catalogSuggestion(
+  id: string,
+  key: string,
+  options: {
+    onByDefault?: boolean;
+    from?: 'for_you' | 'macro';
+    reason?: string;
+  } = {}
+): RoutineSuggestion {
+  const from = options.from ?? 'for_you';
+  return {
+    id,
+    kind: 'catalog',
+    key,
+    knobs: {},
+    from,
+    surfaces: ['email'],
+    reason: from === 'for_you' ? (options.reason ?? null) : null,
+    keepProbability: from === 'for_you' ? 0.9 : null,
+    onByDefault: options.onByDefault ?? false,
+  };
+}
+
+function inbox(address: string): EmailAccount {
+  return { address, isPrimary: true, ownerId: FAKE_VIEWER_ID };
+}
+
+function draftedSuggestion(id: string, name: string): RoutineSuggestion {
+  return {
+    id,
+    kind: 'routine',
+    routine: {
+      name,
+      description: 'Every Friday, list the week’s deliveries.',
+      kind: 'Agent',
+      trigger: { type: 'events', filters: [{ events: ['task.created'] }] },
+      task: { steps: [] },
+      enabled: false,
+    },
+    from: 'for_you',
+    surfaces: ['crm'],
+    reason: 'Suppliers write every week.',
+    keepProbability: 0.95,
+    // Even marked, a drafted routine is never switched on for the person.
+    onByDefault: true,
+  };
+}
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -752,61 +802,166 @@ describe('onboarding flow', () => {
     ).toBeTruthy();
   });
 
-  it('ends with routines: safe ones on, each reviewed in place, and only the chosen turned on', async () => {
-    const starter = (
-      id: string,
-      key: string,
-      keepProbability: number,
-      safeDefault: boolean
-    ) => ({
-      id,
-      kind: 'starter' as const,
-      key,
-      knobs: {},
-      surface: 'email' as const,
-      reason: 'You get a lot of mail.',
-      keepProbability,
-      safeDefault,
-    });
+  it('ends with routines: AI’s picks marked on by default, drafted ones off, and only the chosen turned on', async () => {
     const { fake, navigate } = setup({
       resume: 'routines',
       world: {
         routineSuggestionsEnabled: true,
-        routineSuggestions: [
-          starter('sort', 'inbox', 0.9, true),
-          starter('triage', 'triage', 0.85, true),
-          // AI is sure, but it posts where others see it: off until chosen.
-          starter('updates', 'updates', 0.99, false),
-          {
-            id: 'digest',
-            kind: 'request',
-            title: 'Supplier digest',
-            request: 'Every Friday, list deliveries.',
-            surface: 'crm',
-            reason: 'Suppliers write every week.',
-            keepProbability: 0.99,
-            safeDefault: false,
-          },
-        ],
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            // Marked on by default, but drafted: never switched on.
+            draftedSuggestion('digest', 'Supplier digest'),
+            catalogSuggestion('sort', 'inbox', {
+              onByDefault: true,
+              reason: 'You get a lot of newsletters.',
+            }),
+            catalogSuggestion('triage', 'triage', { onByDefault: true }),
+            // A third marked on by default is past the cap of two.
+            catalogSuggestion('brief', 'brief', { onByDefault: true }),
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
       },
     });
     await heading('Put your busywork on autopilot.');
-    // Requests need drafting, so they wait for the sidebars.
-    expect(screen.queryByText('Supplier digest')).toBeNull();
     expect(
-      screen.getByRole('switch', { name: 'Turn on Share updates' })
-    ).toHaveProperty('checked', false);
-    fireEvent.click(
-      screen.getByRole('switch', { name: 'Turn on Triage new tasks' })
-    );
-    click('Turn on 1 routine');
+      screen.getByText('For you · You get a lot of newsletters.')
+    ).toBeTruthy();
+    expect(screen.getByText('Template from Macro')).toBeTruthy();
+    const toggle = (name: string) =>
+      screen.getByRole('switch', { name: `Turn on ${name}` });
+    expect(toggle('Sort my inbox')).toHaveProperty('checked', true);
+    expect(toggle('Triage new tasks')).toHaveProperty('checked', true);
+    expect(toggle('Morning brief')).toHaveProperty('checked', false);
+    expect(toggle('Supplier digest')).toHaveProperty('checked', false);
+    expect(toggle('Share updates')).toHaveProperty('checked', false);
+    fireEvent.click(toggle('Triage new tasks'));
+    fireEvent.click(toggle('Supplier digest'));
+    click('Turn on 2 routines');
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
-    expect(fake.world.routinesCreated).toEqual(['sort']);
+    expect(fake.world.routinesCreated).toEqual(['digest', 'sort']);
     expect(fake.calls()).toContain('completeOnboarding');
     expect(fake.events()).toContainEqual({
       event: 'onboarding_v4_routines',
-      data: { suggested: 3, recommended: 2, enabled: 1, recommended_kept: 1 },
+      data: {
+        suggested: 5,
+        recommended: 2,
+        enabled: 2,
+        recommended_kept: 1,
+        for_you_enabled: 2,
+      },
     });
+  });
+
+  it('shows AI’s suggestions as they arrive, then falls back to Macro’s templates after the wait', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const template = catalogSuggestion('updates', 'updates', {
+        from: 'macro',
+      });
+      const { fake } = setup({
+        resume: 'routines',
+        world: {
+          routineSuggestionsEnabled: true,
+          routineSuggestions: { status: 'generating', suggestions: [template] },
+        },
+      });
+      await heading('Put your busywork on autopilot.');
+      // Templates wait while AI is suggesting.
+      expect(screen.queryByText('Share updates')).toBeNull();
+      expect(
+        screen.getByText(/Studying your workspace to suggest routines/)
+      ).toBeTruthy();
+      fake.update((draft) => {
+        draft.routineSuggestions = {
+          status: 'generating',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
+            template,
+          ],
+        };
+      });
+      await screen.findByText('Sort my inbox');
+      expect(screen.getByText('Finding more routines for you…')).toBeTruthy();
+      fake.update((draft) => {
+        draft.routineSuggestions = {
+          status: 'generating',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
+            catalogSuggestion('stuck', 'stuck', { reason: 'Tasks pile up.' }),
+            template,
+          ],
+        };
+      });
+      await screen.findByText('Chase stuck tasks');
+      expect(screen.queryByText('Share updates')).toBeNull();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.findByText('Share updates');
+      expect(screen.queryByText('Finding more routines for you…')).toBeNull();
+      expect(fake.events()).toContainEqual({
+        event: 'onboarding_v4_routines_shown',
+        data: expect.objectContaining({
+          shown: 3,
+          for_you: 2,
+          fallback: false,
+          waited_out: true,
+          status: 'generating',
+        }),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('falls back to Macro’s templates when AI gave none in time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { fake } = setup({
+        resume: 'routines',
+        world: {
+          routineSuggestionsEnabled: true,
+          routineSuggestions: {
+            status: 'generating',
+            suggestions: [
+              catalogSuggestion('updates', 'updates', { from: 'macro' }),
+            ],
+          },
+        },
+      });
+      await heading('Put your busywork on autopilot.');
+      expect(screen.queryByText('Share updates')).toBeNull();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.findByText('Share updates');
+      expect(fake.events()).toContainEqual({
+        event: 'onboarding_v4_routines_shown',
+        data: expect.objectContaining({
+          for_you: 0,
+          fallback: true,
+          first_suggestion_ms: null,
+        }),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows templates at once without an inbox', async () => {
+    setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'none',
+          suggestions: [
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    expect(screen.getByText('Share updates')).toBeTruthy();
+    expect(screen.getByText('Template from Macro')).toBeTruthy();
   });
 
   it('keeps a routine that failed to turn on and retries only it', async () => {
@@ -815,28 +970,13 @@ describe('onboarding flow', () => {
       world: {
         routineSuggestionsEnabled: true,
         routineCreateFailures: ['triage'],
-        routineSuggestions: [
-          {
-            id: 'sort',
-            kind: 'starter',
-            key: 'inbox',
-            knobs: {},
-            surface: 'email',
-            reason: 'Fits.',
-            keepProbability: 0.9,
-            safeDefault: true,
-          },
-          {
-            id: 'triage',
-            kind: 'starter',
-            key: 'triage',
-            knobs: {},
-            surface: 'tasks',
-            reason: 'Fits.',
-            keepProbability: 0.9,
-            safeDefault: true,
-          },
-        ],
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { onByDefault: true }),
+            catalogSuggestion('triage', 'triage', { onByDefault: true }),
+          ],
+        },
       },
     });
     await heading('Put your busywork on autopilot.');
@@ -848,15 +988,38 @@ describe('onboarding flow', () => {
     fake.update((draft) => {
       draft.routineCreateFailures = [];
     });
+    await screen.findByRole('button', { name: 'Turn on 2 routines' });
     click('Turn on 2 routines');
     await waitFor(() => expect(navigate).toHaveBeenCalled());
     expect(
       fake.calls().filter((call) => call.startsWith('createRoutine:'))
     ).toEqual([
-      'createRoutine:sort',
-      'createRoutine:triage',
-      'createRoutine:triage',
+      'createRoutine:sort:Sort my inbox',
+      'createRoutine:triage:Triage new tasks',
+      'createRoutine:triage:Triage new tasks',
     ]);
+  });
+
+  it('creates a routine under the name the person gave it', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { onByDefault: true }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    fireEvent.click(screen.getByRole('button', { name: /Sort my inbox/ }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.input(name, { target: { value: 'Label my mail' } });
+    click('Turn on 1 routine');
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(fake.calls()).toContain('createRoutine:sort:Label my mail');
   });
 
   it('ends with the routines step once a plan is chosen, where suggestions are on', async () => {
@@ -882,15 +1045,39 @@ describe('onboarding flow', () => {
     );
   });
 
-  it('starts picking routines when the tools step is left', async () => {
+  it('starts AI suggesting routines once, as soon as an inbox is connected', async () => {
     const { fake } = setup({
       resume: 'tools',
       world: { routineSuggestionsEnabled: true },
     });
     await heading('Connect your tools.');
-    click('Continue');
+    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
+    fake.update((draft) => {
+      draft.emailAccounts = [inbox('work@example.com')];
+    });
     await waitFor(() =>
-      expect(fake.calls()).toContain('warmRoutineSuggestions')
+      expect(fake.calls()).toContain('generateRoutineSuggestions')
     );
+    fake.update((draft) => {
+      draft.emailAccounts = [
+        inbox('work@example.com'),
+        inbox('home@example.com'),
+      ];
+    });
+    await Promise.resolve();
+    expect(
+      fake.calls().filter((call) => call === 'generateRoutineSuggestions')
+    ).toHaveLength(1);
+  });
+
+  it('never starts suggesting where suggestions are off', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: {
+        emailAccounts: [inbox('work@example.com')],
+      },
+    });
+    await heading('Connect your tools.');
+    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
   });
 });

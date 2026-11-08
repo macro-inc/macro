@@ -1,147 +1,90 @@
-import { RoutineSparkGlyph } from '@app/features/routine-suggestions/components/routine-spark-glyph';
-import {
-  ROUTINE_SURFACES,
-  SURFACE_COPY,
-} from '@app/features/routine-suggestions/core/surfaces';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
-import { cn, ToggleSwitch } from '@ui';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import { Button } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { RoutineSurface } from '../../routines/components/routine-editor';
-import {
-  KnobSettings,
-  StepSentence,
-} from '../../routines/components/routine-step-knobs';
-import {
-  RoutineCardChain,
-  surfaceLook,
-  templateCard,
-} from '../../routines/components/routine-template-strip';
-import { knobsOutsideSentence } from '../../routines/core/knobs';
 import { ContinueButton, SkipButton } from '../components/controls';
+import {
+  RoutineSparkGlyph,
+  RoutineSuggestionRow,
+  SuggestionToggle,
+} from '../components/routine-suggestion-row';
 import { useOnboardingContext } from '../context/onboarding-context';
-import { createRoutinesStep } from '../primitives/routines-step';
+import { groupBySurface } from '../core/routine-suggestions';
+import {
+  createRoutinesStep,
+  type RoutinesStep as RoutinesStepState,
+  type ShownSuggestion,
+} from '../primitives/routines-step';
 
-type StarterSuggestion = Extract<RoutineSuggestion, { kind: 'starter' }>;
-
-/**
- * One routine as a routine card, the look of the Routines page templates:
- * its area icon, name, what it does with its knobs in place, its trigger →
- * step line and why AI picked it, with its switch in the corner.
- */
-function RoutineChoice(props: {
-  suggestion: StarterSuggestion;
-  step: ReturnType<typeof createRoutinesStep>;
-  disabled: boolean;
-}) {
-  const entry = () =>
-    props.step
-      .catalog()
-      .find((routine) => routine.key === props.suggestion.key);
-  const code = () => {
-    const [step] = props.step.draftFor(props.suggestion)?.steps ?? [];
-    return step?.kind === 'code' ? step : undefined;
-  };
-  const created = () => props.step.created(props.suggestion);
-  const onKnob = (name: string, value: Parameters<typeof props.step.edit>[2]) =>
-    props.step.edit(props.suggestion, name, value);
-  const look = () => surfaceLook(props.suggestion.surface);
+function SuggestionSkeleton(props: { rows: number; label: string }) {
   return (
-    <Show when={entry()}>
-      {(entry) => (
-        <li class="list-none">
-          <RoutineSurface
-            class={cn(
-              props.step.isOn(props.suggestion) && 'ring-1 ring-edge-muted'
-            )}
-          >
-            <div class="flex min-w-0 items-start gap-3 px-4 py-3.5">
-              <div class="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-                <Dynamic
-                  component={look().icon}
-                  class={cn('size-4 shrink-0', look().tint)}
-                  aria-hidden="true"
-                />
-                <p class="text-sm font-medium text-ink">{entry().title}</p>
-                <Show
-                  when={code()?.sentence}
-                  fallback={
-                    <p class="text-xs leading-4 text-ink-muted">
-                      {entry().description}
-                    </p>
-                  }
-                >
-                  {(sentence) => (
-                    <StepSentence
-                      sentence={sentence()}
-                      knobs={code()?.knobs ?? []}
-                      onKnob={onKnob}
-                    />
-                  )}
-                </Show>
-                <Show
-                  when={
-                    knobsOutsideSentence(code()?.sentence, code()?.knobs ?? [])
-                      .length
-                  }
-                >
-                  <KnobSettings
-                    knobs={knobsOutsideSentence(
-                      code()?.sentence,
-                      code()?.knobs ?? []
-                    )}
-                    onKnob={onKnob}
-                  />
-                </Show>
-                <span class="mt-1 min-w-0 max-w-full">
-                  <RoutineCardChain card={templateCard(entry())} />
-                </span>
-                <p class="text-xs text-ink-extra-muted">
-                  {props.suggestion.reason}
-                </p>
-                <Show when={props.step.failed(props.suggestion)}>
-                  <p role="alert" class="text-xs text-failure">
-                    Couldn’t turn this on. Try again, or leave it off.
-                  </p>
-                </Show>
-                <Show when={created()}>
-                  <p class="text-xs text-success">On</p>
-                </Show>
-              </div>
-              <ToggleSwitch
-                checked={props.step.isOn(props.suggestion)}
-                disabled={props.disabled || created()}
-                size="sm"
-                class="shrink-0"
-                label={<span class="sr-only">Turn on {entry().title}</span>}
-                onChange={(on) => props.step.setOn(props.suggestion, on)}
-              />
-            </div>
-          </RoutineSurface>
-        </li>
-      )}
-    </Show>
+    <ListSkeleton.Root label={props.label}>
+      {Array.from({ length: props.rows }, () => (
+        <div class="flex items-start gap-3 p-3">
+          <div class="skeleton-shimmer size-8 shrink-0 rounded-lg bg-skeleton" />
+          <div class="flex min-w-0 flex-1 flex-col gap-2 pt-1">
+            <ListSkeleton.Bar class="h-3 w-2/5" />
+            <ListSkeleton.Bar class="w-4/5" />
+            <ListSkeleton.Bar class="w-1/3" />
+          </div>
+        </div>
+      ))}
+    </ListSkeleton.Root>
   );
 }
 
-/**
- * Put busywork on autopilot: the catalog routines AI picked from the inbox
- * and tools, the safe ones already on. Every routine shows what it does
- * and its settings; the button turns on the ones left on.
- */
-export function RoutinesStep(props: { finishing: boolean; onFinish(): void }) {
+function SuggestionItem(props: {
+  item: ShownSuggestion;
+  step: RoutinesStepState;
+  busy: boolean;
+}) {
+  const id = () => props.item.row.id;
+  const status = () => props.step.statusFor(id());
+  const edits = () => props.step.editsFor(props.item);
+  return (
+    <RoutineSuggestionRow
+      row={props.item.row}
+      edits={edits()}
+      locked={status() === 'enabling' || status() === 'enabled'}
+      failed={status() === 'failed'}
+      expanded={props.step.isExpanded(id())}
+      onExpandedChange={(expanded) => props.step.setExpanded(id(), expanded)}
+      onEdit={(next) => props.step.edit(props.item, next)}
+      action={
+        <SuggestionToggle
+          name={edits().name || props.item.row.title}
+          on={props.step.isOn(id())}
+          enabled={status() === 'enabled'}
+          disabled={props.busy || status() === 'enabling'}
+          onChange={(on) => props.step.setOn(id(), on)}
+        />
+      }
+    />
+  );
+}
+
+function StepBody(props: { finishing: boolean; onFinish(): void }) {
   const context = useOnboardingContext();
   const step = createRoutinesStep(context);
-  const busy = () => step.enabling() || props.finishing;
+  usePending('routines.suggestions', step.waiting);
   const count = () => step.selectedCount();
-  const groups = () =>
-    ROUTINE_SURFACES.flatMap((surface) => {
-      const suggestions = step
-        .suggestions()
-        .filter((suggestion) => suggestion.surface === surface);
-      return suggestions.length ? [{ surface, suggestions }] : [];
-    });
+  const busy = () => step.enabling() || props.finishing;
+  const continueLabel = () => {
+    if (props.finishing) return 'Opening your workspace…';
+    if (step.enabling()) return 'Turning on routines…';
+    if (count() === 0) return 'Continue to workspace';
+    return `Turn on ${count()} ${count() === 1 ? 'routine' : 'routines'}`;
+  };
+  const forYou = () => {
+    const view = step.view();
+    return (
+      view.kind === 'items' &&
+      view.items.some((item) => item.row.byline.from === 'for_you')
+    );
+  };
+
   return (
     <section class="mx-auto flex w-full max-w-2xl flex-col py-2 sm:py-4">
       <header class="flex flex-col items-center text-center">
@@ -152,74 +95,105 @@ export function RoutinesStep(props: { finishing: boolean; onFinish(): void }) {
         >
           Put your busywork on autopilot.
         </h1>
-        <p class="mx-auto mt-6 max-w-[460px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
-          Routines run on their own. We picked these from your inbox and tools,
-          and switched on a few that only change your own mail and tasks. Change
-          anything before you turn them on.
+        <p class="mx-auto mt-6 max-w-[440px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
+          <Show
+            when={forYou()}
+            fallback="Routines are AI agents that run on their own. Switch on the ones you want; you can change them any time."
+          >
+            Routines are AI agents that run on their own. We picked these from
+            your inbox and tools. Switch on the ones you want; you can change
+            them any time.
+          </Show>
         </p>
       </header>
       <div class="mt-8 flex flex-col gap-6">
         <Switch>
-          <Match when={step.suggestions().length > 0}>
-            <For each={groups()}>
-              {(group) => (
-                <section aria-labelledby={`routine-group-${group.surface}`}>
-                  <h2
-                    id={`routine-group-${group.surface}`}
-                    class="mb-1 px-3 text-xs font-medium tracking-wide text-ink-muted uppercase"
-                  >
-                    {SURFACE_COPY[group.surface].label}
-                  </h2>
-                  <ul class="grid gap-2.5">
-                    <For each={group.suggestions}>
-                      {(suggestion) => (
-                        <RoutineChoice
-                          suggestion={suggestion}
-                          step={step}
-                          disabled={busy()}
-                        />
-                      )}
-                    </For>
-                  </ul>
-                </section>
-              )}
-            </For>
+          <Match
+            when={(() => {
+              const view = step.view();
+              return view.kind === 'items' ? view : undefined;
+            })()}
+          >
+            {(view) => (
+              <>
+                <For each={groupBySurface(view().items)}>
+                  {(group) => (
+                    <section aria-labelledby={`routine-group-${group.surface}`}>
+                      <h2
+                        id={`routine-group-${group.surface}`}
+                        class="mb-1 px-3 text-xs font-medium tracking-wide text-ink-muted uppercase"
+                      >
+                        {group.label}
+                      </h2>
+                      <ul class="flex flex-col gap-1">
+                        <For each={group.items}>
+                          {(item) => (
+                            <SuggestionItem
+                              item={item}
+                              step={step}
+                              busy={busy()}
+                            />
+                          )}
+                        </For>
+                      </ul>
+                    </section>
+                  )}
+                </For>
+                <Show when={view().arriving}>
+                  <div class="flex flex-col gap-2">
+                    <p class="px-3 text-xs text-ink-muted" aria-live="polite">
+                      Finding more routines for you…
+                    </p>
+                    <SuggestionSkeleton
+                      rows={1}
+                      label="Finding more routines"
+                    />
+                  </div>
+                </Show>
+              </>
+            )}
           </Match>
-          <Match when={step.loadFailed()}>
-            <p class="text-center text-sm text-ink-muted">
-              We couldn’t pick routines for you right now.{' '}
-              <button
-                type="button"
-                class="text-ink underline"
+          <Match when={step.view().kind === 'loading'}>
+            <div class="flex flex-col gap-3">
+              <p class="px-3 text-xs text-ink-muted" aria-live="polite">
+                Studying your workspace to suggest routines that fit how you
+                work…
+              </p>
+              <SuggestionSkeleton rows={3} label="Finding routines for you" />
+            </div>
+          </Match>
+          <Match when={step.view().kind === 'error'}>
+            <div
+              role="alert"
+              class="flex flex-col items-center gap-3 px-6 py-10 text-center text-sm text-ink-muted"
+            >
+              Couldn't load suggestions.
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => fireAndForget(step.refresh(), 'onboarding')}
               >
+                <ArrowsClockwiseIcon class="size-4" aria-hidden="true" />
                 Try again
-              </button>
-            </p>
+              </Button>
+            </div>
           </Match>
-          <Match when={step.picking()}>
-            <p class="text-center text-sm text-ink-muted" aria-live="polite">
-              Picking routines from your inbox and tools…
-            </p>
-          </Match>
-          <Match when={step.suggestions().length === 0}>
-            <p class="text-center text-sm text-ink-muted">
-              No routines to suggest yet. As your workspace fills up, ideas show
-              up in each sidebar.
-            </p>
+          <Match when={step.view().kind === 'empty'}>
+            <div class="flex flex-col items-center gap-3 px-6 py-10 text-center text-sm text-ink-muted">
+              <RoutineSparkGlyph />
+              No routines to suggest yet. As your workspace grows, ideas show up
+              in each sidebar.
+            </div>
           </Match>
         </Switch>
       </div>
+      <Show when={step.anyFailed()}>
+        <p role="alert" class="mt-6 text-center text-sm text-failure">
+          Some routines couldn't be turned on. Try again, or skip them for now.
+        </p>
+      </Show>
       <ContinueButton
-        label={
-          props.finishing
-            ? 'Opening your workspace…'
-            : step.enabling()
-              ? 'Turning on routines…'
-              : count() > 0
-                ? `Turn on ${count()} ${count() === 1 ? 'routine' : 'routines'}`
-                : 'Continue to workspace'
-        }
+        label={continueLabel()}
         disabled={busy()}
         onClick={() =>
           fireAndForget(step.turnOnAndFinish(props.onFinish), 'onboarding')
@@ -232,5 +206,17 @@ export function RoutinesStep(props: { finishing: boolean; onFinish(): void }) {
         />
       </Show>
     </section>
+  );
+}
+
+/**
+ * Put busywork on autopilot: the routines AI picked from the inbox, shown
+ * as they arrive, then Macro's templates; finishing turns on those left on.
+ */
+export function RoutinesStep(props: { finishing: boolean; onFinish(): void }) {
+  return (
+    <TraceFlow name="onboarding.routines" sampling="always">
+      <StepBody finishing={props.finishing} onFinish={props.onFinish} />
+    </TraceFlow>
   );
 }
