@@ -50,7 +50,7 @@ to the browser via `inbound/wasm`.
 - Depends on: `agent_runtime_protocol` (schema only, `default-features =
   false` — no transport, which is what makes wasm possible).
 - Used by: `agent_harness_service`, `agent_session`, `agent_harness`,
-  `coding_agent_worker`, `lexical_client`, `agent_changes`, `webhook`, and both
+  `macrod`, `lexical_client`, `agent_changes`, `webhook`, and both
   harness-specific fold crates. Widely shared — check callers before changing
   `domain/model.rs` or `domain/ports.rs`.
 

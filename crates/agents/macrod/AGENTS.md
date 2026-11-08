@@ -1,4 +1,4 @@
-# coding_agent_worker
+# macrod
 
 ## What it is
 
@@ -101,7 +101,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Checks
 
-- `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).
+- `cargo test -p macrod` (`SQLX_OFFLINE` unset).
 - `just run` (from this directory) to run the daemon with
   `--config <repo root>/macrod.toml`, keeping dev off `~/.macrod/macrod.toml`.
 - Self-update end to end (Linux/macOS): `e2e/build_releases.sh /tmp/rel
@@ -115,7 +115,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Windows is built natively on a Namespace Windows runner by
   `build_agent_daemon_on_tag` (MSVC, static CRT). Run that workflow with
   `workflow_dispatch` on your branch to check a Windows-affecting change.
-- `cargo tree -p coding_agent_worker -i rdkafka-sys --target x86_64-unknown-linux-musl`
+- `cargo tree -p macrod -i rdkafka-sys --target x86_64-unknown-linux-musl`
   must find nothing: librdkafka breaks the static and Windows builds.
 
 ## Gotchas

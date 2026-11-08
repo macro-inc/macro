@@ -101,7 +101,7 @@ pub async fn bridge(
 
     let line_turns = turns.clone();
     // The wire tap: every ndjson line crossing the child's stdio, plus its
-    // stderr. Enable with RUST_LOG=coding_agent_worker=trace.
+    // stderr. Enable with RUST_LOG=macrod=trace.
     let debug = Arc::new(move |line: &str, direction: LineDirection| {
         tracing::trace!(?direction, line, "acp line");
         line_turns.observe(line, direction);

@@ -169,7 +169,7 @@ jobs:
         # carry sqlx macros; offline mode keeps a release build from wanting a database.
         export SQLX_OFFLINE=true
 
-        cargo zigbuild --release --package coding_agent_worker --target "$TARGET"
+        cargo zigbuild --release --package macrod --target "$TARGET"
       shell: bash
       env:
         TARGET: x86_64-unknown-linux-musl
@@ -407,7 +407,7 @@ jobs:
         # carry sqlx macros; offline mode keeps a release build from wanting a database.
         export SQLX_OFFLINE=true
 
-        cargo zigbuild --release --package coding_agent_worker --target "$TARGET"
+        cargo zigbuild --release --package macrod --target "$TARGET"
       shell: bash
       env:
         TARGET: aarch64-unknown-linux-musl
@@ -596,7 +596,7 @@ jobs:
           brew install cmake
         fi
 
-        cargo build --release --package coding_agent_worker --target "$TARGET"
+        cargo build --release --package macrod --target "$TARGET"
       shell: bash
       env:
         TARGET: aarch64-apple-darwin
@@ -782,7 +782,7 @@ jobs:
           brew install cmake
         fi
 
-        cargo build --release --package coding_agent_worker --target "$TARGET"
+        cargo build --release --package macrod --target "$TARGET"
       shell: bash
       env:
         TARGET: x86_64-apple-darwin
@@ -974,7 +974,7 @@ jobs:
           export PATH="/c/Program Files/CMake/bin:$PATH"
         fi
 
-        cargo build --release --package coding_agent_worker --target "$TARGET"
+        cargo build --release --package macrod --target "$TARGET"
       shell: bash
       env:
         TARGET: x86_64-pc-windows-msvc

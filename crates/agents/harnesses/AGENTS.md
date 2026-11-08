@@ -20,12 +20,12 @@ daemon reconciles its webhook feed from.
 
 - Owns: harness registration, pairing, and the agent-binding list.
 - Not here: running an agent session or the ACP protocol itself →
-  `crates/agents/agent_session`, `coding_agent_worker`.
+  `crates/agents/agent_session`, `macrod`.
 
 ## Boundaries
 
 - Depends on: `harness_id`, `bearer_token`, `bot_id`, `macro_authorization`.
-- Used by: `coding_agent_worker`.
+- Used by: `macrod`.
 
 ## Recipes
 

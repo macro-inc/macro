@@ -1,6 +1,6 @@
 # Install macrod, Macro's agent daemon, on Windows:
 #
-#   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.ps1 | iex
 #
 # A running macrod downloads updates itself and uses them from its next
 # launch; run this again to update right away.

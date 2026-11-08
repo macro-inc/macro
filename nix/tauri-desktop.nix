@@ -274,7 +274,7 @@
         doCheck = false;
         SQLX_OFFLINE = "true";
         buildPhaseCargoCommand = ''
-          cargo build --release --package coding_agent_worker --bin macrod
+          cargo build --release --package macrod --bin macrod
         '';
         installPhaseCommand = ''
           install -Dm0755 target/release/macrod "$out/bin/macrod"

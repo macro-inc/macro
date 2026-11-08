@@ -36,7 +36,7 @@ fi
 cargo_build=(${CARGO_BUILD:-cargo build})
 
 for tag in "$@"; do
-  MACROD_RELEASE_TAG="$tag" "${cargo_build[@]}" -p coding_agent_worker --bin macrod "${target_args[@]}"
+  MACROD_RELEASE_TAG="$tag" "${cargo_build[@]}" -p macrod --bin macrod "${target_args[@]}"
   stage=$(mktemp -d)
   install -m 755 "$binary_dir/$executable" "$stage/$executable"
   "$stage/$executable" --version | grep -qF "$tag"
