@@ -1,5 +1,6 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
+import { statusError } from '@core/util/safeFetch';
 import { Telemetry } from '@macro-inc/observability';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
@@ -10,20 +11,17 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
-import { stepsFromTask } from '../core/routine-steps';
+import { stepsFromWire } from '../core/routine-steps';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
-/** What the drafter may write, and the user's workspace by name and id. */
+/**
+ * What the drafter may write. The user's workspace is never sent: a large
+ * one exceeds the request size limit.
+ */
 export type ComposerContext = {
   timezone: string;
   /** The model Ask AI steps it writes run on. */
   defaultModel: string;
-  labels: string[];
-  tags: { label: string; definitionId: string; optionId: string }[];
-  channels: { name: string; id: string }[];
-  folders: { name: string; id: string }[];
-  people: { name: string; id: string }[];
-  agents: { name: string; botId: string }[];
   /** Whether triggers may ask AI before a run. */
   decisions: boolean;
   /** Whether AI may write code steps; otherwise it writes Ask AI steps. */
@@ -31,6 +29,8 @@ export type ComposerContext = {
 };
 
 const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
+const TOO_LARGE =
+  'This routine is too large for AI to draft. Shorten it and try again.';
 
 function draftContext(context: ComposerContext): DraftContext {
   return {
@@ -38,14 +38,6 @@ function draftContext(context: ComposerContext): DraftContext {
     agentModel: context.defaultModel,
     code: context.codeSteps,
     conditions: context.decisions,
-    workspace: {
-      labels: context.labels,
-      tags: context.tags,
-      channels: context.channels,
-      folders: context.folders,
-      people: context.people,
-      agents: context.agents,
-    },
   };
 }
 
@@ -70,7 +62,12 @@ export async function requestDraft(
       span.setAttr('routine.draft.outcome', 'request_failed');
       span.error('Routine draft request failed');
       handleAiUsageLimitError(response.error);
-      return response.error.find(isAiUsageLimitError)?.message ?? failure;
+      return (
+        response.error.find(isAiUsageLimitError)?.message ??
+        (response.error.some((e) => e.message === statusError(413).message)
+          ? TOO_LARGE
+          : failure)
+      );
     }
     span.setAttr('routine.draft.outcome', response.value.outcome);
     return response.value.outcome === 'failed'
@@ -84,7 +81,7 @@ export function draftFromRoutine(
   routine: DraftedRoutine,
   defaultModel: string
 ): ScheduleDraft | string {
-  const steps = stepsFromTask({ steps: routine.steps });
+  const steps = stepsFromWire(routine.steps);
   if (!steps) return 'The draft used steps Macro can’t run. Try rephrasing.';
   const drafted = steps.map((step, index) => {
     const problems = routine.problems.find(

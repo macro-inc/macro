@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   ciSourceChanges,
+  CONFLICTS,
+  labelBlocker,
+  STALE_MERGE,
   FORK_CHANGES_CI,
   forkOutcome,
   forkRunDistrust,
@@ -181,5 +184,26 @@ describe('forkRunDistrust', () => {
       forkRunDistrust('.github/workflows/other.yml', []),
       `The run came from .github/workflows/other.yml, not ${PR_CI_PATH}`,
     );
+  });
+});
+
+describe('labelBlocker', () => {
+  test('a mergeable PR whose merge commit holds PR CI can start it', () => {
+    assert.equal(labelBlocker(true, true), null);
+    assert.equal(labelBlocker(null, true), null);
+  });
+
+  test('a conflicting PR runs no pull_request workflow', () => {
+    assert.equal(labelBlocker(false, false), CONFLICTS);
+  });
+
+  test('a merge commit from before PR CI, or none, starts nothing', () => {
+    assert.equal(labelBlocker(true, false), STALE_MERGE);
+    assert.equal(labelBlocker(null, false), STALE_MERGE);
+  });
+
+  test('both explanations fit a commit status', () => {
+    assert.ok(STALE_MERGE.length <= 140);
+    assert.ok(CONFLICTS.length <= 140);
   });
 });

@@ -67,8 +67,7 @@ export function createRuntimeBypass(
     try {
       const outcome: AgentChoiceChangeDto | 'runtimeUnchanged' =
         await stopAskingOnRuntime(sessionId).then(
-          (result) =>
-            result.isOk() ? result.value.agent : 'runtimeUnchanged',
+          (result) => (result.isOk() ? result.value.agent : 'runtimeUnchanged'),
           () => 'runtimeUnchanged'
         );
       await source.respond({

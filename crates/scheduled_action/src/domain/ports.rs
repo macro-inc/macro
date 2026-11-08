@@ -338,6 +338,17 @@ pub enum RoutineRun<'a> {
 }
 
 impl RoutineRun<'_> {
+    pub fn cause(&self) -> trigger_context::origin::RoutineCause {
+        use trigger_context::origin::RoutineCause;
+        match self {
+            Self::Scheduled { .. } => RoutineCause::Scheduled,
+            Self::Manual { .. } => RoutineCause::Manual,
+            Self::Event(run) => RoutineCause::Event {
+                event_id: run.pending.event.event_id().into(),
+            },
+        }
+    }
+
     pub fn event(&self) -> Option<&EventReference> {
         match self {
             Self::Event(run) => Some(&run.pending.event),
@@ -519,6 +530,11 @@ pub struct CodeRun<'a> {
     pub steps: &'a serde_json::Value,
     /// Answer every write with an empty result instead of sending it.
     pub dry_run: bool,
+    /// Who its writes are attributed to.
+    pub acts_as: routine_program::CodeIdentity,
+    /// The routine it belongs to, stamped on its credential so its writes
+    /// never trigger routines.
+    pub routine_id: macro_uuid::Uuid,
 }
 
 /// What one code step did.

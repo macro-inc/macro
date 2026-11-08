@@ -116,6 +116,10 @@ tools — hexagonal, heavily feature-gated.
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new label actions through them.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
+- `domain/recent_inbox.rs` merges a user's newest messages read live from
+  each of their own inboxes; an inbox whose read fails is skipped, and
+  subjects and snippets are cut to 200 and 300 characters there, not in the
+  adapters.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.

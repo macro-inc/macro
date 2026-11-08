@@ -116,10 +116,12 @@ On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-
 On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
 
 Install workspace dependencies from the repository root inside the Nix shell
-for each checkout or worktree before starting the stack:
+for each checkout or worktree before starting the stack. The SDK has its own install,
+which building the services needs:
 
 ```bash
 bun install --frozen-lockfile
+(\cd packages/sdk && bun install --frozen-lockfile)
 ```
 
 Run the preflight check before the first start:
@@ -163,6 +165,10 @@ This command:
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
+In a terminal it stays attached with hotkeys. Without one (an agent's shell, a pipe,
+CI), it runs in the background and returns once the stack is ready. See
+[Run without a terminal](#run-without-a-terminal).
+
 The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
 For document sync, local Caddy normalizes the upstream `Origin` to the worker's
 accepted localhost origin so HTTPS machine hostnames can open WebSockets.
@@ -195,12 +201,16 @@ inbox.
 
 ### Recover an existing instance without resetting data
 
-`run_local` and `stack up` initialize clean state, including snapshot restoration.
-Do not use them to recover an instance whose application or auth data must
-survive. Keep its generated env/Compose files and existing named volumes; start
-stopped containers with `docker start`, or recreate only the affected services
-with the same Compose project/files and `up -d --no-deps --no-build <service>`.
-Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+`just run_local --detach --instance <name>` brings an existing instance back up over
+its volumes. It starts stopped containers, applies new migrations, restores
+LocalStack, reloads rebuilt services, and restarts Vite. An attached `run_local`
+and `stack up` start from clean state instead, so don't use those to recover an
+instance whose application or auth data must survive. Never use `down -v`,
+`reset_local`, or `destroy_local` for this recovery.
+
+To touch only the affected services, keep the instance's generated env/Compose files
+and recreate them with the same Compose project/files and
+`up -d --no-deps --no-build <service>`.
 
 If a local debug service aborts with `tokio-rt-worker` stack overflow, give only
 that service `RUST_MIN_STACK=16777216` in an additional local Compose override,
@@ -317,6 +327,67 @@ While `run_local` is attached:
 - Press `q` to stop the stack and exit.
 
 Use `q`, not the terminal close button. `q` stops and removes the containers at once. The next start does not have to clean up a stale stack.
+
+## Run without a terminal
+
+`just run_local` needs no terminal. Without one on both stdin and stdout, or with
+`--detach`, a background process does the bring-up and then holds Vite. The command
+you ran only streams its log and exits with the result, so it works from an agent's
+Bash tool. The stack, and a bring-up or rebuild still in progress, survive that call
+timing out, its shell being killed, and the `nix develop` that launched it.
+
+```bash
+just run_local --instance <name>                # returns once ready; nonzero names the failed step and log
+just run_local status --instance <name> --json  # phase, health, URLs, last job, containers
+just run_local wait --instance <name>           # block until a running bring-up or rebuild ends
+just run_local rebuild --instance <name>        # the `r` hotkey: rebuild changed services and reload them
+just run_local restart-frontend --instance <name>  # the `f` hotkey
+just run_local logs --instance <name>           # the last job's log
+just run_local logs --service frontend --instance <name>  # Vite; any compose service name works
+just run_local stop --instance <name>           # stop everything, keep the data
+```
+
+Run these inside `nix develop`, or prefix each with `nix develop --command`. They also
+work from another shell against an attached `run_local`, where `rebuild` is
+the same as pressing `r`.
+
+The orchestrator itself compiles in the foreground, into `target/xtask`, so control
+commands answer at once while a service build holds `target/debug`. That first
+compile can take minutes in a fresh worktree. If your call is killed during it,
+nothing has started yet: run it again.
+
+Repeating the start command is safe:
+
+- A healthy instance is left alone.
+- A bring-up or rebuild already running is waited for.
+- A stopped or failed instance comes back over its existing volumes, keeping its data.
+- `--fresh` deletes the data and starts clean. An attached start always does, so a
+  person at a terminal gets a clean slate and an agent never wipes by accident.
+
+The frontend is Vite, so edits under `apps/web` apply on save. Add `--static-frontend`
+to serve a built bundle from the proxy instead (a browser on an unstable network may
+never finish loading Vite's thousands of modules). Then pick up frontend edits with
+`just run_local rebuild --frontend`.
+
+| `wait` or start exit code | Meaning |
+| --- | --- |
+| 0 | Finished. |
+| 1 | Failed. The last line names the step and the log. |
+| 3 | `wait --timeout <seconds>` gave up. The job is still running; call `wait` again. |
+
+`phase` in `status --json` is one of:
+
+| Phase | Meaning |
+| --- | --- |
+| `starting` | A bring-up is running. |
+| `ready` | The backend answers through the proxy and the frontend answers. |
+| `degraded` | Containers run, but the backend or frontend doesn't answer. Check `job`, `services`, and `frontend_healthy`; `just run_local` restarts a dead Vite. |
+| `failed` | The last bring-up failed or was killed. `job.failed_step` says where (for an error between steps it is null and `job.step` is the last step that ran), and `job.log` holds the output. |
+| `stopped` | No container is running. The data is kept. |
+| `unrecorded` | Containers run, but no flow recorded a stack. `just run_local` adopts it and keeps its data. |
+
+A failed `rebuild` leaves the old build running: the phase stays `ready`, and `job`
+records the failure. Run state and logs live in `infra/local/generated/<instance>/run`.
 
 ## Run More than One Stack
 
@@ -454,7 +525,9 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 
 The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
 
-Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
+Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only services
+whose binary is newer than their container restart, so a build that failed partway
+still gets its finished services reloaded next time.
 
 Three services have Docker-built images. They are not rebuilt by default:
 
@@ -468,35 +541,38 @@ If you change these services, the running stack can use a stale image. Force a r
 just run_local --build-aux-services
 ```
 
-When you start the stack with `--build-aux-services`, press `r` to rebuild those images and recreate their containers. This is slower, so leave the flag off unless you work on those services.
+When you start the stack with `--build-aux-services`, press `r` to rebuild those images and recreate their containers. Detached, run `just run_local rebuild --build-aux-services`. This is slower, so leave the flag off unless you work on those services.
 
 If you started without the flag and suspect a stale image, press `q`. Then start again with the flag.
 
-## Headless Mode
+## Lower-Level Stack Control
 
-`just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The bundle counts as local, as `run_local`'s dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.
+Use `just run_local`, with or without a terminal. `just stack` is the same bring-up
+with no background process, kept for Cursor Cloud and environment bakes, which need
+`--infra-only`, or a prebuilt `--binaries-dir` adopted with `update`.
 
-Both headless and attached startup prepare the browser WebAssembly packages
-through `bun run dev:prepare`. A fresh worktree builds them before serving the app;
-later starts reuse the generated packages when they are current. See
-[Integration Secrets](#integration-secrets) for credential-free startup limitations.
+**`just stack up` always deletes the instance's data first.** Use it only when you
+mean that.
 
 ```bash
-just stack up                  # bring everything up, print URLs, return
-just stack status --json      # machine-readable state (containers, health, URLs)
-just stack update             # rebuild and reload only the changed services (the `r` hotkey)
+just stack up                  # wipe, bring everything up with a static frontend, print URLs, return
+just stack status --json      # same as `just run_local status --json`
+just stack update             # same rebuild as `just run_local rebuild`, without the background job
 just stack update --frontend  # also rebuild the frontend bundle
 just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```
 
-All the `run_local` flags apply to `stack` too. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`.
+The `run_local` start flags also apply to `stack up`. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`. Every flow records the same state, so `stack update` works on a `run_local` instance. With no recorded stack it bootstraps through `stack up` only if the instance has no volumes; otherwise it refuses, unless you pass `--wipe-if-unrecorded`.
 
-The app is served at `<proxy>/app/`. The bundle resolves its backend from the origin it is served on. The same stack works on localhost or behind any hostname without a rebuild.
+A static frontend (`stack up`, or `run_local --static-frontend`) is built once and served by the proxy at `<proxy>/app/`. The bundle counts as local, as the dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. It resolves its backend from the origin it is served on, so the same stack works on localhost or behind any hostname without a rebuild.
+
+Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 For Pipedream Connect on a machine hostname, include that HTTPS origin in
-`PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the headless default names only
-localhost. Reuse that override file on subsequent stack invocations.
+`PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the static-frontend default names
+only localhost. `run_local rebuild` reuses the recorded file; pass it again to
+`just stack update`.
 
 ### Init Snapshots
 
@@ -507,13 +583,13 @@ localhost. Reuse that override file on subsequent stack invocations.
 - Waits for the FusionAuth kickstart
 - Creates the search indices
 
-It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
+It saves these volumes as an init snapshot, and clean starts restore it. A detached start over existing volumes keeps them and doesn't use a snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
 
 Useful commands:
 
 ```bash
 just run_local --no-snapshot  # skip the snapshot cache
-just stack up --no-snapshot   # same flag, headless
+just stack up --no-snapshot   # same flag
 ```
 
 Cursor Cloud bakes the snapshot during environment install. Later `stack up` restores it.
@@ -534,10 +610,10 @@ See what a running or stopped instance looks like. The output shows endpoints wi
 just status_local
 ```
 
-Stop an instance but keep its volumes:
+Stop an instance, including its background process, but keep its volumes:
 
 ```bash
-just stop_local --instance agent-a
+just stop_local --instance agent-a    # same as just run_local stop
 ```
 
 Remove the containers, volumes, and named-instance networks of an instance:

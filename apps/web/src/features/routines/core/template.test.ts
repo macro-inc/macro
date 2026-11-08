@@ -221,7 +221,7 @@ describe('templateShareBody', () => {
           description: 'Weekly renewals digest',
           id: 'routine-1',
           name: 'Renewals',
-          task: { user_prompt: PROMPT },
+          task: { prompt: '', user_prompt: PROMPT, model: 'model' },
           trigger: CRON,
           updated_at: '2026-10-01T00:00:00Z',
           variables: [
