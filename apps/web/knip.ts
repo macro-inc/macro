@@ -12,6 +12,7 @@ const config: KnipConfig = {
     // Feature browser harnesses load from their own HTML and Playwright specs.
     'src/features/*/browser-test/*.{ts,tsx}',
     'src/lib/i18n/browser-test/*.{ts,tsx}',
+    'src/components/ui/browser-test/*/*.{ts,tsx}',
     'src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/*.tsx',
     'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/browser-test/*.{ts,tsx}',
     'src/lib/core/component/LexicalMarkdown/fuzz/{fixture.tsx,*.browser.e2e.ts}',
