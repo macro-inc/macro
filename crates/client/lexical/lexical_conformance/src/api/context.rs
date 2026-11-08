@@ -2,7 +2,6 @@
 use crate::replay::{Replayer, Result, fail, integer, node_key, tagged_key};
 use lexical_model::{EditorState, NodeKey, Selection, Transaction};
 use serde_json::{Value, json};
-use std::collections::HashMap;
 
 /// Shared dispatch and fixture-value encoding across suspended host calls.
 ///
@@ -11,9 +10,6 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct Context {
     replay: Replayer,
-    identities: HashMap<String, u32>,
-    owners: HashMap<u32, u64>,
-    next_handle: u32,
     scope: Scope,
     previous_selections: Vec<Option<Selection>>,
 }
@@ -143,13 +139,7 @@ impl Context {
         }
         self.replay.bindings.release_state(version)?;
         self.replay.record_ids.release_version(version)?;
-        let released = self
-            .owners
-            .iter()
-            .filter_map(|(id, owner)| (*owner == version).then_some(*id))
-            .collect::<std::collections::HashSet<_>>();
-        self.owners.retain(|_, owner| *owner != version);
-        self.identities.retain(|_, id| !released.contains(id));
+        let released = self.replay.bindings.release_identities(version)?;
         for tag in ["$h", "$sel", "$pt", "$caret", "$iterator", "$state", "$ed"] {
             for id in &released {
                 if let Some(value) = self.replay.bindings.remove_handle(&format!("{tag}:{id}"))?
@@ -157,13 +147,6 @@ impl Context {
                 {
                     let snapshot = integer(snapshot)? as usize;
                     self.replay.bindings.release_saved_state(snapshot)?;
-                    if self
-                        .replay
-                        .published_snapshot
-                        .is_some_and(|(_, id)| id == snapshot)
-                    {
-                        self.replay.published_snapshot = None;
-                    }
                 }
             }
         }
@@ -177,10 +160,12 @@ impl Context {
             self.replay.bindings.bind_key(raw.clone(), key)?;
             // Key references use a known node handle when available. The raw
             // string remains authoritative for fixture decoding.
-            return Ok(match self.identities.get(&format!("key:{raw}")) {
-                Some(id) => json!({"$key":id,"raw":raw}),
-                None => json!(raw),
-            });
+            return Ok(
+                match self.replay.bindings.identity(&format!("key:{raw}"))? {
+                    Some(id) => json!({"$key":id,"raw":raw}),
+                    None => json!(raw),
+                },
+            );
         }
         for (raw_tag, tag) in [
             ("$node", "$h"),
@@ -205,28 +190,22 @@ impl Context {
             } else {
                 format!("{tag}:{}", serde_json::to_string(&value)?)
             };
-            if let Some(id) = self.identities.get(&identity) {
-                return Ok(json!({tag:*id}));
-            }
-            let id = self.next_handle;
-            self.next_handle = id
-                .checked_add(1)
-                .ok_or_else(|| fail("API handle overflow"))?;
-            self.identities.insert(identity, id);
             let owner = match raw_tag {
                 "$node" => integer(&value["ver"])?,
                 "$snapshot" => self.replay.committed_version,
                 _ => self.replay.version,
             };
-            self.owners.insert(id, owner);
-            self.replay
+            let (id, fresh) = self
+                .replay
                 .bindings
-                .bind_handle(format!("{tag}:{id}"), value.clone())?;
+                .intern_handle(identity, owner, tag, &value)?;
+            if !fresh {
+                return Ok(json!({tag:id}));
+            }
             let mut encoded = json!({tag:id});
             if raw_tag == "$node" {
                 let key = node_key(&value)?;
-                self.replay.bindings.bind_key(key.to_string(), key)?;
-                self.identities.insert(format!("key:{key}"), id);
+                self.replay.bindings.bind_host_key(key, id)?;
                 encoded["key"] = json!(key.to_string());
                 encoded["type"] = value["type"].clone();
                 encoded["ver"] = value["ver"].clone();
