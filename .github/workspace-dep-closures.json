@@ -10742,6 +10742,7 @@
       "crates/workspace-hack"
     ],
     "lexical_conformance_wasm": [
+      "crates/bot_id",
       "crates/client/lexical/lexical_conformance_wasm",
       "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_loro",
@@ -10750,8 +10751,13 @@
       "crates/client/lexical/lexical_rich_nodes",
       "crates/client/lexical/macro_document_model",
       "crates/client/mention_date",
+      "crates/cowlike",
       "crates/document_id",
-      "crates/lexical_node_id"
+      "crates/lexical_node_id",
+      "crates/macro_document_composers",
+      "crates/macro_user_id",
+      "crates/trigger_context",
+      "crates/workspace-hack"
     ],
     "lexical_html": [
       "crates/client/lexical/lexical_html",
