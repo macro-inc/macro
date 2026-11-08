@@ -9,8 +9,12 @@ import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import type { EntityReference } from '../reference';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { ChatGeneration, ChatMessage } from './generation';
 
 type ChatDetail = GetChatResponses[200]['chat'];
@@ -105,6 +109,28 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
 
   /** The messages in the chat, with their attachments. */
   readonly messages = this.field('messages');
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.cognition.getChatPermissions({
+        path: { chat_id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Change who can open the chat: the link share and its access level, the
+   * owner's team, and channel grants. Omitted fields are left as they are.
+   */
+  async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
+    await this.mutate((c) =>
+      c.cognition.patchChat({
+        path: { chat_id: this.id },
+        body: { sharePermission: sharePermissionBody(options) },
+      }),
+    );
+  }
 
   /** Rename the chat. */
   async rename(name: string): Promise<void> {

@@ -14,6 +14,9 @@ use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxCo
 
 const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
 
+/// Enough to read who wrote and what about, without bodies or headers.
+const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
+
 const ARCHIVE_ROLE_PROPERTY: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroFolderRole";
 
@@ -237,6 +240,25 @@ impl MailboxContentReader for OutlookApiClientRepository {
         let mut normalized = normalize(message, attachments, link_id, folders)?;
         normalized.content.calendar_parts = calendar_parts;
         Ok(Some(normalized))
+    }
+
+    async fn recent_inbox_messages(
+        &self,
+        token: &AccessToken,
+        link_id: Uuid,
+        limit: u16,
+        folders: &[MailFolder],
+    ) -> Result<Vec<MailboxMessage>, EmailApiError> {
+        let mut url = self.endpoint(&["me", "mailFolders", "inbox", "messages"])?;
+        url.query_pairs_mut()
+            .append_pair("$select", RECENT_MESSAGE_FIELDS)
+            .append_pair("$orderby", "receivedDateTime desc")
+            .append_pair("$top", &limit.to_string());
+        let page: wire::Page<wire::Message> = self.get(token, url).await?;
+        page.value
+            .into_iter()
+            .map(|message| normalize(message, Vec::new(), link_id, folders))
+            .collect()
     }
 
     async fn attachment(

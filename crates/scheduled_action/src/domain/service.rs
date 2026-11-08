@@ -16,14 +16,18 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
+use super::code_check::{StarterRoutine, checked_task, named_steps, same_task};
+use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    DispatchEvent, InProgressExecution, ListedAction, OwnerNotUserError, ScheduledAction,
+    DispatchEvent, InProgressExecution, ListedAction, MAX_DESCRIPTION_CHARS, OwnerNotUserError,
+    ScheduledAction,
 };
 use super::ports::{
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+    CodeUpgrades, NoRoutineCode, RoutineCode, ScheduledActionExecutor, ScheduledActionRepo,
+    ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
@@ -36,6 +40,8 @@ pub struct ScheduledActionServiceImpl<
     Grants,
     Targets = ModelOnlyTargets,
     Github = NoGithubLinks,
+    Code = NoRoutineCode,
+    Upgrades = NoCodeUpgrades,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -45,6 +51,10 @@ pub struct ScheduledActionServiceImpl<
     conditions_enabled: bool,
     targets: Targets,
     github: Github,
+    /// Type-checks code steps before they are saved.
+    code: Arc<Code>,
+    /// How code steps were brought to new SDKs.
+    upgrades: Arc<Upgrades>,
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -82,17 +92,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
+            code: Arc::new(NoRoutineCode),
+            upgrades: Arc::new(NoCodeUpgrades),
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -102,6 +114,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets,
             github: self.github,
+            code: self.code,
+            upgrades: self.upgrades,
         }
     }
 
@@ -109,7 +123,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -119,6 +133,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github,
+            code: self.code,
+            upgrades: self.upgrades,
+        }
+    }
+
+    /// Lets routines have code steps, type-checked by `code` when saved,
+    /// and shows how they were brought to new SDKs from `upgrades`.
+    pub fn with_code<C: RoutineCode, U: CodeUpgrades>(
+        self,
+        code: Arc<C>,
+        upgrades: Arc<U>,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code,
+            upgrades,
         }
     }
 
@@ -177,14 +214,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
+        let mut input = input;
+        input.task = named_steps(&input.task);
+        let description = description(&input.description)?;
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
+        let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
         }
@@ -199,7 +241,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 name: input.name,
                 trigger: input.trigger,
                 kind: input.kind,
-                task: input.task,
+                task,
                 enabled: input.enabled,
                 run_visibility: input.run_visibility,
                 created_at: now,
@@ -209,6 +251,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 next_run_at,
                 claimed: None,
                 template_id,
+                description,
             })
             .await?;
         self.dispatcher_tx
@@ -236,19 +279,26 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
-        input: ActionConfiguration,
+        mut input: ActionConfiguration,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        input.task = named_steps(&input.task);
+        // Clients don't echo the SDK the stored code was checked against.
+        if same_task(&action.task, &input.task) {
+            input.task = action.task.clone();
+        }
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
             || action.kind != input.kind
-            || action.task != input.task
-            || action.run_visibility != input.run_visibility;
+            || !same_task(&action.task, &input.task)
+            || action.run_visibility != input.run_visibility
+            || action.description != input.description.trim();
         let disable_only = !input.enabled && !configuration_changed;
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
@@ -265,6 +315,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
+            input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)
                     .await?;
@@ -283,6 +334,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         } else {
             None
         };
+        // Checked like any update, but with nothing to replace: a new revision
+        // would only supersede event runs queued under the current one.
+        if !configuration_changed && action.enabled == input.enabled {
+            return Ok(action);
+        }
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
         action.trigger = input.trigger;
@@ -290,6 +346,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         action.task = input.task;
         action.enabled = input.enabled;
         action.run_visibility = input.run_visibility;
+        action.description = description(&input.description)?;
         action.updated_at = now;
 
         let updated = self.repo.update_action(action).await?;
@@ -322,6 +379,15 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// A description as stored: trimmed, and within the limit.
+fn description(text: &str) -> Result<String> {
+    let text = text.trim();
+    if text.chars().count() > MAX_DESCRIPTION_CHARS {
+        return Err(ActionPolicyError::DescriptionTooLong.into());
+    }
+    Ok(text.to_owned())
 }
 
 fn next_run(
@@ -379,10 +445,12 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
 where
     Github: GithubInstallationClaims,
+    Code: RoutineCode,
+    Upgrades: CodeUpgrades,
     Rpo: ScheduledActionRepo,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
@@ -499,6 +567,7 @@ where
             task: action.task.clone(),
             enabled,
             run_visibility: action.run_visibility,
+            description: action.description.clone(),
         };
         self.replace_configuration(action, input).await
     }
@@ -535,5 +604,20 @@ where
             bail!("cannot read execution history without id");
         };
         self.repo.get_execution_records(&id).await
+    }
+
+    fn code_starters(&self) -> Vec<StarterRoutine> {
+        super::code_check::starters(self.code.as_ref())
+    }
+
+    async fn get_code_upgrades(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<CodeUpgrade>> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot read code upgrades without id");
+        };
+        self.upgrades.list_upgrades(id).await
     }
 }

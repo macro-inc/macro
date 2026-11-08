@@ -34,7 +34,12 @@ interface TrackedEntity {
 }
 const trackedEntities: Map<EntityId, TrackedEntity> = new Map();
 type EntityTarget = Pick<TrackEntityMessage, 'entity_id' | 'entity_type'>;
-type EntityRefresh = (entity: EntityTarget) => void;
+/** Why a tracked entity's views should read again: tracking began, or it may have missed events. */
+export type EntityRefreshReason = 'subscribed' | 'reconnected' | 'refocused';
+type EntityRefresh = (
+  entity: EntityTarget,
+  reason: EntityRefreshReason
+) => void;
 
 // The gateway sends an entity's events only to connections that opened or
 // pinged it this recently (connection_gateway's DEFAULT_TIMEOUT_THRESHOLD).
@@ -136,7 +141,7 @@ export function useEntitySubscription(
         const count = callbacks.get(onRefresh) ?? 0;
         callbacks.set(onRefresh, count + 1);
         // A cached view may have missed updates while nobody tracked its parent.
-        if (count === 0) onRefresh(value);
+        if (count === 0) onRefresh(value, 'subscribed');
       }
       onCleanup(() => {
         if (onRefresh) {
@@ -167,7 +172,7 @@ export function useReopenTrackedEntitiesOnReconnect(): void {
       });
       tracked.lastSeen = Date.now();
       for (const onRefresh of tracked.refreshCallbacks.keys())
-        onRefresh(entity);
+        onRefresh(entity, 'reconnected');
     }
   });
 }
@@ -198,7 +203,7 @@ export function useRefreshTrackedEntitiesOnFocus(): void {
           );
           if (missedEvents)
             for (const onRefresh of tracked.refreshCallbacks.keys())
-              onRefresh(entity);
+              onRefresh(entity, 'refocused');
         }
       },
       { defer: true }

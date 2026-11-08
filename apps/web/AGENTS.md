@@ -25,6 +25,13 @@
 
 ## Verifying a change in a real browser
 
+`just test-functional` builds a production-like bundle of its fixtures and runs
+Playwright against it, not a dev server: each page otherwise fetches thousands of
+modules through the test's own routes, which limits how many tests can run at
+once. A fixture that depends on dev-only behavior won't work there. CI sets
+`FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
+one worker and no retries.
+
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
 LexicalMarkdown core browser suite (see its README).
@@ -87,10 +94,16 @@ searches, and picks by keyboard:
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
-meter only under its sort, with the direction in its label while importance moves:
+meter on every row except on phones, with the direction in its label while
+importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
-The fixture has its own sort buttons: the real touch layouts have no sort menu, so
-that coverage proves the meter's layout there, not that touch users can reach it.
+
+A channel call's row and its call panel (the real `Channel` over synthetic service
+responses) have a backend-free desktop and phone regression: the collapsed row, the
+blank slate, composer pinning, quote replies and the outside-message popup:
+`bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
+Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -153,6 +166,13 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+Email invitation cards have a backend-free desktop/phone regression for long
+descriptions wrapping inside the card, collapsed and expanded, the guest row
+lining up with its icon, and `+N more` keeping a 44px tap target on touch:
+`bunx playwright test --config src/features/email-message/browser-test/playwright.config.ts`.
+Use `wrap-anywhere` alone on wrapping text: `break-words` is emitted later and
+overrides `[overflow-wrap:anywhere]`, which then no longer shrinks min-content.
+
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
@@ -204,7 +224,8 @@ ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts, that a sent message renders its
-lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+lines with the spacing the draft showed, that the one-line composer centers its
+buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
@@ -413,6 +434,18 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
+- Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
+  property primitives and committed-response/session-fenced cache updates. Close
+  direct cache-write admission on logout and login replacement, and drain admitted
+  durable writes before clearing storage, while starting independent local/server
+  sign-out immediately. Retain the exact physical cache owner through cleanup even
+  after its public wrapper retires. On login, remove only session-written contact
+  records before refetch; recover typed owner/bootstrap failures only through the
+  original backend/scope factory. Preserve queued offline edits, report failed
+  repair, release email verification's busy state on failure, and retry only local
+  completion after a code has been consumed. New address/back/send attempts must
+  verify anew. Keep admission closed until cleanup succeeds; serialize login behind every logout wipe;
+  `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -474,10 +507,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
-- Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and **Enable Notifications** in the Android app, and keep
-  their Enable action on the native notification provider.
+- Label the notification permission toast **Enable notifications** on every
+  platform, and keep the desktop and Android Enable actions on the native
+  notification provider.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
+  Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
@@ -486,16 +520,24 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Probe identity on deploy-preview origins even without a local login hint;
   shared HttpOnly dev cookies are not visible to JavaScript or localStorage.
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
-  SSO redirect; the callback sets only HttpOnly cookies, and a load without the
-  hint never checks identity, so the returning user sees sign-in again.
+  SSO redirect, and as soon as a native sign-in redeems its session code; the
+  cookies are HttpOnly or in the native jar, and a load without the hint never
+  checks identity, so the user sees sign-in again over a valid session.
 - Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
   lose. `createNativeAuthSession` holds them for the sheet: its result reaches
   only the JavaScript that opened it, and leaving the app for a sign-in code
-  hides the page, the moment OTA bundles apply. Holds also reach the native
-  updater, whose foreground handler never asks the page. See
+  hides the page, the moment OTA bundles apply. Native sign-in (`useSsoLogin`)
+  holds them on until the session code is redeemed and the login hint is down.
+  Holds also reach the native updater, whose foreground handler never asks the
+  page. See
   [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
+- Bound shared cookie-auth refresh (`core/auth/session-refresh.ts`), including
+  proactive socket setup, to 12 seconds and native network availability; let
+  each caller cancel its wait independently, and keep refresh timeouts retryable.
+  On foregrounding, expire a pending refresh older than that deadline by wall
+  clock; suspension can pause its timer.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
@@ -523,6 +565,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.
+- Open tabs share one cache engine, so a source that reads on cache changes must
+  not read while hidden: use `createVisibleRefresh` to throttle too, or
+  `createHiddenDeferral` when its own reads already coalesce. Initial and
+  explicit reads still run.
+- Report cache operation failures through `createCacheErrorThrottle`: one owner
+  loss rejects every queued operation, and each report reaches the console and
+  session replay. The next report for that kind carries `cache.suppressed_count`.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
@@ -530,6 +579,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
+- Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
@@ -652,7 +702,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
   bump its checkpoint version when changing the hydration input contract.
 - Refresh the channel list's bounded unread edge when opening a conversation,
-  including an empty unread result after a read on another device.
+  including an empty unread result after a read on another device. Include
+  off-page favorites in unread presence without adding them to section counts.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
@@ -1082,7 +1133,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ### Creation choices and notifications
 
-- Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
+- Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
@@ -1101,6 +1152,18 @@ browser moves focus off a disabled field, so a failed save would strand it. Ente
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
 away leaves focus where the user put it. The backend-free regression is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
+
+### Assignee people scope
+
+Use only the current team roster and available agents for new Assignee selections.
+Keep existing selected outsiders visible and removable, without contact discovery.
+Reuse the existing selected-first ordering at opening and keep row positions
+stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
+Preserve each picker’s existing placeholder, sizing, and row styling.
+Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
+people/contact fields.
+Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
+import it directly from Tasks and legacy `next-soup` consumers.
 
 ### Sidebar tag dragging
 

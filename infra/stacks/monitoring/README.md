@@ -108,12 +108,16 @@ The gate is that preview:
   `renotifyInterval` only** — the routing move to GoAlert. The two AI-editing
   monitors, already deployed from this stack, update their `message` the same
   way. `dss-errors-prod` also changes its query and critical threshold
-  (150 → 800).
+  (150 → 800), and `rds-low-freeable-memory` its query and thresholds
+  (critical 2 GB → 250 MB, warning 3 GB → 500 MB) so 2 GiB instances stop
+  alerting at their normal level.
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
-  of the channel), and the GraphQL soup volume, gateway connections and task
-  count monitors their `query` and thresholds.
-- **90 resources to create**: 70 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
-  notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
+  of the channel), and the GraphQL soup volume, websocket upgrade, gateway
+  connections and task count monitors their `query` and thresholds (volume
+  and websocket upgrades also gain recovery thresholds).
+- **92 resources to create**: 72 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
+  notification retention, 10 WhatsApp session, 1 native call push, 2 harness
+  presence), 2 webhooks,
   7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync), the GoAlert synthetic test, the five prod
   alert dashboards, and the notification retention dashboard. If the paging
@@ -240,7 +244,7 @@ otherwise the missing-telemetry alerts intentionally fire. Until it ships, a
 downtime in `notification-retention.ts` mutes the prod one; delete the downtime
 once the instrumentation is deployed. This monitoring stack
 still requires a separate, explicitly approved manual deployment. Adopted
-monitors may change only in `message` and `renotifyInterval` (see the gate above).
+monitors may change only as the gate above lists.
 
 Consumers are intentionally ungrouped and do not commit offsets, so native MSK
 consumer-group lag is not meaningful. The new logs expose broker high watermark

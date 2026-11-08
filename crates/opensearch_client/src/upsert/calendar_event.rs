@@ -75,7 +75,7 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
 /// Upsert a single calendar event doc. Full-overwrite `index` semantics so
 /// omitted optional fields (e.g. `organizer_email`) get cleared on
 /// Some→None transitions.
-#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id), err)]
+#[tracing::instrument(skip(client, args), fields(event_id=%args.event_id))]
 pub(crate) async fn upsert_calendar_event(
     client: &opensearch::OpenSearch,
     args: &UpsertCalendarEventArgs,

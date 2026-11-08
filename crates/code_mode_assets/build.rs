@@ -13,8 +13,9 @@ const PREBUILT: &str = "CODE_MODE_ASSETS_DIR";
 const GENERATOR: &str = "packages/code-mode-sdk/scripts/generate.ts";
 
 /// Everything the generator reads, relative to the repository root. TypeDoc
-/// compiles every file `packages/sdk/tsconfig.json` includes.
-const GENERATOR_INPUTS: [&str; 17] = [
+/// compiles every file `packages/sdk/tsconfig.json` includes, and the SDK's
+/// declarations are emitted with `tsconfig.build.json`.
+const GENERATOR_INPUTS: [&str; 18] = [
     "bun.lock",
     "package.json",
     "packages/code-mode-sdk/package.json",
@@ -31,6 +32,7 @@ const GENERATOR_INPUTS: [&str; 17] = [
     "packages/sdk/services.ts",
     "packages/sdk/src",
     "packages/sdk/tests",
+    "packages/sdk/tsconfig.build.json",
     "packages/sdk/tsconfig.json",
 ];
 

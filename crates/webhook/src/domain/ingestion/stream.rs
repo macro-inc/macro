@@ -3,8 +3,8 @@
 use super::{
     LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
     normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
-    normalized_channel_event, normalized_document_event, normalized_message_event,
-    normalized_webhook_event,
+    normalized_call_notification_event, normalized_channel_event, normalized_document_event,
+    normalized_message_event, normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -12,6 +12,7 @@ use crate::domain::{
 };
 use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
+use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::EntityType;
@@ -42,6 +43,23 @@ pub(crate) fn channel_stream_candidate(
             entity_type: EntityType::Channel,
         },
         event: normalized,
+    })
+}
+
+pub(crate) fn call_stream_candidate(
+    event: &Event<CallNotificationEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, recipient) = normalized_call_notification_event(event)?;
+    let audience = match recipient {
+        Some(user_id) => StreamAudience::User { user_id },
+        None => StreamAudience::Entity {
+            entity_id: normalized.entity_id.clone(),
+            entity_type: EntityType::Call,
+        },
+    };
+    Ok(StreamCandidateEvent {
+        event: normalized,
+        audience,
     })
 }
 
