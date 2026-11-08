@@ -1,19 +1,20 @@
 import {
+  ClipboardMsg,
   EditorInputMsg,
   FLAG_HANDLED,
-  ClipboardMsg,
+  type IQueryMsg,
+  type ISelectionChangeMsg,
+  type ISelectionMsg,
+  ListenerTableMsg,
   QueryMsg,
   QueryReplyMsg,
   SelectionMsg,
-  type IQueryMsg,
-  ListenerTableMsg,
   SessionInputMsg,
   TypeTableMsg,
-  type ISelectionMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { SessionExecutor } from '@macro-inc/collaboration/session/executor';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import type { EditorPort, TextFromView, ViewSink } from './port';
 import type { TypeRow, ViewSelection } from './types';
@@ -155,8 +156,27 @@ export class SessionPort implements EditorPort {
       }
     );
   }
-  selectionFromView(selection: ViewSelection): void {
-    if (selection.kind === 'range') {
+  selectionFromView(
+    selection: ViewSelection,
+    change?: ISelectionChangeMsg
+  ): void {
+    if (change || (selection.kind === 'range' && selection.dirty)) {
+      const editor = EditorInputMsg.fromEditorSelection({
+        selection: selectionMessage(selection),
+        change: change ?? {},
+      });
+      this.executor.run(
+        () =>
+          this.executor.session.input(
+            SessionInputMsg.encode({ ...emptyInput(2), editor }),
+            this.executor.now(),
+            Date.now()
+          ),
+        (flags) => {
+          if (flags === 0) this.view.acknowledgeSelection(selection);
+        }
+      );
+    } else if (selection.kind === 'range') {
       const { anchor, focus } = selection;
       this.executor.run(
         () =>
@@ -227,13 +247,15 @@ export class SessionPort implements EditorPort {
     );
     return handled;
   }
-  input(editor: EditorInputMsg): void {
-    this.executor.run(() =>
-      this.executor.session.input(
-        SessionInputMsg.encode({ ...emptyInput(2), editor }),
-        this.executor.now(),
-        Date.now()
-      )
+  input(editor: EditorInputMsg, after?: (handled: boolean) => void): void {
+    this.executor.run(
+      () =>
+        this.executor.session.input(
+          SessionInputMsg.encode({ ...emptyInput(2), editor }),
+          this.executor.now(),
+          Date.now()
+        ),
+      (flags) => after?.(Boolean(flags & FLAG_HANDLED))
     );
   }
   clipboard(kind: number) {

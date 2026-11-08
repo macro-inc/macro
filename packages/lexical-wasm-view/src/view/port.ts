@@ -1,9 +1,10 @@
 import type {
   EditorInputMsg,
-  IViewEffectMsg,
   IClipboardMsg,
   IQueryMsg,
   IQueryReplyMsg,
+  ISelectionChangeMsg,
+  IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
 
@@ -38,7 +39,10 @@ export interface EditorPort {
     text: string,
     facts: number
   ): boolean | undefined;
-  selectionFromView(selection: ViewSelection): void;
+  selectionFromView(
+    selection: ViewSelection,
+    change?: ISelectionChangeMsg
+  ): void;
   command(
     code: number,
     a?: number,
@@ -52,7 +56,7 @@ export interface EditorPort {
     key: string,
     selection: ViewSelection
   ): boolean | undefined;
-  input(input: EditorInputMsg): void;
+  input(input: EditorInputMsg, after?: (handled: boolean) => void): void;
   setState(json: string): void;
   initialize(): void;
   clipboard(kind: number): IClipboardMsg;

@@ -4,6 +4,7 @@
  * unchanged-selection early return, Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import { textLeaf } from './dom';
+
 import type { EditorView } from './editor-view';
 import type { Point, ViewSelection } from './types';
 
@@ -61,7 +62,16 @@ export function readSelection(view: EditorView): ViewSelection {
     selection.anchorOffset
   );
   const focus = resolvePoint(view, selection.focusNode, selection.focusOffset);
-  return anchor && focus ? { kind: 'range', anchor, focus } : { kind: 'none' };
+  return anchor && focus
+    ? {
+        kind: 'range',
+        anchor,
+        focus,
+        dirty:
+          (anchor.type === 'text' && selection.anchorNode.nodeType !== 3) ||
+          (focus.type === 'text' && selection.focusNode.nodeType !== 3),
+      }
+    : { kind: 'none' };
 }
 export function sameSelection(
   left: ViewSelection,
@@ -99,7 +109,7 @@ export function domPoint(
   if (!dom || !record) return null;
   if (point.type === 'text') {
     const leaf = textLeaf(dom);
-    return leaf ? {node: leaf, offset: point.offset} : null;
+    return leaf ? { node: leaf, offset: point.offset } : null;
   }
   const slot = view.slot(point.key);
   if (!slot) return null;

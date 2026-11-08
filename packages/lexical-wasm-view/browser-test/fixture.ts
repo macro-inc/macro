@@ -1,46 +1,48 @@
-import init, {
-  EditorSession,
-} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
-import { NOOP_SPAN } from '@macro-inc/observability';
 import {
   ABI_MAJOR,
   Access,
   CommandCode,
+  type EditorInputMsg,
   SessionConfigMsg,
   SessionInputMsg,
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
-import { mountSessionView } from '../src/session-view';
 import {
-  SessionExecutor,
   type ExecutorOptions,
+  SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
-import { selectionMessage } from '../src/view/session-port';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
-import { EditorView } from '../src/view/editor-view';
-import { SessionPort } from '../src/view/session-port';
-import { createBuiltinRegistry } from '../src/view/node-views/builtins';
+import { NOOP_SPAN } from '@macro-inc/observability';
+import init, {
+  EditorSession,
+} from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
+import { mountSessionView } from '../src/session-view';
+import { KEY_DOWN_COMMAND } from '../src/view/commands';
 import {
-  DRAG_START_COMMAND,
-  DRAG_OVER_COMMAND,
   DRAG_END_COMMAND,
+  DRAG_OVER_COMMAND,
+  DRAG_START_COMMAND,
   INTERNAL_DROP_COMMAND,
 } from '../src/view/drag';
+import { EditorView } from '../src/view/editor-view';
+import { createBuiltinRegistry } from '../src/view/node-views/builtins';
 import type { ViewSink } from '../src/view/port';
+import { SessionPort, selectionMessage } from '../src/view/session-port';
+import type { TypeRow } from '../src/view/types';
 import {
   fixtureTypes,
   registerFixtureViews,
   renderFixture,
 } from './render-fixture';
-import type { TypeRow } from '../src/view/types';
 
 await init();
 const root = document.getElementById('editor');
 if (!root) throw new Error('Missing editor root');
 let view: EditorView | undefined;
 const errors: string[] = [];
+const crossings: string[] = [];
 const sink: ViewSink = {
   apply(words, strings, effects) {
     view?.apply(words, strings, effects);
@@ -66,7 +68,7 @@ const nativeConfig = {
   chatter: false,
   headless: false,
   viewEngine: 1,
-  viewOs: 0,
+  viewOs: /Android/.test(navigator.userAgent) ? 3 : 0,
   token: '',
   traceparent: '',
   coalesce: 10000,
@@ -112,7 +114,7 @@ view = EditorView.mount(
   {
     namespace: 'fixture',
     theme: {
-      text: { bold: 'theme-bold' },
+      text: { bold: 'theme-bold', underline: 'theme-underline' },
       heading: { h2: 'theme-h2' },
       codeHighlight: { keyword: 'theme-keyword' },
     },
@@ -133,12 +135,57 @@ let second: Awaited<ReturnType<typeof mountSessionView>> | undefined;
 let highlightDisposers: (() => void)[] = [];
 const capturedMimes: { mime: string; value: string }[] = [];
 const admit = port.input.bind(port);
-port.input = (input) => {
+port.input = (input, after) => {
   if (input.isEditorPaste())
     capturedMimes.splice(0, capturedMimes.length, ...input.value.clipboard);
-  admit(input);
+  admit(input, after);
 };
 const fixture = {
+  unhandledKeyFallback() {
+    class UnhandledPort extends SessionPort {
+      listeners(): ReadonlyMap<string, number> {
+        return new Map([['KeyDown', 16]]);
+      }
+      input(_input: EditorInputMsg, after?: (handled: boolean) => void): void {
+        after?.(false);
+      }
+    }
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const fallback = EditorView.mount(
+      element,
+      new UnhandledPort(executor, sink, false),
+      createBuiltinRegistry(),
+      {
+        namespace: 'unhandled',
+        theme: {},
+        editable: true,
+        preset: 'rich',
+        onError: (error) => errors.push(String(error)),
+      }
+    );
+    let calls = 0;
+    fallback.registerViewCommand(
+      KEY_DOWN_COMMAND,
+      () => {
+        calls++;
+        return true;
+      },
+      1
+    );
+    element.focus();
+    element.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Backspace',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    fallback.dispose();
+    element.remove();
+    return calls;
+  },
   capturedMimes,
   drag() {
     const events: string[] = [];
@@ -394,7 +441,7 @@ const fixture = {
   undo: () => port.command(CommandCode.Undo),
   redo: () => port.command(CommandCode.Redo),
   errors,
-  crossings: new Array<string>(),
+  crossings,
   metrics: { calls: 0, nodeCalls: 0, selectionWrites: 0, textWrites: 0 },
   count() {
     fixture.metrics.calls =

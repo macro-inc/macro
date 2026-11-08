@@ -4,15 +4,27 @@
  * LexicalMutations.ts observation and LexicalUpdates.ts listener ordering.
  * Pin: Lexical 0.45.0 / 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
-import { batch, createComponent, createSignal } from 'solid-js';
-import { render } from 'solid-js/web';
+
 import {
   CommandCode,
   EditorInputMsg,
   type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import { batch, createComponent, createSignal } from 'solid-js';
+import { render } from 'solid-js/web';
+import { ClipboardAccess } from './clipboard';
+import type {
+  ViewCommand,
+  ViewCommandPriority,
+  ViewListener,
+} from './commands';
+import { textLeaf } from './dom';
+import { registerEvents } from './events';
 import { Mirror } from './mirror';
 import type { EditorPort, TextFromView, ViewSink } from './port';
+import { PresenceLayer } from './presence';
+import { BulkQueries } from './queries';
 import type {
   EditorThemeClasses,
   ElementDOMSlot,
@@ -20,28 +32,17 @@ import type {
   RenderContext,
 } from './registry';
 import { readSelection, sameSelection, writeSelection } from './selection';
+import { selectionMessage } from './session-port';
+import { TableObserver } from './table/observer';
 import type {
   AppliedDiff,
   MutationKind,
   NodeKey,
-  ViewNode,
-  ViewSelectionInfo,
-  ViewSelection,
   TypeFlags,
+  ViewNode,
+  ViewSelection,
+  ViewSelectionInfo,
 } from './types';
-import { textLeaf } from './dom';
-import { registerEvents } from './events';
-import { BulkQueries } from './queries';
-import { TableObserver } from './table/observer';
-import type {
-  ViewCommand,
-  ViewCommandPriority,
-  ViewListener,
-} from './commands';
-import { selectionMessage } from './session-port';
-import { ClipboardAccess } from './clipboard';
-import { PresenceLayer } from './presence';
-import { Telemetry, type Span } from '@macro-inc/observability';
 
 const roots = new WeakMap<Node, EditorView>();
 export interface CommitInfo {
@@ -86,6 +87,8 @@ export class EditorView implements ViewSink {
   private readonly observer: MutationObserver;
   private readonly presence: PresenceLayer;
   private readonly events: ReturnType<typeof registerEvents>;
+  private selectionMarkedAt = -Infinity;
+  private selectionMark: ViewSelectionInfo | null = null;
   private selectionInfo: ViewSelectionInfo = {
     selection: { kind: 'none' },
     format: 0,
@@ -149,8 +152,7 @@ export class EditorView implements ViewSink {
               dom = this.getElementByKey(key);
             if (!node || !dom) continue;
             if (node.kind === 'text') {
-              if (!textLeaf(dom))
-                this.replace(node, node, dom);
+              if (!textLeaf(dom)) this.replace(node, node, dom);
             } else this.reconcileChildren(key);
           }
           const active = this.root.ownerDocument.activeElement;
@@ -261,6 +263,11 @@ export class EditorView implements ViewSink {
     return (
       this.registry.get(node.type).getDOMSlot?.(node, dom) ?? { element: dom }
     );
+  }
+  recentSelectionMark(): ViewSelectionInfo | null {
+    return performance.now() < this.selectionMarkedAt + 200
+      ? this.selectionMark
+      : null;
   }
   selection(): ViewSelectionInfo {
     return this.selectionInfo;
@@ -441,6 +448,14 @@ export class EditorView implements ViewSink {
                 format: effect.format,
                 style: effect.style,
               };
+              if (
+                selection.kind === 'range' &&
+                selection.anchor.key === selection.focus.key &&
+                selection.anchor.offset === selection.focus.offset
+              ) {
+                this.selectionMarkedAt = performance.now();
+                this.selectionMark = this.selectionInfo;
+              }
               if (selection.kind === 'table')
                 this.tables
                   .get(selection.table)
