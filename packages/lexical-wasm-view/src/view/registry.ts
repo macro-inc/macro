@@ -85,6 +85,9 @@ export class NodeViewRegistry {
     }
     return importers;
   }
+  names(): readonly string[] {
+    return [...this.entries.keys()];
+  }
   has(name: string): boolean {
     return this.entries.has(name);
   }

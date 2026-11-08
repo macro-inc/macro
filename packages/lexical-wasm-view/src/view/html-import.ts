@@ -3,6 +3,7 @@
  * MIT licensed. DOM import selection, wrappers and built-in conversions retargeted
  * from Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
+import { macroConversion } from './macro-html';
 import { convertText, importLineBreak, isBlockDOM } from './html-text';
 import type { DraftConversion, NodeViewRegistry } from './registry';
 import type { JsonObject } from './types';
@@ -110,6 +111,7 @@ export function importHTML(
   const CellType = window.HTMLTableCellElement;
   const RowType = window.HTMLTableRowElement;
   const parsed = new window.DOMParser().parseFromString(html, 'text/html');
+  const macroTypes = registry?.names();
   function children(
     node: Node,
     formats: ReadonlyMap<string, number>
@@ -179,7 +181,7 @@ export function importHTML(
         ? [{ type: 'linebreak', version: 1 }]
         : [];
     let values = children(node, nextFormats);
-    let custom: DraftConversion | null = null;
+    let custom: DraftConversion | null = macroConversion(node, macroTypes);
     for (const importer of registry?.importers(tag) ?? []) {
       const candidate = importer(node);
       if (candidate && (!custom || candidate.priority >= custom.priority))
