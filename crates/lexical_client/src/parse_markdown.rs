@@ -32,6 +32,7 @@ pub struct MarkdownSnapshotOptions {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]

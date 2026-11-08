@@ -19,7 +19,7 @@ Task creation passes optional pinned property definition IDs through the owned
 defaults and let an empty document use the golden snapshot. An explicit empty
 list is distinct: it initializes through Lexical and writes an empty pin list.
 The outbound adapter maps domain options into the lexical client's options;
-the HTTP request still uses `initial_pins` and omits the field when absent.
+the HTTP request uses lexical-service's `initialPins` field and omits it when absent.
 Authorization and task property policy remain in the documents domain service.
 
 ## REST contract
