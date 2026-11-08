@@ -1,6 +1,6 @@
 use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_permissions::share_permission::team_share::{TeamShareRequest, authorize_team_share};
+use permissions_types::share_permission::team_share::{TeamShareRequest, authorize_team_share};
 use sqlx::PgPool;
 
 fn project() -> Entity<'static> {
@@ -461,7 +461,7 @@ async fn typed_owner_facts_match_sql_audiences_without_owner_escalation(
     pool: PgPool,
 ) -> rootcause::Result<()> {
     use macro_user_id::user_id::MacroUserIdStr;
-    use models_permissions::share_permission::team_share::TeamSharePolicyError;
+    use permissions_types::share_permission::team_share::TeamSharePolicyError;
 
     let team = Uuid::parse_str("90000000-0000-0000-0000-000000000011")?;
     let actor = MacroUserIdStr::parse_from_str("macro|typed-owner@example.com")?;

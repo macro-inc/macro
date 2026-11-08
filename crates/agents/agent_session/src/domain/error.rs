@@ -28,7 +28,7 @@ pub enum AgentSessionError {
     InvalidSharing(&'static str),
     /// Explicit owner-team sharing was rejected by the shared policy.
     #[error(transparent)]
-    TeamSharing(models_permissions::share_permission::team_share::TeamSharePolicyError),
+    TeamSharing(permissions_types::share_permission::team_share::TeamSharePolicyError),
     /// Sharing facts changed while an owner update was in flight.
     #[error("sharing changed; reload and try again")]
     SharingChanged,

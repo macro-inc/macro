@@ -59,7 +59,7 @@ macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 databases_types = { workspace = true }
 forms_types = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }

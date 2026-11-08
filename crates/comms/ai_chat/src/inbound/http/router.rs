@@ -14,7 +14,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::{Deserialize, Serialize};
 use shared_types::response::StringIDResponse;
@@ -342,7 +342,7 @@ pub struct PatchChatRequest {
     pub project_id: Option<String>,
     /// Share permission updates.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
 }
 
 #[utoipa::path(

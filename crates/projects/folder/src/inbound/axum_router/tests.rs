@@ -30,7 +30,7 @@ use macro_authorization::{
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     SharePermissionV2, access_level::AccessLevel as ShareAccessLevel,
 };
 use rootcause::Report;

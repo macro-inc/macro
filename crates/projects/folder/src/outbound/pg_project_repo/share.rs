@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
 use entity_access_db_utils::EntityType;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 use sqlx::{PgPool, Postgres, Transaction};

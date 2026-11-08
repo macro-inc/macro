@@ -34,7 +34,7 @@ shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
 email_types = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 models_properties = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }

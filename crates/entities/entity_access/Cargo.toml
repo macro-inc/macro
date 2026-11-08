@@ -36,7 +36,7 @@ rootcause = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 entity_access_management_types = { workspace = true, default-features = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

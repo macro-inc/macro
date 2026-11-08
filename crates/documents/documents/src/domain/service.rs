@@ -8,16 +8,16 @@ mod tests;
 use crate::domain::ports::sync::DocumentSyncPort;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_kind::EntityType;
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
-    authorize_team_share,
-};
-use models_permissions::share_permission::{
-    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
-};
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
 use models_properties::service::property_change_source::PropertyChangeSource;
+use permissions_types::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
+use permissions_types::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1743,7 +1743,7 @@ impl<
         {
             if args.project_id.is_some()
                 && *access_level
-                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+                    != permissions_types::share_permission::access_level::AccessLevel::Owner
             {
                 return Err(DocumentError::Unauthorized);
             }
@@ -1756,7 +1756,7 @@ impl<
             });
             if requires_legacy_owner_access
                 && *access_level
-                    != models_permissions::share_permission::access_level::AccessLevel::Owner
+                    != permissions_types::share_permission::access_level::AccessLevel::Owner
             {
                 return Err(DocumentError::Unauthorized);
             }

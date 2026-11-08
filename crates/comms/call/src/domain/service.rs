@@ -19,10 +19,6 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareLevel, TeamShareRequest, authorize_team_share,
-};
 use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
     APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
@@ -32,6 +28,10 @@ use notification::domain::models::{
 };
 use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

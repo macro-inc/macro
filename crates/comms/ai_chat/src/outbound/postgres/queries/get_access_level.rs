@@ -1,6 +1,6 @@
 //! Fetch a user's access level on a chat.
 
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::str::FromStr;
 
 /// Get the user's access level on a chat from the `entity_access` table.

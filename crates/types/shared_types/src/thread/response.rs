@@ -1,4 +1,4 @@
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use utoipa::ToSchema;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

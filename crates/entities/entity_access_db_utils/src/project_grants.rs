@@ -6,7 +6,7 @@
 
 use entity_access_management_types::EntityAccessSourceType;
 use entity_kind::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 
 use crate::walk_up_project_tree;

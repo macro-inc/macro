@@ -10,7 +10,7 @@ use entity_access::domain::{
     models::{EntityType, OwnerAccessLevel, ViewAccessLevel},
     ports::EntityAccessService,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
@@ -93,8 +93,8 @@ pub struct SessionSharingResponse {
     /// Explicit channel grants.
     pub channels: Vec<SessionChannelGrant>,
 }
-impl From<models_permissions::share_permission::SharePermissionV2> for SessionSharingResponse {
-    fn from(value: models_permissions::share_permission::SharePermissionV2) -> Self {
+impl From<permissions_types::share_permission::SharePermissionV2> for SessionSharingResponse {
+    fn from(value: permissions_types::share_permission::SharePermissionV2) -> Self {
         Self {
             owner: value.owner,
             link_scope: match value.link_share {

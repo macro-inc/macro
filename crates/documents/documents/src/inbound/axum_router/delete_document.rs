@@ -7,7 +7,7 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::MacroAuthorizationService;
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
 use shared_types::document::DocumentBasic;
 use shared_types::response::GenericSuccessResponse;
 

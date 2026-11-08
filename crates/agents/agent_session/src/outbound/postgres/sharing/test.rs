@@ -4,7 +4,7 @@ use crate::outbound::postgres::test::{
     create_session, create_test_bot, insert_originating_thread_fixture, new_session, test_repo,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
 use sqlx::PgPool;

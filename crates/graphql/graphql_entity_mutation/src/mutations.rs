@@ -12,7 +12,7 @@ use entity_mutation::{
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };

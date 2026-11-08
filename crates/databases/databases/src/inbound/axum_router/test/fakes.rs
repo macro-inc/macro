@@ -19,7 +19,7 @@ use macro_authorization::{
 };
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use rootcause::Report;
 use uuid::Uuid;
 

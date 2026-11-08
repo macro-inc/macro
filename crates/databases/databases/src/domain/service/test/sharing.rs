@@ -1,14 +1,12 @@
 use super::*;
 use crate::domain::sharing::{DatabaseSharingRepo, DatabaseSharingService, SharingWrite};
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::team_share::{AuthorizedTeamShareCommand, TeamShareFacts};
+use permissions_types::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 
 const TEAM: Uuid = Uuid::from_u128(0x0199a000_0000_7000_8000_00000000aa01);
 
@@ -92,12 +90,12 @@ async fn invalid_share_requests_are_rejected_before_persistence() {
     let valid = UpdateChannelSharePermission {
         channel_id: macro_uuid::generate_uuid_v7().to_string(),
         operation: UpdateOperation::Add,
-        access_level: Some(models_permissions::share_permission::access_level::AccessLevel::View),
+        access_level: Some(permissions_types::share_permission::access_level::AccessLevel::View),
     };
     for invalid in [
         vec![UpdateChannelSharePermission {
             access_level: Some(
-                models_permissions::share_permission::access_level::AccessLevel::Owner,
+                permissions_types::share_permission::access_level::AccessLevel::Owner,
             ),
             ..valid.clone()
         }],
@@ -241,9 +239,9 @@ async fn the_owner_shares_a_database_with_their_team_and_stops_sharing_it() {
     assert_eq!(
         world.lock().unwrap().team_share,
         Some(
-            models_permissions::share_permission::team_share::TeamShareGrant {
+            permissions_types::share_permission::team_share::TeamShareGrant {
                 team_id: TEAM,
-                level: models_permissions::share_permission::team_share::TeamShareLevel::Edit,
+                level: permissions_types::share_permission::team_share::TeamShareLevel::Edit,
             }
         )
     );
@@ -369,7 +367,7 @@ async fn sharing_changes_publish_a_sharing_changed_event() {
                 channel_id: "0199a000-0000-7000-8000-000000000001".into(),
                 operation: UpdateOperation::Add,
                 access_level: Some(
-                    models_permissions::share_permission::access_level::AccessLevel::Edit,
+                    permissions_types::share_permission::access_level::AccessLevel::Edit,
                 ),
             }]),
         },

@@ -11,7 +11,7 @@ use channels::domain::{
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_file_type::FileType;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     access_level::AccessLevel,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };

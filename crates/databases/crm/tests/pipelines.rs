@@ -1300,9 +1300,9 @@ async fn direct_message(pool: &PgPool, members: &[&str]) -> Uuid {
 
 fn channel_grants(
     grants: &[(Uuid, Option<AccessLevel>)],
-) -> models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-    use models_permissions::share_permission::channel_share_permission::*;
-    models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+) -> permissions_types::share_permission::UpdateSharePermissionRequestV2 {
+    use permissions_types::share_permission::channel_share_permission::*;
+    permissions_types::share_permission::UpdateSharePermissionRequestV2 {
         link_share: None,
         link_share_access_level: None,
         team_share_access_level: None,
@@ -1375,7 +1375,7 @@ async fn editors_share_with_people_and_only_the_owner_changes_team_access(pool: 
     assert_eq!(
         shared.channel_share_permissions.unwrap(),
         vec![
-            models_permissions::share_permission::channel_share_permission::ChannelSharePermission {
+            permissions_types::share_permission::channel_share_permission::ChannelSharePermission {
                 channel_id: to_teammate.to_string(),
                 access_level: AccessLevel::Edit,
             }
@@ -1433,11 +1433,11 @@ async fn editors_share_with_people_and_only_the_owner_changes_team_access(pool: 
             (to_colleague, None),
             (to_colleague, Some(AccessLevel::Edit)),
         ]),
-        models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+        permissions_types::share_permission::UpdateSharePermissionRequestV2 {
             team_share_access_level: Some(Some(AccessLevel::Edit)),
             ..channel_grants(&[])
         },
-        models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+        permissions_types::share_permission::UpdateSharePermissionRequestV2 {
             link_share_access_level: Some(Some(AccessLevel::View)),
             ..channel_grants(&[])
         },

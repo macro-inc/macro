@@ -4,7 +4,7 @@ use async_graphql::{Enum, ID, InputObject, MaybeUndefined};
 use graphql_common::parse_id;
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_properties::GraphqlSetPropertyValue;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };

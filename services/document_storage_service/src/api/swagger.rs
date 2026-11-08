@@ -155,7 +155,6 @@ use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
@@ -165,6 +164,7 @@ use models_soup::email_thread::{
 };
 use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::project::SoupProject;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 use project::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
@@ -1105,12 +1105,12 @@ use utoipa::OpenApi;
 
 
             // Permissions V2
-            models_permissions::share_permission::LinkShare,
-            models_permissions::share_permission::access_level::AccessLevel,
-            models_permissions::share_permission::SharePermissionV2,
-            models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
-            models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
-            models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+            permissions_types::share_permission::LinkShare,
+            permissions_types::share_permission::access_level::AccessLevel,
+            permissions_types::share_permission::SharePermissionV2,
+            permissions_types::share_permission::UpdateSharePermissionRequestV2, // Share permission
+            permissions_types::share_permission::channel_share_permission::ChannelSharePermission,
+            permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
             entity::get_entity_permission::EntityPermissionResponse,
             entity_access::domain::models::EntityPermission,
             entity_access::domain::models::ParticipantRole,

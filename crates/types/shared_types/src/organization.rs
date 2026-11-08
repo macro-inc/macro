@@ -1,6 +1,6 @@
 use utoipa::ToSchema;
 
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema)]
 pub struct OrganizationDefaultSharePermission {

@@ -28,7 +28,7 @@ properties, and activity.
 
 ## Boundaries
 
-- Depends on: `entity_access` (ports), `activity`, `models_permissions`,
+- Depends on: `entity_access` (ports), `activity`, `permissions_types`,
   `macro_event_broker`/`macro_event_topics`, optionally `properties` /
   `system_properties` (feature `resources`).
 - Used by: `graphql_initiative`, `agent_tools`, `initiative_description`,

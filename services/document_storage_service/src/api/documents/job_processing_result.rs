@@ -8,7 +8,7 @@ use axum::{
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
 use macro_db_client::document::get_document_process_content_from_job_id;
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use shared_types::response::GenericErrorResponse;
 use shared_types::response::GenericResponse;
 use sqlx::PgPool;

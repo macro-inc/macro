@@ -59,7 +59,7 @@ use shared_types::{
 };
 
 use dcs_types::api::ChatHistoryBatchMessagesRequest;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 use shared_types::citations::DocumentTextPart;
 use utoipa::OpenApi;
 
@@ -142,8 +142,8 @@ use utoipa::OpenApi;
                 StringIDResponse,
                 GenericErrorResponse,
                 // Permissions V2
-                models_permissions::share_permission::LinkShare, models_permissions::share_permission::access_level::AccessLevel, models_permissions::share_permission::SharePermissionV2, models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
-                models_permissions::share_permission::channel_share_permission::ChannelSharePermission, models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+                permissions_types::share_permission::LinkShare, permissions_types::share_permission::access_level::AccessLevel, permissions_types::share_permission::SharePermissionV2, permissions_types::share_permission::UpdateSharePermissionRequestV2, // Share permission
+                permissions_types::share_permission::channel_share_permission::ChannelSharePermission, permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
 
                 // Chat
                 Chat,

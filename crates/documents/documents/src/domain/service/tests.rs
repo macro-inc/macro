@@ -1520,9 +1520,9 @@ fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
     )
 }
 
-fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
+fn team_share_facts() -> permissions_types::share_permission::team_share::TeamShareFacts {
     let owner = task_document_context("doc-1").owner;
-    models_permissions::share_permission::team_share::TeamShareFacts {
+    permissions_types::share_permission::team_share::TeamShareFacts {
         entity: EntityType::Document.with_entity_str("doc-1"),
         owner,
         owner_team_id: Some(uuid::Uuid::from_u128(1)),
@@ -1543,7 +1543,7 @@ async fn team_toggle_rejects_non_owner_without_writes_or_events() {
 }
 
 fn team_edit_args(
-    level: Option<models_permissions::share_permission::access_level::AccessLevel>,
+    level: Option<permissions_types::share_permission::access_level::AccessLevel>,
 ) -> EditDocumentServiceArgs {
     EditDocumentServiceArgs {
         document_name: Some("renamed".to_string()),
@@ -1607,7 +1607,7 @@ fn team_policy_receipts() -> Vec<EntityAccessReceipt<EditAccessLevel>> {
 
 #[tokio::test]
 async fn team_policy_rejects_editors_inherited_owners_and_identityless_receipts() {
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
     for level in [
         Some(AccessLevel::View),
         Some(AccessLevel::Comment),
@@ -1666,7 +1666,7 @@ fn owner_bot_edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
 
 #[tokio::test]
 async fn owner_scoped_bot_can_edit_and_toggle_explicit_team_sharing() {
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
     for level in [
         Some(AccessLevel::View),
         Some(AccessLevel::Comment),
@@ -1754,7 +1754,7 @@ async fn team_toggle_conflict_does_not_invalidate() {
 
 #[tokio::test]
 async fn team_edit_rejects_owner_level_and_enable_without_team_before_writes() {
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
     for (level, has_team) in [(AccessLevel::Owner, true), (AccessLevel::View, false)] {
         let mut repo = make_mock_repo();
         repo.expect_get_team_share_facts().returning(move |_| {
@@ -2487,10 +2487,10 @@ async fn team_bot_task_rejects_a_different_numbering_team() {
 }
 
 async fn create_document_with_team_default(
-    team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
+    team_default: Option<permissions_types::share_permission::TeamLinkShareDefault>,
     file_type: FileType,
-    expected_link_share: Option<models_permissions::share_permission::LinkShare>,
-    expected_access_level: Option<models_permissions::share_permission::access_level::AccessLevel>,
+    expected_link_share: Option<permissions_types::share_permission::LinkShare>,
+    expected_access_level: Option<permissions_types::share_permission::access_level::AccessLevel>,
 ) {
     let mut repo = make_mock_repo();
     repo.expect_get_owner_team()
@@ -2530,8 +2530,8 @@ async fn create_document_with_team_default(
 
 #[tokio::test]
 async fn create_document_repo_receives_team_derived_share_permission() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 
     // Team scope applies; a non-md doc has no entity level so it falls back to View.
     create_document_with_team_default(
@@ -2554,8 +2554,8 @@ async fn create_document_repo_receives_team_derived_share_permission() {
 
 #[tokio::test]
 async fn create_document_repo_receives_entity_default_without_team() {
-    use models_permissions::share_permission::LinkShare;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::LinkShare;
+    use permissions_types::share_permission::access_level::AccessLevel;
 
     create_document_with_team_default(
         None,
@@ -2569,7 +2569,7 @@ async fn create_document_repo_receives_entity_default_without_team() {
 
 #[tokio::test]
 async fn create_document_repo_receives_disabled_share_when_team_turned_link_share_off() {
-    use models_permissions::share_permission::TeamLinkShareDefault;
+    use permissions_types::share_permission::TeamLinkShareDefault;
 
     create_document_with_team_default(Some(TeamLinkShareDefault(None)), FileType::Md, None, None)
         .await;
@@ -2577,8 +2577,8 @@ async fn create_document_repo_receives_disabled_share_when_team_turned_link_shar
 
 #[tokio::test]
 async fn exact_initial_link_share_bypasses_md_public_edit_default() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, LinkShareState};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, LinkShareState};
 
     for state in [
         LinkShareState::Off,
@@ -2642,7 +2642,7 @@ async fn initiative_description_rejects_entity_default_link_share() {
 
 #[tokio::test]
 async fn initiative_description_accepts_exact_link_share() {
-    use models_permissions::share_permission::LinkShareState;
+    use permissions_types::share_permission::LinkShareState;
 
     let mut repo = make_mock_repo();
     let created_metadata = make_test_metadata();

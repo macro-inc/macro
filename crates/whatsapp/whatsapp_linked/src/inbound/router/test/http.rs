@@ -320,7 +320,7 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         &binding.id,
         EntityType::ExternalChat,
         &BOB.to_owned().try_into().unwrap(),
-        Some(models_permissions::share_permission::access_level::AccessLevel::View),
+        Some(permissions_types::share_permission::access_level::AccessLevel::View),
         false,
     )
     .await

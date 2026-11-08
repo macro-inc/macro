@@ -9,7 +9,7 @@ use entity_access::{
     inbound::axum_extractors::ProjectAccessLevelExtractor,
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use models_permissions::share_permission::{SharePermissionV2, access_level::AccessLevel};
+use permissions_types::share_permission::{SharePermissionV2, access_level::AccessLevel};
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};

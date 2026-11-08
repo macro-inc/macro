@@ -82,7 +82,7 @@ entity_registry_db_utils = { workspace = true, optional = true }
 genai_telemetry = { workspace = true }
 entity_kind = { workspace = true, optional = true }
 model_owner = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 share_permission_db_utils = { workspace = true, optional = true }
 shared_entity_registry = { workspace = true }
 clap = { workspace = true, optional = true }

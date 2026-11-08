@@ -39,7 +39,7 @@ use entity_mutation::{
 };
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
 use tracing::Instrument;
 

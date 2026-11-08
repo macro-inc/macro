@@ -18,7 +18,7 @@ use super::{
 use anyhow::Context;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::sync::Arc;
 
 /// Most operations one edit may apply.

@@ -16,8 +16,8 @@ use entity_mutation::{EntityMutationEffect, RestoreEntity};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::{CreationPrincipal, Owner};
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;
 use shared_types::document::{ContentType, DocumentMetadata, FileType};
 use shared_types::folder::{
@@ -956,8 +956,8 @@ async fn create_project_succeeds_when_event_publication_fails() {
 
 #[tokio::test]
 async fn create_project_resolves_share_permission_from_team_default() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
@@ -2521,7 +2521,7 @@ async fn upload_extract_uses_fixed_request_id() {
     assert_eq!(*request_ids.lock().unwrap(), vec![fixed_id]);
 }
 
-use models_permissions::share_permission::team_share::{TeamShareFacts, TeamShareLevel};
+use permissions_types::share_permission::team_share::{TeamShareFacts, TeamShareLevel};
 
 const OTHER_USER: &str = "macro|other@example.com";
 const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);

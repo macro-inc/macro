@@ -4,11 +4,11 @@ use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cow_str::CowLike;
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
 };
 use sqlx::{Pool, Postgres, Row};
@@ -20,7 +20,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::team_share::{
     TeamShareGrant, TeamShareLevel, TeamShareRequest, authorize_team_share,
 };
 

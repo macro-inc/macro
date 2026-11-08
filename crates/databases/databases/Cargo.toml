@@ -85,7 +85,7 @@ entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 databases_types = { workspace = true }
 models_properties = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 properties = { workspace = true, optional = true, features = ["outbound"] }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }

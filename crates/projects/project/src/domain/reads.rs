@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 #[cfg(feature = "ports")]
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

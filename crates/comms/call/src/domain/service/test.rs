@@ -14,13 +14,13 @@ use entity_mutation::{DeleteEntityPermanently, UpdateEntitySharePolicy};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
-    TeamShareFacts, TeamShareGrant, TeamShareLevel,
-};
 use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::service::NotificationIngress;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::{
+    TeamShareFacts, TeamShareGrant, TeamShareLevel,
+};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -2039,9 +2039,9 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
             authenticated_mutation_receipt(),
             EditCallRecordRequest {
                 share_permission: Some(
-                    models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                    permissions_types::share_permission::UpdateSharePermissionRequestV2 {
                         link_share: Some(Some(
-                            models_permissions::share_permission::LinkShare::Public,
+                            permissions_types::share_permission::LinkShare::Public,
                         )),
                         link_share_access_level: None,
                         team_share_access_level: None,

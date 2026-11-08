@@ -1,4 +1,4 @@
-# models_permissions
+# permissions_types
 
 ## What it is
 
@@ -39,7 +39,7 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 
 ## Checks
 
-- `cargo test -p models_permissions` (`SQLX_OFFLINE` unset).
+- `cargo test -p permissions_types` (`SQLX_OFFLINE` unset).
 
 ## Related
 

@@ -9,14 +9,14 @@ mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareCreation, TeamShareGrant, TeamShareLevel,
     TeamShareRequest, authorize_team_share,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
 use sqlx::PgPool;

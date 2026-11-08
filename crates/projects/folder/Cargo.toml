@@ -72,7 +72,7 @@ shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
 bulk_upload_types = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 s3_key = { workspace = true }
 shared_entity_registry = { workspace = true, optional = true }

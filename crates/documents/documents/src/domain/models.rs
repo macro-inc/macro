@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
+use permissions_types::share_permission::{LinkShareState, TeamLinkShareDefault};
 use shared_types::document::response::DocumentResponseMetadata;
 use shared_types::document::{DocumentMetadata, FileType};
 
@@ -483,10 +483,10 @@ pub struct EditDocumentRepoArgs {
     pub project_id: Option<String>,
     /// Updated share permissions.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     /// Owner-authorized conditional team update, applied in the metadata transaction.
     pub team_share:
-        Option<models_permissions::share_permission::team_share::AuthorizedTeamShareCommand>,
+        Option<permissions_types::share_permission::team_share::AuthorizedTeamShareCommand>,
     /// Whether to revoke direct non-owner user access in the edit transaction.
     pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
@@ -504,7 +504,7 @@ pub struct EditDocumentServiceArgs {
     pub project_id: Option<String>,
     /// Updated share permissions for the document.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     /// The new file type for the document (null to clear).
     #[serde(default)]
     pub file_type: Option<FileTypeUpdate>,

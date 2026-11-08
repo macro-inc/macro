@@ -6,7 +6,7 @@ use entity_kind::Entity;
 use graphql_common::require_authenticated_user;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShareState, SharePermissionV2, access_level::AccessLevel,
 };
 use project::domain::{models::*, reads::*};
@@ -484,7 +484,7 @@ async fn share_patch_distinguishes_omission_null_and_value() {
     let set = updates[2].share_permission.as_ref().unwrap();
     assert_eq!(
         set.link_share,
-        Some(Some(models_permissions::share_permission::LinkShare::Team))
+        Some(Some(permissions_types::share_permission::LinkShare::Team))
     );
     assert_eq!(
         set.link_share_access_level,

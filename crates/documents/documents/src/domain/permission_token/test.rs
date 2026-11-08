@@ -1,7 +1,7 @@
 use bot_id::{BotId, MACRO_AI_BOT_ID, NonSystemBotId};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
 use super::{decode_permission_token, encode_principal_permission_token};

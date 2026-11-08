@@ -1,6 +1,6 @@
 use crate::item::{ShareableItem, UserAccessibleItem};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

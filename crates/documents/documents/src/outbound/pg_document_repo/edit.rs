@@ -1,9 +1,9 @@
 //! SQL operations for editing document metadata and share permissions.
 
 use entity_kind::EntityType;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 
 pub(super) async fn get_document_owner(
@@ -155,7 +155,7 @@ async fn update_share_permission_row(
 async fn update_channel_share_permissions(
     transaction: &mut Transaction<'_, Postgres>,
     share_permission_id: &str,
-    channel_perms: &[models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission],
+    channel_perms: &[permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission],
 ) -> Result<(), sqlx::Error> {
     // Collect upserts (Add/Replace) and removals
     let mut upsert_channel_ids = Vec::new();
@@ -169,7 +169,7 @@ async fn update_channel_share_permissions(
                 upsert_access_levels.push(
                     perm.access_level
                         .unwrap_or(
-                            models_permissions::share_permission::access_level::AccessLevel::View,
+                            permissions_types::share_permission::access_level::AccessLevel::View,
                         )
                         .to_string(),
                 );

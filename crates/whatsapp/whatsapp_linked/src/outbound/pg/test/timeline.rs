@@ -265,7 +265,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
     let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let owner = receipt::<MessageView>(ALICE, binding.id);
     let viewer = receipt::<MessageView>(BOB, binding.id);
-    let update = models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+    let update = permissions_types::share_permission::UpdateSharePermissionRequestV2 {
         link_share: None,
         link_share_access_level: None,
         team_share_access_level: Some(Some(AccessLevel::View)),
@@ -300,7 +300,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         .chats
         .update_permissions(
             &owner,
-            &models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+            &permissions_types::share_permission::UpdateSharePermissionRequestV2 {
                 team_share_access_level: Some(None),
                 ..update
             },
@@ -313,7 +313,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         .ingest_event(alice, &text(50, CUSTOMER_JID, "PUBLIC", "Link sharing"))
         .await
         .unwrap();
-    use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+    use permissions_types::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
     let public = UpdateSharePermissionRequestV2 {
         link_share: Some(Some(LinkShare::Public)),
         link_share_access_level: Some(Some(AccessLevel::View)),
@@ -527,10 +527,8 @@ async fn a_group_mentioned_in_a_channel_is_readable_by_its_current_members(pool:
 async fn only_the_owners_own_session_changes_sharing(pool: PgPool) {
     let (linked, _, _, binding, _, _) = adopted(&pool).await;
     let owner = receipt::<MessageView>(ALICE, binding.id);
-    let public = models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-        link_share: Some(Some(
-            models_permissions::share_permission::LinkShare::Public,
-        )),
+    let public = permissions_types::share_permission::UpdateSharePermissionRequestV2 {
+        link_share: Some(Some(permissions_types::share_permission::LinkShare::Public)),
         link_share_access_level: Some(Some(AccessLevel::View)),
         team_share_access_level: None,
         channel_share_permissions: None,
@@ -551,7 +549,7 @@ async fn only_the_owners_own_session_changes_sharing(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_owner_sees_and_revokes_channel_grants(pool: PgPool) {
-    use models_permissions::share_permission::{
+    use permissions_types::share_permission::{
         UpdateSharePermissionRequestV2,
         channel_share_permission::{
             ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,

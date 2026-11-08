@@ -18,8 +18,8 @@ use import::domain::ports::{
     SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use uuid::Uuid;
 

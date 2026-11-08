@@ -10,9 +10,9 @@ use chrono::{DateTime, Utc};
 #[cfg(feature = "ports")]
 use entity_access::domain::models::AccessError;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::AuthorizedTeamShareCommand;
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

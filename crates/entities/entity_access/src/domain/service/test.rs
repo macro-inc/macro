@@ -12,7 +12,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{AccessibleForms, ScheduledActionGrants};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

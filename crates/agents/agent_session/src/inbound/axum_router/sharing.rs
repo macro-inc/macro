@@ -11,7 +11,7 @@ use entity_access::{
     inbound::axum_extractors::AgentSessionAccessLevelExtractor,
 };
 use macro_authorization::MacroAuthorizationService;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 /// Sharing routes, mounted below `/agent-sessions`.
 pub fn agent_session_sharing_router<T, Access, Auth, S>(

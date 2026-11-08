@@ -1,7 +1,7 @@
 use super::*;
 use entity_access::domain::models::{Entity, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, channel_share_permission::UpdateChannelSharePermission,
 };
 use std::sync::{Arc, Mutex};

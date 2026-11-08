@@ -17,8 +17,8 @@ where
 
 use anyhow::Context;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
@@ -296,7 +296,7 @@ where
 pub async fn update_link_share<'e, E>(
     executor: E,
     id: &str,
-    update: &models_permissions::share_permission::UpdateSharePermissionRequestV2,
+    update: &permissions_types::share_permission::UpdateSharePermissionRequestV2,
 ) -> Result<(), sqlx::Error>
 where
     E: Executor<'e, Database = Postgres>,

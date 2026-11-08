@@ -7,7 +7,7 @@ use macro_user_id::{
     cow_str::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
 };
 use model_user::Language;
-use models_permissions::share_permission::LinkShare;
+use permissions_types::share_permission::LinkShare;
 use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPermissionsError};
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;

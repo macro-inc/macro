@@ -3,7 +3,7 @@ use super::*;
 use crate::domain::rich::RichContent;
 use entity_access::domain::models::{AccessLevel, EntityPermission};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
     team_share::{TeamShareLevel, TeamShareRequest, authorize_team_share},

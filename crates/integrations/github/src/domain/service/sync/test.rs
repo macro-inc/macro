@@ -41,12 +41,12 @@ use github_pull_requests::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
-use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
 };
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::{DocumentBasic, DocumentMetadata};
 
 use super::*;
@@ -339,7 +339,7 @@ impl DocumentService for StubDocumentService {
     async fn set_skill_description(
         &self,
         _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
-            models_permissions::share_permission::access_level::EditAccessLevel,
+            permissions_types::share_permission::access_level::EditAccessLevel,
         >,
         _description: documents::domain::skill_description::SkillDescription,
     ) -> Result<(), documents::domain::models::DocumentError> {

@@ -395,7 +395,7 @@ impl IntoResponse for AgentSessionApiError {
             )
                 .into_response(),
             Self::Domain(AgentSessionError::TeamSharing(error)) => {
-                use models_permissions::share_permission::team_share::TeamSharePolicyError;
+                use permissions_types::share_permission::team_share::TeamSharePolicyError;
                 let status = match error {
                     TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
                         StatusCode::FORBIDDEN

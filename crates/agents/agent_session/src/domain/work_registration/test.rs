@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use entity_access::domain::models::{Entity, EntityPermission, EntityType};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 use super::*;
 use crate::domain::ports::SessionViewAccess;

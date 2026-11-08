@@ -23,7 +23,7 @@ use item_filters::{
     ast::{LiteralTree, call::CallLiteral},
 };
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::team_share::TeamShareFacts;
+use permissions_types::share_permission::team_share::TeamShareFacts;
 use sqlx::PgPool;
 use uuid::Uuid;
 

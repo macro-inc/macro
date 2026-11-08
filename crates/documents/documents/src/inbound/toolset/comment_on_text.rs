@@ -8,7 +8,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use messages::domain::models::{NewThreadAnchor, PostMessage, PostMessageNotificationPolicy};
 use messages::domain::service::MessageWrite;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use shared_types::document::FileType;

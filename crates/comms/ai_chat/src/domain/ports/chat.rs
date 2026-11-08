@@ -10,9 +10,9 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::TeamShareFacts;
-use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::TeamShareFacts;
+use permissions_types::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use shared_types::chat::Chat;
 
 /// Repository trait for low-level chat data access.

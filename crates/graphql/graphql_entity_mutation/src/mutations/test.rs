@@ -10,7 +10,7 @@ use entity_mutation::{
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+use permissions_types::share_permission::{LinkShare, access_level::AccessLevel};
 use tracing::{
     field::{Field, Visit},
     span::{Attributes, Id, Record},
@@ -133,7 +133,7 @@ impl QueryRoot {
         &self,
         input: super::UpdateEntitySharePolicyInput,
     ) -> async_graphql::Result<
-        async_graphql::Json<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        async_graphql::Json<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     > {
         super::validate_share_policy_inputs(std::slice::from_ref(&input))?;
         Ok(async_graphql::Json(input.into_model()?.policy))

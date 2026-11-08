@@ -24,7 +24,7 @@ team-level link-share defaults and team sharing.
 
 ## Boundaries
 
-- Depends on: `entity_access_db_utils`, `models_permissions`, `macro_user_id`,
+- Depends on: `entity_access_db_utils`, `permissions_types`, `macro_user_id`,
   `macro_uuid`, `model_owner`.
 - Used by: `agent_session`, `call`, `channels`, `chat`, `databases`, `documents`,
   `initiative`, `projects`.

@@ -64,6 +64,6 @@ harness_id = { workspace = true, features = ["test-utils"] }
 image = { workspace = true }
 macro_db_migrator = { workspace = true }
 model_user = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tower = { workspace = true, features = ["util"] }

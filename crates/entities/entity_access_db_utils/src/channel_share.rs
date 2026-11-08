@@ -2,7 +2,7 @@
 
 use crate::{AccessLevel, EntityType};
 use macro_uuid::Uuid;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use permissions_types::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::{PgPool, Postgres, Transaction};
 
 /// Insert a direct channel grant only when one does not already exist.

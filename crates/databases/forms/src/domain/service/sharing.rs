@@ -8,9 +8,9 @@ use std::collections::HashSet;
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use macro_event_broker::MacroEventBroker;
-use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use uuid::Uuid;
 
 use super::{FormsServiceImpl, receipt_attribution, receipt_form_id, repository_error};

@@ -11,7 +11,7 @@ use entity_access::domain::{
     models::{BotAccessScope, EntityType},
     ports::EntityAccessService,
 };
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

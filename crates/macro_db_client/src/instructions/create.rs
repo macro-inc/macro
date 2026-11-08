@@ -4,7 +4,7 @@ use crate::{
 };
 use dcs_types::constants::INSTRUCTIONS_FILE_NAME;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use shared_types::document::FileType;
 use tracing::instrument;
 

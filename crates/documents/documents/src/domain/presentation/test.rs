@@ -1,7 +1,7 @@
 use super::*;
 use entity_access::domain::models::{Entity, EntityPermission, EntityType, RequiredPermission};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use pptx_engine::inspect::ShapeKindName;
 use std::sync::Mutex;
 

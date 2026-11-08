@@ -27,7 +27,7 @@ inbound adapter exposing initiative queries, mutations, and loaders.
 ## Boundaries
 
 - Depends on: `initiative` (ports only), `graphql_properties`, `graphql_soup`,
-  `graphql_permission`, `models_permissions`.
+  `graphql_permission`, `permissions_types`.
 - Used by: `complete_graph` (schema composition).
 
 ## Recipes

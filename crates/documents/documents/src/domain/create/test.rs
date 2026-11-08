@@ -484,8 +484,8 @@ async fn native_spreadsheet_creation_uses_shared_service_without_upload_or_markd
 
 #[test]
 fn link_share_defaults_to_the_entity_default_unless_set_exactly() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, LinkShareState};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, LinkShareState};
 
     let document = NewDocumentMetadata::new("test").into_new_document(repo_kind());
     assert_eq!(document.initial_link_share, InitialLinkShare::EntityDefault);

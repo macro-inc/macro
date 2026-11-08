@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::sharing::DatabaseSharingService;
 use entity_access::domain::models::OwnerAccessLevel;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 /// Read recipients and the team share for a database owned by the caller.
 /// Link sharing is always `null`: databases do not support it.

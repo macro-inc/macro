@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::response::DocumentResponseMetadata;
 use shared_types::document::{DocumentBasic, DocumentMetadata, FileType};
 use shared_types::response::{PresignedUrl, TypedSuccessResponse};

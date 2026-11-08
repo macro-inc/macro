@@ -6,7 +6,7 @@ use entity_access::domain::models::{
 };
 use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 use super::*;
 use crate::domain::ports::MockSurfaceInitializer;

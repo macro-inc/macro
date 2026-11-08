@@ -128,7 +128,7 @@ impl ChatService for MockService {
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
+    ) -> Result<permissions_types::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
 
@@ -235,7 +235,7 @@ impl ChatService for ErrorService {
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
+    ) -> Result<permissions_types::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -339,7 +339,7 @@ impl ChatService for NotFoundService {
     async fn get_permissions(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_permissions::share_permission::SharePermissionV2> {
+    ) -> Result<permissions_types::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 

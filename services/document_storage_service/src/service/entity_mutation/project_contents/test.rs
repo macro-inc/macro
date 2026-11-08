@@ -239,7 +239,7 @@ impl EntityLifecycleService for FakeLifecycle {
         &self,
         _actor: &EntityMutationActor,
         _entity: &Entity<'static>,
-        _policy: models_permissions::share_permission::UpdateSharePermissionRequestV2,
+        _policy: permissions_types::share_permission::UpdateSharePermissionRequestV2,
     ) -> Result<Vec<Entity<'static>>, LifecycleError> {
         unreachable!("folder duplication never shares threads")
     }

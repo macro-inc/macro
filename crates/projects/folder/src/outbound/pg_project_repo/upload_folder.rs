@@ -5,7 +5,7 @@ use entity_registry::BotFacts;
 use entity_registry_db_utils::{OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use shared_types::document::{DocumentMetadata, FileType, FileTypeExt};
 use shared_types::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
 use shared_types::project::Project;

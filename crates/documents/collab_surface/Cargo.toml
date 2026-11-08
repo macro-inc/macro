@@ -31,7 +31,7 @@ macro_uuid = { workspace = true }
 shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

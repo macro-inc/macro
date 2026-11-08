@@ -118,7 +118,7 @@ mod self_read_guard {
             _entity_access_receipt: EntityAccessReceipt<
                 entity_access::domain::models::EditAccessLevel,
             >,
-        ) -> Result<models_permissions::share_permission::SharePermissionV2> {
+        ) -> Result<permissions_types::share_permission::SharePermissionV2> {
             unreachable!("guard should short-circuit before calling the chat service")
         }
 
@@ -383,7 +383,7 @@ mod self_read_guard {
             _entity_access_receipt: EntityAccessReceipt<
                 entity_access::domain::models::EditAccessLevel,
             >,
-        ) -> Result<models_permissions::share_permission::SharePermissionV2> {
+        ) -> Result<permissions_types::share_permission::SharePermissionV2> {
             Err(ChatErr::Unknown(anyhow::anyhow!("not used by this test")))
         }
 

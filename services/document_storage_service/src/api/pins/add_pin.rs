@@ -10,7 +10,7 @@ use axum::{
 
 use entity_access::inbound::axum_extractors::PinAccessLevelExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;
 use shared_types::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,

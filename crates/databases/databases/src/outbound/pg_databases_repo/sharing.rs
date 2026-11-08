@@ -4,13 +4,11 @@ use crate::domain::{
     sharing::{DatabaseSharingRepo, SharingWrite},
 };
 use entity_kind::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
+use permissions_types::share_permission::team_share::{AuthorizedTeamShareCommand, TeamShareFacts};
 use share_permission_db_utils::team_share::{self, TeamShareError};
 
 impl<Properties: Send + Sync + 'static> DatabaseSharingRepo for PgDatabasesRepo<Properties> {

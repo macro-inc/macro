@@ -17,7 +17,7 @@ use axum::{
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use shared_types::document::response::DocumentResponseMetadata;
 use shared_types::{
     document::{DocumentBasic, FileType, FileTypeExt},

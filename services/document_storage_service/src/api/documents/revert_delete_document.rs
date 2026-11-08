@@ -5,7 +5,7 @@ use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::TryStreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
 use serde::Deserialize;
 use shared_types::document::DocumentBasic;
 use shared_types::response::{

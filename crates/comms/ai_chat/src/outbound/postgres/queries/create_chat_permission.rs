@@ -1,7 +1,7 @@
 //! Create a share permission and link it to a chat.
 
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sqlx::{Postgres, Transaction};
 
 /// Create a share permission row and associate it with the given chat.

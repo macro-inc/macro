@@ -3,14 +3,12 @@
 //! Databases have no share link and refuse turning one on.
 
 use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::team_share::{AuthorizedTeamShareCommand, TeamShareFacts};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 use super::models::{DatabaseError, DatabaseId};
 

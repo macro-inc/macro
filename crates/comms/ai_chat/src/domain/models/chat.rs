@@ -1,6 +1,6 @@
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::AuthorizedTeamShareCommand;
 use serde::{Deserialize, Serialize};
 use shared_types::chat::ChatMessageWithAttachments;
 use utoipa::ToSchema;
@@ -32,7 +32,7 @@ pub struct PatchChatArgs {
     pub project_id: Option<String>,
     /// Share permission updates, if changing.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
 }
 
 /// Arguments the domain service hands to the repository when patching a chat.
@@ -47,7 +47,7 @@ pub struct PatchChatRepoArgs {
     pub project_id: Option<String>,
     /// Share permission updates, if changing.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     /// Owner-authorized team-share write, present only when the request
     /// carried an explicit `teamShareAccessLevel`.
     pub team_share: Option<AuthorizedTeamShareCommand>,

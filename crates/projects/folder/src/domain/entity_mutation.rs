@@ -11,7 +11,7 @@ use entity_mutation::{
     capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use project_id::ProjectId;
 use shared_types::project::{BasicProject, request::PatchProjectRequestV2};
 

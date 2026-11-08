@@ -4,8 +4,8 @@ use databases_types::views::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
 

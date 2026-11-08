@@ -49,7 +49,7 @@ macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 messages = { workspace = true, features = ["ports"], optional = true }
 serde = { workspace = true }

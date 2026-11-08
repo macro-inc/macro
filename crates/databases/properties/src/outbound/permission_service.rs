@@ -10,8 +10,8 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType as StorageEntityType;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

@@ -9,7 +9,7 @@ use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, ProjectBodyAccessLevelExtractorV2,
 };
 use macro_authorization::MacroAuthorizationService;
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use shared_types::document::DocumentBasic;
 use shared_types::response::GenericSuccessResponse;
 

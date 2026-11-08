@@ -10,7 +10,7 @@ use crate::domain::{
 };
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 
@@ -272,7 +272,7 @@ impl TimelineRepository for PgExternalChatRepository {
     async fn share_facts(
         &self,
         chat: Uuid,
-    ) -> ExternalChatResult<models_permissions::share_permission::team_share::TeamShareFacts> {
+    ) -> ExternalChatResult<permissions_types::share_permission::team_share::TeamShareFacts> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let result = share_permission_db_utils::team_share::load_facts(
             &mut tx,
@@ -289,7 +289,7 @@ impl TimelineRepository for PgExternalChatRepository {
         user: &MacroUserIdStr<'_>,
         update: &UpdateSharePermissionRequestV2,
         command: Option<
-            &models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+            &permissions_types::share_permission::team_share::AuthorizedTeamShareCommand,
         >,
     ) -> ExternalChatResult<()> {
         let user = user.as_ref();

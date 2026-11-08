@@ -9,7 +9,7 @@ use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 use entity_kind::{Entity, EntityType};
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
 use crate::domain::models::{

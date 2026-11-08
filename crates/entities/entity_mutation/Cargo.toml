@@ -10,7 +10,7 @@ entity_access = { workspace = true, features = [
 ] }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

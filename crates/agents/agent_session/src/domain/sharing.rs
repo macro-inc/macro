@@ -3,7 +3,7 @@
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
     channel_share_permission::UpdateOperation,

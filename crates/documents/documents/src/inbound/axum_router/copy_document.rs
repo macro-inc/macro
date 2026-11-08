@@ -8,7 +8,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use shared_types::document::{DocumentBasic, FileTypeExt};
 
 use super::{DocumentRouterState, Params};

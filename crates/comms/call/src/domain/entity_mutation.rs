@@ -12,7 +12,7 @@ use entity_mutation::{
     UpdateEntitySharePolicy,
 };
 use macro_event_broker::MacroEventBroker;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 
 use super::{
     models::{CallError, EditCallRecordRequest},

@@ -3,7 +3,7 @@ use super::{models::*, ports::ExternalChatResult, rich::RichContent};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use permissions_types::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -51,7 +51,7 @@ pub struct ExternalChatDetail {
     /// Owner-controlled standard sharing configuration.
     pub share_permission: SharePermissionV2,
     /// Caller's effective permission.
-    pub access_level: models_permissions::share_permission::access_level::AccessLevel,
+    pub access_level: permissions_types::share_permission::access_level::AccessLevel,
     /// Who is in the chat as an observer last read it; absent when no
     /// observer is connected.
     pub members: Option<ExternalChatMembers>,
@@ -430,7 +430,7 @@ pub trait TimelineRepository: Send + Sync {
     async fn share_facts(
         &self,
         chat: Uuid,
-    ) -> ExternalChatResult<models_permissions::share_permission::team_share::TeamShareFacts>;
+    ) -> ExternalChatResult<permissions_types::share_permission::team_share::TeamShareFacts>;
     /// Actual-owner update, including canonical team-share policy.
     async fn update_permissions(
         &self,
@@ -438,7 +438,7 @@ pub trait TimelineRepository: Send + Sync {
         user: &MacroUserIdStr<'_>,
         update: &UpdateSharePermissionRequestV2,
         command: Option<
-            &models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+            &permissions_types::share_permission::team_share::AuthorizedTeamShareCommand,
         >,
     ) -> ExternalChatResult<()>;
 }

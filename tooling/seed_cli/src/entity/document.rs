@@ -7,7 +7,7 @@ use anyhow::Context;
 use clap::{Args, Subcommand};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, access_level::AccessLevel,
 };
 use serde::Deserialize;

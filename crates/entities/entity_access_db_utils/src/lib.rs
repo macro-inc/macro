@@ -16,8 +16,8 @@ pub use entity_access_management_types::EntityAccessSourceType;
 pub use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-pub use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::{
+pub use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
 pub use source_grants::delete_source_grants;

@@ -20,8 +20,8 @@ use entity_access::domain::models::{
 };
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareCreation, TeamShareLevel, TeamSharePolicyError,
     TeamShareRequest, authorize_team_share,
 };

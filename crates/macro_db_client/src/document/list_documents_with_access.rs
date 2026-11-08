@@ -1,4 +1,4 @@
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::document::list::{DocumentListFilters, DocumentListItem};
 use sqlx::{Pool, Postgres};
 use std::str::FromStr;
@@ -108,7 +108,7 @@ pub async fn list_documents_with_access(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
     use shared_types::document::list::DocumentListFilters;
     use sqlx::{Pool, Postgres};
 

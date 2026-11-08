@@ -3,7 +3,7 @@ use entity_access::domain::models::{Entity, EntityPermission, EntityType, Requir
 use illustrator_engine::edit::{History, NewNode, Op, Position};
 use illustrator_engine::geom::Point;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218141";
 

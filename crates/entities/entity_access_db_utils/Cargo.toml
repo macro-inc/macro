@@ -17,7 +17,7 @@ model_owner = { workspace = true }
 entity_access_management_types = { workspace = true, default-features = true, features = [
   "db",
 ] }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]

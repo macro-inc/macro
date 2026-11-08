@@ -11,9 +11,9 @@ use entity_access::domain::models::{
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use mockall::Sequence;
-use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
-use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
-use models_permissions::share_permission::{
+use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use permissions_types::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
+use permissions_types::share_permission::{
     LinkShare, LinkShareState, SharePermissionV2, TeamLinkShareDefault,
     UpdateSharePermissionRequestV2,
 };

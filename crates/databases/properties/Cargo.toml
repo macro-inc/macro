@@ -14,7 +14,7 @@ outbound = [
   "dep:macro_uuid",
   "dep:entity_kind",
   "dep:model_notifications",
-  "dep:models_permissions",
+  "dep:permissions_types",
   "dep:notification",
   "dep:sqlx",
   "ports",
@@ -41,7 +41,7 @@ model_owner = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
 entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
-models_permissions = { workspace = true, optional = true }
+permissions_types = { workspace = true, optional = true }
 models_properties = { workspace = true }
 notification = { workspace = true, default-features = true, optional = true }
 schemars = { workspace = true, optional = true }

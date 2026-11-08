@@ -35,7 +35,7 @@ soft delete/restore/purge, and bulk upload into a project tree.
 ## Boundaries
 
 - Depends on: `entity_access`, `entity_access_management`, `entity_mutation`,
-  `macro_event_broker`, `model_owner`, `models_permissions`.
+  `macro_event_broker`, `model_owner`, `permissions_types`.
 - Used by: `agent_tools` (project tools), `soup_realtime_inbound`,
   `services/deleted_item_poller`, `services/search_processing_service`.
 

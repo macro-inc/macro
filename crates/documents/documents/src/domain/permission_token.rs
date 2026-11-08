@@ -9,7 +9,7 @@ use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt, Requi
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::CreationPrincipal;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Claims minted for the sync service. `actor` is not on the public

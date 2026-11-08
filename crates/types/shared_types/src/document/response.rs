@@ -8,7 +8,7 @@ use std::str::FromStr;
 use crate::document::{BomPart, FileType};
 use crate::response::TypedSuccessResponse;
 use crate::{document::DocumentMetadata, response::PresignedUrl};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;

@@ -1,4 +1,4 @@
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
 use sqlx::{Postgres, Transaction};
@@ -105,7 +105,7 @@ pub async fn remove_channel_share_permissions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::access_level::AccessLevel;
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("channel_share_permissions")))]
     async fn test_upsert_channel_share_permissions(

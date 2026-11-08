@@ -55,7 +55,7 @@ outbound = [
   "dep:unfurl",
   "ports",
 ]
-ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:databases_types", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
+ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:databases_types", "dep:permissions_types", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
@@ -64,7 +64,7 @@ search = ["dep:sqlx", "ports"]
 bot_id = { workspace = true, optional = true }
 databases = { workspace = true, features = ["ports"], optional = true }
 databases_types = { workspace = true, optional = true }
-models_permissions = { workspace = true, optional = true }
+permissions_types = { workspace = true, optional = true }
 entity_access_db_utils = { workspace = true, optional = true }
 anyhow = { workspace = true }
 csv = { workspace = true, optional = true }

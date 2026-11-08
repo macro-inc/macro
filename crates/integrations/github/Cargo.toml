@@ -116,7 +116,7 @@ mockall = { workspace = true }
 shared_types = { workspace = true }
 model_owner = { workspace = true }
 model_user = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

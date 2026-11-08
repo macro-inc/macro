@@ -20,7 +20,7 @@ use macro_user_id::{
 };
 use model_owner::Owner;
 use model_user::Language;
-use models_permissions::share_permission::LinkShare;
+use permissions_types::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 

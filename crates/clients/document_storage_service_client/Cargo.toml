@@ -9,7 +9,7 @@ anyhow = { workspace = true }
 shared_types = { workspace = true }
 model_owner = { workspace = true }
 bulk_upload_types = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 reqwest = { workspace = true, features = ["query"] }
 rootcause = { workspace = true }
 serde = { workspace = true }

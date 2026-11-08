@@ -17,7 +17,7 @@ use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_owner::Owner;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
+use permissions_types::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
 use shared_types::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
@@ -1019,7 +1019,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     async fn get_team_share_facts(
         &self,
         document_id: &str,
-    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, DocumentError>
+    ) -> Result<permissions_types::share_permission::team_share::TeamShareFacts, DocumentError>
     {
         share::get_team_share_facts(&self.pool, document_id).await
     }
@@ -1032,7 +1032,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     #[tracing::instrument(err, skip(self))]
     async fn set_team_share(
         &self,
-        command: models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+        command: permissions_types::share_permission::team_share::AuthorizedTeamShareCommand,
     ) -> Result<DocumentTeamShare, DocumentError> {
         share::set_team_share(&self.pool, command).await
     }

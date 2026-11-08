@@ -7,7 +7,7 @@ use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key};
 use shared_types::document::FileType;
 use shared_types::response::GenericErrorResponse;
