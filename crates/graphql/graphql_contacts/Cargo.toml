@@ -8,7 +8,7 @@ publish = false
 async-graphql = { workspace = true }
 contacts_core = { workspace = true }
 macro_user_id = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

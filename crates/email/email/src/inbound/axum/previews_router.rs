@@ -8,7 +8,7 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
-use models_pagination::{
+use pagination_types::{
     CursorOptionExt, CursorWithValAndFilter, SimpleSortMethod, TypeEraseCursor,
 };
 use std::sync::Arc;

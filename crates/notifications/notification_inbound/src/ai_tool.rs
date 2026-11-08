@@ -17,7 +17,6 @@ use async_trait::async_trait;
 use cow_str::CowLike;
 use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::CreatedAt;
 use notification::domain::{
     models::{
         UserNotificationRow,
@@ -28,6 +27,7 @@ use notification::domain::{
     },
     service::NotificationReader,
 };
+use pagination_types::CreatedAt;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -293,7 +293,7 @@ where
             .get_user_notifications::<serde_json::Value>(
                 MacroUserIdStr((*request_context.user_id).copied()),
                 Some(limit),
-                models_pagination::Query::Sort(CreatedAt, ()),
+                pagination_types::Query::Sort(CreatedAt, ()),
                 NotificationListFilters {
                     states: self.states.clone().unwrap_or_else(|| {
                         notification::domain::models::NotificationState::ACTIVE.to_vec()

@@ -11,7 +11,7 @@ use item_filters::{
         project::ProjectLiteral,
     },
 };
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use sqlx::Row;
 
 const MANY_CHANNELS: &str = "macro|counted-many@example.test";

@@ -9,7 +9,7 @@ use contacts_core::{
     ports::ContactDirectory,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 

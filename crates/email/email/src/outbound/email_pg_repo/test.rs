@@ -45,7 +45,7 @@ use item_filters::ast::email::{Email, EmailLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
+use pagination_types::{Cursor, CursorVal, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

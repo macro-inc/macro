@@ -4,7 +4,7 @@ use email::domain::{
     models::{EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest},
     ports::EmailPreviewServiceReadOnly,
 };
-use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use pagination_types::{PaginatedCursor, SimpleSortMethod};
 use uuid::Uuid;
 
 /// CRM eligibility contains revocable grants. Route the whole preview read to
@@ -46,7 +46,7 @@ mod test {
     use super::*;
     use email::domain::models::{PreviewView, PreviewViewStandardLabel};
     use macro_user_id::user_id::MacroUserIdStr;
-    use models_pagination::{Cursor, CursorVal, Query};
+    use pagination_types::{Cursor, CursorVal, Query};
     use std::sync::Mutex;
 
     #[derive(Default)]

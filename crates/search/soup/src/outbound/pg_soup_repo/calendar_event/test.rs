@@ -2,7 +2,7 @@ use super::*;
 use item_filters::{NotificationState, ast::EntityFilterAst};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CursorVal, CursorWithValAndFilter, Frecency};
+use pagination_types::{CursorVal, CursorWithValAndFilter, Frecency};
 use std::sync::Arc;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

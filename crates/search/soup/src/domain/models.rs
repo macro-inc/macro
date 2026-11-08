@@ -25,12 +25,12 @@ use item_filters::{
     ast::{EntityFilterAst, ExpandErr},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{
-    CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
-};
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use pagination_types::{
+    CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -56,7 +56,7 @@ use {
             properties_filter_matches_propertyless,
         },
     },
-    models_pagination::Cursor,
+    pagination_types::Cursor,
     recursion::CollapsibleExt,
     std::sync::Arc,
 };
@@ -253,7 +253,7 @@ impl<T> SoupQuery<T> {
     /// create a new instance of a [SimpleSortMethod] with [T] this is used to
     /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_simple]
     pub fn new_sort_simple(method: SimpleSortMethod, filters: T) -> Self {
-        SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Sort(
+        SoupQuery::Simple(SimpleQueryInner(pagination_types::Query::Sort(
             method, filters,
         )))
     }
@@ -261,7 +261,7 @@ impl<T> SoupQuery<T> {
     /// create a new instance of a [Frecency] with [T] this is used to
     /// construct the initial page request. To paginate an existing cursor see [Self::new_cursor_frecency]
     pub fn new_sort_frecency(method: Frecency, filters: T) -> Self {
-        SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Sort(
+        SoupQuery::Frecency(FrecencyQueryInner(pagination_types::Query::Sort(
             method, filters,
         )))
     }
@@ -270,21 +270,21 @@ impl<T> SoupQuery<T> {
     /// This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_simple]
     pub fn new_cursor_simple(cursor: CursorWithValAndFilter<Uuid, SimpleSortMethod, T>) -> Self {
-        SoupQuery::Simple(SimpleQueryInner(models_pagination::Query::Cursor(cursor)))
+        SoupQuery::Simple(SimpleQueryInner(pagination_types::Query::Cursor(cursor)))
     }
 
     /// create a new instance of a [Frecency] with an existing cursor on [T].
     /// This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_simple]
     pub fn new_cursor_frecency(cursor: CursorWithValAndFilter<Uuid, Frecency, T>) -> Self {
-        SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
+        SoupQuery::Frecency(FrecencyQueryInner(pagination_types::Query::Cursor(cursor)))
     }
 
     /// create a new instance of a [TouchedByMe] query with [T]. This is used
     /// to construct the initial page request. To paginate an existing cursor
     /// see [Self::new_cursor_touched]
     pub fn new_sort_touched(filters: T) -> Self {
-        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Sort(
+        SoupQuery::Touched(TouchedQueryInner(pagination_types::Query::Sort(
             TouchedByMe,
             filters,
         )))
@@ -294,14 +294,14 @@ impl<T> SoupQuery<T> {
     /// on [T]. This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_touched]
     pub fn new_cursor_touched(cursor: CursorWithValAndFilter<String, TouchedByMe, T>) -> Self {
-        SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Cursor(cursor)))
+        SoupQuery::Touched(TouchedQueryInner(pagination_types::Query::Cursor(cursor)))
     }
 
     /// create a new instance of a [NotifiedAt] query with [T]. This is used
     /// to construct the initial page request. To paginate an existing cursor
     /// see [Self::new_cursor_notified]
     pub fn new_sort_notified(filters: T) -> Self {
-        SoupQuery::Notified(NotifiedQueryInner(models_pagination::Query::Sort(
+        SoupQuery::Notified(NotifiedQueryInner(pagination_types::Query::Sort(
             NotifiedAt, filters,
         )))
     }
@@ -310,7 +310,7 @@ impl<T> SoupQuery<T> {
     /// on [T]. This is used to continue paginating on an existing cursor.
     /// To create a new initial page see [Self::new_sort_notified]
     pub fn new_cursor_notified(cursor: CursorWithValAndFilter<String, NotifiedAt, T>) -> Self {
-        SoupQuery::Notified(NotifiedQueryInner(models_pagination::Query::Cursor(cursor)))
+        SoupQuery::Notified(NotifiedQueryInner(pagination_types::Query::Cursor(cursor)))
     }
 
     /// Returns the filter payload embedded in this query.

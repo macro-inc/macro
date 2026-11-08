@@ -10,7 +10,7 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -422,10 +422,10 @@ async fn get_foreign_entities_for_user_forwards_limit_and_query() {
             None,
             vec![SourceId::user("macro|user@example.com")],
             37,
-            Query::Cursor(models_pagination::Cursor {
+            Query::Cursor(pagination_types::Cursor {
                 id: cursor_id,
                 limit: 37,
-                val: models_pagination::CursorVal {
+                val: pagination_types::CursorVal {
                     sort_type: SimpleSortMethod::CreatedAt,
                     last_val: cursor_value,
                 },

@@ -20,7 +20,7 @@ use item_filters::ast::{
     chat::ChatLiteral, date::DateLiteral, document::DocumentLiteral, project::ProjectLiteral,
     properties::PropertiesLiteral,
 };
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use recursion::CollapsibleExt;
 use sqlx::{Postgres, QueryBuilder};
 

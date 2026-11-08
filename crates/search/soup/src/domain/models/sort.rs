@@ -1,7 +1,7 @@
 //! Sort descriptors and position values for Soup's dynamic query.
 
 use chrono::{DateTime, Utc};
-use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod, Sortable};
+use pagination_types::{Cursor, CursorVal, Query, SimpleSortMethod, Sortable};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use uuid::Uuid;
@@ -12,7 +12,7 @@ use super::SoupSortDirection;
 ///
 /// [`DynamicSort`] and [`DynamicSortValue`] are untagged, and a name sort's
 /// payload is otherwise a subset of a property sort's. This tag, serialized as
-/// the string `"name"` like [`models_pagination::NotifiedAt`], is what tells
+/// the string `"name"` like [`pagination_types::NotifiedAt`], is what tells
 /// the two apart when a cursor comes back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]

@@ -24,7 +24,7 @@ third-party system, following the hexagonal architecture pattern.
 
 ## Boundaries
 
-- Depends on: `entity_access` (ports), `item_filters`, `models_pagination`.
+- Depends on: `entity_access` (ports), `item_filters`, `pagination_types`.
 - Used by: `github_pull_requests`, `github`, `soup`, `documents`, `memory`,
   `agent_tools`, `document_storage_service`, `document_cognition_service`,
   `authentication_service`, `mcp_service`.

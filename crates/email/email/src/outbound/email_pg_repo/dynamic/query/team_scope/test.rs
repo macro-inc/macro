@@ -7,7 +7,7 @@ use item_filters::ast::email::{AttachmentKind, Email, SubjectQuery};
 use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::email::EmailStr;
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use sqlx::Execute;
 use std::cell::RefCell;
 use std::sync::Arc;

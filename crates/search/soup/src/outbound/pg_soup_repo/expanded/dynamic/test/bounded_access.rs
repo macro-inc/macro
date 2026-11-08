@@ -14,7 +14,7 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
     },
 };
-use models_pagination::{
+use pagination_types::{
     CursorVal, CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn,
 };
 use serde_json::json;

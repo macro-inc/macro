@@ -21,7 +21,7 @@ axum = [
   "dep:model_user",
   "dep:serde_with",
   "dep:utoipa",
-  "models_pagination/axum",
+  "pagination_types/axum",
   "notification/schema",
 ]
 
@@ -41,7 +41,7 @@ macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true, optional = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }

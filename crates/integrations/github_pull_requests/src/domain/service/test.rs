@@ -18,7 +18,7 @@ use foreign_entity::domain::{
 };
 use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
+use pagination_types::{Cursor, CursorVal, Query, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::GithubPullRequestServiceImpl;

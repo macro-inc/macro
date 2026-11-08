@@ -61,7 +61,7 @@ macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["broker"] }
 entity_kind = { workspace = true, optional = true }
 model_file_type = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

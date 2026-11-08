@@ -3,7 +3,7 @@
 use grouping_types::GroupingConfig;
 use item_filters::ast::{EntityFilterAst, ExpandErr};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Base64Str, CursorWithValAndFilter, Query};
+use pagination_types::{Base64Str, CursorWithValAndFilter, Query};
 use uuid::Uuid;
 
 use crate::domain::models::{DynamicSort, SoupErr};

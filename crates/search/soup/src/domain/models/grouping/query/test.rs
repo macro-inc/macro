@@ -1,5 +1,5 @@
 use super::*;
-use models_pagination::{CursorVal, SimpleSortMethod};
+use pagination_types::{CursorVal, SimpleSortMethod};
 
 #[test]
 fn continuation_uses_requested_limit_not_initial_group_size() {

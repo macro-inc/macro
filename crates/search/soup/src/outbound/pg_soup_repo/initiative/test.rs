@@ -17,8 +17,8 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::Identify;
-use models_pagination::{CursorWithValAndFilter, Query, SimpleSortMethod, SortOn};
+use pagination_types::Identify;
+use pagination_types::{CursorWithValAndFilter, Query, SimpleSortMethod, SortOn};
 use std::sync::Arc;
 
 fn filters() -> EntityFilterAst {
@@ -89,7 +89,7 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             cursor: Query::Cursor(CursorWithValAndFilter {
                 id: first[1].id(),
                 limit: 2,
-                val: models_pagination::CursorVal {
+                val: pagination_types::CursorVal {
                     sort_type: sort.into(),
                     last_val: DynamicSortValue::Timestamp(
                         SoupItem::sort_on(sort)(&first[1]).last_val,

@@ -1,4 +1,4 @@
-# models_pagination
+# pagination_types
 
 ## What it is
 
@@ -40,7 +40,7 @@ methods, shared by almost every list endpoint in the backend.
 
 ## Checks
 
-- `cargo test -p models_pagination` (`SQLX_OFFLINE` unset).
+- `cargo test -p pagination_types` (`SQLX_OFFLINE` unset).
 
 ## Related
 

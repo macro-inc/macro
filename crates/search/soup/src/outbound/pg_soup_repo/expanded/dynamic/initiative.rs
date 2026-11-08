@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::initiative::InitiativeLiteral;
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use recursion::CollapsibleExt;
 use system_properties::SystemPropertyKey;
 

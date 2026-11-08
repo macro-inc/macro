@@ -6,7 +6,7 @@ use std::future::Future;
 
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::models::{

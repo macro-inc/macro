@@ -28,7 +28,7 @@ mutation-client = ["dep:reqwest"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:models_pagination",
+  "dep:pagination_types",
   "dep:urlencoding",
   "schema",
 ]
@@ -55,7 +55,7 @@ google_calendar_api_url = { workspace = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
 entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
-models_pagination = { workspace = true, optional = true }
+pagination_types = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }
 reqwest = { workspace = true, optional = true }
 macro_event_broker = { workspace = true }

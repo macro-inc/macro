@@ -23,7 +23,7 @@ records, and mute state.
 
 ## Boundaries
 
-- Depends on: `model_notifications`, `entity_kind`, `models_pagination`.
+- Depends on: `model_notifications`, `entity_kind`, `pagination_types`.
 - Used by: `notification`, `services/notification_service`.
 
 ## Recipes

@@ -32,7 +32,6 @@ use macro_user_id::{
 };
 use model_owner::Owner;
 use model_user::UserContext;
-use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
     chat::SoupChat,
     document::SoupDocument,
@@ -41,6 +40,7 @@ use models_soup::{
     item::SoupItem,
     project::SoupProject,
 };
+use pagination_types::{Paginated, PaginatedCursor, SimpleSortMethod};
 use rootcause::Report;
 use soup_realtime_core::models::Patch;
 use uuid::Uuid;

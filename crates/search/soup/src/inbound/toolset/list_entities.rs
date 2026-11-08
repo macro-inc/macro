@@ -28,7 +28,6 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyMatchValue},
     },
 };
-use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
@@ -36,6 +35,7 @@ use models_soup::{
     SoupProperty, agent_session::AgentSessionArchiveCause, document::SoupDocumentSubType,
     item::SoupItem,
 };
+use pagination_types::{SimpleSortMethod, TypeEraseCursor};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

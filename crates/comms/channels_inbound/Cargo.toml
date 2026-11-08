@@ -28,7 +28,7 @@ axum = [
   "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
-  "models_pagination/axum",
+  "pagination_types/axum",
 ]
 # The Kafka consumer that ensures teammate DMs after `team.member_joined`.
 kafka_consumer = [
@@ -67,7 +67,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["broker"] }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
