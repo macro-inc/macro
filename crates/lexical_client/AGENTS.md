@@ -2,9 +2,9 @@
 
 ## What it is
 
-Belongs to Documents: the Rust-side route-switch facade and HTTP client for `lexical_service`, plus
-a parser for Lexical's markdown subset, used by any backend crate that needs
-to read or render document content.
+Belongs to Documents: the Rust-side route-switch facade and HTTP transport for
+`lexical_service`, with typed requests and responses for backend callers that
+read or render document content.
 
 ## Start here
 
@@ -21,8 +21,9 @@ to read or render document content.
 
 ## Scope
 
-- Owns: the Rust-side route-switch facade and HTTP client for `lexical_service` and markdown parsing
-  into Lexical's node shape.
+- Owns: execution policy, route/shadow spans, retained HTTP transport and typed
+  service request/response models. Pure document transformations belong to
+  `macro_document_model`; subsequent route work supplies their adapters.
 - Not here: the service itself, or the frontend's own Lexical node
   implementations (`apps/web`) — those are kept in sync by hand, not shared
   code.
