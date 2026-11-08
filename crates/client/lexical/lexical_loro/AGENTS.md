@@ -20,6 +20,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
 - Retain recorded timestamps only in server-created snapshot helpers; never regenerate the frozen Markdown ancestor.
+- Treat empty snapshot IDs as unkeyed; match source insertion and duplicate retention.
 - Compute snapshot list move sources after deletions and preserve surviving container identities.
 - Never enable loro-internal's wasm feature; native Loro positions are Unicode scalars.
 - WASM builds of Loro itself require a JavaScript host for its internal clock.

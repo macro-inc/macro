@@ -101,7 +101,10 @@ pub fn link_export_dom<'a>(
 ) -> lexical_html::Result<DomExportOutput<'a>> {
     let mut el = HtmlElement::new(if unlinked { "span" } else { "a" });
     if !unlinked {
-        el.set_attribute("href", crate::link::sanitize_url(&link.url));
+        el.set_attribute(
+            "href",
+            lexical_html::js::decode_uri(&crate::link::sanitize_url(&link.url))?,
+        );
         for (name, value) in [
             ("target", &link.target),
             ("rel", &link.rel),

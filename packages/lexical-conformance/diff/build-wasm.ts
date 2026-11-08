@@ -64,10 +64,16 @@ export function buildWasm() {
     }
   }
   // Include the complete local interpreter closure, including patched dependencies.
-  for (const name of ['crates/client/lexical', 'vendor', '.cargo'])
+  for (const name of [
+    'crates/client/lexical',
+    'crates/macro_document_composers/src',
+    'vendor',
+    '.cargo',
+  ])
     directory(path.join(root, name));
   for (const name of [
     'Cargo.toml',
+    'crates/macro_document_composers/Cargo.toml',
     'Cargo.lock',
     'rust-toolchain.toml',
     'packages/lexical-conformance/upstream.lock',

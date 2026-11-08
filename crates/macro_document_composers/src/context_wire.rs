@@ -261,11 +261,7 @@ pub fn compose_agent_context_prompt(input: &Value, context: &DocumentContext) ->
             ));
         }
     }
-    let escaped = prompt
-        .prompt_markdown
-        .replace('&', "&amp;")
-        .replace("<m-agent-context>", "&amp;lt;m-agent-context>")
-        .replace("</m-agent-context>", "&amp;lt;/m-agent-context>");
+    let escaped = crate::escape_agent_context_tags(&prompt.prompt_markdown);
     let mut editor = crate::markdown::editor_from_markdown(&escaped, context)?;
     let mut sections = Vec::new();
     if let Some(instructions) = prompt

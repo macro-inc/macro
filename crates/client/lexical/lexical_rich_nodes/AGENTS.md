@@ -20,6 +20,8 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
+- Omit the synthetic tbody for empty tables and preserve linkedom anchor href decoding.
+- Emit temporary table-cell wire keys until enclosing table export removes them.
 - Keep block-only registration separate from opt-in transforms and plugins.
 - Preserve missing, null and array table colWidths in JSON; geometry treats missing and null as no widths.
 - Keep physical grid coordinates separate from span coordinates; the physical column count comes from the last row.

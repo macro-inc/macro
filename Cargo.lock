@@ -11797,6 +11797,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "libtest-mimic",
+ "macro_document_composers",
  "macro_document_model",
  "serde",
  "serde_json",
@@ -12646,6 +12647,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_document_composers"
+version = "0.1.0"
+dependencies = [
+ "lexical_markdown",
+ "lexical_model",
+ "macro_document_model",
+ "serde",
+ "serde_json",
+ "trigger_context",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "macro_document_model"
 version = "0.1.0"
 dependencies = [
@@ -12654,11 +12669,13 @@ dependencies = [
  "chrono-tz",
  "document_id",
  "indexmap 2.14.0",
+ "lexical_html",
  "lexical_loro",
  "lexical_markdown",
  "lexical_model",
  "lexical_node_id",
  "lexical_rich_nodes",
+ "logos",
  "loro",
  "mention_date",
  "nom 8.0.0",

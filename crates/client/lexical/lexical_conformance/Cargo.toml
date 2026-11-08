@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+macro_document_composers.workspace = true
 macro_document_model = { workspace = true }
 lexical_model = { workspace = true, features = ["foreign-nodes"] }
 lexical_rich_nodes = { workspace = true }

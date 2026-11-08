@@ -3,10 +3,14 @@
 ## What it is
 
 Portable Macro node payloads, model hooks and exact export/headless/web registries.
+Server prompt/reply composers live in crates/macro_document_composers.
 The transformer layer uses the shared lexical_markdown engine; route adapters are separate.
 
 ## Boundaries
 
+- Keep HTML opt-in; parse template fragments with logos starts and nom lexical modes before serializing owned nodes.
+- Keep the two S3 Q7 equation exceptions bound to exact source-row hashes and exact UTF-8 markup; compare Latin-1 exports directly.
+- Match list DOM exports and source attribute order byte-for-byte; never emit stored HTML directly.
 - Restore source own-undefined properties as null only at the snapshot storage boundary; ordinary editor JSON continues to omit them.
 - Keep wire-properties.json generated from actual source node exports and shared with conformance.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
@@ -47,4 +51,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
 - `bun packages/lexical-conformance/corpus/transformers.ts --check` checks source metadata.
 - `bun packages/lexical-conformance/corpus/macro-markdown.ts --check` checks the supplemental source conversion oracle.
+- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model --features html --test html -j4` checks source route, node and fragment bytes.
+- `bun packages/lexical-conformance/corpus/macro-html.ts --check` and `bun packages/lexical-conformance/corpus/html-entities.ts --check` check HTML source freshness.
+- `bun packages/lexical-conformance/corpus/macro-mentions.ts --check` checks authored references.
 - `cargo x deps --check`, `cargo shear`, `just check`

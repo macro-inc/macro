@@ -40,7 +40,10 @@ fn reconcile(map: &LoroMap, new: &SerializedNode) -> Result<()> {
     Ok(())
 }
 fn id(node: &Value) -> Option<&str> {
-    node.get("$")?.get("id")?.as_str()
+    node.get("$")?
+        .get("id")?
+        .as_str()
+        .filter(|id| !id.is_empty())
 }
 fn reconcile_children(list: &LoroMovableList, new: &[Value]) -> Result<()> {
     let old: Vec<_> = (0..list.len())

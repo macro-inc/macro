@@ -34,12 +34,6 @@ pub mod node_ids;
 /// Typed authored message references and parsed markdown extraction.
 pub mod mentions;
 
-/// Node-authored agent chat replies and session announcements.
-pub mod agent_reply;
-
-/// Private context envelope composition.
-pub mod agent_context;
-
 /// Notion enhanced Markdown import.
 pub mod notion;
 
@@ -60,3 +54,7 @@ pub mod snapshot;
 
 /// Collaborative content policy and draft preservation commands.
 pub mod sync;
+
+/// Optional owned HTML export and htmlparser2-compatible fragment parsing.
+#[cfg(feature = "html")]
+pub mod html;

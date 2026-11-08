@@ -118,3 +118,30 @@ fn snapshot_mirror_preserves_maps_across_permutations_and_deletions() -> Result<
     }
     Ok(())
 }
+
+#[test]
+fn snapshot_empty_ids_follow_source_unkeyed_duplicate_retention() -> Result<()> {
+    // Actual pinned loro-mirror inserts unkeyed records without deleting old ones.
+    for id in ["", "stable"] {
+        let doc = new_doc(37)?;
+        let root =
+            |text| json!({"type":"root","children":[{"type":"text","$":{"id":id},"text":text}]});
+        mirror::set_state(&doc, &root("first"))?;
+        let children = schema::children(&doc.get_map("root"))?.expect("children");
+        let original = schema::map_at(children.get(0), "first")?.id();
+        mirror::set_state(&doc, &root("second"))?;
+        let state = schema::from_loro(&doc.get_map("root").get_deep_value())?;
+        if id.is_empty() {
+            assert_eq!(
+                state["children"],
+                json!([{"type":"text","$":{"id":""},"text":"second"},{"type":"text","$":{"id":""},"text":"first"}])
+            );
+            assert_ne!(schema::map_at(children.get(0), "new")?.id(), original);
+            assert_eq!(schema::map_at(children.get(1), "old")?.id(), original);
+        } else {
+            assert_eq!(state, root("second"));
+            assert_eq!(schema::map_at(children.get(0), "same")?.id(), original);
+        }
+    }
+    Ok(())
+}
