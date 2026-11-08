@@ -98,7 +98,10 @@ fn fields(record: &Value) -> BTreeMap<String, Value> {
                 .as_object()
                 .and_then(|value| value.values().next().cloned())
                 .unwrap_or(Value::Null);
-            (attribute["key"].as_str().unwrap_or_default().to_owned(), value)
+            (
+                attribute["key"].as_str().unwrap_or_default().to_owned(),
+                value,
+            )
         })
         .collect()
 }
@@ -169,7 +172,9 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
         Some(format!("Bearer {TOKEN}").as_str())
     );
     assert_eq!(
-        headers.get("content-encoding").and_then(|v| v.to_str().ok()),
+        headers
+            .get("content-encoding")
+            .and_then(|v| v.to_str().ok()),
         Some("gzip")
     );
     let body = gunzip(&logs[0].body);
@@ -320,7 +325,11 @@ fn a_slow_endpoint_never_delays_the_run() {
     let second = Recorder::start(&paths, SystemTime::now(), common())
         .expect("start")
         .expect("opted in");
-    second.finish(BTreeMap::new(), SystemTime::now(), Duration::from_millis(300));
+    second.finish(
+        BTreeMap::new(),
+        SystemTime::now(),
+        Duration::from_millis(300),
+    );
     assert!(
         bounded.elapsed() < Duration::from_secs(2),
         "a bounded finish took {:?}",

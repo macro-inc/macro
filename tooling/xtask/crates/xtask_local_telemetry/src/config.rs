@@ -32,7 +32,8 @@ impl Paths {
     /// The XDG locations for the current user, or `None` without a home directory.
     pub fn for_user() -> Option<Self> {
         let home = std::env::var_os("HOME").map(PathBuf::from);
-        let config_home = xdg_dir("XDG_CONFIG_HOME").or_else(|| Some(home.clone()?.join(".config")));
+        let config_home =
+            xdg_dir("XDG_CONFIG_HOME").or_else(|| Some(home.clone()?.join(".config")));
         let state_home =
             xdg_dir("XDG_STATE_HOME").or_else(|| Some(home?.join(".local").join("state")));
         Some(Self {

@@ -83,6 +83,7 @@ pub(super) struct RunTelemetry {
 struct Shared {
     /// Taken by `finish`; a lane that outlives it has nowhere to record.
     recorder: Mutex<Option<Recorder>>,
+    kind: RunKind,
     project: String,
     started_at: SystemTime,
     state: Mutex<State>,
@@ -111,8 +112,18 @@ impl RunTelemetry {
         started_at: SystemTime,
         detached: bool,
     ) -> Option<Self> {
-        let paths = Paths::for_user()?;
-        let recorder = match Recorder::start(&paths, started_at, common_fields(instance, kind, detached)) {
+        Self::begin_in(&Paths::for_user()?, instance, kind, started_at, detached)
+    }
+
+    fn begin_in(
+        paths: &Paths,
+        instance: &Instance,
+        kind: RunKind,
+        started_at: SystemTime,
+        detached: bool,
+    ) -> Option<Self> {
+        let common = common_fields(instance, kind, detached);
+        let recorder = match Recorder::start(paths, started_at, common) {
             Ok(recorder) => recorder?,
             Err(error) => {
                 eprintln!("local telemetry is off: {error}");
@@ -122,6 +133,7 @@ impl RunTelemetry {
         Some(Self {
             shared: Arc::new(Shared {
                 recorder: Mutex::new(Some(recorder)),
+                kind,
                 project: instance.project_name().to_owned(),
                 started_at,
                 state: Mutex::new(State::default()),
@@ -136,6 +148,13 @@ impl RunTelemetry {
         work: impl FnOnce() -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let telemetry = Self::begin(instance, kind, SystemTime::now(), false);
+        Self::finish_action(telemetry, work)
+    }
+
+    fn finish_action<T>(
+        telemetry: Option<Self>,
+        work: impl FnOnce() -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         let result = work();
         if let Some(telemetry) = telemetry {
             // The user is waiting on this command, so it waits for nothing: what
@@ -156,13 +175,17 @@ impl RunTelemetry {
             ("mode".to_owned(), Value::from(mode.label())),
             ("start".to_owned(), Value::from(start)),
             ("vite".to_owned(), Value::from(plan.vite)),
-            ("static_frontend".to_owned(), Value::from(plan.static_bundle)),
+            (
+                "static_frontend".to_owned(),
+                Value::from(plan.static_bundle),
+            ),
         ]);
     }
 
     pub(super) fn step_started(&self, label: &str) {
         let step = step_name(label);
-        self.shared.with_recorder(|recorder| recorder.step_started(step));
+        self.shared
+            .with_recorder(|recorder| recorder.step_started(step));
         if step.starts_with(BUILD_STEP) {
             self.shared.state().sccache_before = Some(std::thread::spawn(sccache_stats));
         }
@@ -201,8 +224,11 @@ impl RunTelemetry {
         }
     }
 
-    /// Close the run. Its last inspection and the send run on a lane; a detached
-    /// process waits up to `wait` for them, an attached one moves on at once.
+    /// Close the run. The run event is buffered before this returns, so a process
+    /// that exits right after still sends it later, except after a ready bring-up:
+    /// its last container inspection runs first, on a lane. Sending is always in
+    /// the background; a detached process waits up to `wait` for it, an attached
+    /// one moves on at once.
     pub(super) fn finish(self, succeeded: bool, failed_step: Option<&str>, wait: Duration) {
         let ended = SystemTime::now();
         let mut fields = self.shared.state().shape.clone();
@@ -210,11 +236,21 @@ impl RunTelemetry {
         if let Some(step) = failed_step {
             fields.insert("failed_step".to_owned(), Value::from(step_name(step)));
         }
-        let ready = ended.duration_since(self.shared.started_at).unwrap_or_default();
+        let ready = ended
+            .duration_since(self.shared.started_at)
+            .unwrap_or_default();
         fields.insert("seconds".to_owned(), Value::from(seconds(ready)));
 
-        let (done, finished) = mpsc::channel();
         let shared = self.shared;
+        if !(shared.kind == RunKind::Up && succeeded) {
+            fields.insert("steps".to_owned(), Value::from(shared.state().steps));
+            if let Some(recorder) = shared.take_recorder() {
+                recorder.finish(fields, ended, wait);
+            }
+            return;
+        }
+
+        let (done, finished) = mpsc::channel();
         std::thread::spawn(move || {
             let lanes = std::mem::take(&mut shared.state().lanes);
             for lane in lanes {
@@ -223,16 +259,8 @@ impl RunTelemetry {
             if succeeded {
                 inspect_services(&shared, "app");
             }
-            fields.insert(
-                "steps".to_owned(),
-                Value::from(shared.state().steps),
-            );
-            let recorder = shared
-                .recorder
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .take();
-            if let Some(recorder) = recorder {
+            fields.insert("steps".to_owned(), Value::from(shared.state().steps));
+            if let Some(recorder) = shared.take_recorder() {
                 recorder.finish(fields, ended, wait);
             }
             let _ = done.send(());
@@ -280,6 +308,13 @@ impl RunTelemetry {
 }
 
 impl Shared {
+    fn take_recorder(&self) -> Option<Recorder> {
+        self.recorder
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+    }
+
     fn with_recorder(&self, record: impl FnOnce(&Recorder)) {
         let recorder = self.recorder.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(recorder) = recorder.as_ref() {
@@ -326,7 +361,11 @@ fn common_fields(instance: &Instance, kind: RunKind, detached: bool) -> BTreeMap
         ("instance_kind".to_owned(), Value::from(instance_kind)),
         (
             "platform".to_owned(),
-            Value::from(format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)),
+            Value::from(format!(
+                "{}-{}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )),
         ),
         (
             "worktree".to_owned(),
@@ -476,7 +515,10 @@ impl ServiceHealth {
             .flatten()
             .filter_map(|probe| {
                 let end = chrono::DateTime::parse_from_rfc3339(probe.get("End")?.as_str()?).ok()?;
-                Some((end, probe.get("ExitCode").and_then(Value::as_i64) == Some(0)))
+                Some((
+                    end,
+                    probe.get("ExitCode").and_then(Value::as_i64) == Some(0),
+                ))
             })
             .collect();
         probes.sort_by_key(|(end, _)| *end);

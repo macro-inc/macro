@@ -115,7 +115,10 @@ pub(crate) struct Record {
 pub(crate) enum Line {
     Begin(Begin),
     /// A step began. Never sent: it names what an interrupted run was doing.
-    Started { step: String, at_ns: u64 },
+    Started {
+        step: String,
+        at_ns: u64,
+    },
     Record(Record),
 }
 
@@ -271,7 +274,9 @@ impl Recorder {
             event: event.event,
             name: event.name,
             at_ns: unix_ns(event.at),
-            duration_ns: event.duration.map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)),
+            duration_ns: event
+                .duration
+                .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)),
             fields: event.fields,
         }));
     }

@@ -289,7 +289,10 @@ impl Job {
     }
 
     fn with_telemetry(&self, hook: impl FnOnce(&RunTelemetry)) {
-        let telemetry = self.telemetry.lock().unwrap_or_else(PoisonError::into_inner);
+        let telemetry = self
+            .telemetry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         if let Some(telemetry) = telemetry.as_ref() {
             hook(telemetry);
         }

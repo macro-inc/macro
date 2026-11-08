@@ -1,6 +1,45 @@
-use serde_json::json;
+use std::os::unix::fs::PermissionsExt;
+use std::time::SystemTime;
 
-use super::{BuildOutput, SccacheStats, ServiceHealth, step_name};
+use serde_json::json;
+use xtask_local_telemetry::Paths;
+
+use super::super::instance::Instance;
+use super::{BuildOutput, RunKind, RunTelemetry, SccacheStats, ServiceHealth, step_name};
+
+/// A `stop` exits as soon as it returns, so its run line must already be
+/// buffered then, or the next run reports the stop as interrupted.
+#[test]
+fn an_action_buffers_its_run_event_before_returning() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = closed.local_addr().expect("addr").port();
+    drop(closed);
+    let config = dir.path().join("local-telemetry.toml");
+    std::fs::write(&config, format!("endpoint = \"http://127.0.0.1:{port}\"\n")).expect("write");
+    std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
+    let paths = Paths {
+        config,
+        buffer_dir: dir.path().join("buffer"),
+    };
+    let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
+
+    let telemetry =
+        RunTelemetry::begin_in(&paths, &instance, RunKind::Stop, SystemTime::now(), false);
+    assert!(telemetry.is_some());
+    RunTelemetry::finish_action(telemetry, || Ok(())).expect("action");
+
+    let buffered: String = std::fs::read_dir(&paths.buffer_dir)
+        .expect("buffer dir")
+        .filter_map(|entry| std::fs::read_to_string(entry.ok()?.path()).ok())
+        .collect();
+    let run = buffered
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .find(|line| line["event"] == json!("run"))
+        .expect("a buffered run event");
+    assert_eq!(run["fields"]["outcome"], json!("success"));
+}
 
 #[test]
 fn labels_with_names_become_one_step() {
