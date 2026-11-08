@@ -52,8 +52,9 @@ pub trait RoutineSessions: Send + Sync + 'static {
         async { Err(RoutineSessionError::OperationFailed) }
     }
 
-    /// Delete a session the scheduler opened (source `routine`), such as a
-    /// routine draft's once its drafter is done with it. No other session can
+    /// Delete a session the scheduler opened for its owner: a routine's run
+    /// (source `routine`), or a draft's background session once its drafter
+    /// is done with it (`AgentSession::is_background`). No other session can
     /// be deleted this way.
     fn delete(
         &self,
