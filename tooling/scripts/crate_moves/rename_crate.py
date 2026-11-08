@@ -224,13 +224,17 @@ for f in subprocess.check_output(["git", "ls-files", "--", new_dir]).decode().sp
 WORD = re.compile(r"(?<![\w-])" + re.escape(OLD_LIB) + r"(?![\w-]|\.[a-z_])")
 WASM_FILE = re.compile(r"(?<![\w-])" + re.escape(OLD_LIB) + r"(?=(?:_bg)?\.(?:js|wasm|d\.ts)\b)")
 COMMENT = re.compile(r"^(\s*(?://+!?|#|\*|/\*+|--)\s?)(.*)$", re.M)
+# In Rust a line starting with `#` is an attribute (`#[cfg(feature = "old")]`
+# names a feature, not the crate), so only `//` and `/* */` lines count.
+RUST_COMMENT = re.compile(r"^(\s*(?://+!?|\*|/\*+)\s?)(.*)$", re.M)
 
 
 def rename_words(f, text):
     text = WASM_FILE.sub(NEW_LIB, text)
     if f.endswith((".md", ".mdx")):
         return WORD.sub(NEW_LIB, text)
-    return COMMENT.sub(lambda m: m.group(1) + WORD.sub(NEW_LIB, m.group(2)), text)
+    comment = RUST_COMMENT if f.endswith(".rs") else COMMENT
+    return comment.sub(lambda m: m.group(1) + WORD.sub(NEW_LIB, m.group(2)), text)
 
 
 # Package selectors in scripts, CI and docs; package lists in config.

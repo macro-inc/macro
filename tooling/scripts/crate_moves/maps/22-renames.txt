@@ -1,0 +1,36 @@
+# Crate renames (package and directory), applied after the group moves.
+# Package names: the last path component on each side.
+crates/agents/prompt crates/agents/agent_prompts
+crates/ai/agent crates/ai/agent_loop
+crates/ai/ai_tools crates/ai/agent_tools
+crates/ai/jev crates/ai/jev_classifier
+crates/calendar/cal crates/calendar/calcom_webhooks
+crates/comms/chat crates/comms/ai_chat
+crates/databases/database_sql crates/databases/database_sql_engine
+crates/databases/databases_sql crates/databases/database_sql_runner
+crates/documents/sync_router crates/documents/document_sync_router
+crates/documents/sync_service_hex crates/documents/document_sync
+crates/engines/ai_engine crates/engines/illustrator_engine
+crates/platform/database_env_vars crates/platform/datastore_env_vars
+crates/projects/initiative crates/projects/project
+crates/projects/projects crates/projects/folder
+crates/search/models_search crates/search/search_types
+crates/search/models_soup crates/search/soup_types
+crates/types/cowlike crates/types/cow_str
+crates/types/model crates/types/shared_types
+crates/types/model_entity crates/types/entity_kind
+crates/types/models_ai_projection crates/types/ai_projection_types
+crates/types/models_bulk_upload crates/types/bulk_upload_types
+crates/types/models_databases crates/types/databases_types
+crates/types/models_dcs crates/types/dcs_types
+crates/types/models_email crates/types/email_types
+crates/types/models_entity_access_management crates/types/entity_access_management_types
+crates/types/models_forms crates/types/forms_types
+crates/types/models_grouping crates/types/grouping_types
+crates/types/models_opensearch crates/types/opensearch_types
+crates/types/models_pagination crates/types/pagination_types
+crates/types/models_permissions crates/types/permissions_types
+crates/types/models_properties crates/types/properties_types
+crates/types/models_search_cursor crates/types/search_cursor_types
+crates/types/models_sfs crates/types/sfs_types
+crates/types/models_team crates/types/team_types

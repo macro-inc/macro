@@ -26,3 +26,22 @@ cargo x deps
 ```
 
 Run every map that landed since your branch's merge base, in order.
+
+`maps/22-renames.txt` lists the crate renames: the old and new directory,
+whose last components are the old and new package names. `--rewrite-only`
+fixes paths; dependency keys and `use` paths need the package rename too.
+For each pair, rename `old = { workspace = true }` keys and `old::` paths:
+
+```sh
+grep -v '^#' tooling/scripts/crate_moves/maps/22-renames.txt | while read -r old new; do
+  o=${old##*/} n=${new##*/}
+  git ls-files -z '*Cargo.toml' '*.rs' | xargs -0 sed -i -E \
+    -e "s/^${o}( *= *\{|\.workspace)/${n}\1/" -e "s/\"(dep:)?${o}(\??\/)/\"\1${n}\2/g" \
+    -e "s/(^|[^[:alnum:]_:.])${o}::/\1${n}::/g" -e "s/^(\s*(pub )?use )${o}\b/\1${n}/"
+done
+cargo x deps && cargo check --workspace
+```
+
+Short names (`agent`, `model`, `chat`, `prompt`, `cal`, `initiative`,
+`projects`) also match local modules; let `cargo check` point at any it
+rewrote wrongly.
