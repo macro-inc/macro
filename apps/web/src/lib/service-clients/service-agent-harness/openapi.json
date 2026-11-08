@@ -7932,7 +7932,7 @@
           },
           {
             "type": "object",
-            "description": "A person opened the session directly, from the composer.",
+            "description": "A person opened the session directly: from the composer, or by asking for a routine draft.",
             "required": ["by", "origin"],
             "properties": {
               "by": {
