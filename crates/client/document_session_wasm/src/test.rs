@@ -80,6 +80,67 @@ fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
     assert_eq!(&*s.surface().state().root_text_content(), "a😀");
 }
 #[test]
+fn rejected_dom_text_has_an_authoritative_patch_even_without_a_model_change() {
+    let config = wire::SessionConfigMsg {
+        doc: "dom-text-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Read,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut m = machine::Machine::create(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        0.0,
+        true,
+    )
+    .unwrap();
+    m.sync(SyncInput::Start, 0.0, Some(0.0)).unwrap();
+    m.sync(
+        SyncInput::Seed {
+            kind: SeedKind::Optimistic,
+            snapshot: vec![],
+        },
+        1.0,
+        Some(1.0),
+    )
+    .unwrap();
+    // The DOM supplied an edit after permission was lost. No commit is made,
+    // but the view still needs a real correction rather than an acknowledgement.
+    let key = editor_input::key(1, m.generation());
+    let flags = m
+        .editor(
+            Input::TextFromView {
+                key,
+                text: "uncommitted".into(),
+                anchor: None,
+                focus: None,
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::KeepModel,
+            },
+            2.0,
+        )
+        .unwrap();
+    assert_ne!(flags & 1, 0);
+    let word = |i: usize| u32::from_le_bytes(m.output[i * 4..i * 4 + 4].try_into().unwrap());
+    assert!(word(3) > 5, "rejected edit must carry a real Diff op");
+    assert_eq!(word(9), u32::MAX, "rejection never claims the DOM matches");
+}
+
+#[test]
 fn opcode_numbers_match_every_model_variant() {
     assert_eq!(
         generated::DIFF_FORMAT_VERSION,
@@ -209,7 +270,7 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer).unwrap();
+    output::encode(&output, false, &mut buffer, None).unwrap();
     let word = |i: usize| u32::from_le_bytes(buffer[i * 4..i * 4 + 4].try_into().unwrap());
     assert_eq!(word(6 + 4), 2, "both patches survive in one flat diff");
     let end = 24 + word(3) as usize * 4 + word(4) as usize;
@@ -324,7 +385,7 @@ fn closed_and_unsaved_reasons_survive_the_view_boundary() {
         ..SessionOutput::default()
     };
     let mut buffer = vec![];
-    output::encode(&output, false, &mut buffer).unwrap();
+    output::encode(&output, false, &mut buffer, None).unwrap();
     let len = u32::from_le_bytes(buffer[36..40].try_into().unwrap()) as usize;
     let status = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).unwrap();
     assert_eq!(status.closed_reason, wire::ClosedReason::Unauthorized);

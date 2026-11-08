@@ -209,6 +209,10 @@ impl<S: Surface> DocumentSession<S> {
     pub fn version(&self) -> VersionVector {
         self.doc.oplog_vv()
     }
+    /// Effects from the last input, without processing another input.
+    pub fn last_output(&self) -> &SessionOutput {
+        &self.out
+    }
     /// Process exactly one host input and return effects borrowing reused buffers.
     pub fn handle(&mut self, now: Now, input: SessionInput) -> &SessionOutput {
         self.out.view.clear();
