@@ -174,18 +174,37 @@ fn peer_truthiness_coownership_promotion_and_root_noop_match_source() -> Result<
 }
 
 #[test]
-fn loaded_ids_and_stored_highlights_survive_initial_hooks_and_clipboard_clears_recursively() -> Result<()> {
-    use macro_document_model::nodes::*;
+fn loaded_ids_and_stored_highlights_survive_initial_hooks_and_clipboard_clears_recursively()
+-> Result<()> {
     use lexical_rich_nodes::code::CodeHighlightNode;
-    let raw = serde_json::from_value(json!({"root":{"type":"root","version":1,"$":{"id":"root"},"children":[{"type":"paragraph","version":1,"$":{"id":"paragraph"},"children":[{"type":"code-highlight","version":1,"text":"let","format":0,"style":"","mode":"normal","detail":0,"highlightType":"keyword","$":{"id":"stored-highlight","extra":7}}]}]}}))?;
-    let mut editor = NodeIdPlugin::register(export_builder(), &["paragraph", "code-highlight"], None, [8; 32]).initial_state(raw).build()?;
+    use macro_document_model::nodes::*;
+    let raw = serde_json::from_value(
+        json!({"root":{"type":"root","version":1,"$":{"id":"root"},"children":[{"type":"paragraph","version":1,"$":{"id":"paragraph"},"children":[{"type":"code-highlight","version":1,"text":"let","format":0,"style":"","mode":"normal","detail":0,"highlightType":"keyword","$":{"id":"stored-highlight","extra":7}}]}]}}),
+    )?;
+    let mut editor = NodeIdPlugin::register(
+        export_builder(),
+        &["paragraph", "code-highlight"],
+        None,
+        [8; 32],
+    )
+    .initial_state(raw)
+    .build()?;
     let view = editor.state().view();
     let paragraph = view.first_child(NodeKey::ROOT).expect("paragraph");
     let highlight = view.first_child(paragraph).expect("highlight");
     assert!(view.is::<CodeHighlightNode>(highlight));
-    assert_eq!(get_id(view, NodeKey::ROOT)?.expect("root id").as_str(), "root");
-    assert_eq!(get_id(view, paragraph)?.expect("loaded id").as_str(), "paragraph");
-    assert_eq!(get_id(view, highlight)?.expect("stored id").as_str(), "stored-highlight");
+    assert_eq!(
+        get_id(view, NodeKey::ROOT)?.expect("root id").as_str(),
+        "root"
+    );
+    assert_eq!(
+        get_id(view, paragraph)?.expect("loaded id").as_str(),
+        "paragraph"
+    );
+    assert_eq!(
+        get_id(view, highlight)?.expect("stored id").as_str(),
+        "stored-highlight"
+    );
     editor.update(|tx| {
         tx.mark_dirty(highlight)?;
         let comment = create_comment_node(tx, vec!["mark".into()], Maybe::Missing, None)?;
@@ -193,14 +212,58 @@ fn loaded_ids_and_stored_highlights_survive_initial_hooks_and_clipboard_clears_r
         Ok(())
     })?;
     assert!(editor.state().view().is::<CodeHighlightNode>(highlight));
-    assert_eq!(get_id(editor.state().view(), highlight)?.expect("stable highlight").as_str(), "stored-highlight");
+    assert_eq!(
+        get_id(editor.state().view(), highlight)?
+            .expect("stable highlight")
+            .as_str(),
+        "stored-highlight"
+    );
     editor.update(|tx| {
         prepare_clipboard_nodes(tx, &[paragraph])?;
         assert!(get_id(tx.view(), paragraph)?.is_none());
         assert!(get_id(tx.view(), highlight)?.is_none());
         Ok(())
     })?;
-    assert_ne!(get_id(editor.state().view(), paragraph)?.expect("fresh paragraph").as_str(), "paragraph");
-    assert_ne!(get_id(editor.state().view(), highlight)?.expect("fresh highlight").as_str(), "stored-highlight");
+    assert_ne!(
+        get_id(editor.state().view(), paragraph)?
+            .expect("fresh paragraph")
+            .as_str(),
+        "paragraph"
+    );
+    assert_ne!(
+        get_id(editor.state().view(), highlight)?
+            .expect("fresh highlight")
+            .as_str(),
+        "stored-highlight"
+    );
+    Ok(())
+}
+
+#[test]
+fn clipboard_invalidation_runs_before_lower_handlers_without_consuming_insert() -> Result<()> {
+    struct Insert;
+    impl Plugin for Insert {
+        fn name(&self) -> &'static str { "clipboard-insert" }
+        fn commands(&self) -> &[CommandRegistration] {
+            const COMMANDS: &[CommandRegistration] = &[CommandRegistration { command: CommandKind::InsertClipboardNodes, priority: CommandPriority::Normal, placement: Placement::After }]; COMMANDS
+        }
+        fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> ModelResult<Handled> {
+            if let Command::InsertClipboardNodes { nodes, .. } = command {
+                for node in nodes { assert!(get_id(tx.view(), *node)?.is_none()); }
+                tx.append(NodeKey::ROOT, nodes)?;
+                return Ok(Handled::Yes);
+            }
+            Ok(Handled::No)
+        }
+    }
+    let mut editor = NodeIdPlugin::register(export_builder(), &["paragraph"], None, [9; 32]).plugin(Insert).build()?;
+    let (pasted, _) = editor.update(|tx| {
+        let pasted = tx.create(Paragraph::default())?;
+        set_id(tx, pasted.key(), Some(LexicalNodeId::try_new("clipboard-id").expect("id")))?;
+        assert_eq!(tx.dispatch(&Command::InsertClipboardNodes { nodes: vec![pasted.key()], selection: SelectionSlot::Active })?, Handled::Yes);
+        Ok(pasted.key())
+    })?;
+    assert!(editor.state().view().is_attached(pasted));
+    assert_ne!(get_id(editor.state().view(), pasted)?.expect("fresh pasted id").as_str(), "clipboard-id");
     Ok(())
 }
