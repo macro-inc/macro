@@ -257,11 +257,9 @@ export const notificationExcluded = [
   'getUnsubscribes',
   'healthHandler',
   'removeUnsubscribeAll',
-  'removeUnsubscribeItem',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
-  'unsubscribeItem',
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
@@ -269,7 +267,6 @@ export const notificationBacklog =
   [] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
-  'ensureTagSet',
   'mergeTag',
   'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];

@@ -118,19 +118,25 @@
       "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
+      "crates/bot_token",
       "crates/broadcast",
       "crates/channel_sender",
       "crates/cowlike",
       "crates/genai_telemetry",
+      "crates/harness_id",
+      "crates/harness_token",
       "crates/kafka_util",
       "crates/macro_auth",
+      "crates/macro_authorization",
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_event_broker",
       "crates/macro_event_topics",
       "crates/macro_user_id",
       "crates/model-entity",
+      "crates/model-error-response",
       "crates/model_owner",
+      "crates/model_user",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -15356,7 +15362,8 @@
       "crates/macro_queues",
       "crates/workspace-hack",
       "tooling/xtask/crates/xtask_local",
-      "tooling/xtask/crates/xtask_paths"
+      "tooling/xtask/crates/xtask_paths",
+      "tooling/xtask/crates/xtask_ports"
     ],
     "xtask_nextest_filter": [
       "tooling/xtask/crates/xtask_graph",
@@ -15365,6 +15372,11 @@
     ],
     "xtask_paths": [
       "tooling/xtask/crates/xtask_paths"
+    ],
+    "xtask_ports": [
+      "crates/macro_env_var",
+      "crates/workspace-hack",
+      "tooling/xtask/crates/xtask_ports"
     ],
     "xtask_workflows": [
       "tooling/xtask/crates/xtask_paths",

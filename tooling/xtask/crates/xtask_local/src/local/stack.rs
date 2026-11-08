@@ -210,7 +210,9 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 /// leaving only Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     let stage = Stage::from_env_cli(args.run.verbose);
-    let mut instance = Instance::derive(
+    let mut instance = super::allocator::allocate(
+        &stage,
+        mode,
         args.run.instance.instance.as_deref(),
         args.run.instance.port_base,
     )?;
@@ -264,7 +266,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 /// stay. With no recorded stack this bootstraps through [`up`], but only on an
 /// instance with nothing to lose: `up` deletes volumes.
 pub fn update(args: &UpdateArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     if read_state(&instance).is_some() {
         let stage = Stage::from_env_cli(args.verbose);
         return update_running(&stage, args).map(|_| ());
@@ -309,7 +311,7 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
 }
 
 fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     let state = read_state(&instance).context("no recorded stack to update")?;
     let mode = mode_from_label(&state.mode)?;
     stage.section(&format!(
@@ -578,7 +580,7 @@ pub(super) fn status_json(instance: &Instance) -> Result<serde_json::Value> {
 /// `run_local status` and `cargo x stack status` — phase, endpoints, and container
 /// states, as a human summary or `--json` for machines.
 pub fn status(args: &StatusArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     if args.json {
         println!("{}", serde_json::to_string(&status_json(&instance)?)?);
         return Ok(());

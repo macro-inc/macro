@@ -1,4 +1,5 @@
 mod admission;
+mod check;
 mod owned_purge;
 mod user_cleanup;
 

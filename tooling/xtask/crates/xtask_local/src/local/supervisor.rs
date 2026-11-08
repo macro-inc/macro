@@ -512,7 +512,7 @@ pub(super) fn decide_start(phase: stack::Phase, job_running: bool, fresh: bool) 
 /// watch it. Safe to repeat: a healthy instance is left alone and a stopped one
 /// resumes with its data. Only `--fresh` wipes.
 pub fn start_detached(args: &RunLocalFlags, run: &RunArgs) -> Result<()> {
-    let instance = Instance::derive(run.instance.instance.as_deref(), run.instance.port_base)?;
+    let instance = Instance::resolve(run.instance.instance.as_deref(), run.instance.port_base)?;
     instance.ensure_artifact_dir()?;
     let dir = run_dir(&instance)?;
     let start_lock = lock_blocking(&dir.join("start.lock"))?;
@@ -591,12 +591,20 @@ pub fn supervise(mode: Mode, flags: &RunLocalFlags, run: &RunArgs) -> Result<()>
     if mode.spec().runs_local_infra {
         kafka::ensure_available(&format!("run-{}", mode.label()))?;
     }
+    // The lock and job are keyed by name; the window is allocated once the job
+    // can record the allocation step.
     let mut instance = Instance::derive(run.instance.instance.as_deref(), run.instance.port_base)?;
     let _supervisor_lock = take_supervisor_lock(&instance)?;
     let job = Job::begin(&instance, JobKind::Up)?;
     let stage = Stage::from_env_cli(run.verbose).with_job(Arc::clone(&job));
 
     let result = (|| {
+        instance = super::allocator::allocate(
+            &stage,
+            mode,
+            run.instance.instance.as_deref(),
+            run.instance.port_base,
+        )?;
         // Volumes mean someone's data, so only an explicit `--fresh` may wipe them.
         let start = if flags.fresh || !super::instance_has_volumes(&instance)? {
             Start::Fresh
@@ -698,7 +706,7 @@ pub fn run_action(action: &RunAction) -> Result<()> {
 }
 
 fn instance_of(args: &InstanceArgs) -> Result<Instance> {
-    Instance::derive(args.instance.as_deref(), args.port_base)
+    Instance::resolve(args.instance.as_deref(), args.port_base)
 }
 
 /// Stream the current job's log until it finishes. Nonzero, naming the step and
