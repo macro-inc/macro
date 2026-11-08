@@ -252,3 +252,32 @@ fn a_sentence_shows_only_the_steps_knobs_each_in_its_own_form() {
         Err(ProgramError::SentenceTooLong)
     );
 }
+
+#[test]
+fn an_entity_knob_holds_one_of_the_kinds_it_allows() {
+    let entity = |entity_types: serde_json::Value, kind: &str| {
+        validate(json!([code(json!({
+            "source": "export async function main({ knobs }: StepContext) { return knobs.target.id; }",
+            "knobs": [{ "type": "entity", "name": "target", "label": "Where to post", "entity_types": entity_types, "value": { "type": kind, "id": "a1" } }],
+            "sentence": "Post open bugs in {target}.",
+        }))]))
+    };
+    entity(json!(["channel"]), "channel").unwrap();
+    entity(json!(["channel", "document"]), "document").unwrap();
+    let reason = |result: Result<(), ProgramError>| match result {
+        Err(ProgramError::KnobValue { reason, .. }) => reason,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        reason(entity(json!(["channel"]), "document")),
+        "its value must be one of the kinds it allows"
+    );
+    assert_eq!(
+        reason(entity(json!([]), "channel")),
+        "it must allow one or more kinds of item, each once"
+    );
+    assert_eq!(
+        reason(entity(json!(["channel", "channel"]), "channel")),
+        "it must allow one or more kinds of item, each once"
+    );
+}

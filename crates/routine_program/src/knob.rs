@@ -74,7 +74,115 @@ pub enum Knob {
         /// investors, fundraising or finance?".
         value: String,
     },
+    /// One of the owner's items the code uses, such as the channel it posts
+    /// in, which the owner swaps by picking another. The code gets an SDK
+    /// handle for it, never its id.
+    Entity {
+        /// How the code reads it: `knobs.<name>`.
+        name: KnobName,
+        /// What it is, for the owner, e.g. "Channel to post in".
+        label: String,
+        /// The kinds of item the owner may pick, at least one, each once.
+        entity_types: Vec<EntityKind>,
+        /// The item picked.
+        value: EntityValue,
+    },
 }
+
+/// A kind of item an entity knob names: one Macro's SDK has a handle for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntityType))]
+#[serde(rename_all = "snake_case")]
+pub enum EntityKind {
+    /// A channel or direct message.
+    Channel,
+    /// A document.
+    Document,
+    /// A folder.
+    Project,
+    /// A database.
+    Database,
+    /// A person.
+    User,
+}
+
+impl EntityKind {
+    /// The SDK namespace whose `byId` gives this kind's handle.
+    fn namespace(self) -> &'static str {
+        match self {
+            Self::Channel => "channels",
+            Self::Document => "documents",
+            Self::Project => "projects",
+            Self::Database => "databases",
+            Self::User => "users",
+        }
+    }
+
+    /// What it is called, for the owner: "a channel".
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::Channel => "channel",
+            Self::Document => "document",
+            Self::Project => "folder",
+            Self::Database => "database",
+            Self::User => "person",
+        }
+    }
+}
+
+/// The item an entity knob names: its kind and id.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntity))]
+#[serde(deny_unknown_fields)]
+pub struct EntityValue {
+    /// Its kind.
+    #[serde(rename = "type")]
+    pub kind: EntityKind,
+    /// Its id.
+    pub id: EntityId,
+}
+
+/// An item's id: not blank, without spaces, at most 256 characters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntityId))]
+#[serde(try_from = "String", into = "String")]
+pub struct EntityId(String);
+
+impl EntityId {
+    /// The id as written.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for EntityId {
+    type Error = InvalidEntityId;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let valid = !value.is_empty()
+            && value.len() <= 256
+            && !value.chars().any(|c| c.is_whitespace() || c.is_control());
+        if valid {
+            Ok(Self(value))
+        } else {
+            Err(InvalidEntityId)
+        }
+    }
+}
+
+impl From<EntityId> for String {
+    fn from(id: EntityId) -> Self {
+        id.0
+    }
+}
+
+/// An entity knob's id that is blank, has spaces or is too long.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an entity knob's id must be 1 to 256 characters without spaces")]
+pub struct InvalidEntityId;
 
 impl Knob {
     /// How the code reads it.
@@ -84,7 +192,8 @@ impl Knob {
             | Self::Number { name, .. }
             | Self::Boolean { name, .. }
             | Self::Choice { name, .. }
-            | Self::Question { name, .. } => name,
+            | Self::Question { name, .. }
+            | Self::Entity { name, .. } => name,
         }
     }
 
@@ -95,7 +204,8 @@ impl Knob {
             | Self::Number { label, .. }
             | Self::Boolean { label, .. }
             | Self::Choice { label, .. }
-            | Self::Question { label, .. } => label,
+            | Self::Question { label, .. }
+            | Self::Entity { label, .. } => label,
         }
     }
 
@@ -114,12 +224,23 @@ impl Knob {
                 .map(Value::Number)
                 .unwrap_or(Value::Null),
             Self::Boolean { value, .. } => Value::Bool(*value),
+            // The runner turns the marked item into the SDK's handle for it.
+            Self::Entity { value, .. } => serde_json::json!({ "$entity": value }),
+        }
+    }
+
+    /// The item an entity knob names.
+    pub fn entity(&self) -> Option<&EntityValue> {
+        match self {
+            Self::Entity { value, .. } => Some(value),
+            _ => None,
         }
     }
 
     /// Its TypeScript type in the step's `knobs`. A choice is the union of
     /// its options, so code comparing against an option that doesn't exist
-    /// fails the check.
+    /// fails the check; an entity is the SDK handle of each kind it allows,
+    /// so code calling what a channel doesn't have fails it.
     pub(crate) fn ts_type(&self) -> String {
         match self {
             Self::Text { .. } | Self::Question { .. } => "string".to_owned(),
@@ -128,6 +249,16 @@ impl Knob {
             Self::Choice { options, .. } => options
                 .iter()
                 .map(|option| Value::String(option.clone()).to_string())
+                .collect::<Vec<_>>()
+                .join(" | "),
+            Self::Entity { entity_types, .. } => entity_types
+                .iter()
+                .map(|kind| {
+                    format!(
+                        "ReturnType<import('@macro-inc/sdk').Macro['{}']['byId']>",
+                        kind.namespace()
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(" | "),
         }

@@ -267,6 +267,20 @@ fn knob_value(knob: &Knob) -> Result<(), String> {
             }
             Ok(())
         }
+        Knob::Entity {
+            entity_types,
+            value,
+            ..
+        } => {
+            let distinct: HashSet<_> = entity_types.iter().collect();
+            if entity_types.is_empty() || distinct.len() != entity_types.len() {
+                return Err("it must allow one or more kinds of item, each once".to_owned());
+            }
+            if !entity_types.contains(&value.kind) {
+                return Err("its value must be one of the kinds it allows".to_owned());
+            }
+            Ok(())
+        }
         Knob::Text { .. } | Knob::Question { .. } | Knob::Boolean { .. } => Ok(()),
     }
 }

@@ -112,6 +112,13 @@ impl CodeStep {
             .map(|knob| (knob.name().to_string(), knob.value()))
             .collect()
     }
+
+    /// The items its entity knobs name, each with the knob's label.
+    pub fn entities(&self) -> impl Iterator<Item = (&str, &crate::EntityValue)> {
+        self.knobs
+            .iter()
+            .filter_map(|knob| Some((knob.label(), knob.entity()?)))
+    }
 }
 
 /// Identifies the SDK API code was type-checked against: its version and a
