@@ -5,6 +5,8 @@ mod checklist;
 mod code;
 mod diff;
 mod keyboard;
+mod list_insert;
+mod media;
 mod metadata;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
@@ -61,6 +63,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = table::register(builder);
     let builder = code::register(builder);
     let builder = checklist::register(builder);
+    let builder = media::register(builder);
     let builder = diff::register(builder);
     metadata::register(builder)
 }
@@ -69,6 +72,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
 mod checklist_test;
 #[cfg(test)]
 mod code_test;
+#[cfg(test)]
+mod media_test;
 #[cfg(test)]
 mod test;
 
@@ -80,6 +85,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = media::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = checklist::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -94,6 +102,8 @@ pub fn decode_command(
         let command = match event.key.as_ref() {
             "Enter" => KeyCommand::Enter,
             "Tab" => KeyCommand::Tab,
+            "Backspace" => KeyCommand::Backspace,
+            "Delete" => KeyCommand::Delete,
             _ => return Err(Error::Invariant("application keyboard command")),
         };
         return Ok(Some(Command::Key {
