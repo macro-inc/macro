@@ -22,6 +22,9 @@ impl ForeignNode {
     fn check_supported(mask: u64) -> Result<(), Error> {
         let supported = ForeignHook::IsInline.bit()
             | ForeignHook::CanBeEmpty.bit()
+            | ForeignHook::CanMergeWith.bit()
+            | ForeignHook::CanReplaceWith.bit()
+            | ForeignHook::CanInsertAfter.bit()
             | ForeignHook::CanIndent.bit()
             | ForeignHook::IsShadowRoot.bit()
             | ForeignHook::CanInsertTextBefore.bit()
@@ -143,7 +146,12 @@ impl ForeignNode {
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         })
     }
-    fn predicate(&self, node: NodeView<'_>, hook: ForeignHook) -> Override<bool> {
+    fn predicate(
+        &self,
+        node: NodeView<'_>,
+        hook: ForeignHook,
+        nodes: &[NodeKey],
+    ) -> Override<bool> {
         if self.overrides.load(Ordering::SeqCst) & hook.bit() == 0 {
             return Override::Inherit;
         }
@@ -157,7 +165,7 @@ impl ForeignNode {
             Some(callback) => node
                 .state
                 .snapshot_for_foreign_read()
-                .and_then(|snapshot| callback.predicate(&snapshot, node.key, hook)),
+                .and_then(|snapshot| callback.predicate(&snapshot, node.key, hook, nodes)),
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         };
         match result {
@@ -176,41 +184,66 @@ impl ForeignNode {
 }
 impl ForeignHooks for ForeignNode {
     fn is_inline(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsInline)
+        self.predicate(node, ForeignHook::IsInline, &[])
     }
     fn can_be_empty(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanBeEmpty)
+        self.predicate(node, ForeignHook::CanBeEmpty, &[])
     }
 
     fn can_indent(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanIndent)
+        self.predicate(node, ForeignHook::CanIndent, &[])
     }
     fn is_shadow_root(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsShadowRoot)
+        self.predicate(node, ForeignHook::IsShadowRoot, &[])
     }
     fn can_insert_text_before(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanInsertTextBefore)
+        self.predicate(node, ForeignHook::CanInsertTextBefore, &[])
     }
     fn can_insert_text_after(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanInsertTextAfter)
+        self.predicate(node, ForeignHook::CanInsertTextAfter, &[])
     }
     fn can_merge_when_empty(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanMergeWhenEmpty)
+        self.predicate(node, ForeignHook::CanMergeWhenEmpty, &[])
     }
     fn is_parent_required(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsParentRequired)
+        self.predicate(node, ForeignHook::IsParentRequired, &[])
     }
     fn is_text_entity(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsTextEntity)
+        self.predicate(node, ForeignHook::IsTextEntity, &[])
     }
     fn can_have_format(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::CanHaveFormat)
+        self.predicate(node, ForeignHook::CanHaveFormat, &[])
     }
     fn is_isolated(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsIsolated)
+        self.predicate(node, ForeignHook::IsIsolated, &[])
     }
     fn is_keyboard_selectable(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        self.predicate(node, ForeignHook::IsKeyboardSelectable)
+        self.predicate(node, ForeignHook::IsKeyboardSelectable, &[])
+    }
+
+    fn can_merge_with(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        other: NodeKey,
+    ) -> Override<bool> {
+        self.predicate(node, ForeignHook::CanMergeWith, &[other])
+    }
+    fn can_replace_with(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        replacement: NodeKey,
+    ) -> Override<bool> {
+        self.predicate(node, ForeignHook::CanReplaceWith, &[replacement])
+    }
+    fn can_insert_after(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        other: NodeKey,
+    ) -> Override<bool> {
+        self.predicate(node, ForeignHook::CanInsertAfter, &[other])
     }
 
     fn adjust_export_json(

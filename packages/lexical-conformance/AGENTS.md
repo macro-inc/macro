@@ -56,3 +56,5 @@ The debug suite validates model-derived host hook aliases against pinned upstrea
 The WASM builder marks generated inline-JS snippets as ESM independently of the Node entry point's CommonJS boundary. Keep the snippets directory with the generated bindings when copying an artifact; the Node loader uses require(esm).
 
 Set CARGO_BUILD_JOBS to limit the shared optimized WASM builder and its instrumenter; both honor that value (default 4). Use a lower limit on loaded hosts without changing optimization or instrumentation.
+
+The indexed host accepts known native package types without kind metadata; unknown names reject as unknown native types. Foreign registrations carry kind and retain JS behavior.

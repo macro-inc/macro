@@ -82,3 +82,5 @@ Exercise hosted isInline with original arguments, read guards, native super, opa
 Use hosting-empty.test.ts for native child-removal dispatch of canBeEmpty, native super and falsy returns. After a throw, the child remains detached while the empty parent stays attached until an explicit later edit.
 
 Use hosting-predicates.test.ts for individual no-argument boolean hook dispatch/native-super literals, and hosting-format-predicate.test.ts for native range-format denial, throw suppression and recovery.
+
+Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain original indexed arguments; internal native calls encode their node through the shared owned read peer. Exercise native list append failure and retry in hosting-node-predicates.test.ts.

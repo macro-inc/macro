@@ -143,7 +143,7 @@ test('host constructors and postcard decoding reject unsupported or malformed in
   expect(
     () =>
       new node.EditorHandle({ namespace: 'host', nodes: [{ type: 'custom' }] })
-  ).toThrow('needs a foreign registration');
+  ).toThrow('unknown native node type custom');
   expect(() => decodeHostPacket(new Uint8Array([3]))).toThrow(
     'unsupported host packet version'
   );
