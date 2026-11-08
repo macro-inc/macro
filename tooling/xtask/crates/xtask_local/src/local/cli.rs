@@ -24,8 +24,8 @@ enum Cmd {
     RunLocal(RunLocalArgs),
     /// Run local binaries against shared dev resources.
     RunDev(RunLocalArgs),
-    /// Cross-compile the local service binaries with cargo zigbuild.
-    Zigbuild,
+    /// Build the local service binaries natively with cargo.
+    BuildServices,
     /// Build the minimal runtime image.
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
@@ -262,7 +262,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Cmd::RunLocal(args) => super::run_stack(Mode::Local, &args),
         Cmd::RunDev(args) => super::run_stack(Mode::Dev, &args),
-        Cmd::Zigbuild => super::zigbuild_only(),
+        Cmd::BuildServices => super::build_services_only(),
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
         Cmd::FrontendProxyRoutes => {

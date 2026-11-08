@@ -94,3 +94,12 @@ fn named_instances_use_their_own_external_project_networks() {
         Value::from("macro-agent-a_auth-internal")
     );
 }
+
+/// Compose builds only a missing tag, so a Dockerfile edit has to change the tag.
+#[test]
+fn relay_image_tag_follows_its_dockerfile() {
+    let tag = sdk_webhook_relay_image(b"FROM alpine\nRUN a\n");
+    assert_ne!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN b\n"));
+    assert_eq!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN a\n"));
+    assert!(tag.starts_with("macro-sdk-webhook-relay:"));
+}

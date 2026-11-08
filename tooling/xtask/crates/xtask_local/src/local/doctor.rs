@@ -22,13 +22,6 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ("docker daemon", check_docker()),
         ("docker compose", check_compose()),
         (
-            "zig / cargo-zigbuild",
-            check_bin(
-                "cargo-zigbuild",
-                "install cargo-zigbuild + zig (in the nix dev shell)",
-            ),
-        ),
-        (
             "sccache",
             check_bin("sccache", "install sccache (in the nix dev shell)"),
         ),
@@ -41,7 +34,7 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
             "sqlx-cli",
             check_bin("sqlx", "cargo install sqlx-cli (in the nix dev shell)"),
         ),
-        ("rust target", check_rust_target()),
+        ("build host", check_build_host()),
         ("ports", check_ports(&instance)),
         ("port forwarding", check_port_forwarding(&instance)),
         ("instances", check_instances()),
@@ -108,9 +101,9 @@ fn check_bin(bin: &str, hint: &str) -> Status {
     }
 }
 
-fn check_rust_target() -> Status {
-    let target = match arch::detect() {
-        Ok(t) => t,
+fn check_build_host() -> Status {
+    let target = match arch::detect().and_then(|t| arch::ensure_linux_host().map(|()| t)) {
+        Ok(target) => target,
         Err(e) => {
             return Status::Fail {
                 msg: e.to_string(),
@@ -118,29 +111,7 @@ fn check_rust_target() -> Status {
             };
         }
     };
-    let sysroot = match Command::new("rustc").args(["--print", "sysroot"]).output() {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        _ => {
-            return Status::Fail {
-                msg: "rustc not found".into(),
-                hint: None,
-            };
-        }
-    };
-    let std_dir = std::path::Path::new(&sysroot)
-        .join("lib/rustlib")
-        .join(target.triple);
-    if std_dir.exists() {
-        Status::Ok(target.describe())
-    } else {
-        Status::Fail {
-            msg: format!("rust target {} not installed", target.triple),
-            hint: Some(format!(
-                "add {} to rust-toolchain.toml `targets` and re-enter `nix develop`",
-                target.triple
-            )),
-        }
-    }
+    Status::Ok(target.describe())
 }
 
 /// Docker Desktop's VM can wedge so that a container's host port bindings are
