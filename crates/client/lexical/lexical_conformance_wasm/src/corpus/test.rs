@@ -14,3 +14,16 @@ fn corpus_export_uses_the_replacement_free_registry() {
         r#"{"ok":"visible"}"#
     );
 }
+
+#[test]
+fn corpus_composers_use_the_portable_source_wire_apis() {
+    assert_eq!(
+        corpus_route("agent-context", r#"{"promptMarkdown":"literal"}"#),
+        r#"{"ok":"literal"}"#
+    );
+    let input = json!({"staticFileId":"image","url":"https://example.com/image.png","width":640,"height":480});
+    assert_eq!(
+        serde_json::from_str::<Value>(&corpus_route("image-markdown", &input.to_string())).unwrap(),
+        json!({"ok":r#"<m-image>{"url":"https://example.com/image.png","alt":"Generated image","srcType":"sfs","id":"image","width":640,"height":480,"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>"#})
+    );
+}
