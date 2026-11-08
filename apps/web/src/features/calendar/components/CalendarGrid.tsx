@@ -169,6 +169,8 @@ export function CalendarGrid(props: CalendarGridProps) {
         ...(event.eventType === 'out_of_office'
           ? ['calendar-event-out-of-office']
           : []),
+        ...(event.taskDue ? ['calendar-event-task'] : []),
+        ...(event.taskDue?.completed ? ['calendar-event-task-completed'] : []),
       ];
       return {
         ...mapped,

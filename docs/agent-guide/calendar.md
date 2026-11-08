@@ -258,8 +258,10 @@ confirmed booking. Current integrations check hosts' connected calendars and
 write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
-above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
-`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+above the mini calendar offers `Event`, `Task`, feature-gated `Call`, and
+feature-gated `Reminder`. `Task` opens the task composer with the due date set
+to the day the calendar is showing, and turns on the Tasks overlay when the
+task is created so the new task appears on that day. An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
 copy ranges that wrap on narrow screens. The dialog checks all ranges using one
 calendar-occurrence query; ranges without free time are disabled, show an X
@@ -272,7 +274,9 @@ neutral styling. Reduced-motion preferences skip the crossfade and spin.
 Collapsible `Upcoming events` and `Calendars` sections follow; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
-separate account and individual-calendar visibility controls. `Team out of office`
+separate account and individual-calendar visibility controls. `Tasks` is the last
+row in that section, off until checked, and remembered in the same browser
+preferences. Checking it shows tasks that have a due date. `Team out of office`
 is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
@@ -292,8 +296,9 @@ it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 The mobile split header places a month selector and Today in its left island;
 selecting the month opens the date-selection drawer. The right island keeps
 full-sized Availability, Search, and Settings actions. The New menu
-beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Inline Calendar previews retain their host's chrome without adding
+beside the bottom AI input offers Event, Task, feature-gated Call, and
+feature-gated Reminder. Task uses the day the calendar is showing as the due
+date. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
@@ -489,6 +494,17 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
+`Tasks` uses the same checkbox row. It stays off until checked, including for
+someone who already saved calendar preferences. While it is on, the calendar
+loads the tasks the viewer can see, most recently updated first, and draws each
+one that has a due date as an all-day chip on that local date. The time of day
+on the due date does not move the chip. Clicking a chip opens the task beside
+the calendar when another pane fits, and in place on a phone. Completed tasks
+stay on their due date with a line through the title. The load stops after 500
+tasks, so a due date on a task updated less recently than those can be missing.
+Phones, which have no sidebar, use the same `Show tasks` control in Calendar
+settings. The section is shown even when only one calendar is connected, so
+the Tasks row still has a place.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
@@ -1468,4 +1484,4 @@ native details that cannot be safely copied are rejected before any invitations.
 For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
 opens the actual occurrence so you can clear your own response there.
 
-Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
+Calendar's New menus explain Event, Task, Call, and Booking link with icons and muted descriptions. Task opens the task composer with the due date set to the day the calendar is showing. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.

@@ -21,6 +21,8 @@ interface CalendarPreferences {
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
   showNextMeetingBadge: boolean;
+  /** Due-date tasks on the calendar. Off until the viewer turns them on. */
+  showDueTasks: boolean;
 }
 
 /** One persisted store, so preference changes reach invitation cards outside the calendar. */
@@ -34,6 +36,7 @@ export const useCalendarPreferences = createSharedRoot(() => {
     weekStartsOn: 0,
     timeFormat: getDefaultCalendarTimeFormat(),
     showNextMeetingBadge: true,
+    showDueTasks: false,
   };
   const [preferences, setPreferences] = makePersisted(
     createStore<CalendarPreferences>(defaultPreferences),
