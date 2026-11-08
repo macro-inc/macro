@@ -3,6 +3,7 @@ use crate::replay::{Replayer, Result, fail, integer, node_key, tagged_key};
 use lexical_model::{EditorState, NodeKey, Selection, Transaction};
 use serde_json::{Value, json};
 use std::sync::Arc;
+mod arguments;
 mod callbacks;
 pub use callbacks::CallbackContext;
 use callbacks::Frames;
@@ -149,6 +150,28 @@ impl Context {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
         self.frames.validate(tx)?;
+        let _arguments = match (
+            super::index()
+                .get(id as usize)
+                .and_then(|name| name.strip_prefix("LexicalNode.")),
+            receiver.as_ref(),
+            args.as_array(),
+        ) {
+            (Some(method), Some(receiver), Some(args)) => {
+                let hook = lexical_model::ForeignHook::ALL
+                    .iter()
+                    .copied()
+                    .find(|hook| hook.upstream_name() == method);
+                match hook {
+                    Some(hook) => {
+                        let key = node_key(&self.replay.decode(receiver)?)?;
+                        Some(self.frames.arguments.enter(key, hook, args.clone()))
+                    }
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         let result = super::call_by_id(&mut self.replay, tx, id, args, receiver)?;
         self.encode(result)
     }
@@ -176,7 +199,10 @@ impl Context {
             .find(|hook| hook.upstream_name() == method)
             .ok_or_else(|| fail("native-super requires a node hook API"))?;
         let key = node_key(&self.replay.decode(&receiver)?)?;
-        tx.with_foreign_native(key, hook, |tx| self.call(tx, id, args, Some(receiver)))
+        let result = tx.with_foreign_native(key, hook, |tx| {
+            super::call_by_id(&mut self.replay, tx, id, args, Some(receiver))
+        })?;
+        self.encode(result)
     }
 
     /// Read a raw captured field without changing the active update's version.

@@ -681,3 +681,116 @@ fn projected_read_captures_keep_the_source_record_handle_and_owner_version() -> 
     })??;
     Ok(())
 }
+
+#[test]
+fn original_hook_arguments_are_consumed_once_and_restore_after_nested_calls_and_errors()
+-> Result<()> {
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Hooks {
+        context: CallbackContext,
+        calls: Arc<AtomicUsize>,
+        observed: Arc<Mutex<Vec<Option<Vec<Value>>>>>,
+    }
+    impl ForeignHooks for Hooks {
+        fn coerce_format(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            value: TextFormat,
+        ) -> Override<std::result::Result<(), Error>> {
+            let result = (|| -> Result<()> {
+                self.observed
+                    .lock()
+                    .expect("observed")
+                    .push(
+                        self.context
+                            .original_arguments(tx, key, ForeignHook::CoerceFormat)?,
+                    );
+                assert!(
+                    self.context
+                        .original_arguments(tx, key, ForeignHook::CoerceFormat)?
+                        .is_none()
+                );
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    let receiver = self.context.node(tx, key)?;
+                    let id = crate::api::index()
+                        .binary_search(&"LexicalNode.setFormat")
+                        .expect("format") as u32;
+                    self.context.call(tx, id, json!([2]), Some(receiver))?;
+                }
+                tx.with_foreign_native(key, ForeignHook::CoerceFormat, |tx| {
+                    tx.text(key)?.set_format(value)?;
+                    Ok::<_, Error>(())
+                })?;
+                Ok(())
+            })();
+            Override::Value(result.map_err(|error| Error::invariant(error.to_string())))
+        }
+    }
+    let mut context = Context::default();
+    let callback = context.callbacks();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "original-arguments".into(),
+            class_name: "OriginalArguments".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                context: callback.clone(),
+                calls: calls.clone(),
+                observed: observed.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let key = tx.create_foreign("original-arguments", SerializedNode::new())?;
+    let raw = context.replay.node(tx.view(), key)?;
+    let receiver = context.encode(raw)?;
+    let id = crate::api::index()
+        .binary_search(&"LexicalNode.setFormat")
+        .expect("format") as u32;
+    assert!(
+        context
+            .call(
+                &mut tx,
+                id,
+                json!(["invalid-format"]),
+                Some(receiver.clone())
+            )
+            .is_err()
+    );
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)?
+            .is_none()
+    );
+    context.call(&mut tx, id, json!(["bold"]), Some(receiver))?;
+    assert_eq!(
+        *observed.lock().expect("observed"),
+        [Some(vec![json!("bold")]), Some(vec![json!(2)])]
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(tx.view().text_data(key)?.format, TextFormat::BOLD);
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)?
+            .is_none()
+    );
+    drop(tx);
+    context.discard_update()?;
+    let tx = editor.transaction();
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)
+            .is_err()
+    );
+    Ok(())
+}

@@ -51,6 +51,16 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::rich::call(r, tx, name, a);
     }
     match name {
+        "conformance.createForeignNode" => {
+            let type_name = str_arg(a, 0)?;
+            let fields = a
+                .get(1)
+                .and_then(Value::as_object)
+                .cloned()
+                .ok_or_else(|| fail("foreign fields must be an object"))?;
+            let key = tx.create_foreign(type_name, fields)?;
+            r.node(tx.view(), key)
+        }
         "lexical.nodeStatesAreEquivalent" | "lexical/LexicalNodeState.nodeStatesAreEquivalent" => {
             let state = |value: Option<&Value>| -> Result<Option<NodeState>> {
                 let Some(value) =
