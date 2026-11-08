@@ -83,6 +83,7 @@ pub enum IoEffect {
 }
 
 /// A state change or reply delivered to the owning session.
+#[derive(Clone)]
 pub enum SyncEvent {
     /// Public session status changed.
     Status(SyncStatus),
@@ -115,6 +116,7 @@ pub enum SyncEvent {
 }
 
 /// A correlated host request completed.
+#[derive(Clone)]
 pub enum Reply {
     /// Request or report delivery of outstanding changes.
     Flush(FlushReply), // Drained | NotDrained { undelivered: u32 } | Offline | ReadOnly

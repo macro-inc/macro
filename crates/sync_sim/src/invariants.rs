@@ -1,4 +1,4 @@
-//! Invariant queries over raw observations; editor-specific adapters remain explicitly pending.
+//! Invariant queries over raw core, storage and real editor observations.
 use crate::*;
 mod durability;
 pub use durability::*;
@@ -13,7 +13,6 @@ pub fn check_all(outcome: &Outcome) -> Result<(), Vec<Failure>> {
         matches!(step, Step::Net(NetStep::Profile(profile)) if profile.hostile.is_some()));
     let errors = ALL_INVARIANTS
         .iter()
-        .filter(|(name, _)| !PENDING_EDITOR_INVARIANTS.contains(name))
         .filter(|(name, _)| !hostile || HOSTILE_SAFETY_INVARIANTS.contains(name))
         .filter_map(|(_, check)| check(outcome).err())
         .collect::<Vec<_>>();
@@ -61,23 +60,62 @@ pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("no_spurious_terminal", no_spurious_terminal),
     ("per_step", per_step),
 ];
-/// These two checks require the explicitly deferred editor projection adapters.
-/// `check_all` reports only applicable GenericSurface/fact checks; calling a pending
-/// query directly returns a failure, never a fabricated editor safety proof.
-pub const PENDING_EDITOR_INVARIANTS: &[&str] = &["editor_states_equal", "projection_consistent"];
-/// Editor model convergence remains pending until real session/projection integration.
-pub fn editor_states_equal(_: &Outcome) -> Result<(), Failure> {
-    Err(Failure::new(
-        "editor_states_equal",
-        "pending document_session / lexical_loro adapter",
-    ))
+/// Settled live editor peers of a document expose identical synced model JSON.
+pub fn editor_states_equal(outcome: &Outcome) -> Result<(), Failure> {
+    let mut states = std::collections::BTreeMap::new();
+    for (name, client) in &outcome.finals.clients {
+        if !client.alive || client.terminal.is_some() {
+            continue;
+        }
+        let Some(editor) = &client.editor else {
+            if matches!(
+                outcome.config.seeds.get(&client.doc),
+                Some(SeedDocument::Editor(_))
+            ) {
+                return Err(Failure::new(
+                    "editor_states_equal",
+                    format!("{name:?}: missing real editor observation"),
+                ));
+            }
+            continue;
+        };
+        if let Some((other, state)) = states.insert(client.doc, (name, &editor.synced_json))
+            && state != &editor.synced_json
+        {
+            return Err(Failure::new(
+                "editor_states_equal",
+                format!("{name:?} differs from {other:?}"),
+            ));
+        }
+    }
+    Ok(())
 }
-/// Editor/model projection agreement remains pending; GenericSurface has no editor model.
-pub fn projection_consistent(_: &Outcome) -> Result<(), Failure> {
-    Err(Failure::new(
-        "projection_consistent",
-        "pending lexical_model / lexical_loro adapter",
-    ))
+/// Every captured live model agrees with reconstruction from its actual Loro document.
+pub fn projection_consistent(outcome: &Outcome) -> Result<(), Failure> {
+    for (name, client) in &outcome.finals.clients {
+        if client.alive
+            && client.terminal.is_none()
+            && matches!(
+                outcome.config.seeds.get(&client.doc),
+                Some(SeedDocument::Editor(_))
+            )
+            && client.editor.is_none()
+        {
+            return Err(Failure::new(
+                "projection_consistent",
+                format!("{name:?}: missing real editor observation"),
+            ));
+        }
+        if let Some(editor) = &client.editor
+            && editor.synced_json != editor.reconstructed
+        {
+            return Err(Failure::new(
+                "projection_consistent",
+                format!("{name:?}: model differs from persisted reconstruction"),
+            ));
+        }
+    }
+    Ok(())
 }
 /// The final settle transition must succeed.
 pub fn settled(outcome: &Outcome) -> Result<(), Failure> {

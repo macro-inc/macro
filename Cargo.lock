@@ -6567,7 +6567,7 @@ name = "doc_sync_core"
 version = "0.1.0"
 dependencies = [
  "bebop",
- "loro",
+ "loro 1.17.1",
  "macro_user_id",
  "postcard",
  "rootcause",
@@ -6613,7 +6613,7 @@ dependencies = [
  "lexical_loro",
  "lexical_model",
  "lexical_rich_nodes",
- "loro",
+ "loro 1.17.1",
  "proptest",
  "rootcause",
  "serde",
@@ -6637,7 +6637,7 @@ dependencies = [
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
- "loro",
+ "loro 1.17.1",
  "serde_json",
  "sync_protocol",
  "thiserror 2.0.18",
@@ -6969,7 +6969,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
- "loro",
+ "loro 1.17.1",
  "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
@@ -8509,7 +8509,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
- "loro",
+ "loro 1.17.1",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -11886,7 +11886,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lexical_model",
  "lexical_rich_nodes",
- "loro",
+ "loro 1.17.1",
  "proptest",
  "rustc-hash 2.1.2",
  "serde_json",
@@ -11969,7 +11969,7 @@ dependencies = [
 name = "lexical_workspace_tests"
 version = "0.1.0"
 dependencies = [
- "loro",
+ "loro 1.17.1",
  "regress",
  "rootcause",
  "serde",
@@ -12338,6 +12338,20 @@ dependencies = [
 
 [[package]]
 name = "loro"
+version = "1.16.2"
+dependencies = [
+ "enum-as-inner 0.6.1",
+ "generic-btree",
+ "loro-common",
+ "loro-delta",
+ "loro-internal 1.16.2",
+ "loro-kv-store",
+ "rustc-hash 2.1.2",
+ "tracing",
+]
+
+[[package]]
+name = "loro"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "410c939fe3bee34b8ed61f7aea93201fb136629f685ffa557039c4d9952f9988"
@@ -12346,7 +12360,7 @@ dependencies = [
  "generic-btree",
  "loro-common",
  "loro-delta",
- "loro-internal",
+ "loro-internal 1.17.1",
  "loro-kv-store",
  "rustc-hash 2.1.2",
  "tracing",
@@ -12380,6 +12394,51 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "generic-btree",
  "heapless 0.8.0",
+]
+
+[[package]]
+name = "loro-internal"
+version = "1.16.2"
+dependencies = [
+ "append-only-bytes",
+ "arref",
+ "bytes",
+ "either",
+ "ensure-cov",
+ "enum-as-inner 0.6.1",
+ "enum_dispatch",
+ "generic-btree",
+ "getrandom 0.2.17",
+ "im",
+ "itertools 0.12.1",
+ "leb128",
+ "loom",
+ "loro-common",
+ "loro-delta",
+ "loro-kv-store",
+ "loro-rle",
+ "loro_fractional_index",
+ "md5 0.7.0",
+ "nonmax",
+ "num",
+ "num-traits",
+ "once_cell",
+ "parking_lot",
+ "pest",
+ "pest_derive",
+ "postcard",
+ "pretty_assertions",
+ "rand 0.8.6",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_columnar",
+ "serde_json",
+ "smallvec",
+ "thiserror 1.0.69",
+ "thread_local",
+ "tracing",
+ "wasm-bindgen",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -12721,7 +12780,7 @@ dependencies = [
  "lexical_node_id",
  "lexical_rich_nodes",
  "logos",
- "loro",
+ "loro 1.17.1",
  "mention_date",
  "nom 8.0.0",
  "rand_chacha 0.9.0",
@@ -20125,8 +20184,8 @@ name = "sync_protocol"
 version = "0.1.0"
 dependencies = [
  "bebop",
- "loro",
- "loro-internal",
+ "loro 1.17.1",
+ "loro-internal 1.17.1",
  "postcard",
  "rustc-hash 2.1.2",
  "serde",
@@ -20162,7 +20221,7 @@ dependencies = [
  "bebop",
  "futures",
  "lazy-regex",
- "loro",
+ "loro 1.16.2",
  "macro_sync_service_jwt",
  "rootcause",
  "serde",
@@ -20182,7 +20241,7 @@ dependencies = [
  "base64 0.22.1",
  "bebop",
  "futures",
- "loro",
+ "loro 1.16.2",
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
@@ -20257,8 +20316,11 @@ dependencies = [
  "anyhow",
  "bebop",
  "doc_sync_core",
+ "document_session",
  "futures",
- "loro",
+ "lexical_loro",
+ "lexical_model",
+ "loro 1.17.1",
  "macro_env_var",
  "macro_sync_service_jwt",
  "postcard",

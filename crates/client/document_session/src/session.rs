@@ -40,6 +40,12 @@ pub enum SessionInput {
 /// Ordered effects from the last handle call.
 #[derive(Default)]
 pub struct SessionOutput {
+    /// Development-only observations of actual sync events, including nested calls.
+    #[cfg(feature = "conformance")]
+    pub sync_events: Vec<SyncEvent>,
+    /// Development-only actual import results, before model recovery.
+    #[cfg(feature = "conformance")]
+    pub imports: Vec<(String, bool, Option<String>)>,
     /// View and correlated host replies.
     pub view: Vec<ViewEffect>,
     /// I/O instructions executed by the host.
@@ -212,6 +218,11 @@ impl<S: Surface> DocumentSession<S> {
     /// Process exactly one host input and return effects borrowing reused buffers.
     pub fn handle(&mut self, now: Now, input: SessionInput) -> &SessionOutput {
         self.out.view.clear();
+        #[cfg(feature = "conformance")]
+        {
+            self.out.sync_events.clear();
+            self.out.imports.clear();
+        }
         self.out.io.clear();
         let result = match input {
             SessionInput::Sync(input) => {
@@ -293,11 +304,15 @@ impl<S: Surface> DocumentSession<S> {
             access: self.access,
             ready: self.ready,
             view: &mut self.out.view,
+            #[cfg(feature = "conformance")]
+            imports: &mut self.out.imports,
         };
         self.sync.handle(now, &mut doc, input, &mut self.sync_out);
         self.out.io.append(&mut self.sync_out.io);
         self.out.wake_at = self.sync_out.wake_at;
         let events = std::mem::take(&mut self.sync_out.events);
+        #[cfg(feature = "conformance")]
+        self.out.sync_events.extend(events.iter().cloned());
         for event in events {
             match event {
                 SyncEvent::Status(status) => self.out.view.push(ViewEffect::Status(status)),
@@ -377,6 +392,8 @@ struct Adapter<'a, S> {
     access: Access,
     ready: bool,
     view: &'a mut Vec<ViewEffect>,
+    #[cfg(feature = "conformance")]
+    imports: &'a mut Vec<(String, bool, Option<String>)>,
 }
 fn import(doc: &LoroDoc, bytes: &[u8]) -> Result<Imported, ImportFailure> {
     if bytes.is_empty() {
@@ -410,14 +427,28 @@ impl<S: Surface> SyncDoc for Adapter<'_, S> {
     fn oplog_vv(&self) -> VersionVector {
         self.doc.oplog_vv()
     }
-    fn import_remote(&mut self, bytes: &[u8], _: ImportOrigin) -> Result<Imported, ImportFailure> {
-        let result = import(self.doc, bytes)?;
-        if self.ready && result.changed {
-            self.surface
-                .remote(self.doc, self.now, self.access, self.view)
-                .map_err(|error| ImportFailure::Projection(rootcause::report!(error).into()))?;
-        }
-        Ok(result)
+    fn import_remote(
+        &mut self,
+        bytes: &[u8],
+        origin: ImportOrigin,
+    ) -> Result<Imported, ImportFailure> {
+        let result = import(self.doc, bytes).and_then(|result| {
+            if self.ready && result.changed {
+                self.surface
+                    .remote(self.doc, self.now, self.access, self.view)
+                    .map_err(|error| ImportFailure::Projection(rootcause::report!(error).into()))?;
+            }
+            Ok(result)
+        });
+        #[cfg(feature = "conformance")]
+        self.imports.push((
+            format!("{origin:?}"),
+            result.as_ref().is_ok_and(|imported| imported.pending),
+            result.as_ref().err().map(ToString::to_string),
+        ));
+        #[cfg(not(feature = "conformance"))]
+        let _ = origin;
+        result
     }
     fn export_local(&self, since: &VersionVector) -> Result<Option<Vec<u8>>, ExportFailure> {
         let peer = self.doc.peer_id();
@@ -486,6 +517,28 @@ impl DocumentSession<GenericSurface> {
 
 #[cfg(feature = "conformance")]
 impl<S: Surface> DocumentSession<S> {
+    /// Whether the real winning seed has initialized the surface.
+    #[doc(hidden)]
+    pub fn conformance_ready(&self) -> bool {
+        self.ready
+    }
+    /// Development-only immutable core diagnostics; no mutable document handle escapes.
+    #[doc(hidden)]
+    pub fn conformance_sync(&self) -> &SyncCore {
+        &self.sync
+    }
+    /// Move actual effects to a deterministic host while retaining the pending timer.
+    #[doc(hidden)]
+    pub fn conformance_drain_output(&mut self) -> SessionOutput {
+        SessionOutput {
+            view: std::mem::take(&mut self.out.view),
+            io: std::mem::take(&mut self.out.io),
+            wake_at: self.out.wake_at,
+            need_peer_ids: self.out.need_peer_ids,
+            sync_events: std::mem::take(&mut self.out.sync_events),
+            imports: std::mem::take(&mut self.out.imports),
+        }
+    }
     /// Development-only native snapshot for the Tier C relay; never exposes a mutable handle.
     #[doc(hidden)]
     pub fn conformance_snapshot(&self) -> Result<Vec<u8>, loro::LoroEncodeError> {
@@ -518,5 +571,29 @@ impl DocumentSession<EditorSurface> {
             .expect("projection")
             .check(&self.doc, self.surface.state())
             .expect("projection matches native doc");
+    }
+}
+
+#[cfg(feature = "conformance")]
+impl DocumentSession<EditorSurface> {
+    /// Serialize the live model using the actual configured synchronization policy.
+    #[doc(hidden)]
+    pub fn conformance_synced_state(
+        &self,
+    ) -> Result<lexical_model::SerializedEditorState, SessionError> {
+        Ok(lexical_loro::synced_json(
+            self.surface.state(),
+            self.surface.config.policy,
+        )?)
+    }
+    /// Reconstruct the persisted editor tree independently of the live projection.
+    #[doc(hidden)]
+    pub fn conformance_reconstructed_state(
+        &self,
+    ) -> Result<lexical_model::SerializedEditorState, SessionError> {
+        Ok(lexical_loro::reconstruct_state(
+            &self.doc,
+            self.surface.config.policy,
+        )?)
     }
 }

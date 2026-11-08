@@ -1,0 +1,46 @@
+[package]
+name = "loro"
+version = "1.16.2"
+edition = "2021"
+license = "MIT"
+documentation = "https://docs.rs/loro/"
+description = "Loro is a high-performance CRDTs framework. Make your app collaborative efforlessly."
+homepage = "https://loro.dev"
+repository = "https://github.com/loro-dev/loro/"
+authors = ["Zixuan Chen", "Liang Zhao"]
+categories = []
+keywords = ["crdt", "local-first"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+loro-internal = { path = "../loro-internal", version = "1.16.2" }
+loro-common = { path = "../loro-common", version = "1.16.0", features = [
+    "serde_json",
+] }
+loro-kv-store = { path = "../kv-store", version = "1.16.0" }
+delta = { path = "../delta", package = "loro-delta", version = "1.13.0" }
+generic-btree = { version = "^0.10.7" }
+enum-as-inner = { workspace = true }
+tracing = { workspace = true }
+rustc-hash = { workspace = true }
+
+[dev-dependencies]
+serde_json = { version = "1.0.87", features = ["float_roundtrip"] }
+anyhow = "1.0.83"
+ctor = "0.2"
+dev-utils = { path = "../dev-utils" }
+rand = "0.8.5"
+pretty_assertions = "1.4.0"
+loom = "0.7"
+base64 = "0.22.1"
+serial_test = "3"
+
+[features]
+default = ["counter"]
+counter = ["loro-internal/counter"]
+jsonpath = ["loro-internal/jsonpath"]
+logging = ["loro-internal/logging"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }

@@ -68,3 +68,6 @@ mod idle_orphans;
 
 #[path = "stories/account_drain.rs"]
 mod account_drain;
+
+#[path = "stories/editor_basic.rs"]
+mod editor_basic;

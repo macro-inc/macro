@@ -45,6 +45,9 @@ successful binding. Validate complete generic batches before changing the live d
 
 The `conformance` feature only enables read-only inspection and the development
 example. It is not an application API or a wire/session ABI.
+Conformance hosts can inspect immutable SyncCore diagnostics, actual sync/import
+observations and independent reconstructed editor state. Draining effects retains
+the pending timer; no mutable Loro document handle escapes.
 
 Run the current TS stack differential from the repository root:
 `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`.

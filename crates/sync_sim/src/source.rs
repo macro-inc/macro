@@ -100,6 +100,7 @@ fn policy(value: &impl std::fmt::Debug) -> String {
 }
 fn seed_source(seed: &SeedDocument) -> String {
     match seed {
+        SeedDocument::Editor(state) => format!("SeedDocument::Editor(serde_json::json!({state}))"),
         SeedDocument::Empty => "SeedDocument::Empty".into(),
         SeedDocument::Form(fields) => format!("SeedDocument::Form(vec!{fields:?})"),
         SeedDocument::Cached { server, s3, local } => format!(
