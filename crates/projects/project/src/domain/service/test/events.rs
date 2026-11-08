@@ -107,8 +107,8 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
 
 #[tokio::test]
 async fn appearance_validates_and_records_only_changes() {
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "unknown-icon".into(),
         }),
         color: None,
@@ -125,12 +125,12 @@ async fn appearance_validates_and_records_only_changes() {
             .times(1)
             .withf(|_, update| update.attribution.is_some())
             .return_once(move |_, _| {
-                Box::pin(async move { Ok(changed.then(model_entity::EntityAppearance::default)) })
+                Box::pin(async move { Ok(changed.then(entity_kind::EntityAppearance::default)) })
             });
         let events = Arc::new(Events::default());
-        let appearance = model_entity::EntityAppearance {
+        let appearance = entity_kind::EntityAppearance {
             icon: None,
-            color: Some(model_entity::AppearanceColor::Blue),
+            color: Some(entity_kind::AppearanceColor::Blue),
         };
         assert_eq!(
             service(repo)

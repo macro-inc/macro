@@ -2,7 +2,7 @@ use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
     insert_entity_access_row,
 };
-use model_entity::Entity;
+use entity_kind::Entity;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareCreation,

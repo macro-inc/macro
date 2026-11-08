@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use macro_user_id::user_id::MacroUserIdStr;
 

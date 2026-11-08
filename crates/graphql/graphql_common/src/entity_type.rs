@@ -2,7 +2,7 @@
 mod test;
 
 use async_graphql::{Enum, ID, Object, SimpleObject};
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 
 /// GraphQL representation of Soup entity types.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash)]
@@ -241,7 +241,7 @@ impl GraphqlEntityType {
     }
 }
 
-/// GraphQL wrapper over a canonical [`model_entity::Entity`].
+/// GraphQL wrapper over a canonical [`entity_kind::Entity`].
 pub struct GraphqlEntity<'a>(pub Entity<'a>);
 
 /// Canonical reference to an entity.

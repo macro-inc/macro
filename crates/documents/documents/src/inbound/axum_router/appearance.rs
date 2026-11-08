@@ -4,8 +4,8 @@ use axum::{Json, extract::State};
 use entity_access::{
     domain::ports::EntityAccessService, inbound::axum_extractors::DocumentAccessExtractor,
 };
+use entity_kind::EntityAppearance;
 use macro_authorization::MacroAuthorizationService;
-use model_entity::EntityAppearance;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;

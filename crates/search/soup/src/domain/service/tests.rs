@@ -10,6 +10,7 @@ use chrono::Days;
 use chrono::{DateTime, Utc};
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
@@ -29,7 +30,6 @@ use item_filters::{
         github_pull_request::GithubPullRequestLiteral,
     },
 };
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{

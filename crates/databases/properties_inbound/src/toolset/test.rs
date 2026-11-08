@@ -206,8 +206,8 @@ mod entity_type_aliases {
             ToolPropertyTargetEntityType::Thread
         ));
         assert_eq!(
-            model_entity::EntityType::from(tool.entity_type),
-            model_entity::EntityType::EmailThread
+            entity_kind::EntityType::from(tool.entity_type),
+            entity_kind::EntityType::EmailThread
         );
     }
 

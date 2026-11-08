@@ -10,9 +10,9 @@ mod test;
 
 use std::str::FromStr;
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
@@ -51,7 +51,7 @@ impl InitiativeRepo for PgInitiativeRepo {
         &self,
         id: InitiativeId,
         update: &activity::AppearanceUpdate,
-    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+    ) -> Result<Option<entity_kind::EntityAppearance>, Self::Err> {
         let mut transaction = self.pool.begin().await.map_err(classify_sqlx)?;
         let row = sqlx::query!(
             "SELECT appearance FROM initiative WHERE id = $1 FOR UPDATE",
@@ -61,7 +61,7 @@ impl InitiativeRepo for PgInitiativeRepo {
         .await
         .map_err(classify_sqlx)?
         .ok_or(InitiativeError::NotFound)?;
-        let previous: model_entity::EntityAppearance = row
+        let previous: entity_kind::EntityAppearance = row
             .appearance
             .map(serde_json::from_value)
             .transpose()
@@ -79,7 +79,7 @@ impl InitiativeRepo for PgInitiativeRepo {
         .await
         .map_err(classify_sqlx)?;
         if let Some(activity) = update.activity(
-            model_entity::EntityType::Initiative,
+            entity_kind::EntityType::Initiative,
             id.to_string(),
             &previous,
         ) {
@@ -189,7 +189,7 @@ impl GrantTargets {
 }
 
 struct InitiativeRecord {
-    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     id: uuid::Uuid,
     name: String,
     owner_user_id: String,
@@ -339,7 +339,7 @@ async fn load_record(
         r#"
         SELECT
             i.id,
-            i.appearance AS "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+            i.appearance AS "appearance: sqlx::types::Json<entity_kind::EntityAppearance>",
             i.name,
             i.owner_user_id,
             i.created_at,

@@ -23,7 +23,7 @@ pub(super) async fn list_accessible(
         )
         SELECT
             i.id,
-            i.appearance AS "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+            i.appearance AS "appearance: sqlx::types::Json<entity_kind::EntityAppearance>",
             i.name,
             i.updated_at
         FROM initiative i

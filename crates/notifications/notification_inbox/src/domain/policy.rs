@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
@@ -17,7 +18,6 @@ use item_filters::{
         initiative::InitiativeLiteral,
     },
 };
-use model_entity::EntityType;
 
 #[cfg(test)]
 mod test;

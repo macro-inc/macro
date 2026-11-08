@@ -1,7 +1,7 @@
 use super::{imported_entity_type, refuses_view};
 use entity_access::domain::models::AccessError;
+use entity_kind::EntityType;
 use import::domain::models::ImportSource;
-use model_entity::EntityType;
 
 #[test]
 fn imports_are_checked_as_the_entity_type_their_source_becomes() {

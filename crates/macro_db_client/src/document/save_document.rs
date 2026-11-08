@@ -63,7 +63,7 @@ pub async fn save_document(
         "documentFamilyId" as document_family_id,
         "projectId" as project_id,
         "deletedAt"::timestamptz as "deleted_at",
-        appearance as "appearance: sqlx::types::Json<model_entity::EntityAppearance>"
+        appearance as "appearance: sqlx::types::Json<entity_kind::EntityAppearance>"
         "#,
         document_id
     )

@@ -13,9 +13,9 @@ fn test_user() -> MacroUserIdStr<'static> {
 #[tokio::test]
 async fn schema_reader_preserves_canonical_entity_keys() {
     let keys = vec![
-        model_entity::EntityType::CrmCompany.with_entity_string("company-1".to_owned()),
-        model_entity::EntityType::Document.with_entity_string("document-1".to_owned()),
-        model_entity::EntityType::ForeignEntity.with_entity_string("foreign-1".to_owned()),
+        entity_kind::EntityType::CrmCompany.with_entity_string("company-1".to_owned()),
+        entity_kind::EntityType::Document.with_entity_string("document-1".to_owned()),
+        entity_kind::EntityType::ForeignEntity.with_entity_string("foreign-1".to_owned()),
     ];
     let result = NoOpSoupNotificationEdgeReader
         .get_notifications(test_user(), keys.clone(), Default::default())
@@ -31,7 +31,7 @@ struct Reader(
         Mutex<
             Vec<(
                 String,
-                Vec<model_entity::Entity<'static>>,
+                Vec<entity_kind::Entity<'static>>,
                 EntityNotificationQuery,
             )>,
         >,
@@ -42,10 +42,10 @@ impl SoupNotificationEdgeReader for Reader {
     async fn get_notifications(
         &self,
         user: MacroUserIdStr<'static>,
-        keys: Vec<model_entity::Entity<'static>>,
+        keys: Vec<entity_kind::Entity<'static>>,
         query: EntityNotificationQuery,
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
+        HashMap<entity_kind::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
         rootcause::Report,
     > {
         self.0
@@ -80,7 +80,7 @@ impl Query {
     ) -> async_graphql::Result<Vec<crate::GraphqlNotification>> {
         crate::load_entity_notifications::<Reader>(
             ctx,
-            model_entity::EntityType::Channel.with_entity_string(entity),
+            entity_kind::EntityType::Channel.with_entity_string(entity),
             filter,
             limit,
         )

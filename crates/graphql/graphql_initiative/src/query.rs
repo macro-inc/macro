@@ -1,10 +1,10 @@
 //! Viewer-scoped initiative query resolvers.
 
 use async_graphql::{Context, ID};
+use entity_kind::EntityType;
 use graphql_common::{parse_id, require_authenticated_user};
 use graphql_soup::{GraphqlSoupEntity, GraphqlSoupInitiative, SoupEntityEdges, SoupItemDataLoader};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use uuid::Uuid;
 
 use crate::{

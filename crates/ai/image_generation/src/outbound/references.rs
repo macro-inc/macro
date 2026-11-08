@@ -4,7 +4,7 @@ use attachment::image::ImageData;
 use attachment::{AttachmentError, AttachmentPart, AttachmentService};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_owner::CreationPrincipal;
 use non_empty::NonEmpty;
 

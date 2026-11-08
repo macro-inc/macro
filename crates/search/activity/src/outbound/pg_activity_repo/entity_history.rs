@@ -1,7 +1,7 @@
 //! Keyset history for native entity views, independent of Soup.
 
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use std::num::NonZeroU32;
 use uuid::Uuid;
 

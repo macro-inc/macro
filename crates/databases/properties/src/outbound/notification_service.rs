@@ -62,7 +62,7 @@ where
 
         let assigned_by = notification.assigned_by.into_owned();
         let notification_entity =
-            model_entity::EntityType::Document.with_entity_string(notification.task_id.to_string());
+            entity_kind::EntityType::Document.with_entity_string(notification.task_id.to_string());
 
         let notification_futures: Vec<_> = notification
             .recipient_ids

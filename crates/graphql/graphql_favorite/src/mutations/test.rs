@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_graphql::{Context, EmptySubscription, Object, Schema, SimpleObject, value};
+use entity_kind::EntityType;
 use entity_mutation::EntityMutationActor;
 use favorites::domain::models::FavoritesMutationActor;
 use graphql_soup::SoupEntityEdges;
-use model_entity::EntityType;
 use uuid::Uuid;
 
 use super::*;
@@ -59,7 +59,7 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailEdges { available: true }
     }
 
-    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+    fn crm_record_edges(_record: entity_kind::Entity<'static>) -> Self::CrmRecordEdges {
         TestEmailEdges { available: true }
     }
 

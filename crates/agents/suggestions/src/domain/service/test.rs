@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
+use entity_kind::EntityType;
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;

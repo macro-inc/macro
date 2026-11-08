@@ -1,6 +1,6 @@
 use super::*;
 use chrono::Duration;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use std::sync::Mutex;
 
 #[derive(Default)]

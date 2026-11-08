@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::models::{Notification, UserNotificationRow};
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::future::Future;

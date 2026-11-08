@@ -79,9 +79,9 @@ impl EntityPropertyReader for TestReader {
     async fn get_properties(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-        _keys: &[model_entity::Entity<'static>],
+        _keys: &[entity_kind::Entity<'static>],
     ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
+        HashMap<entity_kind::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
         rootcause::Report,
     > {
         Ok(HashMap::new())

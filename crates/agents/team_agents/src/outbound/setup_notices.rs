@@ -11,11 +11,11 @@ mod test;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use entity_kind::EntityType;
 use hosted_runtimes::domain::ids::ComputerId;
 use hosted_runtimes::domain::lifecycle::SetupOutcome;
 use hosted_runtimes::domain::ports::{SetupNotice, SetupNotices};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{ComputerSetupAgent, ComputerSetupMetadata, ComputerSetupOutcome};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;

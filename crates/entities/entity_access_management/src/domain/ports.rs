@@ -2,7 +2,7 @@
 //!
 //! These traits define the contracts that adapters must implement.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::models::EntityAccessManagementError;
 

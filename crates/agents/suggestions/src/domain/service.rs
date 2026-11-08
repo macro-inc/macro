@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use entity_kind::EntityType;
 use feature_flags::FeatureFlags;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::check;

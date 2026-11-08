@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,

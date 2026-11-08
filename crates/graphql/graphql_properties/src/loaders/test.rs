@@ -3,7 +3,7 @@ use entity_access::domain::models::{AccessError, AccessLevel, Entity};
 use macro_user_id::{cow_str::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn receipt(key: &model_entity::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {
+fn receipt(key: &entity_kind::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::try_new_authenticated_user(
         MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
         Entity {
@@ -20,10 +20,10 @@ fn receipt(key: &model_entity::Entity<'static>) -> EntityAccessReceipt<ViewAcces
 #[tokio::test]
 async fn retains_only_authorized_property_targets() {
     let keys = [
-        model_entity::EntityType::DatabaseRow.with_entity_string("allowed".into()),
-        model_entity::EntityType::DatabaseRow.with_entity_string("denied".into()),
-        model_entity::EntityType::Team.with_entity_string("unsupported".into()),
-        model_entity::EntityType::Document.with_entity_string("document".into()),
+        entity_kind::EntityType::DatabaseRow.with_entity_string("allowed".into()),
+        entity_kind::EntityType::DatabaseRow.with_entity_string("denied".into()),
+        entity_kind::EntityType::Team.with_entity_string("unsupported".into()),
+        entity_kind::EntityType::Document.with_entity_string("document".into()),
     ];
     let calls = AtomicUsize::new(0);
     let receipts = load_view_receipts(&keys, |key| {
@@ -49,7 +49,7 @@ async fn retains_only_authorized_property_targets() {
 #[tokio::test]
 async fn authorizes_concurrently_with_a_bounded_number_of_checks() {
     let keys = (0..18)
-        .map(|index| model_entity::EntityType::DatabaseRow.with_entity_string(index.to_string()))
+        .map(|index| entity_kind::EntityType::DatabaseRow.with_entity_string(index.to_string()))
         .collect::<Vec<_>>();
     let active = AtomicUsize::new(0);
     let maximum = AtomicUsize::new(0);
@@ -78,7 +78,7 @@ struct DocumentAccess {
 fn grant<T: entity_access::domain::models::RequiredPermission>(
     user_id: &MacroUserId<Lowercase<'_>>,
     entity_id: &str,
-    entity_type: model_entity::EntityType,
+    entity_type: entity_kind::EntityType,
 ) -> Result<EntityAccessReceipt<T>, AccessError> {
     EntityAccessReceipt::try_new_authenticated_user(
         MacroUserIdStr(user_id.clone().into_owned()),
@@ -104,7 +104,7 @@ impl EntityAccessService for DocumentAccess {
         user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
         entity_id: &str,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         self.single_checks
             .lock()
@@ -130,7 +130,7 @@ impl EntityAccessService for DocumentAccess {
             .map(|id| {
                 Ok((
                     id.clone(),
-                    grant(user_id, id, model_entity::EntityType::Document)?,
+                    grant(user_id, id, entity_kind::EntityType::Document)?,
                 ))
             })
             .collect()
@@ -143,7 +143,7 @@ impl EntityAccessService for DocumentAccess {
         _bot_id: entity_access::domain::models::BotId,
         _scope: entity_access::domain::models::BotAccessScope,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         Err(not_used())
     }
@@ -152,7 +152,7 @@ impl EntityAccessService for DocumentAccess {
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Err(not_used())
     }
@@ -161,7 +161,7 @@ impl EntityAccessService for DocumentAccess {
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
         Err(not_used())
@@ -170,7 +170,7 @@ impl EntityAccessService for DocumentAccess {
     async fn check_public_access(
         &self,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
         Err(not_used())
@@ -180,7 +180,7 @@ impl EntityAccessService for DocumentAccess {
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
         Err(not_used())
@@ -190,7 +190,7 @@ impl EntityAccessService for DocumentAccess {
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
     ) -> Result<
         (
             EntityPermission,
@@ -205,7 +205,7 @@ impl EntityAccessService for DocumentAccess {
     async fn get_users_by_entity(
         &self,
         _entity_id: &str,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         Err(not_used())
     }
@@ -238,10 +238,10 @@ const MISSING: &str = "019339ae-fde1-71fa-b3cb-e5c6b5d6e83c";
 const LEGACY: &str = "legacy-document";
 
 /// Granted, refused, missing and legacy-id documents in one batch.
-fn mixed_documents() -> Vec<model_entity::Entity<'static>> {
+fn mixed_documents() -> Vec<entity_kind::Entity<'static>> {
     [GRANTED, REFUSED, MISSING, LEGACY]
         .into_iter()
-        .map(|id| model_entity::EntityType::Document.with_entity_string(id.into()))
+        .map(|id| entity_kind::EntityType::Document.with_entity_string(id.into()))
         .collect()
 }
 

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use async_graphql::{EmptySubscription, Object, Schema};
 use chrono::Utc;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use model_notifications::{
     ChannelMessageSendMetadata, ChannelType, CommonChannelMetadata, NotifEvent,
 };

@@ -4,9 +4,9 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use documents::domain::ports::DocumentService;
+use entity_kind::EntityType;
 use github_pull_requests::domain::ports::GithubPullRequestService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{
     GithubPrEventAction, GithubPrEventStatus, GithubPrNotificationCommon, GithubPrStatusChanged,
 };

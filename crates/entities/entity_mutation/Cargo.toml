@@ -9,7 +9,7 @@ entity_access = { workspace = true, features = [
   "ports",
 ] }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }

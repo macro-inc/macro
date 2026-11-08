@@ -1,6 +1,6 @@
 use super::*;
 use activity::Action;
-use model_entity::AppearanceColor;
+use entity_kind::AppearanceColor;
 
 #[tokio::test]
 async fn appearance_records_only_real_changes_without_dispatching() {
@@ -42,7 +42,7 @@ async fn invalid_or_foreign_appearance_writes_do_not_mutate_the_routine() {
         .unwrap();
     let id = created.id.unwrap();
     let invalid = EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "⌀".into()
         }),
         color: None,

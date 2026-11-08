@@ -4,10 +4,10 @@ use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentError, AttachmentPart, ResolutionError};
 use document_sub_type::DocumentSubType;
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::EntityType;
 use futures::future::join_all;
 use lexical_client::types::NewMdNode;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use non_empty::NonEmpty;
 use shared_types::document::DocumentBasic;
 

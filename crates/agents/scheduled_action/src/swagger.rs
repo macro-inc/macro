@@ -40,7 +40,7 @@ use crate::domain::models::{
     ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
-use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
+use entity_kind::{AppearanceColor, AppearanceIcon, EntityAppearance};
 use shared_types::response::EmptyResponse;
 
 #[derive(OpenApi)]

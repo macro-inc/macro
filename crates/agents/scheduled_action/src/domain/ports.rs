@@ -14,10 +14,10 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
+use entity_kind::EntityAppearance;
 use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use std::collections::HashMap;

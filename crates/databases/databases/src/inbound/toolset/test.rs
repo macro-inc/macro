@@ -156,8 +156,8 @@ impl DatabasesService for FakeService {
     async fn set_appearance(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
-        _appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        _appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DatabaseError> {
         Err(DatabaseError::Unauthorized)
     }
     async fn create_database(

@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
+use entity_kind::{AppearanceColor, AppearanceIcon, EntityAppearance};
 
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
 async fn content_save_returns_the_stored_appearance(pool: PgPool) -> anyhow::Result<()> {

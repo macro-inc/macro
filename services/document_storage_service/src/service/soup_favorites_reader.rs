@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use entity_kind::Entity;
 use favorites::domain::ports::FavoritesService as _;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use soup::inbound::axum_router::SoupFavoritesReader;
 
 use crate::api::context::FavoritesServiceType;

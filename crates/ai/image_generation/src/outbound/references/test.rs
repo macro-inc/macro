@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use attachment::{AttachmentContent, Attachments, ResolutionError};
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use uuid::Uuid;
 
 use super::*;

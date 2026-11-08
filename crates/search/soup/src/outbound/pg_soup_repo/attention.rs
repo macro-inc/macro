@@ -36,8 +36,8 @@
 
 use activity::{Action, Actor};
 use cow_str::CowLike;
+use entity_kind::EntityType;
 use item_filters::ast::properties::properties_filter_matches_propertyless;
-use model_entity::EntityType;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 

@@ -9,9 +9,9 @@ use attachment::{
     ResolutionError,
 };
 use entity_access::domain::{models::MemberParticipantRole, ports::EntityAccessService};
+use entity_kind::{Entity, EntityType};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use non_empty::NonEmpty;
 use uuid::Uuid;
 

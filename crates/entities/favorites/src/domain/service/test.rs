@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use entity_access::domain::models::EntityAccessReceipt;
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 
 use super::{FavoritesServiceImpl, MAX_FAVORITES_PER_COLLECTION};
 use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};

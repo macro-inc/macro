@@ -1,6 +1,6 @@
 //! Entity access management service implementation.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::{
     models::EntityAccessManagementError,

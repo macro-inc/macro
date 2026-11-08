@@ -10,7 +10,7 @@ cli = ["dep:clap", "dep:macro_env_var", "dep:macro_entrypoint"]
 [dependencies]
 clap = { workspace = true, features = ["derive"], optional = true }
 macro_env_var = { workspace = true, optional = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

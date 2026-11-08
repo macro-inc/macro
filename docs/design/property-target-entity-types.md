@@ -48,7 +48,7 @@ properties domain resolves document subtype
 5. **Keep `models_properties::EntityType::Task` internally.** Existing rows, task initialization, task relationships, grouping, indexing, notifications, and permission side effects continue using it.
 6. **Separate target types from referenced-entity types.** The current `GraphqlPropertyEntityType`/generated `EntityType` is used both for the entity receiving a property and for entities stored inside property values. Introduce a target-only transport type without `TASK`. Keep the existing internal/reference type in this iteration so Parent Task/Subtasks and property-definition constraints are not redesigned accidentally.
 7. **Use one resolution path for reads and writes.** Fixing only `set_entity_property` would recreate the mismatch in the opposite direction.
-8. **Do not add `Task` to `model_entity::EntityType`.** Tasks remain canonical documents.
+8. **Do not add `Task` to `entity_kind::EntityType`.** Tasks remain canonical documents.
 9. **Do not run or create a database migration for this work.** Existing `TASK` rows remain authoritative for task documents.
 10. **Prefer strong domain types over stringly typed interfaces.** Repository and service contracts should use types such as `Uuid` for UUID-backed identifiers rather than `String`, converting only at transport boundaries when necessary.
 
@@ -91,7 +91,7 @@ Add a private/domain model such as:
 
 ```rust
 struct ResolvedPropertySubject {
-    canonical_entity: model_entity::OwnedEntity,
+    canonical_entity: entity_kind::OwnedEntity,
     storage_entity_type: models_properties::EntityType,
 }
 ```
@@ -141,8 +141,8 @@ The existing properties repository already contains document metadata lookup, so
 
 Change the service boundary to return canonical keys. Options, in preferred order:
 
-1. A map keyed by a new canonical `PropertyTargetKey` containing `model_entity::EntityType` and id.
-2. A map keyed by `model_entity::OwnedEntity`.
+1. A map keyed by a new canonical `PropertyTargetKey` containing `entity_kind::EntityType` and id.
+2. A map keyed by `entity_kind::OwnedEntity`.
 3. A vector aligned with the input receipts, if that is clearer for all callers.
 
 Keep `EntityPropertiesKey` with `models_properties::EntityType::Task` inside the repository boundary. During bulk reads, retain a canonical-to-internal mapping, query with internal keys, then map results back to canonical keys before returning.
@@ -170,7 +170,7 @@ Change the GraphQL mutation flow to:
 
 Change the GraphQL property reader similarly:
 
-1. Keep `GraphqlSoupDocument`/`model_entity::EntityType::Document` for tasks.
+1. Keep `GraphqlSoupDocument`/`entity_kind::EntityType::Document` for tasks.
 2. Mint canonical view receipts.
 3. Call the bulk properties service.
 4. Consume results under canonical Document keys.

@@ -83,7 +83,7 @@ pub struct DocumentResponse {
 pub struct DocumentResponseMetadata {
     /// Entity-owned presentation overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The version of the document

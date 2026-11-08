@@ -87,7 +87,7 @@ impl ConnectionRepo for MockConnectionRepo {
     }
     async fn get_entries_by_entity(
         &self,
-        _entity: &model_entity::Entity<'_>,
+        _entity: &entity_kind::Entity<'_>,
     ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
         Ok(vec![])
     }

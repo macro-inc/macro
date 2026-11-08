@@ -13,7 +13,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

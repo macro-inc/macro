@@ -21,7 +21,7 @@ outside development.
 
 ## Contract
 
-The shared Rust `model_entity::EntityAppearance` contains an optional icon and
+The shared Rust `entity_kind::EntityAppearance` contains an optional icon and
 an optional named key from the shared tag color palette. Icons are distinct
 original Macro SVG names or single native emoji. Emoji retain native colors.
 Each entity domain owns its nullable JSON field, eligibility, authorization,
@@ -88,7 +88,7 @@ bun tooling/icons/generate-entity-icons.ts --check
 bun test tooling/icons/generate-entity-icons.test.ts
 bun run --cwd apps/web check
 bun run --cwd apps/web test src/features/entity-appearance
-cargo test -p model_entity
+cargo test -p entity_kind
 just check
 ```
 

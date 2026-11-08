@@ -3,9 +3,9 @@ use bot_id::BotId;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
+use entity_kind::EntityAppearance;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityAppearance;
 use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -206,7 +206,7 @@ pub struct RoutineCheck {
 pub struct CreatedItem {
     /// What kind of item.
     #[schema(inline)]
-    pub entity_type: model_entity::EntityType,
+    pub entity_type: entity_kind::EntityType,
     /// Its id.
     pub entity_id: String,
 }

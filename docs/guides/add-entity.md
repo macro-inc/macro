@@ -54,7 +54,7 @@ until the backend is complete.
 
 ## 1. The entity type
 
-- **`crates/types/model_entity/src/lib.rs`:** add the `EntityType` variant (strum
+- **`crates/types/entity_kind/src/lib.rs`:** add the `EntityType` variant (strum
   `snake_case`; that string is stored in `entity_access.entity_type`) and its arm
   in `is_valid_entity_access_entity`. Add a round-trip case in `src/tests.rs`.
 - **`crates/graphql/graphql_common/src/entity_type.rs`:** both directions of

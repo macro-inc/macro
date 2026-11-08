@@ -52,14 +52,14 @@ impl GraphqlPropertyDataType {
 /// Load the properties attached to an entity through the request-scoped loader.
 pub async fn load_entity_properties<R>(
     ctx: &Context<'_>,
-    entity: model_entity::Entity<'static>,
+    entity: entity_kind::Entity<'static>,
 ) -> async_graphql::Result<Vec<GraphqlProperty>>
 where
     R: EntityPropertyReader,
 {
     let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
     let properties = loader
-        .load_one(model_entity::OwnedEntity::from(entity))
+        .load_one(entity_kind::OwnedEntity::from(entity))
         .await
         .map_err(|err| async_graphql::Error::new(err.to_string()))?
         .unwrap_or_default();

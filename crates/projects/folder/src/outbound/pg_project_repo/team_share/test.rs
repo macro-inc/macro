@@ -1,9 +1,9 @@
 use bot_id::BotId;
 use entity_access_management::domain::ports::EntityAccessManagementRepository;
 use entity_access_management::outbound::PgRepository;
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{

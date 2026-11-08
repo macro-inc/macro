@@ -2711,7 +2711,7 @@ fn build_query_from<'a>(
 
 #[derive(Debug, FromRow)]
 struct DocumentRow {
-    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     id: String,
     user_id: String,
     document_version_id: String,
@@ -2765,7 +2765,7 @@ struct ProjectRow {
 
 #[derive(Debug, FromRow)]
 struct InitiativeRow {
-    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     id: String,
     user_id: String,
     name: String,

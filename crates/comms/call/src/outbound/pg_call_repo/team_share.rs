@@ -13,7 +13,7 @@
 mod test;
 
 use entity_access_db_utils::team_share::direct_level;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{

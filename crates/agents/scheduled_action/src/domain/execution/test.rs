@@ -5,9 +5,9 @@ use crate::domain::event_runs::{
 use crate::domain::event_trigger::{EventName, EventReference};
 use crate::domain::models::{ActionKind, ExecutionResourceType, RunVisibility};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::json;
 use std::sync::{
@@ -233,7 +233,7 @@ impl ScheduledActionRepo for Repo {
     async fn set_appearance(
         &self,
         _change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<Option<entity_kind::EntityAppearance>> {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 
@@ -429,7 +429,7 @@ fn action() -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
-        appearance: model_entity::EntityAppearance::default(),
+        appearance: entity_kind::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,

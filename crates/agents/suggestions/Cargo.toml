@@ -25,7 +25,7 @@ macro_event_broker = { workspace = true, default-features = true, features = ["o
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 messages = { workspace = true, features = ["broker", "outbound"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_owner = { workspace = true }
 folder = { workspace = true }
 rdkafka = { workspace = true }

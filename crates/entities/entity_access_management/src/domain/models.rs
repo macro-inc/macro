@@ -1,6 +1,6 @@
 //! Domain models for entity access management.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 pub use models_entity_access_management::EntityAccessSourceType;
 

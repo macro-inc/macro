@@ -411,9 +411,9 @@ impl SoupRepo for PgSoupRepo {
     async fn attention_unread_entities<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-        types: &'a [model_entity::EntityType],
+        types: &'a [entity_kind::EntityType],
         limit: u16,
-    ) -> Result<Vec<model_entity::Entity<'static>>, Self::Err> {
+    ) -> Result<Vec<entity_kind::Entity<'static>>, Self::Err> {
         attention_unread::attention_unread_entities(&self.pool.0, user_id, types, limit).await
     }
 }

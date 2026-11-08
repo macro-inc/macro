@@ -2,10 +2,10 @@
 
 use std::collections::HashSet;
 
+use entity_kind::Entity;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroSoupRealtimeTopic;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 
 /// A change to one value.

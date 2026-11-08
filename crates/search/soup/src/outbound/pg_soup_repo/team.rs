@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_soup::{item::SoupItem, team::SoupTeam};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;

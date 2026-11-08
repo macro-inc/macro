@@ -43,7 +43,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// Delete one property assignment after checking edit access to its entity.
     fn delete_entity_property(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         entity_property_id: Uuid,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
@@ -51,7 +51,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// Set or attach one property on an entity.
     fn set_entity_property(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -64,7 +64,7 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
     /// whole selection is one transaction.
     fn update_entity_property_options(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         updates: Vec<EntityPropertyOptionDelta>,
     ) -> impl Future<Output = Result<Vec<EntityPropertyWithDefinition>, rootcause::Report>> + Send;
@@ -77,7 +77,7 @@ pub struct NoOpEntityPropertyWriter;
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
     async fn delete_entity_property(
         &self,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _entity_id: String,
         _entity_property_id: Uuid,
     ) -> Result<(), rootcause::Report> {
@@ -86,7 +86,7 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
 
     async fn set_entity_property(
         &self,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _entity_id: String,
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
@@ -96,7 +96,7 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
 
     async fn update_entity_property_options(
         &self,
-        _entity_type: model_entity::EntityType,
+        _entity_type: entity_kind::EntityType,
         _entity_id: String,
         _updates: Vec<EntityPropertyOptionDelta>,
     ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
@@ -136,7 +136,7 @@ where
 {
     async fn delete_entity_property(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         entity_property_id: Uuid,
     ) -> Result<(), rootcause::Report> {
@@ -159,7 +159,7 @@ where
 
     async fn set_entity_property(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
@@ -183,7 +183,7 @@ where
 
     async fn update_entity_property_options(
         &self,
-        entity_type: model_entity::EntityType,
+        entity_type: entity_kind::EntityType,
         entity_id: String,
         updates: Vec<EntityPropertyOptionDelta>,
     ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
@@ -267,18 +267,18 @@ pub enum GraphqlPropertyTargetEntityType {
 
 impl GraphqlPropertyTargetEntityType {
     /// Convert this GraphQL target type into the canonical entity model.
-    pub fn into_model(self) -> model_entity::EntityType {
+    pub fn into_model(self) -> entity_kind::EntityType {
         match self {
-            Self::CallRecord => model_entity::EntityType::Call,
-            Self::Channel => model_entity::EntityType::Channel,
-            Self::Chat => model_entity::EntityType::Chat,
-            Self::Company => model_entity::EntityType::CrmCompany,
-            Self::DatabaseRow => model_entity::EntityType::DatabaseRow,
-            Self::Document => model_entity::EntityType::Document,
-            Self::Initiative => model_entity::EntityType::Initiative,
-            Self::Project => model_entity::EntityType::Project,
-            Self::Thread => model_entity::EntityType::EmailThread,
-            Self::User => model_entity::EntityType::User,
+            Self::CallRecord => entity_kind::EntityType::Call,
+            Self::Channel => entity_kind::EntityType::Channel,
+            Self::Chat => entity_kind::EntityType::Chat,
+            Self::Company => entity_kind::EntityType::CrmCompany,
+            Self::DatabaseRow => entity_kind::EntityType::DatabaseRow,
+            Self::Document => entity_kind::EntityType::Document,
+            Self::Initiative => entity_kind::EntityType::Initiative,
+            Self::Project => entity_kind::EntityType::Project,
+            Self::Thread => entity_kind::EntityType::EmailThread,
+            Self::User => entity_kind::EntityType::User,
         }
     }
 }
@@ -557,14 +557,14 @@ mod tests {
     }
 
     type CapturedWrite = (
-        model_entity::EntityType,
+        entity_kind::EntityType,
         String,
         Uuid,
         Option<SetPropertyValue>,
     );
 
     type CapturedOptionsWrite = (
-        model_entity::EntityType,
+        entity_kind::EntityType,
         String,
         Vec<(Uuid, Vec<Uuid>, Vec<Uuid>)>,
     );
@@ -579,7 +579,7 @@ mod tests {
     impl EntityPropertyWriter for CapturingWriter {
         async fn delete_entity_property(
             &self,
-            _entity_type: model_entity::EntityType,
+            _entity_type: entity_kind::EntityType,
             _entity_id: String,
             _entity_property_id: Uuid,
         ) -> Result<(), rootcause::Report> {
@@ -588,7 +588,7 @@ mod tests {
 
         async fn set_entity_property(
             &self,
-            entity_type: model_entity::EntityType,
+            entity_type: entity_kind::EntityType,
             entity_id: String,
             property_definition_id: Uuid,
             value: Option<SetPropertyValue>,
@@ -600,7 +600,7 @@ mod tests {
 
         async fn update_entity_property_options(
             &self,
-            entity_type: model_entity::EntityType,
+            entity_type: entity_kind::EntityType,
             entity_id: String,
             updates: Vec<EntityPropertyOptionDelta>,
         ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
@@ -721,7 +721,7 @@ mod tests {
         assert_eq!(
             writer.write.lock().expect("capture mutex poisoned").clone(),
             Some((
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
                 "task-1".to_string(),
                 property_definition_id,
                 Some(SetPropertyValue::SelectOption { option_id }),
@@ -841,7 +841,7 @@ mod tests {
                 .expect("capture mutex poisoned")
                 .clone(),
             Some((
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
                 "doc-1".to_string(),
                 vec![(
                     property_definition_id,

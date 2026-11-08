@@ -25,7 +25,7 @@ macro_db_client = { workspace = true, default-features = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
 macro_uuid = { workspace = true }
 shared_types = { workspace = true, features = ["axum"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_permissions = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

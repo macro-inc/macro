@@ -2,8 +2,8 @@
 
 use channels::domain::{ports::ChannelRealtimePublisher, side_effects::ChannelRealtimeEffect};
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType as GatewayEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;

@@ -14,7 +14,7 @@ graphql_common = { workspace = true }
 graphql_entity_mutation = { workspace = true }
 graphql_soup = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

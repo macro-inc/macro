@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_notifications::NewEmailMetadata;
 use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
 use notification::domain::service::NotificationIngress;

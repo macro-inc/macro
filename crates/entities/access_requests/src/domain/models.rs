@@ -1,7 +1,7 @@
 //! Public request contracts and workflow values.
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

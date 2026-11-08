@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::pull_request_links::SessionPullRequestLinkRepo;
 use agent_session::domain::work_registration::WorkRegistrationSignal;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 use soup_realtime_core::models::{Patch, SoupRealtimePatch};
 use soup_realtime_core::ports::{PullRequestSessions, SoupRealtimeService};

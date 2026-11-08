@@ -102,7 +102,7 @@ impl From<&CreationPrincipal> for Attribution {
 
 /// The entity-kind vocabulary activities are recorded against (re-exported
 /// for domain mappings).
-pub use model_entity::EntityType;
+pub use entity_kind::EntityType;
 
 /// Namespace for deriving deterministic activity ids from source event ids.
 static ACTIVITY_ID_NAMESPACE: LazyLock<Uuid> =
@@ -131,16 +131,16 @@ pub enum CommonAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AppearanceChange {
     /// Previous appearance; absent means type defaults.
-    pub from: Option<model_entity::EntityAppearance>,
+    pub from: Option<entity_kind::EntityAppearance>,
     /// New appearance; absent means type defaults.
-    pub to: Option<model_entity::EntityAppearance>,
+    pub to: Option<entity_kind::EntityAppearance>,
 }
 
 /// An appearance replacement persisted atomically with its attributed history.
 #[derive(Debug, Clone)]
 pub struct AppearanceUpdate {
     /// Replacement entity-owned overrides.
-    pub appearance: model_entity::EntityAppearance,
+    pub appearance: entity_kind::EntityAppearance,
     /// The principal responsible for the write, when the caller is attributed.
     pub attribution: Option<Attribution>,
     /// Stable identity for the history event of this write.
@@ -155,7 +155,7 @@ impl AppearanceUpdate {
         &self,
         entity_type: EntityType,
         entity_id: impl Into<String>,
-        previous: &model_entity::EntityAppearance,
+        previous: &entity_kind::EntityAppearance,
     ) -> Option<Activity> {
         if previous == &self.appearance {
             return None;

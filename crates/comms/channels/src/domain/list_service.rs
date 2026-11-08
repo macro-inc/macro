@@ -2,9 +2,9 @@
 
 use std::{collections::HashMap, str::FromStr};
 
+use entity_kind::EntityType;
 use frecency_core::{models::AggregateFrecency, ports::AggregateFrecencyStorage};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -14,7 +14,7 @@ async fn get_channel_frecency<'a, Frec: AggregateFrecencyStorage>(
     service: &Frec,
     include_frecency: bool,
     user: MacroUserIdStr<'a>,
-    entities: &'a [model_entity::Entity<'a>],
+    entities: &'a [entity_kind::Entity<'a>],
 ) -> Result<Vec<AggregateFrecency>, Frec::Err> {
     if include_frecency {
         service

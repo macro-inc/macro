@@ -3,9 +3,9 @@ use entity_access::domain::{
     models::{AccessError, EditAccessLevel, RequiredPermission, ViewAccessLevel},
     ports::EntityAccessService,
 };
+use entity_kind::EntityType;
 use graphql_common::parse_id;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 use crate::{
     loaders::{

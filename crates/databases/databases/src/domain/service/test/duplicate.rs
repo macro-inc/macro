@@ -211,11 +211,11 @@ async fn a_viewer_duplicates_every_table_column_view_and_row_into_a_database_the
     let source_status = seeded.status_column.property_definition_id;
     let source_going = option_id(&seeded.world, source_status, "Going");
 
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🚀".into()
         }),
-        color: Some(model_entity::AppearanceColor::Indigo),
+        color: Some(entity_kind::AppearanceColor::Indigo),
     };
     seeded
         .service

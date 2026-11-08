@@ -594,9 +594,9 @@ where
     async fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
-        if receipt.entity().entity_type != model_entity::EntityType::Database {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DatabaseError> {
+        if receipt.entity().entity_type != entity_kind::EntityType::Database {
             return Err(DatabaseError::NotFound);
         }
         appearance

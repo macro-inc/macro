@@ -3,8 +3,8 @@
 use ai_toolset::{RequestContext, ToolCallError};
 use entity_access::domain::models::{AccessError, EntityAccessReceipt, RequiredPermission};
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{EntityMutationEffect, EntityMutationErrorCode};
-use model_entity::{Entity, EntityType};
 
 /// Mint the requesting user's receipt for an entity.
 ///

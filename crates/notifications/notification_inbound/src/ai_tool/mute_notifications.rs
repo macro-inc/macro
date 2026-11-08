@@ -7,7 +7,7 @@ use ai_toolset::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use notification::domain::item_preferences::{
     ItemNotificationPreferenceError, ItemNotificationPreferenceRepository,
     ItemNotificationPreferenceService,

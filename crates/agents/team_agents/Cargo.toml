@@ -18,7 +18,7 @@ inbound = [
 outbound = [
   "agent_git/client",
   "dep:agent_git_service_url",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:model_notifications",
   "dep:notification",
   "dep:sqlx",
@@ -38,7 +38,7 @@ hosted_runtimes = { workspace = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 agent_git_service_url = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, optional = true }

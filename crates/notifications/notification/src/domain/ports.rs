@@ -13,7 +13,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
-use model_entity::Entity;
+use entity_kind::Entity;
 use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;

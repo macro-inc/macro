@@ -6,12 +6,12 @@ mod test;
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
 };
+use entity_kind::Entity;
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
     UpdateEntitySharePolicy,
 };
 use macro_event_broker::MacroEventBroker;
-use model_entity::Entity;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
 use super::{

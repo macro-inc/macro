@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use cow_str::CowLike;
 use email::domain::ports::EmailService;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use rootcause::Report;
 use soup::domain::{

@@ -101,7 +101,7 @@ impl DatabasesRepo for FakeRepo {
         &self,
         id: DatabaseId,
         update: activity::AppearanceUpdate,
-    ) -> Result<Option<model_entity::EntityAppearance>, FakeError> {
+    ) -> Result<Option<entity_kind::EntityAppearance>, FakeError> {
         let mut world = self.0.lock().unwrap();
         let database = world
             .databases

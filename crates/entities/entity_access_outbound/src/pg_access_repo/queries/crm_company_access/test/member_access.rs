@@ -44,8 +44,8 @@ async fn member_revocation_and_regrant_apply_to_records_and_recipients(
             enabled
         );
         let keys = vec![
-            (model_entity::EntityType::CrmCompany, company.to_string()),
-            (model_entity::EntityType::CrmContact, contact.to_string()),
+            (entity_kind::EntityType::CrmCompany, company.to_string()),
+            (entity_kind::EntityType::CrmContact, contact.to_string()),
         ];
         let visible =
             super::super::super::crm_batch_access::visible_entities(&pool, member.as_ref(), &keys)
@@ -54,7 +54,7 @@ async fn member_revocation_and_regrant_apply_to_records_and_recipients(
         let recipients = super::super::super::crm_entity_users::get_crm_entity_users(
             &pool,
             &company,
-            model_entity::EntityType::CrmCompany,
+            entity_kind::EntityType::CrmCompany,
         )
         .await?;
         assert_eq!(

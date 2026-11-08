@@ -8,9 +8,9 @@ use std::future::Future;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_kind::Entity;
 use entity_mutation::EntityMutationErrorCode;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,

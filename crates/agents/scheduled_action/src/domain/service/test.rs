@@ -146,7 +146,7 @@ impl ScheduledActionRepo for FakeRepo {
     async fn set_appearance(
         &self,
         change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<Option<entity_kind::EntityAppearance>> {
         let mut actions = self.actions.lock().unwrap();
         let action = actions
             .iter_mut()
@@ -1133,7 +1133,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
-        appearance: model_entity::EntityAppearance::default(),
+        appearance: entity_kind::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,
@@ -1204,7 +1204,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
-        appearance: model_entity::EntityAppearance::default(),
+        appearance: entity_kind::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,

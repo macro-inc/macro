@@ -1,6 +1,6 @@
 use super::ConnectionGatewayClient;
 use connection_gateway_models::{MessageReceipt, UniqueMessage};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 const REFRESH_CALENDAR: &str = "refresh_calendar";
 

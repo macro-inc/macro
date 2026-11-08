@@ -20,10 +20,10 @@ use entity_access::domain::models::{
     AccessError, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
     MemberTeamRole, OwnerAccessLevel, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
+use entity_kind::Entity;
 use lexical_client::LexicalClient;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use shared_types::{document::DocumentBasic, sync_service::SyncServiceVersionID};
 use sync_service_client::SyncServiceClient;
@@ -137,8 +137,8 @@ impl DocumentService for FakeDocumentService {
         _receipt: entity_access::domain::models::EntityAccessReceipt<
             models_permissions::share_permission::access_level::EditAccessLevel,
         >,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DocumentError> {
         appearance.validate().map_err(DocumentError::BadRequest)?;
         Ok(appearance)
     }

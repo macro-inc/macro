@@ -205,8 +205,8 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_lots_of_documents")))]
     async fn test_get_user_documents(pool: Pool<Postgres>) {
-        let appearance = model_entity::EntityAppearance {
-            icon: Some(model_entity::AppearanceIcon::Emoji {
+        let appearance = entity_kind::EntityAppearance {
+            icon: Some(entity_kind::AppearanceIcon::Emoji {
                 value: "📋".into()
             }),
             color: None,

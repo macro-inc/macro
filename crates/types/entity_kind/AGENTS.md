@@ -1,4 +1,4 @@
-# model_entity
+# entity_kind
 
 ## What it is
 
@@ -25,4 +25,4 @@ Shared entity identity and presentation vocabulary, without persistence or autho
 
 ## Checks
 
-- `cargo test -p model_entity`.
+- `cargo test -p entity_kind`.

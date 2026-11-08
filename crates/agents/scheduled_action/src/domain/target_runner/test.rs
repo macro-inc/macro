@@ -27,8 +27,8 @@ use crate::domain::{
     program_runner::{ProgramRunner, test as program},
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 use routine_program::RoutineProgram;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -222,7 +222,7 @@ fn action() -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
-        appearance: model_entity::EntityAppearance::default(),
+        appearance: entity_kind::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,
@@ -657,7 +657,7 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn set_appearance(
         &self,
         _change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<Option<entity_kind::EntityAppearance>> {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 

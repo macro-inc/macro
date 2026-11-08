@@ -17,7 +17,7 @@ impl Notification for TestNotification {
 
 fn valid_body() -> String {
     let request = SendNotificationRequestBuilder {
-        notification_entity: model_entity::EntityType::Document.with_entity_str("doc_1"),
+        notification_entity: entity_kind::EntityType::Document.with_entity_str("doc_1"),
         secondary_notification_entity: None,
         notification: TestNotification,
         sender_id: None,

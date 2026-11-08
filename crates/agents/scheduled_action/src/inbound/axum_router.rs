@@ -26,6 +26,7 @@ use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
+use entity_kind::EntityAppearance;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
@@ -33,7 +34,6 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityAppearance;
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use shared_types::response::EmptyResponse;

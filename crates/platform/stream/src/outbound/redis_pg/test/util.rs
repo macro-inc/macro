@@ -71,7 +71,7 @@ pub async fn connect_from_env() -> RedisPostgresStreamRepo {
 
 pub fn test_stream_id(entity_id: &str, stream_id: &str) -> StreamId {
     StreamId {
-        entity_type: model_entity::EntityType::Chat,
+        entity_type: entity_kind::EntityType::Chat,
         entity_id: entity_id.into(),
         stream_id: stream_id.into(),
     }

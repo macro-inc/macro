@@ -47,7 +47,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 model_owner = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

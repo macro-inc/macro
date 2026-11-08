@@ -1,5 +1,6 @@
 //! This module provides the implementation for storing frecency data in postgres
 use chrono::{DateTime, Utc};
+use entity_kind::{Entity, EntityType};
 use frecency_core::{
     models::{
         AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyAction,
@@ -9,7 +10,6 @@ use frecency_core::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{cow_str::CowLike, error::ParseErr, user_id::MacroUserIdStr};
-use model_entity::{Entity, EntityType};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, pool::PoolConnection, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
@@ -39,7 +39,7 @@ pub enum FrecencyStorageErr {
     UserIdErr(#[from] ParseErr),
     /// encounted an unknown entity type
     #[error(transparent)]
-    UnknownEntity(#[from] model_entity::ParseError),
+    UnknownEntity(#[from] entity_kind::ParseError),
     /// failed to deserialize a type from json
     #[error(transparent)]
     Serde(#[from] serde_json::Error),

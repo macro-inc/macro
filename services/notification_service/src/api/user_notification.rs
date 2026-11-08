@@ -4,10 +4,10 @@ use ::notification::domain::models::UserNotificationRow;
 use axum::extract::State;
 use chrono::{DateTime, Utc};
 use email_formatting::EmailDigestNotification;
+use entity_kind::Entity;
 use itertools::{Either, Itertools};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,

@@ -1,8 +1,8 @@
+use entity_kind::EntityType;
 use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cow_str::CowLike;
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
@@ -3542,11 +3542,11 @@ async fn appearance_persists_copies_and_preserves_content_dates(pool: Pool<Postg
         )
         .await
         .unwrap();
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌱".into()
         }),
-        color: Some(model_entity::AppearanceColor::Green),
+        color: Some(entity_kind::AppearanceColor::Green),
     };
     let update = activity::AppearanceUpdate {
         appearance: appearance.clone(),
@@ -3558,7 +3558,7 @@ async fn appearance_persists_copies_and_preserves_content_dates(pool: Pool<Postg
         repo.set_appearance(&original.document_id, &update)
             .await
             .unwrap(),
-        Some(model_entity::EntityAppearance::default())
+        Some(entity_kind::EntityAppearance::default())
     );
     assert_eq!(
         repo.set_appearance(&original.document_id, &update)
@@ -3603,7 +3603,7 @@ async fn appearance_persists_copies_and_preserves_content_dates(pool: Pool<Postg
     repo.set_appearance(
         &original.document_id,
         &activity::AppearanceUpdate {
-            appearance: model_entity::EntityAppearance::default(),
+            appearance: entity_kind::EntityAppearance::default(),
             ..update
         },
     )
@@ -3633,9 +3633,9 @@ async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(pool: Poo
         )
         .await
         .unwrap();
-    let appearance = model_entity::EntityAppearance {
+    let appearance = entity_kind::EntityAppearance {
         icon: None,
-        color: Some(model_entity::AppearanceColor::Blue),
+        color: Some(entity_kind::AppearanceColor::Blue),
     };
     let update = activity::AppearanceUpdate {
         appearance: appearance.clone(),
@@ -3683,7 +3683,7 @@ async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(pool: Poo
         repo.set_appearance(&original.document_id, &update)
             .await
             .unwrap(),
-        Some(model_entity::EntityAppearance::default())
+        Some(entity_kind::EntityAppearance::default())
     );
     assert_eq!(
         repo.set_appearance(&original.document_id, &update)

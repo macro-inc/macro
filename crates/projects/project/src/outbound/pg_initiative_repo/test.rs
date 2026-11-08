@@ -8,10 +8,10 @@ mod initial_properties;
 mod task_access;
 #[cfg(feature = "toolset")]
 mod toolset;
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
@@ -912,11 +912,11 @@ async fn appearance_survives_identity_reads_without_touching_timestamps(
             TeamShareCreation::Unshared,
         )
         .await?;
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌱".into()
         }),
-        color: Some(model_entity::AppearanceColor::Green),
+        color: Some(entity_kind::AppearanceColor::Green),
     };
     let update = activity::AppearanceUpdate {
         appearance: appearance.clone(),
@@ -926,7 +926,7 @@ async fn appearance_survives_identity_reads_without_touching_timestamps(
     };
     assert_eq!(
         repo.set_appearance(created.id, &update).await?,
-        Some(model_entity::EntityAppearance::default())
+        Some(entity_kind::EntityAppearance::default())
     );
     assert_eq!(repo.set_appearance(created.id, &update).await?, None);
     let updated = repo.get_detail(created.id).await?.unwrap();
@@ -943,7 +943,7 @@ async fn appearance_survives_identity_reads_without_touching_timestamps(
     repo.set_appearance(
         created.id,
         &activity::AppearanceUpdate {
-            appearance: model_entity::EntityAppearance::default(),
+            appearance: entity_kind::EntityAppearance::default(),
             ..update
         },
     )
@@ -973,9 +973,9 @@ async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(
             TeamShareCreation::Unshared,
         )
         .await?;
-    let appearance = model_entity::EntityAppearance {
+    let appearance = entity_kind::EntityAppearance {
         icon: None,
-        color: Some(model_entity::AppearanceColor::Blue),
+        color: Some(entity_kind::AppearanceColor::Blue),
     };
     let update = activity::AppearanceUpdate {
         appearance: appearance.clone(),
@@ -1015,7 +1015,7 @@ async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(
         .await?;
     assert_eq!(
         repo.set_appearance(created.id, &update).await?,
-        Some(model_entity::EntityAppearance::default())
+        Some(entity_kind::EntityAppearance::default())
     );
     assert_eq!(repo.set_appearance(created.id, &update).await?, None);
     let page = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool)

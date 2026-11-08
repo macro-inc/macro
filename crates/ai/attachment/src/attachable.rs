@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use crate::fmt::{ClosedXmlTag, XmlTag};
 use crate::models::*;
 use crate::{Attachable, Attributes};
-use model_entity::Entity;
+use entity_kind::Entity;
 use non_empty::NonEmpty;
 
 impl Attachable for Attachments<'_> {

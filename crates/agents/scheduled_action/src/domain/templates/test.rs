@@ -104,10 +104,10 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
     let templates = templates(&actions);
     let id = create_routine(&actions).await;
     let appearance = EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌿".into()
         }),
-        color: Some(model_entity::AppearanceColor::Green),
+        color: Some(entity_kind::AppearanceColor::Green),
     };
     actions
         .set_appearance(owner_receipt(user(), id), appearance.clone())

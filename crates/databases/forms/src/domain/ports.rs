@@ -101,7 +101,7 @@ pub trait FormsRepo: Send + Sync + 'static {
         &self,
         id: FormId,
         update: activity::AppearanceUpdate,
-    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<Option<entity_kind::EntityAppearance>, Self::Error>> + Send;
 
     /// Store a new form with its layout, returning any table or schema conflict.
     /// Grant its owner owner access,
@@ -344,8 +344,8 @@ pub trait FormsService: Send + Sync + 'static {
     fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> impl Future<Output = Result<model_entity::EntityAppearance, FormError>> + Send;
+        appearance: entity_kind::EntityAppearance,
+    ) -> impl Future<Output = Result<entity_kind::EntityAppearance, FormError>> + Send;
 
     /// Save a whole layout in the shared document. A successful response includes
     /// its publication result: a saved draft can need repair or a retry before

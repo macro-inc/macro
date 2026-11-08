@@ -27,6 +27,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerAccessLevel,
     ViewAccessLevel,
 };
+use entity_kind::Entity;
 use foreign_entity::domain::{
     models::{
         CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
@@ -39,7 +40,6 @@ use github_pull_requests::domain::{
     service::GithubPullRequestServiceImpl,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
@@ -142,8 +142,8 @@ impl DocumentService for StubDocumentService {
         _receipt: entity_access::domain::models::EntityAccessReceipt<
             models_permissions::share_permission::access_level::EditAccessLevel,
         >,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DocumentError> {
         appearance.validate().map_err(DocumentError::BadRequest)?;
         Ok(appearance)
     }

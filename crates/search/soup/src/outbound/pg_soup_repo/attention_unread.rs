@@ -8,8 +8,8 @@
 
 use std::{collections::HashSet, str::FromStr};
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use sqlx::PgPool;
 
 use crate::outbound::pg_soup_repo::{candidate_gates::UUID_PATTERN, type_err};

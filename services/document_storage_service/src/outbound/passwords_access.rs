@@ -65,7 +65,7 @@ impl<I: NotificationIngress, B> PasswordAccessDelivery<I, B> {
                 SendNotificationRequestBuilder {
                     // The owning team is the notification's entity; the item and
                     // request ids in the metadata key its row and its click target.
-                    notification_entity: model_entity::EntityType::Team
+                    notification_entity: entity_kind::EntityType::Team
                         .with_entity_string(event.team.0.to_string()),
                     secondary_notification_entity: None,
                     sender_id: Some(event.agent.clone()),

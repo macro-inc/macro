@@ -24,7 +24,7 @@ macro_authorization = { workspace = true, features = [
 ] }
 macro_user_id = { workspace = true }
 mcp_select = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 import_notion = { workspace = true }
 import_tracker = { workspace = true }
 models_databases = { workspace = true }

@@ -2,8 +2,8 @@
 
 use activity::{Activity, AppearanceUpdate, Attribution};
 use chrono::{DateTime, Utc};
+use entity_kind::{EntityAppearance, EntityType};
 use macro_uuid::Uuid;
-use model_entity::{EntityAppearance, EntityType};
 
 /// An authorized appearance replacement, persisted together with its history.
 pub struct ChangeAppearance {

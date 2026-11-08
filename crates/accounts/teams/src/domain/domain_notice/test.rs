@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use uuid::Uuid;
 
 use super::*;

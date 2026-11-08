@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use entity_kind::EntityAppearance;
 use macro_uuid::Uuid;
-use model_entity::EntityAppearance;
 use model_owner::Owner;
 use serde_json::Value;
 use sqlx::PgPool;

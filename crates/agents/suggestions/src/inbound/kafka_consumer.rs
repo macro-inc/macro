@@ -17,6 +17,7 @@ use std::time::Duration;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use entity_kind::EntityType;
 use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
@@ -25,7 +26,6 @@ use macro_event_broker::{
 };
 use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
-use model_entity::EntityType;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::Report;

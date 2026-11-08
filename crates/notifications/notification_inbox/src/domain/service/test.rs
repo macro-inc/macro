@@ -5,7 +5,7 @@ use attention_feed::{
     },
     test_support::*,
 };
-use model_entity::Entity;
+use entity_kind::Entity;
 use notification::domain::models::NotificationState;
 use serde_json::json;
 

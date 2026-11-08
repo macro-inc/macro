@@ -19,6 +19,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
+use entity_kind::EntityType;
 use futures::{
     FutureExt,
     sink::SinkExt,
@@ -27,7 +28,6 @@ use futures::{
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
-use model_entity::EntityType;
 use shared_types::user::UserContext;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;

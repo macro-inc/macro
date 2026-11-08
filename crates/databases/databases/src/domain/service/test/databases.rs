@@ -535,8 +535,8 @@ async fn appearance_validates_and_emits_only_changed_metadata() {
     let (world, svc, db) = (seeded.world, seeded.service, seeded.database_id);
     world.lock().unwrap().broker_events.clear();
     let receipt = || receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Edit);
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "unknown-icon".into(),
         }),
         color: None,
@@ -545,9 +545,9 @@ async fn appearance_validates_and_emits_only_changed_metadata() {
         svc.set_appearance(receipt(), invalid).await,
         Err(DatabaseError::InvalidAppearance(_))
     ));
-    let appearance = model_entity::EntityAppearance {
+    let appearance = entity_kind::EntityAppearance {
         icon: None,
-        color: Some(model_entity::AppearanceColor::Blue),
+        color: Some(entity_kind::AppearanceColor::Blue),
     };
     assert_eq!(
         svc.set_appearance(receipt(), appearance.clone())

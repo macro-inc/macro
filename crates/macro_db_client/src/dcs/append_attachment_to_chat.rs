@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use shared_types::StringID;
 use shared_types::chat::{AttachmentType, NewChatAttachment};
 use sqlx::{Postgres, Transaction};

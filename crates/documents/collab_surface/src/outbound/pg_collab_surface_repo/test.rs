@@ -1,5 +1,5 @@
+use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use model_entity::EntityType;
 use sqlx::PgPool;
 
 use super::*;

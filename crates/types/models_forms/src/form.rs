@@ -97,7 +97,7 @@ pub enum FormAccess {
 pub struct Form {
     /// Entity-owned icon and color overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// The form.
     #[schema(value_type = Uuid)]
     pub id: FormId,

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

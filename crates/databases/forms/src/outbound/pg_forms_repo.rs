@@ -12,8 +12,8 @@ mod test;
 
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_databases::position::PositionError;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -92,7 +92,7 @@ fn parsed<Value: std::str::FromStr>(
 
 /// One `forms` row as stored.
 struct FormRow {
-    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     id: Uuid,
     name: String,
     description: String,
@@ -197,7 +197,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         &self,
         id: FormId,
         update: activity::AppearanceUpdate,
-    ) -> Result<Option<model_entity::EntityAppearance>, Self::Error> {
+    ) -> Result<Option<entity_kind::EntityAppearance>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             "SELECT appearance FROM forms WHERE id = $1 AND trashed_at IS NULL FOR UPDATE",
@@ -205,7 +205,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         )
         .fetch_one(&mut *transaction)
         .await?;
-        let previous: model_entity::EntityAppearance = row
+        let previous: entity_kind::EntityAppearance = row
             .appearance
             .map(serde_json::from_value)
             .transpose()

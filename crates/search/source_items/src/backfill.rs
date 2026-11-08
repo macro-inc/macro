@@ -1,6 +1,6 @@
 //! Fills `source_items` for items that predate its triggers.
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::PgPool;
 use std::time::Duration;
 

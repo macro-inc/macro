@@ -1,5 +1,5 @@
 use anyhow::Context;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{Pool, Postgres, Transaction};
 
 #[tracing::instrument(skip(db))]

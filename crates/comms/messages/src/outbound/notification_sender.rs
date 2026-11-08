@@ -3,8 +3,8 @@ use crate::domain::{
     models::MessageParent,
     notification::CommentNotificationReason,
 };
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{
     CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
     RepliedToDocumentCommentThreadMetadata,

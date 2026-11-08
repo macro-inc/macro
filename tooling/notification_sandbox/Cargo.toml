@@ -13,7 +13,7 @@ inquire = { workspace = true }
 macro_aws_config = { workspace = true }
 macro_env = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 models_pagination = { workspace = true }
 notification = { workspace = true, default-features = true }

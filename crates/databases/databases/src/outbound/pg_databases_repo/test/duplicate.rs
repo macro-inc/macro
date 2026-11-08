@@ -64,11 +64,11 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
     let guests = guests(&pool).await;
     insert_named_user(&pool, DUPLICATOR).await;
     let service = service(&pool);
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🚀".into()
         }),
-        color: Some(model_entity::AppearanceColor::Indigo),
+        color: Some(entity_kind::AppearanceColor::Indigo),
     };
     service
         .set_appearance(edit(guests.database_id), appearance.clone())

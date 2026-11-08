@@ -2,7 +2,7 @@
 use anyhow::{Error, Result};
 use chat_message::ChatMessageContent;
 use chat_message::Role;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use model_owner::Owner;
 use shared_types::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
 use sqlx::{Executor, Pool, Postgres};

@@ -3,9 +3,9 @@
 //! with its sender's name.
 
 use email::domain::ports::EmailRepo;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 use sqlx::PgPool;
 
 use crate::domain::model::{Target, Waiting, sender_name};

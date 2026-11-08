@@ -27,7 +27,7 @@ schema types (entity type, owner type, property filters).
 ## Boundaries
 
 - Depends on: `macro_authorization` (axum), `filter_ast`, `item_filters`,
-  `model_entity`, `model_owner`, `models_properties`.
+  `entity_kind`, `model_owner`, `models_properties`.
 - Used by: every `graphql_*` domain adapter crate (favorite, initiative,
   calendar, email, notification, soup_filter_input, entity_mutation,
   properties, crm, soup, channel, work_feed, notification_inbox, activity) and
