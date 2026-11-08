@@ -13898,7 +13898,6 @@ dependencies = [
  "message_id",
  "messages",
  "model_owner",
- "models_team",
  "non_empty",
  "opensearch_types",
  "permissions_types",
@@ -13909,6 +13908,7 @@ dependencies = [
  "single_flight",
  "sqlx",
  "system_properties",
+ "team_types",
  "thiserror 2.0.18",
  "tracing",
  "user_quota",
@@ -14974,18 +14974,6 @@ dependencies = [
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_team"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "sqlx",
- "strum 0.27.2",
- "utoipa",
  "workspace-hack",
 ]
 
@@ -22265,6 +22253,18 @@ dependencies = [
  "sqlx",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "team_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
