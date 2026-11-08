@@ -12,7 +12,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
-- `corpus/dev/README.md`: read-only dev collection, encrypted external cache and count-only scans; corpus replay awaits dev access.
+- `corpus/dev/README.md`: bounded dev collection, encrypted frozen sample, count-only scans and local source-versus-WASM replay.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
