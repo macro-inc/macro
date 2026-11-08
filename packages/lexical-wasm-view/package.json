@@ -1,0 +1,29 @@
+{
+  "name": "@macro-inc/lexical-wasm-view",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./view/*": "./src/view/*.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test --config browser-test/playwright.config.ts"
+  },
+  "dependencies": {
+    "@macro-inc/collaboration": "workspace:*",
+    "@macro-inc/observability": "workspace:*",
+    "solid-js": "^1.9.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.8.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vite-plugin-solid": "^2.11.8",
+    "vitest": "5.0.1"
+  }
+}

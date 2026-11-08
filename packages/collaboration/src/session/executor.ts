@@ -63,7 +63,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private readonly storage: StorageAdapter;
   private storageQueue: Promise<void>;
   private busy = false;
-  private queue: (() => number)[] = [];
+  private queue: (() => void)[] = [];
   private closed = false;
   private started = false;
   private closing?: Promise<void>;
@@ -142,16 +142,20 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   }
   now = () => this.clock.mono() - this.t0;
   /** All synchronous admission, including view inputs, is serialized here. */
-  run(call: () => number): void {
+  run(call: () => number, after?: (flags: number) => void): void {
     if (this.closed) return;
-    this.queue.push(call);
+    this.queue.push(() => {
+      const flags = call();
+      this.consume(flags);
+      after?.(flags);
+    });
     if (this.busy) return;
     this.busy = true;
     try {
       while (this.queue.length) {
         const call = this.queue.shift();
         if (!call) break;
-        this.consume(call());
+        call();
       }
     } finally {
       this.busy = false;
