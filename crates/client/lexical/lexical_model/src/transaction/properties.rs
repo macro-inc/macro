@@ -334,9 +334,10 @@ impl TextMut<'_, '_> {
         let mut value = self.data().text.as_str().to_owned();
         value.replace_range(start..end, insert);
         // spliceText acquires a writable record even when the result is unchanged.
-        self.data_mut()?;
-        self.set_text_content(&value)?;
-        if move_selection {
+        let data = self.data_mut()?;
+        data.text = TextBuffer::new(value);
+        data.absent.remove(crate::node::AbsentKeys::TEXT);
+        if move_selection && self.tx.selection().is_some_and(Selection::is_range) {
             let offset = range.start + TextBuffer::new(insert).utf16_len();
             self.select(Some(offset), Some(offset))?;
         }
