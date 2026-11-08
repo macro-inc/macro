@@ -16,7 +16,7 @@ schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
 aquamarine = { version = "0.6", optional = true }
 broadcast = { workspace = true }
 chrono = { workspace = true }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 either = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }

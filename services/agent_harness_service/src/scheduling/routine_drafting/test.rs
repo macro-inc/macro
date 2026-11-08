@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::cow_str::CowLike as _;
 use models_search::SearchHighlight;
 use models_search::channel::{ChannelNameSearchResponse, ChannelNameSearchResponseItem};
 use models_search::document::{

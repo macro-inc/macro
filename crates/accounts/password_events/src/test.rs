@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 #[test]
 fn resolution_is_keyed_by_recipient_and_keeps_its_outbox_id() {

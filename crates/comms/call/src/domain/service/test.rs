@@ -12,7 +12,7 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::NoOpEntityAccessService;
 use entity_mutation::{DeleteEntityPermanently, UpdateEntitySharePolicy};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;

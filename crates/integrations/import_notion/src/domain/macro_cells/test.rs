@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use chrono::TimeZone;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 use super::*;
 use crate::domain::model::{NotionOption, NotionParent};

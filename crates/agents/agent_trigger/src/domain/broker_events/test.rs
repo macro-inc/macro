@@ -2,7 +2,7 @@ use super::*;
 
 use channel_sender::ChannelSender;
 use chrono::Utc;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 

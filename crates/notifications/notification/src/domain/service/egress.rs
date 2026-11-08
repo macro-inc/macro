@@ -21,7 +21,7 @@ use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitService, RealtimeSender,
 };
-use cowlike::CowLike;
+use cow_str::CowLike;
 use either::Either;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;

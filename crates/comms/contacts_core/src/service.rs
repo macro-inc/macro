@@ -10,7 +10,7 @@ use crate::ports::{
     ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
     ContactsService, PeopleSearchRepository, PeopleSearchService,
 };
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;

@@ -12,7 +12,7 @@ use agent_session::domain::ports::MockAgentSessionRepo;
 use bots::domain::models::{Agent, AgentChannelScope, AgentMcpServers, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
 use chrono::Utc;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::SimpleMention;

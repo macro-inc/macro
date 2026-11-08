@@ -1,7 +1,7 @@
 use super::insert_bom_parts;
 use crate::history::upsert_user_history;
 use crate::share_permission::create::{create_document_permission, create_project_permission};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{BasicDocument, FileType};
 use model::document::{ID, SaveBomPart, VersionID};

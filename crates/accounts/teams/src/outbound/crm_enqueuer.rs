@@ -10,7 +10,7 @@
 //! using a no-op) never pull `models_email` in.
 
 use crate::domain::crm_enqueuer::CrmEnqueuer;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, DepopulateCrmForUserPayload,
     PopulateCrmForUserPayload,

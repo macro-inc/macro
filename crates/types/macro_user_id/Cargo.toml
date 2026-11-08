@@ -9,7 +9,7 @@ schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]
 
 [dependencies]
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 doppleganger = { workspace = true }
 nom = { workspace = true }
 serde = { workspace = true }

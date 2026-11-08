@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::SaveBomPart;
 use models_permissions::share_permission::SharePermissionV2;

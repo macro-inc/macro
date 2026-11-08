@@ -17,7 +17,7 @@ pub use colleague_joined::ColleagueJoinedMacro;
 
 use askama::Template;
 use macro_env::Environment;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::email::EmailStr;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;

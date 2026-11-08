@@ -7,7 +7,7 @@ use aes_gcm::{
     aead::{Aead, AeadCore, OsRng, Payload},
 };
 use async_trait::async_trait;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 

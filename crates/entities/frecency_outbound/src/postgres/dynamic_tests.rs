@@ -10,7 +10,7 @@ use item_filters::{
     ast::EntityFilterAst,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use std::collections::VecDeque;
 use std::sync::Arc;

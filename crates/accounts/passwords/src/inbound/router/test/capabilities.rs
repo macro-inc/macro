@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::service::test::fakes::FakeAvailability;
 use crate::outbound::availability::PASSWORDS_FLAG;
 use feature_flags::{FlagSnapshot, FlagValue};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 
 #[tokio::test]
 async fn can_edit_matches_http_value_and_totp_write_authorization() {

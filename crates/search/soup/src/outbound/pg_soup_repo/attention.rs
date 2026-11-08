@@ -35,7 +35,7 @@
 //! page; a short page here still means the feed is exhausted.
 
 use activity::{Action, Actor};
-use cowlike::CowLike;
+use cow_str::CowLike;
 use item_filters::ast::properties::properties_filter_matches_propertyless;
 use model_entity::EntityType;
 use sqlx::{PgPool, Row};

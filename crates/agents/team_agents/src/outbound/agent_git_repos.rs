@@ -6,7 +6,7 @@ use agent_git::client::AgentGitClient;
 use agent_git::domain::template::PersonaSeed as RepoSeed;
 use agent_git::domain::voice::VoiceConfig;
 use agent_git_service_url::AgentGitServiceUrl;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 

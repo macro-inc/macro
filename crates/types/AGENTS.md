@@ -23,7 +23,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`computer_id`](computer_id/AGENTS.md) | Shared computer UUID identity, independent of the runtime and harness domains. |
 | [`computer_types`](computer_types/AGENTS.md) | Macro computers: values shared by the control plane (`hosted_runtimes`) and the Firecracker host agent's contract (`firecracker_host_api`): `EnrollmentGeneration` … |
 | `connection_gateway_models` |  |
-| `cowlike` |  |
+| `cow_str` |  |
 | `document_sub_type` |  |
 | [`entity_basic_types`](entity_basic_types/AGENTS.md) | Shared types: the `DocumentBasic`, `ChatBasic` and `BasicProject` rows that db queries load and `entity_access`'s axum extractors read from request extensions. |
 | `filter_ast` |  |

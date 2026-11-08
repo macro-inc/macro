@@ -11,7 +11,7 @@ ports = ["dep:tokio", "dep:tracing"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { workspace = true }
+cow_str = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }

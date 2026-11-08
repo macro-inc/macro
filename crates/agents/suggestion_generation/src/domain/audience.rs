@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::cow_str::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use suggestions::domain::ports::SuggestionAudience;
 

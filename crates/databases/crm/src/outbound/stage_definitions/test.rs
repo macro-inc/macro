@@ -5,7 +5,7 @@ use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole, TeamRole,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use properties::domain::model::TaskAssignedNotification;
 use properties::domain::model::{EditReceipt, ViewReceipt};
 use properties::{NotificationService, PermissionService, PropertiesPgRepo, PropertiesServiceImpl};

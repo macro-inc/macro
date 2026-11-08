@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata, SessionIdentity};
 use bots::domain::models::BotId;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
-use macro_user_id::cowlike::CowLike as _;
+use macro_user_id::cow_str::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::BrokerLifecyclePublisher;

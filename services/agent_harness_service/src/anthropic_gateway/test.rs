@@ -531,7 +531,7 @@ mod brain_route {
         BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout,
     };
     use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
-    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 
     const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
     const CREATOR: &str = "macro|admin@macro.com";
