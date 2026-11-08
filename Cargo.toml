@@ -91,12 +91,12 @@ members = [
   "crates/email/generic_email_domains",
   "crates/email/google_token",
   "crates/email/reminders",
-  "crates/engines/ai_engine",
   "crates/engines/ai_engine_wasm",
   "crates/engines/docx_engine",
   "crates/engines/docx_engine_wasm",
   "crates/engines/fig_engine",
   "crates/engines/fig_engine_wasm",
+  "crates/engines/illustrator_engine",
   "crates/engines/pptx_engine",
   "crates/engines/pptx_engine_wasm",
   "crates/engines/psd_engine",
@@ -641,7 +641,6 @@ agent_trigger = { path = "crates/agents/agent_trigger" }
 ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/billing/ai_billing" }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
-ai_engine = { path = "crates/engines/ai_engine" }
 ai_projections = { path = "crates/ai/ai_projections" }
 ai_tools = { path = "crates/ai/ai_tools" }
 ai_toolset = { path = "crates/ai/ai_toolset" }
@@ -787,6 +786,7 @@ gtm_invite = { path = "crates/accounts/gtm_invite" }
 harness_id = { path = "crates/types/harness_id" }
 harnesses = { path = "crates/agents/harnesses", default-features = false }
 id_newtype = { path = "crates/types/id_newtype" }
+illustrator_engine = { path = "crates/engines/illustrator_engine" }
 image_generation = { path = "crates/ai/image_generation" }
 image_proxy_service_url = { path = "crates/platform/service_urls/image_proxy_service_url" }
 import = { path = "crates/integrations/import" }

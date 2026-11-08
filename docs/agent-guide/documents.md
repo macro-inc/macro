@@ -2215,7 +2215,7 @@ menus) makes a new one with a single 1920 × 1080 artboard. Both are behind
 the `enable-ai-editor` PostHog flag (on by default in development builds;
 `ENABLE_AI_EDITOR` overrides it); with the flag off the block offers the
 file for download. The file is read, rendered, and edited by the Rust
-`ai_engine` compiled to WebAssembly, in a primary worker plus up to three
+`illustrator_engine` compiled to WebAssembly, in a primary worker plus up to three
 tile-raster helpers; the canvas composites tiles at the device pixel ratio
 over a gray pasteboard and redraws only what an edit changed.
 
@@ -2234,7 +2234,7 @@ faithfully is listed in `ai-warnings`.
 
 Everyone with the file open edits it live. Changes go through the sync
 service as the Loro maps `aiMeta`, `aiDoc`, `aiNodes`, and `aiImages`
-(`ai_engine::collab`); the stored `.ai` stays the base everyone opens, and
+(`illustrator_engine::collab`); the stored `.ai` stays the base everyone opens, and
 the first person who can edit seeds the shared copy. Each person creates
 objects in an id session (1–4095) picked at random among those the people
 present do not use, published in their presence. Undo takes back only your
@@ -2355,7 +2355,7 @@ Illustrator documents (`ai`). All three are design files in the `vector`
 association, beside Figma designs, so a Photoshop document is never handled
 as a picture, despite its `image/vnd.adobe.photoshop` media type: the image
 block and image attachments for the agent skip it. The backend reads these
-documents with the Rust `psd_engine` and `ai_engine`, the same engines the
+documents with the Rust `psd_engine` and `illustrator_engine`, the same engines the
 browser editors run as WebAssembly.
 
 Macro AI reads them with `ReadPhotoshopDocument` and
@@ -2370,7 +2370,7 @@ attaching one points the agent at its tool):
 - Illustrator: the artboards with their names, positions, and sizes in
   points, then the layer tree from top to bottom with each object's kind,
   name, id, position, size, fill, and stroke, and the text of text objects
-  with their fonts (`ai_engine::describe::outline`).
+  with their fonts (`illustrator_engine::describe::outline`).
 
 Descriptions stop at about 60,000 characters. The tools open files up to
 300 MB; a Photoshop document whose layers decode to more than 512 MB of

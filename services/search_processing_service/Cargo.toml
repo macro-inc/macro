@@ -91,7 +91,7 @@ macro_uuid = { workspace = true }
 mention_utils = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 documents = { workspace = true, optional = true }
-ai_engine = { workspace = true }
+illustrator_engine = { workspace = true }
 fig_engine = { workspace = true, default-features = true }
 psd_engine = { workspace = true }
 doppler-config = { workspace = true }

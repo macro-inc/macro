@@ -91,7 +91,7 @@ word docs, Illustrator/Photoshop files).
 ## Boundaries
 
 - Depends on (feature-gated): `entity_access`/`entity_registry` (permissions),
-  `ai_engine`/`ai_toolset`/`ai_billing`/`ai_usage` (AI tools), `pptx_engine`/
+  `illustrator_engine`/`ai_toolset`/`ai_billing`/`ai_usage` (AI tools), `pptx_engine`/
   `psd_engine` (file formats), `lexical_client` (sync-service calls),
   `comms_db_client` (create/purge adapters), `macro_db_client` (purge/backfill).
 - Used by: `ai_tools`, `agent_harness`, `webhook`, `soup_realtime_inbound`, `memory`,

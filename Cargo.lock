@@ -1205,29 +1205,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai_engine"
-version = "0.1.0"
-dependencies = [
- "clap",
- "console_error_panic_hook",
- "fig_engine",
- "miniz_oxide",
- "png",
- "serde",
- "serde_json",
- "skrifa",
- "thiserror 2.0.18",
- "tiny-skia",
- "wasm-bindgen",
- "zune-core",
- "zune-jpeg",
-]
-
-[[package]]
 name = "ai_engine_wasm"
 version = "0.1.0"
 dependencies = [
- "ai_engine",
+ "illustrator_engine",
 ]
 
 [[package]]
@@ -7309,7 +7290,6 @@ dependencies = [
  "activity",
  "agent_correlation",
  "ai_billing",
- "ai_engine",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -7342,6 +7322,7 @@ dependencies = [
  "github_pull_requests",
  "hex",
  "http-body-util",
+ "illustrator_engine",
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
@@ -11200,6 +11181,25 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "illustrator_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "miniz_oxide",
+ "png",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -18496,7 +18496,6 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_session",
- "ai_engine",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -18520,6 +18519,7 @@ dependencies = [
  "fig_engine",
  "futures",
  "http-body-util",
+ "illustrator_engine",
  "kafka_util",
  "lexical_client",
  "lexical_service_url",

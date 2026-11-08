@@ -77,9 +77,12 @@ impl IllustratorService {
 
 /// Opens `bytes` and describes the document for a model to read.
 fn describe(bytes: &[u8]) -> anyhow::Result<String> {
-    let opened =
-        ai_engine::build::open(bytes).map_err(|e| IllustratorError::Unreadable(e.to_string()))?;
-    Ok(ai_engine::describe::outline(&opened.document, MAX_CHARS))
+    let opened = illustrator_engine::build::open(bytes)
+        .map_err(|e| IllustratorError::Unreadable(e.to_string()))?;
+    Ok(illustrator_engine::describe::outline(
+        &opened.document,
+        MAX_CHARS,
+    ))
 }
 
 #[cfg(test)]

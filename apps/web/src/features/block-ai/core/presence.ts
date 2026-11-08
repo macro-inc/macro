@@ -95,7 +95,7 @@ export function isPresence(value: unknown): value is AiPresence {
   );
 }
 
-/** The largest id session (`ai_engine::collab::MAX_SESSION`). */
+/** The largest id session (`illustrator_engine::collab::MAX_SESSION`). */
 export const MAX_SESSION = 4095;
 
 /**

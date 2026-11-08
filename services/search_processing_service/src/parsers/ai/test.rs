@@ -1,12 +1,12 @@
 use super::*;
-use ai_engine::edit::{History, NewNode, Op, Position};
-use ai_engine::geom::Point;
+use illustrator_engine::edit::{History, NewNode, Op, Position};
+use illustrator_engine::geom::Point;
 
 /// A saved letter-size document with one text object reading "Quarterly
 /// report".
 fn document() -> Vec<u8> {
-    let blank = ai_engine::save::blank_file(612.0, 792.0).expect("a blank document saves");
-    let mut doc = ai_engine::build::open(&blank)
+    let blank = illustrator_engine::save::blank_file(612.0, 792.0).expect("a blank document saves");
+    let mut doc = illustrator_engine::build::open(&blank)
         .expect("the blank document opens")
         .document;
     History::new()
@@ -29,7 +29,7 @@ fn document() -> Vec<u8> {
             None,
         )
         .expect("the text is added");
-    ai_engine::save::save(&doc).expect("the document saves")
+    illustrator_engine::save::save(&doc).expect("the document saves")
 }
 
 #[test]

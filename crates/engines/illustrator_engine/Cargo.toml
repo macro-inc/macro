@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "ai_engine"
+name = "illustrator_engine"
 publish = false
 version = "0.1.0"
 

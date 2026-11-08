@@ -21,7 +21,7 @@ purge = [
 ai_tools = [
   "dep:ai_billing",
   "dep:base64",
-  "dep:ai_engine",
+  "dep:illustrator_engine",
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:docx_engine",
@@ -198,7 +198,7 @@ loro = { workspace = true, optional = true }
 macro_tower_layers = { workspace = true, optional = true }
 messages = { workspace = true, optional = true, features = ["ports"] }
 model_file_type = { workspace = true, optional = true }
-ai_engine = { workspace = true, optional = true }
+illustrator_engine = { workspace = true, optional = true }
 docx_engine = { workspace = true, optional = true }
 fig_engine = { workspace = true, default-features = true, optional = true }
 pptx_engine = { workspace = true, default-features = true, optional = true, features = ["embedded-fonts", "schema"] }

@@ -453,8 +453,8 @@ build-ai-engine-wasm:
 ensure-ai-engine-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
-    WASM="{{justfile_directory()}}/src/lib/core/ai-engine/wasm/ai_engine_bg.wasm"
-    CRATE="{{justfile_directory()}}/../../crates/engines/ai_engine"
+    WASM="{{justfile_directory()}}/src/lib/core/ai-engine/wasm/illustrator_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/engines/illustrator_engine"
     FIG="{{justfile_directory()}}/../../crates/engines/fig_engine"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-ai-engine-wasm

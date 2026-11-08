@@ -1,7 +1,7 @@
 /**
  * Editing on top of the viewer: the operations the canvas, panels, and
  * shortcuts perform. Every change is an engine operation
- * (`ai_engine::edit::Op`), applied as a step of `create-edit-steps` (in
+ * (`illustrator_engine::edit::Op`), applied as a step of `create-edit-steps` (in
  * order with other people's changes, shared, re-rendered, and saved).
  */
 
