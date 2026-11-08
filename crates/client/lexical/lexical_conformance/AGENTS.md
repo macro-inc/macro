@@ -101,3 +101,5 @@ Route indexed text splicing, JSON updates, copy predicates and element creation 
 Context/Session call_native uses the shared API index and model-derived hook names; accept only indexed node hooks and preserve the exact mutable callback frame. Native-super bypasses one outer foreign dispatch, never a whole native operation. Pure indexed read dispatch and lifecycle construction scopes remain separate host work.
 
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
+
+Key RecordIdentities by immutable model tokens, not allocation addresses; resolve owner versions by matching the source token before encoding handles. Token retention must not pin records or force COW, including native-projection read peers.

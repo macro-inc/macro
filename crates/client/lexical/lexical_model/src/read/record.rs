@@ -23,6 +23,11 @@ impl NodeRecord {
 }
 impl<'state> NodeRef<'state> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn foreign_record_identity(self) -> &'state ForeignRecordIdentity {
+        &self.slot.foreign_identity.0
+    }
+
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) fn from_retired(
         slot: &'state NodeSlot,
         registry: &'state std::sync::Arc<Registry>,

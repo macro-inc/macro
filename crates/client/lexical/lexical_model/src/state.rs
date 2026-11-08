@@ -34,6 +34,8 @@ impl EditorState {
         nodes.insert(
             NodeKey::ROOT,
             Arc::new(NodeSlot {
+                #[cfg(feature = "foreign-nodes")]
+                foreign_identity: Default::default(),
                 key: NodeKey::ROOT,
                 type_index: index,
                 links: Default::default(),

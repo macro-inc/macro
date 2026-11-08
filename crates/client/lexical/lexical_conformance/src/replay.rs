@@ -856,7 +856,7 @@ impl Replayer {
     }
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
         let node = view.node_or_err(key)?;
-        let pointer = std::ptr::from_ref(node.base()) as usize;
+        let record = view.foreign_record_identity(key)?;
         let version = self
             .record_owner
             .as_ref()
@@ -864,10 +864,10 @@ impl Replayer {
                 state
                     .view()
                     .node(key)
-                    .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
+                    .is_some_and(|node| record.matches(node))
             })
             .map_or(self.version, |(version, _)| *version);
-        let (version, identity) = self.record_ids.identify(key, pointer, version)?;
+        let (version, identity) = self.record_ids.identify(key, record, version)?;
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
         )

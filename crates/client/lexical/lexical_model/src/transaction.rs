@@ -407,6 +407,8 @@ impl<'editor> Transaction<'editor> {
         self.pending.nodes.insert(
             key,
             Arc::new(NodeSlot {
+                #[cfg(feature = "foreign-nodes")]
+                foreign_identity: Default::default(),
                 key,
                 type_index: index,
                 links: Links::default(),

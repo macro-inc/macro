@@ -33,15 +33,29 @@ impl ReadOriginRef<'_> {
     }
 }
 
-/// Pinned source record identity for a development host's captured node object.
-/// Materialized native projections retain the identity of their source record.
+/// Stable source identity for a development host's captured node object.
+/// Materialized native projections retain their source identity. The token
+/// retains no record or payload and does not make a live record need cloning.
 #[derive(Clone)]
-pub struct ForeignRecordIdentity(Arc<crate::node::NodeSlot>);
+pub struct ForeignRecordIdentity(Arc<()>);
+
+/// A cloned record receives a new identity; cloning an identity retains it.
+pub(crate) struct RecordIdentityMarker(pub ForeignRecordIdentity);
+impl Default for RecordIdentityMarker {
+    fn default() -> Self {
+        Self(ForeignRecordIdentity(Arc::new(())))
+    }
+}
+impl Clone for RecordIdentityMarker {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
 
 impl ForeignRecordIdentity {
     /// Whether a borrowed record is the original captured source record.
     pub fn matches(&self, node: NodeRef<'_>) -> bool {
-        std::ptr::eq(&self.0.base, node.base())
+        Arc::ptr_eq(&self.0, &node.foreign_record_identity().0)
     }
 }
 
@@ -139,12 +153,7 @@ impl ForeignReadSnapshot {
     /// Pin the source identity independently of the materialized read payload.
     /// The token must be released with its owning host handle or version.
     pub fn record_identity(&self, key: NodeKey) -> Result<ForeignRecordIdentity, Error> {
-        let slot = self
-            .source_records
-            .get(&key)
-            .or_else(|| self.state.nodes.get(&key))
-            .ok_or(Error::NodeNotFound(key))?;
-        Ok(ForeignRecordIdentity(slot.clone()))
+        self.view().foreign_record_identity(key)
     }
 
     /// Run model reads through an independently owned, guarded transaction.
@@ -215,6 +224,17 @@ impl Read for ForeignReadSnapshot {
 }
 
 impl StateRef<'_> {
+    /// Source identity for host handles without pinning the node or payload.
+    /// A materialized read uses its original source marker rather than its copy.
+    pub fn foreign_record_identity(self, key: NodeKey) -> Result<ForeignRecordIdentity, Error> {
+        let slot = self
+            .source_records
+            .and_then(|records| records.get(&key))
+            .or_else(|| self.state.nodes.get(&key))
+            .ok_or(Error::NodeNotFound(key))?;
+        Ok(slot.foreign_identity.0.clone())
+    }
+
     /// Capture an owned view for a pure development host callback.
     ///
     /// Materialize an active inherited-native payload projection into the

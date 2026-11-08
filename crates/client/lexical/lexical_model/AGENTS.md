@@ -132,3 +132,5 @@ Move existing text ranges through point edits in select and splice_text so compo
 Use with_foreign_native for explicit development native-super dispatch; consume the exact node/hook before entering native behavior so nested virtual calls stay active. Keep scopes update-local and thread-local even when read captures share their owner; drop guards independent of transaction borrows; import/clone lifecycle dispatch needs its own construction scope.
 
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
+
+Track foreign captured-record identity with immutable marker tokens that do not retain records or affect writability; copy-on-write slot clones receive fresh markers. Resolve materialized read identities through source aliases, and never substitute payload-copy addresses for source identity.
