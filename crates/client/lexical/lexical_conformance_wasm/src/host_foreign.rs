@@ -20,7 +20,8 @@ impl ForeignNode {
         })
     }
     fn check_supported(mask: u64) -> Result<(), Error> {
-        let supported = ForeignHook::IsInline.bit()
+        let supported = ForeignHook::AfterClone.bit()
+            | ForeignHook::IsInline.bit()
             | ForeignHook::CanBeEmpty.bit()
             | ForeignHook::CanMergeWith.bit()
             | ForeignHook::CanReplaceWith.bit()
@@ -300,6 +301,35 @@ impl ForeignHooks for ForeignNode {
                 .map(str::to_owned)
                 .ok_or(Error::Invariant("getTextContent must return a string"))
         })
+    }
+
+    fn after_clone(
+        &self,
+        key: NodeKey,
+        original: NodeKey,
+        data: &ForeignData,
+    ) -> Override<Option<ForeignData>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::AfterClone.bit() == 0 {
+            return Override::Inherit;
+        }
+        if !ForeignReadOperation::is_active() {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        let result = match (callback, ForeignCloneContext::capture()) {
+            (Some(callback), Some(source)) => {
+                callback.clone_node(&source, key, original, &data.fields)
+            }
+            (None, _) => Err(Error::Invariant("foreign dispatcher is not installed")),
+            (_, None) => Err(Error::Invariant("foreign clone source is unavailable")),
+        };
+        match result {
+            Ok(data) => Override::Value(Some(data)),
+            Err(error) => {
+                let _ = ForeignReadOperation::defer(error);
+                Override::Value(None)
+            }
+        }
     }
 
     fn adjust_export_json(
@@ -599,7 +629,8 @@ mod test {
         assert!(node.set_mask(ForeignHook::CoerceMode.bit(), true).is_err());
         assert!(ForeignNode::new(ForeignHook::IsInline.bit()).is_ok());
         assert!(ForeignNode::new(ForeignHook::CanBeEmpty.bit()).is_ok());
-        assert!(ForeignNode::new(ForeignHook::AfterClone.bit()).is_err());
+        assert!(ForeignNode::new(ForeignHook::AfterClone.bit()).is_ok());
+        assert!(ForeignNode::new(ForeignHook::ExtractWithChild.bit()).is_err());
         assert!(ForeignNode::new(1u64 << 63).is_err());
         Ok(())
     }

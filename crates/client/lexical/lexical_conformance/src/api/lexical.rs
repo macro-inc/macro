@@ -59,6 +59,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             let key = tx.import_node(json)?;
             r.node(tx.view(), key)
         }
+        "lexical.$copyNode" => {
+            let original = node_key(a.first().ok_or_else(|| fail("copy source"))?)?;
+            let copy =
+                tx.copy_node(original, a.get(1).and_then(Value::as_bool).unwrap_or(false))?;
+            r.node(tx.view(), copy)
+        }
         "conformance.createForeignNode" => {
             let type_name = str_arg(a, 0)?;
             let fields = a

@@ -83,7 +83,12 @@ impl BoundFunction {
         }
     }
 
-    fn invoke_export(&self, message: Value, errors: &Errors) -> Result<Value, Error> {
+    fn invoke_export(
+        &self,
+        message: Value,
+        errors: &Errors,
+        require_object: bool,
+    ) -> Result<Value, Error> {
         ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
@@ -91,7 +96,7 @@ impl BoundFunction {
             let result = self
                 .function
                 .call1(&JsValue::UNDEFINED, &message)
-                .and_then(|value| snapshot_result(&value, true));
+                .and_then(|value| snapshot_result(&value, require_object));
             match result {
                 Ok(value) => crate::host::from_js(value)
                     .map_err(|error| Error::invariant(format!("{error:?}"))),
@@ -103,7 +108,7 @@ impl BoundFunction {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let _ = (message, errors);
+            let _ = (message, errors, require_object);
             Err(Error::Invariant("JS callbacks require WASM"))
         }
     }
@@ -253,6 +258,62 @@ impl Callback {
             .map_err(|error| Error::invariant(error.to_string()))?
     }
 
+    pub(crate) fn clone_node(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        key: NodeKey,
+        original: NodeKey,
+        fields: &lexical_model::SerializedNode,
+    ) -> Result<lexical_model::ForeignData, Error> {
+        self.context
+            .with_read_scope(snapshot, |peer| {
+                let original = peer.node(original)?;
+                let handle = original
+                    .get("$h")
+                    .and_then(Value::as_u64)
+                    .and_then(|handle| u32::try_from(handle).ok())
+                    .ok_or_else(|| {
+                        lexical_conformance::replay::ReplayError::Mismatch(
+                            "clone source handle".into(),
+                        )
+                    })?;
+                let type_name = peer
+                    .read_field(handle, "__type")?
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| {
+                        lexical_conformance::replay::ReplayError::Mismatch(
+                            "clone source type".into(),
+                        )
+                    })?;
+                let message =
+                    serde_json::to_value(super::super::host_protocol::HostNodeMutation {
+                        hook: ForeignHook::AfterClone as u8,
+                        node: super::super::host_protocol::HostCloneNode {
+                            staging: super::super::host_protocol::HostCloneStage {
+                                key: key.to_string(),
+                                type_name,
+                                fields,
+                            },
+                        },
+                        args: vec![original],
+                    })?;
+                let frame = ReadFrame {
+                    owner: &self.owner,
+                    errors: &self.errors,
+                    peer: RefCell::new(peer),
+                };
+                Ok(CURRENT.set(&frame, || {
+                    self.function.invoke_export(message, &self.errors, false)
+                }))
+            })
+            .map_err(|error| Error::invariant(error.to_string()))??
+            .as_object()
+            .cloned()
+            .map(|fields| lexical_model::ForeignData { fields })
+            .ok_or(Error::Invariant("clone staging must return own fields"))
+    }
+
     pub(crate) fn export_json(
         &self,
         snapshot: &ForeignReadSnapshot,
@@ -276,7 +337,7 @@ impl Callback {
                     peer: RefCell::new(peer),
                 };
                 Ok(CURRENT.set(&frame, || {
-                    self.function.invoke_export(message, &self.errors)
+                    self.function.invoke_export(message, &self.errors, true)
                 }))
             })
             .map_err(|error| Error::invariant(error.to_string()))??

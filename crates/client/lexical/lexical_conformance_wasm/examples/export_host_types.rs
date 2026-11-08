@@ -1,6 +1,9 @@
 //! Generate the TypeScript declaration consumed by the development postcard decoder.
 use clap::Parser;
-use lexical_conformance_wasm::{host_packet::HostCommitPacket, host_protocol::HostNodeMutation};
+use lexical_conformance_wasm::{
+    host_packet::HostCommitPacket,
+    host_protocol::{HostCloneNode, HostNodeMutation},
+};
 use specta::Types;
 use specta_typescript::Typescript;
 use std::{
@@ -19,7 +22,8 @@ fn main() -> Result<(), rootcause::Report> {
     let args = Args::parse();
     let types = Types::default()
         .register::<HostCommitPacket>()
-        .register::<HostNodeMutation<specta_typescript::Unknown, specta_typescript::Unknown>>();
+        .register::<HostNodeMutation<specta_typescript::Unknown, specta_typescript::Unknown>>()
+        .register::<HostCloneNode<specta_typescript::Unknown>>();
     let generated = Typescript::default()
         .export(&types, specta_serde::PhasesFormat)
         .map_err(rootcause::Report::new)?;

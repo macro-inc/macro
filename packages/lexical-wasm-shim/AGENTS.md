@@ -86,3 +86,5 @@ Use hosting-predicates.test.ts for individual no-argument boolean hook dispatch/
 Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain original indexed arguments; internal native calls encode their node through the shared owned read peer. Exercise native list append failure and retry in hosting-node-predicates.test.ts.
 
 Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and excludeFromCopy destinations. Scalar hooks require their declared primitive type; reject objects without getters/coercion, invalid u32 indents, and preserve opaque throws/recovery.
+
+Exercise clone staging, original-version reads, native copyNode fresh keys, read guards, opaque throws and retry in hosting-clone.test.ts. Class construction/opaque custom fields remain part of the full facade.
