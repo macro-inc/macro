@@ -24,6 +24,8 @@ Sync policy, authorization, history and retries remain in document_session/doc_s
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
 Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
+Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.
+Preserve keystroke work counters when changing code-generation or post-processing settings.
 
 ## Checks
 
