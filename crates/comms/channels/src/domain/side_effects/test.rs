@@ -9,6 +9,7 @@ use crate::domain::{
 };
 use chrono::Utc;
 use std::sync::{Arc, Mutex};
+use thread_id::ThreadId;
 
 #[derive(Clone)]
 struct FakeContext {
@@ -68,7 +69,7 @@ impl ChannelSideEffectContext for FakeContext {
 
     async fn get_thread_notification_context(
         &self,
-        _thread_id: Uuid,
+        _thread_id: ThreadId,
     ) -> Result<ThreadNotificationContext, Self::Err> {
         Ok(self.thread_context.clone())
     }

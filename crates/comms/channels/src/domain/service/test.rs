@@ -20,6 +20,7 @@ use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+use thread_id::ThreadId;
 
 mod deletion;
 
@@ -427,7 +428,7 @@ impl ChannelRepo for FakeMutationRepo {
 
     async fn get_thread_participants(
         &self,
-        _thread_id: Uuid,
+        _thread_id: ThreadId,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
         Ok(self.state.lock().unwrap().thread_participants.clone())
     }

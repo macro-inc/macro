@@ -22,6 +22,7 @@ use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use std::collections::HashSet;
+use thread_id::ThreadId;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
@@ -765,7 +766,7 @@ where
         match thread_id {
             Some(thread_id) => self
                 .context
-                .get_thread_notification_context(thread_id)
+                .get_thread_notification_context(ThreadId::from_uuid(thread_id))
                 .await
                 .unwrap_or_default(),
             None => ThreadNotificationContext::default(),

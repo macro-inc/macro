@@ -222,6 +222,7 @@ members = [
   "crates/types/project_id",
   "crates/types/soup_property",
   "crates/types/team_id",
+  "crates/types/thread_id",
   "crates/types/trigger_context",
   "crates/whatsapp/whatsapp_e2e",
   "crates/whatsapp/whatsapp_fake_server",
@@ -936,6 +937,7 @@ system_status = { path = "crates/accounts/system_status" }
 task_dedup = { path = "crates/projects/task_dedup" }
 team_id = { path = "crates/types/team_id" }
 teams = { path = "crates/accounts/teams", default-features = false }
+thread_id = { path = "crates/types/thread_id" }
 trigger_context = { path = "crates/types/trigger_context" }
 turso-opfs = { path = "crates/client/turso-opfs" }
 unfurl = { path = "crates/integrations/unfurl" }

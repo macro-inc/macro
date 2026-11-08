@@ -73,6 +73,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -90,6 +91,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "activity": [
@@ -236,6 +238,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -253,6 +256,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -375,6 +379,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -487,6 +492,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -511,6 +517,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -679,6 +686,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -944,6 +952,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -1181,6 +1190,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -1278,6 +1288,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -1295,6 +1306,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -1363,6 +1375,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -1380,6 +1393,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -1452,6 +1466,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -1469,6 +1484,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -1589,6 +1605,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack",
       "services/agent_trigger_service"
@@ -1971,6 +1988,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -2164,6 +2182,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -2361,6 +2380,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -2443,6 +2463,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -2460,6 +2481,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "broadcast": [
@@ -2593,6 +2615,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -2856,6 +2879,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -2873,6 +2897,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "call_recording_preview_handler": [
@@ -3099,6 +3124,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -3176,6 +3202,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -3193,6 +3220,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "channels_inbound": [
@@ -3239,6 +3267,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -3256,6 +3285,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "channels_outbound": [
@@ -3305,6 +3335,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -3323,6 +3354,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "chat": [
@@ -3537,6 +3569,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -3561,6 +3594,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -3690,6 +3724,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -3707,6 +3742,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "complete_graph": [
@@ -3884,6 +3920,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -4245,6 +4282,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "cursor_api_key": [
@@ -4314,6 +4352,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -4332,6 +4371,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -4610,6 +4650,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -4753,6 +4794,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -4778,6 +4820,7 @@
       "crates/types/project_id",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -5085,6 +5128,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/whatsapp/whatsapp_linked",
@@ -5234,6 +5278,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -5258,6 +5303,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -5349,6 +5395,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -5373,6 +5420,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -5550,6 +5598,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -5726,6 +5775,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack",
       "services/email_focus_worker"
@@ -5887,6 +5937,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack",
       "services/email_scheduled_handler"
@@ -6026,6 +6077,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -6130,6 +6182,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -6769,6 +6822,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -6793,6 +6847,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -6918,6 +6973,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -6935,6 +6991,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "graphql_activity": [
@@ -7067,6 +7124,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -7084,6 +7142,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "graphql_common": [
@@ -7191,6 +7250,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "graphql_databases": [
@@ -7310,6 +7370,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -7413,6 +7474,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -7531,6 +7593,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -7650,6 +7713,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -7770,6 +7834,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -7929,6 +7994,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -8130,6 +8196,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -8273,6 +8340,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -8391,6 +8459,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -8538,6 +8607,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -8790,6 +8860,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -9920,6 +9991,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -9939,6 +10011,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "native_app_server": [
@@ -10144,6 +10217,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -10542,6 +10616,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -10567,6 +10642,7 @@
       "crates/types/project_id",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -10860,6 +10936,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -10922,6 +10999,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -10939,6 +11017,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "routines": [
@@ -10988,6 +11067,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -11005,6 +11085,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/workspace-hack"
     ],
     "s3_client": [
@@ -11163,6 +11244,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -11324,6 +11406,7 @@
       "crates/types/project_id",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -11446,6 +11529,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -11570,6 +11654,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -11592,6 +11677,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack",
@@ -11801,6 +11887,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -11908,6 +11995,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack",
       "services/slack_import_worker"
@@ -12004,6 +12092,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -12116,6 +12205,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -12231,6 +12321,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -12342,6 +12433,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -12506,6 +12598,7 @@
       "crates/types/project_id",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -12572,6 +12665,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/message_parent",
@@ -12589,6 +12683,7 @@
       "crates/types/non_empty",
       "crates/types/notification_state",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
@@ -12923,6 +13018,7 @@
       "crates/types/s3_key",
       "crates/types/soup_property",
       "crates/types/team_id",
+      "crates/types/thread_id",
       "crates/workspace-hack",
       "tooling/teammate_dm_backfill"
     ],
@@ -12986,6 +13082,11 @@
       "crates/types/s3_key",
       "crates/types/team_id",
       "crates/workspace-hack"
+    ],
+    "thread_id": [
+      "crates/types/id_newtype",
+      "crates/types/macro_uuid",
+      "crates/types/thread_id"
     ],
     "trigger_context": [
       "crates/types/bot_id",
@@ -13339,6 +13440,7 @@
       "crates/types/entity_basic_types",
       "crates/types/filter_ast",
       "crates/types/harness_id",
+      "crates/types/id_newtype",
       "crates/types/macro_sync_service_jwt",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
@@ -13363,6 +13465,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/types/user_quota",
       "crates/workspace-hack"
@@ -13624,6 +13727,7 @@
       "crates/types/notification_state",
       "crates/types/s3_key",
       "crates/types/soup_property",
+      "crates/types/thread_id",
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
