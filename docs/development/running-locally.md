@@ -680,13 +680,15 @@ Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only servic
 whose binary is newer than their container restart, so a build that failed partway
 still gets its finished services reloaded next time.
 
-Three services have Docker-built images. They are not rebuilt by default:
+Three services have Docker-built images:
 
 - `sync_service`
 - `lexical_service`
 - `websocket_service`
 
-If you change these services, the running stack can use a stale image. Force a rebuild with this flag:
+`sync_service` and `lexical_service`, like the local OpenSearch image, run under tags keyed by the content of what their build reads (the sync worker's cargo dependency closure; the JavaScript workspace manifests, lockfile, shared `packages/` and the lexical service). A start whose inputs changed builds the new image; otherwise every instance and worktree on the machine shares the one already built, so an unrelated edit no longer costs a new instance a minute or two of image builds. Tags over three days old that no container uses are removed.
+
+A running stack keeps the images it started with, and `websocket_service` is built once per instance. If you change these services, force a rebuild with this flag:
 
 ```bash
 just run_local --build-aux-services
@@ -718,7 +720,7 @@ The `run_local` start flags also apply to `stack up`. This includes `--instance`
 
 A static frontend (`stack up`, or `run_local --static-frontend`) is built once and served by the proxy at `<proxy>/app/`. The bundle counts as local, as the dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. It resolves its backend from the origin it is served on, so the same stack works on localhost or behind any hostname without a rebuild.
 
-Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
+Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`, in the background while the services build. A package whose sources match one any worktree on the machine has built is copied from `~/.cache/macro-local/wasm-pkgs` instead of compiled; later starts reuse the generated packages when they are current. The static bundle is cached in `~/.cache/macro-local/frontend-bundles`, keyed by the frontend sources as they are on disk (`apps/web`, `packages`, `static_assets`, the root manifests, uncommitted and untracked files included), the generated wasm packages and every `VITE_*` variable, so a stack whose frontend hasn't changed skips `vite build`. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 For Pipedream Connect on a machine hostname, include that HTTPS origin in
 `PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the static-frontend default names
@@ -734,7 +736,7 @@ only localhost. `run_local rebuild` reuses the recorded file; pass it again to
 - Waits for the FusionAuth kickstart
 - Creates the search indices
 
-It saves these volumes as an init snapshot, and clean starts restore it. A detached start over existing volumes keeps them and doesn't use a snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
+It saves these volumes as an init snapshot, and clean starts restore it. A detached start over existing volumes keeps them and doesn't use a snapshot. The snapshot is content-addressed and stored in `~/.cache/macro-local/stack-snapshots`, shared by every worktree and instance on the machine (`MACRO_STACK_SNAPSHOT_DIR` overrides it). Later runs restore the snapshot and skip the initialization. The key covers the migrations, compose files, search mappings and the FusionAuth kickstart, but not the instance's ports: each start writes its own redirect URLs into FusionAuth instead. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged. Snapshots unused for 14 days are deleted when a new one is saved.
 
 Useful commands:
 

@@ -30,7 +30,7 @@ clap = { workspace = true }
 computer_id = { workspace = true }
 universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
-activity = { path = "../../crates/activity", default-features = false, features = ["outbound", "schema"] }
+activity = { path = "../../crates/activity", default-features = false, features = ["axum", "outbound", "schema"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
