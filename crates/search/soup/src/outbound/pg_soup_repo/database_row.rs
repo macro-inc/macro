@@ -6,7 +6,7 @@ mod test;
 
 use entity_kind::EntityType;
 use model_owner::Owner;
-use models_soup::{database_row::SoupDatabaseRow, item::SoupItem};
+use soup_types::{database_row::SoupDatabaseRow, item::SoupItem};
 use sqlx::PgPool;
 use uuid::Uuid;
 

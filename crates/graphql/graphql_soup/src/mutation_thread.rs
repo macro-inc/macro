@@ -4,7 +4,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use email::domain::ports::EmailThreadPreviewService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::email_thread::SoupEnrichedEmailThreadPreview;
+use soup_types::email_thread::SoupEnrichedEmailThreadPreview;
 use uuid::Uuid;
 
 /// A fresh, user-scoped snapshot from the same service that performs writes.

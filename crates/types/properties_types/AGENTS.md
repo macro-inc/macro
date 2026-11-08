@@ -33,7 +33,7 @@ split into three layers plus a `shared` layer used by all of them.
   `database_sql_runner`, `documents`, `document_storage_service`, `email_service`,
   `forms`, `github`, `graphql_common`, `graphql_crm`, `graphql_initiative`,
   `graphql_properties`, `graphql_soup`, `import`, `initiative`, `messages`,
-  `models_soup`, `properties`, `properties_service`, `scheduled_action`,
+  `soup_types`, `properties`, `properties_service`, `scheduled_action`,
   `search_service`, `soup`, `soup_realtime_inbound`, `system_properties`.
 
 ## Recipes

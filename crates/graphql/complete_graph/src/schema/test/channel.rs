@@ -1,5 +1,5 @@
 use super::*;
-use models_soup::comms::{
+use soup_types::comms::{
     Channel, ChannelId, ChannelType, ChannelWithParticipants, LatestMessage, SoupAgentDmProfile,
     SoupChannel,
 };

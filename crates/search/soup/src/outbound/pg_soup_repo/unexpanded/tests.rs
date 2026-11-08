@@ -4,9 +4,9 @@ use crate::outbound::pg_soup_repo::unexpanded::{
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_soup::item::SoupItem;
 use pagination_types::Identify;
 use pagination_types::{PaginateOn, Query, SimpleSortMethod};
+use soup_types::item::SoupItem;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;

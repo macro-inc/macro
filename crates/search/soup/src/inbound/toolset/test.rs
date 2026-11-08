@@ -3,8 +3,8 @@ use super::list_entities::build_summary;
 use super::*;
 use ai_toolset::schema::generate_validated_input_schema;
 use chrono::Utc;
-use models_soup::{foreign_entity::SoupForeignEntity, item::SoupItem};
 use non_empty::IsEmpty;
+use soup_types::{foreign_entity::SoupForeignEntity, item::SoupItem};
 use uuid::Uuid;
 
 #[test]
@@ -402,12 +402,12 @@ fn test_tag_filter_expr_ands_with_existing_propf() {
 fn test_from_soup_item_resolves_tags_via_caller_map() {
     use crate::domain::models::SoupPropertiesField;
     use model_owner::Owner;
-    use models_soup::SoupProperty;
-    use models_soup::document::SoupDocument;
     use properties_types::service::property_definition::PropertyDefinition;
     use properties_types::service::property_value::PropertyValue;
     use properties_types::service::tag_sets::{AppliedTag, TagScope};
     use properties_types::{DataType, PropertyOwner};
+    use soup_types::SoupProperty;
+    use soup_types::document::SoupDocument;
     use std::collections::HashMap;
 
     let known_option = Uuid::new_v4();

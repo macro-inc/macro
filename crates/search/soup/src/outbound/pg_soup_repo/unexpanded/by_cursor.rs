@@ -1,8 +1,8 @@
 use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::item::SoupItem;
 use pagination_types::{Query, SimpleSortMethod};
+use soup_types::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
 use system_properties::{StatusOption, SystemPropertyKey};

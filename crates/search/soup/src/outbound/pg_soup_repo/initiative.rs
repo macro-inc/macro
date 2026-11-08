@@ -5,7 +5,7 @@ mod test;
 
 use entity_kind::EntityType;
 use model_owner::Owner;
-use models_soup::{initiative::SoupInitiative, item::SoupItem};
+use soup_types::{initiative::SoupInitiative, item::SoupItem};
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -32,7 +32,10 @@ use macro_user_id::{
 };
 use model_owner::Owner;
 use model_user::UserContext;
-use models_soup::{
+use pagination_types::{Paginated, PaginatedCursor, SimpleSortMethod};
+use rootcause::Report;
+use soup_realtime_core::models::Patch;
+use soup_types::{
     chat::SoupChat,
     document::SoupDocument,
     email_thread::{SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview},
@@ -40,9 +43,6 @@ use models_soup::{
     item::SoupItem,
     project::SoupProject,
 };
-use pagination_types::{Paginated, PaginatedCursor, SimpleSortMethod};
-use rootcause::Report;
-use soup_realtime_core::models::Patch;
 use uuid::Uuid;
 
 use super::*;
@@ -107,7 +107,7 @@ fn soup_document(id: Uuid) -> SoupItem<()> {
 }
 
 fn soup_agent_session(id: Uuid) -> SoupItem<()> {
-    SoupItem::AgentSession(models_soup::agent_session::SoupAgentSession {
+    SoupItem::AgentSession(soup_types::agent_session::SoupAgentSession {
         id,
         name: "A session".to_string(),
         archived_by: None,
@@ -128,8 +128,8 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
         updated_at: Default::default(),
         viewed_at: None,
         extra: (),
-        source: models_soup::agent_session::AgentSessionSource::User,
-        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
+        source: soup_types::agent_session::AgentSessionSource::User,
+        visibility: soup_types::agent_session::AgentSessionVisibility::Listed,
     })
 }
 

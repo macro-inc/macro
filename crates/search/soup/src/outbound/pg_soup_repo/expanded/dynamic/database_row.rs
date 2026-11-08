@@ -43,7 +43,7 @@ const FORM_SEMI_JOIN: &str = r#"row_database.database_id IN (
                 )"#;
 
 /// Rows are never viewed on their own: `ViewedAt` sorts them last and `ViewedUpdated`
-/// uses `updated_at`, matching [`models_soup::item::SoupItem`]'s cursor.
+/// uses `updated_at`, matching [`soup_types::item::SoupItem`]'s cursor.
 pub(super) fn database_row_top_clause(
     sort: SimpleSortMethod,
     grouped: bool,

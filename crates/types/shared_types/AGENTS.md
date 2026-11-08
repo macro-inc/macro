@@ -32,7 +32,7 @@ authentication — one of the most widely depended-on crates in the backend.
 - Used by: dozens of services and crates — `agent_harness`, `agent_tools`,
   `authentication_service(_client)`, `chat`, `collab_surface`,
   `document_storage_service(_client)`, `documents`, `email_service(_client)`,
-  `entity_access`, `macro_db_client`, `messages`, `models_soup`, `projects`,
+  `entity_access`, `macro_db_client`, `messages`, `soup_types`, `projects`,
   `search_service`, `sync_service_client`, and more — check reverse
   dependents before changing a public type's shape.
 

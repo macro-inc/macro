@@ -1,7 +1,6 @@
 use ai_toolset::{ToolCallError, ToolResult};
 use calendar_events::domain::labels::off_schedule_summary;
 use item_filters::TagFilterMode;
-use models_soup::SoupProperty;
 use properties::PropertiesService as _;
 use properties_types::DataType;
 use properties_types::service::property_value::PropertyValue;
@@ -10,6 +9,7 @@ use schemars::JsonSchema;
 use search_types::MatchType;
 use search_types::unified::UnifiedSearchResponseItem;
 use serde::{Deserialize, Serialize};
+use soup_types::SoupProperty;
 
 use super::context::SearchToolContext;
 

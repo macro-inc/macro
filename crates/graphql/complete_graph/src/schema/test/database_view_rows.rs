@@ -5,7 +5,7 @@ use databases_types::{
     RowId, TableVersion,
     views::{DateRangeOperator, FilterNode, FilterTest, NumberOperator, SortDirection},
 };
-use models_soup::database_row::SoupDatabaseRow;
+use soup_types::database_row::SoupDatabaseRow;
 
 use super::*;
 

@@ -31,9 +31,6 @@ use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use model_owner::Owner;
-use models_soup::database_row::SoupDatabaseRow;
-use models_soup::item::SoupItem;
-use models_soup::properties::SoupProperty;
 use pagination_types::Paginated;
 use properties_types::service::property_definition::PropertyDefinition;
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -44,6 +41,9 @@ use soup::domain::models::{
     EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField, SoupRequest,
 };
 use soup::domain::ports::{SoupOutput, SoupService};
+use soup_types::database_row::SoupDatabaseRow;
+use soup_types::item::SoupItem;
+use soup_types::properties::SoupProperty;
 use uuid::Uuid;
 
 use crate::service::DatabasesSql;

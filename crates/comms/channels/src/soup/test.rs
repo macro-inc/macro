@@ -1,6 +1,6 @@
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::comms::{SoupAgentDmProfile, SoupChannel};
+use soup_types::comms::{SoupAgentDmProfile, SoupChannel};
 use uuid::Uuid;
 
 #[test]

@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "models_soup"
+name = "soup_types"
 publish = false
 version = "0.1.0"
 
