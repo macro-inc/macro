@@ -132,3 +132,207 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
     );
     Ok(())
 }
+
+#[test]
+fn independent_read_peer_preserves_inputs_and_rejects_guarded_writes_before_hooks()
+-> Result<(), Error> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NATIVE_CLONES: AtomicUsize = AtomicUsize::new(0);
+    static NATIVE_IMPORTS: AtomicUsize = AtomicUsize::new(0);
+    static NATIVE_DEFAULTS: AtomicUsize = AtomicUsize::new(0);
+    #[derive(Clone, Default, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct Probe {}
+    impl NodeType for Probe {
+        const TYPE: &'static str = "read-probe";
+        type Kind = ElementKind;
+        fn default_node() -> Option<Self> {
+            NATIVE_DEFAULTS.fetch_add(1, Ordering::SeqCst);
+            Some(Self {})
+        }
+        fn after_clone(&self) -> Option<Self> {
+            NATIVE_CLONES.fetch_add(1, Ordering::SeqCst);
+            Some(self.clone())
+        }
+        fn import(tx: &mut Transaction<'_>, _: &SerializedNode) -> Result<NodeKey, Error> {
+            NATIVE_IMPORTS.fetch_add(1, Ordering::SeqCst);
+            Ok(tx.create(Self {})?.key())
+        }
+    }
+    impl ElementNode for Probe {
+        element_node_base!();
+    }
+    struct Hooks {
+        splices: Arc<AtomicUsize>,
+        clones: Arc<AtomicUsize>,
+    }
+    impl ForeignHooks for Hooks {
+        fn splice(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+            _: ChildIndex,
+            _: u32,
+            _: &[NodeKey],
+        ) -> Override<Result<(), Error>> {
+            self.splices.fetch_add(1, Ordering::SeqCst);
+            Override::Inherit
+        }
+        fn after_clone(
+            &self,
+            _: NodeKey,
+            _: NodeKey,
+            _: &ForeignData,
+        ) -> Override<Option<ForeignData>> {
+            self.clones.fetch_add(1, Ordering::SeqCst);
+            Override::Inherit
+        }
+    }
+    let splices = Arc::new(AtomicUsize::new(0));
+    let clones = Arc::new(AtomicUsize::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Probe>()
+        .foreign_node(ForeignNodeType {
+            type_name: "read-native-probe".into(),
+            class_name: "ReadNativeProbe".into(),
+            kind: NodeKind::Element,
+            extends: Some("read-probe"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                splices: splices.clone(),
+                clones: clones.clone(),
+            }),
+        })
+        .foreign_node(ForeignNodeType {
+            type_name: "read-paragraph".into(),
+            class_name: "ReadParagraph".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                splices: splices.clone(),
+                clones: clones.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create_foreign("read-paragraph", SerializedNode::new())?;
+        let text = tx.create_text("before")?.key();
+        tx.append(paragraph, &[text])?;
+        tx.append(NodeKey::ROOT, &[paragraph])?;
+        tx.text(text)?
+            .select(Some(Utf16Offset(3)), Some(Utf16Offset(3)))?;
+        Ok((paragraph, text))
+    })?;
+    let mut tx = editor.transaction();
+    tx.text(text)?.set_text_content("pending")?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))?;
+    tx.set_composition_key(Some(text))?;
+    let probe = tx.create(Probe {})?.key();
+    let snapshot = tx.view().snapshot_for_foreign_read()?;
+    let committed = tx.committed_state().clone();
+    let splice_count = splices.load(Ordering::SeqCst);
+    let clone_count = clones.load(Ordering::SeqCst);
+    let native_clone_count = NATIVE_CLONES.load(Ordering::SeqCst);
+    let native_import_count = NATIVE_IMPORTS.load(Ordering::SeqCst);
+    let native_default_count = NATIVE_DEFAULTS.load(Ordering::SeqCst);
+    snapshot.with_read_transaction(&committed, |peer| -> Result<(), Error> {
+        assert_eq!(peer.committed_state().view().text_content(text), "before");
+        assert_eq!(peer.text_content(text), "pending");
+        assert_eq!(
+            peer.previous_selection()
+                .and_then(Selection::as_range)
+                .expect("previous")
+                .anchor
+                .offset(),
+            3
+        );
+        assert_eq!(peer.range_selection()?.anchor.offset(), 1);
+        assert_eq!(peer.composition_key(), Some(text));
+        assert!(matches!(
+            peer.copy_node(probe, false),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.create_resolved::<Probe>(),
+            Err(Error::ForeignReadOnly)
+        ));
+        let imported = serde_json::json!({"type":"read-probe","version":1})
+            .as_object()
+            .expect("object")
+            .clone();
+        assert!(matches!(
+            peer.import_node(&imported),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.create_foreign("read-native-probe", SerializedNode::new()),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.create_text("forbidden"),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.text(text)?.set_text_content("forbidden"),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.append(paragraph, &[]),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(peer.clear(paragraph), Err(Error::ForeignReadOnly)));
+        assert!(matches!(
+            peer.remove(text, false),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.mark_dirty(paragraph),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.set_selection(None),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.set_composition_key(None),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.queue_update(|_| Ok(()), UpdateOptions::default()),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert!(matches!(
+            peer.restore_editor_state(&committed),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert_eq!(
+            Error::ForeignReadOnly.to_string(),
+            "Cannot use method in read-only mode."
+        );
+        assert_eq!(peer.text_content(text), "pending");
+        Ok(())
+    })??;
+    assert_eq!(NATIVE_CLONES.load(Ordering::SeqCst), native_clone_count);
+    assert_eq!(NATIVE_IMPORTS.load(Ordering::SeqCst), native_import_count);
+    assert_eq!(NATIVE_DEFAULTS.load(Ordering::SeqCst), native_default_count);
+    assert_eq!(splices.load(Ordering::SeqCst), splice_count);
+    assert_eq!(clones.load(Ordering::SeqCst), clone_count);
+    assert_eq!(tx.text_content(text), "pending");
+    assert_eq!(tx.range_selection()?.anchor.offset(), 1);
+    assert_eq!(tx.composition_key(), Some(text));
+    assert_eq!(tx.create_text("after")?.key().to_string(), "4");
+    let other = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("other editor");
+    assert!(matches!(
+        snapshot.with_read_transaction(other.state(), |_| panic!(
+            "foreign state must reject before callback"
+        )),
+        Err(Error::ForeignEditorState)
+    ));
+    tx.commit()?;
+    assert_eq!(editor.state().root_text_content().as_ref(), "pending");
+    Ok(())
+}
