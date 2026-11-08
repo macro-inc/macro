@@ -609,3 +609,21 @@ codegen-units = 1
 [workspace.metadata.cargo-shear]
 # Leaf ID registered for the document model, which lands in the next work package.
 ignored = ["lexical_node_id"]
+
+# S8 T0 retains exact frame bytes and canonical port evidence across hundreds
+# of worlds. Optimize the simulation and JSON tree traversal in tests only;
+# production profiles and assertion coverage stay unchanged.
+[profile.test.package.sync_sim]
+opt-level = 2
+
+[profile.test.package.serde_json]
+opt-level = 2
+
+[profile.test.package.sync_server_sim]
+opt-level = 2
+
+[profile.test.package.sync_server_core]
+opt-level = 2
+
+[profile.test.package.doc_sync_core]
+opt-level = 2

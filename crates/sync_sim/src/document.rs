@@ -29,6 +29,25 @@ impl SimDoc {
                     .insert(&(field % fields.max(1)).to_string(), i64::from(*value))
                     .map_err(|e| Failure::new("form_set", e))?;
             }
+            AbstractOp::FormText { field, bytes, salt } => {
+                let length = usize::try_from(*bytes)
+                    .unwrap_or(usize::MAX)
+                    .min(4 * 1_024 * 1_024);
+                let mut text = String::with_capacity(length);
+                for block in 0..length.div_ceil(8) {
+                    let hash = xxhash_rust::xxh3::xxh3_64_with_seed(
+                        &u64::try_from(block).unwrap_or(u64::MAX).to_le_bytes(),
+                        u64::from(*salt),
+                    );
+                    for byte in hash.to_le_bytes().into_iter().take(length - text.len()) {
+                        text.push(char::from(33 + byte % 94));
+                    }
+                }
+                self.loro
+                    .get_map("fields")
+                    .insert(&(field % fields.max(1)).to_string(), text)
+                    .map_err(|error| Failure::new("form_text", error))?;
+            }
             AbstractOp::FormMove { from, to } => {
                 let list = self.loro.get_movable_list("order");
                 let count = list.len();

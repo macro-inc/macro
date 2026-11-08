@@ -44,6 +44,7 @@ impl RunStats {
                     let kind = match op {
                         AbstractOp::FormSet { .. } => "FormSet",
                         AbstractOp::FormMove { .. } => "FormMove",
+                        AbstractOp::FormText { .. } => "FormText",
                         AbstractOp::Select(_) => "Select",
                     };
                     *self.ops_by_kind.entry(kind.into()).or_default() += 1;

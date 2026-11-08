@@ -1,5 +1,4 @@
 //! Exact replay and first-difference diagnostics, without environment or filesystem access.
-use crate::world::validation::{canonical, canonical_finals};
 use crate::*;
 
 impl Outcome {
@@ -12,7 +11,7 @@ impl Outcome {
         self.compare_replay(&self.replay())
     }
     /// Seed, complete configuration and debug script for a failed run.
-    /// This is diagnostic text; generated Rust/shrinking belongs to the later S8 driver.
+    /// Use `story_source` for a complete compilable literal regression.
     pub fn reproduction(&self) -> String {
         format!(
             "SIM_SEED={}\nconfig={:#?}\nscript={:#?}",
@@ -25,21 +24,9 @@ impl Outcome {
             return Err(self.replay_failure("different input seeds"));
         }
         for index in 0..self.events.len().max(other.events.len()) {
-            let left = self
-                .events
-                .get(index)
-                .map(serde_json::to_value)
-                .transpose()
-                .map_err(|error| self.replay_failure(error.to_string()))?;
-            let right = other
-                .events
-                .get(index)
-                .map(serde_json::to_value)
-                .transpose()
-                .map_err(|error| self.replay_failure(error.to_string()))?;
-            if left.as_ref().map(|value| canonical(value.clone()))
-                != right.as_ref().map(|value| canonical(value.clone()))
-            {
+            let left = self.events.get(index);
+            let right = other.events.get(index);
+            if left != right {
                 let mut failure = self.replay_failure(format!(
                     "first differing event{index}: left={left:?}, right={right:?}"
                 ));
@@ -52,19 +39,24 @@ impl Outcome {
             }
         }
         for index in 0..self.server_ports.len().max(other.server_ports.len()) {
-            let left = self.server_ports.get(index).map(port);
-            let right = other.server_ports.get(index).map(port);
+            let left = self
+                .server_ports
+                .get(index)
+                .map(|port| (port.doc, port.callback, &port.effect));
+            let right = other
+                .server_ports
+                .get(index)
+                .map(|port| (port.doc, port.callback, &port.effect));
             if left != right {
                 return Err(self.replay_failure(format!(
                     "first differing server port{index}: left={left:?}, right={right:?}"
                 )));
             }
         }
-        if canonical_finals(&self.finals) != canonical_finals(&other.finals) {
+        if self.finals != other.finals {
             return Err(self.replay_failure("final state differs"));
         }
-        if canonical_finals(&self.finals_after_quiet) != canonical_finals(&other.finals_after_quiet)
-        {
+        if self.finals_after_quiet != other.finals_after_quiet {
             return Err(self.replay_failure("final state after quiet differs"));
         }
         if self.per_step_failures != other.per_step_failures {
@@ -87,12 +79,4 @@ impl Outcome {
             format!("{}\n{}", detail.to_string(), self.reproduction()),
         )
     }
-}
-fn port(port: &ServerPort) -> serde_json::Value {
-    canonical(serde_json::json!([
-        port.doc,
-        port.callback,
-        port.effect.operation,
-        port.effect.value
-    ]))
 }
