@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+rand_chacha.workspace = true
 chrono-tz.workspace = true
 url.workspace = true
 base64.workspace = true

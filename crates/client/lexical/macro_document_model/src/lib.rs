@@ -42,3 +42,9 @@ pub mod agent_context;
 
 /// Notion enhanced Markdown import.
 pub mod notion;
+
+/// Ownership state, validation and local reconciliation plugin.
+pub mod peer;
+
+/// Durable identity helpers and plugin.
+pub use node_ids as ids;
