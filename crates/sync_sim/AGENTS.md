@@ -116,3 +116,10 @@ whose client name has reopened. Require retained rows and final parking/access i
 that epoch; never forgive missing rows. Exempt an exact live read-only owner's parked
 row from the profile-drain check, while keeping durable recovery and ACK checks strict.
 Comment-only replicas share Read's private-history rule and must cover server history.
+
+Observe exact per-row core delivery and checksum-valid parked intervals in finals.
+Above a parked gap, require both live-owner delivery and cold persisted-VV coverage
+before treating a retained StoreImage row as confirmed. Actual Gap rows stay parked;
+missing durable edits still fail independent loss queries. A live revoked memory AI
+can retain its own ReadOnly WAL without a browser append fact; require its exact
+validated retained intervals and parking, never infer retention from document VV.

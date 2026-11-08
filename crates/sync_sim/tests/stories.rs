@@ -38,3 +38,6 @@ mod storage_capabilities;
 
 #[path = "stories/failed_persistence.rs"]
 mod failed_persistence;
+
+#[path = "stories/confirmed_gap.rs"]
+mod confirmed_gap;

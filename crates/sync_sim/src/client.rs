@@ -221,6 +221,27 @@ impl SimClient {
             deep_value: self.doc.value()?,
             wal_undelivered: undelivered,
             wal_total: total,
+            delivered: self
+                .core
+                .wal()
+                .entries
+                .iter()
+                .filter(|row| self.core.is_delivered(row.seq))
+                .map(|row| row.seq)
+                .collect(),
+            parked_spans: self
+                .core
+                .wal()
+                .entries
+                .iter()
+                .filter(|row| parked.iter().any(|(seq, _)| *seq == row.seq))
+                .filter_map(|row| {
+                    loro::LoroDoc::decode_import_blob_meta(&row.bytes, true).ok()?;
+                    crate::document::spans(&row.bytes)
+                        .ok()
+                        .map(|spans| (row.seq, spans))
+                })
+                .collect(),
             parked: parked
                 .into_iter()
                 .map(|(seq, reason)| (seq, format!("{reason:?}")))
