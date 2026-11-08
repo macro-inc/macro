@@ -44,6 +44,12 @@ impl RunStats {
                     let kind = match op {
                         AbstractOp::Editor(EditorOp::Type { .. }) => "Type",
                         AbstractOp::Editor(EditorOp::Select { .. }) => "EditorSelect",
+                        AbstractOp::Editor(EditorOp::Backspace { .. }) => "Backspace",
+                        AbstractOp::Editor(EditorOp::DeleteRange { .. }) => "DeleteRange",
+                        AbstractOp::Editor(EditorOp::SplitBlock { .. }) => "SplitBlock",
+                        AbstractOp::Editor(EditorOp::Format { .. }) => "Format",
+                        AbstractOp::Editor(EditorOp::Indent { .. }) => "Indent",
+                        AbstractOp::Editor(EditorOp::Outdent { .. }) => "Outdent",
                         AbstractOp::Editor(EditorOp::Undo) => "Undo",
                         AbstractOp::Editor(EditorOp::Redo) => "Redo",
                         AbstractOp::FormSet { .. } => "FormSet",

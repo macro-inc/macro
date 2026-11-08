@@ -127,3 +127,11 @@ first idle scan. Settlement repeats real Visible recovery after completed durabl
 write progress, drains actual adoption, and preserves every strict invariant and
 exact replay. Failed-adoption load retries remain core InFlight work; no additional
 orphan deletion or invariant exemption is introduced.
+
+`editor_commands`: actual typing, astral segmented backspace, range deletion,
+paragraph splitting, formatting and indent/outdent through both tab and headless
+sessions. Every command must produce actual own spans; both replicas' synced JSON
+and independent reconstruction pass unchanged invariants and exact replay. A second
+literal checks repeated backspace follows the updated cursor across astral text.
+Rich package operations, application registry/gate and editor generator floors remain
+pending; these literals do not claim those producers.

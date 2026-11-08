@@ -77,3 +77,6 @@ mod quiet_adoption;
 
 #[path = "stories/editor_undo.rs"]
 mod editor_undo;
+
+#[path = "stories/editor_commands.rs"]
+mod editor_commands;

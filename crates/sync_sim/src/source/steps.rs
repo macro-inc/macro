@@ -29,6 +29,12 @@ pub(super) fn source(step: &Step) -> String {
                     "EditorOp::Select {{ from: Pos {{ block: {}, offset: {} }}, to: Pos {{ block: {}, offset: {} }} }}",
                     from.block, from.offset, to.block, to.offset
                 ),
+                EditorOp::Backspace { .. }
+                | EditorOp::DeleteRange { .. }
+                | EditorOp::SplitBlock { .. }
+                | EditorOp::Format { .. }
+                | EditorOp::Indent { .. }
+                | EditorOp::Outdent { .. } => format!("EditorOp::{op:?}"),
                 EditorOp::Undo => "EditorOp::Undo".into(),
                 EditorOp::Redo => "EditorOp::Redo".into(),
             };
