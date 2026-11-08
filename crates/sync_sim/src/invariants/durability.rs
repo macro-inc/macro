@@ -381,6 +381,22 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                 exempt.extend(row_spans.clone());
             }
         }
+        // Memory AI has no browser WalAppendIssued record, but a live revoked
+        // worker can retain the same exact edit in its actual parked WAL.
+        for peer in outcome.finals.clients.values().filter(|peer| {
+            peer.alive
+                && peer.kind == ClientKind::AiWorker
+                && peer.doc == doc
+                && peer.access != Access::Edit
+        }) {
+            for (seq, reason) in &peer.parked {
+                if reason == "ReadOnly"
+                    && let Some(retained) = peer.parked_spans.get(seq)
+                {
+                    exempt.extend(retained.clone());
+                }
+            }
+        }
         let required = spans
             .iter()
             .filter(|span| !ranges_cover(&exempt, span))
@@ -436,31 +452,21 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
             // Durable delivery is a contiguous prefix. A live owner can have an
             // exact acknowledged row above a parked gap, without persisting a
             // false prefix over that gap.
-            let acknowledged = outcome
-                .finals
-                .clients
-                .values()
-                .any(|client| client.alive && *owner == WalOwner::Session(client.session))
-                && outcome.events.iter().any(|event| match &event.fact {
-                    Fact::PushSent {
-                        client,
-                        update,
-                        rows,
-                        ..
-                    } => {
-                        rows.contains(&(*owner, *seq))
-                            && outcome.events.iter().any(|event| {
-                                matches!(&event.fact,
-                            Fact::AckReceived { client: receiver, update: id }
-                            if receiver == client && id == update)
-                            })
-                            && outcome.finals.clients.get(client).is_some_and(|client| {
-                                client.profile == *profile
-                                    && document_key(client.doc, &outcome.config) == doc.as_str()
-                            })
-                    }
-                    _ => false,
-                });
+            let confirmed = outcome.finals.clients.values().any(|client| {
+                client.alive
+                    && client.profile == *profile
+                    && *owner == WalOwner::Session(client.session)
+                    && client.delivered.contains(seq)
+                    && document_key(client.doc, &outcome.config) == doc.as_str()
+                    && loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true).is_ok()
+                    && crate::document::spans(&row.record.bytes).is_ok_and(|spans| {
+                        outcome
+                            .finals
+                            .servers
+                            .get(&client.doc)
+                            .is_some_and(|server| contains(&server.persisted_vv, &spans))
+                    })
+            });
             let writable = outcome.finals.clients.values().any(|client| {
                 client.alive
                     && client.terminal.is_none()
@@ -470,26 +476,23 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
                     && client.access == Access::Edit
                     && document_key(client.doc, &outcome.config) == doc.to_string()
             });
-            let parked_readonly = outcome.finals.clients.values().any(|client| {
+            let parked = outcome.finals.clients.values().any(|client| {
                 client.alive
                     && client.profile == *profile
-                    && client.access != Access::Edit
                     && *owner == WalOwner::Session(client.session)
                     && document_key(client.doc, &outcome.config) == doc.as_str()
-                    && client
-                        .parked
-                        .iter()
-                        .any(|(parked, reason)| *parked == *seq && reason == "ReadOnly")
+                    && client.parked.iter().any(|(parked, reason)| {
+                        *parked == *seq
+                            && (reason == "Gap"
+                                || (reason == "ReadOnly" && client.access != Access::Edit))
+                    })
             });
-            if writable
-                && !row.delivered
-                && !row.record.quarantined
-                && !acknowledged
-                && !parked_readonly
-            {
+            if writable && !row.delivered && !row.record.quarantined && !confirmed && !parked {
                 return Err(Failure::new(
                     "all_wals_drained",
-                    format!("{profile:?} has an undelivered orphan/foreign row"),
+                    format!(
+                        "{profile:?} {doc} {owner:?}/{seq:?} has an undelivered orphan/foreign row"
+                    ),
                 ));
             }
         }

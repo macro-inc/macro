@@ -541,6 +541,10 @@ pub struct ClientFinal {
     pub wal_undelivered: usize,
     /// Every retained unacknowledged row, including parked rows.
     pub wal_total: usize,
+    /// Actual retained own rows confirmed delivered by the core, even above a parked gap.
+    pub delivered: Vec<WalSeq>,
+    /// Checksum-valid operation intervals retained in actual parked WAL rows.
+    pub parked_spans: BTreeMap<WalSeq, Vec<IdSpan>>,
     /// Actual parked rows.
     pub parked: Vec<(WalSeq, String)>,
     /// Public core status.

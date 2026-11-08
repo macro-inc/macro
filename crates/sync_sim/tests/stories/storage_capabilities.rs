@@ -315,3 +315,53 @@ fn comment_only_replicas_keep_private_parked_history_but_must_cover_the_server()
         .oplog_vv = outcome.finals.servers[&DocIx(0)].oplog_vv.clone();
     assert!(invariants::all_docs_equal(&fake_equal).is_err());
 }
+
+#[test]
+fn revoked_memory_ai_retains_its_own_parked_edits() {
+    let outcome = verify(
+        SimConfig::calm(229),
+        &[
+            Step::Open(OpenSpec {
+                kind: ClientKind::AiWorker,
+                ..OpenSpec::form("ai", "memory")
+            }),
+            Step::Open(OpenSpec::form("tab", "browser")),
+            Step::Run(Millis(500)),
+            Step::Offline {
+                client: ClientName("ai".into()),
+                offline: true,
+            },
+            Step::Edit {
+                client: ClientName("ai".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 11,
+                },
+            },
+            Step::Run(Millis(100)),
+            Step::Grant {
+                client: ClientName("ai".into()),
+                access: Access::Read,
+                force_reconnect: true,
+            },
+            Step::Settle,
+        ],
+    );
+    let mut lost = outcome.clone();
+    lost.finals
+        .clients
+        .get_mut(&ClientName("ai".into()))
+        .unwrap()
+        .parked_spans
+        .clear();
+    assert!(invariants::no_edit_lost_without_crash(&lost).is_err());
+    let mut unparked = outcome.clone();
+    unparked
+        .finals
+        .clients
+        .get_mut(&ClientName("ai".into()))
+        .unwrap()
+        .parked
+        .clear();
+    assert!(invariants::no_edit_lost_without_crash(&unparked).is_err());
+}

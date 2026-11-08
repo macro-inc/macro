@@ -63,3 +63,8 @@ requires actual cold-server ACK durability after a failed AI parent write and ne
 
 Read-only epoch boundaries: storage_capabilities tests retain old-user parked rows
 across reopen, reject missing row/parking evidence, and enforce CommentOnly server coverage.
+
+`confirmed_gap::confirmed_foreign_rows_above_a_parked_gap_stay_quiet` retains the
+complete literal197, checks quiet replay and independently removes live delivery
+and cold-server proof. `revoked_memory_ai_retains_its_own_parked_edits` removes actual
+parked intervals and parking metadata separately; both mutations must fail edit survival.
