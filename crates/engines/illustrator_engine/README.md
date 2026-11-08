@@ -1,4 +1,4 @@
-# ai_engine
+# illustrator_engine
 
 A from-scratch Illustrator (`.ai`) engine: it reads Illustrator's
 PDF-based files (and any PDF), turns their pages into an editable model of
@@ -155,7 +155,7 @@ nodes get ids in the creator's session (`session << 20`). See
 
 ## The CLI
 
-`cargo run -p ai_engine --features cli --release --bin ai_render -- <command>`:
+`cargo run -p illustrator_engine --features cli --release --bin ai_render -- <command>`:
 
 - `info <files…> [--tree]`: artboards, layers, object counts, warnings, open
   time.

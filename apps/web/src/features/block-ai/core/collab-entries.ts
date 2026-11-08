@@ -1,6 +1,6 @@
 /**
  * A shared Illustrator document's maps on a Loro document (the layout is
- * defined by `ai_engine::collab`): flat string maps of node states, the
+ * defined by `illustrator_engine::collab`): flat string maps of node states, the
  * document state, and placed images that changed since the collaboration
  * began. Every person opens the stored file and applies them; concurrent
  * writes to one node resolve last-writer-wins.

@@ -2,10 +2,10 @@
 //! summaries, artboard renders, save round trips, and fidelity scores
 //! against reference renders (PNGs another PDF reader made of each page).
 
-use ai_engine::build::{self, Opened};
-use ai_engine::model::{Document, NodeKind};
-use ai_engine::render::{Options, Renderer, View};
 use clap::{Parser, Subcommand};
+use illustrator_engine::build::{self, Opened};
+use illustrator_engine::model::{Document, NodeKind};
+use illustrator_engine::render::{Options, Renderer, View};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -299,17 +299,17 @@ fn main() {
                 // Move everything away and back: every object is written
                 // again, from its operators.
                 let ids: Vec<u32> = doc.layers.iter().map(|&l| doc.node(l).id).collect();
-                let mut history = ai_engine::edit::History::new();
+                let mut history = illustrator_engine::edit::History::new();
                 for d in [5.0, -5.0] {
-                    let op = ai_engine::edit::Op::Transform {
+                    let op = illustrator_engine::edit::Op::Transform {
                         ids: ids.clone(),
-                        matrix: ai_engine::geom::Affine::translate(d, 0.0),
+                        matrix: illustrator_engine::geom::Affine::translate(d, 0.0),
                     };
                     if let Err(e) = history.apply(&mut doc, &[op], None) {
                         println!("{}: edit failed: {e}", f.display());
                     }
                 }
-                let saved = match ai_engine::save::save(&doc) {
+                let saved = match illustrator_engine::save::save(&doc) {
                     Ok(b) => b,
                     Err(e) => {
                         println!("{}: save failed: {e}", f.display());

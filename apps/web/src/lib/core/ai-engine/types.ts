@@ -1,5 +1,5 @@
 /**
- * The values the Illustrator engine (`ai_engine`) exchanges as JSON:
+ * The values the Illustrator engine (`illustrator_engine`) exchanges as JSON:
  * documents, layers, properties, edit operations, and shared entries.
  * Names and shapes mirror the Rust types' serde forms.
  */
@@ -10,7 +10,7 @@ export interface Point {
   y: number;
 }
 
-/** A rectangle by its edges (`ai_engine::geom::Rect`). */
+/** A rectangle by its edges (`illustrator_engine::geom::Rect`). */
 export interface EdgeRect {
   x0: number;
   y0: number;
@@ -125,7 +125,7 @@ export interface Artboard {
   removed: boolean;
 }
 
-/** `ai_engine::inspect::Summary`. */
+/** `illustrator_engine::inspect::Summary`. */
 export interface Summary {
   artboards: Artboard[];
   /** The canvas around every artboard. */
@@ -241,7 +241,7 @@ export interface TextGeometry {
   length: number;
 }
 
-/** What an edit changed (`EditResult` in `ai_engine::wasm`). */
+/** What an edit changed (`EditResult` in `illustrator_engine::wasm`). */
 export interface EditResult {
   created: number[];
   /** Canvas area whose pixels may have changed. */
@@ -256,7 +256,7 @@ export interface EditResult {
 }
 
 /**
- * A change to one entry of the shared maps (`ai_engine::collab`):
+ * A change to one entry of the shared maps (`illustrator_engine::collab`):
  * `value` null deletes it.
  */
 export interface EntryChange {
@@ -265,7 +265,7 @@ export interface EntryChange {
   value?: string | null;
 }
 
-// ---- edit operations (`ai_engine::edit::Op`) ------------------------------
+// ---- edit operations (`illustrator_engine::edit::Op`) ------------------------------
 
 /** Where in a stack a node goes. */
 export type Position =

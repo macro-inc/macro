@@ -1,6 +1,6 @@
 /**
  * Outlines of the shapes the drawing tools make, as the engine builds them
- * (`ai_engine::edit::shapes`), for the preview drawn while dragging.
+ * (`illustrator_engine::edit::shapes`), for the preview drawn while dragging.
  */
 
 import type { Rect } from './geometry';

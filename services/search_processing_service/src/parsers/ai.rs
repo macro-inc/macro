@@ -6,9 +6,9 @@
 /// engine does not open (those saved by Illustrator 8 and earlier, which are
 /// PostScript rather than PDF, and encrypted or damaged files) are errors.
 pub fn parse_ai_text(bytes: &[u8]) -> anyhow::Result<String> {
-    let opened = ai_engine::build::open(bytes)
+    let opened = illustrator_engine::build::open(bytes)
         .map_err(|e| anyhow::anyhow!("unable to read the Illustrator document: {e}"))?;
-    Ok(ai_engine::describe::text(&opened.document))
+    Ok(illustrator_engine::describe::text(&opened.document))
 }
 
 #[cfg(test)]

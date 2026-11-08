@@ -438,7 +438,7 @@ export class AiEngine {
     h.terminate();
   }
 
-  /** Applies edit operations (see `ai_engine::edit::Op`) as one step. */
+  /** Applies edit operations (see `illustrator_engine::edit::Op`) as one step. */
   apply(ops: Op[], coalesce?: string): Promise<EditResult> {
     const json = JSON.stringify(ops);
     return this.edit(() => ({
