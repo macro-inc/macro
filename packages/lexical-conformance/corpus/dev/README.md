@@ -53,7 +53,11 @@ stored ids and timestamps remain compared. Snapshot routes compare decoded
 Loro JSON; empty Markdown also compares frozen bytes. Gate pairs compare the
 verdict and both normalized documents. Paired conversion errors are unverified,
 never parity. Mismatches or unverified errors give exit 1 after all route counts;
-fatal harness errors give exit 2. Source content diagnostics are disabled in the
+fatal harness errors give exit 2. The default replay checks TS/Rust route parity;
+input identity changes remain reported on both sides. Use `replay --strict-identity`
+to additionally fail on any stored-input loss, including loss shared with TS.
+An equal replay does not establish the separate full S4 identity criterion.
+Source content diagnostics are disabled in the
 isolated oracle process. Only schema-allowlisted node/field names enter the
 histogram; arbitrary names become counts.
 

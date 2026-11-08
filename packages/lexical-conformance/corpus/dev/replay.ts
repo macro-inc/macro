@@ -65,6 +65,7 @@ type Counts = {
 };
 const routes: Record<string, Counts> = {};
 const gateKinds: Record<string, number> = {};
+const strictIdentity = process.argv.includes('--strict-identity');
 
 async function compare(
   route: string,
@@ -309,6 +310,7 @@ try {
       gateKinds,
       skipped: { htmlNotYetPorted: records.length },
       masks: {},
+      identityPolicy: strictIdentity ? 'strict' : 'report-only',
       traceparent: trace.traceparent(),
     }) + '\n'
   );
@@ -317,8 +319,8 @@ try {
       (count) =>
         count.different > 0 ||
         count.bothErrorUnverified > 0 ||
-        count.tsInputChanged > 0 ||
-        count.rustInputChanged > 0
+        (strictIdentity &&
+          (count.tsInputChanged > 0 || count.rustInputChanged > 0))
     )
   )
     process.exitCode = 1;
