@@ -3,8 +3,8 @@
 use email::domain::scheduled_delivery::recovery::{
     PendingDelivery, ScheduledRecoveryQueue, ScheduledRecoveryRepo,
 };
+use email_types::service::pubsub::ScheduledPubsubMessage;
 use futures::{Stream, TryStreamExt};
-use models_email::service::pubsub::ScheduledPubsubMessage;
 use sqlx::PgPool;
 use std::sync::Arc;
 

@@ -6,8 +6,8 @@ use base64::{
     Engine as _,
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
-use models_email::email::service::thread::ThreadSummary;
-use models_email::gmail::MessagePart;
+use email_types::email::service::thread::ThreadSummary;
+use email_types::gmail::MessagePart;
 use uuid::Uuid;
 
 use email_api_client_core::models::{

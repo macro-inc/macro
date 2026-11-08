@@ -325,12 +325,12 @@ async fn a_missing_upsert_keeps_its_debug_event_and_provider_identity() {
 
 #[tokio::test]
 async fn catalog_debug_counts_cover_add_update_delete_mixed_and_unchanged() {
-    let kept: models_email::service::label::Label = label("kept").into();
+    let kept: email_types::service::label::Label = label("kept").into();
     let mut updated = kept.clone();
     updated.name = Some("Updated".into());
-    let first: models_email::service::label::Label = label("new-first").into();
-    let second: models_email::service::label::Label = label("new-second").into();
-    let removed: models_email::service::label::Label = label("removed").into();
+    let first: email_types::service::label::Label = label("new-first").into();
+    let second: email_types::service::label::Label = label("new-second").into();
+    let removed: email_types::service::label::Label = label("removed").into();
     for (case, stored, provider, counts) in [
         ("add", vec![], vec![first.clone(), second], Some((2, 0, 0))),
         (
@@ -404,7 +404,7 @@ async fn own_sender_filter_keeps_its_debug_event_and_thread_identity() {
         state.import.committed.as_mut().unwrap().from_contact_id = Some(sender);
         state.import.senders.insert(
             sender,
-            models_email::service::address::ContactInfo {
+            email_types::service::address::ContactInfo {
                 email: format!("no-reply@{}", email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN),
                 name: None,
                 photo_url: None,

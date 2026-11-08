@@ -1,4 +1,4 @@
-use models_email::email::service::label::Label;
+use email_types::email::service::label::Label;
 use uuid::Uuid;
 
 use super::super::models::EmailApiError;

@@ -1,8 +1,8 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{Extension, Json, extract::State, response::Response};
 use email::domain::mailbox::settings::MailboxSettingsOperation;
+use email_types::service::link::Link;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_email::service::link::Link;
 
 /// Accepted label and sender-policy changes awaiting provider confirmation.
 #[utoipa::path(get,tag="Settings",path="/email/settings/operations",operation_id="mailbox_settings_operations",

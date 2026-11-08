@@ -60,12 +60,12 @@ pub async fn handler(
     // The raw message carries the code itself; a program reads Macro's
     // sign-in emails only redacted, through the JSON message routes.
     if macro_authorization::is_program_run(authorization.authorization.user.attribution(), &headers)
-        && models_email::sign_in_email::is_macro_sign_in_eml(&source.bytes)
+        && email_types::sign_in_email::is_macro_sign_in_eml(&source.bytes)
     {
         return Ok((
             axum::http::StatusCode::FORBIDDEN,
             axum::Json(ErrorResponse {
-                message: models_email::sign_in_email::HIDDEN_SIGN_IN_EMAIL.into(),
+                message: email_types::sign_in_email::HIDDEN_SIGN_IN_EMAIL.into(),
             }),
         )
             .into_response());

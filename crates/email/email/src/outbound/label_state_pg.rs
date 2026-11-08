@@ -11,7 +11,7 @@ use email_db_client::{
     messages::update,
 };
 #[cfg(feature = "mailbox")]
-use models_email::service::label::Label;
+use email_types::service::label::Label;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 

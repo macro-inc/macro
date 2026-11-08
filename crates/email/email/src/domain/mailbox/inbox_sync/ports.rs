@@ -2,10 +2,10 @@
 
 use super::super::connection::ConnectionSourceError;
 use email_api_client_core::models::EmailApiError;
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::service::pubsub::ProcessingError;
+use email_types::{db, service};
 use futures::future::BoxFuture;
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
-use models_email::service::pubsub::ProcessingError;
-use models_email::{db, service};
 use uuid::Uuid;
 
 /// A provider-sync deletion, including a send that still needs its message.
@@ -165,7 +165,7 @@ pub trait InboxSyncQueue: Send + Sync + 'static {
     /// Publish already selected backfill or CRM work.
     fn enqueue_backfill(
         &self,
-        message: models_email::service::backfill::BackfillPubsubMessage,
+        message: email_types::service::backfill::BackfillPubsubMessage,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Publish a refused operation to the existing retry queue and delay.
     fn enqueue_retry(

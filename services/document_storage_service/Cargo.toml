@@ -215,7 +215,7 @@ shared_types = { workspace = true, features = ["axum"] }
 entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 databases_types = { workspace = true }
 dcs_types = { workspace = true }
 models_pagination = { workspace = true, features = [

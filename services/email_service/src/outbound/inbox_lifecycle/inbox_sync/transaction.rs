@@ -1,8 +1,8 @@
 use super::*;
 use email::domain::message_labels::state as label_state;
 use email::outbound::label_state_pg::PgLabelState;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::{db, service};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::{db, service};
 use sqlx::{Postgres, Transaction};
 
 pub(crate) struct PgInboxSyncTransaction(pub Transaction<'static, Postgres>);

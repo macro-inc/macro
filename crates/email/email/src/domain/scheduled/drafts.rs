@@ -1,6 +1,6 @@
 //! Reads a bounded page of drafts from the caller's selected accessible inbox.
 
-use models_email::service::message::Message;
+use email_types::service::message::Message;
 use uuid::Uuid;
 
 #[cfg(test)]

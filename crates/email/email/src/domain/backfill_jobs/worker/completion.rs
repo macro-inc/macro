@@ -1,7 +1,7 @@
 use super::followups::{handle_attachment_upload, handle_contacts_sync, handle_thread_completed};
 use super::*;
 use crate::domain::backfill_jobs::BackfillJobRepository;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link::Link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
@@ -221,17 +221,17 @@ where
         return Ok(());
     };
     match job.status {
-        models_email::service::backfill::BackfillJobStatus::Complete => {}
+        email_types::service::backfill::BackfillJobStatus::Complete => {}
         // A job that failed or was cancelled after its completion message
         // published will never become Complete; retrying such a delivery
         // only burns receives, so retire its effects instead.
-        models_email::service::backfill::BackfillJobStatus::Failed
-        | models_email::service::backfill::BackfillJobStatus::Cancelled => {
+        email_types::service::backfill::BackfillJobStatus::Failed
+        | email_types::service::backfill::BackfillJobStatus::Cancelled => {
             tracing::warn!(%job_id, status = ?job.status, "retiring completion effects for a terminal, non-complete job");
             return retire_completion_effects(ctx, job_id, lease_token).await;
         }
-        models_email::service::backfill::BackfillJobStatus::Init
-        | models_email::service::backfill::BackfillJobStatus::InProgress => {
+        email_types::service::backfill::BackfillJobStatus::Init
+        | email_types::service::backfill::BackfillJobStatus::InProgress => {
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
                 source: anyhow::anyhow!(

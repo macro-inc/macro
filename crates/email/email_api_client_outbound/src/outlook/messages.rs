@@ -1,5 +1,5 @@
 use chrono::Utc;
-use models_email::service::{address::ContactInfo, attachment::Attachment, message::Message};
+use email_types::service::{address::ContactInfo, attachment::Attachment, message::Message};
 use reqwest::Method;
 use serde_json::json;
 use uuid::Uuid;

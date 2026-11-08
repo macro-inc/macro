@@ -1,5 +1,5 @@
 use crate::EmailServiceClient;
-use models_email::service::thread;
+use email_types::service::thread;
 
 impl EmailServiceClient {
     pub async fn get_thread_owner(

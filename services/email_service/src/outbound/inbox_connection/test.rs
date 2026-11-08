@@ -40,7 +40,7 @@ async fn held_inbox(db: &PgPool, owner: &str) -> Link {
     email_db_client::links::get::fetch_link_by_email(
         db,
         "team@example.com",
-        models_email::service::link::UserProvider::Gmail,
+        email_types::service::link::UserProvider::Gmail,
     )
     .await
     .unwrap()

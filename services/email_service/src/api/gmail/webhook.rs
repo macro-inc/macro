@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use email::domain::mailbox::gmail_push::{GmailPushError, PushAuthenticationError};
-use models_email::gmail::inbox_sync::GmailInboxSyncPayload;
+use email_types::gmail::inbox_sync::GmailInboxSyncPayload;
 use shared_types::response::ErrorResponse;
 
 /// webhook that GCP hits when there are changes to a user's inbox. we authenticate the message then

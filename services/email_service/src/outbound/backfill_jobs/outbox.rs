@@ -188,7 +188,7 @@ impl CrmOutboxTransaction for PgOutboxTransaction {
 impl BackfillOutboxPublisher for BackfillSqs {
     async fn publish(
         &self,
-        message: models_email::service::backfill::BackfillPubsubMessage,
+        message: email_types::service::backfill::BackfillPubsubMessage,
     ) -> anyhow::Result<()> {
         self.0.enqueue_email_backfill_message(message).await
     }

@@ -1,7 +1,7 @@
 //! Store URL-backed contact photos and refresh only the inbox's self-contact.
 
 use anyhow::{Context, anyhow};
-use models_email::service::{contact::Contact, link::Link};
+use email_types::service::{contact::Contact, link::Link};
 use std::future::Future;
 use uuid::Uuid;
 

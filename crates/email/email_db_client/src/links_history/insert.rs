@@ -10,7 +10,7 @@ pub async fn insert_email_link_history(
     link_id: Uuid,
     fusionauth_user_id: &str,
     email_address: &str,
-    provider: models_email::service::link::UserProvider,
+    provider: email_types::service::link::UserProvider,
 ) -> anyhow::Result<()> {
     let id = macro_uuid::generate_uuid_v7();
     let db_provider = DbUserProvider::mirror(provider);

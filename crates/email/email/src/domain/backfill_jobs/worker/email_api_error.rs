@@ -1,5 +1,5 @@
 use email_api_client_core::models::EmailApiError;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 #[cfg(test)]
 mod test;

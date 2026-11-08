@@ -1,6 +1,6 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::filters::{Filter, ListFiltersResponse};
+use email_types::gmail::filters::{Filter, ListFiltersResponse};
 
 /// Creates a Gmail filter from the supplied wire request.
 #[tracing::instrument(skip(client, access_token), err)]

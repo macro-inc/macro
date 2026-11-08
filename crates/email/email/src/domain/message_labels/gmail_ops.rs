@@ -12,8 +12,8 @@ pub use ports::*;
 
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use anyhow::anyhow;
-use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Logging policy already decided by the domain for a terminal delivery.
 #[derive(Clone, Copy)]

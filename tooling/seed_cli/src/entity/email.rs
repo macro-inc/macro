@@ -18,14 +18,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use clap::{Args, Subcommand};
-use futures::stream::{self, StreamExt};
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::label::{
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::label::{
     Label, LabelListVisibility, LabelType, MessageListVisibility,
 };
-use models_email::email::service::link::UserProvider;
-use models_email::email::service::message::Message;
-use models_email::email::service::thread::Thread;
+use email_types::email::service::link::UserProvider;
+use email_types::email::service::message::Message;
+use email_types::email::service::thread::Thread;
+use futures::stream::{self, StreamExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -429,8 +429,8 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
             .context("failed to parse email address")?;
 
         let is_primary =
-            models_email::email::service::link::Link::derive_is_primary(&macro_id, &email_str);
-        let link = models_email::email::service::link::Link {
+            email_types::email::service::link::Link::derive_is_primary(&macro_id, &email_str);
+        let link = email_types::email::service::link::Link {
             id: Uuid::now_v7(),
             macro_id,
             fusionauth_user_id: seed_data.user_id.clone(),

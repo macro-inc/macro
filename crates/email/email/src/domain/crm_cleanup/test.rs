@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 mod candidate;
 mod events;

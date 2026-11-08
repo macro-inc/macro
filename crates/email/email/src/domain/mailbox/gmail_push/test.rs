@@ -1,6 +1,6 @@
 use super::*;
+use email_types::gmail::inbox_sync::JwtVerificationError;
 use fixtures::*;
-use models_email::gmail::inbox_sync::JwtVerificationError;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber;

@@ -5,12 +5,12 @@ use crate::parse::db_to_service;
 use crate::parse::db_to_service::map_attachmentless_db_message_to_service;
 use crate::{attachments, contacts, labels, messages};
 
+use email_types::email::db;
+use email_types::email::service::message::Message;
+use email_types::service;
+use email_types::service::address::ContactInfo;
+use email_types::service::message::{MessageSenderInfo, MessageToSend};
 use futures::future::try_join_all;
-use models_email::email::db;
-use models_email::email::service::message::Message;
-use models_email::service;
-use models_email::service::address::ContactInfo;
-use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

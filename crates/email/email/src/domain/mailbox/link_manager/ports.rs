@@ -7,9 +7,9 @@ use super::super::lifecycle::{
 };
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::message_labels::gmail_ops::GmailOpsLinks;
+use email_types::service::link::Link;
+use email_types::service::pubsub::DeletionReason;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::link::Link;
-use models_email::service::pubsub::DeletionReason;
 use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;

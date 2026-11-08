@@ -3,8 +3,8 @@ use crate::api::email::backfill::get::job_error_response;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Json, Response};
 use email::domain::backfill_jobs::BackfillJobAccess;
+use email_types::email::service::backfill::BackfillJob;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::email::service::backfill::BackfillJob;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 

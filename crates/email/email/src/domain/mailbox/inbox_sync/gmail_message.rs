@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use email_api_client_core::models::{EmailApiError, SyncCursor};
-use models_email::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
-use models_email::service::backfill::{
+use email_types::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
+use email_types::service::backfill::{
     BackfillJob, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use uuid::Uuid;

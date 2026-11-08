@@ -2,7 +2,7 @@ use email_api_client_core::models::EmailApiError;
 use email_api_client_core::ports::{
     MailboxBlocklistClient, MailboxLabelClient, MailboxMessageClient, MailboxSyncClient,
 };
-use models_email::gmail::labels::GmailLabel;
+use email_types::gmail::labels::GmailLabel;
 use uuid::Uuid;
 
 use super::*;
@@ -285,7 +285,7 @@ async fn labels_can_be_created_applied_and_deleted() {
     assert_eq!(aliases[1].send_as_email, "ada@alias.example.com");
     assert_eq!(
         aliases[1].verification_status,
-        Some(models_email::gmail::SendAsVerificationStatus::Pending)
+        Some(email_types::gmail::SendAsVerificationStatus::Pending)
     );
 }
 

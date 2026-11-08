@@ -1,10 +1,10 @@
 use super::*;
-use models_email::gmail::gmail_ops::{
+use email_types::gmail::gmail_ops::{
     BlockSenderPayload, GmailOpsOperation, GmailOpsPubsubMessage, UnblockSenderPayload,
 };
 
 /// The gmail_ops message format of the newest released workers, copied from
-/// `models_email::gmail::gmail_ops` on `main` before `ModifyMessageLabelsBatch`,
+/// `email_types::gmail::gmail_ops` on `main` before `ModifyMessageLabelsBatch`,
 /// limited to the operations producers enqueue. During a rolling deploy these
 /// workers consume whatever new producers send.
 mod released_worker {

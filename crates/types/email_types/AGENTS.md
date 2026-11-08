@@ -1,4 +1,4 @@
-# models_email
+# email_types
 
 ## What it is
 
@@ -29,7 +29,7 @@ thread/message API types, DB row types, and Gmail API response shapes.
 
 ## Checks
 
-- `cargo test -p models_email` (`SQLX_OFFLINE` unset).
+- `cargo test -p email_types` (`SQLX_OFFLINE` unset).
 
 Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
 

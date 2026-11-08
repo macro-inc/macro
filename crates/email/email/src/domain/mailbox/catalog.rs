@@ -2,11 +2,11 @@
 
 use super::*;
 use crate::domain::models::{EmailBackfillStatus, EmailSyncStatus};
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{
+use email_types::service::{
     link::{Link, UserProvider},
     settings::Settings,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 pub struct InboxCatalogFacts {
     pub link: Link,

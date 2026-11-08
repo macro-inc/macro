@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 
 pub(super) async fn relocate<L: ConnectionLinks, P: ConnectionProvider>(
     links: &L,

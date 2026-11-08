@@ -6,7 +6,7 @@ use crate::domain::mailbox::inbox_sync::{
     CrmContactRecipient, enqueue_crm_contacts as enqueue_normalized_contacts, resync_snapshot,
 };
 use email_api_client_core::models::CalendarPart;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link,
     message::Message,

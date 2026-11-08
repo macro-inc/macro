@@ -1,9 +1,9 @@
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::attachment::AttachmentToSend;
+use email_types::email::service::message::MessageToSend;
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
 use mail_builder::mime::{BodyPart, MimePart};
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::attachment::AttachmentToSend;
-use models_email::email::service::message::MessageToSend;
 
 #[cfg(feature = "ports")]
 use super::AccessToken;

@@ -1,7 +1,7 @@
 //! Image selection and read policy for one signature import.
 use email_api_client_core::models::EmailApiError;
-use models_email::email::service::attachment::Attachment;
-use models_email::email::service::message::Message;
+use email_types::email::service::attachment::Attachment;
+use email_types::email::service::message::Message;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use tokio::sync::Mutex;

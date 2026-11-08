@@ -2,7 +2,7 @@
 
 use super::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::catalog::InboxAccessRepository;
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 impl InboxAccessRepository for super::inbox_catalog::PgInboxCatalog {

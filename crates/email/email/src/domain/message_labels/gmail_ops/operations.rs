@@ -3,10 +3,8 @@
 use super::error_policy::is_delete_label_success;
 use super::{GmailMailboxOperations, GmailOpsService};
 use email_api_client_core::models::EmailApiError;
-use models_email::gmail::gmail_ops::{
-    BlockSenderPayload, DeleteLabelPayload, UnblockSenderPayload,
-};
-use models_email::service::link::Link;
+use email_types::gmail::gmail_ops::{BlockSenderPayload, DeleteLabelPayload, UnblockSenderPayload};
+use email_types::service::link::Link;
 
 /// Creates a filter to block a sender in Gmail.
 #[tracing::instrument(skip(ctx, link, payload), err, fields(link_id = %link.id))]

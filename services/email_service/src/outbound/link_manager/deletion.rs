@@ -10,7 +10,7 @@ use email::domain::mailbox::link_manager::deletion::{
     PromotedMailboxCleanup,
 };
 use email_api_client_core::models::EmailApiError;
-use models_email::{
+use email_types::{
     api::refresh::RefreshEmailEvent,
     service::{cache::TokenCacheKey, link::Link},
 };

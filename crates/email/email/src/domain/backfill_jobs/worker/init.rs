@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::{
+use email_types::service::{
     backfill::{BackfillJob, InitPayload, JobScopedPayload},
     link::Link,
     pubsub::ProcessingError,

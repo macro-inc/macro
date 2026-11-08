@@ -3,8 +3,8 @@
 
 use super::*;
 use email_api_client_core::models::{CategoryMessage, OwnedSenderRule};
+use email_types::service::{label::Label, link::UserProvider};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{label::Label, link::UserProvider};
 
 #[derive(Clone, Copy)]
 pub struct SettingsMailbox {

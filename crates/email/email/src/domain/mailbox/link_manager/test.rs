@@ -1,7 +1,7 @@
 use super::super::lifecycle::InboxLifecycleError;
 use super::*;
+use email_types::service::pubsub::DeletionReason;
 use fakes::*;
-use models_email::service::pubsub::DeletionReason;
 
 pub(super) mod events;
 mod fakes;

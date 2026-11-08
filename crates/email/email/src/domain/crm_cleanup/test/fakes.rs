@@ -1,11 +1,11 @@
 use super::*;
 use chrono::{DateTime, TimeDelta, Utc};
 use crm::domain::model::{CrmError, DepopulateContactOutcome};
-use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::{
+use email_types::service::{
     crm_cleanup::{CrmCleanupCandidate, CrmCleanupJob},
     link::{Link, UserProvider},
 };
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
-use models_email::email::service::message::Message;
-use models_email::email::service::thread::ThreadSummary;
-use models_email::service::contact::Contact;
+use email_types::email::service::message::Message;
+use email_types::email::service::thread::ThreadSummary;
+use email_types::service::contact::Contact;
 use serde::{Deserialize, Serialize};
 
 use super::SyncCursor;

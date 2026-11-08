@@ -11,7 +11,7 @@ use email_api_client_core::{
     },
     service::mailbox::MailboxApiService,
 };
-use models_email::service::link::UserProvider;
+use email_types::service::link::UserProvider;
 
 pub struct ProviderMessageSource<R, T, L> {
     pub gmail: GmailApi,

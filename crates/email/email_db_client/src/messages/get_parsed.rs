@@ -2,10 +2,10 @@ use crate::parse::db_to_service::{self};
 use crate::{contacts, labels};
 
 use chrono::{DateTime, Utc};
+use email_types::email::service::message;
+use email_types::email::{db, service};
+use email_types::service::message::{MessageWithBodyReplyless, ParsedMessage};
 use futures::future::join_all;
-use models_email::email::service::message;
-use models_email::email::{db, service};
-use models_email::service::message::{MessageWithBodyReplyless, ParsedMessage};
 use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 use sqlx::types::Uuid;

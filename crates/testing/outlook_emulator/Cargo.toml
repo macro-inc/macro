@@ -40,4 +40,4 @@ email_api_client_core = { workspace = true, features = ["ports"] }
 email_api_client_outbound = { workspace = true, features = ["outbound-outlook"] }
 fusionauth = { workspace = true }
 microsoft_graph_url = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }

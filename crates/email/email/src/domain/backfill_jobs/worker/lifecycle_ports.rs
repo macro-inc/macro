@@ -1,8 +1,8 @@
 //! Initialization leases, completion accounting and follow-up capabilities.
 use super::BackfillDatabaseError;
 use crate::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCatalogRepository};
+use email_types::service::{attachment::AttachmentUploadMetadata, link::Link};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{attachment::AttachmentUploadMetadata, link::Link};
 use uuid::Uuid;
 
 /// Result of attempting to claim an initialization lease.

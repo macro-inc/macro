@@ -291,7 +291,7 @@ async fn catalog_diff_deletes_missing_then_upserts_changed_and_new_labels() {
     {
         let mut s = fake.0.lock().unwrap();
         s.import.history = Some("1".into());
-        let mut old: models_email::service::label::Label = super::fakes::label("keep").into();
+        let mut old: email_types::service::label::Label = super::fakes::label("keep").into();
         old.name = Some("old".into());
         let mut changed = old.clone();
         changed.name = Some("new".into());
@@ -342,7 +342,7 @@ async fn catalog_compares_each_provider_field_and_retains_the_stored_identity() 
         {
             let mut s = fake.0.lock().unwrap();
             s.import.history = Some("1".into());
-            let old: models_email::service::label::Label = super::fakes::label("same").into();
+            let old: email_types::service::label::Label = super::fakes::label("same").into();
             let mut new = old.clone();
             new.id = None;
             match field {

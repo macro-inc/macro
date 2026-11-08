@@ -1,6 +1,6 @@
 use super::database_error::database_error;
 use super::*;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 pub(crate) struct MetadataTransaction(pub sqlx::Transaction<'static, sqlx::Postgres>);
 

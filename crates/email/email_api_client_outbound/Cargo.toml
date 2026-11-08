@@ -34,7 +34,7 @@ http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
 microsoft_graph_url = { workspace = true, optional = true }
 mailparse = { workspace = true, optional = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 serde_path_to_error = { workspace = true, optional = true }

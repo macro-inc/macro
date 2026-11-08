@@ -315,8 +315,8 @@ async fn synced_threads_record_whether_they_have_received_mail(
 async fn oversized_provider_values_do_not_block_the_thread_insert(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    use models_email::email::service::address::ContactInfo;
-    use models_email::email::service::message;
+    use email_types::email::service::address::ContactInfo;
+    use email_types::email::service::message;
 
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
     let thread_db_id = Uuid::now_v7();

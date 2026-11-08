@@ -3,7 +3,7 @@ use crate::domain::{
     mailbox::{lifecycle::*, projection::ProjectionEvent},
     models::UserProvider,
 };
-use models_email::service::pubsub::DeletionReason;
+use email_types::service::pubsub::DeletionReason;
 
 #[cfg(test)]
 mod test;

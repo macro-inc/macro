@@ -2,7 +2,7 @@ use crate::pubsub::inbox_sync::error_handlers;
 use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use anyhow::{Context, Result};
 use email::domain::mailbox::inbox_sync::InboxSyncDisposition;
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
 use sqs_worker::cleanup_message;
 
 /// Decode one delivery and perform only the domain-selected acknowledgement.

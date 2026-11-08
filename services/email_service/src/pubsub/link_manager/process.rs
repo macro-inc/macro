@@ -1,7 +1,7 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use anyhow::Context;
 use email::domain::mailbox::link_manager::LinkManagerDisposition;
-use models_email::service::pubsub::LinkManagerMessage;
+use email_types::service::pubsub::LinkManagerMessage;
 use sqs_worker::cleanup_message;
 
 #[cfg(test)]

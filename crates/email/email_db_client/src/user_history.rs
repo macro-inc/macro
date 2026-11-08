@@ -2,7 +2,7 @@
 mod test;
 
 use anyhow::anyhow;
-use models_email::service::message::ThreadHistoryInfo;
+use email_types::service::message::ThreadHistoryInfo;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashMap;

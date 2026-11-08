@@ -1,5 +1,5 @@
 //! Durable claim decisions over storage facts; SQL retains relational guards.
-use models_email::service::message::ScheduledMessage;
+use email_types::service::message::ScheduledMessage;
 use uuid::Uuid;
 
 /// A unique ownership receipt; replacing it fences every older invocation.

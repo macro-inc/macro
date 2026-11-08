@@ -1,7 +1,7 @@
 use super::*;
 use anyhow::Context;
+use email_types::service::link::{Link, UserProvider};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::link::{Link, UserProvider};
 
 pub(super) async fn connect<L, T, P, G, I, B, N, O>(
     service: &InboxConnectionService<L, T, P, G, I, B, N, O>,

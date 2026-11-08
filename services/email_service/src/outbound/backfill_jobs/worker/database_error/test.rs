@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 const NOT_NULL_VIOLATION: &str = "23502";
 const CHECK_VIOLATION: &str = "23514";
 fn map_db_error(error: anyhow::Error, context: &'static str) -> ProcessingError {

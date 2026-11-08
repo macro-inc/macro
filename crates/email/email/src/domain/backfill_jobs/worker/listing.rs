@@ -1,9 +1,9 @@
 use super::email_api_error::map_email_api_error;
 use super::*;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use models_email::gmail::labels::SystemLabelID;
-use models_email::service::thread::ListThreadsPayload;
-use models_email::service::{
+use email_types::gmail::labels::SystemLabelID;
+use email_types::service::thread::ListThreadsPayload;
+use email_types::service::{
     backfill::*,
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
@@ -284,7 +284,7 @@ async fn enqueue_sent_contact_seeds<R, G, Q, E, C>(
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    use models_email::email::service::backfill::SeedSentContactPayload;
+    use email_types::email::service::backfill::SeedSentContactPayload;
 
     let message_ids = match ctx
         .gmail

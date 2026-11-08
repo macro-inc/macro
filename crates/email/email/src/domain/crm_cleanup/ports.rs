@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use crm::domain::model::{CrmError, DepopulateContactOutcome};
-use models_email::service::{
+use email_types::service::{
     crm_cleanup::{CrmCleanupCandidate, CrmCleanupJob, CrmCleanupJobStatus, CrmCleanupOperation},
     link::Link,
 };

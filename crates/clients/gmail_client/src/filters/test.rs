@@ -4,7 +4,7 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
-use models_email::gmail::filters::{FilterAction, FilterCriteria};
+use email_types::gmail::filters::{FilterAction, FilterCriteria};
 
 fn client(server: &MockServer) -> GmailClient {
     GmailClient::new_with_urls(

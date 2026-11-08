@@ -1,6 +1,6 @@
 //! Gmail blocked-sender capability implementation.
 
-use models_email::gmail::filters::{Filter, FilterAction, FilterCriteria};
+use email_types::gmail::filters::{Filter, FilterAction, FilterCriteria};
 
 use email_api_client_core::models::{AccessToken, EmailApiError};
 use email_api_client_core::ports::MailboxBlocklistClient;

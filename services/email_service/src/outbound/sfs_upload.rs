@@ -6,8 +6,8 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use email::domain::mailbox::contacts::sfs_upload::{
     PhotoSyncedNotifier, SfsPhotoContacts, SfsPhotoMappings, SfsPhotoUploader,
 };
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::service::{contact::Contact, link::Link};
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::service::{contact::Contact, link::Link};
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::collections::HashMap;

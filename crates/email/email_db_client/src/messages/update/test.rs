@@ -2,8 +2,8 @@ use super::{mark_message_as_sent, set_flags_from_labels};
 use crate::messages::get::fetch_messages_metadata;
 use crate::threads::get::get_thread_by_id_and_link_id;
 use crate::threads::update::update_thread_metadata;
+use email_types::service::message::Message;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::service::message::Message;
 use sqlx::{PgConnection, PgPool, types::Uuid};
 
 const LINK: Uuid = Uuid::from_u128(0x019a0000_0000_7000_8000_000000000001);

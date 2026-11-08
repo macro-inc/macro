@@ -2,7 +2,7 @@
 
 use super::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::{catalog::InboxCredentialOwnerLookup, lifecycle::InboxDeletionQueue};
-use models_email::service::pubsub::{DeletionReason, LinkManagerMessage};
+use email_types::service::pubsub::{DeletionReason, LinkManagerMessage};
 use uuid::Uuid;
 
 pub struct PgDeletedUserInboxes(pub sqlx::PgPool);

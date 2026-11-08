@@ -9,8 +9,8 @@ mod test;
 
 pub use ports::*;
 
-use models_email::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
-use models_email::service::pubsub::ProcessingError;
+use email_types::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
+use email_types::service::pubsub::ProcessingError;
 use std::collections::HashSet;
 
 /// The listener's final action after the domain has handled the operation.

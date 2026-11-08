@@ -1,6 +1,6 @@
 use super::*;
 use calendar_events::domain::models::{AppliedGoogleGrant, CalendarGrantIntent};
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 pub(super) async fn apply_and_consume<G: ConnectionGrants>(

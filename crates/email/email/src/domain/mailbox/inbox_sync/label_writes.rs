@@ -1,7 +1,7 @@
 use super::{InboxSyncLabelTransaction, InboxSyncRepository, InboxSyncTransaction};
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::service::{self, link};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::{self, link};
 use std::result;
 use uuid::Uuid;
 

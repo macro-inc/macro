@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::enqueue_crm_contacts;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };

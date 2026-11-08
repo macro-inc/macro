@@ -1,6 +1,6 @@
 //! Backfill-job access, cancellation, and initialization publication.
 
-use models_email::service::{
+use email_types::service::{
     backfill::{BackfillJob, BackfillJobStatus},
     link::Link,
 };

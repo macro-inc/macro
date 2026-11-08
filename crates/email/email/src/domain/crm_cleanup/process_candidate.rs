@@ -2,7 +2,7 @@ use super::{
     CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
     CrmCleanupService,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
 /// Processes one cleanup candidate: claims (deletes) the candidate row, then

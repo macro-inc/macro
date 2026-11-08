@@ -202,7 +202,7 @@ local stack, without Microsoft accounts.
 - It only listens where it is told to, `127.0.0.1` by default. Never give it
   real mail or real tokens.
 - Responses are Graph's shapes, not ours: build them in `src/render.rs`, not
-  from `models_email` types. HTML bodies come back wrapped in a document, as
+  from `email_types` types. HTML bodies come back wrapped in a document, as
   Exchange stores them, and `internetMessageHeaders` only when selected.
 - A query option, `$filter`, `$expand` or `$select` property it does not
   understand answers 400, and an unknown path answers 400 with no route in

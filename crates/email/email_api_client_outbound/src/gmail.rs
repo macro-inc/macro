@@ -14,10 +14,10 @@ mod sync;
 #[cfg(test)]
 mod test;
 
-use gmail_client::{GmailApiHttpError, GmailClient};
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
+use gmail_client::{GmailApiHttpError, GmailClient};
 
 use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 

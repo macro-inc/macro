@@ -1,5 +1,5 @@
 use doppleganger::Mirror;
-use models_email::gmail::history::{GmailHistory, GmailHistoryDb};
+use email_types::gmail::history::{GmailHistory, GmailHistoryDb};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
@@ -9,7 +9,7 @@ use crate::links::types::DbUserProvider;
 pub async fn fetch_history_id_for_link(
     pool: &PgPool,
     email_address: &str,
-    provider: models_email::service::link::UserProvider,
+    provider: email_types::service::link::UserProvider,
 ) -> anyhow::Result<Option<String>> {
     if email_address.is_empty() {
         anyhow::bail!("Email address cannot be empty");

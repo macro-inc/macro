@@ -1,7 +1,7 @@
 use chrono::{TimeZone, Utc};
+use email_types::email::service;
+use email_types::gmail::{Header, MessageResource};
 use mailparse::{MailAddr, MailAddrList, addrparse};
-use models_email::email::service;
-use models_email::gmail::{Header, MessageResource};
 use uuid::Uuid;
 
 use super::payload::parse_gmail_payload;

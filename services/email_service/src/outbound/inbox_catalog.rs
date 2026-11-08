@@ -2,8 +2,8 @@ use email::domain::{
     mailbox::{MailboxError, catalog::*},
     models::EmailBackfillStatus,
 };
+use email_types::service::backfill::BackfillJobStatus;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::backfill::BackfillJobStatus;
 
 pub struct PgInboxCatalog(pub sqlx::PgPool);
 impl InboxCatalogRepository for PgInboxCatalog {

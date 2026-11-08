@@ -6,11 +6,11 @@ use email::domain::mailbox::inbox_sync::{
 };
 use email_api_client_core::models::{CalendarPart, RateLimitOrigin};
 use email_db_client::attachments::provider::upload::new_email_media_atts;
+use email_types::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
+use email_types::service::link::UserProvider;
+use email_types::service::message::Message;
+use email_types::service::pubsub::ProcessingError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
-use models_email::service::link::UserProvider;
-use models_email::service::message::Message;
-use models_email::service::pubsub::ProcessingError;
 use std::time::Duration;
 
 struct Preparation;
@@ -22,7 +22,7 @@ impl InboxSyncPreparation for Preparation {
     }
     fn prepare_threads<'a>(
         &'a self,
-        threads: &'a mut Vec<models_email::service::thread::Thread>,
+        threads: &'a mut Vec<email_types::service::thread::Thread>,
     ) -> BoxFuture<'a, ()> {
         Box::pin(crate::util::process_pre_insert::process_threads_pre_insert(
             threads,

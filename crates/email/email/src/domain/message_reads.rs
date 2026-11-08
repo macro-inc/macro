@@ -1,13 +1,13 @@
 //! Synced-mail reads, including the public and internal routes' distinct policies.
 
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_email::service::{
+use email_types::service::{
     message::{
         MessageSenderInfo, MessageSendersRequest, MessageSendersResponse, ParsedMessage,
         ThreadHistoryInfo, ThreadHistoryRequest, ThreadHistoryResponse,
     },
     thread::GetThreadOwnerResponse,
 };
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 

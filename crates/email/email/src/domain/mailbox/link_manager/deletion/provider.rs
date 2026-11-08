@@ -2,7 +2,7 @@
 
 use super::ports::{LinkDeletionAuth, LinkDeletionGmail};
 use email_api_client_core::models::EmailApiError;
-use models_email::service::{
+use email_types::service::{
     cache::TokenCacheKey,
     link::{Link, UserProvider},
 };

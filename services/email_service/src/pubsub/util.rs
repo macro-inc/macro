@@ -1,12 +1,12 @@
 use connection_gateway_client::client::ConnectionGatewayClient;
 use email::domain::events::EmailMacroEvent;
-use macro_event_broker::MacroEventBroker;
 /// shared utils across different pubsub workers
-use models_email::api::refresh::RefreshEmailEvent;
+use email_types::api::refresh::RefreshEmailEvent;
+use macro_event_broker::MacroEventBroker;
 
 #[cfg(test)]
 mod test;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(

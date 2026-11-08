@@ -8,10 +8,10 @@ use ::crm::domain::{
     model::{CrmError, DepopulateContactOutcome},
 };
 use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
+use email_types::service::link::{Link, UserProvider};
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::link::{Link, UserProvider};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
@@ -341,7 +341,7 @@ impl BackfillMetadataTransaction for Fake {
         let step = if result.is_ok() { "commit" } else { "rollback" };
         self.call(step).map_err(|e| {
             ProcessingError::Retryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
+                reason: email_types::service::pubsub::FailureReason::DatabaseQueryFailed,
                 source: e.into_original(),
             })
         })?;
@@ -352,7 +352,7 @@ impl BackfillGmail for Fake {
     fn labels(
         &self,
         _: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>> {
+    ) -> BoxFuture<'_, Result<Vec<email_types::service::label::Label>, EmailApiError>> {
         Box::pin(async move {
             self.call("provider_labels")
                 .map_err(|e| EmailApiError::Transient {
@@ -618,9 +618,9 @@ impl BackfillCrm for Fake {
 pub(super) fn provider_message(
     link_id: Uuid,
     thread_db_id: Uuid,
-) -> models_email::service::message::Message {
+) -> email_types::service::message::Message {
     let now = chrono::DateTime::default();
-    models_email::service::message::Message {
+    email_types::service::message::Message {
         db_id: Uuid::from_u128(60),
         provider_id: Some("provider-message".to_string()),
         thread_db_id,
@@ -658,7 +658,7 @@ pub(super) fn provider_message(
 }
 
 pub(super) fn attachment() -> BackfillPubsubMessage {
-    use models_email::service::attachment::{
+    use email_types::service::attachment::{
         AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
     };
     input(BackfillOperation::BackfillAttachment(scope(

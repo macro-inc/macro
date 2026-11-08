@@ -51,7 +51,7 @@ quotes the user's approval, so an owner routine step (signed `routine_id`, no
 agent) sends and creates. The email sign-in and the MCP OAuth broker take no
 credential, so the header is what refuses a program there.
 
-A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
+A program reads Macro's own sign-in emails redacted (email and storage-service responses, `email_types::sign_in_email`), and GraphQL refuses it.
 
 A run whose `RunEnvironment::egress` is `Egress::Proxied` reaches the hosts
 only through a loopback forwarder the runner starts for it

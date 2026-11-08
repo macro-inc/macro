@@ -7,8 +7,8 @@ use crate::domain::mailbox::*;
 use email_api_client_core::models::{
     MailboxChangePage, MailboxState, ProviderId, StreamPosition, StreamToken,
 };
+use email_types::email::service::address::ContactInfo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::email::service::address::ContactInfo;
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -1,7 +1,7 @@
 use chrono::Utc;
-use models_email::email::service;
-use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
-use models_email::gmail::ThreadResource;
+use email_types::email::service;
+use email_types::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
+use email_types::gmail::ThreadResource;
 use uuid::Uuid;
 
 use super::message::map_message_resource_to_service;

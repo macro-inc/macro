@@ -1,12 +1,12 @@
 use super::*;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::build_contact_connections;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link::Link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
-use models_email::{
+use email_types::{
     db::address::EmailRecipientType,
     service::attachment::{
         AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,

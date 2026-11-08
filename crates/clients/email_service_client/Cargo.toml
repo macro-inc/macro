@@ -8,7 +8,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 email = { workspace = true, features = ["axum", "inbound"] }
 macro_tower_layers = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

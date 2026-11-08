@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::{address::ContactInfo, link::UserProvider};
+use email_types::service::{address::ContactInfo, link::UserProvider};
 
 fn context() -> ProjectionContext {
     let link_id = Uuid::now_v7();

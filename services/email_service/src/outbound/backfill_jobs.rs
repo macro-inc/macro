@@ -4,7 +4,7 @@ pub(crate) mod outbox;
 pub(crate) mod worker;
 
 use email::domain::backfill_jobs::{BackfillJobQueue, BackfillJobRepository};
-use models_email::service::{
+use email_types::service::{
     backfill::{
         BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload,
         JobScopedPayload,

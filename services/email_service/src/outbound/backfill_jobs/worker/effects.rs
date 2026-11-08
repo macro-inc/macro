@@ -16,10 +16,10 @@ use crm::domain::{
     model::{CrmError, DepopulateContactOutcome},
     service::CrmService,
 };
+use email_types::api::refresh::{BackfillStatus, RefreshEmailEvent};
+use email_types::service::{backfill::*, link::Link};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
-use models_email::service::{backfill::*, link::Link};
 use std::collections::HashSet;
 
 impl BackfillEffects for BackfillWorkerEffects {
@@ -210,7 +210,7 @@ impl BackfillCrm for BackfillWorkerCrm {
 impl email::domain::mailbox::inbox_sync::InboxSyncPreparation for BackfillWorkerEffects {
     fn prepare_message<'a>(
         &'a self,
-        message: &'a mut models_email::service::message::Message,
+        message: &'a mut email_types::service::message::Message,
     ) -> BoxFuture<'a, ()> {
         Box::pin(crate::util::process_pre_insert::process_message_pre_insert(
             message,
@@ -218,7 +218,7 @@ impl email::domain::mailbox::inbox_sync::InboxSyncPreparation for BackfillWorker
     }
     fn prepare_threads<'a>(
         &'a self,
-        threads: &'a mut Vec<models_email::service::thread::Thread>,
+        threads: &'a mut Vec<email_types::service::thread::Thread>,
     ) -> BoxFuture<'a, ()> {
         Box::pin(crate::util::process_pre_insert::process_threads_pre_insert(
             threads,

@@ -1,5 +1,5 @@
 use super::PushAuthenticationError;
-use models_email::gmail::inbox_sync::{GooglePublicKeys, JwtVerificationError, KeyMap};
+use email_types::gmail::inbox_sync::{GooglePublicKeys, JwtVerificationError, KeyMap};
 use uuid::Uuid;
 
 pub trait PushKeyCache: Send + Sync + 'static {

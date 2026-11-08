@@ -1,7 +1,7 @@
 use super::database_error::{database_error, is_unstorable};
 use super::*;
 use email::domain::mailbox::inbox_sync::{InboxSyncResync, MessageResyncRepository};
-use models_email::service::{
+use email_types::service::{
     message::{Message, SimpleMessage},
     thread::ThreadProviderMap,
 };

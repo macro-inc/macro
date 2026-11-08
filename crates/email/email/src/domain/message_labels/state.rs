@@ -1,7 +1,7 @@
 //! Label-state decisions over statement-sized persistence capabilities.
 
 #[cfg(feature = "mailbox")]
-use models_email::service::label::Label;
+use email_types::service::label::Label;
 use std::collections::HashMap;
 use uuid::Uuid;
 

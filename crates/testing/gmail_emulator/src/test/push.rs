@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::Json;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;
-use models_email::gmail::inbox_sync::GmailInboxSyncPayload;
+use email_types::gmail::inbox_sync::GmailInboxSyncPayload;
 use tokio::sync::mpsc;
 
 use super::*;

@@ -1,10 +1,10 @@
 //! Authorized reads of a message's original RFC 822 source, for `.eml` download.
 //! Access matches attachment reads; the owner mailbox supplies provider credentials.
 use super::{draft_attachments::AttachmentError, mailbox::MailboxKey, ports::EmailUserRepo};
+use email_types::service::link::Link;
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::link::Link;
 use std::future::Future;
 use uuid::Uuid;
 

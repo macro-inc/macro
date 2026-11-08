@@ -73,7 +73,7 @@ async fn missing_sender_or_null_recipient_skips_cleanup_but_blank_addresses_keep
             state.sender = address.map(|email| contact(Some(email)));
             state.recipients = vec![(
                 contact(address),
-                models_email::db::address::EmailRecipientType::To,
+                email_types::db::address::EmailRecipientType::To,
             )];
         }
         assert!(matches!(
@@ -123,7 +123,7 @@ async fn cleanup_selection_normalizes_filters_and_preserves_first_seen_order() {
         .map(|email| {
             (
                 contact(Some(email)),
-                models_email::db::address::EmailRecipientType::To,
+                email_types::db::address::EmailRecipientType::To,
             )
         })
         .collect();

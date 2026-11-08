@@ -1,6 +1,6 @@
 use super::*;
 use ::crm::domain::model::CrmError;
-use models_email::service::{backfill::PopulateCrmPolicyPayload, pubsub::FailureReason};
+use email_types::service::{backfill::PopulateCrmPolicyPayload, pubsub::FailureReason};
 
 /// No child fan-out: completing a page means every contact effect is durable.
 #[tracing::instrument(name = "crm.email_history.consume", skip_all, fields(team_id = %payload.team_id, work_id = %payload.work_id), err)]

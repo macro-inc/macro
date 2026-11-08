@@ -5,8 +5,8 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::mailbox::lifecycle::InboxActor;
+use email_types::email::service::link::Link;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_email::email::service::link::Link;
 use shared_types::response::{EmptyResponse, ErrorResponse};
 
 /// Disables inbox syncing for the selected inbox.

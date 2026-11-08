@@ -1,8 +1,8 @@
 use super::*;
 
 mod connection;
+use email_types::service::link::UserProvider;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::link::UserProvider;
 use std::sync::{Arc, Mutex};
 
 const INBOX: Uuid = Uuid::from_u128(1);

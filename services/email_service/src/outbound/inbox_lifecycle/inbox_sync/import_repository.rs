@@ -4,9 +4,9 @@ use email::domain::models::{EmailThreadPreview, PreviewCursorQuery};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email::outbound::label_state_pg::PgLabelCatalog;
+use email_types::service;
+use email_types::service::attachment::AttachmentUploadMetadata;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service;
-use models_email::service::attachment::AttachmentUploadMetadata;
 use std::collections::{HashMap, HashSet};
 
 impl InboxSyncHistoryFacts for PgInboxSync {

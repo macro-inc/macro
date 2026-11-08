@@ -208,7 +208,7 @@ async fn permanent_stop_errors_continue_without_retry_and_outlook_skips_all_gmai
     }
     let (service, fake) = service();
     let mut link = link();
-    link.provider = models_email::service::link::UserProvider::Outlook;
+    link.provider = email_types::service::link::UserProvider::Outlook;
     service
         .delete(&link, &DeletionReason::Unused)
         .await

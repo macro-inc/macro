@@ -5,12 +5,12 @@ use crate::util::upload_attachment::{
 };
 use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
 use email_api_client_core::models::{CalendarPart, ChangeBatch};
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{
+use email_types::service::{
     attachment::{Attachment, AttachmentUploadArgs},
     message::Message,
     thread::Thread,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 impl InboxSyncHistory for InboxSyncEffects {
     type Jobs = PgBackfillJobs;

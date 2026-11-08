@@ -6,11 +6,11 @@ use crate::domain::mailbox::{
 use email_api_client_core::models::{
     CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
 };
-use futures::future::BoxFuture;
-use models_email::service::{
+use email_types::service::{
     message::{Message, SimpleMessage},
     thread::{Thread, ThreadProviderMap},
 };
+use futures::future::BoxFuture;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub(super) struct ImportState {

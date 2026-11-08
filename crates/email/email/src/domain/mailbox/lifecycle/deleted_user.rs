@@ -2,7 +2,7 @@
 
 use super::InboxLifecycleService;
 use crate::domain::mailbox::catalog::InboxCredentialOwnerLookup;
-use models_email::service::pubsub::DeletionReason;
+use email_types::service::pubsub::DeletionReason;
 use uuid::Uuid;
 
 #[cfg(test)]

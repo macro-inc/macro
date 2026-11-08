@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::{attachment::AttachmentUploadMetadata, label::Label};
+use email_types::service::{attachment::AttachmentUploadMetadata, label::Label};
 use tokio::sync::oneshot;
 
 fn init() -> BackfillPubsubMessage {
@@ -25,7 +25,7 @@ fn label() -> Label {
         created_at: Default::default(),
         message_list_visibility: None,
         label_list_visibility: None,
-        type_: Some(models_email::service::label::LabelType::User),
+        type_: Some(email_types::service::label::LabelType::User),
     }
 }
 
@@ -456,7 +456,7 @@ async fn feature_switches_skip_only_their_own_effects() {
 
 #[tokio::test]
 async fn attachment_destinations_and_recipient_filters_preserve_input_order() {
-    use models_email::{
+    use email_types::{
         db::{address::EmailRecipientType, contact::Contact},
         service::attachment::AttachmentUploadDestination,
     };
@@ -687,7 +687,7 @@ async fn completion_result_preserves_all_atomic_transition_outcomes() {
             }
             BackfillCompletion::LeaseLost => assert!(matches!(
                 result,
-                Err(models_email::service::pubsub::ProcessingError::Retryable(
+                Err(email_types::service::pubsub::ProcessingError::Retryable(
                     DetailedError {
                         reason: FailureReason::EmailBackfillInitBusy,
                         ..
@@ -696,12 +696,12 @@ async fn completion_result_preserves_all_atomic_transition_outcomes() {
             )),
             BackfillCompletion::NotFound => assert!(matches!(
                 result,
-                Err(
-                    models_email::service::pubsub::ProcessingError::NonRetryable(DetailedError {
+                Err(email_types::service::pubsub::ProcessingError::NonRetryable(
+                    DetailedError {
                         reason: FailureReason::BackfillJobNotFound,
                         ..
-                    })
-                )
+                    }
+                ))
             )),
         }
     }

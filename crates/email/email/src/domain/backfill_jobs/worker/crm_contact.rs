@@ -1,6 +1,6 @@
 use super::*;
 use ::crm::domain::model::CrmError;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},

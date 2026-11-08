@@ -1,11 +1,11 @@
 //! SQS adapter for [`EmailMessageEnqueuer`].
 
 use crate::domain::ports::EmailMessageEnqueuer;
-use models_email::gmail::gmail_ops::{
+use email_types::gmail::gmail_ops::{
     BlockSenderPayload, GmailOpsOperation, GmailOpsPubsubMessage, MAX_BATCH_MODIFY_MESSAGES,
     UnblockSenderPayload,
 };
-use models_email::service::pubsub::ScheduledPubsubMessage;
+use email_types::service::pubsub::ScheduledPubsubMessage;
 use sqs_client::SQS;
 use uuid::Uuid;
 

@@ -2,7 +2,7 @@ use crate::pubsub::gmail_ops::error_handlers;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::{Context, Result};
 use email::domain::message_labels::gmail_ops::GmailOpsDisposition;
-use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
+use email_types::gmail::gmail_ops::GmailOpsPubsubMessage;
 use sqs_worker::cleanup_message;
 
 /// Decode one delivery, then perform only the acknowledgement selected by the domain.

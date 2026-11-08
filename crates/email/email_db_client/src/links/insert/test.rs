@@ -1,8 +1,8 @@
 use super::*;
+use email_types::email::service::link::{Link, UserProvider};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 
 /// Mirrors the self-link bootstrap write: the row is owned by the child's macro_id while

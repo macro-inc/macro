@@ -62,7 +62,7 @@ fn thread_from_normalized_messages(
     messages.sort_by_key(|message| message.internal_date_ts);
     let inbox_visible = messages.iter().any(|message| {
         message.labels.iter().any(|label| {
-            label.provider_label_id == models_email::service::label::system_labels::INBOX
+            label.provider_label_id == email_types::service::label::system_labels::INBOX
         })
     });
     let is_read = messages.iter().all(|message| message.is_read);

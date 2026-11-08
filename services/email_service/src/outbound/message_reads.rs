@@ -1,7 +1,7 @@
 //! Existing synced-mail queries, with their results and errors left intact.
 
 use email::domain::message_reads::MessageReadRepository;
-use models_email::service::message::{MessageSenderInfo, ParsedMessage, ThreadHistoryInfo};
+use email_types::service::message::{MessageSenderInfo, ParsedMessage, ThreadHistoryInfo};
 use std::collections::HashMap;
 use uuid::Uuid;
 

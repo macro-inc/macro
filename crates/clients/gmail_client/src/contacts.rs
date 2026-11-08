@@ -1,6 +1,6 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
+use email_types::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
 
 const PERSON_FIELDS: &str = "names,emailAddresses,photos";
 

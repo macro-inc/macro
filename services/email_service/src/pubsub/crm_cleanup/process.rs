@@ -1,7 +1,7 @@
 use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
 use anyhow::Context;
 use email::domain::crm_cleanup::CrmCleanupDisposition;
-use models_email::service::crm_cleanup::CrmCleanupPubsubMessage;
+use email_types::service::crm_cleanup::CrmCleanupPubsubMessage;
 use sqs_worker::cleanup_message;
 
 /// Decode a delivery and perform only the acknowledgement selected by the domain.

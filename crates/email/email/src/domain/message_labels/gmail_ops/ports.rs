@@ -2,8 +2,8 @@
 
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use email_api_client_core::models::EmailApiError;
-use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
-use models_email::service::link::Link;
+use email_types::gmail::gmail_ops::GmailOpsPubsubMessage;
+use email_types::service::link::Link;
 use std::collections::HashMap;
 use uuid::Uuid;
 

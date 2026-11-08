@@ -33,7 +33,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
                 serde_json::json!({"db_id":message,"link_id":link,"subject":"Saved locally"}),
             )
             .unwrap(),
-            from: models_email::service::address::ContactInfo {
+            from: email_types::service::address::ContactInfo {
                 email: "owner@example.com".into(),
                 name: None,
                 photo_url: None,

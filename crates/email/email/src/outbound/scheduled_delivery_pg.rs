@@ -454,7 +454,7 @@ impl deletion::EmptyThreadQueries for PgConnection {
 }
 
 impl crate::domain::scheduled::drafts::ScheduledDraftQueries for PgPool {
-    type Stored = models_email::db::message::Message;
+    type Stored = email_types::db::message::Message;
     async fn scheduled_rows(
         &self,
         link: Uuid,
@@ -469,7 +469,7 @@ impl crate::domain::scheduled::drafts::ScheduledDraftQueries for PgPool {
     async fn expand_rows(
         &self,
         rows: Vec<Self::Stored>,
-    ) -> anyhow::Result<Vec<models_email::service::message::Message>> {
+    ) -> anyhow::Result<Vec<email_types::service::message::Message>> {
         email_db_client::messages::get::convert_db_messages_to_service_concurrent(self, rows).await
     }
 }

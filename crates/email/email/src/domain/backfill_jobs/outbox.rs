@@ -1,10 +1,10 @@
 //! Durable backfill publication with a row lock held through each queue send.
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::backfill::{
+use email_types::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, FinalizeBackfillPayload, JobScopedPayload,
     PopulateCrmForUserPayload, PopulateCrmPolicyPayload,
 };
-use models_email::service::thread::ListThreadsPayload;
+use email_types::service::thread::ListThreadsPayload;
+use macro_user_id::user_id::MacroUserIdStr;
 use tracing::Instrument;
 use uuid::Uuid;
 

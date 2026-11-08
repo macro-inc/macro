@@ -6,8 +6,8 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use email::domain::backfill_jobs::{BackfillCancelError, BackfillJobAccess};
+use email_types::email::service::link::Link;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_email::email::service::link::Link;
 use shared_types::response::{EmptyResponse, ErrorResponse};
 use sqlx::types::Uuid;
 use utoipa::ToSchema;

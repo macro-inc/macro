@@ -7,8 +7,8 @@ use gmail_images::{
 
 /// Mailbox image selection, caching, and retry policy.
 pub mod gmail_images;
+use email_types::service::settings::{Settings, SettingsPatch};
 use email_utils::sanitize_html_fragment;
-use models_email::service::settings::{Settings, SettingsPatch};
 use uuid::Uuid;
 
 #[cfg(test)]

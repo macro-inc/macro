@@ -1,5 +1,5 @@
-use models_email::gmail::labels::{GmailLabel, GmailLabelsResponse};
-use models_email::service::label::{LabelListVisibility, LabelType, MessageListVisibility};
+use email_types::gmail::labels::{GmailLabel, GmailLabelsResponse};
+use email_types::service::label::{LabelListVisibility, LabelType, MessageListVisibility};
 use uuid::Uuid;
 
 use super::{map_label_to_service, map_labels_to_service};
