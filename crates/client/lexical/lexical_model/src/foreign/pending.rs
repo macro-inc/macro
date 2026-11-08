@@ -32,6 +32,7 @@ impl ForeignUpdateIdentity {
 /// Dropping it discards its writes, events, extensions, tags and queued updates.
 pub struct PendingUpdate {
     update: Arc<()>,
+    native_calls: Arc<super::native::NativeCalls>,
     read_only: bool,
     read_sources: Option<crate::state::NodeMap>,
     read_origin: Option<super::ReadOrigin>,
@@ -98,6 +99,7 @@ impl Transaction<'_> {
     pub fn suspend(self) -> PendingUpdate {
         PendingUpdate {
             update: self.foreign_update,
+            native_calls: self.foreign_native_calls,
             read_only: self.foreign_read_only,
             read_sources: self.foreign_read_sources,
             read_origin: self.foreign_read_origin,
@@ -141,6 +143,7 @@ impl Editor {
         }
         Ok(Transaction {
             foreign_update: update.update,
+            foreign_native_calls: update.native_calls,
             foreign_read_only: update.read_only,
             foreign_read_sources: update.read_sources,
             foreign_read_origin: update.read_origin,

@@ -16,6 +16,7 @@ pub(crate) fn kind_base(kind: NodeKind) -> NodeVTable {
     }
 }
 fn read_hook<Value>(
+    hook: ForeignHook,
     data: &dyn Any,
     node: NodeView<'_>,
     mut invoke: impl FnMut(&dyn ForeignHooks, &ForeignData, NodeView<'_>) -> Override<Value>,
@@ -35,7 +36,11 @@ fn read_hook<Value>(
             .state
             .registry
             .get(node.state.type_name(node.key).unwrap_or(""));
-        while let Some(current) = entry {
+        let bypass = node
+            .state
+            .foreign_native_calls
+            .is_some_and(|calls| calls.consume(node.key, hook));
+        while let Some(current) = entry.filter(|_| !bypass) {
             let Some(definition) = &current.foreign else {
                 break;
             };
@@ -59,6 +64,7 @@ fn read_hook<Value>(
 }
 
 fn mutate<Value>(
+    hook: ForeignHook,
     tx: &mut Transaction<'_>,
     key: NodeKey,
     mut invoke: impl FnMut(&dyn ForeignHooks, &mut Transaction<'_>) -> Override<Result<Value, Error>>,
@@ -67,7 +73,8 @@ fn mutate<Value>(
     let registry = tx.pending.registry.clone();
     let index = tx.type_index(key).ok_or(Error::NodeNotFound(key))?;
     let mut entry = registry.node(index);
-    while let Some(current) = entry {
+    let bypass = tx.foreign_native_calls.consume(key, hook);
+    while let Some(current) = entry.filter(|_| !bypass) {
         let Some(definition) = &current.foreign else {
             break;
         };
@@ -97,6 +104,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     table.required = definition.required_state.clone();
     table.transforms = vec![crate::registry::RegisteredTransform::Plain(|tx, key| {
         mutate(
+            ForeignHook::StaticTransform,
             tx,
             key,
             |hooks, tx| hooks.static_transform(tx, key),
@@ -166,6 +174,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     table.import_exact = table.import;
     table.adjust_export_json = |data, node, json| {
         read_hook(
+            ForeignHook::AdjustExportJson,
             data,
             node,
             |hooks, fields, node| hooks.adjust_export_json(node, fields, json),
@@ -174,6 +183,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_inline = |data, node| {
         read_hook(
+            ForeignHook::IsInline,
             data,
             node,
             |hooks, fields, node| hooks.is_inline(node, fields),
@@ -182,6 +192,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_be_empty = |data, node| {
         read_hook(
+            ForeignHook::CanBeEmpty,
             data,
             node,
             |hooks, fields, node| hooks.can_be_empty(node, fields),
@@ -190,6 +201,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_indent = |data, node| {
         read_hook(
+            ForeignHook::CanIndent,
             data,
             node,
             |hooks, fields, node| hooks.can_indent(node, fields),
@@ -198,6 +210,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_shadow_root = |data, node| {
         read_hook(
+            ForeignHook::IsShadowRoot,
             data,
             node,
             |hooks, fields, node| hooks.is_shadow_root(node, fields),
@@ -206,6 +219,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_insert_text_before = |data, node| {
         read_hook(
+            ForeignHook::CanInsertTextBefore,
             data,
             node,
             |hooks, fields, node| hooks.can_insert_text_before(node, fields),
@@ -214,6 +228,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_insert_text_after = |data, node| {
         read_hook(
+            ForeignHook::CanInsertTextAfter,
             data,
             node,
             |hooks, fields, node| hooks.can_insert_text_after(node, fields),
@@ -222,6 +237,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_merge_when_empty = |data, node| {
         read_hook(
+            ForeignHook::CanMergeWhenEmpty,
             data,
             node,
             |hooks, fields, node| hooks.can_merge_when_empty(node, fields),
@@ -230,6 +246,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_parent_required = |data, node| {
         read_hook(
+            ForeignHook::IsParentRequired,
             data,
             node,
             |hooks, fields, node| hooks.is_parent_required(node, fields),
@@ -238,6 +255,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_text_entity = |data, node| {
         read_hook(
+            ForeignHook::IsTextEntity,
             data,
             node,
             |hooks, fields, node| hooks.is_text_entity(node, fields),
@@ -246,6 +264,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_have_format = |data, node| {
         read_hook(
+            ForeignHook::CanHaveFormat,
             data,
             node,
             |hooks, fields, node| hooks.can_have_format(node, fields),
@@ -254,6 +273,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_isolated = |data, node| {
         read_hook(
+            ForeignHook::IsIsolated,
             data,
             node,
             |hooks, fields, node| hooks.is_isolated(node, fields),
@@ -262,6 +282,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.is_keyboard_selectable = |data, node| {
         read_hook(
+            ForeignHook::IsKeyboardSelectable,
             data,
             node,
             |hooks, fields, node| hooks.is_keyboard_selectable(node, fields),
@@ -270,6 +291,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.indent = |data, node| {
         read_hook(
+            ForeignHook::Indent,
             data,
             node,
             |hooks, fields, node| hooks.indent(node, fields),
@@ -278,6 +300,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_merge_with = |data, node, other| {
         read_hook(
+            ForeignHook::CanMergeWith,
             data,
             node,
             |hooks, fields, node| hooks.can_merge_with(node, fields, other),
@@ -286,6 +309,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_replace_with = |data, node, replacement| {
         read_hook(
+            ForeignHook::CanReplaceWith,
             data,
             node,
             |hooks, fields, node| hooks.can_replace_with(node, fields, replacement),
@@ -294,6 +318,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.can_insert_after = |data, node, other| {
         read_hook(
+            ForeignHook::CanInsertAfter,
             data,
             node,
             |hooks, fields, node| hooks.can_insert_after(node, fields, other),
@@ -302,6 +327,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.exclude_from_copy = |data, node, destination| {
         read_hook(
+            ForeignHook::ExcludeFromCopy,
             data,
             node,
             |hooks, fields, node| hooks.exclude_from_copy(node, fields, destination),
@@ -310,6 +336,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.extract_with_child = |data, node, child, selection, destination| {
         read_hook(
+            ForeignHook::ExtractWithChild,
             data,
             node,
             |hooks, fields, node| {
@@ -322,6 +349,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.text_content = |data, node| {
         read_hook(
+            ForeignHook::TextContent,
             data,
             node,
             |hooks, fields, node| match hooks.text_content(node, fields) {
@@ -333,6 +361,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.coerce_text_content = |data, node, requested| {
         read_hook(
+            ForeignHook::CoerceTextContent,
             data,
             node,
             |hooks, fields, node| match hooks.coerce_text_content(node, fields, requested) {
@@ -344,6 +373,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.check_splice_text = |data, node, range, insert| {
         read_hook(
+            ForeignHook::CheckSpliceText,
             data,
             node,
             |hooks, fields, node| hooks.check_splice_text(node, fields, range.clone(), insert),
@@ -352,6 +382,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.coerce_detail = |data, node, requested| {
         read_hook(
+            ForeignHook::CoerceDetail,
             data,
             node,
             |hooks, fields, node| hooks.coerce_detail(node, fields, requested),
@@ -360,6 +391,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.coerce_mode = |data, node, requested| {
         read_hook(
+            ForeignHook::CoerceMode,
             data,
             node,
             |hooks, fields, node| hooks.coerce_mode(node, fields, requested),
@@ -368,6 +400,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.coerce_format = |data, node, requested| {
         read_hook(
+            ForeignHook::CoerceFormat,
             data,
             node,
             |hooks, fields, node| hooks.coerce_format(node, fields, requested),
@@ -376,6 +409,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.remove = |tx, key, preserve_empty_parent| {
         mutate(
+            ForeignHook::Remove,
             tx,
             key,
             |hooks, tx| hooks.remove(tx, key, preserve_empty_parent),
@@ -384,6 +418,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.replace = |tx, key, replacement, include_children| {
         mutate(
+            ForeignHook::Replace,
             tx,
             key,
             |hooks, tx| hooks.replace(tx, key, replacement, include_children),
@@ -392,6 +427,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.insert_after = |tx, key, node, restore_selection| {
         mutate(
+            ForeignHook::InsertAfter,
             tx,
             key,
             |hooks, tx| hooks.insert_after(tx, key, node, restore_selection),
@@ -400,6 +436,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.insert_before = |tx, key, node, restore_selection| {
         mutate(
+            ForeignHook::InsertBefore,
             tx,
             key,
             |hooks, tx| hooks.insert_before(tx, key, node, restore_selection),
@@ -408,6 +445,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.reset_on_copy = |tx, key, original| {
         mutate(
+            ForeignHook::ResetOnCopy,
             tx,
             key,
             |hooks, tx| hooks.reset_on_copy(tx, key, original),
@@ -416,6 +454,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.create_parent_element = |tx, key| {
         mutate(
+            ForeignHook::CreateParentElement,
             tx,
             key,
             |hooks, tx| hooks.create_parent_element(tx, key),
@@ -424,6 +463,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.splice = |tx, key, start, delete_count, nodes| {
         mutate(
+            ForeignHook::Splice,
             tx,
             key,
             |hooks, tx| hooks.splice(tx, key, start, delete_count, nodes),
@@ -432,6 +472,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.append = |tx, key, nodes| {
         mutate(
+            ForeignHook::Append,
             tx,
             key,
             |hooks, tx| hooks.append(tx, key, nodes),
@@ -440,6 +481,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.set_indent = |tx, key, indent| {
         mutate(
+            ForeignHook::SetIndent,
             tx,
             key,
             |hooks, tx| hooks.set_indent(tx, key, indent),
@@ -448,6 +490,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.insert_new_after = |tx, key, selection, restore_selection| {
         mutate(
+            ForeignHook::InsertNewAfter,
             tx,
             key,
             |hooks, tx| hooks.insert_new_after(tx, key, selection, restore_selection),
@@ -456,6 +499,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.collapse_at_start = |tx, key, selection| {
         mutate(
+            ForeignHook::CollapseAtStart,
             tx,
             key,
             |hooks, tx| hooks.collapse_at_start(tx, key, selection),
@@ -464,6 +508,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
     };
     table.selection_transform = |tx, key| {
         mutate(
+            ForeignHook::SelectionTransform,
             tx,
             key,
             |hooks, tx| hooks.selection_transform(tx, key),
@@ -478,6 +523,12 @@ pub(crate) fn update_override(
     key: NodeKey,
     json: &SerializedNode,
 ) -> Option<Result<(), Error>> {
+    if tx
+        .foreign_native_calls
+        .consume(key, ForeignHook::UpdateFromJson)
+    {
+        return None;
+    }
     let registry = tx.pending.registry.clone();
     let mut entry = tx.type_index(key).and_then(|index| registry.node(index));
     while let Some(current) = entry {
