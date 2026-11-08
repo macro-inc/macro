@@ -76,7 +76,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   spread, maximum issued latency and one millisecond; never wait for query success.
   Once data work and old publications drain, issue one fresh selection and finite
   FIFO barrier pair so bounded skew cannot expire the entry-time publication
-  before the first view. Heartbeat restarts alone do not replace that view.
+  before the first view. Heartbeat restarts alone do not replace that view. At preliminary idle, also
+  deliver one real Visible rescan per lifetime and drain its adoption/snapshot
+  effects before capture; quiet still compares exact final storage metadata.
 - Record actual partition/offline losses on exact open socket generations, including
   packets lost at delivery. Preserve evidence across explicit Heal. During Settle,
   close only affected generations still open through real direct/router callbacks;

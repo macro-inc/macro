@@ -161,6 +161,18 @@ impl Sim {
                     // one fresh real selection before certifying the first view.
                     // This fixed phase never consults expected presence values.
                     published_at_idle = true;
+                    // Stop may release another owner's lease after the entry
+                    // Visible load. Rescan once through the real host input,
+                    // then drain adoption and snapshot work before capture.
+                    let visible = self
+                        .clients
+                        .iter()
+                        .filter(|(_, client)| client.alive)
+                        .map(|(name, client)| (name.clone(), client.session))
+                        .collect::<Vec<_>>();
+                    for (name, session) in visible {
+                        self.input(&name, session, SyncInput::Host(HostSignal::Visible))?;
+                    }
                     presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
                     self.resend_healing_presence(deadline)?;
                     continue;
