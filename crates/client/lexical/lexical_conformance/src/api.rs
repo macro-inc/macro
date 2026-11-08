@@ -7,6 +7,8 @@ include!(concat!(env!("OUT_DIR"), "/api_index.rs"));
 
 mod context;
 pub use context::Context;
+mod session;
+pub use session::Session;
 
 /// Every explicitly mapped API name, sorted in stable dispatch-ID order.
 ///
