@@ -133,6 +133,11 @@ fn fill(
     }
     Ok(())
 }
+pub(super) fn can_convert(view: &impl Read, list: NodeKey) -> Result<bool, Error> {
+    Ok(view.is::<ListNode>(list)
+        && view.parent(list) == Some(NodeKey::ROOT)
+        && grid(view, list)?.is_some())
+}
 pub(super) fn convert(tx: &mut Transaction<'_>, list: NodeKey) -> Result<bool, Error> {
     if !tx.is::<ListNode>(list) || tx.parent(list) != Some(NodeKey::ROOT) {
         return Ok(false);

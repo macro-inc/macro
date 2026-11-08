@@ -160,5 +160,18 @@ pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, E
     if let Some(payload) = text_paste::event_payload(event)? {
         return Ok(Some(payload));
     }
+    if let Some(payload) = table::event_payload(event)? {
+        return Ok(Some(payload));
+    }
     clipboard::event_payload(event)
+}
+
+/// Execute a Group B bulk read without live handles or host callbacks.
+pub fn query(
+    name: &str,
+    data: &serde_json::Value,
+    generation: u32,
+    state: &EditorState,
+) -> Result<Option<serde_json::Value>, Error> {
+    table::query(name, data, generation, state)
 }
