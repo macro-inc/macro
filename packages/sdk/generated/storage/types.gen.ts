@@ -12269,6 +12269,16 @@ export type InitialPropertyValue = {
 };
 
 /**
+ * An initiative's description.
+ */
+export type InitiativeDescription = {
+    /**
+     * GitHub-flavored markdown; empty while no one has opened or written it.
+     */
+    markdown: string;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -12363,6 +12373,73 @@ export type InitiativeList = {
      */
     initiatives: Array<InitiativeSummary>;
 };
+
+/**
+ * One authorized project collection page.
+ */
+export type InitiativePage = {
+    /**
+     * Rows in requested order.
+     */
+    initiatives: Array<InitiativePageRow>;
+    /**
+     * Continuation, absent when exhausted.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A project row with caller-specific permissions, properties and visible task progress.
+ */
+export type InitiativePageRow = InitiativeSummary & {
+    /**
+     * Number of visible tasks whose status is completed.
+     */
+    completedTaskCount: number;
+    /**
+     * Canonical property values.
+     */
+    properties: InitiativePropertySnapshot;
+    /**
+     * Number of associated tasks the caller may view.
+     */
+    taskCount: number;
+    /**
+     * Verified effective access for the caller.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Snapshot of canonical property values, never a second writable store.
+ */
+export type InitiativePropertySnapshot = {
+    /**
+     * Assigned user ids, independent of sharing membership.
+     */
+    assignees: Array<string>;
+    /**
+     * Whether the canonical task status represents completion.
+     */
+    completed: boolean;
+    /**
+     * Due timestamp, or unset.
+     */
+    dueDate?: string | null;
+    /**
+     * Priority option id, or unset.
+     */
+    priority?: string | null;
+    /**
+     * Status option id, or unset.
+     */
+    status?: string | null;
+};
+
+/**
+ * Supported collection ordering. Every ordering uses id as its final tie breaker.
+ */
+export type InitiativeSort = 'updated' | 'name' | 'due';
 
 /**
  * List-row view of an initiative.
@@ -18129,15 +18206,15 @@ export type SpreadsheetCellInput = {
      */
     address: string;
     /**
-     * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-     * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-     * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-     * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-     * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-     * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
+     * The new input: text or a formula, a number, true/false, or null to empty the cell.
      */
-    value: string;
+    value: SpreadsheetCellValue;
 };
+
+/**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
 
 /**
  * Applied edit summary.
@@ -29860,6 +29937,71 @@ export type CreateInitiativeResponses = {
 
 export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
 
+export type PageInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum rows, between one and one hundred; defaults to fifty.
+         */
+        limit?: number | null;
+        /**
+         * Opaque continuation returned by the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Case-insensitive name substring.
+         */
+        query?: string | null;
+        /**
+         * Required status option id.
+         */
+        status?: string | null;
+        /**
+         * Required priority option id.
+         */
+        priority?: string | null;
+        /**
+         * Required assignee user id.
+         */
+        assignee?: string | null;
+        /**
+         * Inclusive due-date lower bound.
+         */
+        dueAfter?: string | null;
+        /**
+         * Inclusive due-date upper bound.
+         */
+        dueBefore?: string | null;
+        /**
+         * Sort key; defaults to updated time.
+         */
+        sort?: InitiativeSort;
+        /**
+         * Descending order; defaults to true for updated time.
+         */
+        descending?: boolean | null;
+    };
+    url: '/initiatives/page';
+};
+
+export type PageInitiativesErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PageInitiativesError = PageInitiativesErrors[keyof PageInitiativesErrors];
+
+export type PageInitiativesResponses = {
+    200: InitiativePage;
+};
+
+export type PageInitiativesResponse = PageInitiativesResponses[keyof PageInitiativesResponses];
+
 export type DeleteInitiativeData = {
     body?: never;
     path: {
@@ -29954,6 +30096,36 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type GetInitiativeDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/description';
+};
+
+export type GetInitiativeDescriptionErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeDescriptionError = GetInitiativeDescriptionErrors[keyof GetInitiativeDescriptionErrors];
+
+export type GetInitiativeDescriptionResponses = {
+    200: InitiativeDescription;
+};
+
+export type GetInitiativeDescriptionResponse = GetInitiativeDescriptionResponses[keyof GetInitiativeDescriptionResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;

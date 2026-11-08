@@ -168,6 +168,22 @@ local resources.
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
 | Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of Grafana, Loki and Tempo downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
 
+Build handoffs use Namespace artifact storage at
+`handoff/<run_id>-<run_attempt>/<service>/<file>`, with a 24-hour expiry.
+The shared upload wrapper retries only the explicit finalization
+`DeadlineExceeded` diagnostic, at most three invocations with 5/10-second
+backoff and a five-minute bound per CLI process (20-minute step bound).
+Other errors, cancellation, local timeouts and exhausted retries fail the job.
+It verifies the completed tarball's SHA-256 and size before each invocation and
+after completion; retries never rebuild, repack or read from another attempt.
+Success requires an actual zero CLI exit, not object existence or a receipt.
+Namespace [versions repeated uploads](https://namespace.so/docs/architecture/storage/artifact-storage),
+so a lost finalization response can leave duplicate, identical expiring versions;
+this is content-safe repetition, not exactly-once publication. Each path has one
+build-job producer and the archive must remain immutable while it uploads.
+Both deploy-all and single-service workflows use this helper. Download paths and
+build/deployment failure gates remain attempt-scoped.
+
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
   `macrodb`, `doppler-projects`, `monitoring`, `observability` and a few
   others are manual.

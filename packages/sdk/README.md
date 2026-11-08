@@ -452,6 +452,29 @@ const transcript = await routine.execute(); // Chat or AgentSession, if availabl
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
+A routine can instead run `steps` in order: `code` steps run TypeScript against
+this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
+hands the run to a model or agent. Code steps' writes are attributed to Macro's
+agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
+user explicitly asks for the routine to act, send or post as them:
+
+```ts
+await macro.routines.create({
+  name: 'Say hello',
+  trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+  steps: [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: `export async function main({ macro }: StepContext) {
+  await macro.channels.byId(channelId).send('Hello');
+}`,
+    },
+  ],
+  dangerouslyOperateAsUser: true,
+});
+```
+
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
@@ -563,9 +586,17 @@ atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
-`macro.initiatives.create/list/byId` groups tasks and members. Relations return user
+`macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and
-`delete()` manage it.
+`delete()` manage it. `initiatives.list({ query, status, priority, assignee,
+dueAfter, dueBefore, sort })` iterates the matching initiatives with their Status,
+Priority, assignees, due date and progress over the tasks the caller can view;
+`initiatives.summaries()` reads every name in one request.
+`initiative.description()` returns its description as Markdown, and
+`comments()`, `comment(body)` and `commentById(id)` read and write its
+discussion; `comment.reply(body)` answers a thread. Its comments are the same
+`DiscussionComment` handles CRM companies and contacts use (formerly
+`CrmComment`).
 
 ### Access requests and message threads
 

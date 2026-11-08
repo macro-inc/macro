@@ -30105,6 +30105,9 @@ export const calculateSpreadsheetParams = zod.object({
   document_id: zod.string().describe('Document identity'),
 });
 
+export const calculateSpreadsheetBodyOverridesItemCellsItemValueDefaultFour =
+  null;
+
 export const calculateSpreadsheetBody = zod
   .object({
     formulas: zod
@@ -30134,9 +30137,26 @@ export const calculateSpreadsheetBody = zod
                       .string()
                       .describe('A1 address, from A1 through XFD100000.'),
                     value: zod
-                      .string()
+                      .union([
+                        zod.boolean().describe('TRUE or FALSE.'),
+                        zod
+                          .number()
+                          .describe(
+                            'A number, passed to the engine exactly as written.'
+                          ),
+                        zod
+                          .string()
+                          .describe(
+                            'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                          ),
+                        zod
+                          .null()
+                          .describe(
+                            "Empties the cell's input; formatting stays."
+                          ),
+                      ])
                       .describe(
-                        'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                        "A cell's new input, typed as the caller has it."
                       ),
                   })
                   .describe(
@@ -30888,6 +30908,7 @@ export const editSpreadsheetParams = zod.object({
   document_id: zod.string().describe('Document identity'),
 });
 
+export const editSpreadsheetBodyOperationsItemCellsItemValueDefaultFour = null;
 export const editSpreadsheetBodyOperationsItemStyleFontSizeMin = 0;
 
 export const editSpreadsheetBodyOperationsItemStyleIndentMin = 0;
@@ -30917,9 +30938,26 @@ export const editSpreadsheetBody = zod
                           .string()
                           .describe('A1 address, from A1 through XFD100000.'),
                         value: zod
-                          .string()
+                          .union([
+                            zod.boolean().describe('TRUE or FALSE.'),
+                            zod
+                              .number()
+                              .describe(
+                                'A number, passed to the engine exactly as written.'
+                              ),
+                            zod
+                              .string()
+                              .describe(
+                                'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                              ),
+                            zod
+                              .null()
+                              .describe(
+                                "Empties the cell's input; formatting stays."
+                              ),
+                          ])
                           .describe(
-                            'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                            "A cell's new input, typed as the caller has it."
                           ),
                       })
                       .describe(
@@ -41740,6 +41778,122 @@ export const createInitiativeResponse = zod
   );
 
 /**
+ * @summary Page the initiatives the caller can view, filtered by name and canonical properties,
+with each row's properties and progress over the tasks the caller can view.
+ */
+export const pageInitiativesQueryLimitMin = 0;
+
+export const pageInitiativesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(pageInitiativesQueryLimitMin)
+    .nullish()
+    .describe('Maximum rows, between one and one hundred; defaults to fifty.'),
+  cursor: zod
+    .string()
+    .nullish()
+    .describe('Opaque continuation returned by the previous page.'),
+  query: zod.string().nullish().describe('Case-insensitive name substring.'),
+  status: zod.uuid().nullish().describe('Required status option id.'),
+  priority: zod.uuid().nullish().describe('Required priority option id.'),
+  assignee: zod.string().nullish().describe('Required assignee user id.'),
+  dueAfter: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date lower bound.'),
+  dueBefore: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date upper bound.'),
+  sort: zod
+    .enum(['updated', 'name', 'due'])
+    .optional()
+    .describe('Sort key; defaults to updated time.'),
+  descending: zod
+    .boolean()
+    .nullish()
+    .describe('Descending order; defaults to true for updated time.'),
+});
+
+export const pageInitiativesResponseInitiativesItemCompletedTaskCountMin = 0;
+
+export const pageInitiativesResponseInitiativesItemTaskCountMin = 0;
+
+export const pageInitiativesResponse = zod
+  .object({
+    initiatives: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+              ),
+            name: zod.string().describe('Display name.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the initiative was last updated.'),
+          })
+          .describe('List-row view of an initiative.')
+          .and(
+            zod.object({
+              completedTaskCount: zod
+                .number()
+                .min(
+                  pageInitiativesResponseInitiativesItemCompletedTaskCountMin
+                )
+                .describe('Number of visible tasks whose status is completed.'),
+              properties: zod
+                .object({
+                  assignees: zod
+                    .array(zod.string())
+                    .describe(
+                      'Assigned user ids, independent of sharing membership.'
+                    ),
+                  completed: zod
+                    .boolean()
+                    .describe(
+                      'Whether the canonical task status represents completion.'
+                    ),
+                  dueDate: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Due timestamp, or unset.'),
+                  priority: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Priority option id, or unset.'),
+                  status: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Status option id, or unset.'),
+                })
+                .describe(
+                  'Snapshot of canonical property values, never a second writable store.'
+                ),
+              taskCount: zod
+                .number()
+                .min(pageInitiativesResponseInitiativesItemTaskCountMin)
+                .describe('Number of associated tasks the caller may view.'),
+              userAccessLevel: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            })
+          )
+          .describe(
+            'A project row with caller-specific permissions, properties and visible task progress.'
+          )
+      )
+      .describe('Rows in requested order.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Continuation, absent when exhausted.'),
+  })
+  .describe('One authorized project collection page.');
+
+/**
  * @summary Fetch one initiative the caller can view.
  */
 export const getInitiativeParams = zod.object({
@@ -41971,6 +42125,23 @@ export const updateInitiativeResponse = zod
   .describe(
     'Full initiative returned to a caller, including members, tasks, and share state.'
   );
+
+/**
+ * @summary Read the description of an initiative the caller can view.
+ */
+export const getInitiativeDescriptionParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeDescriptionResponse = zod
+  .object({
+    markdown: zod
+      .string()
+      .describe(
+        'GitHub-flavored markdown; empty while no one has opened or written it.'
+      ),
+  })
+  .describe("An initiative's description.");
 
 /**
  * @summary Gets the instructions document for the current user

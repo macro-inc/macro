@@ -9,6 +9,7 @@ import {
   persistLocalEmailSend,
   readLocalDraft,
   readLocalEmailSends,
+  readRemovedEmailSendCopy,
   removeLocalEmailSend,
   watchLocalEmailSends,
 } from './local-drafts';
@@ -56,6 +57,22 @@ export function emailSendMatchesDraft(
 export async function readEmailSendIntents(): Promise<EmailSendIntent[]> {
   const rows = await readLocalEmailSends();
   return usableEmailSendIntents(rows);
+}
+
+/**
+ * The working-copy version a send from this browser carried for a draft, or
+ * undefined when no send here took it (it was sent from another device). The
+ * live intent is read first: removal records its copy before deleting it.
+ */
+export async function readSentWorkingCopy(
+  draftId: string
+): Promise<Pick<SendWorkingCopy, 'generation' | 'revision'> | undefined> {
+  const intent = (await readEmailSendIntents()).find(
+    (row) => emailSendMatchesDraft(row, draftId) && emailSendLocked(row)
+  );
+  const copy = intent?.metadata.payload.workingCopy;
+  if (copy) return { generation: copy.generation, revision: copy.revision };
+  return await readRemovedEmailSendCopy(draftId);
 }
 
 export const watchEmailSends = watchLocalEmailSends;

@@ -25,7 +25,7 @@ enforced by the ordinary backend APIs.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
-  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
+  in the harness's `sdk_endpoints`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `Document.readPresentation`/`editPresentation`/`copyPresentation`,
   `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
@@ -44,7 +44,11 @@ enforced by the ordinary backend APIs.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
-  included) that the `ListCodingAgents` tool serves.
+  included) that the `ListCodingAgents` tool serves. `routines.create` takes
+  either the single agent task or `steps` (generated `CodeStep`s, agent steps
+  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
+  restricts to an explicit user request; `routineBody` maps both onto the
+  scheduler's `RoutineTask`.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -177,8 +181,13 @@ the existing gateway prefixes.
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
   or `initiatives.summaries` (the list response); `name()` per handle loads each
-  entity. Task create `propertyValues` replace the service defaults (creator
-  assigned, Not started), so `Task.create` spells them out when it sends any.
+  entity. `initiatives.list(filters)` pages `/initiatives/page` and maps
+  the system Status and Priority option ids to names; keep its tables in step
+  with `system_properties`' `StatusOption` and `PriorityOption`. Task create
+  `propertyValues` replace the service defaults (creator assigned, Not
+  started), so `Task.create` spells them out when it sends any.
+- CRM records and initiatives share `messages/discussion.ts`: their comments are
+  messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Team routes act on the caller's current team, which the auth service
