@@ -20,6 +20,9 @@ fn typed_server_composers_match_all_source_goldens() -> macro_document_model::Re
         let input = &row["input"];
         let actual = (|| -> macro_document_model::Result<String> {
             match row["route"].as_str().expect("route") {
+                "endpoint-announcement" => {
+                    Ok(wire::handle_agent_announcement(input, &context)?.markdown)
+                }
                 "agent-context" => {
                     wire::compose_agent_context(&wire::agent_context_from_json(input)?, &context)
                 }
@@ -53,6 +56,7 @@ fn typed_server_composers_match_all_source_goldens() -> macro_document_model::Re
     }
     assert!(native_inputs.len() >= 50, "native typed context coverage");
     use std::io::Write;
+    let native_input_bytes = serde_json::to_vec(&native_inputs)?;
     let mut source = std::process::Command::new("bun")
         .args([
             concat!(
@@ -70,7 +74,7 @@ fn typed_server_composers_match_all_source_goldens() -> macro_document_model::Re
         .stdin
         .take()
         .expect("oracle stdin")
-        .write_all(&serde_json::to_vec(&native_inputs)?)
+        .write_all(&native_input_bytes)
         .expect("native inputs");
     let source = source.wait_with_output().expect("native oracle completion");
     assert!(

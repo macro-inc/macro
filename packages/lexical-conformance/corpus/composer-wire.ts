@@ -13,7 +13,8 @@ for (;;) {
   let end = match.index + match[0].length,
     depth = 1;
   while (depth) {
-    if(end>=source.length)throw Error("Unbalanced server domain implementation");
+    if (end >= source.length)
+      throw Error('Unbalanced server domain implementation');
     depth += Number(source[end] === '{') - Number(source[end] === '}');
     end++;
   }
