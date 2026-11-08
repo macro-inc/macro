@@ -13,6 +13,9 @@ The host supplies identities and both clocks and executes the returned effects.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Use `EditorSurface::view_diff` for a cold repaint without resetting sync/history.
 - Surface imports queue view effects in the same output as their sync input.
+- Hold composing-paragraph remote imports only in the live editor; keep the canonical
+  sync/WAL/ack document current and publish local IME edits immediately. End the
+  hold at composition end, 3 seconds or 64 new imports; merge through Loro.
 - Use the supplied editor factory for live editors and headless comment forks.
   Application registry/policy wiring belongs to macro_document_model (WP-28/29).
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
@@ -38,7 +41,7 @@ successful binding. Validate complete generic batches before changing the live d
 ## Start here
 
 - `src/session.rs`: shared lifecycle, SyncDoc lending adapter and ordered output drain.
-- `src/editor.rs`: initialization, immediate remote repair and deterministic Loro grouping.
+- `src/editor.rs`: initialization, remote repair and deterministic Loro grouping.
 - `src/editor/builder.rs`: default registry, command handlers and persistent node-id index.
 - `src/generic/validate.rs`: semantic shadow validation before any native operation.
 - `src/generic/surface.rs`: native event collection and observed-path replacement handling.

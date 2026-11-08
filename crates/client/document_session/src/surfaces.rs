@@ -125,6 +125,66 @@ impl Surface for EditorSurface {
     ) -> Result<Vec<u8>, doc_sync_core::CommentRefusal> {
         self.stage(doc, request, peer, now)
     }
+    fn composing(&self) -> bool {
+        matches!(
+            self.core.composition(),
+            lexical_model::Composition::Composing { .. }
+        )
+    }
+    fn composition_changed(&self, before: &LoroDoc, after: &LoroDoc) -> bool {
+        use loro::ContainerTrait;
+        let lexical_model::Composition::Composing { key } = self.core.composition() else {
+            return false;
+        };
+        let view = self.state().view();
+        let paragraph = view.parent(key).unwrap_or(key);
+        let Some(id) = self
+            .projection
+            .as_ref()
+            .and_then(|projection| projection.container_of(paragraph))
+        else {
+            return true;
+        };
+        match (
+            before.get_container(id.clone()),
+            after.get_container(id.clone()),
+        ) {
+            (Some(loro::Container::Map(a)), Some(loro::Container::Map(b))) => {
+                b.is_deleted() || a.get_deep_value() != b.get_deep_value()
+            }
+            _ => true,
+        }
+    }
+    fn end_composition(
+        &mut self,
+        doc: &LoroDoc,
+        now: Now,
+        access: Access,
+        view: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError> {
+        use lexical_model::*;
+        let Composition::Composing { key } = self.core.composition() else {
+            return Ok(());
+        };
+        let text = self.state().view().text_content(key).into_owned();
+        self.apply(
+            doc,
+            Input::Composition {
+                event: CompositionEvent::End {
+                    key,
+                    text,
+                    anchor: None,
+                    focus: None,
+                    data: String::new(),
+                },
+                selection: ViewSelection::KeepModel,
+            },
+            now,
+            access,
+            view,
+        )?;
+        Ok(())
+    }
     fn drop_binding(&mut self) {
         self.clear_binding();
     }
@@ -187,6 +247,21 @@ impl Surface for GenericSurface {
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
         self.local(doc, input, now, access, ready, view)
+    }
+    fn composing(&self) -> bool {
+        false
+    }
+    fn composition_changed(&self, _: &LoroDoc, _: &LoroDoc) -> bool {
+        false
+    }
+    fn end_composition(
+        &mut self,
+        _: &LoroDoc,
+        _: Now,
+        _: Access,
+        _: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError> {
+        Ok(())
     }
     fn drop_binding(&mut self) {
         self.drop_binding();
