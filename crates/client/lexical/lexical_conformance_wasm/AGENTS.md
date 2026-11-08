@@ -140,3 +140,5 @@ EditorHandle::read_state hosts associated-editor reads of retained versions thro
 isInline is the first hosted pure predicate: use the owned read peer and JS truthiness inside a fallible ForeignReadOperation. Opaque throws defer to the operation boundary; stop later callbacks/writes/caches before returning the original value. This private JS adapter is supported only through scoped host entry points; direct unscoped model predicate reads cannot invoke JS. Text and line-break inline flags remain fixed non-hooks.
 
 canBeEmpty shares the scoped predicate/error adapter. Child removal happens before the parent predicate; a thrown predicate must preserve that earlier detach and stop subsequent empty-parent cleanup, matching the pinned native algorithm.
+
+All no-argument boolean ForeignHooks use the shared predicate adapter. Keep one literal per hook plus native editing cases; a canHaveFormat failure must stop later predicate callbacks and format setters while preserving opaque error identity.
