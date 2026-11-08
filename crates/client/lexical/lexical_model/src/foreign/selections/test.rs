@@ -1,6 +1,133 @@
 use super::*;
 
 #[test]
+fn previous_selection_hydration_reuses_the_committed_object_without_activation() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    assert!(tx.detach_previous_foreign_selection()?.is_none());
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(3)), Some(Utf16Offset(1)))?;
+    assert!(tx.range_is_backward_at(SelectionSlot::Active)?);
+    let original = tx
+        .foreign_selection_identity(SelectionSlot::Active)
+        .expect("original");
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    let current = tx
+        .foreign_selection_identity(SelectionSlot::Active)
+        .expect("current");
+    let capture = tx.view().snapshot_for_foreign_read()?;
+    let committed = tx.committed_state().clone();
+    capture.with_read_transaction(&committed, |peer| -> Result<(), Error> {
+        let slot = peer.detach_previous_foreign_selection()?.expect("previous");
+        assert_eq!(
+            peer.foreign_selection_identity(slot),
+            Some(original.clone())
+        );
+        assert_eq!(peer.range_at(slot)?.cached_is_backward(), Some(true));
+        assert_eq!(peer.anchor_at(slot)?.offset(), 3);
+        assert_eq!(peer.detach_previous_foreign_selection()?, Some(slot));
+        assert_eq!(
+            peer.foreign_selection_identity(SelectionSlot::Active),
+            Some(current.clone())
+        );
+        assert!(
+            peer.view()
+                .snapshot_for_foreign_read()?
+                .contains_selection_identity(&original)
+        );
+        Ok(())
+    })??;
+    let slot = tx.detach_previous_foreign_selection()?.expect("previous");
+    assert_ne!(slot, SelectionSlot::Active);
+    assert_eq!(tx.foreign_selection_identity(slot), Some(original.clone()));
+    assert_eq!(tx.range_at(slot)?.cached_is_backward(), Some(true));
+    assert_eq!(tx.detach_previous_foreign_selection()?, Some(slot));
+    assert_eq!(
+        tx.foreign_selection_identity(SelectionSlot::Active),
+        Some(current)
+    );
+    let pending = tx.suspend();
+    let mut tx = editor.resume(pending)?;
+    assert_eq!(tx.detach_previous_foreign_selection()?, Some(slot));
+    assert_eq!(tx.foreign_selection_identity(slot), Some(original));
+    assert!(tx.commit()?.is_noop());
+    Ok(())
+}
+
+#[test]
+fn committed_and_previous_selection_objects_keep_identity_across_noop_updates() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(3)), Some(Utf16Offset(1)))?;
+    assert!(tx.range_is_backward_at(SelectionSlot::Active)?);
+    let identity = tx
+        .foreign_selection_identity(SelectionSlot::Active)
+        .expect("identity");
+    let committed = tx.commit()?.next;
+    assert!(
+        committed
+            .view()
+            .snapshot_for_foreign_read()?
+            .contains_selection_identity(&identity)
+    );
+    assert!(
+        committed
+            .clone()
+            .view()
+            .snapshot_for_foreign_read()?
+            .contains_selection_identity(&identity)
+    );
+    let replacement = committed.with_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::text(text, Utf16Offset(2)),
+    ))));
+    assert!(
+        !replacement
+            .view()
+            .snapshot_for_foreign_read()?
+            .contains_selection_identity(&identity)
+    );
+    assert_eq!(
+        committed
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .cached_is_backward(),
+        Some(true)
+    );
+    let tx = editor.transaction();
+    let pending = tx
+        .foreign_selection_identity(SelectionSlot::Active)
+        .expect("pending");
+    assert_ne!(identity, pending);
+    assert_eq!(tx.range_selection()?.cached_is_backward(), None);
+    let snapshot = tx.view().snapshot_for_foreign_read()?;
+    assert!(snapshot.contains_selection_identity(&identity));
+    assert!(snapshot.contains_selection_identity(&pending));
+    let unchanged = tx.commit()?;
+    assert!(unchanged.is_noop());
+    let snapshot = unchanged.next.view().snapshot_for_foreign_read()?;
+    assert!(snapshot.contains_selection_identity(&identity));
+    assert!(!snapshot.contains_selection_identity(&pending));
+    Ok(())
+}
+
+#[test]
 fn replaced_objects_retain_values_and_identity_through_reads_suspend_and_reactivation()
 -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)

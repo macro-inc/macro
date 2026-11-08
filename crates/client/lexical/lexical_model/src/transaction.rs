@@ -34,6 +34,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_previous_selection_identity: Option<ForeignSelectionIdentity>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) events: Vec<PluginEvent>,
@@ -87,6 +89,8 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
             #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: None,
+            #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             extensions: editor.extensions.clone(),
             events: vec![],
@@ -139,6 +143,12 @@ impl<'editor> Transaction<'editor> {
             detached_selections: &self.detached,
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_identities: Some(&self.foreign_selections),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: if self.foreign_read_only {
+                self.foreign_previous_selection_identity.as_ref()
+            } else {
+                Some(&self.editor.state.foreign_selection_identity)
+            },
             #[cfg(feature = "foreign-nodes")]
             source_records: self.foreign_read_sources.as_ref(),
             #[cfg(feature = "foreign-nodes")]

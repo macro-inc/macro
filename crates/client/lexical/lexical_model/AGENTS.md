@@ -144,3 +144,5 @@ Toggle text directionless/unmergeable bits directly on the writable detail field
 Development selection identities use pointer tokens with no retained model data. Retire replaced objects into detached slots before callbacks; preserve tokens across suspend/read captures, explicit reactivation and removeText restoration. In-place point/format/normalization updates preserve tokens. Native replace installs a cloned RangeSelection after structural edits; NodeSelection stays the original object.
 
 Use ForeignReadSnapshot::contains_selection_identity to distinguish inherited selection objects from newly owned peer values; never infer that distinction from transaction-local slot indices.
+
+Retain the current selection token and memo in immutable committed state clones; clone/reset selection values explicitly for pending updates. Publish the pending token only with the pending state so no-op commits retain the committed object. Give with_selection replacement snapshots a fresh token. Carry previous selection identity through owned read captures/suspension and hydrate it with detach_previous_foreign_selection without activation or write permission.

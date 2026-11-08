@@ -82,6 +82,7 @@ pub struct ForeignReadSnapshot {
     state: EditorState,
     native_calls: Option<Arc<super::native::NativeCalls>>,
     previous_selection: Option<Selection>,
+    previous_selection_identity: Option<ForeignSelectionIdentity>,
     composition_key: Option<NodeKey>,
     source_records: crate::state::NodeMap,
     detached: Vec<Option<Selection>>,
@@ -118,6 +119,7 @@ impl Clone for ForeignReadSnapshot {
                 .previous_selection
                 .as_ref()
                 .map(Selection::snapshot_for_foreign_read),
+            previous_selection_identity: self.previous_selection_identity.clone(),
             composition_key: self.composition_key,
             source_records: self.source_records.clone(),
             origin: self.origin.clone(),
@@ -144,6 +146,7 @@ impl ForeignReadSnapshot {
     pub fn contains_selection_identity(&self, identity: &ForeignSelectionIdentity) -> bool {
         &self.selection_identities.current == identity
             || self.selection_identities.detached.contains(identity)
+            || self.previous_selection_identity.as_ref() == Some(identity)
     }
 
     /// Whether this capture originated in the given editor and exact update.
@@ -208,6 +211,7 @@ impl ForeignReadSnapshot {
             .previous_selection
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
+        tx.foreign_previous_selection_identity = self.previous_selection_identity.clone();
         tx.foreign_selections = self.selection_identities.clone();
         tx.detached = self
             .detached
@@ -230,6 +234,7 @@ impl Read for ForeignReadSnapshot {
             foreign_origin: self.origin.as_ref().map(ReadOrigin::borrowed),
             detached_selections: &self.detached,
             foreign_selection_identities: Some(&self.selection_identities),
+            foreign_previous_selection_identity: self.previous_selection_identity.as_ref(),
             previous_selection: self.previous_selection.as_ref(),
             composition_key: self.composition_key,
         }
@@ -272,6 +277,9 @@ impl StateRef<'_> {
             .selection
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
+        if let Some(identities) = self.foreign_selection_identities {
+            state.foreign_selection_identity = identities.current.clone();
+        }
         let mut source_records = self.source_records.cloned().unwrap_or_default();
         let projections = self.native_projection.into_iter().chain(
             self.foreign_projections
@@ -306,6 +314,7 @@ impl StateRef<'_> {
             previous_selection: self
                 .previous_selection
                 .map(Selection::snapshot_for_foreign_read),
+            previous_selection_identity: self.foreign_previous_selection_identity.cloned(),
             composition_key: self.composition_key,
             source_records,
             origin: self.foreign_origin.map(ReadOriginRef::capture),
@@ -313,7 +322,10 @@ impl StateRef<'_> {
             selection_identities: self
                 .foreign_selection_identities
                 .cloned()
-                .unwrap_or_default(),
+                .unwrap_or_else(|| super::selections::SelectionIdentities {
+                    current: self.state.foreign_selection_identity.clone(),
+                    detached: Vec::new(),
+                }),
             detached: self
                 .detached_selections
                 .iter()

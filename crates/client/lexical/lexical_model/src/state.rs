@@ -13,9 +13,10 @@ pub(crate) type NodeMap = imbl::GenericHashMap<
     imbl::shared_ptr::ArcK,
 >;
 /// An immutable snapshot; cloning shares the persistent node map and node records.
-#[derive(Clone)]
 /// s2: UPD-02
 pub struct EditorState {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selection_identity: ForeignSelectionIdentity,
     pub(crate) registry: Arc<Registry>,
     pub(crate) nodes: NodeMap,
     pub(crate) selection: Option<Selection>,
@@ -24,6 +25,26 @@ pub struct EditorState {
     // Opaque text hooks can inspect arbitrary model state. Their presence rules
     // out proving root-text equality from the changed text record alone.
     pub(crate) opaque_text_count: usize,
+}
+impl Clone for EditorState {
+    fn clone(&self) -> Self {
+        Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identity: self.foreign_selection_identity.clone(),
+            registry: self.registry.clone(),
+            nodes: self.nodes.clone(),
+            #[cfg(feature = "foreign-nodes")]
+            selection: self
+                .selection
+                .as_ref()
+                .map(Selection::snapshot_for_foreign_read),
+            #[cfg(not(feature = "foreign-nodes"))]
+            selection: self.selection.clone(),
+            root_text: self.root_text.clone(),
+            max_key: self.max_key,
+            opaque_text_count: self.opaque_text_count,
+        }
+    }
 }
 impl EditorState {
     pub(crate) fn empty(registry: Arc<Registry>) -> Result<Self, Error> {
@@ -45,6 +66,8 @@ impl EditorState {
             }),
         );
         Ok(Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identity: Default::default(),
             registry,
             nodes,
             selection: None,
@@ -56,6 +79,7 @@ impl EditorState {
     pub(crate) fn pending(&self) -> Self {
         Self {
             root_text: Arc::new(OnceLock::new()),
+            selection: self.selection.clone(),
             ..self.clone()
         }
     }
@@ -80,6 +104,8 @@ impl EditorState {
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_identities: None,
             #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: Some(&self.foreign_selection_identity),
+            #[cfg(feature = "foreign-nodes")]
             source_records: None,
             #[cfg(feature = "foreign-nodes")]
             retired_records: None,
@@ -101,6 +127,8 @@ impl EditorState {
     /// Share the nodes with a different selection.
     pub fn with_selection(&self, selection: Option<Selection>) -> Self {
         Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identity: Default::default(),
             selection,
             ..self.clone()
         }
