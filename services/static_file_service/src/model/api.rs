@@ -1,7 +1,7 @@
 use crate::service::dynamodb::model::MetadataObject;
-use models_sfs::FileMetadata;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sfs_types::FileMetadata;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -20,7 +20,7 @@ internal-auth-key-authenticated requests.
 
 ## Boundaries
 
-- Depends on: `models_sfs`, `macro_aws_config`, `reqwest`.
+- Depends on: `sfs_types`, `macro_aws_config`, `reqwest`.
 - Used by: `services/document_storage_service`, `services/agent_harness_service`,
   `services/email_service`, `crates/comms/channels`, `crates/agents/cursor_cloud_agents`,
   `crates/ai/agent_tools`, `crates/ai/image_generation`.
