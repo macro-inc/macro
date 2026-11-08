@@ -7,6 +7,7 @@ use axum::{
     http::{Request, StatusCode, request::Builder},
 };
 use bot_id::NonSystemBotId;
+use document_id::DocumentId;
 use embedding::embedding_provider::openai::TextEmbedding3Small;
 use entity_access::domain::{
     models::{
@@ -567,7 +568,7 @@ impl DocumentService for FakeDocumentService {
 impl DocumentContentEventService for FakeDocumentService {
     async fn publish_sync_content_updated(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
         self.sync_content_calls
@@ -582,7 +583,7 @@ impl DocumentContentEventService for FakeDocumentService {
 
     async fn publish_content_uploaded(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         file_type: FileType,
         document_version_id: Option<String>,
     ) -> Result<(), DocumentError> {

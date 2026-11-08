@@ -107,6 +107,7 @@ service = [
 
 [dependencies]
 agent_correlation = { workspace = true }
+document_id = { workspace = true }
 macro_db_client = { workspace = true, default-features = true, optional = true }
 macro_sha_count_client = { workspace = true, optional = true }
 sqs_client = { workspace = true, default-features = true, optional = true }

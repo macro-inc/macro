@@ -5,10 +5,11 @@ publish = false
 version = "0.1.0"
 
 [features]
-json-schema = ["dep:schemars"]
-schema = ["dep:utoipa"]
+json-schema = ["dep:schemars", "document_id/json-schema"]
+schema = ["dep:utoipa", "document_id/schema"]
 
 [dependencies]
+document_id = { workspace = true }
 model_entity = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

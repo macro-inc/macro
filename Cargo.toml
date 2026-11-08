@@ -206,6 +206,7 @@ members = [
   "crates/types/chat_message",
   "crates/types/cowlike",
   "crates/types/database_id",
+  "crates/types/document_id",
   "crates/types/email_thread_id",
   "crates/types/entity_basic_types",
   "crates/types/form_id",
@@ -713,6 +714,7 @@ databases_sql = { path = "crates/databases/databases_sql" }
 decode_jwt = { path = "crates/platform/decode_jwt" }
 dictation = { path = "crates/ai/dictation" }
 document_cognition_service_url = { path = "crates/platform/service_urls/document_cognition_service_url" }
+document_id = { path = "crates/types/document_id" }
 document_storage_service_client = { path = "crates/clients/document_storage_service_client" }
 document_storage_service_url = { path = "crates/platform/service_urls/document_storage_service_url" }
 document_sub_type = { path = "crates/types/document_sub_type", default-features = false }

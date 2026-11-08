@@ -1,3 +1,4 @@
+use document_id::DocumentId;
 use entity_access::domain::models::MemberTeamRole;
 use foreign_entity::domain::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
@@ -1802,7 +1803,11 @@ async fn content_uploaded_publishes_document_event_with_owner_and_version() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
 
     service
-        .publish_content_uploaded("doc-1", FileType::Pdf, Some("convert".to_string()))
+        .publish_content_uploaded(
+            &DocumentId::parse("doc-1").unwrap(),
+            FileType::Pdf,
+            Some("convert".to_string()),
+        )
         .await
         .unwrap();
 
@@ -1828,7 +1833,7 @@ async fn content_uploaded_preserves_an_absent_version() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
 
     service
-        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .publish_content_uploaded(&DocumentId::parse("doc-1").unwrap(), FileType::Pdf, None)
         .await
         .unwrap();
 
@@ -1851,7 +1856,11 @@ async fn content_uploaded_maps_a_missing_document_to_not_found() {
 
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let result = service
-        .publish_content_uploaded("missing-doc", FileType::Pdf, None)
+        .publish_content_uploaded(
+            &DocumentId::parse("missing-doc").unwrap(),
+            FileType::Pdf,
+            None,
+        )
         .await;
 
     assert!(matches!(
@@ -1871,7 +1880,7 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
         make_test_service_with_configured_event_broker(repo, event_broker);
 
     let result = service
-        .publish_content_uploaded("doc-1", FileType::Pdf, None)
+        .publish_content_uploaded(&DocumentId::parse("doc-1").unwrap(), FileType::Pdf, None)
         .await;
 
     assert!(matches!(result, Err(DocumentError::Internal(_))));

@@ -6,6 +6,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use document_id::DocumentId;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -55,7 +56,11 @@ pub async fn sync_content_updated_handler<
     }
     state
         .service
-        .publish_sync_content_updated(&document_id, editors)
+        .publish_sync_content_updated(
+            &DocumentId::parse(&document_id)
+                .map_err(|_| DocumentError::NotFound(document_id.clone()))?,
+            editors,
+        )
         .await?;
     Ok(StatusCode::OK)
 }

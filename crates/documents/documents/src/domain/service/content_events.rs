@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::domain::events::{DocumentContentUploadedMetadata, DocumentSyncContentUpdatedMetadata};
+use document_id::DocumentId;
 
 impl<
     R: DocumentRepo,
@@ -17,10 +18,11 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn publish_content_uploaded(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         file_type: FileType,
         document_version_id: Option<String>,
     ) -> Result<(), DocumentError> {
+        let document_id = document_id.as_str();
         let document = self
             .repo
             .get_basic_document(document_id)
@@ -44,9 +46,10 @@ impl<
     #[tracing::instrument(err, skip(self))]
     async fn publish_sync_content_updated(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> Result<(), DocumentError> {
+        let document_id = document_id.as_str();
         let document = self
             .repo
             .get_basic_document(document_id)

@@ -6986,6 +6986,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_id"
+version = "0.1.0"
+dependencies = [
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "utoipa",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
@@ -7315,6 +7326,7 @@ dependencies = [
  "cloudfront_sign",
  "comms_db_client",
  "connection",
+ "document_id",
  "document_sub_type",
  "docx_engine",
  "embedding",
@@ -13650,6 +13662,7 @@ dependencies = [
 name = "message_parent"
 version = "0.1.0"
 dependencies = [
+ "document_id",
  "model_entity",
  "schemars 1.2.1",
  "serde",

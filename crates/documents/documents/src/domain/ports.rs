@@ -14,6 +14,7 @@ mod test;
 use std::collections::HashMap;
 use std::future::Future;
 
+use document_id::DocumentId;
 use entity_access::domain::models::{
     AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, EntityType, MemberTeamRole,
     OwnerAccessLevel, ViewAccessLevel,
@@ -493,7 +494,7 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
     /// Load the document owner and publish a content-uploaded event.
     fn publish_content_uploaded(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         file_type: FileType,
         document_version_id: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
@@ -502,7 +503,7 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
     /// supply document identity and editors without interpreting the content.
     fn publish_sync_content_updated(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         editors: Vec<crate::domain::events::DocumentSyncEditor>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
