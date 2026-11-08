@@ -758,3 +758,68 @@ fn revoked_helpers_leave_assistance_retained_until_they_can_write_again() {
     }));
     assert!(h.core.assist_push.is_some());
 }
+
+#[test]
+fn own_ack_prevents_later_assistance_of_the_same_committed_span() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let entry = h.core.wal.entries.back().unwrap();
+    let record = StoredWalRecord {
+        delivered: false,
+        record: WalRecord {
+            seq: WalSeq(4),
+            created_at: now(h.time).wall,
+            user: h.core.config.user.clone(),
+            foreign: true,
+            quarantined: false,
+            bytes: entry.bytes.to_vec(),
+        },
+    };
+    h.ack();
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+    assert!(
+        !h.out
+            .io
+            .iter()
+            .any(|io| matches!(io, IoEffect::SocketSend { .. }))
+    );
+}
+
+#[test]
+fn own_ack_evidence_excludes_unpushed_rows_and_invalid_checksums() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let first = h.doc.oplog_vv();
+    h.append();
+    assert!(!first.includes_vv(&h.doc.oplog_vv()));
+    h.ack();
+    assert!(h.core.server_vv.includes_vv(&first));
+    assert!(!h.core.server_vv.includes_vv(&h.doc.oplog_vv()));
+
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.append();
+    let entry = h.core.wal.entries.back_mut().unwrap();
+    let mut damaged = entry.bytes.to_vec();
+    *damaged.last_mut().unwrap() ^= 1;
+    entry.bytes = damaged.into();
+    h.ack();
+    assert!(!h.core.server_vv.includes_vv(&h.doc.oplog_vv()));
+}

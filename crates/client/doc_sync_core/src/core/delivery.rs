@@ -232,6 +232,16 @@ impl SyncCore {
         let Some(push) = self.push.take() else {
             return;
         };
+        for entry in &self.wal.entries {
+            if push.rows.contains(&entry.seq)
+                && entry.park.is_none_or(|p| p == ParkReason::NeedsRebase)
+                && let Ok(meta) = loro::LoroDoc::decode_import_blob_meta(&entry.bytes, true)
+            {
+                // The sender receives no broadcast echo. Its actual ACKed bytes
+                // are server evidence too, including rows later seen via assist.
+                self.server_vv.merge(&meta.partial_end_vv);
+            }
+        }
         for entry in &mut self.wal.entries {
             if push.rows.contains(&entry.seq)
                 && entry.park.is_none_or(|p| p == ParkReason::NeedsRebase)
