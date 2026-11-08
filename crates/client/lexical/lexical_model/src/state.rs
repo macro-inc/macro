@@ -73,6 +73,8 @@ impl EditorState {
             detached_selections: &[],
             #[cfg(feature = "foreign-nodes")]
             source_records: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_origin: None,
             state: self,
             previous_selection: self.selection.as_ref(),
             composition_key: None,

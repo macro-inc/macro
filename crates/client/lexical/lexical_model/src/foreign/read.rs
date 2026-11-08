@@ -3,6 +3,36 @@ use crate::*;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+#[derive(Clone)]
+pub(crate) struct ReadOrigin {
+    editor: Arc<()>,
+    update: Arc<()>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ReadOriginRef<'a> {
+    pub editor: &'a Arc<()>,
+    pub update: &'a Arc<()>,
+}
+
+impl ReadOrigin {
+    pub fn borrowed(&self) -> ReadOriginRef<'_> {
+        ReadOriginRef {
+            editor: &self.editor,
+            update: &self.update,
+        }
+    }
+}
+
+impl ReadOriginRef<'_> {
+    fn capture(self) -> ReadOrigin {
+        ReadOrigin {
+            editor: self.editor.clone(),
+            update: self.update.clone(),
+        }
+    }
+}
+
 /// Pinned source record identity for a development host's captured node object.
 /// Materialized native projections retain the identity of their source record.
 #[derive(Clone)]
@@ -40,6 +70,7 @@ pub struct ForeignReadSnapshot {
     composition_key: Option<NodeKey>,
     source_records: crate::state::NodeMap,
     detached: Vec<Option<Selection>>,
+    origin: Option<ReadOrigin>,
 }
 
 // Selection::clone models the upstream clone() method, which clears direction
@@ -61,6 +92,7 @@ impl Clone for ForeignReadSnapshot {
             previous_selection: self.previous_selection.as_ref().map(capture_selection),
             composition_key: self.composition_key,
             source_records: self.source_records.clone(),
+            origin: self.origin.clone(),
             detached: self
                 .detached
                 .iter()
@@ -74,6 +106,20 @@ impl ForeignReadSnapshot {
     /// Captured node map and active selection, including pending writes.
     pub fn state(&self) -> &EditorState {
         &self.state
+    }
+
+    /// Whether this capture originated in the given editor and exact update.
+    /// This proves provenance, not freshness or continued callback authorization;
+    /// the host must also check that the matching update is still active.
+    /// Plain editor-state captures have no origin and always return false.
+    pub fn matches_origin(
+        &self,
+        editor: &ForeignEditorIdentity,
+        update: &ForeignUpdateIdentity,
+    ) -> bool {
+        self.origin.as_ref().is_some_and(|origin| {
+            Arc::ptr_eq(&origin.editor, &editor.0) && Arc::ptr_eq(&origin.update, &update.0)
+        })
     }
 
     /// Pin the source identity independently of the materialized read payload.
@@ -116,6 +162,7 @@ impl ForeignReadSnapshot {
         tx.composition_key = self.composition_key;
         tx.foreign_read_only = true;
         tx.foreign_read_sources = Some(self.source_records.clone());
+        tx.foreign_read_origin = self.origin.clone();
         tx.foreign_previous_selection = self.previous_selection.as_ref().map(capture_selection);
         tx.detached = self
             .detached
@@ -132,6 +179,7 @@ impl Read for ForeignReadSnapshot {
             state: &self.state,
             native_projection: None,
             source_records: Some(&self.source_records),
+            foreign_origin: self.origin.as_ref().map(ReadOrigin::borrowed),
             detached_selections: &self.detached,
             previous_selection: self.previous_selection.as_ref(),
             composition_key: self.composition_key,
@@ -171,6 +219,7 @@ impl StateRef<'_> {
             previous_selection: self.previous_selection.map(capture_selection),
             composition_key: self.composition_key,
             source_records,
+            origin: self.foreign_origin.map(ReadOriginRef::capture),
             detached: self
                 .detached_selections
                 .iter()

@@ -1,6 +1,103 @@
 use super::*;
 
 #[test]
+fn read_origin_preserves_source_identity_without_authorizing_the_peer_or_fresh_update()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut other = editor.create_conformance_peer(EditorMode::Headless)?;
+    let tx = editor.transaction();
+    let owner = tx.foreign_editor_identity();
+    let update = tx.foreign_update_identity();
+    let snapshot = tx.view().snapshot_for_foreign_read()?.clone();
+    assert!(snapshot.matches_origin(&owner, &update));
+    assert!(
+        snapshot
+            .view()
+            .snapshot_for_foreign_read()?
+            .matches_origin(&owner, &update)
+    );
+    let other_tx = other.transaction();
+    assert!(!snapshot.matches_origin(&other_tx.foreign_editor_identity(), &update));
+    assert!(!snapshot.matches_origin(&owner, &other_tx.foreign_update_identity()));
+    drop(other_tx);
+    snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        assert!(!owner.matches(peer));
+        assert!(!update.matches(peer));
+        let recaptured = peer.view().snapshot_for_foreign_read()?;
+        assert!(recaptured.matches_origin(&owner, &update));
+        assert!(!recaptured.matches_origin(
+            &peer.foreign_editor_identity(),
+            &peer.foreign_update_identity()
+        ));
+        recaptured.with_read_transaction(peer.committed_state(), |nested| -> Result<(), Error> {
+            assert!(
+                nested
+                    .view()
+                    .snapshot_for_foreign_read()?
+                    .matches_origin(&owner, &update)
+            );
+            Ok(())
+        })?
+    })??;
+    // Exercise provenance suspension independently of the peer's mutable owner.
+    let mut peer = other.transaction();
+    peer.foreign_read_only = true;
+    peer.foreign_read_origin = snapshot.origin.clone();
+    let peer_owner = peer.foreign_editor_identity();
+    let peer_update = peer.foreign_update_identity();
+    let pending = peer.suspend();
+    let peer = other.resume(pending)?;
+    assert!(peer_owner.matches(&peer));
+    assert!(peer_update.matches(&peer));
+    assert!(!owner.matches(&peer));
+    assert!(
+        peer.view()
+            .snapshot_for_foreign_read()?
+            .matches_origin(&owner, &update)
+    );
+    drop(peer);
+    let pending = tx.suspend();
+    let tx = editor.resume(pending)?;
+    assert!(
+        tx.view()
+            .snapshot_for_foreign_read()?
+            .matches_origin(&owner, &update)
+    );
+    drop(tx);
+    let fresh = editor.transaction();
+    assert!(owner.matches(&fresh));
+    assert!(!snapshot.matches_origin(&owner, &fresh.foreign_update_identity()));
+    // Retained provenance does not assert that this old update is still active.
+    assert!(snapshot.matches_origin(&owner, &update));
+    assert!(
+        !fresh
+            .committed_state()
+            .view()
+            .snapshot_for_foreign_read()?
+            .matches_origin(&owner, &fresh.foreign_update_identity())
+    );
+    let plain = fresh.committed_state().view().snapshot_for_foreign_read()?;
+    plain.with_read_transaction(fresh.committed_state(), |peer| -> Result<(), Error> {
+        let captured = peer.view().snapshot_for_foreign_read()?;
+        assert!(!captured.matches_origin(
+            &peer.foreign_editor_identity(),
+            &peer.foreign_update_identity()
+        ));
+        assert!(!captured.matches_origin(&owner, &update));
+        captured.with_read_transaction(peer.committed_state(), |nested| -> Result<(), Error> {
+            assert!(!nested.view().snapshot_for_foreign_read()?.matches_origin(
+                &nested.foreign_editor_identity(),
+                &nested.foreign_update_identity()
+            ));
+            Ok(())
+        })?
+    })??;
+    Ok(())
+}
+
+#[test]
 fn read_only_peers_reject_pipeline_and_publication_before_callbacks_or_commit_ids()
 -> Result<(), Error> {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -261,6 +358,9 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
     let snapshot = crate::foreign::projection::native(&mut tx, key, |_, tx| {
         tx.get_mut::<Counter>(key)?.count = 7;
         let snapshot = tx.view().snapshot_for_foreign_read()?;
+        assert!(
+            snapshot.matches_origin(&tx.foreign_editor_identity(), &tx.foreign_update_identity())
+        );
         let identity = snapshot.record_identity(key)?;
         assert!(identity.matches(tx.node_or_err(key)?));
         assert!(!identity.matches(snapshot.node_or_err(key)?));
