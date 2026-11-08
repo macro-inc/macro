@@ -11,6 +11,7 @@ mod list_insert;
 mod markdown_paste;
 mod media;
 mod metadata;
+mod movement;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
 mod table;
@@ -65,6 +66,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder =
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
     let builder = structure::register(builder);
+    let builder = movement::register(builder);
     let builder = keyboard::register(builder);
     let builder = table::register(builder);
     let builder = code::register(builder);
@@ -89,6 +91,8 @@ mod links_test;
 #[cfg(test)]
 mod media_test;
 #[cfg(test)]
+mod movement_test;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod text_paste_test;
@@ -101,6 +105,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = movement::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = text_paste::decode(name, json, generation)? {
         return Ok(Some(command));
     }
