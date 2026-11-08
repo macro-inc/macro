@@ -971,8 +971,9 @@ continues to render the project list.
 Right-click a project row for its context menu; the row takes focus, as in
 Tasks. Every project offers `Open in new split` (disabled when no split fits),
 `Copy Link` (the Overview link), `Copy ID`, and `Share`, which opens the same
-Share menu as the project's top bar. Edit access adds `Rename`, which opens a
-name dialog, and the `Set status` and `Set priority` submenus; owners also get
+Share menu as the project's top bar. Edit access adds `Rename`, which edits the
+row's name in place (see [renaming](ui-conventions.md#renaming)), and the
+`Set status` and `Set priority` submenus; owners also get
 `Delete`, which confirms first and leaves the project's tasks in place.
 Right-clicking one of several checked rows acts on the whole selection and
 offers only `Set status`, `Set priority`, and, when you own every project,

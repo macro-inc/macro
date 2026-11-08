@@ -1706,9 +1706,9 @@ only ids: Macro Agent's `anthropic/claude-sonnet-5-5` shows as **Sonnet 5.5**. O
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
-to open the title menu (caret), then **Rename** — that opens the generic entity
-rename dialog. Do not expect a tap on the name itself to start
-an inline edit.
+to open the title menu (caret), then **Rename** — that turns the title into the
+shared rename field (see [renaming](ui-conventions.md#renaming)). A tap on the
+name itself opens the menu; on desktop a double-click renames it.
 
 When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it

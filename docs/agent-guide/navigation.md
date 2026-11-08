@@ -1765,8 +1765,9 @@ right-click **Mark Done** moves the preview to the next item, like the `e` key. 
 
 ## Entity action dialogs
 
-Rename and Delete use compact centered dialogs on desktop and the shared drawer
-on mobile, with actions in a separated footer. One selected
+Delete and bulk rename (several selected items) use compact centered dialogs on
+desktop and the shared drawer on mobile, with actions in a separated footer. A
+single item renames in place instead; see [renaming](ui-conventions.md#renaming). One selected
 item shows a compact name chip; multiple items show two chips and
 `+N`, which expands single-line names for review.
 Selected-item chips in action command menus and dialogs use the shared Badge,
@@ -1786,7 +1787,7 @@ Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Bulk rename, delete, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker is a command menu, like Snooze, over the same folder list as the Drive sidebar. Folders are a flat list with their parent path: **Open in split** (Drive folders and folder splits, in split order, first row selected), **Created by you**, then **Shared with you**, each newest first. It leaves out folders that already hold every item and, for a moved folder, the folder itself and everything under it. Enter or a click moves at once. Typing ranks by name like Cmd+K and adds **New folder “name”** unless a folder has that name; choosing it creates the folder and moves the items into it. Phones show the same list in the drawer with the path under the name.
 
