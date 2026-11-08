@@ -12,6 +12,13 @@ import { registerNativeDraggableBlock } from '../../../apps/web/src/lib/core/com
 import { registerNativeListSwipeIndent } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/list-swipe-indent/native';
 import { registerNativeNormalizeEnter } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/normalize-enter/native';
 import { registerNativeTabIndentation } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/native';
+import {
+  deleteNativeTableAtHover,
+  insertNativeTableAxis,
+  moveNativeTableCells,
+} from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/native';
+import { registerNativeTableResizeEdges } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/nativeResizeEdges';
+import { registerNativeTableTouchSelection } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/trailing-paragraph/native';
 import init, {
   EditorSession,
@@ -175,7 +182,21 @@ function mount(id: string) {
   const releaseGap = registerNativeTrailingParagraph(mounted);
   const releaseEnter = registerNativeNormalizeEnter(mounted);
   const releaseTab = registerNativeTabIndentation(mounted);
+  const releaseResize = registerNativeTableResizeEdges(mounted);
+  const releaseTouchSelection = registerNativeTableTouchSelection(mounted);
   return {
+    tableDelete(cell: number, axis: 'row' | 'column' | 'table') {
+      return deleteNativeTableAtHover(mounted, cell, axis);
+    },
+    tableInsert(cell: number, axis: 'row' | 'column', after: boolean) {
+      return insertNativeTableAxis(mounted, cell, axis, after);
+    },
+    tableMove(anchor: number, focus: number, target: number) {
+      return moveNativeTableCells(mounted, anchor, focus, target);
+    },
+    selection() {
+      return mounted.selection().selection;
+    },
     set(json: string) {
       port.setState(json);
     },
@@ -204,6 +225,8 @@ function mount(id: string) {
       }));
     },
     close() {
+      releaseResize();
+      releaseTouchSelection();
       releaseTab();
       releaseEnter();
       releaseGap();
