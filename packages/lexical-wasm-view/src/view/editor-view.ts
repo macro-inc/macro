@@ -129,6 +129,9 @@ export class EditorView implements ViewSink {
     readonly options: ViewOptions,
     private openingSpan: Span | undefined
   ) {
+    this.root.style.userSelect = 'text';
+    this.root.style.whiteSpace = 'pre-wrap';
+    this.root.style.wordBreak = 'break-word';
     this.mirror = new Mirror(port.types());
     this.query = new BulkQueries(this, port);
     this.clipboard = new ClipboardAccess(this, port);
