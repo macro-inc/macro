@@ -37,6 +37,7 @@ import { selectionMessage } from './session-port';
 import { TableObserver } from './table/observer';
 import type {
   AppliedDiff,
+  JsonValue,
   MutationKind,
   NodeKey,
   TypeFlags,
@@ -66,6 +67,10 @@ export class EditorView implements ViewSink {
   readonly query: BulkQueries;
   readonly clipboard: ClipboardAccess;
   readonly context: RenderContext;
+  private readonly pluginEvents = new Map<
+    string,
+    Set<(payload: JsonValue) => void>
+  >();
   private readonly keyRoutes = new Set<
     (event: KeyboardEvent) => KeyRoute | null
   >();
@@ -487,6 +492,14 @@ export class EditorView implements ViewSink {
             case 4:
               this.scrollIntoView(effect.detail);
               break;
+            case 9: {
+              const payload: JsonValue = effect.style
+                ? JSON.parse(effect.style)
+                : null;
+              for (const listener of this.pluginEvents.get(effect.text) ?? [])
+                listener(payload);
+              break;
+            }
             case 7:
               this.scheduleRemoveEmptyText(effect.detail, effect.format);
               break;
@@ -798,6 +811,19 @@ export class EditorView implements ViewSink {
     listeners.add(listener);
     return () => listeners.delete(listener);
   }
+  /** Host requests are delivered after the native transition and its Diff. */
+  onPluginEvent(
+    name: string,
+    listener: (payload: JsonValue) => void
+  ): () => void {
+    let listeners = this.pluginEvents.get(name);
+    if (!listeners) {
+      listeners = new Set();
+      this.pluginEvents.set(name, listeners);
+    }
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
   onHistory(
     listener: (state: { canUndo: boolean; canRedo: boolean }) => void
   ): () => void {
@@ -820,6 +846,8 @@ export class EditorView implements ViewSink {
   dispose(): void {
     this.disposed = true;
     this.keyRoutes.clear();
+    this.pluginEvents.clear();
+    this.clipboard.dispose();
     if (this.paintFrame !== null)
       this.root.ownerDocument.defaultView?.cancelAnimationFrame(
         this.paintFrame

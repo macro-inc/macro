@@ -37,3 +37,20 @@ pub fn decode_command(
     }
     Ok(None)
 }
+
+/// Encode application host-event payloads through append-only group registration.
+pub fn event_payload(
+    event: &lexical_model::PluginEvent,
+) -> crate::ModelResult<Option<serde_json::Value>> {
+    type Encoder = fn(&lexical_model::PluginEvent) -> crate::ModelResult<Option<serde_json::Value>>;
+    let encoders: &[Encoder] = &[
+        // WP-58 Group B host requests.
+        crate::plugins_group_b::event_payload,
+    ];
+    for encode in encoders {
+        if let Some(payload) = encode(event)? {
+            return Ok(Some(payload));
+        }
+    }
+    Ok(None)
+}

@@ -2,11 +2,13 @@
 use lexical_model::*;
 
 mod checklist;
+mod clipboard;
 mod code;
 mod diff;
 mod keyboard;
 mod links;
 mod list_insert;
+mod markdown_paste;
 mod media;
 mod metadata;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
@@ -65,6 +67,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = code::register(builder);
     let builder = checklist::register(builder);
     let builder = media::register(builder);
+    let builder = clipboard::register(builder);
+    let builder = markdown_paste::register(builder, ty);
     let builder = links::register(builder, ty);
     let builder = diff::register(builder);
     metadata::register(builder)
@@ -72,6 +76,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
 
 #[cfg(test)]
 mod checklist_test;
+#[cfg(test)]
+mod clipboard_test;
 #[cfg(test)]
 mod code_test;
 #[cfg(test)]
@@ -126,4 +132,9 @@ pub fn decode_command(
         ))));
     }
     Ok(None)
+}
+
+/// Serialize Group B host requests without exposing model event identities.
+pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    clipboard::event_payload(event)
 }

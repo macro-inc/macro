@@ -28,6 +28,7 @@ Use the surface decoder table so migration groups append registrations independe
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
 - `src/macro_editor.rs`: application MarkdownSync surface preset/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
+- Serialize application PluginEvent payloads through surface.rs group encoders into the existing editor-effect envelope; never perform host I/O in the model.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.

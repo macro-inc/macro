@@ -860,3 +860,37 @@ fn application_enter_clears_empty_typing_style_without_a_generic_keydown_listene
     assert_eq!(range.format, TextFormat::empty());
     assert_eq!(range.style.as_ref(), "");
 }
+
+#[test]
+fn application_host_request_keeps_its_typed_payload_in_the_existing_effect_envelope() {
+    let mut editor = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let mut payload = ClipboardPayload {
+        has_files: true,
+        ..ClipboardPayload::default()
+    };
+    payload.data.insert("application/x-macro-paste-facts".into(), serde_json::json!({"request":37,"plainOnly":false,"hasFileEntries":true,"mobileImageRecovery":false}).to_string());
+    let (_, commit) = editor
+        .dispatch(&Command::Paste(payload))
+        .expect("file request");
+    let event = commit.events.first().expect("event").clone();
+    let output = SessionOutput {
+        view: vec![ViewEffect::Editor(Effect::PluginEvent(event))],
+        ..SessionOutput::default()
+    };
+    let mut buffer = vec![];
+    output::encode(&output, false, &mut buffer, None).expect("effect bytes");
+    let len = u32::from_le_bytes(buffer[36..40].try_into().expect("length")) as usize;
+    let effect = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).expect("effect");
+    assert_eq!(effect.kind, 6);
+    assert_eq!(effect.code, 9);
+    assert_eq!(effect.text, "group-b.file-paste");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&effect.style).expect("payload"),
+        serde_json::json!({"request":37})
+    );
+}

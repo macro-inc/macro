@@ -250,6 +250,10 @@ pub(crate) fn encode(
                     Effect::PluginEvent(event) => {
                         m.code = 9;
                         m.text = event.name().into();
+                        if let Some(payload) = macro_document_model::surface::event_payload(event)?
+                        {
+                            m.style = serde_json::to_string(&payload)?;
+                        }
                     }
                     Effect::FollowUpFailed { plugin, kind, .. } => {
                         m.code = 10;

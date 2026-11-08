@@ -202,7 +202,7 @@ pub fn preset_editor(ty: EditorType) -> Editor {
         .build()
         .expect("valid static Macro preset registry")
 }
-fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilder {
+pub(crate) fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilder {
     let builder = builder.node::<CodeNode>();
     let builder = builder.node::<CustomCodeNode>();
     let builder = builder.node::<DatabaseQueryNode>();
