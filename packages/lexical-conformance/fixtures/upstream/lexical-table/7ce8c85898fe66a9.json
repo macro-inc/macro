@@ -1,0 +1,1603 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
+    "test": [
+      "table selection",
+      "regression #7140",
+      "selection points to missing nodes after deleting table rows"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableNode",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "table",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 3,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableRowNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "2",
+            "type": "tablerow",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableCellNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "3",
+            "type": "tablecell",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "0,0"
+          ],
+          "ret": {
+            "$h": 7,
+            "key": "5",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableCellNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "6",
+            "type": "tablecell",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 9,
+            "key": "7",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "1,0"
+          ],
+          "ret": {
+            "$h": 10,
+            "key": "8",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 10
+            }
+          ],
+          "this": {
+            "$h": 9
+          },
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.append",
+          "args": [
+            {
+              "$h": 9
+            }
+          ],
+          "this": {
+            "$h": 8
+          },
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableRowNode.append",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableRowNode",
+          "args": [],
+          "ret": {
+            "$h": 11,
+            "key": "9",
+            "type": "tablerow",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableCellNode",
+          "args": [],
+          "ret": {
+            "$h": 12,
+            "key": "10",
+            "type": "tablecell",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 13,
+            "key": "11",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "0,1"
+          ],
+          "ret": {
+            "$h": 14,
+            "key": "12",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 14
+            }
+          ],
+          "this": {
+            "$h": 13
+          },
+          "ret": {
+            "$h": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.append",
+          "args": [
+            {
+              "$h": 13
+            }
+          ],
+          "this": {
+            "$h": 12
+          },
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableCellNode",
+          "args": [],
+          "ret": {
+            "$h": 15,
+            "key": "13",
+            "type": "tablecell",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 16,
+            "key": "14",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "1,1"
+          ],
+          "ret": {
+            "$h": 17,
+            "key": "15",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 17
+            }
+          ],
+          "this": {
+            "$h": 16
+          },
+          "ret": {
+            "$h": 16
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.append",
+          "args": [
+            {
+              "$h": 16
+            }
+          ],
+          "this": {
+            "$h": 15
+          },
+          "ret": {
+            "$h": 15
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableRowNode.append",
+          "args": [
+            {
+              "$h": 12
+            },
+            {
+              "$h": 15
+            }
+          ],
+          "this": {
+            "$h": 11
+          },
+          "ret": {
+            "$h": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableNode.append",
+          "args": [
+            {
+              "$h": 4
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$computeTableMapSkipCellCheck",
+          "args": [
+            {
+              "$h": 1
+            },
+            null,
+            null
+          ],
+          "ret": [
+            [
+              [
+                {
+                  "cell": {
+                    "$h": 5
+                  },
+                  "startColumn": 0,
+                  "startRow": 0
+                },
+                {
+                  "cell": {
+                    "$h": 8
+                  },
+                  "startColumn": 1,
+                  "startRow": 0
+                }
+              ],
+              [
+                {
+                  "cell": {
+                    "$h": 12
+                  },
+                  "startColumn": 0,
+                  "startRow": 1
+                },
+                {
+                  "cell": {
+                    "$h": 15
+                  },
+                  "startColumn": 1,
+                  "startRow": 1
+                }
+              ]
+            ],
+            null,
+            null
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            [
+              [
+                {
+                  "cell": {
+                    "$h": 5
+                  },
+                  "startColumn": 0,
+                  "startRow": 0
+                },
+                {
+                  "cell": {
+                    "$h": 8
+                  },
+                  "startColumn": 1,
+                  "startRow": 0
+                }
+              ],
+              [
+                {
+                  "cell": {
+                    "$h": 12
+                  },
+                  "startColumn": 0,
+                  "startRow": 1
+                },
+                {
+                  "cell": {
+                    "$h": 15
+                  },
+                  "startColumn": 1,
+                  "startRow": 1
+                }
+              ]
+            ],
+            null,
+            null
+          ],
+          "args": [],
+          "ret": [
+            [
+              {
+                "cell": {
+                  "$h": 5
+                },
+                "startColumn": 0,
+                "startRow": 0
+              },
+              {
+                "cell": {
+                  "$h": 8
+                },
+                "startColumn": 1,
+                "startRow": 0
+              }
+            ],
+            [
+              {
+                "cell": {
+                  "$h": 12
+                },
+                "startColumn": 0,
+                "startRow": 1
+              },
+              {
+                "cell": {
+                  "$h": 15
+                },
+                "startColumn": 1,
+                "startRow": 1
+              }
+            ]
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:cell",
+          "this": {
+            "cell": {
+              "$h": 5
+            },
+            "startColumn": 0,
+            "startRow": 0
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:cell",
+          "this": {
+            "cell": {
+              "$h": 15
+            },
+            "startColumn": 1,
+            "startRow": 1
+          },
+          "args": [],
+          "ret": {
+            "$h": 15
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableSelectionFrom",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 5
+            },
+            {
+              "$h": 15
+            }
+          ],
+          "ret": {
+            "$sel": 18,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$setSelection",
+          "args": [
+            {
+              "$sel": 18
+            }
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "0,0",
+                                "type": "text",
+                                "version": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "1,0",
+                                "type": "text",
+                                "version": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "0,1",
+                                "type": "text",
+                                "version": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "1,1",
+                                "type": "text",
+                                "version": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "table",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "table",
+          "tableKey": "1",
+          "anchorCellKey": "3",
+          "focusCellKey": "13"
+        },
+        "text": "0,0\n\n1,0\n\n0,1\n\n1,1",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            7,
+            10,
+            14,
+            17
+          ],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              4,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              9,
+              true
+            ],
+            [
+              11,
+              true
+            ],
+            [
+              12,
+              true
+            ],
+            [
+              13,
+              true
+            ],
+            [
+              15,
+              true
+            ],
+            [
+              16,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 19,
+            "key": "root",
+            "type": "root",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 20,
+            "key": "16",
+            "type": "paragraph",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Before table"
+          ],
+          "ret": {
+            "$h": 21,
+            "key": "17",
+            "type": "text",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 21
+            }
+          ],
+          "this": {
+            "$h": 20
+          },
+          "ret": {
+            "$h": 20
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 20
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 19
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 19
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$computeTableMapSkipCellCheck",
+          "args": [
+            {
+              "$h": 1
+            },
+            null,
+            null
+          ],
+          "ret": [
+            [
+              [
+                {
+                  "cell": {
+                    "$h": 5
+                  },
+                  "startColumn": 0,
+                  "startRow": 0
+                },
+                {
+                  "cell": {
+                    "$h": 8
+                  },
+                  "startColumn": 1,
+                  "startRow": 0
+                }
+              ],
+              [
+                {
+                  "cell": {
+                    "$h": 12
+                  },
+                  "startColumn": 0,
+                  "startRow": 1
+                },
+                {
+                  "cell": {
+                    "$h": 15
+                  },
+                  "startColumn": 1,
+                  "startRow": 1
+                }
+              ]
+            ],
+            null,
+            null
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            [
+              [
+                {
+                  "cell": {
+                    "$h": 5
+                  },
+                  "startColumn": 0,
+                  "startRow": 0
+                },
+                {
+                  "cell": {
+                    "$h": 8
+                  },
+                  "startColumn": 1,
+                  "startRow": 0
+                }
+              ],
+              [
+                {
+                  "cell": {
+                    "$h": 12
+                  },
+                  "startColumn": 0,
+                  "startRow": 1
+                },
+                {
+                  "cell": {
+                    "$h": 15
+                  },
+                  "startColumn": 1,
+                  "startRow": 1
+                }
+              ]
+            ],
+            null,
+            null
+          ],
+          "args": [],
+          "ret": [
+            [
+              {
+                "cell": {
+                  "$h": 5
+                },
+                "startColumn": 0,
+                "startRow": 0
+              },
+              {
+                "cell": {
+                  "$h": 8
+                },
+                "startColumn": 1,
+                "startRow": 0
+              }
+            ],
+            [
+              {
+                "cell": {
+                  "$h": 12
+                },
+                "startColumn": 0,
+                "startRow": 1
+              },
+              {
+                "cell": {
+                  "$h": 15
+                },
+                "startColumn": 1,
+                "startRow": 1
+              }
+            ]
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:cell",
+          "this": {
+            "cell": {
+              "$h": 5
+            },
+            "startColumn": 0,
+            "startRow": 0
+          },
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:cell",
+          "this": {
+            "cell": {
+              "$h": 15
+            },
+            "startColumn": 1,
+            "startRow": 1
+          },
+          "args": [],
+          "ret": {
+            "$h": 15
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableSelectionFrom",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 5
+            },
+            {
+              "$h": 15
+            }
+          ],
+          "ret": {
+            "$sel": 22,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$setSelection",
+          "args": [
+            {
+              "$sel": 22
+            }
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 22
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$isTableSelection",
+          "args": [
+            {
+              "$sel": 22
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$deleteTableRowAtSelection",
+          "args": [],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 2,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 22
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$isTableSelection",
+          "args": [
+            {
+              "$sel": 22
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "TableSelection.isValid",
+          "args": [],
+          "this": {
+            "$sel": 22
+          },
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "TableSelection.getNodes",
+          "args": [],
+          "this": {
+            "$sel": 22
+          },
+          "ret": []
+        }
+      ],
+      "id": 3,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1,
+        2,
+        3
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Before table",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "table",
+          "tableKey": "1",
+          "anchorCellKey": "3",
+          "focusCellKey": "13"
+        },
+        "text": "Before table",
+        "nodeMapKeys": [
+          "root",
+          "16",
+          "17"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            21
+          ],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              20,
+              true
+            ],
+            [
+              19,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Before table",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "table",
+      "tableKey": "1",
+      "anchorCellKey": "3",
+      "focusCellKey": "13"
+    },
+    "text": "Before table",
+    "nodeMapKeys": [
+      "root",
+      "16",
+      "17"
+    ]
+  }
+}

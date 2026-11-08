@@ -44,6 +44,10 @@ function toBlob(content: FileContent): Blob {
  *
  * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
  *
+ * ## New spreadsheets
+ *
+ * `createSpreadsheet` saves the spreadsheet before it returns, so it exists even when a later step of the program throws. Keep its id across that failure: fill it inside `try`/`catch` and return `{ data: { spreadsheet: sheet, error } }` (the handle serializes as its `id` and `url`). To retry, reopen it with `macro.documents.spreadsheet(macro.documents.byId(id))`; never search recent documents for it or create another.
+ *
  * ## Linking Macro items inside document content
  *
  * `CreateDocument` content (the `fileContent` argument) is rendered with the same Markdown parser used for chat responses, channel messages, and email bodies inside the Macro app — but only for Markdown (`.md`) documents. Non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX, created by passing a non-`md` `file_extension`) are stored as raw file bytes and must never contain Markdown syntax or mention tags.
@@ -208,17 +212,26 @@ export class DocumentNamespace {
 
   /**
    * Create a blank native spreadsheet, ready to read and edit; fill it with
-   * `applyEdits`.
+   * `applyEdits`. It is saved before this returns: keep its `id` even when
+   * filling it fails, and reopen it by id rather than creating another.
    *
-   * @example
+   * @example Create and fill a budget, keeping the spreadsheet if a step fails.
    * ```js
    * const sheet = await macro.documents.createSpreadsheet({ name: 'Q4 budget' });
-   * const { revision, sheets } = await sheet.read();
-   * await sheet.applyEdits(
-   *   [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'A1', value: 'Item' }, { address: 'B1', value: 'Cost' }] }],
-   *   { expectedRevision: revision },
-   * );
-   * return { data: sheet.webUrl() };
+   * try {
+   *   const { revision, sheets } = await sheet.read();
+   *   await sheet.applyEdits(
+   *     [{ type: 'set_cells', sheetId: sheets[0].id, cells: [
+   *       { address: 'A1', value: 'Item' }, { address: 'B1', value: 'Cost' },
+   *       { address: 'A2', value: 'Laptops' }, { address: 'B2', value: 4200 },
+   *       { address: 'A3', value: 'Total' }, { address: 'B3', value: '=SUM(B2:B2)' },
+   *     ] }],
+   *     { expectedRevision: revision },
+   *   );
+   *   return { data: { spreadsheet: sheet } };
+   * } catch (error) {
+   *   return { data: { spreadsheet: sheet, error: String(error) } };
+   * }
    * ```
    */
   async createSpreadsheet(opts: {

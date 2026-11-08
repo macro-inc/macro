@@ -946,6 +946,8 @@ jobs:
         fi
     - name: Start sccache server
       run: sccache --start-server
+    - name: Clear previous bundle output
+      run: rm -rf apps/web/dist
     - name: Build
       run: just build-dev
       env:
@@ -959,6 +961,8 @@ jobs:
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
+    - name: Exclude development oracle from production bundle
+      run: bun packages/lexical-conformance/coverage/boundaries.ts --bundle-only
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

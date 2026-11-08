@@ -1,0 +1,48 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/reply-target-node.test.ts",
+    "test": [
+      "ReplyTargetNode",
+      "rejects unsupported parent unknown"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/ReplyTargetNode.readReplyTargetData",
+      "args": [
+        {
+          "parent": {
+            "type": "unknown",
+            "id": "parent-1"
+          },
+          "targetMessageId": "reply-1",
+          "targetThreadId": "thread-1",
+          "displayText": "A one-line preview",
+          "senderId": "macro|sender@example.com"
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

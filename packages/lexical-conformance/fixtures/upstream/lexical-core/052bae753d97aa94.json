@@ -1,0 +1,303 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-activity-markdown.test.ts",
+    "test": [
+      "agent activity markdown",
+      "reads a payload written with raw line separators"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":1,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Read\",\"detail\":\"a b\",\"status\":\"completed\"}],\"sealed\":true}</m-agent-activity>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 1,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Read",
+                  "detail": "a b",
+                  "status": "completed"
+                }
+              ],
+              "sealed": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 1,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Read",
+                  "detail": "a b",
+                  "status": "completed"
+                }
+              ],
+              "sealed": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 1,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Read",
+                "detail": "a b",
+                "status": "completed"
+              }
+            ],
+            "sealed": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 1,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Read",
+                "detail": "a b",
+                "status": "completed"
+              }
+            ],
+            "sealed": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 1,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Read",
+              "detail": "a b",
+              "status": "completed"
+            }
+          ],
+          "sealed": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 1,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Read",
+              "detail": "a b",
+              "status": "completed"
+            }
+          ],
+          "sealed": true
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 1,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Read",
+            "detail": "a b",
+            "status": "completed"
+          }
+        ],
+        "sealed": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 1,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Read",
+            "detail": "a b",
+            "status": "completed"
+          }
+        ],
+        "sealed": true
+      },
+      "args": [],
+      "ret": "agent-activity"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

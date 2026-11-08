@@ -79,7 +79,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 ## Gotchas
 
-- Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
+- Keep `loro-crdt` pinned to 1.17.1, matching the root Rust dependency and Bun
+  catalog. Bumping it touches three lockfiles: `bun.lock`, the workspace
   `Cargo.lock`, and this directory's `package-lock.json` — update all three.
 - Durable Object in-memory state (including the loro document) evicts after
   10s of inactivity even with open connections; the alarm-based heartbeat in

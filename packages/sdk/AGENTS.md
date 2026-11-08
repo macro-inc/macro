@@ -25,7 +25,7 @@ enforced by the ordinary backend APIs.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
-  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
+  in the harness's `sdk_endpoints`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `Document.readPresentation`/`editPresentation`/`copyPresentation`,
   `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`

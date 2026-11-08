@@ -173,7 +173,7 @@ fn build_markdown_initializer(
 
     Ok(OptionalMarkdownInitializer::Enabled(
         LexicalSyncMarkdownInitializer::new(
-            LexicalClient::new(internal_api_secret_key, lexical_service_url),
+            LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?,
             SyncServiceClient::new(sync_service_auth_key, sync_service_url),
         ),
     ))

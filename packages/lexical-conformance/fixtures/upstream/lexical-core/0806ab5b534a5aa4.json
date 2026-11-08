@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/reply-target-node.test.ts",
+    "test": [
+      "ReplyTargetNode",
+      "strips one leading reply-target block from Markdown"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/ReplyTargetNode.stripLeadingReplyTargetMarkdown",
+      "args": [
+        "<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"reply-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"A one-line preview\",\"senderId\":\"macro|sender@example.com\"}</m-reply-target>\n\nmy response"
+      ],
+      "ret": "my response"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/ReplyTargetNode.stripLeadingReplyTargetMarkdown",
+      "args": [
+        "before\n\n<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"reply-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"A one-line preview\",\"senderId\":\"macro|sender@example.com\"}</m-reply-target>"
+      ],
+      "ret": "before\n\n<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"reply-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"A one-line preview\",\"senderId\":\"macro|sender@example.com\"}</m-reply-target>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

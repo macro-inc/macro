@@ -172,10 +172,13 @@ pub async fn build(
             PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
         )));
 
-    let lexical_client = Arc::new(lexical_client::LexicalClient::new(
-        internal_api_key.clone(),
-        LexicalServiceUrl::new()?.to_string(),
-    ));
+    let lexical_client = Arc::new(
+        lexical_client::LexicalClient::new(
+            internal_api_key.clone(),
+            LexicalServiceUrl::new()?.to_string(),
+        )
+        .with_route_modes(config.lexical_route_modes.clone()),
+    );
 
     let email_service_client = Arc::new(EmailServiceClient::new(
         internal_api_key.clone(),

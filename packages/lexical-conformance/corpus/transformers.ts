@@ -1,0 +1,131 @@
+// Source metadata for the portable Macro transformer catalog. No callbacks ship from JS.
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const directory = root + 'packages/lexical-core/transformers/';
+const upstream = await import(
+  root + 'node_modules/@lexical/markdown/dist/LexicalMarkdown.node.mjs'
+);
+const index = await import(directory + 'index.ts');
+const custom = await import(directory + 'customTransformers.ts');
+const entities = await import(directory + 'transformers.ts');
+const formats = await import(directory + 'htmlTextFormats.ts');
+type TransformerObject = {
+  type: string;
+  dependencies?: Array<{ getType(): string }>;
+  regExp?: RegExp;
+  importRegExp?: RegExp;
+  regExpStart?: RegExp;
+  regExpEnd?: RegExp | { regExp: RegExp; optional: boolean };
+  conversionOnly?: boolean;
+  triggerOnEnter?: boolean;
+  trigger?: string;
+  format?: string[];
+  tag?: string;
+  intraword?: boolean;
+  replace?: unknown;
+};
+const isTransformer = (value: unknown): value is TransformerObject =>
+  !!value &&
+  typeof value === 'object' &&
+  'type' in value &&
+  ['element', 'multiline-element', 'text-match', 'text-format'].includes(
+    String(value.type)
+  );
+const names = new Map<TransformerObject, string>();
+const builtin = new Set<TransformerObject>();
+for (const [name, value] of Object.entries(upstream)) {
+  if (isTransformer(value)) {
+    names.set(value, name);
+    builtin.add(value);
+  }
+}
+for (const file of readdirSync(directory)
+  .filter((name) => name.endsWith('.ts'))
+  .sort()) {
+  const module = await import(directory + file);
+  for (const [name, value] of Object.entries(module)) {
+    if (isTransformer(value) && !names.has(value)) names.set(value, name);
+  }
+}
+for (const [i, value] of entities.HTML_ENTITY_TRANSFORMERS.entries())
+  names.set(value, `HTML_ENTITY_${i}`);
+for (const [i, value] of formats.HTML_TEXT_FORMAT_IMPORTERS.entries())
+  names.set(value, `HTML_TEXT_FORMAT_IMPORTER_${i}`);
+for (const [i, value] of custom.CUSTOM_TRANSFORMERS.slice(-3).entries()) {
+  names.set(
+    value,
+    ['MACRO_ORDERED_LIST', 'MACRO_CHECK_LIST', 'MACRO_UNORDERED_LIST'][i]
+  );
+}
+const lists: Record<string, TransformerObject[]> = {
+  internal: index.INTERNAL_TRANSFORMERS,
+  external: index.EXTERNAL_TRANSFORMERS,
+  all: index.ALL_TRANSFORMERS,
+  custom: custom.CUSTOM_TRANSFORMERS,
+};
+for (const [name, list] of Object.entries(lists)) {
+  for (const value of list) {
+    if (!names.has(value))
+      names.set(value, `LIST_ITEM_IMAGE_${name.toUpperCase()}`);
+  }
+}
+const regex = (value: RegExp | undefined) =>
+  value
+    ? {
+        source: value.source,
+        flags: value.flags,
+        matcher: value.constructor.name,
+      }
+    : undefined;
+const objects = new Set(Object.values(lists).flat());
+objects.add(custom.ORDERED_LIST_ENTER);
+objects.add(entities.BR_TAG_TO_SPACE);
+const catalog = [...objects].map((value) => ({
+  name: names.get(value),
+  builtin: builtin.has(value),
+  type: value.type,
+  dependencies: value.dependencies?.map((node) => node.getType()) ?? [],
+  regExp: regex(value.regExp),
+  importRegExp: regex(value.importRegExp),
+  regExpStart: regex(value.regExpStart),
+  regExpEnd:
+    value.regExpEnd &&
+    ('regExp' in value.regExpEnd
+      ? {
+          ...regex(value.regExpEnd.regExp),
+          optional: value.regExpEnd.optional,
+        }
+      : regex(value.regExpEnd)),
+  conversionOnly: value.conversionOnly === true,
+  triggerOnEnter: value.triggerOnEnter === true,
+  trigger: value.trigger,
+  hasReplace: typeof value.replace === 'function',
+}));
+if (catalog.some((row) => !row.name))
+  throw new Error('Unnamed source transformer');
+const output = {
+  catalog,
+  lists: Object.fromEntries(
+    Object.entries(lists).map(([name, list]) => [
+      name,
+      list.map((value) => names.get(value)),
+    ])
+  ),
+};
+const destination =
+  root +
+  'crates/client/lexical/macro_document_model/src/transformers/catalog.json';
+const contents = JSON.stringify(output, null, 2) + '\n';
+if (process.argv.includes('--check')) {
+  if (readFileSync(destination, 'utf8') !== contents)
+    throw new Error('Transformer metadata drift');
+} else {
+  writeFileSync(destination, contents);
+}
+console.log(
+  `Checked ${catalog.length} transformers; list lengths ${Object.values(lists)
+    .map((list) => list.length)
+    .join('/')}`
+);

@@ -1,0 +1,563 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply",
+      "escapes a session id that tries to close the tag"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "</m-agent-session-mention><m-user-mention>x",
+          "body": {
+            "kind": "pending"
+          }
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"\\u003c/m-agent-session-mention>\\u003cm-user-mention>x\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-await>{\"awaitId\":\"PCq-QXVzrpx_uDn8oR1js\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136,
+        55,
+        26,
+        18
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"\\u003c/m-agent-session-mention>\\u003cm-user-mention>x\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-await>{\"awaitId\":\"PCq-QXVzrpx_uDn8oR1js\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "x_cOZYHw"
+                  },
+                  "id": "</m-agent-session-mention><m-user-mention>x",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "klMcq1Dz"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "TVUW3IJT"
+                  },
+                  "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "No7zhn7Y"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "5GQuaI5k"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.31888069794513285
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.12981509510427713
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        181,
+        149,
+        97,
+        67,
+        192,
+        238,
+        45,
+        85
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        251,
+        99,
+        140,
+        119,
+        254,
+        224,
+        182,
+        245
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        249,
+        39,
+        95,
+        175,
+        41,
+        126,
+        44,
+        151
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        223,
+        84,
+        4,
+        243,
+        59,
+        212,
+        6,
+        98
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        11,
+        88,
+        33,
+        207,
+        104,
+        37,
+        156,
+        203
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "x_cOZYHw"
+                  },
+                  "id": "</m-agent-session-mention><m-user-mention>x",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "klMcq1Dz"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "TVUW3IJT"
+                  },
+                  "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "No7zhn7Y"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "5GQuaI5k"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "x_cOZYHw"
+                },
+                "id": "</m-agent-session-mention><m-user-mention>x",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "klMcq1Dz"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "TVUW3IJT"
+                },
+                "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "No7zhn7Y"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "5GQuaI5k"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "x_cOZYHw"
+                },
+                "id": "</m-agent-session-mention><m-user-mention>x",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "klMcq1Dz"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "TVUW3IJT"
+                },
+                "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "No7zhn7Y"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "5GQuaI5k"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "x_cOZYHw"
+              },
+              "id": "</m-agent-session-mention><m-user-mention>x",
+              "label": "Agent session",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "klMcq1Dz"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "type": "await",
+              "version": 1,
+              "$": {
+                "id": "TVUW3IJT"
+              },
+              "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+              "text": "Thinking…",
+              "inline": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "No7zhn7Y"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "x_cOZYHw"
+              },
+              "id": "</m-agent-session-mention><m-user-mention>x",
+              "label": "Agent session",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "klMcq1Dz"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "type": "await",
+              "version": 1,
+              "$": {
+                "id": "TVUW3IJT"
+              },
+              "awaitId": "PCq-QXVzrpx_uDn8oR1js",
+              "text": "Thinking…",
+              "inline": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "No7zhn7Y"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "x_cOZYHw"
+            },
+            "id": "</m-agent-session-mention><m-user-mention>x",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "klMcq1Dz"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -1,0 +1,1160 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply with segments",
+      "interleaves passages as written with live steps, in order"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "link": false,
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "prose",
+                "markdown": "Checking the **tests** first."
+              },
+              {
+                "kind": "activity",
+                "turn": 3,
+                "segment": 1,
+                "rows": [
+                  {
+                    "id": "t1",
+                    "label": "Ran",
+                    "detail": "cargo test",
+                    "status": "completed"
+                  },
+                  {
+                    "id": "t2",
+                    "label": "Reading",
+                    "status": "running"
+                  }
+                ],
+                "sealed": false
+              }
+            ]
+          }
+        }
+      ],
+      "ret": "Checking the **tests** first.\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":1,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":false}</m-agent-activity>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "Checking the **tests** first.\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":1,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":false}</m-agent-activity>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Checking the ",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "uaI5kI0P"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 1,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "tests",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "cq1Dz5GQ"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " first.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "OZYHwklM"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "zhn7Yx_c"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 3,
+              "segment": 1,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": false
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.05054362863302231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3695183543022722
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        198,
+        142,
+        4,
+        163,
+        64,
+        108,
+        151,
+        214
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        60,
+        251,
+        220,
+        83,
+        174,
+        136,
+        55,
+        26
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        18,
+        81,
+        33,
+        181,
+        149,
+        97,
+        67,
+        192
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        238,
+        45,
+        85,
+        251,
+        99,
+        140,
+        119,
+        254
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        224,
+        182,
+        245,
+        249,
+        39,
+        95,
+        175,
+        41
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        126,
+        44,
+        151,
+        223,
+        84,
+        4,
+        243,
+        59
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Checking the ",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "uaI5kI0P"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 1,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "tests",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "cq1Dz5GQ"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " first.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "OZYHwklM"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "zhn7Yx_c"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 3,
+              "segment": 1,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": false
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Checking the ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "uaI5kI0P"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "tests",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "cq1Dz5GQ"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " first.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "OZYHwklM"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "zhn7Yx_c"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Checking the ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "uaI5kI0P"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "tests",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "cq1Dz5GQ"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " first.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "OZYHwklM"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "zhn7Yx_c"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Checking the ",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "uaI5kI0P"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 1,
+              "mode": "normal",
+              "style": "",
+              "text": "tests",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "cq1Dz5GQ"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": " first.",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "OZYHwklM"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "zhn7Yx_c"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 3,
+          "segment": 1,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": false
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Checking the ",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "uaI5kI0P"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 1,
+            "mode": "normal",
+            "style": "",
+            "text": "tests",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "cq1Dz5GQ"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " first.",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "OZYHwklM"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "Cq-QXVzr"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "zhn7Yx_c"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 3,
+        "segment": 1,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": false
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Checking the ",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "uaI5kI0P"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 1,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "tests",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "cq1Dz5GQ"
+                  }
+                },
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": " first.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "OZYHwklM"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "zhn7Yx_c"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 3,
+              "segment": 1,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": false
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Checking the ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "uaI5kI0P"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "tests",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "cq1Dz5GQ"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " first.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "OZYHwklM"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "zhn7Yx_c"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Checking the ",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "uaI5kI0P"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "tests",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "cq1Dz5GQ"
+                }
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " first.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "OZYHwklM"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "zhn7Yx_c"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 3,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Checking the ",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "uaI5kI0P"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 1,
+              "mode": "normal",
+              "style": "",
+              "text": "tests",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "cq1Dz5GQ"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": " first.",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "OZYHwklM"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "zhn7Yx_c"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 3,
+          "segment": 1,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": false
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:1",
+      "this": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Checking the ",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "uaI5kI0P"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 1,
+              "mode": "normal",
+              "style": "",
+              "text": "tests",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "cq1Dz5GQ"
+              }
+            },
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": " first.",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "OZYHwklM"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "zhn7Yx_c"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 3,
+          "segment": 1,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": false
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "zhn7Yx_c"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 3,
+        "segment": 1,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": false
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

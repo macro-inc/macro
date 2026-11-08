@@ -79,6 +79,9 @@ threads, pins, recents, notifications, folders, activity.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs

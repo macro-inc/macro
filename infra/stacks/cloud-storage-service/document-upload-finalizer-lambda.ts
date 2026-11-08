@@ -14,6 +14,7 @@ export type DocumentUploadFinalizerLambdaEnvVars = {
   INTERNAL_API_SECRET_KEY: pulumi.Output<string> | string;
   SYNC_SERVICE_AUTH_KEY: pulumi.Output<string> | string;
   LEXICAL_SERVICE_URL: pulumi.Output<string> | string;
+  LEXICAL_ROUTE_MODES: pulumi.Output<string> | string;
   SYNC_SERVICE_URL: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;

@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/form-references.test.ts",
+    "test": [
+      "form references in channel messages",
+      "preserves the existing reference behavior of non-form cards"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-card>{\"documentId\":\"01a10ac3-013f-72f8-afbb-3bad148dee03\",\"blockName\":\"md\",\"documentName\":\"Workshop notes\",\"blockParams\":{},\"previewBox\":[\"100%\",\"400px\"]}</m-document-card>"
+      ],
+      "ret": []
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

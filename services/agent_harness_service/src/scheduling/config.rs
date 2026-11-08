@@ -30,6 +30,8 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Validated lexical execution modes, loaded once at startup.
+    pub lexical_route_modes: lexical_client::RouteModes,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,

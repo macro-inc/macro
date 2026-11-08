@@ -1,0 +1,856 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-list/src/__tests__/unit/formatList.test.ts",
+    "test": [
+      "insertList",
+      "inserting with empty shadow root selection"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableNode",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "table",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableRowNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "tablerow",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/table.$createTableCellNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "tablecell",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableRowNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.select",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$sel": 6,
+            "kind": "range"
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "clock",
+      "src": "perf",
+      "t": 0
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "table",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 3,
+              "raw": "3"
+            },
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "focus": {
+            "key": {
+              "$key": 3,
+              "raw": "3"
+            },
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/list.$insertList",
+          "args": [
+            "number"
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 4,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "direction": null,
+                                "format": "",
+                                "indent": 0,
+                                "type": "listitem",
+                                "version": 1,
+                                "value": 1
+                              }
+                            ],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "list",
+                            "version": 1,
+                            "listType": "number",
+                            "start": 1,
+                            "tag": "ol"
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "table",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": "5",
+            "path": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "focus": {
+            "key": "5",
+            "path": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "5",
+          "6"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              2,
+              false
+            ],
+            [
+              1,
+              false
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              "5",
+              true
+            ],
+            [
+              "6",
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 5,
+      "reason": "await"
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableRowNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 7,
+            "key": "3",
+            "type": "tablecell",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.getChildrenSize",
+          "args": [],
+          "this": {
+            "$h": 7
+          },
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "TableCellNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 7
+          },
+          "ret": {
+            "$h": 8,
+            "key": "6",
+            "type": "list",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$isListNode",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "ret": true
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "direction": null,
+                            "format": "",
+                            "indent": 0,
+                            "type": "listitem",
+                            "version": 1,
+                            "value": 1
+                          }
+                        ],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "list",
+                        "version": 1,
+                        "listType": "number",
+                        "start": 1,
+                        "tag": "ol"
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablecell",
+                    "version": 1,
+                    "backgroundColor": null,
+                    "colSpan": 1,
+                    "headerState": 0,
+                    "rowSpan": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "tablerow",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "table",
+            "version": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": "5",
+        "path": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "focus": {
+        "key": "5",
+        "path": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "5",
+      "6"
+    ]
+  }
+}

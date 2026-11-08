@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "normalizeMarkdown - shouldMergeAdjacentLines = true",
+      "preserves backslash hard-breaks when merging adjacent lines"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@lexical/markdown/MarkdownTransformers.normalizeMarkdown",
+      "args": [
+        "foo\\\nbar",
+        true
+      ],
+      "ret": "foo\\\nbar"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

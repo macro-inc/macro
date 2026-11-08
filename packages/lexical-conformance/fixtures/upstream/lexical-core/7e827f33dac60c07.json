@@ -1,0 +1,465 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-context.test.ts",
+    "test": [
+      "composeAgentContextPrompt",
+      "names a crm_contact conversation as the origin"
+    ],
+    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "tell me more",
+          "parent": {
+            "type": "crm_contact",
+            "id": "record-1"
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation type=\\\"crm_contact\\\" id=\\\"record-1\\\">\\n  \\u003corigin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.\\u003c/origin>\\n\\u003c/conversation>\"}</m-agent-context>\n\ntell me more"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation type=\\\"crm_contact\\\" id=\\\"record-1\\\">\\n  \\u003corigin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.\\u003c/origin>\\n\\u003c/conversation>\"}</m-agent-context>\n\ntell me more"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "tell me more",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        67,
+        192,
+        238,
+        45,
+        85,
+        251,
+        99,
+        140
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "tell me more",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "tell me more",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "tell me more",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "tell me more",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "tell me more",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "tell me more",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+      },
+      "args": [],
+      "ret": "<conversation type=\"crm_contact\" id=\"record-1\">\n  <origin>This prompt was posted in a CRM contact comment thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>\n</conversation>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
