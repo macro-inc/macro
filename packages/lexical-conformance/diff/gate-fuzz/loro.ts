@@ -19,7 +19,9 @@ const { isCommentOnlyChange, contentWithoutComments } = await import(
 const { rawMarkdownStateToLoroSnapshot } = await import(
   root + 'packages/lexical-core/markdown-loro-snapshot.ts'
 );
-const { LoroDoc } = await import('loro-crdt');
+const { LoroDoc, LoroMap, LoroMovableList, LoroText } = await import(
+  'loro-crdt'
+);
 const seed = {
   root: {
     type: 'root',
@@ -61,23 +63,35 @@ for (let index = 0; index < 2048; index++) {
   const before = doc.toJSON();
   const vv = doc.oplogVersion();
   const rootMap = doc.getMap('root');
-  const p = rootMap.get('children').get(0);
-  const text = p.get('children').get(0);
+  const children = rootMap.get('children');
+  if (!(children instanceof LoroMovableList))
+    throw new Error('Root list required');
+  const p = children.get(0);
+  if (!(p instanceof LoroMap)) throw new Error('Paragraph map required');
+  const paragraphChildren = p.get('children');
+  if (!(paragraphChildren instanceof LoroMovableList))
+    throw new Error('Paragraph list required');
+  const text = paragraphChildren.get(0);
+  if (!(text instanceof LoroMap)) throw new Error('Text map required');
+  const content = text.get('text');
+  const state = text.get('$');
+  if (!(content instanceof LoroText) || !(state instanceof LoroMap))
+    throw new Error('Text containers required');
   switch (index % 10) {
     case 0:
-      text.get('text').insert(random() % 6, '!');
+      content.insert(random() % 6, '!');
       break;
     case 1:
-      text.get('text').delete(random() % 5, 1);
+      content.delete(random() % 5, 1);
       break;
     case 2:
-      text.get('$').set('id', `new-${random()}`);
+      state.set('id', `new-${random()}`);
       break;
     case 3:
-      text.get('$').set('peerId', `peer-${random()}`);
+      state.set('peerId', `peer-${random()}`);
       break;
     case 4:
-      text.get('$').set('retained', random() % 8);
+      state.set('retained', random() % 8);
       break;
     case 5:
       text.set('format', random() % 128);
@@ -89,10 +103,10 @@ for (let index = 0; index < 2048; index++) {
       p.set('format', random() % 2 ? 'right' : 'center');
       break;
     case 8:
-      text.get('$').set('local', Boolean(random() % 2));
+      state.set('local', Boolean(random() % 2));
       break;
     case 9:
-      p.get('children').set(0, {
+      paragraphChildren.set(0, {
         type: 'comment-mark',
         version: 1,
         ids: ['mark'],
