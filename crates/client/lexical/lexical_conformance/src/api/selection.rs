@@ -9,7 +9,8 @@ pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value
         return Ok(());
     }
     let id = integer(&value["$selection"])? as usize;
-    tx.activate_foreign_selection(r.selections.slot(id)?)?;
+    let slot = r.selection_slot(tx, id)?;
+    tx.activate_foreign_selection(slot)?;
     r.selections.synchronize(tx)?;
     r.selections.set_slot(id, SelectionSlot::Active)?;
     r.selections.set_active(Some(id))?;
@@ -24,7 +25,7 @@ pub(crate) fn call(
 ) -> Result<Value> {
     if let Some(point) = receiver.get("$point") {
         let id = integer(&point["selection"])? as usize;
-        let slot = r.selections.slot(id)?;
+        let slot = r.selection_slot(tx, id)?;
         let role = if point["role"] == "anchor" {
             PointRole::Anchor
         } else {
@@ -46,7 +47,7 @@ pub(crate) fn call(
             "isBefore" | "is" => {
                 let other = a.first().ok_or_else(|| fail("point"))?;
                 let other_id = integer(&other["$point"]["selection"])? as usize;
-                let other_slot = r.selections.slot(other_id)?;
+                let other_slot = r.selection_slot(tx, other_id)?;
                 let other = if other["$point"]["role"] == "anchor" {
                     tx.anchor_at(other_slot)?
                 } else {
@@ -62,7 +63,7 @@ pub(crate) fn call(
         };
     }
     let id = integer(&receiver["$selection"])? as usize;
-    let slot = r.selections.slot(id)?;
+    let slot = r.selection_slot(tx, id)?;
     let selection = tx
         .selection_at(slot)?
         .map(Selection::snapshot_for_foreign_read)
@@ -78,7 +79,10 @@ pub(crate) fn call(
             if slot == SelectionSlot::Active {
                 tx.set_selection(Some(value))?;
             } else {
-                let identity = r.selections.identity(id)?;
+                let identity = r
+                    .selections
+                    .identity(id)?
+                    .ok_or_else(|| fail("selection identity"))?;
                 r.selections
                     .set_slot(id, tx.detach_foreign_selection(value, identity))?;
             }

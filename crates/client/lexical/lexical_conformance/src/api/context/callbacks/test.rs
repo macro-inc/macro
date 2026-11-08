@@ -191,7 +191,7 @@ fn callback_selection_encoding_reuses_active_and_detached_slots_without_activati
     );
     let id = captured["$sel"].as_u64().expect("selection handle");
     let decoded = context.replay.decode(&json!({"$sel":id}))?;
-    let slot = super::super::super::lexical::slot_arg(&context.replay, &decoded)?;
+    let slot = super::super::super::lexical::slot_arg(&context.replay, &mut tx, &decoded)?;
     assert_eq!(slot, detached);
     assert_eq!(tx.anchor_at(slot)?.offset(), 1);
     assert_eq!(tx.focus_at(slot)?.offset(), 2);
@@ -219,11 +219,11 @@ fn replacement_before_callback_allocates_a_new_handle_and_detaches_the_old_objec
     let new = callback.selection(&mut tx, SelectionSlot::Active)?;
     assert_ne!(old["$sel"], new["$sel"]);
     let old_value = context.replay.decode(&old)?;
-    let old_slot = crate::api::lexical::slot_arg(&context.replay, &old_value)?;
+    let old_slot = crate::api::lexical::slot_arg(&context.replay, &mut tx, &old_value)?;
     assert_eq!(tx.anchor_at(old_slot)?.offset(), 3);
     assert_eq!(tx.focus_at(old_slot)?.offset(), 1);
     let new_value = context.replay.decode(&new)?;
-    let new_slot = crate::api::lexical::slot_arg(&context.replay, &new_value)?;
+    let new_slot = crate::api::lexical::slot_arg(&context.replay, &mut tx, &new_value)?;
     assert_eq!(new_slot, SelectionSlot::Active);
     assert_eq!(tx.anchor_at(new_slot)?.offset(), 2);
     tx.activate_foreign_selection(old_slot)?;
@@ -231,11 +231,11 @@ fn replacement_before_callback_allocates_a_new_handle_and_detaches_the_old_objec
     assert_eq!(reactivated["$sel"], old["$sel"]);
     let old_value = context.replay.decode(&old)?;
     assert_eq!(
-        crate::api::lexical::slot_arg(&context.replay, &old_value)?,
+        crate::api::lexical::slot_arg(&context.replay, &mut tx, &old_value)?,
         SelectionSlot::Active
     );
     let new_value = context.replay.decode(&new)?;
-    let retired_new = crate::api::lexical::slot_arg(&context.replay, &new_value)?;
+    let retired_new = crate::api::lexical::slot_arg(&context.replay, &mut tx, &new_value)?;
     assert_ne!(retired_new, SelectionSlot::Active);
     assert_eq!(tx.anchor_at(retired_new)?.offset(), 2);
     Ok(())

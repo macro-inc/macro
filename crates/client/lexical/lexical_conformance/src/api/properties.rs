@@ -9,7 +9,7 @@ pub(crate) fn get(
     name: &str,
 ) -> Result<Value> {
     if let Some(point) = receiver.get("$point") {
-        let slot = r.selections.slot(integer(&point["selection"])? as usize)?;
+        let slot = r.selection_slot(tx, integer(&point["selection"])? as usize)?;
         let p = if point["role"] == "anchor" {
             tx.anchor_at(slot)?
         } else {
@@ -24,19 +24,14 @@ pub(crate) fn get(
     }
     if receiver.get("$selection").is_some() {
         let id = integer(&receiver["$selection"])?;
+        let slot = r.selection_slot(tx, id as usize)?;
         return match name {
             "anchor" | "focus" => Ok(json!({"$point":{"selection":id,"role":name}})),
-            "_cachedIsBackward" => Ok(json!(
-                tx.range_at(r.selections.slot(id as usize)?)?
-                    .cached_is_backward()
-            )),
-            "format" => Ok(json!(
-                tx.range_at(r.selections.slot(id as usize)?)?.format.bits()
-            )),
-            "style" => Ok(json!(tx.range_at(r.selections.slot(id as usize)?)?.style)),
+            "_cachedIsBackward" => Ok(json!(tx.range_at(slot)?.cached_is_backward())),
+            "format" => Ok(json!(tx.range_at(slot)?.format.bits())),
+            "style" => Ok(json!(tx.range_at(slot)?.style)),
             "dirty" => Ok(json!(
-                tx.selection_at(r.selections.slot(id as usize)?)?
-                    .is_some_and(Selection::is_dirty)
+                tx.selection_at(slot)?.is_some_and(Selection::is_dirty)
             )),
             _ => Err(fail(format!("unmapped selection property {name}"))),
         };

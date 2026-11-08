@@ -64,24 +64,32 @@ pub(crate) fn call(
     name: &str,
     args: &[Value],
 ) -> Result<Value> {
+    let short = name.rsplit('.').next().unwrap_or(name);
+    let selection = if short == "$convertSelectionToMarkdownString" {
+        args.get(1)
+            .filter(|value| !value.is_null() && value.get("$undef").is_none())
+            .map(|value| -> Result<_> {
+                let slot = slot_arg(r, tx, value)?;
+                Ok(tx
+                    .selection_at(slot)?
+                    .map(Selection::snapshot_for_foreign_read))
+            })
+            .transpose()?
+            .flatten()
+    } else {
+        None
+    };
     let snapshot = r.read_state.clone();
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
-    let short = name.rsplit('.').next().unwrap_or(name);
     match short {
         "normalizeMarkdown" => Ok(json!(normalize_markdown(
             string(args.first().ok_or_else(|| fail("markdown source"))?)?,
             args.get(1).and_then(Value::as_bool).unwrap_or(false)
         ))),
         "$convertSelectionToMarkdownString" => {
-            let selection = args
-                .get(1)
-                .filter(|v| !v.is_null() && v.get("$undef").is_none())
-                .map(|v| slot_arg(r, v).and_then(|slot| Ok(tx.selection_at(slot)?.cloned())))
-                .transpose()?
-                .flatten();
             let opts = MarkdownOptions {
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
                 ..r.markdown_options

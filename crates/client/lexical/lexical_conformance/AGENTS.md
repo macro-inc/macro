@@ -113,3 +113,5 @@ Resolve hosted node return values with CallbackContext::returned_node in the exa
 CallbackContext::selection encodes an existing active or detached transaction slot in the shared selection identity store without cloning or activating it. Preserve the exact callback update capability and reuse prior slot handles.
 
 Synchronize selection slot bindings by model object tokens before/after dispatch and when encoding callback selections. Reuse tokens when hydrating host values, including read frames and explicit reactivation; never infer replacement identity solely from the resettable selection_replacements counter or snapshot old values after callbacks.
+
+Share selection IDs, tokens and owned values across dispatch frames, but keep slot caches and activation revisions local to each transaction frame. Resolve handles through the invoking transaction token and lazily hydrate saved detached values; never decode a peer selection using another frame's slot index. Mutable nested callbacks share their exact frame; owned read peers require a separate frame.

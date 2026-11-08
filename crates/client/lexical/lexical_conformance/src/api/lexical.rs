@@ -176,9 +176,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             Ok(undefined())
         }
         "@lexical/mark.$wrapSelectionInMarkNode" => {
-            let range = tx
-                .range_at(slot_arg(r, a.first().ok_or_else(|| fail("selection"))?)?)?
-                .clone();
+            let slot = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
+            let range = tx.range_at(slot)?.clone();
             let backward = a.get(1).and_then(Value::as_bool).unwrap_or(false);
             let id = str_arg(a, 2)?;
             lexical_rich_nodes::mark::wrap_selection_in_mark_node::<
@@ -346,7 +345,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical/__tests__/utils.$assertRangeSelection" => {
             let value = a.first().ok_or_else(|| fail("range argument"))?;
-            tx.range_at(slot_arg(r, value)?)?;
+            let slot = slot_arg(r, tx, value)?;
+            tx.range_at(slot)?;
             Ok(value.clone())
         }
         "@lexical/text.$rootTextContent" => Ok(json!(view.text_content(NodeKey::ROOT))),
@@ -388,7 +388,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .map(|id| r.selections.try_slot(id as usize))
+                .map(|id| r.selections.resolve(tx, id as usize))
                 .transpose()?
                 .flatten()
                 .and_then(|slot| tx.selection_at(slot).ok().flatten())
@@ -398,7 +398,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .map(|id| r.selections.try_slot(id as usize))
+                .map(|id| r.selections.resolve(tx, id as usize))
                 .transpose()?
                 .flatten()
                 .and_then(|slot| tx.selection_at(slot).ok().flatten())
@@ -493,7 +493,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$normalizeSelection" | "lexical/LexicalNormalization.$normalizeSelection" => {
             let value = a.first().ok_or_else(|| fail("selection argument"))?;
-            let slot = slot_arg(r, value)?;
+            let slot = slot_arg(r, tx, value)?;
             tx.normalize_selection_at(slot)?;
             Ok(value.clone())
         }
@@ -574,8 +574,12 @@ pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
         .key(string(value)?)?
         .ok_or_else(|| fail(format!("unknown key argument: {value}")))
 }
-pub(crate) fn slot_arg(r: &Replayer, value: &Value) -> Result<SelectionSlot> {
-    r.selections.slot(integer(&value["$selection"])? as usize)
+pub(crate) fn slot_arg(
+    r: &Replayer,
+    tx: &mut Transaction<'_>,
+    value: &Value,
+) -> Result<SelectionSlot> {
+    r.selection_slot(tx, integer(&value["$selection"])? as usize)
 }
 pub(crate) fn node_args(value: &Value) -> Result<Vec<NodeKey>> {
     value
