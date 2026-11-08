@@ -171,7 +171,9 @@ impl Session {
                 return Err(error.into());
             }
         };
-        if let Err(error) = tx.flush() {
+        if tx.needs_flush()
+            && let Err(error) = tx.flush()
+        {
             drop(tx);
             self.context.discard_update()?;
             return Err(error.into());

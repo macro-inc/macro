@@ -119,3 +119,5 @@ Share selection IDs, tokens and owned values across dispatch frames, but keep sl
 Use CallbackContext::with_read_scope for a whole pure callback, keeping one guarded owned peer across indexed calls. Reject command, tag and scheduling effects at the dispatcher boundary. Save only newly allocated, locally created selection values at scope exit, including error exits; never overwrite inherited captured values. Read peers never hydrate saved tokens absent from their capture; mutable frames may hydrate them after the read ends. Inherited selection object writes and absent cross-scope values currently reject until ancestor synchronization is implemented; full JS pure-hook hosting remains unfinished.
 
 Route lexical.$parseSerializedNode through Transaction::import_node and the normal captured-node encoder; recursive children and virtual append belong to the model import algorithm, never a second shim tree builder.
+
+Gate Session commit_prepared's implicit pipeline pass with Transaction::needs_flush, matching model commit. Explicit flush remains unconditional; a write or queued update after flushing requires another pass.

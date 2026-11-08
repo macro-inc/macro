@@ -1,6 +1,36 @@
 use super::*;
 
 #[test]
+fn flush_state_tracks_writes_and_queued_updates_across_suspension() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    assert!(tx.needs_flush());
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    tx.add_tag(UpdateTag::HistoryPush);
+    assert!(!tx.needs_flush());
+    tx.text(text)?.set_text_content("updated")?;
+    assert!(tx.needs_flush());
+    let pending = tx.suspend();
+    let mut tx = editor.resume(pending)?;
+    assert!(tx.needs_flush());
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    tx.queue_update(|_| Ok(()), UpdateOptions::default())?;
+    assert!(tx.needs_flush());
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    assert_eq!(tx.text_content(text), "updated");
+    Ok(())
+}
+
+#[test]
 fn failed_host_preparation_discards_current_model_effects_and_preserves_published_state()
 -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)

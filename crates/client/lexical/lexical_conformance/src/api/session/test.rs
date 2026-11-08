@@ -3,6 +3,66 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn commit_flushes_only_when_the_last_successful_flush_was_invalidated() -> Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Hooks(Arc<AtomicUsize>);
+    impl ForeignHooks for Hooks {
+        fn selection_transform(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+        ) -> Override<std::result::Result<(), Error>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Override::Value(Ok(()))
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "flush-count".into(),
+            class_name: "FlushCount".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks(calls.clone())),
+        })
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    host.begin_update(TagSet::default())?;
+    let text = host.with_update(|_, tx| {
+        let paragraph = tx.create(Paragraph::default())?.key();
+        let text = tx.create_foreign("flush-count", SerializedNode::new())?;
+        tx.text(text)?.set_text_content("text")?;
+        tx.append(paragraph, &[text])?;
+        tx.append(NodeKey::ROOT, &[paragraph])?;
+        tx.text(text)?
+            .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))?;
+        Ok(text)
+    })?;
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    host.begin_update(TagSet::default())?;
+    host.flush()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    host.begin_update(TagSet::default())?;
+    host.flush()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    host.with_update(|_, tx| {
+        tx.text(text)?.set_text_content("updated")?;
+        Ok(())
+    })?;
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    Ok(())
+}
+
+#[test]
 fn failed_packet_preparation_keeps_the_committed_version_and_invalidates_pending_handles()
 -> Result<()> {
     let editor = Editor::builder(EditorMode::Headless)
@@ -386,6 +446,9 @@ fn commit_transform_failure_rolls_back_writes_and_invalidates_only_pending_handl
         host.read_field(orphan["$h"].as_u64().expect("handle") as u32, "__text")?,
         "discarded"
     );
+    // A completed normalize-only flush needs a new write before commit runs
+    // the default pipeline again (S1 §7.1).
+    host.call(set, json!(["changed again"]), Some(writable.clone()))?;
     assert!(matches!(
         host.commit(),
         Err(crate::replay::ReplayError::Model(Error::NodeNotFound(_)))
