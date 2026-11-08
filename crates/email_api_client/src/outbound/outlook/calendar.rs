@@ -28,6 +28,55 @@ const CREATION_ID: &str =
 const APPOINTMENT_SEQUENCE_ID: &str = "Integer {00062002-0000-0000-C000-000000000046} Id 0x8201";
 const PREFERENCES_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarPreferences";
+/// What `instances` selects: every property of Graph's v1.0 `event` that it
+/// returns by default, plus `originalStart`, which it leaves out of the
+/// default set although its documentation says otherwise. Without it an
+/// exception cannot be paired with the occurrence it replaces, nor an
+/// occurrence addressed by its original start. A `$select` returns only what
+/// it names, so a new read of an instance property must be listed here.
+const INSTANCE_PROPERTIES: &[&str] = &[
+    "allowNewTimeProposals",
+    "attendees",
+    "body",
+    "bodyPreview",
+    "categories",
+    "changeKey",
+    "createdDateTime",
+    "end",
+    "hasAttachments",
+    "hideAttendees",
+    "iCalUId",
+    "id",
+    "importance",
+    "isAllDay",
+    "isCancelled",
+    "isDraft",
+    "isOnlineMeeting",
+    "isOrganizer",
+    "isReminderOn",
+    "lastModifiedDateTime",
+    "location",
+    "locations",
+    "onlineMeeting",
+    "onlineMeetingProvider",
+    "onlineMeetingUrl",
+    "organizer",
+    "originalEndTimeZone",
+    "originalStart",
+    "originalStartTimeZone",
+    "recurrence",
+    "reminderMinutesBeforeStart",
+    "responseRequested",
+    "responseStatus",
+    "sensitivity",
+    "seriesMasterId",
+    "showAs",
+    "start",
+    "subject",
+    "transactionId",
+    "type",
+    "webLink",
+];
 
 fn invalid() -> CalendarProviderError {
     CalendarProviderError::new(
@@ -230,6 +279,7 @@ impl OutlookApiClientRepository {
             .append_pair("startDateTime", &target.range.starts_at.to_rfc3339())
             .append_pair("endDateTime", &target.range.ends_at.to_rfc3339())
             .append_pair("$top", "1000")
+            .append_pair("$select", &INSTANCE_PROPERTIES.join(","))
             .append_pair(
                 "$expand",
                 &format!(
@@ -258,7 +308,7 @@ impl OutlookApiClientRepository {
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = self.calendar_occurrences(token, target, &master).await?;
-        Ok(normalize::projection(target, master, instances)?)
+        Ok(normalize::projection(target, master, instances)?.upsert)
     }
     async fn calendar_refresh(
         &self,
@@ -332,6 +382,9 @@ impl OutlookApiClientRepository {
 }
 
 impl OutlookCalendarReader for OutlookApiClientRepository {
+    // 1: instances select `originalStart`, so exceptions pair with their
+    // occurrences instead of hiding their series.
+    const READER_REVISION: i16 = 1;
     async fn calendars(
         &self,
         token: &str,
@@ -466,7 +519,10 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
         };
         let instances = api.calendar_occurrences(&token, target, &master).await?;
         Ok(match normalize::projection(target, master, instances) {
-            Ok(upsert) => OutlookEventRefresh::Refreshed(Box::new(upsert)),
+            Ok(normalize::Projection { upsert, skipped }) => OutlookEventRefresh::Refreshed {
+                upsert: Box::new(upsert),
+                skipped,
+            },
             Err(Rejected(field)) => OutlookEventRefresh::Unreadable { field },
         })
     }
@@ -929,7 +985,7 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
         }
         // Outlook may remove a declined event from the attendee's calendar.
         // The successful response must not be reported as a failed RSVP.
-        let mut echo = normalize::projection(target, master, vec![])?;
+        let mut echo = normalize::projection(target, master, vec![])?.upsert;
         for attendee in &mut echo.event.attendees {
             if attendee.email.eq_ignore_ascii_case(address) {
                 attendee.response_status = response;

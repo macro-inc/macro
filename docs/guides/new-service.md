@@ -151,7 +151,7 @@ cargo build -p <package>
 just rust-check && just clippy
 cargo test -p <package>                 # with SQLX_OFFLINE unset
 cargo x deps --check && cargo x workflows --check
-just run_local                          # or just stack up
+just run_local                          # no terminal needed
 curl http://localhost:<port>/health
 curl https://localhost:8090/<prefix>/health   # through the local proxy
 ```

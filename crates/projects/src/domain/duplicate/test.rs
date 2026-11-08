@@ -93,6 +93,7 @@ type TestProjects = ProjectServiceImpl<
     AcceptAll,
     AcceptAll,
     AcceptAll,
+    crate::domain::ports::UnavailableFiledItemsUnfiler,
     NoopMacroEventBroker,
 >;
 
@@ -107,6 +108,7 @@ fn projects(pool: PgPool) -> Arc<TestProjects> {
         AcceptAll,
         AcceptAll,
         AcceptAll,
+        crate::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         NoopMacroEventBroker,
     ))

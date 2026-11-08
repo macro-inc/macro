@@ -44,6 +44,12 @@ pub struct PrepareRoutineSession {
     /// schedulers omit it along with `source`.
     #[serde(default)]
     pub visibility: SessionVisibility,
+    /// What opened the session. Older schedulers omit it.
+    #[serde(
+        default,
+        skip_serializing_if = "trigger_context::TriggerOrigin::is_unknown"
+    )]
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// A verified, persisted session ready for its first prompt.

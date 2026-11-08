@@ -111,6 +111,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,

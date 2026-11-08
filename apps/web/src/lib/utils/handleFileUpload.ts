@@ -1,8 +1,11 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -40,19 +43,27 @@ export function useHandleFileUpload(options: { projectId?: string } = {}) {
           );
           fireAndForget(refetchHistory(), 'file-upload');
 
-          toast.success(`Uploaded ${upload.name}`, {
-            actions: [
-              {
-                label: 'Open folder',
-                onClick: () => {
-                  openWithSplit(
-                    { type: 'project', id: createdProjectId },
-                    { referredFrom: 'file-upload', activate: true }
-                  );
+          toast.success(
+            t('entityActions.toastFolderUploaded', { name: upload.name }),
+            {
+              titleIcon: FolderIcon,
+              dismissStyle: 'icon',
+              stack: true,
+              actions: [
+                {
+                  label: t('entityActions.open'),
+                  icon: ArrowSquareOutIcon,
+                  trailingIcon: true,
+                  onClick: () => {
+                    openWithSplit(
+                      { type: 'project', id: createdProjectId },
+                      { referredFrom: 'file-upload', activate: true }
+                    );
+                  },
                 },
-              },
-            ],
-          });
+              ],
+            }
+          );
         }),
         'file-upload'
       );

@@ -1,7 +1,12 @@
+import { t } from '@app/lib/i18n';
+import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import { useQuery } from '@tanstack/solid-query';
 import { Show, Suspense } from 'solid-js';
+import type { CallDiscussion } from '../discussion/call-discussion';
 import { buildCallMessageLink } from './build-call-message-link';
 import { useCallChat } from './queries/use-call-chat';
 
@@ -21,6 +26,92 @@ export function CallChatHistory(props: CallChatHistoryProps) {
         <CallChatHistoryContent {...props} />
       </Suspense>
     </section>
+  );
+}
+
+/**
+ * A channel call's discussion, on its record: read-only, and only for people
+ * who can read the channel. Sharing a record doesn't open part of a channel.
+ */
+function ChannelThreadHistory(props: {
+  channelId: string;
+  rootId: string;
+  targetId?: string;
+  targetRequestKey?: string | number;
+  onClearTarget?: () => void;
+}) {
+  const parent = () => ({ type: 'channel' as const, id: props.channelId });
+  const thread = useQuery(() => ({
+    ...threadRepliesQueryOptions(parent(), props.rootId),
+    retry: false,
+  }));
+
+  return (
+    <Show when={thread.isSuccess && thread.data}>
+      {(data) => (
+        <section class="flex min-w-0 flex-col gap-3" aria-label="Call chat">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-ink">Call chat</h3>
+            <a
+              class="text-xs text-ink-muted hover:text-ink"
+              href={buildMessageLink(props.channelId, props.rootId)}
+            >
+              {t('calls.openInChannel')}
+            </a>
+          </div>
+          <StaticMarkdownContext>
+            <div class="min-w-0 rounded border border-edge-muted/50 py-2">
+              <MessageThread
+                data={threadListItem(data())}
+                canWrite={false}
+                expanded
+                hideReplyInput
+                monorail
+                hideRail
+                targetId={props.targetId}
+                targetRequestKey={props.targetRequestKey}
+                onClearTarget={props.onClearTarget}
+                buildLink={(message) =>
+                  buildMessageLink(
+                    props.channelId,
+                    message.id,
+                    message.thread_id
+                  )
+                }
+              />
+            </div>
+          </StaticMarkdownContext>
+        </section>
+      )}
+    </Show>
+  );
+}
+
+/** The one place a call's record chooses how to show its discussion. */
+export function CallDiscussionHistory(
+  props: CallChatHistoryProps & { discussion: CallDiscussion }
+) {
+  const channelThread = () =>
+    props.discussion.kind === 'channel_thread' ? props.discussion : undefined;
+
+  return (
+    <Show
+      when={channelThread()}
+      keyed
+      fallback={<CallChatHistory {...props} />}
+    >
+      {(thread) => (
+        <Suspense>
+          <ChannelThreadHistory
+            channelId={thread.channel_id}
+            rootId={thread.root_id}
+            targetId={props.targetId}
+            targetRequestKey={props.targetRequestKey}
+            onClearTarget={props.onClearTarget}
+          />
+        </Suspense>
+      )}
+    </Show>
   );
 }
 

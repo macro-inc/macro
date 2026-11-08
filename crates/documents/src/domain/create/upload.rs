@@ -131,7 +131,7 @@ where
         let bytes_uploader = self.bytes_uploader.clone();
         // Own the entire write so dropping the caller cannot interrupt metadata
         // creation before we know its ID, the upload, or failure cleanup.
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 let response = document_service
                     .create_document(&principal, document, None)
@@ -181,7 +181,7 @@ where
                 Ok(created)
             }
             .in_current_span(),
-        )
+        ))
         .await
         .map_err(|error| DocumentError::Internal(rootcause::report!(error).into_anyhow()))?
     }
