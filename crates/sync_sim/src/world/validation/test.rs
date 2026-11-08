@@ -327,6 +327,47 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
 }
 
 #[test]
+fn borrowed_canonical_serialization_retains_exact_tree_bytes_and_trace_hash() {
+    let value = serde_json::json!({"z": [null, true, -2, 4.5, {"b": 2, "a": 1}], "a": "text"});
+    assert_eq!(
+        postcard::to_allocvec(&Canonical(&value)).unwrap(),
+        postcard::to_allocvec(&canonical(value.clone())).unwrap()
+    );
+    let outcome = Sim::new(SimConfig::calm(211)).run(&[
+        Step::Open(OpenSpec::form("a", "browser")),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 1,
+                value: 42,
+            },
+        },
+        Step::Settle,
+    ]);
+    let ports = outcome
+        .server_ports
+        .iter()
+        .map(|port| {
+            (
+                port.doc,
+                port.callback,
+                port.effect.operation.clone(),
+                canonical(port.effect.value.clone()),
+            )
+        })
+        .collect::<Vec<_>>();
+    let bytes = postcard::to_allocvec(&(
+        outcome.event_bytes.as_slice(),
+        ports,
+        canonical_finals(&outcome.finals),
+        canonical_finals(&outcome.finals_after_quiet),
+    ))
+    .unwrap();
+    assert_eq!(outcome.trace_hash, xxhash_rust::xxh3::xxh3_64(&bytes));
+}
+
+#[test]
 fn actual_delivery_above_a_true_gap_requires_both_core_and_cold_proof() {
     use doc_sync_core::{UnixMillis, WalRecord};
     let mut sim = Sim::new(SimConfig::calm(239));

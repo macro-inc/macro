@@ -769,3 +769,72 @@ fn completed_close_evidence_excludes_failed_attempts_and_retains_wire_code() {
     assert_eq!(ports.take_completed_closes(), [(socket(), 1008)]);
     assert!(ports.take_completed_closes().is_empty());
 }
+
+#[test]
+fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots() {
+    block_on(async {
+        let ports = SimPorts::new();
+        ports.set_gate(GateMode::Held);
+        let id = OperationId::new("same-key".into());
+        ports.put_pending_operation(&id, b"first").await.unwrap();
+        let first = ports.write_generation();
+        ports.put_pending_operation(&id, b"later").await.unwrap();
+        ports.confirm_through(first);
+        let cold = ports.fork_durable();
+        assert_eq!(
+            cold.pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"first"
+        );
+        assert_eq!(
+            ports
+                .pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"later"
+        );
+        ports.recover();
+        assert_eq!(
+            ports
+                .pending_operations()
+                .await
+                .unwrap()
+                .remove(0)
+                .unwrap()
+                .update,
+            b"first"
+        );
+
+        ports.set_gate(GateMode::Held);
+        SnapshotStore::put(&ports, &key(), b"first snapshot")
+            .await
+            .unwrap();
+        let first = ports.write_generation();
+        SnapshotStore::put(&ports, &key(), b"later snapshot")
+            .await
+            .unwrap();
+        ports.confirm_through(first);
+        assert_eq!(
+            SnapshotStore::get(&ports.fork_durable(), &key())
+                .await
+                .unwrap(),
+            b"first snapshot"
+        );
+        assert_eq!(
+            SnapshotStore::get(&ports, &key()).await.unwrap(),
+            b"later snapshot"
+        );
+        ports.recover();
+        assert_eq!(
+            SnapshotStore::get(&ports, &key()).await.unwrap(),
+            b"first snapshot"
+        );
+    });
+}

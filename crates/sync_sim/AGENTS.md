@@ -85,7 +85,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `just check`, `cargo x deps --check`
 - Count reached paths from completed facts; requested faults alone cannot satisfy a
   generator coverage floor. Preserve actual fragment counts across network delivery.
-- Same seed/script must yield byte-identical canonical event logs.
+- Same seed/script must yield byte-identical canonical event logs. Borrow sorted
+  JSON during trace serialization and read per-step core diagnostics directly;
+  preserve exact event/port bytes, hash encoding and invariant predicates.
 - `SIM_SEED=197 cargo test -p sync_sim --test replay -- --nocapture` runs the
   explicit replay story; only this CLI test host reads SIM_SEED. Use Outcome::replay
   for an arbitrary stored script and compare_replay for first-difference evidence.

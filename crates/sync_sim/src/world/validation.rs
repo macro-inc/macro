@@ -79,17 +79,15 @@ impl Sim {
                     ));
                 }
             }
-            let final_state = match client.final_state() {
-                Ok(state) => state,
-                Err(error) => {
-                    failures.push(error);
-                    continue;
-                }
-            };
+            let retained = wal
+                .entries
+                .iter()
+                .any(|row| !row.superseded && !client.core.is_delivered(row.seq));
             if client.core.status().save == SaveState::Saved
-                && (final_state.wal_total > 0
-                    || !final_state.parked.is_empty()
-                    || final_state.pending_import
+                && (retained
+                    || !client.core.parked().is_empty()
+                    || client.doc.pending
+                    || client.core.status().pending_import
                     || !matches!(wal.health, StorageHealth::Ok)
                     || client.core.busy() == Some(doc_sync_core::BusyReason::Rebasing))
             {
@@ -268,8 +266,8 @@ impl Sim {
                 (
                     port.doc,
                     port.callback,
-                    port.effect.operation.clone(),
-                    canonical(port.effect.value.clone()),
+                    &port.effect.operation,
+                    Canonical(&port.effect.value),
                 )
             })
             .collect::<Vec<_>>();
@@ -284,6 +282,31 @@ impl Sim {
                 self.fail(Failure::new("canonical_log", error));
                 0
             }
+        }
+    }
+}
+// Serialize the same sorted tree without copying large raw-byte JSON arrays.
+struct Canonical<'a>(&'a serde_json::Value);
+impl serde::Serialize for Canonical<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeSeq};
+        match self.0 {
+            serde_json::Value::Object(values) => {
+                let ordered = values.iter().collect::<BTreeMap<_, _>>();
+                let mut map = serializer.serialize_map(Some(ordered.len()))?;
+                for (key, value) in ordered {
+                    map.serialize_entry(key, &Canonical(value))?;
+                }
+                map.end()
+            }
+            serde_json::Value::Array(values) => {
+                let mut seq = serializer.serialize_seq(Some(values.len()))?;
+                for value in values {
+                    seq.serialize_element(&Canonical(value))?;
+                }
+                seq.end()
+            }
+            value => value.serialize(serializer),
         }
     }
 }
