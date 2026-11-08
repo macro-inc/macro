@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "cal"
+name = "calcom_webhooks"
 publish = false
 version = "0.1.0"
 

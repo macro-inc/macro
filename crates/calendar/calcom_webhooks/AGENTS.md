@@ -34,7 +34,7 @@ in the workspace yet.
 
 ## Checks
 
-- `cargo test -p cal` (`SQLX_OFFLINE` unset).
+- `cargo test -p calcom_webhooks` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
