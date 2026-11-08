@@ -382,12 +382,12 @@ fn document_answers_expose_discovery_and_the_one_query_tool() {
     assert!(tools.user_tools.is_empty());
 }
 
-/// An agent session presents email and calendar drafts on a saved review
-/// card that never pauses the turn. The deferring user tools stay registered
-/// for review submission, but the model cannot call them, so no turn ever
-/// waits on a review elicitation.
+/// An agent session never calls the deferring user tools, so no turn waits
+/// on a review elicitation. They stay registered for review submission. A
+/// turn on these direct tools has no review card, so it confirms drafts in
+/// the conversation and sends through the confirmed twins.
 #[test]
-fn the_agent_session_host_presents_drafts_instead_of_calling_user_tools() {
+fn the_agent_session_host_confirms_drafts_instead_of_calling_user_tools() {
     let session = tools_for(AiHost::AgentSession);
     for name in ["SendEmail", "CreateCalendarEvent"] {
         assert!(session.toolset.user_tools.contains_key(name), "{name}");
@@ -397,8 +397,7 @@ fn the_agent_session_host_presents_drafts_instead_of_calling_user_tools() {
             "{name}"
         );
     }
-    // The confirmed twins execute in the loop, for the prompts a session
-    // reads out of a thread.
+    // The confirmed twins execute in the loop, on the user's quoted approval.
     assert!(session.toolset.tools.contains_key("SendConfirmedEmail"));
     assert!(
         session
@@ -407,7 +406,7 @@ fn the_agent_session_host_presents_drafts_instead_of_calling_user_tools() {
             .contains_key("CreateConfirmedCalendarEvent")
     );
     let prompt = session.prompt.to_string();
-    assert!(prompt.contains("`PresentReview`"));
+    assert!(prompt.contains("`SendConfirmedEmail` for the email"));
     assert!(!prompt.contains("the turn waits"));
     assert!(!prompt.contains("PendingUserExecution"));
     assert_eq!(
@@ -427,7 +426,7 @@ fn the_agent_session_host_presents_drafts_instead_of_calling_user_tools() {
                 .count()),
         "the same tools as chat except agent-session connector discovery, chat's \
          DisplayResults, which sessions replace with the harness's execution.views.present, \
-         and the user tools, which sessions replace with PresentReview"
+         and the user tools, which sessions never call"
     );
 }
 

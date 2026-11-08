@@ -54,7 +54,10 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes; email and
 calendar drafts go through them, and the model is never offered `SendEmail` or
-`CreateCalendarEvent`, so no turn waits on a review.
+`CreateCalendarEvent`, so no turn waits on a review. A standard-mode turn runs
+only when the code-mode tools are unreachable, and with them `PresentReview`;
+its prompt confirms drafts in the conversation through `SendConfirmedEmail` /
+`CreateConfirmedCalendarEvent`.
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 

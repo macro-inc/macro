@@ -60,10 +60,10 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT);
 
-/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
-/// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
-/// presents drafts on a saved review card the turn never waits on, not a
-/// composer left pending after it.
+/// The agent-session prompt for a turn on direct tools, which runs only when
+/// the code-mode tools are unreachable: [`SESSION_BASE_PROMPT`] with drafts
+/// confirmed in the conversation, since neither a composer nor a review card
+/// is available.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT);
@@ -171,16 +171,22 @@ mod tests {
     }
 
     #[test]
-    fn session_tool_use_prompt_presents_drafts_without_holding_the_turn() {
-        // An agent session never calls the deferring user tools: drafts go on
-        // a saved review card the turn does not wait on, and the account
-        // holder's "yes" in chat submits it.
+    fn session_tool_use_prompt_confirms_drafts_in_the_conversation() {
+        // A session turn on direct tools has no review card: the code-mode
+        // tools, PresentReview among them, are unreachable. The model writes
+        // the draft out, asks, and sends on the user's quoted approval, so no
+        // turn waits on a review and nothing goes out unseen.
         let session = SESSION_TOOL_USE_PROMPT.to_string();
         assert!(!session.contains("PendingUserExecution"));
         assert!(!session.contains("MUST use the `SendEmail` tool"));
-        assert!(session.contains("present the editable draft with `PresentReview`"));
-        assert!(session.contains("Do not wait for the user to act on it"));
-        assert!(session.contains("submit it with\n  `DecideReview`"));
+        assert!(!session.contains("PresentReview"));
+        assert!(session.contains("the user confirms in the conversation"));
+        assert!(session.contains("the whole calendar event"));
+        assert!(session.contains("`SendConfirmedEmail` for the email"));
+        assert!(session.contains("`CreateConfirmedCalendarEvent` for the event"));
+        assert!(session.contains("quoted verbatim in `userConfirmation`"));
+        assert!(session.contains("never approval of it"));
+        assert!(session.contains("`AskUser`"));
     }
 
     #[test]
@@ -204,52 +210,13 @@ mod tests {
     }
 
     #[test]
-    fn session_tool_use_prompt_routes_thread_prompts_to_prose_and_the_confirmed_send() {
-        // A prompt read out of a channel or document thread has no review
-        // card anyone is watching: the model asks in the thread, then sends
-        // on the user's reply through SendConfirmedEmail, quoting it.
-        let session = SESSION_TOOL_USE_PROMPT.to_string();
-        assert!(session.contains("channel or document thread"));
-        assert!(session.contains("context block names a conversation parent"));
-        assert!(session.contains("`SendConfirmedEmail`"));
-        assert!(session.contains("quoted verbatim"));
-        assert!(session.contains("`userConfirmation`"));
-        assert!(session.contains("`AskUser`"));
-        assert!(session.contains("never call either from the agent session view"));
-
-        // The thread rule is to restate what the tool would have done, whole,
-        // so the user can approve it without opening the session - and it
-        // covers every user tool, not just email: an approved event goes
-        // through the calendar twin of the confirmed send.
-        assert!(session.contains("written out verbatim"));
-        assert!(session.contains("the whole calendar event"));
-        assert!(session.contains("`CreateConfirmedCalendarEvent` for the event"));
-
-        // Which prompt is being answered decides it, not the session.
-        assert!(session.contains("decided per"));
-    }
-
-    #[test]
-    fn session_tool_use_prompt_treats_a_private_conversation_like_the_session_view() {
-        // A DM with the agent is read live: its questions and review cards
-        // appear there, so the thread rule does not apply to it.
-        let session = SESSION_TOOL_USE_PROMPT.to_string();
-        assert!(session.contains("private conversation with the user is the exception"));
-        assert!(session.contains("like one typed in the agent session view"));
-    }
-
-    #[test]
-    fn session_tool_use_prompt_keeps_the_thread_mechanics_away_from_the_user() {
-        // The thread rule explains review cards and the session view so the
-        // model knows why it writes the draft out. None of that is for the
-        // user, who asked for an email or an event and should just get the
-        // draft and a question - not a note about where their prompt came from.
+    fn session_tool_use_prompt_keeps_the_mechanics_away_from_the_user() {
+        // The user asked for an email or an event and should just get the
+        // draft and a question, not a note about review cards or tools.
         let session = SESSION_TOOL_USE_PROMPT.to_string();
         assert!(session.contains("The rule above is for you, not the user"));
         assert!(session.contains("Never explain why you are writing the draft out"));
-        assert!(session.contains("not mention the agent session view, review cards"));
-        assert!(session.contains("does not know or care"));
-        assert!(session.contains("with no preamble about"));
+        assert!(session.contains("not mention review cards, composers, or tools"));
     }
 
     #[test]

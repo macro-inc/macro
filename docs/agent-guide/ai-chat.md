@@ -2480,6 +2480,8 @@ In every agent session, the blocking `SendEmail` and `CreateCalendarEvent`
 tools are not advertised or available through lazy discovery. Email and calendar
 drafts use these saved reviews instead. Presenting a draft must not produce an
 `elicitation/create` request or leave the session blocked waiting for approval.
+If a turn cannot reach the review tools, the agent writes the email or event into
+its reply and asks; it sends or creates only after the user replies approving it.
 Older sessions may still show a resolved email or calendar review question; once the
 tool reported back it reads as the tool's card.
 
