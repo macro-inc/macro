@@ -120,6 +120,11 @@ class RegistryState {
           continue;
         if (hook.name === 'setFormat' && record.kind !== 'Text') continue;
         if (
+          hook.name === 'isInline' &&
+          (record.kind === 'Text' || record.kind === 'LineBreak')
+        )
+          continue;
+        if (
           record.baseline.methods[i] === undefined &&
           hook.name !== 'transform'
         )

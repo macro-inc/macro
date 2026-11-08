@@ -31,7 +31,7 @@ GC and await that release event; explicit disposal is idempotent.
 
 The production view lives in `lexical-wasm-view`; DOM code belongs there.
 
-Captured-node identity is cached weakly per editor and version. Reachable nodes pin their Rust version; collection waits through active updates and cancels if a new node owner captures the version before publication. Full native node classes, foreign hosting and read scopes remain unfinished.
+Captured-node identity is cached weakly per editor and version. Reachable nodes pin their Rust version; collection waits through active updates and cancels if a new node owner captures the version before publication. Full native node classes, foreign hosting and inherited selection synchronization remain unfinished.
 
 Foreign class metadata captures native hook implementations before JS patches,
 walks registered and native ancestry, and computes inherited override masks in the
@@ -61,3 +61,5 @@ Mutable `selectionTransform` hooks receive the existing previous committed and c
 The backend also hosts `exportJSON` with scoped reentrant reads, native-super, opaque exceptions and write/effect rejection. The read peer still rejects inherited selection value writes. Committed-state exports require the exact state-read or publication lease; the other pure hooks and complete class facade remain unfinished.
 
 `backend.readState(version, body)` reads an exact retained published state with its editor associated, preserving suspended writes and nested callback scopes. Historical graph reads retain the latest committed previous-selection owner. Body returns and throws stay opaque. Editor-less reads and inherited selection value synchronization remain unfinished.
+
+`isInline` is the first hosted pure predicate. Its owned read peer preserves native-super calls and original arguments, rejects writes, and uses JS truthiness without inspecting returned objects. Scoped failure barriers preserve opaque exceptions and stop later callbacks, model writes and cache publication. Text and line-break inline flags remain fixed non-hooks. Other pure hooks remain disabled.

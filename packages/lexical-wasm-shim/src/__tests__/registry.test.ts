@@ -460,7 +460,7 @@ it('reserves native type names even when defaults are omitted from the input', (
   );
 });
 
-it('keeps text/element getTextContent and element setFormat out of the override mask', () => {
+it('keeps kind-specific non-hooks out of the override mask', () => {
   class Element {
     static getType() {
       return 'element';
@@ -478,6 +478,9 @@ it('keeps text/element getTextContent and element setFormat out of the override 
     }
     getTextContent() {
       return 'native text';
+    }
+    isInline() {
+      return true;
     }
     setFormat() {
       return this;
@@ -511,6 +514,9 @@ it('keeps text/element getTextContent and element setFormat out of the override 
     }
     getTextContent() {
       return 'custom inline';
+    }
+    isInline() {
+      return false;
     }
     setFormat() {
       return this;

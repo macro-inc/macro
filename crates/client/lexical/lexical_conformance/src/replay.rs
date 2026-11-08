@@ -518,6 +518,7 @@ impl Replayer {
         self.selections.replace_slots(slots)
     }
     pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
+        lexical_model::ForeignReadOperation::check()?;
         self.selections.synchronize(tx)?;
         self.bindings.capture_retired_records(tx, self.version)?;
         for (id, slot) in self.selections.slots()?.into_iter().enumerate() {
@@ -873,6 +874,7 @@ impl Replayer {
         Ok(())
     }
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
+        lexical_model::ForeignReadOperation::check()?;
         let node = view.node_or_err(key)?;
         let record = view.foreign_record_identity(key)?;
         let version = self

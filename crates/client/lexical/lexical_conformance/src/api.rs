@@ -41,10 +41,13 @@ pub fn call_by_id(
 /// Arguments and receiver use the recorder's value encoding. The development
 /// host owns the same identity bookkeeping as a fixture replay.
 pub fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Result<Value> {
+    let operation = lexical_model::ForeignReadOperation::begin()?;
     r.selections.synchronize(tx)?;
     let result = lexical::call(r, tx, op);
-    r.selections.synchronize(tx)?;
-    result
+    if lexical_model::ForeignReadOperation::check().is_ok() {
+        r.selections.synchronize(tx)?;
+    }
+    operation.finish(result)
 }
 
 pub(crate) mod lexical;

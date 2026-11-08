@@ -138,6 +138,7 @@ impl Session {
             if tx.has_foreign_effects() {
                 return Ok(false);
             }
+            lexical_model::ForeignReadOperation::check()?;
             context.finish_update(tx)?;
             context.publish(tx.committed_state().clone())?;
             Ok(true)
@@ -160,51 +161,55 @@ impl Session {
         &mut self,
         prepare: impl FnOnce(&Commit, u64) -> Result<T>,
     ) -> Result<(Commit, T)> {
-        let pending = self
-            .pending
-            .take()
-            .ok_or_else(|| fail("no API update is active"))?;
-        let mut tx = match self.editor.resume(pending) {
-            Ok(tx) => tx,
-            Err(error) => {
-                self.context.discard_update()?;
-                return Err(error.into());
-            }
-        };
-        if tx.needs_flush()
-            && let Err(error) = tx.flush()
-        {
-            drop(tx);
-            self.context.discard_update()?;
-            return Err(error.into());
-        }
-        let read_context = match tx.view().context_for_foreign_read() {
-            Ok(capture) => capture,
-            Err(error) => {
+        let operation = lexical_model::ForeignReadOperation::begin()?;
+        let result = (|| {
+            let pending = self
+                .pending
+                .take()
+                .ok_or_else(|| fail("no API update is active"))?;
+            let mut tx = match self.editor.resume(pending) {
+                Ok(tx) => tx,
+                Err(error) => {
+                    self.context.discard_update()?;
+                    return Err(error.into());
+                }
+            };
+            if tx.needs_flush()
+                && let Err(error) = tx.flush()
+            {
                 drop(tx);
                 self.context.discard_update()?;
                 return Err(error.into());
             }
-        };
-        if let Err(error) = self.context.finish_update(&tx) {
-            drop(tx);
-            self.context.discard_update()?;
-            return Err(error);
-        }
-        let version = self.context.publishing_version()?;
-        let (commit, artifact) = match tx.commit_foreign(|commit| {
-            self.context
-                .with_prepared_reads(read_context, &commit.next, || prepare(commit, version))
-        }) {
-            Ok(prepared) => prepared,
-            Err(error) => {
+            let read_context = match tx.view().context_for_foreign_read() {
+                Ok(capture) => capture,
+                Err(error) => {
+                    drop(tx);
+                    self.context.discard_update()?;
+                    return Err(error.into());
+                }
+            };
+            if let Err(error) = self.context.finish_update(&tx) {
+                drop(tx);
                 self.context.discard_update()?;
                 return Err(error);
             }
-        };
-        let last = commit.chain().last().expect("commit chain includes itself");
-        self.context.publish(last.next.clone())?;
-        Ok((commit, artifact))
+            let version = self.context.publishing_version()?;
+            let (commit, artifact) = match tx.commit_foreign(|commit| {
+                self.context
+                    .with_prepared_reads(read_context, &commit.next, || prepare(commit, version))
+            }) {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    self.context.discard_update()?;
+                    return Err(error);
+                }
+            };
+            let last = commit.chain().last().expect("commit chain includes itself");
+            self.context.publish(last.next.clone())?;
+            Ok((commit, artifact))
+        })();
+        operation.finish(result)
     }
 
     /// Drop unpublished model writes and invalidate their handles.
@@ -248,6 +253,7 @@ impl Session {
         &mut self,
         body: impl FnOnce(&mut Context, &mut Transaction<'_>) -> Result<ValueType>,
     ) -> Result<ValueType> {
+        let operation = lexical_model::ForeignReadOperation::begin()?;
         let pending = self
             .pending
             .take()
@@ -260,6 +266,7 @@ impl Session {
             }
         };
         let value = body(&mut self.context, &mut tx);
+        let value = operation.finish(value);
         self.pending = Some(tx.suspend());
         value
     }
