@@ -172,7 +172,7 @@ pub struct DocumentMetadata {
     /// Entity-owned presentation overrides; absent values use type defaults.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[sqlx(json(nullable))]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The version of the document
@@ -362,7 +362,7 @@ impl DocumentPreviewDataSubType {
 pub struct DocumentPreviewData {
     /// Entity-owned icon and color overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// The document id
     pub document_id: String,
     /// The file type of the document (e.g. pdf, docx)

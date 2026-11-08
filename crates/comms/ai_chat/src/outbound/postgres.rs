@@ -147,7 +147,7 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
         entity_access_db_utils::project_grants::refuse_filing_in(
             &mut tx,
             &chat_uuid,
-            model_entity::EntityType::Chat,
+            entity_kind::EntityType::Chat,
             args.project_id.as_deref(),
         )
         .await
@@ -339,7 +339,7 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
             entity_access_db_utils::project_grants::refuse_filing_in(
                 &mut tx,
                 &chat_uuid,
-                model_entity::EntityType::Chat,
+                entity_kind::EntityType::Chat,
                 args.project_id.as_deref(),
             )
             .await

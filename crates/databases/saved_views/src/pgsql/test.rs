@@ -531,11 +531,11 @@ async fn appearance_is_owner_only_and_does_not_change_filter_revision(pool: PgPo
         )
         .await
         .unwrap();
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "📚".into()
         }),
-        color: Some(model_entity::AppearanceColor::Blue),
+        color: Some(entity_kind::AppearanceColor::Blue),
     };
     assert!(matches!(
         service.set_appearance(VIEWER, id, appearance.clone()).await,
@@ -576,8 +576,8 @@ async fn appearance_is_owner_only_and_does_not_change_filter_revision(pool: PgPo
             .as_ref(),
         Some(&appearance)
     );
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "not-a-macro-icon".into(),
         }),
         color: None,
@@ -591,12 +591,12 @@ async fn appearance_is_owner_only_and_does_not_change_filter_revision(pool: PgPo
         Some(&appearance)
     );
     let reset = service
-        .set_appearance(OWNER, id, model_entity::EntityAppearance::default())
+        .set_appearance(OWNER, id, entity_kind::EntityAppearance::default())
         .await
         .unwrap();
     assert_eq!(
         reset.appearance.as_ref(),
-        Some(&model_entity::EntityAppearance::default())
+        Some(&entity_kind::EntityAppearance::default())
     );
     assert_eq!(reset.revision, updated.revision);
 }
@@ -608,8 +608,8 @@ async fn appearance_is_owner_only_and_does_not_change_filter_revision(pool: PgPo
 async fn create_retry_preserves_first_appearance(pool: PgPool) {
     let service = service(pool);
     let id = Uuid::now_v7();
-    let first = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let first = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "📚".into()
         }),
         color: None,
@@ -632,7 +632,7 @@ async fn create_retry_preserves_first_appearance(pool: PgPool) {
             "Changed".into(),
             json!({"kind":"tasks"}),
             None,
-            Some(model_entity::EntityAppearance::default()),
+            Some(entity_kind::EntityAppearance::default()),
         )
         .await
         .unwrap();
@@ -651,8 +651,8 @@ async fn create_retry_preserves_first_appearance(pool: PgPool) {
             .await,
         Err(Error::NotFound)
     ));
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "invalid".into(),
         }),
         color: None,

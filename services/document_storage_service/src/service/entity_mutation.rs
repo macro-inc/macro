@@ -31,6 +31,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
     EntityMutationEffect, EntityMutationErrorCode, EntityMutationService, EntityMutationSuccess,
@@ -41,7 +42,6 @@ use entity_mutation::{
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };

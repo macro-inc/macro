@@ -1,5 +1,5 @@
 use entity_access_db_utils::team_share::direct_level;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareGrant, TeamShareLevel,
 };

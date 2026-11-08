@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use anyhow::Result;
+use entity_kind::{Entity, EntityType};
 use frecency::domain::{
     models::{EventRecord, FrecencyAction, FrecencyEntity, FrecencyEvent},
     ports::EventIngestorService,
@@ -14,7 +15,6 @@ use frecency::domain::{
 use futures::StreamExt;
 use futures::TryFutureExt;
 use itertools::Itertools;
-use model_entity::{Entity, EntityType};
 use tokio::sync::mpsc::Sender;
 use tracing::Level;
 

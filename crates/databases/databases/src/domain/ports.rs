@@ -35,7 +35,7 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         &self,
         id: DatabaseId,
         update: activity::AppearanceUpdate,
-    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<Option<entity_kind::EntityAppearance>, Self::Error>> + Send;
 
     /// Create a database with its first table and that table's title
     /// column, granting the creator owner access, all or nothing.
@@ -422,8 +422,8 @@ pub trait DatabasesService: Send + Sync + 'static {
     fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DatabaseError>> + Send;
+        appearance: entity_kind::EntityAppearance,
+    ) -> impl Future<Output = Result<entity_kind::EntityAppearance, DatabaseError>> + Send;
 
     /// Move a database to the trash.
     fn trash_database(

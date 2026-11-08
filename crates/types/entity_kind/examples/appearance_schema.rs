@@ -1,5 +1,5 @@
 //! Export the standalone appearance contract for frontend schema generation.
-use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
+use entity_kind::{AppearanceColor, AppearanceIcon, EntityAppearance};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]

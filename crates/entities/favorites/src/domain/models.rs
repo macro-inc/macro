@@ -1,8 +1,8 @@
 //! Domain models for favorites.
 
 use chrono::{DateTime, Utc};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 
 /// A single favorited entity, including display metadata hydrated from the
@@ -42,7 +42,7 @@ pub struct Favorite {
 }
 
 impl Favorite {
-    /// The favorited entity as a [model_entity::Entity].
+    /// The favorited entity as a [entity_kind::Entity].
     pub fn entity(&self) -> Entity<'_> {
         self.entity_type.with_entity_str(&self.entity_id)
     }

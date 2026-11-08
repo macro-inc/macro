@@ -1,7 +1,7 @@
 use super::*;
+use entity_kind::Entity;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use sqlx::Postgres;
 
 #[sqlx::test(

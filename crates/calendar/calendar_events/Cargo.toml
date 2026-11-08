@@ -36,7 +36,7 @@ inbound = [
   "schema",
 ]
 # The notification-service reminder notifier.
-notify = ["dep:macro_user_id", "dep:model_entity", "dep:model_notifications", "dep:notification"]
+notify = ["dep:macro_user_id", "dep:entity_kind", "dep:model_notifications", "dep:notification"]
 postgres = ["dep:sqlx", "dep:tokio"]
 schema = ["dep:utoipa"]
 
@@ -57,7 +57,7 @@ macro_authorization = { workspace = true, features = [
 ], optional = true }
 google_calendar_api_url = { workspace = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 models_pagination = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }

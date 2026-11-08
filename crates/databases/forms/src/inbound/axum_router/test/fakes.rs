@@ -290,8 +290,8 @@ impl FormsService for RecordingForms {
     async fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, FormError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, FormError> {
         self.answer(handed("set_appearance", &receipt), appearance)
     }
     async fn collaborate_form(

@@ -1,9 +1,9 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use async_graphql::{Context, Enum, ID, InputObject, Object};
+use entity_kind::Entity;
 use graphql_common::{GraphqlEntityType, parse_id, require_authenticated_user};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_notifications::NotifEvent;
 use notification::domain::{
     models::{

@@ -36,10 +36,10 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
+use entity_kind::EntityType;
 use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

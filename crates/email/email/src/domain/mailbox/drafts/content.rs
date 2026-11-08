@@ -90,7 +90,7 @@ impl<R: DraftContentRepository, B: DraftContentBytes, A: EntityAccessService>
                     &actor,
                     None,
                     &thread.to_string(),
-                    model_entity::EntityType::EmailThread,
+                    entity_kind::EntityType::EmailThread,
                 )
                 .await
                 .map_err(|_| EmailApiError::Forbidden)?;

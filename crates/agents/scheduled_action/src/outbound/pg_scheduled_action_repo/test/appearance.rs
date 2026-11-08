@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::appearance::ChangeAppearance;
 use activity::domain::ports::{ActivityReads, EntityActivityReads};
 use activity::{Action, Actor, Attribution, RecordedAction};
-use model_entity::{AppearanceColor, EntityAppearance};
+use entity_kind::{AppearanceColor, EntityAppearance};
 use std::num::NonZeroU32;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -55,7 +55,7 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
     let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool);
     let records = history
         .entity_feed(
-            model_entity::EntityType::ScheduledAction,
+            entity_kind::EntityType::ScheduledAction,
             &id.to_string(),
             None,
             NonZeroU32::new(10).unwrap(),
@@ -79,7 +79,7 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
     assert!(
         history
             .entity_feed(
-                model_entity::EntityType::ScheduledAction,
+                entity_kind::EntityType::ScheduledAction,
                 &id.to_string(),
                 None,
                 NonZeroU32::new(10).unwrap(),

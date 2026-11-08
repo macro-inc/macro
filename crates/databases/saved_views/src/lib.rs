@@ -21,7 +21,7 @@ pub struct View {
     pub config: serde_json::Value,
     /// Validated icon and color metadata, independent of configuration revisions.
     #[serde(default)]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     /// Optimistic-write revision, omitted from legacy REST responses.

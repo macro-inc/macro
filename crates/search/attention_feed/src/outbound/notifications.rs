@@ -2,8 +2,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_notifications::NotifEvent;
 use notification::domain::{
     models::{

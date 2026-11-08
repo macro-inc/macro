@@ -26,7 +26,7 @@ users, independent of the HTTP client.
 ## Boundaries
 
 - Depends on: `entity_access` (ports), `connection_gateway_client` +
-  `model_entity` (outbound feature).
+  `entity_kind` (outbound feature).
 - Used by: `call`, `documents`, `agent_tools`, `document_storage_service` — a
   composition root constructs the outbound adapter; domain crates depend on
   `ConnectionService`/`ConnectionGateway`, never the client directly.

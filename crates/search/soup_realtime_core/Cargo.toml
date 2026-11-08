@@ -21,7 +21,7 @@ futures = { workspace = true, optional = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"], optional = true }

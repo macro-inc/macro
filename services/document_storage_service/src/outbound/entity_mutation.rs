@@ -11,11 +11,11 @@ use crate::{
     },
 };
 use channels::domain::models::ChannelType;
+use entity_kind::{Entity, EntityType};
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };

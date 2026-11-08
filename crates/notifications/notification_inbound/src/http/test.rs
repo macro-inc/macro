@@ -22,6 +22,7 @@ fn notification_state_query_parameters_are_exact_and_support_unions() {
         Query::<super::Params>::try_from_uri(&"/?states=seen,invalid".parse().unwrap()).is_err()
     );
 }
+use entity_kind::Entity;
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
 use macro_authorization::{
@@ -29,7 +30,6 @@ use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_user::UserContext;
 use models_pagination::{CreatedAt, Paginated, Query};
 use reqwest::StatusCode;

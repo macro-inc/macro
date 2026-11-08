@@ -86,7 +86,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &task,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
             )
             .await
             .map_err(|error| anyhow::anyhow!("no edit access to imported task: {error:?}"))?;
@@ -136,7 +136,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &id,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
             )
             .await
             .map_err(|error| {

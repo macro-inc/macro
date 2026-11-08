@@ -10,7 +10,7 @@ This crate owns saved-view definitions, shared icon/color appearance, revisions,
 - `MembershipPort::denied_view_kinds` supplies current consumer access policy to both transports, including personal and legacy views; the composition adapter gates `crm` and `crm-list` with the CRM primary-backed member check. Denied definitions return not found and are omitted from listings.
 - `src/pgsql.rs`: primary-backed SQLx queries, owner/revision guards, and per-ID transaction locks. Physical deletes leave permanent ID-only tombstones; never purge them or bypass the create lock. Deletion triggers must not acquire that lock after locking a row; creation rechecks tombstones after INSERT to catch legacy deletes.
 - `src/storage.rs`: legacy REST PATCH payload and excluded-default storage.
-- Appearance uses the shared `model_entity::EntityAppearance` value outside consumer config; only owners write it, and metadata writes preserve definition revisions and timestamps. Initial appearance is validated and inserted atomically on create. Keep SQLx JSON wrappers in the PostgreSQL adapter, never the domain.
+- Appearance uses the shared `entity_kind::EntityAppearance` value outside consumer config; only owners write it, and metadata writes preserve definition revisions and timestamps. Initial appearance is validated and inserted atomically on create. Keep SQLx JSON wrappers in the PostgreSQL adapter, never the domain.
 - Order is personal: `saved_view_position` holds each viewer's position per visible view, outside the definition and its revision. Lists sort placed views first, then by creation time and ID, and the cursor carries all three. `reorder` replaces one kind's order whole (views left out become unplaced) under a per-viewer, per-kind advisory lock.
 
 ## Checks

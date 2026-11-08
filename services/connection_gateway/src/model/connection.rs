@@ -1,5 +1,5 @@
 use crate::{config::Config, context::ApiContext};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use shared_types::user::UserContext;
 use std::time::{SystemTime, UNIX_EPOCH};
 use utoipa::ToSchema;

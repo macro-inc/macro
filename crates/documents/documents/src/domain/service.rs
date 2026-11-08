@@ -8,7 +8,7 @@ mod tests;
 
 use crate::domain::ports::sync::DocumentSyncPort;
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
     authorize_team_share,
@@ -1142,8 +1142,8 @@ impl<
     async fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DocumentError> {
         appearance.validate().map_err(DocumentError::BadRequest)?;
         let id = &receipt.entity().entity_id;
         let document = self
@@ -1461,7 +1461,7 @@ impl<
     async fn get_project_children(
         &self,
         project_id: &str,
-    ) -> Result<Vec<model_entity::Entity<'static>>, DocumentError> {
+    ) -> Result<Vec<entity_kind::Entity<'static>>, DocumentError> {
         self.repo
             .get_project_children(project_id)
             .await

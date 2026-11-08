@@ -1,8 +1,8 @@
 use super::*;
 use ai_toolset::schema::generate_validated_input_schema;
 use chrono::Duration;
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use notification::domain::item_preferences::ItemNotificationPreference;
 use rootcause::Report;
 use std::sync::{Arc, Mutex};

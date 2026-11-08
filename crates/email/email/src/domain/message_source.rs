@@ -2,8 +2,8 @@
 //! Access matches attachment reads; the owner mailbox supplies provider credentials.
 use super::{draft_attachments::AttachmentError, mailbox::MailboxKey, ports::EmailUserRepo};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_email::service::link::Link;
 use std::future::Future;
 use uuid::Uuid;

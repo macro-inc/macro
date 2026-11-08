@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use serde_json::json;
 
 use crate::domain::ports::TaskDedupNotifier;

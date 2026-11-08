@@ -306,7 +306,7 @@ pub(super) struct RecordingService {
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
-    pub(super) appearances: Mutex<Vec<model_entity::EntityAppearance>>,
+    pub(super) appearances: Mutex<Vec<entity_kind::EntityAppearance>>,
     /// Every duplicate asked for: source, owner, acting bot, and name.
     pub(super) duplicates: Mutex<Vec<Duplicate>>,
     /// Every create asked for.
@@ -319,8 +319,8 @@ impl DatabasesService for RecordingService {
     async fn set_appearance(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DatabaseError> {
         self.appearances.lock().unwrap().push(appearance.clone());
         Ok(appearance)
     }

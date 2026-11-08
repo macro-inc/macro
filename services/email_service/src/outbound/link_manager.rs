@@ -9,7 +9,7 @@ use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::link_manager::{
     LinkManagerNotifications, LinkManagerRepository, ReauthNotification,
 };
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;

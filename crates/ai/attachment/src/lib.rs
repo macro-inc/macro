@@ -1,8 +1,8 @@
 //! A lib crate to support AI attachment consumers and providers
 #![deny(missing_docs)]
 
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 pub use models::{
     AttachmentContent, AttachmentError, AttachmentPart, Attachments, FormattedParts,
     ResolutionError, TextOrImage,

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use collab_surface::domain::models::CollabSurfaceError;
 use collab_surface::domain::ports::OwnedSurfaceService;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use project::domain::models::{InitiativeError, InitiativeId};
 use project::domain::ports::InitiativeDescriptionSurfaces;
 

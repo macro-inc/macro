@@ -8,8 +8,8 @@ use activity::{
 };
 use async_graphql::{EmptyMutation, Object, Schema};
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use uuid::Uuid;
 
 use super::*;

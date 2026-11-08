@@ -45,14 +45,14 @@ macro_rules! push_capable {
         impl NotificationExtIos for $notification {
             type NotifData = $notification;
 
-            fn collapse_key(&self, _entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+            fn collapse_key(&self, _entity: &entity_kind::Entity<'_>) -> NotifCollapseKey {
                 NotifCollapseKey::new(CHANNEL_ID)
             }
 
             fn as_apns<'a>(
                 &self,
                 _sender: Option<MacroUserIdStr<'a>>,
-                _entity: &model_entity::Entity<'_>,
+                _entity: &entity_kind::Entity<'_>,
                 _notification_id: Uuid,
             ) -> Option<APNSPushNotification<Self::NotifData>> {
                 Some(APNSPushNotification {

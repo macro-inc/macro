@@ -10,10 +10,10 @@ use entity_access::domain::models::AccessLevel;
 #[cfg(feature = "explain_binary")]
 use entity_access::domain::models::{AccessGrant, TeamRole};
 #[cfg(feature = "explain_binary")]
+use entity_kind::EntityType;
+#[cfg(feature = "explain_binary")]
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-#[cfg(feature = "explain_binary")]
-use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;

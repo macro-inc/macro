@@ -21,7 +21,7 @@ use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLin
 use shared_types::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
@@ -142,7 +142,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         &self,
         document_id: &str,
         update: &activity::AppearanceUpdate,
-    ) -> Result<Option<model_entity::EntityAppearance>, Self::Err> {
+    ) -> Result<Option<entity_kind::EntityAppearance>, Self::Err> {
         let mut tx = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"SELECT appearance FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE"#,
@@ -150,7 +150,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .fetch_one(&mut *tx)
         .await?;
-        let previous: model_entity::EntityAppearance = row
+        let previous: entity_kind::EntityAppearance = row
             .appearance
             .map(serde_json::from_value)
             .transpose()
@@ -168,7 +168,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         .execute(&mut *tx)
         .await?;
         if let Some(activity) =
-            update.activity(model_entity::EntityType::Document, document_id, &previous)
+            update.activity(entity_kind::EntityType::Document, document_id, &previous)
         {
             activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
         }
@@ -734,7 +734,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             entity_access_db_utils::project_grants::refuse_filing_in(
                 &mut transaction,
                 &document_uuid,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
                 args.project_id.as_deref(),
             )
             .await?;

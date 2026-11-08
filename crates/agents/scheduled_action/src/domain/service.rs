@@ -9,11 +9,11 @@ use entity_access::domain::{
     },
     ports::ScheduledActionGrants,
 };
+use entity_kind::EntityAppearance;
 use entity_registry::OwnedPurgeOutcome;
 use github::domain::{models::GithubError, ports::GithubInstallationClaims};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use routine_program::{CodeIdentity, RoutineProgram};
 use tokio::sync::mpsc::Sender;

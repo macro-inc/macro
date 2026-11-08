@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use connection_gateway::service::connection::ConnectionRepo;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::AiResponseMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;

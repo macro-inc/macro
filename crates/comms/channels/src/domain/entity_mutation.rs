@@ -4,10 +4,10 @@ use channel_id::ChannelId;
 use entity_access::domain::models::{
     EntityAccessReceipt, MemberParticipantRole, RequiredPermission, ViewOnly,
 };
+use entity_kind::Entity;
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
 };
-use model_entity::Entity;
 use uuid::Uuid;
 
 use super::{

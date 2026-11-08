@@ -5,8 +5,8 @@ mod test;
 
 use std::collections::{BTreeSet, HashMap};
 
+use entity_kind::EntityType;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;
 use uuid::Uuid;

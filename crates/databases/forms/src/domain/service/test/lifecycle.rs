@@ -290,10 +290,10 @@ async fn a_database_receipt_is_not_a_form_receipt() {
 #[cfg(feature = "entity_mutation")]
 #[tokio::test]
 async fn moving_a_form_files_it_names_both_folders_and_leaves_its_database() {
+    use entity_kind::EntityType;
     use entity_mutation::{
         EntityMutationEffect, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
     };
-    use model_entity::EntityType;
 
     let world = world();
     seed_rsvp(&world, Audience::Members);
@@ -351,8 +351,8 @@ async fn appearance_validates_preserves_dates_and_emits_only_changes() {
     seed_rsvp(&world, Audience::Members);
     let forms = service(&world);
     let receipt = || form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit);
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "unknown-icon".into(),
         }),
         color: None,
@@ -361,11 +361,11 @@ async fn appearance_validates_preserves_dates_and_emits_only_changes() {
         forms.set_appearance(receipt(), invalid).await,
         Err(FormError::InvalidAppearance(_))
     ));
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌱".into()
         }),
-        color: Some(model_entity::AppearanceColor::Green),
+        color: Some(entity_kind::AppearanceColor::Green),
     };
     assert_eq!(
         forms

@@ -66,7 +66,7 @@ impl FromStr for InitiativeId {
 pub struct InitiativeBasic {
     /// Entity-owned icon and color overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -82,7 +82,7 @@ pub struct InitiativeBasic {
 pub struct InitiativeSummary {
     /// Entity-owned icon and color overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -98,7 +98,7 @@ pub struct InitiativeSummary {
 pub struct InitiativeDetail {
     /// Entity-owned icon and color overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<model_entity::EntityAppearance>,
+    pub appearance: Option<entity_kind::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.

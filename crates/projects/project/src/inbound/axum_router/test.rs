@@ -328,8 +328,8 @@ impl InitiativeService for FakeInitiativeService {
     async fn set_appearance(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, InitiativeError> {
         appearance.validate().map_err(InitiativeError::BadRequest)?;
         Ok(appearance)
     }

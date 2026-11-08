@@ -3,8 +3,8 @@
 use axum::{Json, extract::State};
 use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
 use entity_access::inbound::axum_extractors::InitiativeAccessExtractor;
+use entity_kind::EntityAppearance;
 use macro_authorization::MacroAuthorizationService;
-use model_entity::EntityAppearance;
 
 use super::{InitiativeIdParams, InitiativeRouterState};
 use crate::domain::{models::InitiativeError, ports::InitiativeService};

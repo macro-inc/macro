@@ -17,6 +17,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use entity_kind::Entity;
 use entity_registry::NonUserOwners;
 use http_body_util::BodyExt;
 use lexical_client::LexicalClient;
@@ -27,7 +28,6 @@ use macro_authorization::{
     MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
 use rootcause::Report;
@@ -241,8 +241,8 @@ impl DocumentService for FakeDocumentService {
         _receipt: entity_access::domain::models::EntityAccessReceipt<
             models_permissions::share_permission::access_level::EditAccessLevel,
         >,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, DocumentError> {
         appearance.validate().map_err(DocumentError::BadRequest)?;
         Ok(appearance)
     }

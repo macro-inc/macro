@@ -4,10 +4,10 @@ use ai_chat::domain::models::PatchChatRepoArgs;
 use ai_chat::domain::ports::ChatRepo;
 use ai_chat::outbound::postgres::PgChatRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use entity_kind::EntityType;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use std::sync::Arc;
 
 const CHAT_RENAMED_MESSAGE_TYPE: &str = "chat_renamed";

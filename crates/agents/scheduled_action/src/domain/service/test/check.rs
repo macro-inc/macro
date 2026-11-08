@@ -233,7 +233,7 @@ impl<Check: ScheduledActionService> RoutineSessions for SessionOnAnotherReplica<
                     ..config
                 },
                 vec![crate::domain::models::CreatedItem {
-                    entity_type: model_entity::EntityType::Database,
+                    entity_type: entity_kind::EntityType::Database,
                     entity_id: "bug-log".into(),
                 }],
                 Some(correlation),

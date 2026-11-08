@@ -4,7 +4,7 @@
 mod test;
 
 use entity_access::domain::ports::EntityAudienceLookup;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 
 use soup_realtime_core::{models::SharedAccess, ports::UserAccessExpander};

@@ -3,8 +3,8 @@ use crate::domain::models::AdvancedSortParams;
 use crate::domain::models::SoupPropertiesField;
 use crate::domain::models::grouping::{GroupLabels, ItemGroupingInfo, build_grouped_response};
 use document_sub_type::DocumentSubType;
+use entity_kind::EntityType;
 use item_filters::ast::project::ProjectLiteral;
-use model_entity::EntityType;
 use models_soup::item::SoupItem;
 use uuid::{Uuid, uuid};
 

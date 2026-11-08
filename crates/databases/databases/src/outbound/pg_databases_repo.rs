@@ -29,7 +29,7 @@ use properties::domain::database_definition_writer::{
 use sqlx::{PgPool, Postgres, Transaction};
 
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 use crate::domain::models::{
     CardPosition, Column, ColumnId, ColumnReplacement, CreateDatabase, Database, DatabaseId,
@@ -87,7 +87,7 @@ pub(crate) fn stored_positions(positions: &[Position]) -> Vec<String> {
 
 /// A `database_entities` row, read by `query_as!` and mapped onto [`Database`].
 pub(crate) struct DatabaseRecord {
-    pub(crate) appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    pub(crate) appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     pub(crate) id: Uuid,
     pub(crate) name: String,
     pub(crate) owner_id: String,
@@ -185,7 +185,7 @@ pub(crate) async fn insert_owned_entity(
     name: &str,
     owner_id: &str,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
-    appearance: Option<&model_entity::EntityAppearance>,
+    appearance: Option<&entity_kind::EntityAppearance>,
 ) -> Result<Database, PgDatabasesRepoError> {
     sqlx::query!(
         "INSERT INTO databases (id) VALUES ($1)",
@@ -325,13 +325,13 @@ where
         &self,
         id: DatabaseId,
         update: activity::AppearanceUpdate,
-    ) -> Result<Option<model_entity::EntityAppearance>, Self::Error> {
+    ) -> Result<Option<entity_kind::EntityAppearance>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             "SELECT appearance FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR UPDATE",
             id.into_uuid(),
         ).fetch_one(&mut *transaction).await?;
-        let previous: model_entity::EntityAppearance = row
+        let previous: entity_kind::EntityAppearance = row
             .appearance
             .map(serde_json::from_value)
             .transpose()

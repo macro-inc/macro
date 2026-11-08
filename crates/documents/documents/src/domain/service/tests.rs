@@ -3944,7 +3944,7 @@ async fn appearance_rejects_non_markdown_and_special_document_types() {
             service
                 .set_appearance(
                     edit_receipt("doc-1"),
-                    model_entity::EntityAppearance::default()
+                    entity_kind::EntityAppearance::default()
                 )
                 .await,
             Err(DocumentError::BadRequest(_))
@@ -3955,8 +3955,8 @@ async fn appearance_rejects_non_markdown_and_special_document_types() {
 #[tokio::test]
 async fn appearance_validates_before_persistence() {
     let service = make_test_service(make_mock_repo());
-    let invalid = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Macro {
+    let invalid = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Macro {
             name: "invalid-icon".into(),
         }),
         color: None,
@@ -3979,18 +3979,18 @@ async fn appearance_emits_history_only_for_changes() {
             repo.expect_set_appearance()
                 .withf(|id, update| {
                     id == "doc-1"
-                        && update.appearance.color == Some(model_entity::AppearanceColor::Blue)
+                        && update.appearance.color == Some(entity_kind::AppearanceColor::Blue)
                         && update.attribution.is_some()
                 })
                 .return_once(move |_, _| {
                     Box::pin(
-                        async move { Ok(changed.then(model_entity::EntityAppearance::default)) },
+                        async move { Ok(changed.then(entity_kind::EntityAppearance::default)) },
                     )
                 });
             let (service, broker) = make_test_service_with_event_broker(repo);
-            let appearance = model_entity::EntityAppearance {
+            let appearance = entity_kind::EntityAppearance {
                 icon: None,
-                color: Some(model_entity::AppearanceColor::Blue),
+                color: Some(entity_kind::AppearanceColor::Blue),
             };
             assert_eq!(
                 service
@@ -4040,9 +4040,9 @@ async fn appearance_records_team_and_channel_bot_attribution() {
         service
             .set_appearance(
                 receipt,
-                model_entity::EntityAppearance {
+                entity_kind::EntityAppearance {
                     icon: None,
-                    color: Some(model_entity::AppearanceColor::Blue),
+                    color: Some(entity_kind::AppearanceColor::Blue),
                 },
             )
             .await

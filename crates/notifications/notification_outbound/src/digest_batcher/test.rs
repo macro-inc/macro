@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use notification::domain::models::{Notification, TaggedContent};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};

@@ -12,9 +12,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 
 use super::model::{OpenTarget, ResolveReason, SuggestionError, Target};
 use super::ports::{ResolveSuggestions, SuggestionAccess, SuggestionRepo};

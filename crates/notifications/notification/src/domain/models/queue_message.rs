@@ -10,9 +10,9 @@ use crate::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use cow_str::CowLike;
+use entity_kind::Entity;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use rate_limit::RateLimitExceeded;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use rootcause::{Report, compat::IntoRootcause};
 
 use crate::domain::{models::BotOwnerProfile, ports::BotProfilePublisher};

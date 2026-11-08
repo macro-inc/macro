@@ -355,16 +355,16 @@ where
 #[utoipa::path(put, tag = "databases", operation_id = "set_database_appearance",
     path = "/databases/{id}/appearance",
     params(("id" = Uuid, Path, description = "Database id")),
-    request_body = model_entity::EntityAppearance,
-    responses((status = 200, body = model_entity::EntityAppearance),
+    request_body = entity_kind::EntityAppearance,
+    responses((status = 200, body = entity_kind::EntityAppearance),
         (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
 #[tracing::instrument(err, skip_all)]
 pub async fn set_database_appearance<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<EditAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
-    Json(appearance): Json<model_entity::EntityAppearance>,
-) -> Result<Json<model_entity::EntityAppearance>, DatabaseError>
+    Json(appearance): Json<entity_kind::EntityAppearance>,
+) -> Result<Json<entity_kind::EntityAppearance>, DatabaseError>
 where
     Service: DatabasesService,
     EntityAccess: EntityAccessService,

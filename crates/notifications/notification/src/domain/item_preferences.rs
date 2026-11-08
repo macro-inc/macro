@@ -1,8 +1,8 @@
 //! User-owned notification mute and snooze preferences.
 
 use chrono::{DateTime, Utc};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 

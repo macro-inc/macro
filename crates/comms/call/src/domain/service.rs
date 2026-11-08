@@ -673,14 +673,14 @@ impl Notification for CallStartedNotification {
 impl NotificationExtIos for CallStartedNotification {
     type NotifData = PushNotificationData;
 
-    fn collapse_key(&self, entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+    fn collapse_key(&self, entity: &entity_kind::Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(Self::TYPE_NAME).append(&entity.entity_id)
     }
 
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &model_entity::Entity<'_>,
+        _entity: &entity_kind::Entity<'_>,
         notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         Some(APNSPushNotification {

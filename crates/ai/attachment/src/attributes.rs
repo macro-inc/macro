@@ -1,7 +1,7 @@
 //! impls for Attributes
 use crate::Attributes;
 use crate::fmt::Attr;
-use model_entity::Entity;
+use entity_kind::Entity;
 use std::borrow::Cow;
 
 impl Attributes for Entity<'_> {

@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use async_graphql::{Context, InputObject, Object};
+use entity_kind::Entity;
 use entity_mutation::EntityMutationErrorCode;
 use favorites::domain::{
     models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
@@ -10,7 +11,6 @@ use graphql_common::require_authenticated_user;
 use graphql_entity_mutation::{EntityRefInput, GraphqlEntityMutationResult};
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 
 use crate::objects::GraphqlFavorite;
 

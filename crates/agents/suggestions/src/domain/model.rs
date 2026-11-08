@@ -2,8 +2,8 @@
 //! generation sessions.
 
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

@@ -8,8 +8,8 @@ fn canonical_external_chat_share_address_supports_view_access() {
     }))
     .unwrap();
     assert_eq!(
-        model_entity::EntityType::from(entity.entity_type),
-        model_entity::EntityType::ExternalChat
+        entity_kind::EntityType::from(entity.entity_type),
+        entity_kind::EntityType::ExternalChat
     );
     assert_eq!(
         supported_levels(entity.entity_type, None),

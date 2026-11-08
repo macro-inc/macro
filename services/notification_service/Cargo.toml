@@ -54,7 +54,7 @@ macro_queues = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 shared_types = { workspace = true, features = ["axum"] }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_error_response = { workspace = true }
 model_notifications = { workspace = true }
 models_pagination = { workspace = true, features = [

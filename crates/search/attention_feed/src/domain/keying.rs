@@ -6,7 +6,7 @@
 //! under [`CandidateKeying::FiledEntity`] every notification keys to its own
 //! entity.
 
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
 

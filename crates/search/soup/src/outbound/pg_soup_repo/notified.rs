@@ -18,13 +18,13 @@
 //! attributes the notification to; the channel row keeps only channel-level
 //! notifications.
 
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
 use item_filters::ast::agent_session::AgentSessionLiteral;
 use item_filters::ast::calendar_event::CalendarEventLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use item_filters::ast::properties::{PropertyEntityType, properties_filter_matches_propertyless};
-use model_entity::EntityType;
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;

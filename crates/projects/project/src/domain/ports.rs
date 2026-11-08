@@ -55,7 +55,7 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         &self,
         id: InitiativeId,
         update: &activity::AppearanceUpdate,
-    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<entity_kind::EntityAppearance>, Self::Err>> + Send;
 
     /// Persist a new initiative, its members, and initial share state in one transaction.
     fn create(
@@ -122,8 +122,8 @@ pub trait InitiativeService: Send + Sync + 'static {
     fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> impl Future<Output = Result<model_entity::EntityAppearance, InitiativeError>> + Send;
+        appearance: entity_kind::EntityAppearance,
+    ) -> impl Future<Output = Result<entity_kind::EntityAppearance, InitiativeError>> + Send;
     /// Read canonical properties and visible task progress for one authorized initiative.
     fn summary(
         &self,

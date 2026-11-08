@@ -19,7 +19,7 @@ pub struct GraphqlSavedView {
     /// Versioned filter configuration interpreted by the consuming feature.
     config: Json<serde_json::Value>,
     /// Icon and color metadata, separate from the filter configuration.
-    appearance: Option<Json<model_entity::EntityAppearance>>,
+    appearance: Option<Json<entity_kind::EntityAppearance>>,
     /// Team with effective access, or null when the definition is private.
     shared_team_id: Option<ID>,
     /// Current revision required for conditional updates and deletion.
@@ -150,7 +150,7 @@ pub struct CreateSavedViewInput {
     /// Current team to share with, or null for a private definition.
     shared_team_id: Option<ID>,
     /// Initial icon and color metadata, validated on first creation.
-    appearance: Option<Json<model_entity::EntityAppearance>>,
+    appearance: Option<Json<entity_kind::EntityAppearance>>,
 }
 
 /// Explicit sharing action: an omitted input leaves sharing unchanged; null team ID makes it private.

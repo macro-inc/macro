@@ -1,5 +1,5 @@
 use super::*;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap()

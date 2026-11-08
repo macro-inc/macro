@@ -14,7 +14,7 @@ schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 form_id = { workspace = true }
 lazy-regex = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_databases = { workspace = true }
 serde = { workspace = true }
 specta = { workspace = true, features = ["chrono", "uuid"] }

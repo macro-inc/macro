@@ -1,8 +1,8 @@
 use ::activity::{Action, Actor, activity_id};
 use chrono::{TimeZone as _, Utc};
+use entity_kind::EntityType;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_databases::TableId;
 use uuid::Uuid;
 

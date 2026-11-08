@@ -38,7 +38,7 @@ use super::skill_description::SkillDescription;
 
 use shared_types::sync_service::SyncServiceVersionID;
 
-use model_entity::Entity;
+use entity_kind::Entity;
 
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
@@ -59,7 +59,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
         update: &activity::AppearanceUpdate,
-    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<entity_kind::EntityAppearance>, Self::Err>> + Send;
 
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
@@ -523,8 +523,8 @@ pub trait DocumentService: Send + Sync + 'static {
     fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DocumentError>> + Send;
+        appearance: entity_kind::EntityAppearance,
+    ) -> impl Future<Output = Result<entity_kind::EntityAppearance, DocumentError>> + Send;
 
     /// Gets the basic document ignoring access checks
     fn internal_get_basic_document(

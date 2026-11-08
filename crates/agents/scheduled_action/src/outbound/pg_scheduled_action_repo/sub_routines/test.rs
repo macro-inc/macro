@@ -138,7 +138,7 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
         .await
         .unwrap();
     let appearance = EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌱".to_string(),
         }),
         color: None,

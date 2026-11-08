@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use std::io::{self, BufRead};
 use stream::domain::StreamId;
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;

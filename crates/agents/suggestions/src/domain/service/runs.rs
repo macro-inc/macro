@@ -9,10 +9,10 @@
 //! from where the run is now.
 
 use chrono::{TimeDelta, Utc};
+use entity_kind::EntityType;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_entity::EntityType;
 
 use super::{Runs, SuggestionService};
 use crate::domain::model::{RunStartError, StoredRun, Suggestion, SuggestionError, Target};

@@ -2,6 +2,7 @@
 
 use super::*;
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use frecency_core::models::{AggregateId, FrecencyData};
 use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
@@ -11,7 +12,6 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model_entity::EntityType;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use uuid::Uuid;

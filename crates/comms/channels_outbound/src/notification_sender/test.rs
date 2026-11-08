@@ -1,6 +1,6 @@
 use super::*;
+use entity_kind::Entity;
 use macro_user_id::cow_str::CowLike;
-use model_entity::Entity;
 use models_pagination::{CreatedAt, Paginated, Query};
 use notification_hex::domain::models::{
     DisabledNotificationType, UserNotificationRow,

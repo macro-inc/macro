@@ -4,8 +4,8 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{DuplicateEntity, MoveEntity, TrashEntity};
-use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

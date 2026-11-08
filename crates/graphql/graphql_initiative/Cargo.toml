@@ -15,7 +15,7 @@ graphql_soup = { workspace = true }
 project = { workspace = true, features = ["ports"] }
 macro_user_id = { workspace = true }
 models_permissions = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

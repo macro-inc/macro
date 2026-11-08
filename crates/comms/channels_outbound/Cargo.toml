@@ -20,7 +20,7 @@ filter_ast = { workspace = true }
 indexmap = { workspace = true }
 item_filters = { workspace = true, features = ["native"] }
 macro_uuid = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 models_permissions = { workspace = true }
 notification_hex = { workspace = true }

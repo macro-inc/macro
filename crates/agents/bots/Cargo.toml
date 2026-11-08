@@ -34,7 +34,7 @@ outbound = ["dep:sqlx", "dep:macro_uuid", "dep:entity_registry", "dep:model_owne
 realtime = [
   "dep:connection_gateway_client",
   "dep:kafka_util",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:rdkafka",
   "dep:serde_json",
   "inbound",
@@ -66,7 +66,7 @@ macro_authorization = { workspace = true, optional = true }
 messages = { workspace = true }
 macro_event_broker = { workspace = true }
 mockall = { workspace = true, optional = true }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }

@@ -486,7 +486,7 @@ pub(super) async fn update_thread_project(
     entity_access_db_utils::project_grants::refuse_filing_in(
         &mut transaction,
         &thread_id,
-        model_entity::EntityType::EmailThread,
+        entity_kind::EntityType::EmailThread,
         project_id,
     )
     .await?;

@@ -1,9 +1,9 @@
 use super::insert_bom_parts;
 use crate::history::upsert_user_history;
 use crate::share_permission::create::{create_document_permission, create_project_permission};
+use entity_kind::EntityType;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;

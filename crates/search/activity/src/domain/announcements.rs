@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod test;
 
+use entity_kind::EntityType;
 use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use std::{
     collections::{BTreeSet, HashMap},
     time::Duration,

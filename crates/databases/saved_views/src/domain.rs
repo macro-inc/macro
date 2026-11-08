@@ -1,6 +1,6 @@
 //! Saved-view policy and persistence ports. Configurations belong to their consumers.
 use crate::View;
-use model_entity::EntityAppearance;
+use entity_kind::EntityAppearance;
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},

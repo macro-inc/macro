@@ -14,7 +14,7 @@ use attention_feed::domain::{
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
 };
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_notifications::NotifEvent;
 use rootcause::Report;
 use uuid::Uuid;

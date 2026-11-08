@@ -37,7 +37,7 @@ macro_authorization = { workspace = true, optional = true, features = [
 ] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 notification = { workspace = true, default-features = true }
 rate_limit = { workspace = true, features = ["axum"] }
 

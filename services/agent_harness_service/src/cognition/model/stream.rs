@@ -1,6 +1,6 @@
 use agent_loop::types::AssistantMessagePart;
 use agent_loop::{AgentError, CompletionError};
-use model_entity::Entity;
+use entity_kind::Entity;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

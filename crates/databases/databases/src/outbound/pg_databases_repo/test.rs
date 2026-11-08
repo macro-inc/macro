@@ -541,8 +541,8 @@ async fn appearance_persists_without_changing_content_dates(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let appearance = model_entity::EntityAppearance {
-        icon: Some(model_entity::AppearanceIcon::Emoji {
+    let appearance = entity_kind::EntityAppearance {
+        icon: Some(entity_kind::AppearanceIcon::Emoji {
             value: "🌱".into()
         }),
         color: None,
@@ -557,7 +557,7 @@ async fn appearance_persists_without_changing_content_dates(pool: PgPool) {
     };
     assert_eq!(
         repo.set_appearance(id, update.clone()).await.unwrap(),
-        Some(model_entity::EntityAppearance::default())
+        Some(entity_kind::EntityAppearance::default())
     );
     assert_eq!(repo.set_appearance(id, update.clone()).await.unwrap(), None);
     let (saved, _) = repo.get_database(id).await.unwrap().unwrap();
@@ -592,7 +592,7 @@ async fn appearance_persists_without_changing_content_dates(pool: PgPool) {
     repo.set_appearance(
         id,
         activity::AppearanceUpdate {
-            appearance: model_entity::EntityAppearance::default(),
+            appearance: entity_kind::EntityAppearance::default(),
             event_id: Uuid::now_v7(),
             ..update
         },
@@ -622,9 +622,9 @@ async fn history_failure_rolls_back_appearance(pool: PgPool) {
         repo.set_appearance(
             id,
             activity::AppearanceUpdate {
-                appearance: model_entity::EntityAppearance {
+                appearance: entity_kind::EntityAppearance {
                     icon: None,
-                    color: Some(model_entity::AppearanceColor::Blue),
+                    color: Some(entity_kind::AppearanceColor::Blue),
                 },
                 attribution: Some(activity::Attribution::direct(
                     activity::Actor::new_from_user(MacroUserIdStr::parse_from_str(USER).unwrap())

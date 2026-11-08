@@ -15,7 +15,7 @@ use attention_feed::domain::{
     reader::FeedReader,
 };
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use notification::domain::bulk_action::{
     ApplyChunk, BulkAction, BulkActionItem, BulkActionLease, BulkActionStatus, BulkActionStore,
     ChunkOutcome, CreatedBulkAction, NewBulkAction, UndoRequested,

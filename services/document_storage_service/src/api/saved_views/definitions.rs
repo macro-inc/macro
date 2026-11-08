@@ -68,7 +68,7 @@ pub struct SavedViewDefinition {
     #[schema(value_type = Object)]
     config: serde_json::Value,
     /// Icon and color metadata, separate from configuration.
-    appearance: Option<model_entity::EntityAppearance>,
+    appearance: Option<entity_kind::EntityAppearance>,
     /// Team with access, or absent when the definition is private.
     shared_team_id: Option<Uuid>,
     /// Current revision, required by updates and deletion.
@@ -128,7 +128,7 @@ pub struct CreateSavedViewDefinitionRequest {
     /// Team to share with, which the creator must belong to.
     shared_team_id: Option<Uuid>,
     /// Optional initial icon and color metadata; retries retain the original value.
-    appearance: Option<model_entity::EntityAppearance>,
+    appearance: Option<entity_kind::EntityAppearance>,
 }
 
 /// An explicit sharing change: a team, or `null` to make the definition private.
@@ -387,7 +387,7 @@ pub async fn update_handler(
     path = "/saved_views/definitions/{saved_view_id}/appearance",
     operation_id = "set_saved_view_appearance",
     params(("saved_view_id" = Uuid, Path, description = "The saved view to edit")),
-    request_body = model_entity::EntityAppearance,
+    request_body = entity_kind::EntityAppearance,
     responses(
         (status = 200, body = SavedViewDefinition),
         (status = 400, body = ErrorResponse),
@@ -401,7 +401,7 @@ pub async fn appearance_handler(
     State(SavedViewDefinitionsState(service)): State<SavedViewDefinitionsState>,
     user: Viewer,
     Path(path): Path<SavedViewDefinitionPath>,
-    Json(appearance): Json<model_entity::EntityAppearance>,
+    Json(appearance): Json<entity_kind::EntityAppearance>,
 ) -> Result<Json<SavedViewDefinition>, SavedViewDefinitionErr> {
     let view = service
         .set_appearance(

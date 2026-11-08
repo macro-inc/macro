@@ -353,8 +353,8 @@ where
     async fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, FormError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, FormError> {
         appearance
             .validate()
             .map_err(FormError::InvalidAppearance)?;

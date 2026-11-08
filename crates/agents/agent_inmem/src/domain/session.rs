@@ -15,7 +15,7 @@ use agent_session::domain::model::AgentSessionId;
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use dashmap::DashMap;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use non_empty::NonEmpty;
 use tokio_util::sync::CancellationToken;
 

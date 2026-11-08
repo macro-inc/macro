@@ -8,8 +8,8 @@ use std::{
 };
 
 use chrono::{DateTime, TimeZone, Utc};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_notifications::NotifEvent;
 use notification::domain::models::{NotificationState, UserNotificationRow};
 use rootcause::Report;

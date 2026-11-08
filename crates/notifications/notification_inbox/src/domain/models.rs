@@ -5,8 +5,8 @@ use attention_feed::domain::models::{
     DoneReceipt, FeedKey, FeedNotification, FeedPosition, FeedRevision,
 };
 use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use notification::domain::bulk_action::BulkActionLease;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

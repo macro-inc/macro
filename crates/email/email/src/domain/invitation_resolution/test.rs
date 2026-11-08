@@ -84,8 +84,8 @@ fn cancellation_with_missing_or_invalid_stamp_survives_a_timestamped_request() {
 #[tokio::test]
 async fn composed_service_resolves_the_authorized_threads_saved_invitations() {
     use entity_access::domain::models::ViewAccessLevel;
+    use entity_kind::EntityType;
     use macro_user_id::user_id::MacroUserIdStr;
-    use model_entity::EntityType;
     use std::sync::{Arc, Mutex};
 
     struct Snapshots(Uuid, Uuid);

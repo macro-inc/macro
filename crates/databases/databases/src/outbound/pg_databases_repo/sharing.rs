@@ -3,7 +3,7 @@ use crate::domain::{
     models::DatabaseId,
     sharing::{DatabaseSharingRepo, SharingWrite},
 };
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,

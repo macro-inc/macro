@@ -1,7 +1,7 @@
 //! Cross-session change signals over the user-addressed Soup realtime topic.
 
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use soup_realtime_core::{
     models::{Patch, SoupRealtimeMessage},
     ports::SoupRealtimePublisher,

@@ -2,13 +2,13 @@ use async_graphql::{
     Context, ID, InputType, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
     OutputType, Scalar, ScalarType, SimpleObject, Union, Value as GraphqlValue,
 };
+use entity_kind::Entity;
 use graphql_common::{
     GraphqlCacheDeletion, GraphqlEntity, GraphqlOwnerType, GraphqlSoupEntityType,
 };
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use models_pagination::PaginatedOpaqueCursor;
 use models_soup::{
     agent_session::{AgentPullRequestState, AgentSessionArchiveCause, SoupAgentSession},
@@ -80,14 +80,14 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 
     /// Construct the common/global edge object for a Soup entity.
     /// This is for edges that apply to all soup entities, e.g. notifications
-    fn from_entity(entity: model_entity::Entity<'static>) -> Self;
+    fn from_entity(entity: entity_kind::Entity<'static>) -> Self;
 
     /// Construct common/global edges for a channel message whose viewer
     /// permission is inherited from its parent channel.
     fn from_channel_message(message_id: Uuid, channel_id: Uuid) -> Self {
         let _ = channel_id;
         Self::from_entity(
-            model_entity::EntityType::ChannelMessage.with_entity_string(message_id.to_string()),
+            entity_kind::EntityType::ChannelMessage.with_entity_string(message_id.to_string()),
         )
     }
 
@@ -120,7 +120,7 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     type CrmRecordEdges: ObjectType + Clone + Send + Sync + 'static;
 
     /// Construct the CRM-record edge object for a company or contact.
-    fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges;
+    fn crm_record_edges(record: entity_kind::Entity<'static>) -> Self::CrmRecordEdges;
 
     /// Resolve properties assigned to this entity.
     fn resolve_properties(
@@ -353,7 +353,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
 
 /// Construct a canonical GraphQL entity reference.
 fn graphql_entity(
-    entity_type: model_entity::EntityType,
+    entity_type: entity_kind::EntityType,
     entity_id: impl ToString,
 ) -> GraphqlEntity<'static> {
     GraphqlEntity(entity_type.with_entity_string(entity_id.to_string()))
@@ -490,7 +490,7 @@ where
     E: SoupEntityEdges,
 {
     /// Return the concrete GraphQL object name associated with a Soup entity type.
-    fn graphql_type_name_for(entity_type: model_entity::EntityType) -> Option<String> {
+    fn graphql_type_name_for(entity_type: entity_kind::EntityType) -> Option<String> {
         let entity_type = GraphqlSoupEntityType::try_new(entity_type)?;
         Some(
             match entity_type {
@@ -554,38 +554,38 @@ where
         match item {
             SoupItem::Document(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
                 Self::Document(GraphqlSoupDocument(item, edges, None, None))
             }
             SoupItem::Initiative(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Initiative.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Initiative.with_entity_string(item.id.to_string()),
                 );
                 Self::Initiative(GraphqlSoupInitiative(item, edges, None))
             }
             SoupItem::Chat(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Chat.with_entity_string(item.id.to_string()),
                 );
                 Self::Chat(GraphqlSoupChat(item, edges, None))
             }
             SoupItem::Project(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Project.with_entity_string(item.id.to_string()),
                 );
                 Self::Project(GraphqlSoupProject(item, edges, None))
             }
             SoupItem::EmailThread(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::EmailThread
+                    entity_kind::EntityType::EmailThread
                         .with_entity_string(item.thread.id.to_string()),
                 );
                 Self::EmailThread(GraphqlSoupEmailThread(item, edges, None))
             }
             SoupItem::Channel(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Channel
+                    entity_kind::EntityType::Channel
                         .with_entity_string(item.channel.channel.id.0.to_string()),
                 );
                 Self::Channel(GraphqlSoupChannel(item, edges, None))
@@ -596,55 +596,55 @@ where
             }
             SoupItem::Call(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Call.with_entity_string(item.call_id.to_string()),
+                    entity_kind::EntityType::Call.with_entity_string(item.call_id.to_string()),
                 );
                 Self::Call(GraphqlSoupCall(item, edges, None))
             }
             SoupItem::CalendarEvent(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::CalendarEvent.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::CalendarEvent.with_entity_string(item.id.to_string()),
                 );
                 Self::CalendarEvent(GraphqlSoupCalendarEvent(item, edges))
             }
             SoupItem::CrmContact(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::CrmContact.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::CrmContact.with_entity_string(item.id.to_string()),
                 );
                 Self::CrmContact(GraphqlSoupCrmContact(item, edges, None))
             }
             SoupItem::CrmCompany(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::CrmCompany.with_entity_string(item.id.to_string()),
                 );
                 Self::CrmCompany(GraphqlSoupCrmCompany(item, edges, None))
             }
             SoupItem::ForeignEntity(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::ForeignEntity.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::ForeignEntity.with_entity_string(item.id.to_string()),
                 );
                 Self::ForeignEntity(GraphqlSoupForeignEntity(item, edges, None))
             }
             SoupItem::AgentSession(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::AgentSession.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::AgentSession.with_entity_string(item.id.to_string()),
                 );
                 Self::AgentSession(GraphqlSoupAgentSession(item, edges, None))
             }
             SoupItem::DatabaseRow(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::DatabaseRow.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::DatabaseRow.with_entity_string(item.id.to_string()),
                 );
                 Self::DatabaseRow(GraphqlSoupDatabaseRow(item, edges, None))
             }
             SoupItem::Harness(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Harness.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Harness.with_entity_string(item.id.to_string()),
                 );
                 Self::Harness(GraphqlSoupHarness(item, edges, None))
             }
             SoupItem::Team(item) => {
                 let edges = E::from_entity(
-                    model_entity::EntityType::Team.with_entity_string(item.id.to_string()),
+                    entity_kind::EntityType::Team.with_entity_string(item.id.to_string()),
                 );
                 Self::Team(GraphqlSoupTeam(item, edges, None))
             }
@@ -791,7 +791,7 @@ where
     }
 
     /// Entity-owned icon and color overrides.
-    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+    async fn appearance(&self) -> Option<Json<entity_kind::EntityAppearance>> {
         self.0.appearance.clone().map(Json)
     }
 
@@ -808,7 +808,7 @@ where
             parent: self
                 .0
                 .project_id
-                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -977,7 +977,7 @@ where
             parent: self
                 .0
                 .project_id
-                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -1069,7 +1069,7 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
     }
 
     /// Entity-owned icon and color overrides.
-    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+    async fn appearance(&self) -> Option<Json<entity_kind::EntityAppearance>> {
         self.0.appearance.clone().map(Json)
     }
 
@@ -1606,7 +1606,7 @@ where
             parent: self
                 .0
                 .parent_id
-                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Project, id)),
             created_at: Some(self.0.created_at.to_rfc3339()),
             updated_at: Some(self.0.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -1804,7 +1804,7 @@ where
                 .thread
                 .project_id
                 .as_ref()
-                .map(|id| graphql_entity(model_entity::EntityType::Project, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Project, id)),
             created_at: Some(self.0.thread.created_at.to_rfc3339()),
             updated_at: Some(self.0.thread.updated_at.to_rfc3339()),
             viewed_at: self.0.thread.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -2179,7 +2179,7 @@ where
                 .channel
                 .channel
                 .team_id
-                .map(|id| graphql_entity(model_entity::EntityType::Team, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Team, id)),
             created_at: Some(self.0.channel.channel.created_at.to_rfc3339()),
             updated_at: Some(self.0.channel.channel.updated_at.to_rfc3339()),
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
@@ -2354,7 +2354,7 @@ where
             owner_id: Some(self.0.sender_id.clone()),
             owner_type: Some(GraphqlOwnerType::User),
             parent: Some(graphql_entity(
-                model_entity::EntityType::Channel,
+                entity_kind::EntityType::Channel,
                 self.0.channel_id,
             )),
             created_at: Some(self.0.created_at.to_rfc3339()),
@@ -2493,7 +2493,7 @@ where
             parent: self
                 .0
                 .channel_id
-                .map(|id| graphql_entity(model_entity::EntityType::Channel, id)),
+                .map(|id| graphql_entity(entity_kind::EntityType::Channel, id)),
             created_at: Some(self.0.started_at.to_rfc3339()),
             updated_at: self.0.ended_at.map(|ts| ts.to_rfc3339()),
             viewed_at: None,
@@ -2654,7 +2654,7 @@ where
             owner_id: None,
             owner_type: None,
             parent: Some(graphql_entity(
-                model_entity::EntityType::Team,
+                entity_kind::EntityType::Team,
                 self.0.team_id,
             )),
             created_at: Some(self.0.created_at.to_rfc3339()),
@@ -2723,7 +2723,7 @@ where
     #[graphql(flatten)]
     async fn crm_record_edges(&self) -> E::CrmRecordEdges {
         E::crm_record_edges(
-            model_entity::EntityType::CrmCompany.with_entity_string(self.0.id.to_string()),
+            entity_kind::EntityType::CrmCompany.with_entity_string(self.0.id.to_string()),
         )
     }
 

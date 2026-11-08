@@ -1,7 +1,7 @@
 use ::activity::{Action, activity_id};
 use chrono::{TimeZone as _, Utc};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use shared_types::document::FileType;
 use uuid::Uuid;
 
@@ -143,10 +143,10 @@ fn attributed_update_and_delete_map_to_activities() {
 fn appearance_events_do_not_ingest_history() {
     let event = envelope(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         appearance_change: Some([
-            model_entity::EntityAppearance::default(),
-            model_entity::EntityAppearance {
+            entity_kind::EntityAppearance::default(),
+            entity_kind::EntityAppearance {
                 icon: None,
-                color: Some(model_entity::AppearanceColor::Blue),
+                color: Some(entity_kind::AppearanceColor::Blue),
             },
         ]),
         document_id: DOCUMENT_ID.to_string(),

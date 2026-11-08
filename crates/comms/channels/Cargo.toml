@@ -11,7 +11,7 @@ ai_tools = ["dep:schemars", "ports"]
 attachment = ["ports"]
 list = [
   "dep:models_soup",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:rootcause",
   "ports",
   "dep:frecency_core",
@@ -20,7 +20,7 @@ list = [
 entity_mutation = [
   "dep:entity_access",
   "dep:entity_mutation",
-  "dep:model_entity",
+  "dep:entity_kind",
   "dep:rootcause",
   "entity_access/ports",
   "ports",
@@ -59,7 +59,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["broker"] }
-model_entity = { workspace = true, optional = true }
+entity_kind = { workspace = true, optional = true }
 model_file_type = { workspace = true }
 models_pagination = { workspace = true }
 rootcause = { workspace = true, optional = true }

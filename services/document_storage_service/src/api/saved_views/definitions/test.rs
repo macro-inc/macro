@@ -47,7 +47,7 @@ enum Call {
     },
     Appearance {
         id: Uuid,
-        appearance: model_entity::EntityAppearance,
+        appearance: entity_kind::EntityAppearance,
     },
     Delete {
         id: Uuid,
@@ -132,7 +132,7 @@ impl SavedViewApi for FakeSavedViews {
         name: String,
         _config: Value,
         team: Option<Uuid>,
-        _appearance: Option<model_entity::EntityAppearance>,
+        _appearance: Option<entity_kind::EntityAppearance>,
     ) -> Result<View, Error> {
         self.record(viewer, Call::Create { id, name, team })?;
         Ok(view(id))
@@ -166,7 +166,7 @@ impl SavedViewApi for FakeSavedViews {
         &self,
         viewer: &str,
         id: Uuid,
-        appearance: model_entity::EntityAppearance,
+        appearance: entity_kind::EntityAppearance,
     ) -> Result<View, Error> {
         self.record(viewer, Call::Appearance { id, appearance })?;
         Ok(view(id))
@@ -606,11 +606,11 @@ async fn appearance_replaces_metadata_through_the_signed_in_owner_service() {
         service.calls(),
         vec![Call::Appearance {
             id: VIEW,
-            appearance: model_entity::EntityAppearance {
-                icon: Some(model_entity::AppearanceIcon::Emoji {
+            appearance: entity_kind::EntityAppearance {
+                icon: Some(entity_kind::AppearanceIcon::Emoji {
                     value: "📚".into()
                 }),
-                color: Some(model_entity::AppearanceColor::Blue),
+                color: Some(entity_kind::AppearanceColor::Blue),
             },
         }]
     );

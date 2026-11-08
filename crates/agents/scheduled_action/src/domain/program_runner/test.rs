@@ -4,8 +4,8 @@ use std::sync::Mutex;
 use bots::domain::models::AgentMcpServer;
 use chrono::{TimeZone, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_kind::EntityType;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model_entity::EntityType;
 use model_owner::Owner;
 use rootcause::Report;
 use trigger_context::{RoutineEvent, TaskSnapshot};
@@ -145,7 +145,7 @@ pub(crate) fn action(task: Value) -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
-        appearance: model_entity::EntityAppearance::default(),
+        appearance: entity_kind::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,

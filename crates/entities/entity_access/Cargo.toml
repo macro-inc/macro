@@ -34,7 +34,7 @@ uuid = { workspace = true }
 bot_id = { workspace = true }
 rootcause = { workspace = true }
 macro_user_id = { workspace = true }
-model_entity = { workspace = true }
+entity_kind = { workspace = true }
 models_entity_access_management = { workspace = true, default-features = true }
 models_permissions = { workspace = true }
 

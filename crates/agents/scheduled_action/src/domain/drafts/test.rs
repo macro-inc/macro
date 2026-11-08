@@ -731,7 +731,7 @@ async fn a_draft_of_a_single_agent_task_becomes_its_agent_step() {
 async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
     let task = json!({ "prompt": " ", "user_prompt": "", "model": "anthropic/claude-sonnet-5-5" });
     let notes = CreatedItem {
-        entity_type: model_entity::EntityType::Document,
+        entity_type: entity_kind::EntityType::Document,
         entity_id: "recap-notes".into(),
     };
     let rows = Arc::new(Rows::default());
@@ -1168,7 +1168,7 @@ async fn a_draft_that_needs_a_new_database_creates_it_references_it_and_says_so(
         &rows,
         Box::new(move |_| {
             let created = vec![CreatedItem {
-                entity_type: model_entity::EntityType::Database,
+                entity_type: entity_kind::EntityType::Database,
                 entity_id: made.clone(),
             }];
             let source = format!(
@@ -1206,7 +1206,7 @@ async fn a_draft_that_needs_a_new_database_creates_it_references_it_and_says_so(
     assert_eq!(
         drafted.created,
         [DraftCreated {
-            entity_type: model_entity::EntityType::Database,
+            entity_type: entity_kind::EntityType::Database,
             entity_id: database.clone(),
             used: true,
         }]
@@ -1281,11 +1281,11 @@ async fn a_dropped_draft_request_still_cleans_up_its_session() {
 async fn a_failing_check_after_a_passing_one_never_replaces_it() {
     let rows = Arc::new(Rows::default());
     let database = CreatedItem {
-        entity_type: model_entity::EntityType::Database,
+        entity_type: entity_kind::EntityType::Database,
         entity_id: "bug-log".into(),
     };
     let folder = CreatedItem {
-        entity_type: model_entity::EntityType::Project,
+        entity_type: entity_kind::EntityType::Project,
         entity_id: "bug-reports-folder".into(),
     };
     let (made_database, made_folder) = (database.clone(), folder.clone());
@@ -1352,11 +1352,11 @@ async fn a_failing_check_after_a_passing_one_never_replaces_it() {
 async fn an_item_the_session_never_named_is_shown_and_marked_unused() {
     let rows = Arc::new(Rows::default());
     let database = CreatedItem {
-        entity_type: model_entity::EntityType::Database,
+        entity_type: entity_kind::EntityType::Database,
         entity_id: "bug-log".into(),
     };
     let task = CreatedItem {
-        entity_type: model_entity::EntityType::Document,
+        entity_type: entity_kind::EntityType::Document,
         entity_id: "todays-task".into(),
     };
     let named = database.clone();
@@ -1405,7 +1405,7 @@ async fn a_failed_draft_still_says_what_its_session_created() {
     let rows = Arc::new(Rows::default());
     let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
     let task = CreatedItem {
-        entity_type: model_entity::EntityType::Document,
+        entity_type: entity_kind::EntityType::Document,
         entity_id: "todays-task".into(),
     };
     let drafts = drafts(&rows, &sessions)

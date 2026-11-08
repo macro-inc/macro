@@ -1664,7 +1664,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &folder.to_string(),
-                model_entity::EntityType::Project,
+                entity_kind::EntityType::Project,
             )
             .await
             .map_err(|error| anyhow::anyhow!("no edit access to folder {folder}: {error:?}"))?;
@@ -1833,7 +1833,7 @@ impl ToolEntityCreator {
                 user,
                 None,
                 &document_id,
-                model_entity::EntityType::Document,
+                entity_kind::EntityType::Document,
             )
             .await
         {
@@ -1967,13 +1967,13 @@ impl ToolEntityCreator {
 
 /// The entity-access type an import from `source` is recorded as. Linear
 /// and Jira issues become tasks, which are documents.
-fn imported_entity_type(source: import::domain::models::ImportSource) -> model_entity::EntityType {
+fn imported_entity_type(source: import::domain::models::ImportSource) -> entity_kind::EntityType {
     use import::domain::models::ImportSource;
     match source {
         ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => {
-            model_entity::EntityType::Document
+            entity_kind::EntityType::Document
         }
-        ImportSource::Slack => model_entity::EntityType::Channel,
+        ImportSource::Slack => entity_kind::EntityType::Channel,
     }
 }
 

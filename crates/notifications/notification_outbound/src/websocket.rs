@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use serde::Serialize;
 

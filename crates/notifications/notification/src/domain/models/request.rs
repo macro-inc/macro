@@ -8,9 +8,9 @@ use crate::domain::models::{
     queue_message::EmailCreateBundle,
 };
 use cow_str::CowLike;
+use entity_kind::Entity;
 use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;

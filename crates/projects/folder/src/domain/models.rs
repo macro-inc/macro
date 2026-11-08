@@ -1,7 +1,7 @@
 //! Domain-owned project models.
 
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};

@@ -147,7 +147,7 @@ fn seed(source_event: u128, action: CommonAction, entity_id: &str) -> Activity {
         0,
         Actor::new_from_user(user("macro|actor@example.com")),
         None,
-        model_entity::EntityType::Document,
+        entity_kind::EntityType::Document,
         entity_id,
         action,
         Utc::now(),
@@ -210,7 +210,7 @@ async fn purge_removes_only_that_entitys_activities(pool: PgPool) {
     .await
     .unwrap();
 
-    repo.purge_entities(&[(model_entity::EntityType::Document, "doc-purged".to_string())])
+    repo.purge_entities(&[(entity_kind::EntityType::Document, "doc-purged".to_string())])
         .await
         .unwrap();
 
@@ -232,7 +232,7 @@ fn seed_at(
         0,
         Actor::new_from_user(user("macro|actor@example.com")),
         None,
-        model_entity::EntityType::Document,
+        entity_kind::EntityType::Document,
         entity_id,
         action,
         occurred_at,
@@ -269,7 +269,7 @@ fn seed_for_subject_at(
         0,
         Actor::new_from_user(user("macro|actor@example.com")),
         Some(user(subject_id)),
-        model_entity::EntityType::Document,
+        entity_kind::EntityType::Document,
         entity_id,
         CommonAction::Edited,
         occurred_at,
@@ -392,7 +392,7 @@ async fn subject_activity_range_filters_half_open_interval_and_subject(pool: PgP
             0,
             Actor::new_from_user(user("macro|someone-else@example.com")),
             None,
-            model_entity::EntityType::Document,
+            entity_kind::EntityType::Document,
             "other-subject",
             CommonAction::Edited,
             from + chrono::Duration::seconds(1),
@@ -471,14 +471,14 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
     .unwrap();
 
     let keys = vec![
-        (model_entity::EntityType::Document, "doc-a".to_string()),
-        (model_entity::EntityType::Document, "doc-b".to_string()),
+        (entity_kind::EntityType::Document, "doc-a".to_string()),
+        (entity_kind::EntityType::Document, "doc-b".to_string()),
         (
-            model_entity::EntityType::Document,
+            entity_kind::EntityType::Document,
             "doc-untouched".to_string(),
         ),
         // Repeated on purpose: duplicates must not stack extra rows.
-        (model_entity::EntityType::Document, "doc-a".to_string()),
+        (entity_kind::EntityType::Document, "doc-a".to_string()),
     ];
     let by_entity = repo.entity_activity(&keys, 2).await.unwrap();
 
@@ -499,9 +499,9 @@ async fn appearance_changes_remain_in_entity_history_but_not_personal_feeds(pool
     let repo = PgActivityRepo::new(pool);
     let change = crate::AppearanceChange {
         from: None,
-        to: Some(model_entity::EntityAppearance {
+        to: Some(entity_kind::EntityAppearance {
             icon: None,
-            color: Some(model_entity::AppearanceColor::Blue),
+            color: Some(entity_kind::AppearanceColor::Blue),
         }),
     };
     repo.insert_activities(&[seed(

@@ -5,8 +5,8 @@ use super::{
     ports::EmailUserRepo,
 };
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use std::future::Future;
 use uuid::Uuid;
 

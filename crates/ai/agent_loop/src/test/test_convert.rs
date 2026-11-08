@@ -2,7 +2,7 @@ use crate::convert::*;
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use non_empty::NonEmpty;
 use rig_core::message::{
     AssistantContent, DocumentSourceKind, ImageMediaType, Message, UserContent,

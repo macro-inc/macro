@@ -1,7 +1,7 @@
 use connection_gateway_client::ConnectionGatewayClient;
 use contacts_core::ports::UserPictureNotifier;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use rootcause::Report;
 use std::sync::Arc;
 

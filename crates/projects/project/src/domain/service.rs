@@ -436,8 +436,8 @@ where
     async fn set_appearance(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        appearance: model_entity::EntityAppearance,
-    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        appearance: entity_kind::EntityAppearance,
+    ) -> Result<entity_kind::EntityAppearance, InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
         appearance.validate().map_err(InitiativeError::BadRequest)?;
         let attribution = receipt_attribution(&receipt);

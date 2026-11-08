@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 
 /// Deletes all documents for a user and returns all document ids that were deleted
 /// Does not commit the transaction

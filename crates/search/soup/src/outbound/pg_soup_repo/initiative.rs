@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use model_owner::Owner;
 use models_soup::{initiative::SoupInitiative, item::SoupItem};
 use sqlx::PgPool;

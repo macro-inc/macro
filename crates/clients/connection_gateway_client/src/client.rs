@@ -5,7 +5,7 @@ use connection_gateway_models::{
     UniqueMessage,
 };
 
-use model_entity::Entity;
+use entity_kind::Entity;
 
 mod calendar;
 mod email;

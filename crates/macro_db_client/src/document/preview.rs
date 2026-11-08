@@ -10,7 +10,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 /// Intermediate struct for SQL row mapping with compile-time validation.
 #[derive(sqlx::FromRow)]
 struct PreviewQueryResult {
-    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    appearance: Option<sqlx::types::Json<entity_kind::EntityAppearance>>,
     document_id: String,
     file_type: Option<String>,
     document_name: String,

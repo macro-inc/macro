@@ -10,8 +10,8 @@ use axum::{
     response::ErrorResponse,
     routing::get,
 };
+use entity_kind::Entity;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model_entity::Entity;
 use utoipa::ToSchema;
 
 pub fn router<S>(state: AppState) -> Router<S>

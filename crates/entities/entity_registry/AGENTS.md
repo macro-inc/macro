@@ -29,7 +29,7 @@ plus the owner-grant policy for what access that owner implies.
 
 ## Boundaries
 
-- Depends on: `shared_entity_registry`, `model_entity`, `model_owner`,
+- Depends on: `shared_entity_registry`, `entity_kind`, `model_owner`,
   `macro_authorization` (feature `axum`), `bot_id`.
 - Used by: `crates/memory`, `crates/agent_tools`, `crates/projects`,
   `crates/agents/agent_harness`, `crates/accounts/teams`, `crates/agents/agent_session`,

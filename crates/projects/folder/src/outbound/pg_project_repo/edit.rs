@@ -52,7 +52,7 @@ pub(super) async fn edit_project(
         entity_access_db_utils::project_grants::refuse_filing_in(
             transaction,
             &project_id,
-            model_entity::EntityType::Project,
+            entity_kind::EntityType::Project,
             args.parent_id.as_deref(),
         )
         .await?;

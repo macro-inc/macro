@@ -5,9 +5,9 @@
 
 use crate::domain::{models::GithubError, ports::GithubSyncRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType;
 use foreign_entity::domain::models::ForeignEntity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 
 /// Connection gateway publisher for saved GitHub PR mappings.
 pub struct ConnectionGatewayGithubRealtime {

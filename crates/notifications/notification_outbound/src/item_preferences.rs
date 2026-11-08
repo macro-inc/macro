@@ -1,8 +1,8 @@
 //! Postgres persistence for user-owned item notification preferences.
 
 use chrono::{DateTime, Utc};
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use notification::domain::item_preferences::{
     ItemNotificationPreference, ItemNotificationPreferenceRepository,
 };

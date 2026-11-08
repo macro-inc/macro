@@ -4,7 +4,7 @@ use crate::models::{
 };
 use chrono::DateTime;
 use cool_asserts::assert_matches;
-use model_entity::{Entity, EntityType};
+use entity_kind::{Entity, EntityType};
 use std::borrow::Cow;
 
 fn create_event() -> EventRecord<'static> {

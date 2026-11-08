@@ -13,8 +13,8 @@ use entity_access::domain::{
     ports::{AccessRepository, EntityAccessService},
     service::EntityAccessServiceImpl,
 };
+use entity_kind::{Entity, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::{Entity, EntityType};
 use tokio::task::AbortHandle;
 
 use crate::model::tracking::TrackAction;
