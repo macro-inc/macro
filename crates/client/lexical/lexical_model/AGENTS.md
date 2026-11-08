@@ -10,6 +10,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
+- `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
 - `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.

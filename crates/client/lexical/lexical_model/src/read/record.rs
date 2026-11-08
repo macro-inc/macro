@@ -22,6 +22,23 @@ impl NodeRecord {
     }
 }
 impl<'state> NodeRef<'state> {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn from_retired(
+        slot: &'state NodeSlot,
+        registry: &'state std::sync::Arc<Registry>,
+    ) -> Self {
+        Self { slot, registry }
+    }
+
+    /// Capture raw development host fields without running an upstream clone hook.
+    /// The copied record cannot make a live source slot require snapshot cloning.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn capture_for_foreign_read(self) -> NodeRecord {
+        NodeRecord {
+            slot: self.slot.clone(),
+            registry: self.registry.clone(),
+        }
+    }
     /// Make an independent ephemeral record, applying the clone hook.
     /// s2: ID-07
     pub fn to_owned(self) -> NodeRecord {
@@ -79,6 +96,15 @@ impl<'state> NodeRef<'state> {
     /// Node state, if allocated.
     pub fn node_state(self) -> Option<&'state NodeState> {
         self.slot.state.as_deref()
+    }
+    /// Borrow a native payload or its registered native parent without graph lookup.
+    /// Foreign payloads expose no native fields outside an inherited native scope.
+    pub fn get<Node: NodeType>(self) -> Option<&'state Node> {
+        (self.registry.vtable(self.slot.type_index).project)(
+            self.slot.data.as_any(),
+            TypeId::of::<Node>(),
+        )?
+        .downcast_ref::<Node>()
     }
     /// Type-erased user payload.
     pub fn data_any(self) -> &'state dyn std::any::Any {
