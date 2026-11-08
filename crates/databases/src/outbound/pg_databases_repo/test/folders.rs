@@ -115,3 +115,43 @@ async fn purging_its_folder_returns_a_database_to_the_root(pool: PgPool) {
     let (database, _) = repo.get_database(database_id).await.unwrap().unwrap();
     assert_eq!(database.project_id, None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn trashing_its_folder_returns_a_database_to_the_root_without_its_grants(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    shared_folders(&pool).await;
+    let database_id = table.database_id;
+    repo.move_database(database_id, Some(SUBFOLDER))
+        .await
+        .unwrap();
+
+    PgDatabaseFolders::new(pool.clone())
+        .unfile_from_projects(&[SUBFOLDER.to_string()])
+        .await
+        .unwrap();
+
+    let (database, _) = repo.get_database(database_id).await.unwrap().unwrap();
+    assert_eq!(database.project_id, None);
+    assert_eq!(
+        grants(&pool, database_id).await,
+        vec![(USER.to_string(), None)]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn trashing_another_folder_leaves_a_database_filed(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    shared_folders(&pool).await;
+    let database_id = table.database_id;
+    repo.move_database(database_id, Some(SUBFOLDER))
+        .await
+        .unwrap();
+
+    PgDatabaseFolders::new(pool.clone())
+        .unfile_from_projects(&[FOLDER.to_string()])
+        .await
+        .unwrap();
+
+    let (database, _) = repo.get_database(database_id).await.unwrap().unwrap();
+    assert_eq!(database.project_id.as_deref(), Some(SUBFOLDER));
+}

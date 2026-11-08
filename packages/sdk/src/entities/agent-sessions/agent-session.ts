@@ -31,6 +31,7 @@ import {
   sessionActivity,
 } from './activity';
 import { CodeExecution } from './code-execution';
+import { type SessionOrigin, sessionOrigin } from './origin';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
@@ -111,8 +112,8 @@ export type SelectableRepository = {
 /** What a managed session is created with. */
 export type CreateManagedSessionOptions = {
   /**
-   * Persona the session runs as, from {@link AgentNamespace.list} or
-   * {@link Agent.byId}. The caller must be able to use it. Omitted, the
+   * Persona the session runs as, from {@link AgentNamespace.coding} or
+   * {@link AgentNamespace.list}. The caller must be able to use it. Omitted, the
    * deployment's default coding persona, or Cursor when `repoUrl` is set.
    * Its harness, instructions and model apply unless `instructions` or
    * `model` override them.
@@ -277,6 +278,19 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
 
   /** The session's user-facing display name. */
   readonly name = this.field('name');
+
+  /**
+   * What opened the session: who or what started it, and what it is about.
+   * Readable by anyone who can view the session, including other agents.
+   */
+  async origin(): Promise<SessionOrigin> {
+    const detail = await this.detail.get();
+    return sessionOrigin(
+      this.client,
+      detail.origin ?? { origin: 'unknown' },
+      detail.threadChannelId ?? undefined,
+    );
+  }
 
   /**
    * Who archived the session, making it read-only: `'user'`,

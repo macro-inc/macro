@@ -9,6 +9,7 @@ fn every_starter_is_a_valid_routine_with_a_sentence() {
             mcp_servers: Vec::new(),
             single_agent_task: false,
             sdk: None,
+            dangerously_operate_as_user: false,
         };
         program
             .validate()

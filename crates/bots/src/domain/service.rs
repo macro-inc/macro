@@ -127,9 +127,6 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
 struct AgentFields<'a> {
     name: &'a str,
     handle: &'a str,
-    harness: &'a str,
-    harness_id: Option<HarnessId>,
-    workspace_path: Option<&'a str>,
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
@@ -141,9 +138,6 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
-            workspace_path: req.workspace_path.as_deref(),
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -157,9 +151,6 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
-            workspace_path: req.workspace_path.as_deref(),
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -172,9 +163,6 @@ fn validate_agent_fields(
     AgentFields {
         name,
         handle,
-        harness,
-        harness_id,
-        workspace_path,
         default_model,
         channel_scope,
         channel_ids,
@@ -186,31 +174,6 @@ fn validate_agent_fields(
     if name.trim().is_empty() {
         return Err(BotError::BadRequest(
             "agent name must not be empty".to_string(),
-        ));
-    }
-    if harness.trim().is_empty() {
-        return Err(BotError::BadRequest(
-            "agent harness must not be empty".to_string(),
-        ));
-    }
-    // The `macrod` slug and a registered harness travel together: the slug
-    // selects the external runtime path, the id says whose daemon serves it.
-    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
-        (true, None) => {
-            return Err(BotError::BadRequest(
-                "agents on the macrod harness must reference a registered harness".to_string(),
-            ));
-        }
-        (false, Some(_)) => {
-            return Err(BotError::BadRequest(
-                "harness_id applies only to the macrod harness".to_string(),
-            ));
-        }
-        _ => {}
-    }
-    if workspace_path.is_some() && harness_id.is_none() {
-        return Err(BotError::BadRequest(
-            "a workspace applies only to a registered macrod harness".to_string(),
         ));
     }
     if default_model.trim().is_empty() {
@@ -241,11 +204,48 @@ fn validate_agent_fields(
     }
 }
 
+/// Check a runtime someone chose. The `macrod` slug and a registered harness
+/// travel together: the slug selects the external runtime path, the id says
+/// whose daemon serves it. A binding a patch leaves alone is not re-checked,
+/// so an agent whose harness was deleted stays editable until it is rebound.
+fn validate_runtime(harness: &str, harness_id: Option<HarnessId>) -> Result<(), BotError> {
+    if harness.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent harness must not be empty".to_string(),
+        ));
+    }
+    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
+        (true, None) => Err(BotError::BadRequest(
+            "agents on the macrod harness must reference a registered harness".to_string(),
+        )),
+        (false, Some(_)) => Err(BotError::BadRequest(
+            "harness_id applies only to the macrod harness".to_string(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// A workspace is a directory on a registered harness's machine.
+fn validate_workspace(
+    harness_id: Option<HarnessId>,
+    workspace_path: Option<&str>,
+) -> Result<(), BotError> {
+    if workspace_path.is_some() && harness_id.is_none() {
+        return Err(BotError::BadRequest(
+            "a workspace applies only to a registered macrod harness".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
+    validate_runtime(&req.harness, req.harness_id)?;
+    validate_workspace(req.harness_id, req.workspace_path.as_deref())?;
     validate_agent_fields(req.into())
 }
 
 fn validate_update_agent_request(req: &UpdateAgentRequest) -> Result<(), BotError> {
+    validate_workspace(req.harness_id, req.workspace_path.as_deref())?;
     validate_agent_fields(req.into())
 }
 
@@ -633,6 +633,7 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_runtime(&req.harness, req.harness_id)?;
         validate_update_agent_request(&req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
         self.replace_agent(caller, &current, &existing, req).await
@@ -664,6 +665,9 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        if let Some(selection) = &req.harness {
+            validate_runtime(&selection.harness, selection.harness_id)?;
+        }
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;

@@ -181,6 +181,14 @@ Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.
 
+## What opened a session
+
+Each `New` trigger event says what opened its session
+(`NewAgentSessionEvent::origin`). `src/trigger.rs` keeps it on `TriggerWork`, and
+`src/dispatch.rs` copies it onto the create request, where the service stores it
+with the session. macrod reports only what the event said. The service treats it
+as a description, so it never decides a session's visibility or notifications.
+
 ## Replies to chat-agent mentions
 
 Trigger prompts use the source channel/document message UUID as the control

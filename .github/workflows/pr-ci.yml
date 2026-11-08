@@ -24,6 +24,7 @@ jobs:
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
     timeout-minutes: 5
     steps:
@@ -38,6 +39,8 @@ jobs:
         //   start   a requested run begins: remove the label, check the merge commit
         //           holds the PR head, set pending
         //   finish  the run ends: success when every job passed or was path-skipped
+        //   label   the label goes on a PR: fail when it can't start PR CI, because the
+        //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
         //                 token, from a trusted run of `main`'s workflow
         //   fork    after a fork PR's run, whose read-only token could not set the status
@@ -61,6 +64,10 @@ jobs:
         // the generated workflows and the Rust that generates them.
         export const PR_CI_PATH = '.github/workflows/pr-ci.yml';
         export const CI_SOURCES = ['.github', 'tooling/xtask/crates/xtask_workflows'] as const;
+        export const STALE_MERGE =
+          "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";
+        export const CONFLICTS =
+          "PR CI can't start: this PR conflicts with main. Merge main in, push, and add the run-ci label again.";
         export const FORK_CHANGES_CI =
           'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
@@ -77,6 +84,25 @@ jobs:
             throw new Error(`${name} is not set`);
           }
           return value;
+        }
+
+        /// Whether a path exists at a ref.
+        async function exists(path: string, ref: string): Promise<boolean> {
+          const response = await fetch(`${API}/repos/${repo()}/contents/${path}?ref=${ref}`, {
+            method: 'HEAD',
+            headers: {
+              accept: 'application/vnd.github+json',
+              authorization: `Bearer ${env('GH_TOKEN')}`,
+              'x-github-api-version': '2022-11-28',
+            },
+          });
+          if (response.status === 404) {
+            return false;
+          }
+          if (!response.ok) {
+            throw new Error(`HEAD contents/${path}?ref=${ref}: HTTP ${response.status}`);
+          }
+          return true;
         }
 
         async function github(method: string, path: string, body?: unknown): Promise<any> {
@@ -174,6 +200,19 @@ jobs:
           return null;
         }
 
+        /// Why the label can't start PR CI, or null. GitHub runs no `pull_request`
+        /// workflow on a conflicting PR, and takes the workflow files from the PR's
+        /// merge commit, which it refreshes on a push but not when main moves on.
+        export function labelBlocker(mergeable: boolean | null, mergeHasPrCi: boolean): string | null {
+          if (mergeable === false) {
+            return CONFLICTS;
+          }
+          if (!mergeHasPrCi) {
+            return STALE_MERGE;
+          }
+          return null;
+        }
+
         async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
           await github('POST', `/repos/${repo()}/statuses/${sha}`, {
             state,
@@ -237,6 +276,32 @@ jobs:
 
         async function removeLabel(pr: string) {
           await github('DELETE', `/repos/${repo()}/issues/${pr}/labels/${encodeURIComponent(label())}`);
+        }
+
+        /// Why a label on the PR can't start PR CI, from GitHub's view of it now.
+        /// GitHub computes mergeability in the background, so wait briefly for it.
+        async function labelProblem(pr: string): Promise<string | null> {
+          let pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          for (let attempt = 0; pull.mergeable === null && attempt < 6; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+            pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          }
+          const merge: string | null = pull.merge_commit_sha;
+          const hasPrCi = merge !== null && (await exists(PR_CI_PATH, merge));
+          return labelBlocker(pull.mergeable, hasPrCi);
+        }
+
+        async function labelCheck() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+          const problem = await labelProblem(pr);
+          if (!problem) {
+            console.log(`#${pr}'s merge commit holds ${PR_CI_PATH}; PR CI takes it from here.`);
+            return;
+          }
+          // The label stays otherwise, and adding it again must fire a new event.
+          await removeLabel(pr);
+          await setStatus(head, 'failure', problem, env('CI_GATE_DOCS_URL'));
         }
 
         async function remind() {
@@ -321,6 +386,12 @@ jobs:
 
           await removeLabel(pr);
 
+          const problem = await labelProblem(pr);
+          if (problem) {
+            await setStatus(head, 'failure', problem, env('CI_GATE_DOCS_URL'));
+            return;
+          }
+
           // The run the label starts would use the fork's own workflow files.
           if ((await forkCiChanges(env('BASE_REF'), head)).length > 0) {
             await setStatus(head, 'failure', FORK_CHANGES_CI, env('PR_CHECKS_URL'));
@@ -372,6 +443,7 @@ jobs:
         export async function main() {
           const modes: Record<string, () => Promise<void>> = {
             remind,
+            label: labelCheck,
             start,
             finish,
             'fork-request': forkRequest,
@@ -453,6 +525,12 @@ jobs:
           sdk:
             - 'packages/sdk/**'
             - '.github/workflows/sdk-check.yml'
+          observability_image:
+            - 'infra/stacks/observability/flake.nix'
+            - 'infra/stacks/observability/flake.lock'
+            - 'infra/stacks/observability/nixos/**'
+            - 'infra/stacks/observability/assets/**'
+            - '.github/workflows/observability_image.yml'
           macrod_update:
             - 'crates/coding_agent_worker/**'
             - '.github/workflows/test_macrod_update.yml'
@@ -522,6 +600,13 @@ jobs:
     name: SDK
     uses: ./.github/workflows/sdk-check.yml
     secrets: inherit
+  observability-image:
+    needs:
+    - start
+    if: needs.start.outputs.observability_image == 'true'
+    name: Observability image
+    uses: ./.github/workflows/observability_image.yml
+    secrets: inherit
   macrod-update:
     needs:
     - start
@@ -542,6 +627,7 @@ jobs:
     - node-modules-nix
     - tauri-lockfiles
     - sdk
+    - observability-image
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''
     name: CI gate
@@ -561,6 +647,8 @@ jobs:
         //   start   a requested run begins: remove the label, check the merge commit
         //           holds the PR head, set pending
         //   finish  the run ends: success when every job passed or was path-skipped
+        //   label   the label goes on a PR: fail when it can't start PR CI, because the
+        //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
         //                 token, from a trusted run of `main`'s workflow
         //   fork    after a fork PR's run, whose read-only token could not set the status
@@ -584,6 +672,10 @@ jobs:
         // the generated workflows and the Rust that generates them.
         export const PR_CI_PATH = '.github/workflows/pr-ci.yml';
         export const CI_SOURCES = ['.github', 'tooling/xtask/crates/xtask_workflows'] as const;
+        export const STALE_MERGE =
+          "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";
+        export const CONFLICTS =
+          "PR CI can't start: this PR conflicts with main. Merge main in, push, and add the run-ci label again.";
         export const FORK_CHANGES_CI =
           'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
@@ -600,6 +692,25 @@ jobs:
             throw new Error(`${name} is not set`);
           }
           return value;
+        }
+
+        /// Whether a path exists at a ref.
+        async function exists(path: string, ref: string): Promise<boolean> {
+          const response = await fetch(`${API}/repos/${repo()}/contents/${path}?ref=${ref}`, {
+            method: 'HEAD',
+            headers: {
+              accept: 'application/vnd.github+json',
+              authorization: `Bearer ${env('GH_TOKEN')}`,
+              'x-github-api-version': '2022-11-28',
+            },
+          });
+          if (response.status === 404) {
+            return false;
+          }
+          if (!response.ok) {
+            throw new Error(`HEAD contents/${path}?ref=${ref}: HTTP ${response.status}`);
+          }
+          return true;
         }
 
         async function github(method: string, path: string, body?: unknown): Promise<any> {
@@ -697,6 +808,19 @@ jobs:
           return null;
         }
 
+        /// Why the label can't start PR CI, or null. GitHub runs no `pull_request`
+        /// workflow on a conflicting PR, and takes the workflow files from the PR's
+        /// merge commit, which it refreshes on a push but not when main moves on.
+        export function labelBlocker(mergeable: boolean | null, mergeHasPrCi: boolean): string | null {
+          if (mergeable === false) {
+            return CONFLICTS;
+          }
+          if (!mergeHasPrCi) {
+            return STALE_MERGE;
+          }
+          return null;
+        }
+
         async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
           await github('POST', `/repos/${repo()}/statuses/${sha}`, {
             state,
@@ -760,6 +884,32 @@ jobs:
 
         async function removeLabel(pr: string) {
           await github('DELETE', `/repos/${repo()}/issues/${pr}/labels/${encodeURIComponent(label())}`);
+        }
+
+        /// Why a label on the PR can't start PR CI, from GitHub's view of it now.
+        /// GitHub computes mergeability in the background, so wait briefly for it.
+        async function labelProblem(pr: string): Promise<string | null> {
+          let pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          for (let attempt = 0; pull.mergeable === null && attempt < 6; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+            pull = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          }
+          const merge: string | null = pull.merge_commit_sha;
+          const hasPrCi = merge !== null && (await exists(PR_CI_PATH, merge));
+          return labelBlocker(pull.mergeable, hasPrCi);
+        }
+
+        async function labelCheck() {
+          const head = env('HEAD_SHA');
+          const pr = env('PR_NUMBER');
+          const problem = await labelProblem(pr);
+          if (!problem) {
+            console.log(`#${pr}'s merge commit holds ${PR_CI_PATH}; PR CI takes it from here.`);
+            return;
+          }
+          // The label stays otherwise, and adding it again must fire a new event.
+          await removeLabel(pr);
+          await setStatus(head, 'failure', problem, env('CI_GATE_DOCS_URL'));
         }
 
         async function remind() {
@@ -844,6 +994,12 @@ jobs:
 
           await removeLabel(pr);
 
+          const problem = await labelProblem(pr);
+          if (problem) {
+            await setStatus(head, 'failure', problem, env('CI_GATE_DOCS_URL'));
+            return;
+          }
+
           // The run the label starts would use the fork's own workflow files.
           if ((await forkCiChanges(env('BASE_REF'), head)).length > 0) {
             await setStatus(head, 'failure', FORK_CHANGES_CI, env('PR_CHECKS_URL'));
@@ -895,6 +1051,7 @@ jobs:
         export async function main() {
           const modes: Record<string, () => Promise<void>> = {
             remind,
+            label: labelCheck,
             start,
             finish,
             'fork-request': forkRequest,

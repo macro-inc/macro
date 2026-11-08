@@ -26,7 +26,6 @@ outbound = [
   "channels/outbound",
   "dep:entity_access_db_utils",
   "dep:feature_flags",
-  "dep:futures",
   "dep:livekit-api",
   "dep:livekit-protocol",
   "dep:macro_aws_config",
@@ -36,7 +35,7 @@ outbound = [
   "dep:urlencoding",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages"]
+ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages", "dep:futures"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
@@ -45,6 +44,7 @@ ai_usage = { path = "../ai_usage", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
@@ -104,6 +104,7 @@ subtle = { workspace = true }
 base64 = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+model_user = { path = "../model_user" }
 rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
