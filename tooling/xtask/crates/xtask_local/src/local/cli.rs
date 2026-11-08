@@ -92,7 +92,8 @@ pub struct InstanceArgs {
     /// Stack name. Absent (or `macro`) is the default instance.
     #[arg(long)]
     pub instance: Option<String>,
-    /// Override the derived port base.
+    /// Use this port window instead of an automatically allocated one. Later
+    /// commands find it without the flag.
     #[arg(long)]
     pub port_base: Option<u16>,
 }
@@ -269,11 +270,11 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Cmd::ValidateLocalCompose(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::validate::local_compose(&instance, Mode::Local)
         }
         Cmd::ValidateLocalEnv(a) => {
-            let instance = super::instance::Instance::derive(
+            let instance = super::instance::Instance::resolve(
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;
@@ -282,24 +283,24 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::KafkaProvision(a) => {
             super::kafka::ensure_available("kafka-provision")?;
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::kafka::provision(&instance)
         }
         Cmd::LocalstackProvision(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::localstack::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StatusLocal(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::status::run(&instance)
         }
         Cmd::SeedEnv(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::seed_env::emit(&instance)
         }
         Cmd::SeedScenario(a) => {
-            let instance = super::instance::Instance::derive(
+            let instance = super::instance::Instance::resolve(
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;

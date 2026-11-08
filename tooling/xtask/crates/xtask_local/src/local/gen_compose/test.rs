@@ -74,3 +74,23 @@ fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
         assert!(ports.contains(&format!("{}:2222", instance.port(Port::PreviewSsh))));
     }
 }
+
+/// External is what lets an existing instance keep its networks: a Compose-managed
+/// network whose config changed would be recreated, stopping what's attached.
+#[test]
+fn named_instances_use_their_own_external_project_networks() {
+    let instance = Instance::derive(Some("agent-a"), None).unwrap();
+    let mut value = Value::Mapping(serde_yaml::Mapping::new());
+
+    set_external_project_networks(&mut value, &instance);
+
+    let services = &value["networks"]["services"];
+    assert_eq!(services["external"], Value::from(true));
+    assert_eq!(services["name"], Value::from("macro-agent-a_services"));
+    let auth_internal = &value["networks"]["auth-internal"];
+    assert_eq!(auth_internal["external"], Value::from(true));
+    assert_eq!(
+        auth_internal["name"],
+        Value::from("macro-agent-a_auth-internal")
+    );
+}

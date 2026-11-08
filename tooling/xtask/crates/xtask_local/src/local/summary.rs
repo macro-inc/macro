@@ -253,11 +253,7 @@ fn dd_env() -> String {
 
 /// Whether something is listening on `port` on localhost.
 pub(super) fn port_open(port: u16) -> bool {
-    std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(150),
-    )
-    .is_ok()
+    xtask_ports::probe::accepting(port, std::time::Duration::from_millis(150))
 }
 
 #[cfg(test)]
