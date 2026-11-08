@@ -11,6 +11,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
+- `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.
@@ -54,4 +55,5 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
+- Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.
 - Report pass/fail/ledger totals by source package; ledgered cases do not count toward the 50-fixture core gate.

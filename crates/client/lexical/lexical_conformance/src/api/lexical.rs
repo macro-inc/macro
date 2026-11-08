@@ -472,7 +472,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 id
             } else {
                 let id = r.saved_states.len();
-                r.saved_states.push(state.clone());
+                r.saved_states.push(Some(state.clone()));
                 r.published_snapshot = Some((r.committed_version, id));
                 id
             };
@@ -482,12 +482,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         "lexical/LexicalUtils.getEditorStateTextContent" => {
             let id =
                 integer(&a.first().ok_or_else(|| fail("editor state"))?["$snapshot"])? as usize;
-            Ok(json!(
-                r.saved_states
-                    .get(id)
-                    .ok_or_else(|| fail("state handle"))?
-                    .root_text_content()
-            ))
+            Ok(json!(r.saved_state(id)?.root_text_content()))
         }
         "lexical/LexicalUtils.getTextDirection" => {
             Ok(serde_json::to_value(text_direction(str_arg(a, 0)?))?)
@@ -505,12 +500,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "EditorState.toJSON" => {
             let id = integer(&receiver["$snapshot"])? as usize;
-            Ok(serde_json::to_value(
-                r.saved_states
-                    .get(id)
-                    .ok_or_else(|| fail("state handle"))?
-                    .to_json()?,
-            )?)
+            Ok(serde_json::to_value(r.saved_state(id)?.to_json()?)?)
         }
         "iter" => {
             if receiver.is_array() {
