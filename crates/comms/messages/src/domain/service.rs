@@ -5,6 +5,7 @@ use entity_access::domain::models::{
     EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole, OwnerAccessLevel,
     RequiredPermission, ViewAccessLevel, ViewOnly,
 };
+use message_id::MessageId;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -215,7 +216,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         self.ensure_parent(&parent).await?;
         self.active_message(&parent, id, false).await?;
-        self.repo.preceding(&parent, id, limit.clamp(1, 100)).await
+        self.repo
+            .preceding(&parent, MessageId::from_uuid(id), limit.clamp(1, 100))
+            .await
     }
 
     /// Publish transient typing for an existing discussion.
@@ -330,7 +333,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let thread_id = input.thread_id;
-        if let Some(message) = self.repo.get(&parent, event_id).await? {
+        if let Some(message) = self
+            .repo
+            .get(&parent, MessageId::from_uuid(event_id))
+            .await?
+        {
             return validate_event_message(message, &parent, &actor, thread_id);
         }
         input.id = Some(event_id);
@@ -338,7 +345,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             Err(MessageError::Conflict) => {
                 let message = self
                     .repo
-                    .get(&parent, event_id)
+                    .get(&parent, MessageId::from_uuid(event_id))
                     .await?
                     .ok_or(MessageError::Conflict)?;
                 validate_event_message(message, &parent, &actor, thread_id)
@@ -457,7 +464,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .await?
             .ok_or(MessageError::NotFound)?;
         let parent = MessageParent::Channel(facts.channel_id);
-        if let Some(root) = self.repo.get(&parent, call_id).await? {
+        if let Some(root) = self
+            .repo
+            .get(&parent, MessageId::from_uuid(call_id))
+            .await?
+        {
             return Ok(root);
         }
 
@@ -491,7 +502,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             Err(MessageError::Conflict) => {
                 return self
                     .repo
-                    .get(&parent, call_id)
+                    .get(&parent, MessageId::from_uuid(call_id))
                     .await?
                     .ok_or(MessageError::Conflict);
             }
@@ -594,7 +605,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let message = self.repo.edit(&parent, id, input).await?;
+        let message = self
+            .repo
+            .edit(&parent, MessageId::from_uuid(id), input)
+            .await?;
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
@@ -632,7 +646,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .await?;
             return self
                 .repo
-                .get(&parent, id)
+                .get(&parent, MessageId::from_uuid(id))
                 .await?
                 .ok_or(MessageError::NotFound);
         }
@@ -641,7 +655,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
             return Err(MessageError::Forbidden);
         }
-        let message = self.repo.delete(&parent, id).await?;
+        let message = self.repo.delete(&parent, MessageId::from_uuid(id)).await?;
         self.publish_message(
             actor,
             nonce,
@@ -674,7 +688,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         let ReactionResult { message, changed } = self
             .repo
-            .react(&parent, id, actor.as_ref(), &emoji, add)
+            .react(
+                &parent,
+                MessageId::from_uuid(id),
+                actor.as_ref(),
+                &emoji,
+                add,
+            )
             .await?;
         // Idempotent retries still return the current message to the caller,
         // but must not publish another change or notify the author again.
@@ -796,7 +816,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// message id can mint that parent's receipt. Grants nothing on its own.
     #[tracing::instrument(err, skip(self))]
     pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
-        self.repo.parent_of(id).await
+        self.repo.parent_of(MessageId::from_uuid(id)).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.
@@ -1008,7 +1028,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let message = self
             .repo
-            .get(parent, id)
+            .get(parent, MessageId::from_uuid(id))
             .await?
             .ok_or(MessageError::NotFound)?;
         if message.parent != *parent || (!tombstone && message.deleted_at.is_some()) {

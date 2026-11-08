@@ -13620,6 +13620,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "message_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "message_parent"
 version = "0.1.0"
 dependencies = [
@@ -13656,6 +13668,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "message_id",
  "message_parent",
  "mockall",
  "model",

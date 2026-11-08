@@ -2,6 +2,7 @@ use super::models::*;
 use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use message_id::MessageId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -437,7 +438,7 @@ pub trait MessageRepository: Send + Sync + 'static {
     fn get(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
     ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
     /// Recover a call submission within its authorized parent and original sender.
     /// Includes tombstones so retries never recreate deleted content.
@@ -464,7 +465,7 @@ pub trait MessageRepository: Send + Sync + 'static {
     fn preceding(
         &self,
         parent: &MessageParent,
-        message_id: Uuid,
+        message_id: MessageId,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
     /// Read a bounded root page with reply previews under indexable parent predicates.
@@ -483,20 +484,20 @@ pub trait MessageRepository: Send + Sync + 'static {
     fn edit(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         command: EditMessage,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
     /// Tombstone a single message, preserving its replies and anchor.
     fn delete(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
     /// Add or remove the caller's reaction and report whether membership changed.
     fn react(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         user_id: &str,
         emoji: &str,
         add: bool,
@@ -525,7 +526,7 @@ pub trait MessageRepository: Send + Sync + 'static {
     /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
     fn parent_of(
         &self,
-        _id: Uuid,
+        _id: MessageId,
     ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
         async { Ok(None) }
     }

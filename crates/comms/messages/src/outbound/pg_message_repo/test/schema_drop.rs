@@ -68,7 +68,7 @@ async fn channel_parent_fk_rejects_missing_channels_and_cascades(pool: PgPool) {
         Some(0)
     );
     assert!(
-        repo.get(&document.parent, document.id)
+        repo.get(&document.parent, MessageId::from_uuid(document.id))
             .await
             .unwrap()
             .is_some()
