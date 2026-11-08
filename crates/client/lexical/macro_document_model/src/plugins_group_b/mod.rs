@@ -1,6 +1,7 @@
 //! Structure, list, table, media, clipboard and link model plugins.
 use lexical_model::*;
 
+mod code;
 mod diff;
 mod keyboard;
 mod metadata;
@@ -57,10 +58,13 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = structure::register(builder);
     let builder = keyboard::register(builder);
     let builder = table::register(builder);
+    let builder = code::register(builder);
     let builder = diff::register(builder);
     metadata::register(builder)
 }
 
+#[cfg(test)]
+mod code_test;
 #[cfg(test)]
 mod test;
 
@@ -69,9 +73,15 @@ mod test;
 pub fn decode_command(
     name: &str,
     json: &str,
-    _generation: u32,
+    generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = code::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if name == "group-b.select-all" {
+        return Ok(Some(Command::SelectAll(event.cloned())));
+    }
     if name == "group-b.key" {
         let event = event.ok_or(Error::Invariant("application keyboard facts"))?;
         let command = match event.key.as_ref() {
