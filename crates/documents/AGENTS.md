@@ -2,7 +2,7 @@
 
 ## What it is
 
-Documents: the document domain (blocks, uploads, conversions, sharing), collaborative surfaces, the native sync service domain (`sync_service_hex`) and its router, static files, and Lexical mention extraction. The Cloudflare sync worker itself stays in `services/sync-service`.
+Documents: the document domain (blocks, uploads, conversions, sharing), collaborative surfaces, the native sync service domain (`document_sync`) and its router, static files, and Lexical mention extraction. The Cloudflare sync worker itself stays in `services/sync-service`.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
@@ -15,8 +15,8 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`documents`](documents/AGENTS.md) | The core of the Documents feature: document CRUD, content storage, AI editing/tools, and file-type-specific services (spreadsheets, presentations, word docs … |
 | `lexical_mention_extractor` |  |
 | [`static_file`](static_file/AGENTS.md) | Shared infrastructure for attachments and uploads — a hex crate for resolving static file (SFS) references into URLs or metadata without callers depending on … |
-| [`sync_router`](sync_router/AGENTS.md) | Document sync routing library hosted by DSS at `/sync/ws`. |
-| [`sync_service_hex`](sync_service_hex/AGENTS.md) | Part of the Documents (collaborative editing/sync) feature — a hex crate defining the sync service's domain ports and an axum router shim, used by … |
+| [`document_sync_router`](document_sync_router/AGENTS.md) | Document sync routing library hosted by DSS at `/sync/ws`. |
+| [`document_sync`](document_sync/AGENTS.md) | Part of the Documents (collaborative editing/sync) feature — a hex crate defining the sync service's domain ports and an axum router shim, used by … |
 
 ## Recipes
 

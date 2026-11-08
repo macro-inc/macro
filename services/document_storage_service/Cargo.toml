@@ -272,9 +272,9 @@ sqs_client = { workspace = true, features = [
 ] }
 sqs_worker = { workspace = true }
 static_file_service_client = { workspace = true }
-sync_router = { workspace = true }
+document_sync_router = { workspace = true }
 sync_service_client = { workspace = true }
-sync_service_hex = { workspace = true, features = [
+document_sync = { workspace = true, features = [
   "inbound",
 ] }
 system_properties = { workspace = true }

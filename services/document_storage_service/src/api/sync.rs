@@ -13,12 +13,12 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
+use document_sync_router::session::{
+    CLIENT_QUEUE_CAPACITY, MAX_FRAME_BYTES, SyncSession, SyncSessionFactory,
+};
 use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
 use opentelemetry::trace::TraceContextExt;
 use std::time::Duration;
-use sync_router::session::{
-    CLIENT_QUEUE_CAPACITY, MAX_FRAME_BYTES, SyncSession, SyncSessionFactory,
-};
 use tokio::sync::mpsc;
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;

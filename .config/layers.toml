@@ -222,7 +222,7 @@ to = "soup"
 reason = "uses SoupProjectionHydration and SoupDocumentServerFacts; move them to a types crate"
 
 [[allow]]
-from = "sync_router"
+from = "document_sync_router"
 to = "sync_service_bebop_schema"
 reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
 
@@ -233,7 +233,7 @@ reason = "the bebop schema lives under services/sync-service; plan PR 16 moves i
 
 [[allow]]
 from = "sync_service_client"
-to = "sync_service_hex"
+to = "document_sync"
 reason = "implements the SyncWakeupService port; move the adapter into sync_service_hex's outbound"
 
 [[allow]]

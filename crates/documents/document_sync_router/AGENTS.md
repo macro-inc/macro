@@ -1,4 +1,4 @@
-# sync_router
+# document_sync_router
 
 ## What it is
 
@@ -22,7 +22,7 @@ service, Redis subscriber, or Pulumi stack.
 
 ## Checks
 
-- `cargo test -p sync_router` (no live external services required).
+- `cargo test -p document_sync_router` (no live external services required).
 - Session tests exercise real local downstream sockets, isolation, backpressure,
   cancellation, and byte budgets.
 - After dependency changes, regenerate and check `cargo x deps`.

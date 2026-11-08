@@ -2329,8 +2329,9 @@ async fn run_server() -> anyhow::Result<()> {
         feed_viewers,
     );
 
-    let sync_sessions =
-        sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    let sync_sessions = document_sync_router::session::SyncSessionFactory::new(
+        SyncServiceUrl::new()?.as_ref().parse()?,
+    )?;
     let api_context = ApiContext {
         sync_sessions,
         dictation_state,

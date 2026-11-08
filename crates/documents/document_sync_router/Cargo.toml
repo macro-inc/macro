@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "sync_router"
+name = "document_sync_router"
 publish = false
 version = "0.1.0"
 

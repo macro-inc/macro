@@ -7092,6 +7092,8 @@ dependencies = [
  "dcs_types",
  "dictation",
  "document_sub_type",
+ "document_sync",
+ "document_sync_router",
  "documents",
  "doppler-config",
  "dynamodb_client",
@@ -7197,10 +7199,8 @@ dependencies = [
  "sqs_worker",
  "static_file_service_client",
  "static_file_service_url",
- "sync_router",
  "sync_service_bebop_schema",
  "sync_service_client",
- "sync_service_hex",
  "sync_service_url",
  "system_properties",
  "task_dedup",
@@ -7272,6 +7272,39 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "utoipa",
+]
+
+[[package]]
+name = "document_sync"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "macro_authorization",
+ "serde",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "document_sync_router"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bebop",
+ "futures",
+ "mockall",
+ "opentelemetry",
+ "rustls",
+ "sync_service_bebop_schema",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "url",
+ "webpki-roots 1.0.10",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -20678,28 +20711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sync_router"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bebop",
- "futures",
- "mockall",
- "opentelemetry",
- "rustls",
- "sync_service_bebop_schema",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tokio-util",
- "tracing",
- "tracing-opentelemetry",
- "url",
- "webpki-roots 1.0.10",
- "workspace-hack",
-]
-
-[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -20742,26 +20753,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "document_sync",
  "macro_sync_service_jwt",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "shared_types",
- "sync_service_hex",
  "tokio",
  "tracing",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "sync_service_hex"
-version = "0.1.0"
-dependencies = [
- "axum",
- "macro_authorization",
- "serde",
- "utoipa",
  "workspace-hack",
 ]
 

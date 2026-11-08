@@ -85,7 +85,7 @@ members = [
   "crates/databases/properties_inbound",
   "crates/databases/properties_service",
   "crates/documents/collab_surface",
-  "crates/documents/sync_router",
+  "crates/documents/document_sync_router",
   "crates/email/email_api_client_core",
   "crates/email/email_api_client_outbound",
   "crates/email/generic_email_domains",
@@ -722,6 +722,8 @@ document_id = { path = "crates/types/document_id" }
 document_storage_service_client = { path = "crates/clients/document_storage_service_client" }
 document_storage_service_url = { path = "crates/platform/service_urls/document_storage_service_url" }
 document_sub_type = { path = "crates/types/document_sub_type", default-features = false }
+document_sync = { path = "crates/documents/document_sync" }
+document_sync_router = { path = "crates/documents/document_sync_router" }
 documents = { path = "crates/documents/documents", default-features = false }
 documents_hex = { package = "documents", path = "crates/documents/documents" }
 docx_engine = { path = "crates/engines/docx_engine" }
@@ -932,10 +934,8 @@ static_file_public_url = { path = "crates/platform/service_urls/static_file_publ
 static_file_service_client = { path = "crates/clients/static_file_service_client" }
 static_file_service_url = { path = "crates/platform/service_urls/static_file_service_url" }
 stream = { path = "crates/platform/stream" }
-sync_router = { path = "crates/documents/sync_router" }
 sync_service_bebop_schema = { path = "services/sync-service/bebop-schema" }
 sync_service_client = { path = "crates/clients/sync_service_client" }
-sync_service_hex = { path = "crates/documents/sync_service_hex" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }
 system_properties = { path = "crates/databases/system_properties" }
 system_skills = { path = "crates/agents/system_skills" }
