@@ -331,3 +331,38 @@ fn closed_and_unsaved_reasons_survive_the_view_boundary() {
     assert_eq!(status.save_reason, wire::SaveReason::ReadOnly);
     assert!(status.flag);
 }
+
+#[test]
+fn adoption_boundary_preserves_the_exact_loaded_selection() {
+    let expected = StoredWalRecord {
+        delivered: true,
+        record: WalRecord {
+            seq: WalSeq(9_007_199_254_740_993),
+            created_at: UnixMillis(-17),
+            user: UserKey("fixture-user".into()),
+            foreign: true,
+            quarantined: true,
+            bytes: vec![0, 255, 1],
+        },
+    };
+    let op = StorageOp::WalAdopt {
+        doc: "fixture-document".parse().unwrap(),
+        from: WalOwner::Legacy,
+        to: codec::session("00000000-0000-0000-0000-000000000001").unwrap(),
+        first_seq: WalSeq(11),
+        covers: WalSeq(7),
+        expected: vec![expected],
+    };
+    let encoded = storage::encode(&op, false);
+    let decoded = wire::StorageOpMsg::deserialize(&bytes(&encoded).unwrap()).unwrap();
+    assert_eq!(decoded.kind, 5);
+    assert_eq!(decoded.seq, 11);
+    assert_eq!(decoded.through, 7);
+    assert_eq!(decoded.expected.len(), 1);
+    let row = &decoded.expected[0];
+    assert_eq!(row.seq, 9_007_199_254_740_993);
+    assert_eq!(row.created_at, -17);
+    assert_eq!(row.user, "fixture-user");
+    assert!(row.delivered && row.foreign && row.quarantined);
+    assert_eq!(row.bytes, [0, 255, 1]);
+}

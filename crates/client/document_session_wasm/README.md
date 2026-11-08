@@ -11,6 +11,12 @@ Diff format, Diff words/string lengths and effect count. Each aligned effect is
 copy; the next call or WASM memory growth cannot invalidate it. UTF-16 primitives
 reject lone surrogates. Byte arrays decoded by Bebop retain subarray views.
 
+ABI major 2 carries the exact source records selected for WAL adoption, including
+delivered flags and bytes. The browser holds the source owner's lease and a
+per-document snapshot lock through cover validation and the WAL transaction.
+Legacy snapshot writers share that lock so cover validation cannot race a save
+or delete. A changed nonempty selection or cover is refused without mutation.
+
 The default registry includes core and portable rich nodes. The application
 registry remains a later integration through the native registry builder.
 Markdown queries reuse lexical_markdown; HTML and clipboard use portable native
