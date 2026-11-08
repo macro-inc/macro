@@ -236,6 +236,46 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
                 selection: selection(&s, generation)?,
             }
         }
+        wire::EditorInputMsg::EditorApplication {
+            name,
+            json,
+            generation: submitted,
+            selection: s,
+            keyboard,
+            key: logical,
+            mods,
+            code,
+        } => {
+            if submitted != generation {
+                return Err(BoundaryError::Invalid("application command generation"));
+            }
+            if mods > 63 {
+                return Err(BoundaryError::Invalid("application key flags"));
+            }
+            // The application surface owns its append-only group decoder registration.
+            let command = macro_document_model::surface::decode_command(&name, &json, generation)?
+                .ok_or(BoundaryError::Invalid("application command name"))?;
+            let selection = selection(&s, generation)?;
+            if keyboard {
+                Input::KeyDown {
+                    event: KeyEvent {
+                        key: logical.into(),
+                        code: code.to_string().into(),
+                        shift: mods & 1 != 0,
+                        alt: mods & 2 != 0,
+                        ctrl: mods & 4 != 0,
+                        meta: mods & 8 != 0,
+                        repeat: mods & 16 != 0,
+                        is_composing: mods & 32 != 0,
+                    },
+                    routed: Some(command),
+                    routed_prevent_default: true,
+                    selection,
+                }
+            } else {
+                Input::Command { command, selection }
+            }
+        }
         wire::EditorInputMsg::EditorSetState { json } => Input::SetState {
             state: serde_json::from_str(&json)?,
             tags: TagSet::default(),

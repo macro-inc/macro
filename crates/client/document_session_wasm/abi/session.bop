@@ -25,6 +25,7 @@ union EditorInputMsg {
  6 -> struct EditorComposition { byte kind; uint32 key; string text; uint32 anchorOffset; uint32 focusOffset; string data; SelectionMsg selection; }
  8 -> struct EditorKeyDown { uint32 code; uint32 mods; string key; CommandCode command; uint32 argument; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
  7 -> struct EditorText { uint32 key; uint16[] text; uint32 anchorOffset; uint32 focusOffset; bool compositionEnd; string compositionData; SelectionMsg selection; }
+ 9 -> struct EditorApplication { string name; string json; uint32 generation; SelectionMsg selection; bool keyboard; string key; uint32 mods; uint32 code; }
 }
 
 struct PathStepMsg { byte kind; string key; uint32 index; }

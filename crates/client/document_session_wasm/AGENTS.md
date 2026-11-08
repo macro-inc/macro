@@ -19,6 +19,10 @@ composition at the supplied selection before executing the command in one input;
 b=0 preserves composition. EditorKeyDown carries the layout target through
 normal KeyDown listener dispatch before the routed deletion.
 
+Application command envelopes carry the mirror generation and an optional
+keyboard event; reject stale generations before decoding typed surface commands.
+Use the surface decoder table so migration groups append registrations independently.
+
 ## Start here
 
 - `abi/session.bop`: authoritative ABI, generated constants and messages.

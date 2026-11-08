@@ -705,3 +705,76 @@ fn adoption_boundary_preserves_the_exact_loaded_selection() {
     assert!(row.delivered && row.foreign && row.quarantined);
     assert_eq!(row.bytes, [0, 255, 1]);
 }
+
+#[test]
+fn application_command_admission_rejects_stale_generations_and_applies_typed_policy() {
+    let mut editor = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("typed")?;
+            tx.append(p, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.select_end(text)?;
+            Ok(text.key())
+        })
+        .expect("seed");
+    let point = wire::PointMsg {
+        key: key.index(),
+        offset: 5,
+        _type: 0,
+    };
+    let envelope = wire::EditorInputMsg::EditorApplication {
+        name: "group-b.node-transform".into(),
+        json: "\"heading1\"".into(),
+        generation: key.generation(),
+        selection: wire::SelectionMsg {
+            kind: 2,
+            anchor: point.clone(),
+            focus: point,
+            nodes: vec![],
+            table: 0,
+            dirty: false,
+        },
+        keyboard: false,
+        key: "".into(),
+        mods: 0,
+        code: 0,
+    };
+    let mut stale = envelope.clone();
+    if let wire::EditorInputMsg::EditorApplication { generation, .. } = &mut stale {
+        *generation = generation.saturating_add(1);
+    }
+    assert!(matches!(
+        editor_input::input(stale, key.generation()),
+        Err(BoundaryError::Invalid("application command generation"))
+    ));
+    assert_eq!(editor.state().view().text_content(NodeKey::ROOT), "typed");
+    let input = editor_input::input(envelope, key.generation()).expect("typed input");
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1))
+        .expect("application admission");
+    let first = core
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("block");
+    assert!(core
+        .state()
+        .view()
+        .is::<lexical_rich_nodes::heading::HeadingNode>(first));
+    assert_eq!(core.state().view().text_content(NodeKey::ROOT), "typed");
+}

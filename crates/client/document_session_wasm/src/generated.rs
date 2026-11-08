@@ -1115,6 +1115,18 @@ pub enum EditorInputMsg<'raw> {
         target: ModifyTargetMsg,
         character_target: ModifyTargetMsg,
     },
+
+    /// Discriminator 9
+    EditorApplication {
+        name: &'raw str,
+        json: &'raw str,
+        generation: u32,
+        selection: SelectionMsg<'raw>,
+        keyboard: bool,
+        key: &'raw str,
+        mods: u32,
+        code: u32,
+    },
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
@@ -1245,6 +1257,26 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                 _selection.serialized_size() +
                 _target.serialized_size() +
                 _character_target.serialized_size()
+            }
+            Self::EditorApplication {
+                name: ref _name,
+                json: ref _json,
+                generation: ref _generation,
+                selection: ref _selection,
+                keyboard: ref _keyboard,
+                key: ref _key,
+                mods: ref _mods,
+                code: ref _code,
+            }
+            => {
+                _name.serialized_size() +
+                _json.serialized_size() +
+                _generation.serialized_size() +
+                _selection.serialized_size() +
+                _keyboard.serialized_size() +
+                _key.serialized_size() +
+                _mods.serialized_size() +
+                _code.serialized_size()
             }
         }
     }
@@ -1383,6 +1415,27 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                 _selection._serialize_chained(dest)?;
                 _target._serialize_chained(dest)?;
                 _character_target._serialize_chained(dest)?;
+            }
+            Self::EditorApplication {
+                name: ref _name,
+                json: ref _json,
+                generation: ref _generation,
+                selection: ref _selection,
+                keyboard: ref _keyboard,
+                key: ref _key,
+                mods: ref _mods,
+                code: ref _code,
+            }
+            => {
+                9u8._serialize_chained(dest)?;
+                _name._serialize_chained(dest)?;
+                _json._serialize_chained(dest)?;
+                _generation._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+                _keyboard._serialize_chained(dest)?;
+                _key._serialize_chained(dest)?;
+                _mods._serialize_chained(dest)?;
+                _code._serialize_chained(dest)?;
             }
         }
         Ok(size)
@@ -1562,6 +1615,35 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                     selection: v5,
                     target: v6,
                     character_target: v7,
+                }
+            }
+            9 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorApplication {
+                    name: v0,
+                    json: v1,
+                    generation: v2,
+                    selection: v3,
+                    keyboard: v4,
+                    key: v5,
+                    mods: v6,
+                    code: v7,
                 }
             }
             _ => {
@@ -4004,6 +4086,18 @@ pub mod owned {
             target: ModifyTargetMsg,
             character_target: ModifyTargetMsg,
         },
+
+        /// Discriminator 9
+        EditorApplication {
+            name: String,
+            json: String,
+            generation: u32,
+            selection: SelectionMsg,
+            keyboard: bool,
+            key: String,
+            mods: u32,
+            code: u32,
+        },
     }
 
     impl<'raw> ::core::convert::From<super::EditorInputMsg<'raw>> for EditorInputMsg {
@@ -4148,6 +4242,28 @@ pub mod owned {
                         character_target: _character_target,
                     }
                 }
+                super::EditorInputMsg::EditorApplication {
+                    name: _name,
+                    json: _json,
+                    generation: _generation,
+                    selection: _selection,
+                    keyboard: _keyboard,
+                    key: _key,
+                    mods: _mods,
+                    code: _code,
+                }
+                => {
+                    Self::EditorApplication {
+                        name: _name.into(),
+                        json: _json.into(),
+                        generation: _generation,
+                        selection: _selection.into(),
+                        keyboard: _keyboard,
+                        key: _key.into(),
+                        mods: _mods,
+                        code: _code,
+                    }
+                }
             }
         }
 
@@ -4280,6 +4396,26 @@ pub mod owned {
                     _selection.serialized_size() +
                     _target.serialized_size() +
                     _character_target.serialized_size()
+                }
+                Self::EditorApplication {
+                    name: ref _name,
+                    json: ref _json,
+                    generation: ref _generation,
+                    selection: ref _selection,
+                    keyboard: ref _keyboard,
+                    key: ref _key,
+                    mods: ref _mods,
+                    code: ref _code,
+                }
+                => {
+                    _name.serialized_size() +
+                    _json.serialized_size() +
+                    _generation.serialized_size() +
+                    _selection.serialized_size() +
+                    _keyboard.serialized_size() +
+                    _key.serialized_size() +
+                    _mods.serialized_size() +
+                    _code.serialized_size()
                 }
             }
         }
@@ -4418,6 +4554,27 @@ pub mod owned {
                     _selection._serialize_chained(dest)?;
                     _target._serialize_chained(dest)?;
                     _character_target._serialize_chained(dest)?;
+                }
+                Self::EditorApplication {
+                    name: ref _name,
+                    json: ref _json,
+                    generation: ref _generation,
+                    selection: ref _selection,
+                    keyboard: ref _keyboard,
+                    key: ref _key,
+                    mods: ref _mods,
+                    code: ref _code,
+                }
+                => {
+                    9u8._serialize_chained(dest)?;
+                    _name._serialize_chained(dest)?;
+                    _json._serialize_chained(dest)?;
+                    _generation._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                    _keyboard._serialize_chained(dest)?;
+                    _key._serialize_chained(dest)?;
+                    _mods._serialize_chained(dest)?;
+                    _code._serialize_chained(dest)?;
                 }
             }
             Ok(size)
@@ -4597,6 +4754,35 @@ pub mod owned {
                         selection: v5,
                         target: v6,
                         character_target: v7,
+                    }
+                }
+                9 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorApplication {
+                        name: v0,
+                        json: v1,
+                        generation: v2,
+                        selection: v3,
+                        keyboard: v4,
+                        key: v5,
+                        mods: v6,
+                        code: v7,
                     }
                 }
                 _ => {

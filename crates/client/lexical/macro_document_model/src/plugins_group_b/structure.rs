@@ -3,6 +3,7 @@ use super::*;
 use lexical_rich_nodes::{
     code::CodeNode,
     heading::{HeadingNode, HeadingTagType},
+    link::LinkNode,
     list::{ListItemNode, ListType},
     quote::QuoteNode,
     selection::set_blocks_type_default,
@@ -141,6 +142,7 @@ fn transform(tx: &mut Transaction<'_>, kind: BlockKind) -> Result<Handled, Error
                 .key(),
             BlockKind::Quote => tx.create(QuoteNode::default())?.key(),
             BlockKind::Code => tx.create(CodeNode::default())?.key(),
+            BlockKind::Link => tx.create(LinkNode::default())?.key(),
             BlockKind::Bullet | BlockKind::Number | BlockKind::Check => {
                 return Err(Error::Invariant("list handled before block replacement"));
             }
