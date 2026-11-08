@@ -6,7 +6,7 @@ use databases::domain::models::DatabaseError;
 use macro_user_id::user_id::MacroUserIdStr;
 
 pub use databases_types::{CellValue, ColumnId, DatabaseId, OptionId, RowId, TableId};
-pub use models_forms::{
+pub use forms_types::{
     AccentColor, Answer, Audience, CreateForm, Form, FormAccess, FormBranding, FormDetail, FormId,
     FormLayout, FormQuestionDetail, FormQuestionId, FormResponse, FormResponseId, FormSection,
     FormSectionDetail, FormSectionId, FormSource, FormStatus, FormTally, LayoutProblem, ListedForm,

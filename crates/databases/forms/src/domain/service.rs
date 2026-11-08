@@ -269,7 +269,7 @@ fn validated_name(name: &str) -> Result<String, FormError> {
     if trimmed.is_empty() {
         return Err(FormError::InvalidName("a form needs a name"));
     }
-    if trimmed.chars().count() > models_forms::MAX_TITLE_LENGTH {
+    if trimmed.chars().count() > forms_types::MAX_TITLE_LENGTH {
         return Err(FormError::InvalidName("the name is too long"));
     }
     Ok(trimmed.to_string())
@@ -279,7 +279,7 @@ fn validated_name(name: &str) -> Result<String, FormError> {
 fn within(text: &str, max: usize) -> Result<(), FormError> {
     if text.chars().count() > max {
         return Err(FormError::InvalidLayout(
-            models_forms::LayoutProblem::TextTooLong { max },
+            forms_types::LayoutProblem::TextTooLong { max },
         ));
     }
     Ok(())
@@ -300,7 +300,7 @@ where
     async fn collaborate_form(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_forms::FormCollaboration, FormError> {
+    ) -> Result<forms_types::FormCollaboration, FormError> {
         self.collaborate(&receipt).await
     }
 
@@ -354,7 +354,7 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> Result<models_forms::FormCollaboration, FormError> {
+    ) -> Result<forms_types::FormCollaboration, FormError> {
         self.replace_layout(&receipt, layout).await
     }
 

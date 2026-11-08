@@ -11,8 +11,8 @@ use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, Database
 use databases_types::ColumnKind;
 use databases_types::views::{FilterGroup, SchemaColumn, ViewLayout, ViewQuery, check};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use forms_types::{MAX_TEXT_LENGTH, MAX_TITLE_LENGTH};
 use macro_event_broker::MacroEventBroker;
-use models_forms::{MAX_TEXT_LENGTH, MAX_TITLE_LENGTH};
 use uuid::Uuid;
 
 use super::{FormsServiceImpl, receipt_access, receipt_form_id, within};
@@ -415,7 +415,7 @@ where
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> Result<models_forms::FormCollaboration, FormError> {
+    ) -> Result<forms_types::FormCollaboration, FormError> {
         let form = self.live_form(receipt_form_id(receipt)?).await?;
         let table = self.live_table_of(&form).await?;
         let mut refreshed = self.replace_draft(&form, &table, &layout).await?;
@@ -427,11 +427,11 @@ where
             Ok(current) => current,
             Err(error) => {
                 tracing::error!(form_id = %form.id, error = ?error, "saved form draft facts could not be refreshed");
-                refreshed.publication_error = Some(models_forms::FormPublicationProblem::Pending);
+                refreshed.publication_error = Some(forms_types::FormPublicationProblem::Pending);
                 form
             }
         };
-        Ok(models_forms::FormCollaboration {
+        Ok(forms_types::FormCollaboration {
             detail: form_detail(
                 form,
                 receipt_access(receipt),

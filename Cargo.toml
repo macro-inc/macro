@@ -211,6 +211,7 @@ members = [
   "crates/types/email_thread_id",
   "crates/types/entity_basic_types",
   "crates/types/form_id",
+  "crates/types/forms_types",
   "crates/types/harness_id",
   "crates/types/harness_token",
   "crates/types/id_newtype",
@@ -219,7 +220,6 @@ members = [
   "crates/types/message_id",
   "crates/types/message_parent",
   "crates/types/model_owner",
-  "crates/types/models_forms",
   "crates/types/natural_time",
   "crates/types/notification_state",
   "crates/types/project_id",
@@ -759,6 +759,7 @@ folder = { path = "crates/projects/folder", default-features = false }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
 form_id = { path = "crates/types/form_id" }
 forms = { path = "crates/databases/forms" }
+forms_types = { path = "crates/types/forms_types" }
 frecency = { path = "crates/entities/frecency" }
 frecency_core = { path = "crates/entities/frecency_core" }
 frecency_inbound = { path = "crates/entities/frecency_inbound" }
@@ -858,7 +859,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_forms = { path = "crates/types/models_forms" }
 models_grouping = { path = "crates/types/models_grouping" }
 models_opensearch = { path = "crates/types/models_opensearch" }
 models_pagination = { path = "crates/types/models_pagination" }

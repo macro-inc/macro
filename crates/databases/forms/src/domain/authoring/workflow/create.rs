@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::ports::{CreateFormCommand, CreateSource};
-use models_forms::{FormSource, UpdateForm};
+use forms_types::{FormSource, UpdateForm};
 
 impl<
     C: AuthoringCore,
@@ -54,7 +54,7 @@ impl<
             &prepared.layout,
             &all_columns,
             &protected,
-            models_forms::Audience::Members,
+            forms_types::Audience::Members,
         )?;
         self.targets(&actor, &prepared.layout).await?;
         let form_id = FormId::generate();

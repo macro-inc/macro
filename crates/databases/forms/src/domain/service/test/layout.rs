@@ -37,9 +37,9 @@ fn respondent_details_withhold_the_booking_destination() {
             id: FormSectionId::from_uuid(Uuid::from_u128(4)),
             title: "Book a time".into(),
             description: "Meet with us".into(),
-            target: models_forms::BookingTarget {
-                profile_id: models_forms::BookingProfileId::from_uuid(Uuid::from_u128(5)),
-                event_type_id: models_forms::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
+            target: forms_types::BookingTarget {
+                profile_id: forms_types::BookingProfileId::from_uuid(Uuid::from_u128(5)),
+                event_type_id: forms_types::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
             },
         }],
     };
@@ -62,9 +62,9 @@ async fn booking_must_follow_every_question_and_gate() {
         id: FormSectionId::from_uuid(Uuid::from_u128(0xb00)),
         title: "Book a time".into(),
         description: "".into(),
-        target: models_forms::BookingTarget {
-            profile_id: models_forms::BookingProfileId::from_uuid(Uuid::from_u128(5)),
-            event_type_id: models_forms::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
+        target: forms_types::BookingTarget {
+            profile_id: forms_types::BookingProfileId::from_uuid(Uuid::from_u128(5)),
+            event_type_id: forms_types::BookingEventTypeId::from_uuid(Uuid::from_u128(6)),
         },
     };
     let mut layout = rsvp_layout();
@@ -78,7 +78,7 @@ async fn booking_must_follow_every_question_and_gate() {
 async fn put(
     world: &Shared,
     layout: FormLayout,
-) -> Result<models_forms::FormCollaboration, FormError> {
+) -> Result<forms_types::FormCollaboration, FormError> {
     service(world)
         .put_layout(
             form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),

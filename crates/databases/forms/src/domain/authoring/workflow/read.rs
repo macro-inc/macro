@@ -71,7 +71,7 @@ impl<
                 // even when the actor also holds Owner or Edit.
                 detail.access = FormAccess::View;
                 for section in &mut detail.sections {
-                    if let models_forms::FormSectionDetail::Booking { target, .. } = section {
+                    if let forms_types::FormSectionDetail::Booking { target, .. } = section {
                         *target = None;
                     }
                 }

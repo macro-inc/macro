@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod test;
 use super::models::*;
-use models_forms::{FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout};
+use forms_types::{FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout};
 
 fn conflict(path: impl Into<String>) -> AuthoringError {
     AuthoringError::new(

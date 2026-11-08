@@ -297,7 +297,7 @@ pub trait FormsService: Send + Sync + 'static {
     fn collaborate_form(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> impl Future<Output = Result<models_forms::FormCollaboration, FormError>> + Send;
+    ) -> impl Future<Output = Result<forms_types::FormCollaboration, FormError>> + Send;
 
     /// Create a form over a new database or an existing table.
     fn create_form(
@@ -340,7 +340,7 @@ pub trait FormsService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         layout: FormLayout,
-    ) -> impl Future<Output = Result<models_forms::FormCollaboration, FormError>> + Send;
+    ) -> impl Future<Output = Result<forms_types::FormCollaboration, FormError>> + Send;
 
     /// Respond: validate, run the gates, write the row, record the response.
     fn submit_response(

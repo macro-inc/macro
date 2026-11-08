@@ -4,7 +4,7 @@
 
 use databases_types::{CellValue, OptionRef};
 use entity_access::domain::models::ViewAccessLevel;
-use models_forms::{BookingEventTypeId, BookingProfileId, BookingTarget, UnlockedBooking};
+use forms_types::{BookingEventTypeId, BookingProfileId, BookingTarget, UnlockedBooking};
 use serde_json::json;
 
 use super::*;

@@ -13,7 +13,7 @@ newtype (CS-10). Each id is a `nutype` over `Uuid`, transparent on the wire.
 
 - Depends on: `nutype`, `uuid`, `macro_uuid`. Must stay wasm-safe
   (`databases_types` runs in the browser); it is a hakari traversal exclude.
-- Used by: `databases_types`, `models_forms`.
+- Used by: `databases_types`, `forms_types`.
 
 ## Recipes
 

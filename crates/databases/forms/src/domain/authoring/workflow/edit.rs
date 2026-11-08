@@ -1,5 +1,5 @@
 use super::*;
-use models_forms::UpdateForm;
+use forms_types::UpdateForm;
 
 impl<
     C: AuthoringCore,
@@ -40,9 +40,9 @@ impl<
             Some(&latest.layout),
         )?;
         for section in &layout.sections {
-            if let models_forms::FormSection::Booking { target, .. } = section {
+            if let forms_types::FormSection::Booking { target, .. } = section {
                 let already_attached = latest.layout.sections.iter().any(|old| matches!(old,
-                    models_forms::FormSection::Booking { target: existing, .. } if existing == target));
+                    forms_types::FormSection::Booking { target: existing, .. } if existing == target));
                 if !already_attached {
                     self.booking.check_target(&actor, target).await?;
                 }
@@ -104,7 +104,7 @@ fn schema_dependencies(
     layout: &FormLayout,
     changes: &[Change],
 ) -> std::collections::HashSet<databases_types::ColumnId> {
-    use models_forms::FormSection;
+    use forms_types::FormSection;
     let mut ids = std::collections::HashSet::new();
     for change in changes {
         match change {

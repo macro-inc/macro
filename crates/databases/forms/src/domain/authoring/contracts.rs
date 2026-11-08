@@ -2,7 +2,7 @@
 use super::models::*;
 use chrono::{DateTime, Utc};
 use databases_types::DatabaseId;
-use models_forms::{
+use forms_types::{
     Audience, Form, FormAccess, FormDetail, FormId, FormLayout, FormStatus, ResponseSummary,
 };
 use schemars::JsonSchema;

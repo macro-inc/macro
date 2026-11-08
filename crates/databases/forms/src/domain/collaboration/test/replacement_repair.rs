@@ -1,4 +1,4 @@
-use models_forms::{BookingEventTypeId, BookingProfileId, BookingTarget};
+use forms_types::{BookingEventTypeId, BookingProfileId, BookingTarget};
 
 use super::*;
 

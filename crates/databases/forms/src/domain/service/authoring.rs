@@ -219,7 +219,7 @@ where
                 .await
                 .map_err(repository_error)?
             {
-                return Err(FormError::from(models_forms::LayoutProblem::RepeatedId { id }).into());
+                return Err(FormError::from(forms_types::LayoutProblem::RepeatedId { id }).into());
             }
             match self
                 .drafts
@@ -249,7 +249,7 @@ where
             .await
             .map_err(repository_error)?
         {
-            return Err(models_forms::LayoutProblem::RepeatedId { id }.into());
+            return Err(forms_types::LayoutProblem::RepeatedId { id }.into());
         }
         self.ensure_draft(&form).await?;
         let bytes = self

@@ -288,11 +288,11 @@ impl FormsService for RecordingForms {
     async fn collaborate_form(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<models_forms::FormCollaboration, FormError> {
+    ) -> Result<forms_types::FormCollaboration, FormError> {
         let detail = self.detail(FormAccess::Edit);
         self.answer(
             handed("collaborate_form", &receipt),
-            models_forms::FormCollaboration {
+            forms_types::FormCollaboration {
                 detail,
                 publication_error: None,
             },
@@ -365,11 +365,11 @@ impl FormsService for RecordingForms {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         _layout: FormLayout,
-    ) -> Result<models_forms::FormCollaboration, FormError> {
+    ) -> Result<forms_types::FormCollaboration, FormError> {
         let detail = self.detail(FormAccess::Edit);
         self.answer(
             handed("put_layout", &receipt),
-            models_forms::FormCollaboration {
+            forms_types::FormCollaboration {
                 detail,
                 publication_error: None,
             },

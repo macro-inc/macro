@@ -29,7 +29,7 @@ service.
 ## Boundaries
 
 - Depends on: `databases` (ports), `collab_surface` (outbound, ports),
-  `entity_access`, `models_forms`, `databases_types`, `macro_event_broker`,
+  `entity_access`, `forms_types`, `databases_types`, `macro_event_broker`,
   `static_file_service_client` (feature `static_files`: branding images must
   be the setter's own image uploads; `src/outbound/static_file_images.rs`).
 - Used by: `document_storage_service`, `agent_tools`.
@@ -40,7 +40,7 @@ service.
   → `src/domain/authoring/validate.rs` → `src/outbound/collaborative_layout.rs`.
 - Add an AI authoring tool: `src/inbound/toolset.rs` → `src/domain/authoring/workflow.rs`.
 - Change section rules (gates, a questions section's `showWhen` branching):
-  `models_forms` → `src/domain/service/layout.rs` (`validate_layout`,
+  `forms_types` → `src/domain/service/layout.rs` (`validate_layout`,
   `gates_fit_table`) → `src/domain/service/answers.rs` (`evaluate`) →
   `src/domain/authoring/validate.rs` → `src/outbound/pg_forms_repo/layout.rs`.
   A skipped section's answers are ignored and count as unanswered.
