@@ -35,7 +35,7 @@ export class TableObserver {
   private cells = new Map<number, DOMCell>();
   private anchor: number | null = null;
   private focus: number | null = null;
-  private dragging = false;
+  private pointerId: number | null = null;
   constructor(
     readonly view: EditorView,
     readonly key: number,
@@ -45,6 +45,7 @@ export class TableObserver {
     table.addEventListener('pointerdown', this.down);
     table.ownerDocument.addEventListener('pointermove', this.move);
     table.ownerDocument.addEventListener('pointerup', this.up);
+    table.ownerDocument.addEventListener('pointercancel', this.up);
     this.refresh();
   }
   refresh(): void {
@@ -150,16 +151,26 @@ export class TableObserver {
   }
   private down = (event: PointerEvent): void => {
     const key = this.keyFromTarget(event.target);
-    if (key === null || event.button !== 0) return;
+    if (
+      key === null ||
+      event.button !== 0 ||
+      event.pointerType === 'touch' ||
+      this.view.root.contentEditable !== 'true'
+    )
+      return;
     if (!event.shiftKey || this.anchor === null) this.anchor = key;
-    this.dragging = true;
+    this.pointerId = event.pointerId;
     if (event.shiftKey) {
       event.preventDefault();
       this.submit(key);
     }
   };
   private move = (event: PointerEvent): void => {
-    if (!this.dragging || this.anchor === null) return;
+    if (this.pointerId !== event.pointerId || this.anchor === null) return;
+    if (this.view.root.contentEditable !== 'true') {
+      this.pointerId = null;
+      return;
+    }
     const key = this.keyFromTarget(event.target);
     if (
       key === null ||
@@ -170,8 +181,8 @@ export class TableObserver {
     event.preventDefault();
     this.submit(key);
   };
-  private up = (): void => {
-    this.dragging = false;
+  private up = (event: PointerEvent): void => {
+    if (event.pointerId === this.pointerId) this.pointerId = null;
   };
   private submit(key: number): void {
     if (this.anchor === null) return;
@@ -187,6 +198,8 @@ export class TableObserver {
     this.table.removeEventListener('pointerdown', this.down);
     this.table.ownerDocument.removeEventListener('pointermove', this.move);
     this.table.ownerDocument.removeEventListener('pointerup', this.up);
+    this.table.ownerDocument.removeEventListener('pointercancel', this.up);
+    this.pointerId = null;
     observers.delete(this.table);
     this.clear();
   }

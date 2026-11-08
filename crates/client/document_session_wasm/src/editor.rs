@@ -557,7 +557,7 @@ impl EditorSession {
             ..Default::default()
         };
         let mut bytes = vec![];
-        output::encode(&out, false, &mut bytes, None).map_err(js)?;
+        output::encode(&out, false, &mut bytes, None, None).map_err(js)?;
         Ok(bytes)
     }
     /// Current complete document text in one crossing.

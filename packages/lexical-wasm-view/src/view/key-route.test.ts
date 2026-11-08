@@ -103,84 +103,135 @@ test('application Tab routes once through the real Macro session despite its cri
   }
 });
 
-test('native code arrow listeners run once while middle-line browser movement stays unclaimed', () => {
+test.each(['code-highlight', 'text'])(
+  'native %s code arrows run once while middle-line browser movement stays unclaimed',
+  (type) => {
+    const fixture = nativeSurface();
+    const { port, view, root, session, counters } = fixture;
+    try {
+      port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'custom-code',
+                version: 1,
+                language: 'rust',
+                children: [
+                  { type, version: 1, text: 'first' },
+                  { type: 'linebreak', version: 1 },
+                  { type, version: 1, text: 'middle' },
+                  { type: 'linebreak', version: 1 },
+                  { type, version: 1, text: 'last' },
+                ],
+              },
+            ],
+          },
+        })
+      );
+      const first = [...view.mirror.values()].find(
+        (node) => node.text === 'first'
+      );
+      const middle = [...view.mirror.values()].find(
+        (node) => node.text === 'middle'
+      );
+      if (!first || !middle) throw new Error('Missing code highlights');
+      const firstText = view.getElementByKey(first.key)?.firstChild;
+      const middleText = view.getElementByKey(middle.key)?.firstChild;
+      if (!firstText || !middleText) throw new Error('Missing highlight DOM');
+      root.focus();
+      document.getSelection()?.setBaseAndExtent(middleText, 2, middleText, 2);
+      session.query = () => {
+        throw new Error('Query crossing on arrow key');
+      };
+      session.nodeText = () => {
+        throw new Error('Per-node crossing on arrow key');
+      };
+      counters.admissions = 0;
+      const middleArrow = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        keyCode: 40,
+        bubbles: true,
+        cancelable: true,
+      });
+      root.dispatchEvent(middleArrow);
+      expect(middleArrow.defaultPrevented).toBe(false);
+      expect(counters.admissions).toBe(1);
+      document.getSelection()?.setBaseAndExtent(firstText, 0, firstText, 0);
+      counters.admissions = 0;
+      const up = new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        keyCode: 38,
+        bubbles: true,
+        cancelable: true,
+      });
+      root.dispatchEvent(up);
+      expect(up.defaultPrevented).toBe(true);
+      expect(counters.admissions).toBe(1);
+      expect(root.firstElementChild?.tagName).toBe('P');
+      expect(root.children).toHaveLength(3);
+      counters.admissions = 0;
+      root.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'x',
+          keyCode: 88,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      expect(counters.admissions).toBe(0);
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
+test('an unhandled native key route preserves consuming after-listener ordering', () => {
   const fixture = nativeSurface();
-  const { port, view, root, session, counters } = fixture;
+  const release = fixture.view.registerKeyRoute((event) =>
+    event.key === 'ArrowRight'
+      ? { name: 'group-b.table-key', json: '{}', preventDefault: false }
+      : null
+  );
   try {
-    port.setState(
+    fixture.port.setState(
       JSON.stringify({
         root: {
           type: 'root',
           version: 1,
           children: [
             {
-              type: 'custom-code',
+              type: 'paragraph',
               version: 1,
-              language: 'rust',
-              children: [
-                { type: 'code-highlight', version: 1, text: 'first' },
-                { type: 'linebreak', version: 1 },
-                { type: 'code-highlight', version: 1, text: 'middle' },
-                { type: 'linebreak', version: 1 },
-                { type: 'code-highlight', version: 1, text: 'last' },
-              ],
+              children: [{ type: 'text', version: 1, text: 'plain' }],
             },
           ],
         },
       })
     );
-    const first = [...view.mirror.values()].find(
-      (node) => node.text === 'first'
-    );
-    const middle = [...view.mirror.values()].find(
-      (node) => node.text === 'middle'
-    );
-    if (!first || !middle) throw new Error('Missing code highlights');
-    const firstText = view.getElementByKey(first.key)?.firstChild;
-    const middleText = view.getElementByKey(middle.key)?.firstChild;
-    if (!firstText || !middleText) throw new Error('Missing highlight DOM');
-    root.focus();
-    document.getSelection()?.setBaseAndExtent(middleText, 2, middleText, 2);
-    session.query = () => {
-      throw new Error('Query crossing on arrow key');
+    const original = fixture.view.runViewCommand.bind(fixture.view);
+    const after: string[] = [];
+    fixture.view.runViewCommand = (name, payload, phase) => {
+      if (phase === 'after') {
+        after.push(name);
+        return true;
+      }
+      return original(name, payload, phase);
     };
-    session.nodeText = () => {
-      throw new Error('Per-node crossing on arrow key');
-    };
-    counters.admissions = 0;
-    const middleArrow = new KeyboardEvent('keydown', {
-      key: 'ArrowDown',
-      keyCode: 40,
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
       bubbles: true,
       cancelable: true,
     });
-    root.dispatchEvent(middleArrow);
-    expect(middleArrow.defaultPrevented).toBe(false);
-    expect(counters.admissions).toBe(1);
-    document.getSelection()?.setBaseAndExtent(firstText, 0, firstText, 0);
-    counters.admissions = 0;
-    const up = new KeyboardEvent('keydown', {
-      key: 'ArrowUp',
-      keyCode: 38,
-      bubbles: true,
-      cancelable: true,
-    });
-    root.dispatchEvent(up);
-    expect(up.defaultPrevented).toBe(true);
-    expect(counters.admissions).toBe(1);
-    expect(root.firstElementChild?.tagName).toBe('P');
-    expect(root.children).toHaveLength(3);
-    counters.admissions = 0;
-    root.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'x',
-        keyCode: 88,
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    expect(counters.admissions).toBe(0);
+    fixture.counters.admissions = 0;
+    fixture.root.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(after).toEqual(['KeyDown']);
+    expect(fixture.counters.admissions).toBe(1);
   } finally {
+    release();
     fixture.close();
   }
 });

@@ -119,6 +119,27 @@ impl Machine {
             }
             _ => None,
         };
+        let submitted_selection = match &input {
+            SessionInput::Editor(Input::SelectionFromView { selection, .. })
+                if *selection != lexical_model::ViewSelection::KeepModel =>
+            {
+                Some(selection.clone())
+            }
+            _ => None,
+        };
+        let previous_typing = if submitted_selection.is_some() {
+            match &self.session {
+                Session::Editor(session) => session
+                    .surface()
+                    .state()
+                    .selection()
+                    .and_then(lexical_model::Selection::as_range)
+                    .map(|range| (range.format, range.style.clone())),
+                Session::Doc(_) => None,
+            }
+        } else {
+            None
+        };
         let capture = crate::telemetry::begin();
         match &mut self.session {
             Session::Editor(s) => {
@@ -175,7 +196,59 @@ impl Machine {
         } else {
             None
         };
-        let mut flags = output::encode(out, self.terminal, &mut self.output, correction)?;
+        // Only exact accepted selections may use the zero-output acknowledgement.
+        // Notifications, IO and rejected/normalized points need final model facts.
+        let selection_feedback =
+            if let (Some(mut submitted), Some(surface)) = (submitted_selection, surface) {
+                if let lexical_model::ViewSelection::Range {
+                    resolution_dirty, ..
+                } = &mut submitted
+                {
+                    *resolution_dirty = false;
+                }
+                let selection = surface.state().selection();
+                let actual = lexical_model::view_selection(selection);
+                let authoritative = out.view.iter().any(|effect| {
+                    matches!(
+                        effect,
+                        ViewEffect::Editor(lexical_model::Effect::SetViewSelection { .. })
+                    )
+                });
+                let nonzero = !out.view.is_empty()
+                    || !out.io.is_empty()
+                    || out.need_peer_ids
+                    || wake_changed
+                    || !messages.is_empty();
+                let typing = selection
+                    .and_then(lexical_model::Selection::as_range)
+                    .map(|range| (range.format, range.style.clone()));
+                if !authoritative && (submitted != actual || nonzero || typing != previous_typing) {
+                    let (format, style) = selection
+                        .and_then(lexical_model::Selection::as_range)
+                        .map_or(
+                            (lexical_model::TextFormat::empty(), Arc::from("")),
+                            |range| (range.format, range.style.clone()),
+                        );
+                    Some(ViewEffect::Editor(
+                        lexical_model::Effect::SetViewSelection {
+                            selection: actual,
+                            format,
+                            style,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+        let mut flags = output::encode(
+            out,
+            self.terminal,
+            &mut self.output,
+            correction,
+            selection_feedback,
+        )?;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
         if command
             && flags & 16 == 0
@@ -213,6 +286,7 @@ impl Machine {
                 diff: session.surface().view_diff()?,
                 initialize: true,
             }),
+            None,
         )
     }
     pub(crate) fn editor(&mut self, input: Input, mono: f64) -> Result<u32, BoundaryError> {

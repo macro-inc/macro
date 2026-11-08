@@ -2,6 +2,8 @@
 export interface KeyRoute {
   readonly name: string;
   readonly json: string;
+  /** False leaves browser default policy to the native result. */
+  readonly preventDefault?: boolean;
 }
 
 export interface ViewCommand<P> {

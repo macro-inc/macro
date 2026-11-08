@@ -13,7 +13,11 @@ export function dispatchApplicationCommand(
 ): boolean | undefined {
   const generation = view.mirror.keyGeneration;
   if (generation === null) return false;
-  const resolved = readSelection(view);
+  const cached = view.selection().selection;
+  const resolved =
+    cached.kind === 'node' || cached.kind === 'table'
+      ? ({ kind: 'keep' } as const)
+      : readSelection(view);
   const selection =
     resolved.kind === 'none' ? ({ kind: 'keep' } as const) : resolved;
   let handled: boolean | undefined;
@@ -40,4 +44,22 @@ export function dispatchApplicationCommand(
     }
   );
   return handled;
+}
+
+/** One immutable bulk read, rejecting a reply against a retired mirror generation. */
+export function queryApplication(
+  view: EditorView,
+  name: string,
+  data: JsonValue
+): unknown {
+  const generation = view.mirror.keyGeneration;
+  if (generation === null) return null;
+  const reply = view.port.query({
+    kind: 9,
+    key: 0,
+    flags: generation,
+    text: JSON.stringify({ name, data }),
+  });
+  const value: unknown = JSON.parse(reply.text);
+  return value;
 }
