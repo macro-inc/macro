@@ -33,6 +33,7 @@ impl ForeignUpdateIdentity {
 pub struct PendingUpdate {
     update: Arc<()>,
     read_only: bool,
+    read_sources: Option<crate::state::NodeMap>,
     previous_selection: Option<Selection>,
     owner: Arc<()>,
     version: CommitId,
@@ -76,6 +77,7 @@ impl Transaction<'_> {
         PendingUpdate {
             update: self.foreign_update,
             read_only: self.foreign_read_only,
+            read_sources: self.foreign_read_sources,
             previous_selection: self.foreign_previous_selection,
             native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
@@ -116,6 +118,7 @@ impl Editor {
         Ok(Transaction {
             foreign_update: update.update,
             foreign_read_only: update.read_only,
+            foreign_read_sources: update.read_sources,
             foreign_previous_selection: update.previous_selection,
             native_projection: update.native_projection,
             editor: self,

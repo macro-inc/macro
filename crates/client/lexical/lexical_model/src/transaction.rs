@@ -24,6 +24,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
@@ -66,6 +68,8 @@ impl<'editor> Transaction<'editor> {
             foreign_update: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_read_sources: None,
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
             #[cfg(feature = "foreign-nodes")]
@@ -111,6 +115,10 @@ impl<'editor> Transaction<'editor> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
+            #[cfg(feature = "foreign-nodes")]
+            detached_selections: &self.detached,
+            #[cfg(feature = "foreign-nodes")]
+            source_records: self.foreign_read_sources.as_ref(),
             state: &self.pending,
             previous_selection,
             composition_key: self.composition_key,
