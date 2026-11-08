@@ -22,8 +22,8 @@ mod test;
 pub struct CatalogEntry {
     /// Names it, e.g. `inbox`.
     pub key: String,
-    /// Where it is offered.
-    pub surface: Surface,
+    /// Where it is offered, first the part of the app it belongs to most.
+    pub surfaces: Vec<Surface>,
     /// Its name once saved.
     pub title: String,
     /// What it does, in a short line.
@@ -50,6 +50,8 @@ pub struct CatalogEntry {
     pub safe_default: bool,
     /// Offered among the templates when someone creates a routine.
     pub template: bool,
+    /// Offered unpicked as a suggestion from Macro.
+    pub suggest: bool,
 }
 
 /// Every catalog routine, with schedules in `timezone`. Code steps are left
@@ -90,7 +92,7 @@ fn entry(
     };
     Ok(CatalogEntry {
         key: routine.key.to_owned(),
-        surface: routine.surface,
+        surfaces: routine.surfaces.to_vec(),
         title: routine.title.to_owned(),
         description: routine.description.to_owned(),
         request: routine.request.to_owned(),
@@ -106,5 +108,6 @@ fn entry(
         affects_others: routine.affects_others,
         safe_default: routine.safe_default,
         template: routine.template,
+        suggest: routine.suggest,
     })
 }

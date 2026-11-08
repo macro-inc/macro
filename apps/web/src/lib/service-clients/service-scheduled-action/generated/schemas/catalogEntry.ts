@@ -34,8 +34,10 @@ items (a tag, channel or label), by knob name. */
   request: string;
   /** It may be switched on before its owner changes anything. */
   safeDefault: boolean;
-  /** Where it is offered. */
-  surface: Surface;
+  /** Offered unpicked as a suggestion from Macro. */
+  suggest: boolean;
+  /** Where it is offered, first the part of the app it belongs to most. */
+  surfaces: Surface[];
   /** Offered among the templates when someone creates a routine. */
   template: boolean;
   /** Its name once saved. */

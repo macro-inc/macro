@@ -16,6 +16,7 @@ const marks = {
   affectsOthers: false,
   safeDefault: false,
   template: true,
+  suggest: true,
   namedKnobs: {},
 };
 
@@ -24,7 +25,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'inbox',
-    surface: 'email',
+    surfaces: ['email'],
     title: 'Sort my inbox',
     description: 'AI labels new email by topic',
     request: 'When a new email arrives, label it.',
@@ -40,7 +41,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'triage',
-    surface: 'tasks',
+    surfaces: ['tasks'],
     title: 'Triage new tasks',
     description: 'AI sets each new task’s priority',
     request: 'When a task is created, set its priority.',
@@ -53,7 +54,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'brief',
-    surface: 'calendar',
+    surfaces: ['calendar'],
     title: 'Morning brief',
     description: 'Weekdays at 9, sum up my day',
     request: 'Every weekday at 9am, sum up my day.',
@@ -69,7 +70,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'updates',
-    surface: 'chat',
+    surfaces: ['chat'],
     title: 'Share updates',
     description: 'Post finished tasks to a channel',
     request: 'When a task is marked completed, post it.',
@@ -91,7 +92,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'stuck',
-    surface: 'tasks',
+    surfaces: ['tasks'],
     title: 'Chase stuck tasks',
     description: 'Fridays, list what’s stalled',
     request: 'Every Friday at 3pm, list my stalled tasks.',
@@ -107,7 +108,7 @@ const ENTRIES: CatalogEntry[] = [
   {
     ...marks,
     key: 'invoices',
-    surface: 'email',
+    surfaces: ['email'],
     title: 'Task for invoices due soon',
     description: 'AI makes a task to pay each invoice due soon',
     request: 'When an invoice arrives, make a task.',
