@@ -2,8 +2,7 @@
 -- sequence's current steps, so enrollments keep no copy and edits need no
 -- version. Steps get stable ids, which step history is keyed by. An email that
 -- didn't go out is `needs_attention` without a reason, and an inbox or access
--- problem only holds steps back. Steps are ordinary scheduled sends, so the
--- schedule's `source` goes.
+-- problem only holds steps back.
 --
 -- Existing step ids derive from the sequence and position, so recorded
 -- history keeps pointing at the step it was.
@@ -45,6 +44,3 @@ ALTER TABLE email_sequence_enrollments
     DROP COLUMN attempts;
 
 DROP INDEX email_sequence_enrollments_waiting_idx;
-
--- Also drops `email_scheduled_messages_pending_sequence_idx`.
-ALTER TABLE email_scheduled_messages DROP COLUMN source;

@@ -55,6 +55,8 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 - Scheduled delivery and durable Send share `email_draft_provider_attachment_ids`
   for native/forwarded identities, honoring removals and copied-upload deduplication.
 
+- Thread metadata, importance, and search reads leave pending sequence steps
+  out; `pause_delivery` recomputes the thread when one fails.
 - Forwarded-attachment delivery reads preserve `source_link_id` from the original
   message; the destination draft inbox is only the query access scope.
 - `insert_message_with_tx` leaves labels with an unexpired

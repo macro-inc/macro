@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT max(send_time) FROM email_scheduled_messages\n               WHERE link_id = $1 AND NOT sent AND send_time > now() AND send_time <= $2",
+  "query": "SELECT max(send_time) FROM email_scheduled_messages\n               WHERE link_id = $1 AND source IS NOT NULL AND NOT sent AND send_time <= $2",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "fed19408b4f95a614ffc9df1f3b924d46af9d829fec8c4388d6b62403d1b70c3"
+  "hash": "0b4000bcf53a4a4a9df9b4830f7a08747693e40d4c710f0e0412d658e3c9dbae"
 }

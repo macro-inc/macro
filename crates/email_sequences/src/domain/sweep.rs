@@ -4,7 +4,9 @@
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
     models::{ContactInfo, ScheduledSendStatus},
-    sequence_steps::{InboundMessage, NewStep, ReplySearch, SequenceStepStore, StepState},
+    sequence_steps::{
+        CancelExpectation, InboundMessage, NewStep, ReplySearch, SequenceStepStore, StepState,
+    },
 };
 use uuid::Uuid;
 
@@ -178,8 +180,8 @@ where
                 self.record_sent(&mut tx, &mut row, &step, &sent, submitted_at, now)
                     .await?;
             }
-            // Gmail refused it. It shows in Mail as a failed send; a paused or
-            // stopped enrollment's (it was delivering when they changed) goes.
+            // Gmail refused it. It shows in Mail like any failed send; a paused
+            // or stopped enrollment's (it was delivering when they changed) goes.
             StepState::Scheduled {
                 status: ScheduledSendStatus::Failed,
                 ..
@@ -187,7 +189,8 @@ where
                 if live {
                     self.needs_attention(&mut tx, &mut row).await?;
                 } else {
-                    self.withdraw(&mut tx, &row, &step).await?;
+                    self.withdraw(&mut tx, &row, &step, CancelExpectation::Scheduled)
+                        .await?;
                 }
             }
             StepState::Scheduled { status, send_time } => {

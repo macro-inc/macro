@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT message_id, send_time, delivery_status, processing,\n               delivery_claim_id, delivery_started_at\n        FROM email_scheduled_messages\n        WHERE message_id = ANY($1) AND sent = false\n        ",
+  "query": "\n        SELECT message_id, send_time, delivery_status, processing,\n               delivery_claim_id, delivery_started_at, source\n        FROM email_scheduled_messages\n        WHERE message_id = ANY($1) AND sent = false\n        ",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "ordinal": 5,
         "name": "delivery_started_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "source",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -45,8 +50,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "24c770aeb77c07c117b69ad4e88d566230ee40b4408761bbd2323280609e14af"
+  "hash": "6d4ce73f390686a6b387d5c6ead99fbb3f7716f0eac32cf3f4fed56f80f4de00"
 }

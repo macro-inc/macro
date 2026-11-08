@@ -83,6 +83,8 @@ export interface EmailMessage {
     | 'failed'
     | 'unconfirmed'
     | null;
+  /** Set when something other than the user's composer scheduled it. */
+  scheduled_send_source?: 'sequence' | null;
   sent_at?: string | null;
   snippet?: string | null;
   subject?: string | null;
