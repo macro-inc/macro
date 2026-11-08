@@ -14,6 +14,15 @@ pub trait Plugin: Send + Sync + 'static {
     fn after_commit(&self, _tx: &mut Transaction<'_>, _commit: &Commit) -> Result<(), Error> {
         Ok(())
     }
+    /// Optional speculative follow-up, isolated from shared plugin writes.
+    fn isolated_after_commit(&self) -> Option<&dyn IsolatedAfterCommit> {
+        None
+    }
+}
+/// A follow-up whose declined edits must be discarded, such as Markdown shortcuts.
+pub trait IsolatedAfterCommit: Send + Sync {
+    /// Return true to publish this transaction; false discards every staged write.
+    fn apply(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<bool, Error>;
 }
 /// Whether propagation stops.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -232,8 +241,16 @@ impl Editor {
             .filter(|c| !c.is_noop())
             .cloned()
             .collect::<Vec<_>>();
+        let isolated: Vec<_> = plugins
+            .iter()
+            .filter_map(|plugin| {
+                plugin
+                    .isolated_after_commit()
+                    .map(|hook| (plugin.name(), hook))
+            })
+            .collect();
         let mut rounds = 0;
-        while !previous.is_empty() {
+        'rounds: while !previous.is_empty() {
             let state = self.state.clone();
             let extensions = self.extensions.clone();
             let tags = self.carried_tags.clone();
@@ -267,11 +284,13 @@ impl Editor {
                 break;
             }
             // Check the guard before publishing the would-be hundredth round.
-            if rounds == 99
+            if rounds >= 99
                 && (!tx.dirty_leaves.is_empty()
                     || !tx.dirty_elements.is_empty()
                     || tx.selection_dirty
-                    || !tx.events.is_empty())
+                    || !tx.events.is_empty()
+                    || !tx.nested.is_empty()
+                    || tx.preceding.is_some())
             {
                 drop(tx);
                 rollback(self);
@@ -292,16 +311,79 @@ impl Editor {
                     break;
                 }
             };
-            if following.is_noop() {
+            let mut next_previous = Vec::new();
+            if !following.is_noop() {
+                next_previous.extend(following.chain().filter(|c| !c.is_noop()).cloned());
+                commit.following.push(following);
+            }
+            for prior in &previous {
+                for (name, hook) in &isolated {
+                    let state = self.state.clone();
+                    let extensions = self.extensions.clone();
+                    let tags = self.carried_tags.clone();
+                    let composition = self.composition_key;
+                    let restore = |editor: &mut Editor| {
+                        editor.state = state;
+                        editor.extensions = extensions;
+                        editor.carried_tags = tags;
+                        editor.composition_key = composition;
+                    };
+                    let mut tx = self.transaction();
+                    match hook.apply(&mut tx, prior) {
+                        Ok(false) => {
+                            drop(tx);
+                            restore(self);
+                            continue;
+                        }
+                        Ok(true) => {}
+                        Err(error) => {
+                            drop(tx);
+                            restore(self);
+                            commit.follow_up_error = Some(FollowUpError {
+                                plugin: name,
+                                error: Arc::new(error),
+                            });
+                            break 'rounds;
+                        }
+                    }
+                    if rounds >= 99
+                        && (!tx.dirty_leaves.is_empty()
+                            || !tx.dirty_elements.is_empty()
+                            || tx.selection_dirty
+                            || !tx.events.is_empty()
+                            || !tx.nested.is_empty()
+                            || tx.preceding.is_some())
+                    {
+                        drop(tx);
+                        restore(self);
+                        commit.follow_up_error = Some(FollowUpError {
+                            plugin: "follow-up",
+                            error: Arc::new(Error::EndlessFollowUps),
+                        });
+                        break 'rounds;
+                    }
+                    let next = match tx.commit() {
+                        Ok(next) => next,
+                        Err(error) => {
+                            restore(self);
+                            commit.follow_up_error = Some(FollowUpError {
+                                plugin: name,
+                                error: Arc::new(error),
+                            });
+                            break 'rounds;
+                        }
+                    };
+                    if !next.is_noop() {
+                        next_previous.extend(next.chain().filter(|c| !c.is_noop()).cloned());
+                        commit.following.push(next);
+                    }
+                }
+            }
+            if next_previous.is_empty() {
                 break;
             }
             rounds += 1;
-            previous = following
-                .chain()
-                .filter(|c| !c.is_noop())
-                .cloned()
-                .collect();
-            commit.following.push(following);
+            previous = next_previous;
         }
         commit
     }
