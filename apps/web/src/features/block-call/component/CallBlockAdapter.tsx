@@ -128,7 +128,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
       <div class="h-full flex flex-col @container">
         <Show when={callRecord.isPending ? undefined : callRecord.data}>
           {(data) => (
-            <SidePanel.Root persistKey={`call:${callId}`}>
+            <SidePanel.Root floating persistKey={`call:${callId}`}>
               <CallSidePanelSections record={data()} callId={callId} />
               <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
                 <CallRecordingSplitHeader record={data()} />

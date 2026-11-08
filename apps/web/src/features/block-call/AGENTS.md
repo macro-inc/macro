@@ -20,14 +20,14 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Read discussion through `CallDiscussionHistory`'s source slot; preserve channel authorization and canonical call-chat roots.
 - Keep one media element across summary, transcript, chat and pinned controls; preserve idle-control visibility, menu focus and native volume state.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
-- Let CallRecordingBody own the only SidePanel.Layout below the full-width header; keep the single toggle in that header and preserve narrow overlays.
+- Let CallRecordingBody own the floating details SidePanel.Layout below the full-width header; keep the details toggle in that header.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.
-- Keep metadata and entity sections on SidePanel's unframed, divider-free rows; keep the team-sharing card always visible below metadata, outside collapsible sections.
+- Keep metadata and entity sections on SidePanel's standard floating detail rows and dividers; keep the team-sharing card always visible below metadata, outside collapsible sections.
 - Show read-only team visibility and the starter's resolved display name when sharing is not editable; use the generic starter reason instead of an email fallback, and reserve a disabled switch for pending writes.
 - Put the existing fetched entity-tag pill below title metadata; keep its property reads inside a local Suspense boundary.
 - Keep reading tabs unframed; let the shared Tabs component own the track and selected state.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
-- Keep the phone Details close action in the SidePanel drawer-header slot, outside its ScrollBody.
+- Use the standard SidePanel drawer for phone details, with the same content as desktop.
 
 ## Checks
 

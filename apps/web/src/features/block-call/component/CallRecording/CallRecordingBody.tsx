@@ -29,10 +29,6 @@ import { recordingChatMessages } from '../../core/recording-chat';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { CallTranscript } from '../CallTranscript';
 import {
-  CallDetailsSheetHeader,
-  CallRecordingSidePanel,
-} from '../sidepanel/CallRecordingSidePanel';
-import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,
   sortTranscriptSegments,
@@ -244,45 +240,7 @@ export function CallRecordingBody(props: {
             <div class="relative min-h-0 flex-1">
               <SidePanel.Layout
                 headerToggle={props.headerToggle ?? false}
-                narrowThreshold={960}
-                plainSections
-                drawerHeader={<CallDetailsSheetHeader />}
-                panel={(details) => (
-                  <CallRecordingSidePanel
-                    details={details}
-                    footer={
-                      <Show
-                        when={panel?.isOverlayMode() && record().recordingUrl}
-                      >
-                        <CallRecordingPinnedPlayer
-                          playback={playback}
-                          speaker={currentSpeaker()}
-                          onShowVideo={() => {
-                            panel?.setIsOpen(false);
-                            playerRef()?.scrollIntoView({
-                              behavior: 'smooth',
-                              block: 'start',
-                            });
-                          }}
-                        />
-                      </Show>
-                    }
-                    transcript={
-                      <CallTranscript
-                        transcript={record().transcript}
-                        channelId={record().channelId}
-                        record={record()}
-                        timelineStartMs={timelineStartMs()}
-                        durationSeconds={recordingDuration()}
-                        activeSequenceNum={activeSequenceNum()}
-                        videoSeekGeneration={videoSeekGeneration()}
-                        onSeekToSeconds={seekToSeconds}
-                        messages={messages()}
-                        hideHeader
-                      />
-                    }
-                  />
-                )}
+                floating
               >
                 <div class="relative flex h-full min-h-0 flex-col overflow-hidden @container/call-column">
                   <SidePanel.HeaderActions>

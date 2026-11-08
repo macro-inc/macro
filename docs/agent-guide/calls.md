@@ -48,10 +48,9 @@ The existing tag picker sits below the title metadata and uses the call's proper
 precedes the stored summary and read-only Call chat. Summary headings are the
 stored Markdown, not generated client-side sections.
 
-The full-width top bar stays above both content and the side panel, with a
-single panel toggle beside Share. The side panel is docked below that top bar
-in wide panes and has Transcript and Details tabs using the same shared pill
-treatment as the reading tabs.
+The full-width top bar stays above the content, with the standard details toggle.
+Details opens in the existing floating popover below the header, without
+Transcript/Details tabs. On touch it uses the standard details drawer.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
@@ -59,8 +58,8 @@ playback and returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,
 status, channel, team sharing, properties, activity and references on their
 existing permission-scoped readers. Only team sharing has a card, always visible below metadata with no collapsible
-Sharing section; other sections use the shared unframed side-panel rows, separated
-by spacing rather than divider lines.
+Sharing section; other sections use the shared floating-detail rows and standard
+dividers, matching other entity detail popovers.
 After a call ends, only its starter can change team sharing. Other viewers see
 the current state and an explanation naming the starter, not a disabled switch.
 Until a display name is available, the explanation says only the person who
@@ -69,8 +68,8 @@ An editable switch stays disabled while its change is pending.
 
 Medium-size Summary/Transcript tabs always sit below the recording, whether a
 panel is open or closed. Stored summary attribution sits below the reading tabs,
-above the summary text. Below 960px of call-pane width the panel starts closed;
-opening it covers the content with Back to content, keeping the same tabs.
+above the summary text. Details starts closed and floats over the content without
+moving the recording or its reading tabs.
 Playback remains reachable in a pinned bar after the recording scrolls above the
 viewport. On wide panes its width follows the centered content column; only
 narrow panes use the available width. Show video returns to the recording; all controls drive one media
@@ -90,8 +89,7 @@ On touch, the first tap reveals hidden controls; a tap with controls visible tog
 Phones use separate Back, title-menu, and Details header islands. The player
 comes before identity, then Summary/Transcript/Chat tabs with the real chat count.
 Ask Macro floats above the dock on Summary and Chat. The avatar chevron opens the
-participant list. Details opens the same content in a bottom sheet with a pinned
-heading and close action. In the scrolled Transcript tab, manual downward
+participant list. Details opens the same content in the standard bottom sheet. In the scrolled Transcript tab, manual downward
 scrolling replaces the navigation dock with the mini player; scrolling upward
 restores navigation below it. Search, the keyboard, and leaving the view release
 that chrome. No Call again action appears in the phone header.
@@ -103,7 +101,7 @@ call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
 
 Check a saved call with recording, transcript, summary, chat and attachments at
 1440x900, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
-panel open/closed, both panel tabs, pause/seek/skip/speed/fullscreen, scroll-follow
+details open/closed, reading tabs, pause/seek/skip/speed/fullscreen, scroll-follow
 and Sync to video, pinned playback, phone scroll direction, Details dismissal,
 and switching away while playback chrome is mounted. Also check calls without a
 recording, standalone guests, private channel access, owner/non-owner sharing,

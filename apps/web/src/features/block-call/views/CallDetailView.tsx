@@ -184,7 +184,7 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <SidePanel.Root persistKey={`call:${props.callId}`}>
+    <SidePanel.Root floating persistKey={`call:${props.callId}`}>
       {props.children}
     </SidePanel.Root>
   );
