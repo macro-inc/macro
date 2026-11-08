@@ -14,6 +14,7 @@ mod metadata;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
 mod table;
+mod text_paste;
 mod theme;
 pub use theme::parse_pasted_theme;
 
@@ -70,6 +71,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = checklist::register(builder);
     let builder = media::register(builder);
     let builder = clipboard::register(builder);
+    let builder = text_paste::register(builder);
     let builder = markdown_paste::register(builder, ty);
     let builder = links::register(builder, ty);
     let builder = diff::register(builder);
@@ -88,6 +90,8 @@ mod links_test;
 mod media_test;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod text_paste_test;
 
 /// Decode a named application command into an immutable typed model payload.
 /// Unknown namespaces remain available to the other surface plugin groups.
@@ -97,6 +101,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = text_paste::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = links::decode(name, json)? {
         return Ok(Some(command));
     }
@@ -138,5 +145,8 @@ pub fn decode_command(
 
 /// Serialize Group B host requests without exposing model event identities.
 pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(payload) = text_paste::event_payload(event)? {
+        return Ok(Some(payload));
+    }
     clipboard::event_payload(event)
 }

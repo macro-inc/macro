@@ -47,6 +47,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Checks
 
+- `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.
 - `bun apps/web/scripts/lexical-group-b-themes.ts --check` checks Group B theme paste validation/migration constants and source cases.
 
 - `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`
