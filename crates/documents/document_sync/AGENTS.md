@@ -5,8 +5,8 @@
 Part of the Documents (collaborative editing/sync) feature — a hex crate
 defining the sync service's domain ports and an axum router shim, used by
 `document_storage_service`'s in-process sync integration. Package name is
-`sync_service_hex` (not `sync_service`) — depend on it with
-`sync_service_hex = { workspace = true }`.
+`document_sync` (not `sync_service`) — depend on it with
+`document_sync = { workspace = true }`.
 
 ## Start here
 
@@ -28,7 +28,7 @@ defining the sync service's domain ports and an axum router shim, used by
 
 ## Checks
 
-- `cargo test -p sync_service_hex` (`SQLX_OFFLINE` unset).
+- `cargo test -p document_sync` (`SQLX_OFFLINE` unset).
 
 ## Related
 

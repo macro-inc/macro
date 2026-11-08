@@ -1045,7 +1045,7 @@ pub(crate) struct ApiContext {
     /// the legacy `/saved_views` routes.
     pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
-    pub sync_sessions: sync_router::session::SyncSessionFactory,
+    pub sync_sessions: document_sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,

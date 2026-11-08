@@ -71,7 +71,7 @@ async fn dedicated_endpoint_preserves_large_chunks_heartbeats_and_drains_on_shut
     let response = client.next().await.unwrap().unwrap().into_data();
     assert_eq!(
         response.as_ref(),
-        sync_router::domain::envelope::doc_frame("document", &chunk)
+        document_sync_router::domain::envelope::doc_frame("document", &chunk)
     );
     tokio::time::timeout(Duration::from_secs(2), factory.shutdown())
         .await

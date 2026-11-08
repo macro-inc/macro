@@ -1,5 +1,5 @@
 use super::SyncServiceClient;
-use sync_service_hex::domain::ports::SyncWakeupService;
+use document_sync::domain::ports::SyncWakeupService;
 
 impl SyncServiceClient {
     pub fn bulk_wakeup_fire_and_forget(&self, document_ids: Vec<String>) -> usize {

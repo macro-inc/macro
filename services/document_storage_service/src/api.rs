@@ -301,8 +301,8 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/sync_service",
-            sync_service_hex::inbound::axum_router::sync_service_router(
-                sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+            document_sync::inbound::axum_router::sync_service_router(
+                document_sync::inbound::axum_router::SyncServiceRouterState {
                     service: state.sync_service_client.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
@@ -505,8 +505,8 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .nest(
                     "/sync_service",
-                    sync_service_hex::inbound::axum_router::sync_service_router(
-                        sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+                    document_sync::inbound::axum_router::sync_service_router(
+                        document_sync::inbound::axum_router::SyncServiceRouterState {
                             service: state.sync_service_client.clone(),
                             authorization_state: state.authorization_state.clone(),
                         },
