@@ -109,14 +109,14 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     tag_option_ids: &[String],
     match_all_tags: bool,
     limit: u32,
-    cursor: models_search_cursor::SearchCursorOption,
-) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
+    cursor: search_cursor_types::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, search_cursor_types::SearchCursorOption), SearchError> {
     // If cursor is Done, no more results to fetch
     let inner_cursor = match cursor {
-        models_search_cursor::SearchCursorOption::Done => {
-            return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
+        search_cursor_types::SearchCursorOption::Done => {
+            return Ok((vec![], search_cursor_types::SearchCursorOption::Done));
         }
-        models_search_cursor::SearchCursorOption::NotDone(c) => c,
+        search_cursor_types::SearchCursorOption::NotDone(c) => c,
     };
 
     let chat_uuids = filter_chat_response

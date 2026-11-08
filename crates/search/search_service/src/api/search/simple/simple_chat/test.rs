@@ -1,6 +1,6 @@
 use super::*;
 use crate::api::search::span_capture::SpanFields;
-use models_search_cursor::SearchCursorOption;
+use search_cursor_types::SearchCursorOption;
 
 /// The chat name search span says how long the term is, never what it is.
 #[tokio::test]

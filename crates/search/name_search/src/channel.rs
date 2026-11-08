@@ -9,7 +9,7 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 use uuid::Uuid;
 
 use crate::{

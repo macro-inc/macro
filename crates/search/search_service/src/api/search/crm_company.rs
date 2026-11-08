@@ -21,9 +21,9 @@ use item_filters::CrmCompanyFilters;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::crm_company::{CrmCompanySearchDomain, CrmCompanySearchResponseItem};
 use models_search::unified::UnifiedSearchResponseItem;
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::model::{Highlight, SearchHit};
 use opensearch_types::SearchEntityType;
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 use shared_types::user::UserContext;
 use uuid::Uuid;
 

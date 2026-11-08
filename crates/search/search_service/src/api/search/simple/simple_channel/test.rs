@@ -1,5 +1,5 @@
 use super::*;
-use models_search_cursor::SearchCursorOption;
+use search_cursor_types::SearchCursorOption;
 
 /// Organization channels no longer exist, so an `org_id` filter matches no
 /// channel. The search returns before touching the database, which a lazy
