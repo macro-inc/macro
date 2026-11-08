@@ -14,6 +14,7 @@ export const root = path.resolve(
   '../../..'
 );
 export const pkg = path.join(root, 'packages/lexical-conformance');
+const jobs = process.env.CARGO_BUILD_JOBS ?? '4';
 function run(command: string, args: string[]) {
   const temporary = process.env.TMPDIR ?? path.join(root, 'target/tmp');
   mkdirSync(temporary, { recursive: true });
@@ -23,7 +24,7 @@ function run(command: string, args: string[]) {
     env: {
       ...process.env,
       TMPDIR: temporary,
-      CARGO_BUILD_JOBS: '4',
+      CARGO_BUILD_JOBS: jobs,
       CARGO_TARGET_DIR: path.join(root, 'target'),
     },
   });
@@ -96,7 +97,7 @@ export function buildWasm() {
     'wasm32-unknown-unknown',
     '-p',
     'lexical_conformance_wasm',
-    '-j4',
+    `-j${jobs}`,
   ]);
   for (const target of ['nodejs', 'web']) {
     const out = path.join(output, target === 'nodejs' ? 'node' : 'web');
@@ -126,7 +127,7 @@ export function buildWasm() {
       'lexical_conformance_wasm',
       '--example',
       'instrument_exports',
-      '-j4',
+      `-j${jobs}`,
       '--',
       '--input',
       path.join(out, 'lexical_conformance_wasm_bg.wasm'),
