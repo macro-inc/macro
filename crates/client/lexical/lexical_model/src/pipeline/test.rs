@@ -78,6 +78,10 @@ fn non_converging_transform_rolls_back_after_one_hundred_passes() -> Result<(), 
         tx.append(NodeKey::ROOT, &[p.key()])
     });
     assert!(matches!(result, Err(Error::InfiniteTransforms)));
+    assert_eq!(
+        result.expect_err("non-converging transform").to_string(),
+        "One or more transforms are endlessly triggering additional transforms. May have encountered infinite recursion caused by transforms that have their preconditions too lose and/or conflict with each other."
+    );
     assert!(editor.state().same_snapshot(&previous));
     Ok(())
 }

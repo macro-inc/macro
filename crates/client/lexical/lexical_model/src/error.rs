@@ -117,7 +117,7 @@ pub enum Error {
     UnknownSerializedType(String),
     /// A transform keeps writing without reaching a fixpoint.
     #[error(
-        "One or more transforms are endlessly triggering additional transforms. May have encountered infinite recursion caused by transforms not having loose enough preconditions and/or postconditions."
+        "One or more transforms are endlessly triggering additional transforms. May have encountered infinite recursion caused by transforms that have their preconditions too lose and/or conflict with each other."
     )]
     InfiniteTransforms,
     /// A range endpoint disappeared during the update.
