@@ -290,5 +290,29 @@ pub fn local_binaries() -> Vec<&'static str> {
     bins
 }
 
+/// The services `names` refer to in `mode`, by compose name or cargo binary
+/// (`contacts_service`, `authentication-service`), for `--services`.
+pub fn services_named(mode: Mode, names: &[String]) -> anyhow::Result<Vec<&'static RustService>> {
+    let mut found: Vec<&'static RustService> = Vec::new();
+    for name in names.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let Some(svc) =
+            services_for_mode(mode).find(|s| s.compose_name == name || s.cargo_bin == name)
+        else {
+            let known: Vec<&str> = services_for_mode(mode).map(|s| s.compose_name).collect();
+            anyhow::bail!(
+                "no local service named {name}. Name one of: {}",
+                known.join(", ")
+            );
+        };
+        if !found.iter().any(|f| f.compose_name == svc.compose_name) {
+            found.push(svc);
+        }
+    }
+    if found.is_empty() {
+        anyhow::bail!("--services needs at least one service name");
+    }
+    Ok(found)
+}
+
 #[cfg(test)]
 mod test;

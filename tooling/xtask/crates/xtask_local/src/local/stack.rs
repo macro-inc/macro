@@ -56,6 +56,11 @@ pub struct UpdateArgs {
     /// Rebuild every repository-built local Docker service and recreate it.
     #[arg(long)]
     pub build_aux_services: bool,
+    /// Rebuild and restart only these Rust services (comma-separated compose or
+    /// binary names). The others keep running older code until a full update;
+    /// `status` lists them.
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    pub services: Vec<String>,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
@@ -332,6 +337,14 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
         },
         state.traces_enabled,
     )?;
+    let only = if args.services.is_empty() {
+        None
+    } else {
+        if args.binaries_dir.is_some() {
+            bail!("--services rebuilds from source, so it can't be combined with --binaries-dir");
+        }
+        Some(super::inventory::services_named(mode, &args.services)?)
+    };
     let mut reloaded = Vec::new();
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
@@ -356,9 +369,19 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
             &env,
             target,
             args.build_aux_services,
+            only.as_deref(),
         )?;
         false
     };
+    if remounted || args.binaries_dir.is_some() {
+        super::staleness::clear(&instance);
+    }
+    let stale = super::staleness::stale(&instance);
+    if let Some(notice) =
+        super::staleness::notice(&stale, &super::summary::instance_flags(&instance))
+    {
+        println!("{notice}");
+    }
 
     if args.binaries_dir.is_some() && args.build_aux_services {
         super::build_aux_service_images(stage, &instance, &env)?;
@@ -379,6 +402,7 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
                 "frontend_updated": args.frontend,
                 "aux_services_rebuilt": args.build_aux_services,
                 "reloaded": reloaded,
+                "stale_services": stale,
             }))?
         );
     }
@@ -574,6 +598,7 @@ pub(super) fn status_json(instance: &Instance) -> Result<serde_json::Value> {
     out["supervisor_alive"] = json!(supervisor::supervisor_alive(instance));
     out["job"] = supervisor::job_json(instance);
     out["services"] = json!(observed.services);
+    out["stale_services"] = json!(super::staleness::stale(instance));
     Ok(out)
 }
 
@@ -601,6 +626,12 @@ pub fn status(args: &StatusArgs) -> Result<()> {
         if let Some(log) = job.log {
             println!("  job log   {}", log.display());
         }
+    }
+    let stale = super::staleness::stale(&instance);
+    if let Some(notice) =
+        super::staleness::notice(&stale, &super::summary::instance_flags(&instance))
+    {
+        println!("  {notice}");
     }
     super::status::run(&instance)
 }
