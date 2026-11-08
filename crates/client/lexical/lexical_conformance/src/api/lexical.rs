@@ -367,7 +367,11 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             } else {
                 Selection::Node(NodeSelection::new())
             };
-            let id = r.selections.push(tx.detach_selection(selection))?;
+            let slot = tx.detach_selection(selection);
+            let identity = tx
+                .foreign_selection_identity(slot)
+                .ok_or_else(|| fail("selection identity"))?;
+            let id = r.selections.push(slot, identity)?;
             Ok(
                 json!({"$selection":id,"kind":if short == "$createRangeSelection" {"range"} else {"node"}}),
             )

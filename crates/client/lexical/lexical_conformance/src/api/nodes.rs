@@ -476,11 +476,6 @@ pub(crate) fn call(
             return Ok(undefined());
         }
         "replace" => {
-            if let Some(id) = r.selections.take_active()?
-                && let Some(selection) = tx.selection().map(Selection::snapshot_for_foreign_read)
-            {
-                r.selections.set_slot(id, tx.detach_selection(selection))?;
-            }
             let node = node_key(a.first().ok_or_else(|| fail("replacement"))?)?;
             let node = tx.replace(
                 key,

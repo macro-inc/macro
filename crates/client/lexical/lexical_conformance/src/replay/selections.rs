@@ -1,6 +1,6 @@
 //! Selection identities shared by mutable dispatch frames of one transaction.
 use super::{Result, fail};
-use lexical_model::{Selection, SelectionSlot};
+use lexical_model::{ForeignSelectionIdentity, Selection, SelectionSlot, Transaction};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -15,6 +15,7 @@ pub(crate) struct SelectionBindings(Arc<Mutex<Selections>>);
 #[derive(Default)]
 struct Selections {
     slots: Vec<SelectionSlot>,
+    identities: Vec<ForeignSelectionIdentity>,
     values: Vec<Option<Selection>>,
     active: Option<usize>,
     revision: u64,
@@ -64,15 +65,6 @@ impl SelectionBindings {
         Ok(())
     }
 
-    pub fn take_active(&self) -> Result<Option<usize>> {
-        let mut values = self.lock()?;
-        values.revision = values
-            .revision
-            .checked_add(1)
-            .ok_or_else(|| fail("selection revision overflow"))?;
-        Ok(values.active.take())
-    }
-
     pub fn try_slot(&self, id: usize) -> Result<Option<SelectionSlot>> {
         Ok(self.lock()?.slots.get(id).copied())
     }
@@ -90,10 +82,41 @@ impl SelectionBindings {
         Ok(())
     }
 
-    pub fn push(&self, slot: SelectionSlot) -> Result<usize> {
+    pub fn identity(&self, id: usize) -> Result<ForeignSelectionIdentity> {
+        self.lock()?
+            .identities
+            .get(id)
+            .cloned()
+            .ok_or_else(|| fail("selection identity"))
+    }
+    pub fn find(&self, identity: &ForeignSelectionIdentity) -> Result<Option<usize>> {
+        let values = self.lock()?;
+        Ok(values
+            .identities
+            .iter()
+            .take(values.slots.len())
+            .position(|known| known == identity))
+    }
+    pub fn synchronize(&self, tx: &Transaction<'_>) -> Result<()> {
+        let slots = self.slots()?;
+        for id in 0..slots.len() {
+            let identity = self.identity(id)?;
+            if let Some(slot) = tx.foreign_selection_slot(&identity) {
+                self.set_slot(id, slot)?;
+            }
+        }
+        if let Some(active) = self.active()?
+            && self.slot(active.id)? != SelectionSlot::Active
+        {
+            self.clear_if_active(Some(active))?;
+        }
+        Ok(())
+    }
+    pub fn push(&self, slot: SelectionSlot, identity: ForeignSelectionIdentity) -> Result<usize> {
         let mut values = self.lock()?;
         let id = values.slots.len();
         values.slots.push(slot);
+        values.identities.push(identity);
         values.values.push(None);
         Ok(id)
     }
@@ -124,6 +147,7 @@ impl SelectionBindings {
     pub fn restore_values(&self, values: Vec<Option<Selection>>) -> Result<()> {
         self.set_active(None)?;
         let mut stored = self.lock()?;
+        stored.identities.truncate(values.len());
         stored.values = values;
         stored.slots.clear();
         Ok(())

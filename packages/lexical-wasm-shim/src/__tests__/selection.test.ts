@@ -59,3 +59,36 @@ test('replacing the active selection keeps the old object direction memo through
     backend.dispose();
   }
 });
+
+test('selecting a text range preserves the old node-selection object and allocates a new active identity', () => {
+  const backend = new ConformanceBackend({
+    namespace: 'selection kind identity',
+    nodes: [],
+  });
+  try {
+    backend.beginUpdate([], false);
+    const paragraph = backend.call('lexical.$createParagraphNode', []);
+    const text = backend.call('lexical.$createTextNode', ['text']);
+    backend.call('LexicalNode.append', [text], paragraph);
+    backend.call(
+      'LexicalNode.append',
+      [paragraph],
+      backend.call('lexical.$getRoot', [])
+    );
+    const nodes = backend.call('lexical.$createNodeSelection', []);
+    backend.call(
+      'Selection.add',
+      [backend.call('LexicalNode.getKey', [], text)],
+      nodes
+    );
+    backend.call('lexical.$setSelection', [nodes]);
+    const old = backend.call('lexical.$getSelection', []);
+    const range = backend.call('LexicalNode.select', [1, 2], text);
+    expect(backend.call('lexical.$getSelection', [])).not.toEqual(old);
+    expect(backend.call('Selection.getTextContent', [], nodes)).toBe('text');
+    expect(backend.call('Selection.getTextContent', [], range)).toBe('e');
+    backend.commit();
+  } finally {
+    backend.dispose();
+  }
+});
