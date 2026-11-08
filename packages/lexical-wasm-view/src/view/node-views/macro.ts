@@ -169,9 +169,21 @@ export function registerMacroViews(
   decorators: MacroDecorators
 ): NodeViewRegistry {
   for (const type of macroDecoratorTypes) {
-    const component = decorators[type];
-    if (!component)
+    if (!decorators[type])
       throw new Error('Missing Macro decorator component: ' + type);
+  }
+  registerMacroDecoratorViews(registry, decorators);
+  return registerMacroElementViews(registry);
+}
+
+/** Register the concrete decorators owned by one application plugin group. */
+export function registerMacroDecoratorViews(
+  registry: NodeViewRegistry,
+  decorators: Partial<MacroDecorators>
+): NodeViewRegistry {
+  for (const type of macroDecoratorTypes) {
+    const component = decorators[type];
+    if (!component) continue;
     registry.register(type, {
       decorator: component,
       flags: (node) => ({
@@ -199,6 +211,13 @@ export function registerMacroViews(
       },
     });
   }
+  return registry;
+}
+
+/** Install common element/text views once before application group decorators. */
+export function registerMacroElementViews(
+  registry: NodeViewRegistry
+): NodeViewRegistry {
   for (const type of ['classed-block', 'completion', 'diff', 'diff-delete'])
     registry.register(type, {
       createDOM(node, ctx) {
