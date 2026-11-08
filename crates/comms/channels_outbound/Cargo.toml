@@ -9,6 +9,7 @@ version = "0.1.0"
 attachment = ["channels/attachment"]
 
 [dependencies]
+thread_id = { workspace = true }
 async-trait = { workspace = true }
 channels = { workspace = true, features = ["list", "ports", "sqlx"] }
 connection_gateway_client = { workspace = true }
