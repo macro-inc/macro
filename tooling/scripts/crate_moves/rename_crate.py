@@ -173,7 +173,8 @@ for d in src_dirs:
         rel = os.path.relpath(f, d)
         in_lib = d == new_dir and not rel.startswith(("src/bin/", "tests/", "benches/", "examples/"))
         local = in_lib or local_decl.search(COMMENTS.sub("", t))
-        n = t if local else apply(unambiguous, t)
+        # `::old::` always names the crate, even next to a local `old`.
+        n = apply(unambiguous[1:2], t) if local and not in_lib else t if local else apply(unambiguous, t)
         if local and not in_lib and any(rx.search(outside_use(n, lambda s: s)) for rx, _ in ambiguous):
             review.append(f)
         if not local:
