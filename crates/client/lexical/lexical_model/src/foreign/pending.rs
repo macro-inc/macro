@@ -67,6 +67,11 @@ pub struct PendingUpdate {
 }
 
 impl Transaction<'_> {
+    /// Whether writes or queued work require another pipeline pass before commit.
+    /// This is the same predicate used by commit and survives suspend/resume.
+    pub fn needs_flush(&self) -> bool {
+        self.dirty_since_flush
+    }
     /// Whether dropping this update would lose model effects beyond host API values/tags.
     /// This observes the current pending state; it neither flushes nor authorizes writes.
     pub fn has_foreign_effects(&self) -> bool {

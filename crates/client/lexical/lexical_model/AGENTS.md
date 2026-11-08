@@ -146,3 +146,5 @@ Development selection identities use pointer tokens with no retained model data.
 Use ForeignReadSnapshot::contains_selection_identity to distinguish inherited selection objects from newly owned peer values; never infer that distinction from transaction-local slot indices.
 
 Retain the current selection token and memo in immutable committed state clones; clone/reset selection values explicitly for pending updates. Publish the pending token only with the pending state so no-op commits retain the committed object. Give with_selection replacement snapshots a fresh token. Carry previous selection identity through owned read captures/suspension and hydrate it with detach_previous_foreign_selection without activation or write permission.
+
+Use needs_flush for a development host's implicit pre-commit pipeline pass; preserve the model dirty_since_flush predicate across suspension and keep explicit flush semantics unchanged.
