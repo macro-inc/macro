@@ -295,7 +295,7 @@ fn document_version_upgrade_preserves_other_root_state_and_environment_tags() ->
     let metadata = state.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
     assert_eq!(
         metadata.as_ref(),
-        &json!({"version": 10.0, "environmentTags": ["dev"]})
+        &json!({"version": 10, "environmentTags": ["dev"]})
     );
     assert_eq!(state.get_state(NodeKey::ROOT, &OTHER)?, "keep");
     assert!(
