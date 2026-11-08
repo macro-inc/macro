@@ -78,6 +78,31 @@ fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
         panic!("editor")
     };
     assert_eq!(&*s.surface().state().root_text_content(), "a😀");
+    let flags = m
+        .editor(
+            Input::TextFromView {
+                key: NodeKey::ROOT,
+                text: "invalid element edit".into(),
+                anchor: None,
+                focus: None,
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::KeepModel,
+            },
+            4.0,
+        )
+        .unwrap();
+    assert_ne!(flags & 1, 0);
+    let word = |i: usize| u32::from_le_bytes(m.output[i * 4..i * 4 + 4].try_into().unwrap());
+    assert_eq!(
+        word(8),
+        1,
+        "non-text keys receive a full repair, never Remove"
+    );
+    let machine::Session::Editor(s) = &m.session else {
+        panic!("editor")
+    };
+    assert_eq!(&*s.surface().state().root_text_content(), "a😀");
 }
 #[test]
 fn rejected_dom_text_has_an_authoritative_patch_even_without_a_model_change() {
@@ -136,7 +161,11 @@ fn rejected_dom_text_has_an_authoritative_patch_even_without_a_model_change() {
         .unwrap();
     assert_ne!(flags & 1, 0);
     let word = |i: usize| u32::from_le_bytes(m.output[i * 4..i * 4 + 4].try_into().unwrap());
-    assert!(word(3) > 5, "rejected edit must carry a real Diff op");
+    assert_eq!(
+        word(8),
+        1,
+        "stale key requires an authoritative full repair"
+    );
     assert_eq!(word(9), u32::MAX, "rejection never claims the DOM matches");
 }
 

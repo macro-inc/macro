@@ -250,6 +250,7 @@ fn sample_type_row_msg() -> wire::TypeRowMsg {
         index: 7,
         name: "fixture 😀 é".into(),
         kind: 0,
+        flags: 7,
     }
 }
 fn sample_type_table_msg() -> wire::TypeTableMsg {

@@ -326,29 +326,33 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 104, 116, 109, 108, 0, 245, 255, 255, 255, 0, 108, 101,
 120, 105, 99, 97, 108, 0, 245, 255, 255, 255, 0, 112, 108,
 97, 105, 110, 0, 245, 255, 255, 255, 0, 84, 121, 112, 101,
-82, 111, 119, 77, 115, 103, 0, 1, 0, 0, 9, 0, 0, 0, 0, 3,
+82, 111, 119, 77, 115, 103, 0, 1, 0, 0, 13, 0, 0, 0, 0, 4,
 105, 110, 100, 101, 120, 0, 251, 255, 255, 255, 0, 110,
 97, 109, 101, 0, 245, 255, 255, 255, 0, 107, 105, 110,
-100, 0, 254, 255, 255, 255, 0, 84, 121, 112, 101, 84, 97,
-98, 108, 101, 77, 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
-114, 111, 119, 115, 0, 242, 255, 255, 255, 0, 41, 0, 0, 0,
-0, 76, 105, 115, 116, 101, 110, 101, 114, 82, 111, 119,
-77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109,
-109, 97, 110, 100, 0, 245, 255, 255, 255, 0, 112, 114,
-105, 111, 114, 105, 116, 121, 0, 251, 255, 255, 255, 0,
-76, 105, 115, 116, 101, 110, 101, 114, 84, 97, 98, 108,
+100, 0, 254, 255, 255, 255, 0, 102, 108, 97, 103, 115, 0,
+251, 255, 255, 255, 0, 84, 121, 112, 101, 84, 97, 98, 108,
 101, 77, 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111,
-119, 115, 0, 242, 255, 255, 255, 0, 43, 0, 0, 0, 0, 82,
-111, 117, 116, 101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0,
-0, 6, 100, 111, 99, 0, 245, 255, 255, 255, 0, 107, 105,
-110, 100, 0, 254, 255, 255, 255, 0, 99, 111, 110, 110, 0,
-251, 255, 255, 255, 0, 97, 99, 99, 101, 115, 115, 0, 254,
-255, 255, 255, 0, 99, 111, 100, 101, 0, 251, 255, 255,
-255, 0, 102, 114, 97, 109, 101, 0, 242, 255, 255, 255, 0,
-254, 255, 255, 255, 0, 0, 0, 0, 0
+119, 115, 0, 242, 255, 255, 255, 0, 41, 0, 0, 0, 0, 76,
+105, 115, 116, 101, 110, 101, 114, 82, 111, 119, 77, 115,
+103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109, 109, 97,
+110, 100, 0, 245, 255, 255, 255, 0, 112, 114, 105, 111,
+114, 105, 116, 121, 0, 251, 255, 255, 255, 0, 76, 105,
+115, 116, 101, 110, 101, 114, 84, 97, 98, 108, 101, 77,
+115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111, 119,
+115, 0, 242, 255, 255, 255, 0, 43, 0, 0, 0, 0, 82, 111,
+117, 116, 101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0, 0,
+6, 100, 111, 99, 0, 245, 255, 255, 255, 0, 107, 105, 110,
+100, 0, 254, 255, 255, 255, 0, 99, 111, 110, 110, 0, 251,
+255, 255, 255, 0, 97, 99, 99, 101, 115, 115, 0, 254, 255,
+255, 255, 0, 99, 111, 100, 101, 0, 251, 255, 255, 255, 0,
+102, 114, 97, 109, 101, 0, 242, 255, 255, 255, 0, 254,
+255, 255, 255, 0, 0, 0, 0, 0
 ]);
 
-export const ABI_MAJOR: number = 1;
+export const ABI_MAJOR: number = 2;
+
+
+export const FLAG_HANDLED: number = 32;
 
 
 export const DIFF_FORMAT_VERSION: number = 1;
@@ -5613,17 +5617,21 @@ export interface ITypeRowMsg extends BebopRecord {
   readonly name: string;
 
   readonly kind: number;
+
+  readonly flags: number;
 }
 
 export class TypeRowMsg implements ITypeRowMsg {
   public readonly index: number;
   public readonly name: string;
   public readonly kind: number;
+  public readonly flags: number;
 
   constructor(record: ITypeRowMsg) {
     this.index = record.index;
     this.name = record.name;
     this.kind = record.kind;
+    this.flags = record.flags;
   }
 
   /**
@@ -5654,6 +5662,7 @@ export class TypeRowMsg implements ITypeRowMsg {
     BebopTypeGuard.ensureUint32(record.index)
     BebopTypeGuard.ensureString(record.name)
     BebopTypeGuard.ensureUint8(record.kind)
+    BebopTypeGuard.ensureUint32(record.flags)
   }
 
   /**
@@ -5690,6 +5699,7 @@ export class TypeRowMsg implements ITypeRowMsg {
     view.writeUint32(record.index);
     view.writeString(record.name);
     view.writeByte(record.kind);
+    view.writeUint32(record.flags);
     const after = view.length;
     return after - before;
   }
@@ -5707,10 +5717,13 @@ export class TypeRowMsg implements ITypeRowMsg {
     field1 = view.readString();
     let field2: number;
     field2 = view.readByte();
+    let field3: number;
+    field3 = view.readUint32();
     let message: ITypeRowMsg = {
       index: field0,
       name: field1,
       kind: field2,
+      flags: field3,
     };
     return new TypeRowMsg(message);
   }

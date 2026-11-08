@@ -7,6 +7,7 @@ import {
 import {
   ABI_MAJOR,
   Access,
+  CommandCode,
   SessionConfigMsg,
   SessionInputMsg,
   Transport,
@@ -57,13 +58,16 @@ function setup(debug: boolean) {
   let corrupt = false;
   let flags = -1;
   const sink: ViewSink = {
-    apply(words, strings) {
-      mirror?.apply(words, strings);
+    apply(words, strings, effects) {
+      if (effects.some((effect) => effect.kind === 8))
+        mirror?.initialize(words, strings);
+      else mirror?.apply(words, strings);
     },
     acknowledgeText(input) {
       acknowledgements++;
       if (!corrupt) mirror?.acknowledgeText(input.key, input.text);
     },
+    acknowledgeSelection() {},
     text(key) {
       return mirror?.node(key)?.text ?? null;
     },
@@ -134,7 +138,7 @@ function setup(debug: boolean) {
     corrupt: () => {
       corrupt = true;
     },
-    advance: () => now++,
+    advance: (milliseconds = 1) => now += milliseconds,
     executor,
   };
 }
@@ -183,4 +187,67 @@ test('production TextFromView has no per-node query crossing', () => {
   } finally {
     s.session.free();
   }
+});
+
+test('invalid DOM UTF-16 is rejected with a real repair and the debug check still runs', () => {
+  const s = setup(true);
+  try {
+    s.port.textFromView(s.input('a\ud800'));
+    expect(s.flags() & 16).toBe(16);
+    expect(s.mirror.node(s.key)?.text).toBe('a');
+    expect(s.session.nodeText(s.key)).toBe('a');
+    expect(s.acknowledgements()).toBe(0);
+  } finally {
+    s.session.free();
+  }
+});
+test('non-text and stale text keys cannot remove live mirror nodes', () => {
+  const s = setup(true);
+  try {
+    s.port.textFromView({ ...s.input('invalid'), key: 0 });
+    expect(s.mirror.node(0)?.kind).toBe('root');
+    expect(s.mirror.node(s.key)?.text).toBe('a');
+    s.port.setState(JSON.stringify({ root: { type: 'root', version: 1, children: [{ type: 'paragraph', version: 1, children: [{ type: 'text', version: 1, text: 'fresh', format: 0, detail: 0, mode: 'normal', style: '' }] }] } }));
+    expect(s.mirror.node(s.key)).toBeNull();
+    s.port.textFromView(s.input('stale'));
+    expect(s.mirror.node(s.key)).toBeNull();
+    expect(s.mirror.node(0)?.kind).toBe('root');
+  } finally {
+    s.session.free();
+  }
+});
+
+test('normalized composition text uses real Rust ops rather than local acknowledgement', () => {
+  const s = setup(true);
+  try {
+    s.port.textFromView({ ...s.input('a\u200b'), compositionEnd: true });
+    expect(s.flags()).not.toBe(0);
+    expect(s.acknowledgements()).toBe(0);
+    expect(s.mirror.node(s.key)?.text).toBe('a');
+    expect(s.session.nodeText(s.key)).toBe('a');
+  } finally { s.session.free(); }
+});
+test('an exact edit with other output still carries authoritative text', () => {
+  const s = setup(true);
+  try {
+    s.advance(30);
+    s.executor.run(() => s.session.tick(s.executor.now(), Date.now()));
+    s.advance();
+    s.port.textFromView(s.input('ab'));
+    expect(s.flags()).not.toBe(0);
+    expect(s.acknowledgements()).toBe(0);
+    expect(s.mirror.node(s.key)?.text).toBe('ab');
+  } finally { s.session.free(); }
+});
+
+test('type flags, command propagation and cold initialize use the paired ABI', () => {
+  const s = setup(true);
+  try {
+    expect(s.port.types().find(row => row.name === 'text')?.flags?.canInsertTextBefore).toBe(true);
+    expect(s.port.command(CommandCode.ClearHistory)).toBe(true);
+    s.port.textFromView(s.input('ab'));
+    s.port.initialize();
+    expect(s.mirror.node(s.key)?.text).toBe('ab');
+    expect(s.session.nodeText(s.key)).toBe('ab');
+  } finally { s.session.free(); }
 });

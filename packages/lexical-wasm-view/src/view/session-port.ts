@@ -1,11 +1,18 @@
 import {
   EditorInputMsg,
+  FLAG_HANDLED,
+  ClipboardMsg,
+  QueryMsg,
+  QueryReplyMsg,
+  SelectionMsg,
+  type IQueryMsg,
   ListenerTableMsg,
   SessionInputMsg,
   TypeTableMsg,
   type ISelectionMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { SessionExecutor } from '@macro-inc/collaboration/session/executor';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import type { EditorPort, TextFromView, ViewSink } from './port';
@@ -73,7 +80,22 @@ export class SessionPort implements EditorPort {
                   ? 'linebreak'
                   : null;
         if (!kind) throw new Error('Unknown node kind: ' + row.kind);
-        return { index: row.index, name: row.name, kind };
+        return {
+          index: row.index,
+          name: row.name,
+          kind,
+          flags:
+            row.flags & 1
+              ? {
+                  isInline: Boolean(row.flags & 2),
+                  canInsertTextBefore: Boolean(row.flags & 4),
+                  canInsertTextAfter: Boolean(row.flags & 8),
+                  isKeyboardSelectable: Boolean(row.flags & 16),
+                  isIsolated: Boolean(row.flags & 32),
+                  isShadowRoot: Boolean(row.flags & 64),
+                }
+              : undefined,
+        };
       }
     );
   }
@@ -82,6 +104,22 @@ export class SessionPort implements EditorPort {
       ListenerTableMsg.decode(this.executor.session.listenerTable()).rows.map(
         (row) => [row.command, row.priority]
       )
+    );
+  }
+  debugInsertion(
+    selection: ViewSelection,
+    format: number,
+    style: string,
+    text: string,
+    facts: number
+  ): boolean | undefined {
+    if (!this.debug) return undefined;
+    return this.executor.session.debugInsertion(
+      SelectionMsg.encode(selectionMessage(selection)),
+      format,
+      style,
+      text,
+      facts
     );
   }
   textFromView(input: TextFromView): void {
@@ -120,16 +158,20 @@ export class SessionPort implements EditorPort {
   selectionFromView(selection: ViewSelection): void {
     if (selection.kind === 'range') {
       const { anchor, focus } = selection;
-      this.executor.run(() =>
-        this.executor.session.selectionFromView(
-          anchor.key,
-          anchor.offset,
-          anchor.type === 'text' ? 0 : 1,
-          focus.key,
-          focus.offset,
-          focus.type === 'text' ? 0 : 1,
-          this.executor.now()
-        )
+      this.executor.run(
+        () =>
+          this.executor.session.selectionFromView(
+            anchor.key,
+            anchor.offset,
+            anchor.type === 'text' ? 0 : 1,
+            focus.key,
+            focus.offset,
+            focus.type === 'text' ? 0 : 1,
+            this.executor.now()
+          ),
+        (flags) => {
+          if (flags === 0) this.view.acknowledgeSelection(selection);
+        }
       );
     } else
       this.input(
@@ -139,21 +181,20 @@ export class SessionPort implements EditorPort {
         })
       );
   }
-  command(code: number, a = 0, b = 0, text?: string): void {
-    this.executor.run(() =>
-      this.executor.session.command(code, a, b, text, this.executor.now())
-    );
+  command(code: number, a = 0, b = 0, text?: string): boolean | undefined {
+    let handled: boolean | undefined;
+    this.executor.run(() => this.executor.session.command(code, a, b, text, this.executor.now()), flags => { handled = Boolean(flags & FLAG_HANDLED); });
+    return handled;
   }
-  keyDown(code: number, mods: number, routed: number, key: string): void {
-    this.executor.run(() =>
-      this.executor.session.keyDown(
-        code,
-        mods,
-        routed,
-        key,
-        this.executor.now()
-      )
-    );
+  keyDown(code: number, mods: number, routed: number, key: string, selection: ViewSelection): boolean | undefined {
+    let handled: boolean | undefined;
+    const anchor = selection.kind === 'range' ? selection.anchor : { key: 0, offset: 0, type: 'text' };
+    const focus = selection.kind === 'range' ? selection.focus : anchor;
+    this.executor.run(() => this.executor.session.keyDown(code, mods, routed, key,
+      anchor.key, anchor.offset, anchor.type === 'text' ? 0 : 1,
+      focus.key, focus.offset, focus.type === 'text' ? 0 : 1,
+      selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1, this.executor.now()), flags => { handled = Boolean(flags & FLAG_HANDLED); });
+    return handled;
   }
   input(editor: EditorInputMsg): void {
     this.executor.run(() =>
@@ -163,6 +204,21 @@ export class SessionPort implements EditorPort {
         Date.now()
       )
     );
+  }
+  clipboard(kind: number) {
+    return ClipboardMsg.decode(this.executor.session.clipboard(kind));
+  }
+  query(query: IQueryMsg) {
+    return QueryReplyMsg.decode(
+      this.executor.session.query(QueryMsg.encode(query))
+    );
+  }
+  initialize(): void {
+    this.executor.run(() => {
+      const out = decodeOutput(this.executor.session.initialize());
+      this.view.apply(out.view, out.strings, out.viewEffects);
+      return 0;
+    });
   }
   setState(json: string): void {
     this.input(EditorInputMsg.fromEditorSetState({ json }));
