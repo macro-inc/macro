@@ -319,7 +319,9 @@ branch:
   fold fixture.
 
 Second pass, same branch — Macro's own user tools reviewed through
-elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)):
+elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)).
+Superseded: everything in this pass except the `agent_fold` parsing has been
+removed; agent sessions present drafts with `PresentReview` instead.
 
 - `agent`: `AgentLoop::with_user_tool_finisher`. The stream bridge's
   `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
