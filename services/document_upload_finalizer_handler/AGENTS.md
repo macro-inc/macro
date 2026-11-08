@@ -41,6 +41,9 @@ initializes markdown content.
 - Change what counts as "finalized": `src/app.rs` (`DocumentUploadFinalizer`) →
   `src/ports.rs` if a new capability is needed → `src/outbound.rs`.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p document_upload_finalizer_handler` (`SQLX_OFFLINE` unset).

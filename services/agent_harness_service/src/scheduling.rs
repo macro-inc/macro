@@ -414,7 +414,8 @@ fn event_content(
         lexical_client::LexicalClient::new(
             config.internal_api_key.to_string(),
             LexicalServiceUrl::new()?.to_string(),
-        ),
+        )
+        .with_route_modes(config.lexical_route_modes.clone()),
     ))
 }
 

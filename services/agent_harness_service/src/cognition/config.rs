@@ -77,6 +77,8 @@ maybe_env_vars!(
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Validated lexical execution modes, loaded once at startup.
+    pub lexical_route_modes: lexical_client::RouteModes,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
@@ -206,6 +208,7 @@ impl Config {
     #[cfg(test)]
     pub fn new_empty_for_test() -> Self {
         Config {
+            lexical_route_modes: Default::default(),
             enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement::Disabled,
             enable_ai_usage_billing: ai_billing::AiUsageBilling::Disabled,
             typesafe_api_key: jev::outbound::TypesafeApiKey::Unset,
