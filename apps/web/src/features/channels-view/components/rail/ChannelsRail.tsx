@@ -6,6 +6,7 @@ import {
 } from '@app/components/list';
 import {
   useViewControlHotkeys,
+  useViewShell,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
 import {
@@ -164,6 +165,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
+  const shell = useViewShell();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   let activation = 0;
@@ -1006,9 +1008,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   // Esc from the open conversation returns to its row: the one it was opened
   // from, or its first row when it arrived from elsewhere (Cmd+K, a link).
+  // A collapsed sidebar opens for it. A narrow split shows the sidebar and
+  // the conversation in turns, so Esc stays with the split there.
   registerRailRowFocus((channelId) => {
     const root = listRoot();
     if (!root?.isConnected) return false;
+    if (shell.aside.isCollapsed()) {
+      if (!shell.aside.canCollapse()) return false;
+      shell.aside.expand();
+    }
     if (rowChannelId(list.focus.item()) !== channelId) {
       const row = visibleRows().find((row) => rowChannelId(row) === channelId);
       const result = row && list.focus.set(row.id, { reason: 'keyboard' });

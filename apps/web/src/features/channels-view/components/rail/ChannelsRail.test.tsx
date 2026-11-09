@@ -63,7 +63,12 @@ const mocks = vi.hoisted(() => ({
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
   onNavigate: (_event: { result?: { item: ChannelRailRow } }) => {},
-  focusRailRow: (_channelId: string) => false,
+  focusRailRow: (_channelId: string): boolean => false,
+  shell: {
+    collapsed: false,
+    canCollapse: true,
+    expand: vi.fn(),
+  },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
 }));
@@ -140,6 +145,13 @@ vi.mock('@app/components/view-shell', () => ({
   SearchBar: () => null,
   useViewControlHotkeys: vi.fn(),
   useViewTabHotkeys: vi.fn(),
+  useViewShell: () => ({
+    aside: {
+      isCollapsed: () => mocks.shell.collapsed,
+      canCollapse: () => mocks.shell.canCollapse,
+      expand: mocks.shell.expand,
+    },
+  }),
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   channelPreviewSelection: (
@@ -324,12 +336,14 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
       );
       return (
-        <button
-          onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
-          onClick={(event) => mocks.activate(event)}
-        >
-          Open conversation
-        </button>
+        <div ref={rail.registerRootRef} tabIndex={-1} data-testid="rail">
+          <button
+            onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
+            onClick={(event) => mocks.activate(event)}
+          >
+            Open conversation
+          </button>
+        </div>
       );
     },
   };
@@ -514,6 +528,8 @@ beforeEach(() => {
   mocks.selected = { type: 'channel', id: channel.id };
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
+  mocks.shell.collapsed = false;
+  mocks.shell.canCollapse = true;
 });
 afterEach(() => {
   cleanup();
@@ -1058,6 +1074,34 @@ describe('composer focus on opening a conversation', () => {
     });
     vi.advanceTimersByTime(150);
     expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
+  });
+});
+
+describe('Esc back to the sidebar', () => {
+  it('focuses the open conversation on its row', () => {
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+    expect(mocks.focusSet).toHaveBeenCalledWith('channel:one', {
+      reason: 'keyboard',
+    });
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
+  });
+
+  it('opens a collapsed sidebar for the row', () => {
+    mocks.shell.collapsed = true;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(mocks.shell.expand).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+  });
+
+  it('leaves Esc to a narrow split that shows the conversation alone', () => {
+    mocks.shell.collapsed = true;
+    mocks.shell.canCollapse = false;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(false);
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
   });
 });
 

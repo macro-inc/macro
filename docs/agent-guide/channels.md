@@ -55,8 +55,10 @@ emoji menus, dictation, a message being edited, a thread reply). On the message
 list, a selected message or focused thread reply clears first, then Esc returns
 to the list the conversation was opened from, on its row: the Chat sidebar,
 Home, or the Notifications list. A conversation that arrived from elsewhere
-(Cmd+K, a link, search) returns to its row in the Chat sidebar. Without a list,
-Esc reaches the split as before (clearing a selection, leaving spotlight).
+(Cmd+K, a link, search) returns to its row in the Chat sidebar of the same
+split, and a collapsed Chat sidebar opens for it. Without a list, including a
+narrow split that shows the conversation alone, Esc reaches the split as before
+(clearing a selection, leaving spotlight).
 
 To check this, arrow through several conversations (focus stays in the list),
 press Enter (the composer takes focus), press Esc twice (back on the same row),
