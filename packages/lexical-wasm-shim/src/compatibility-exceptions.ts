@@ -10,6 +10,15 @@ import type { NodeStateJSON, ValueOrUpdater } from './nodes/state/types';
 import type { PointType } from './selection';
 import { Point } from './selection/point';
 
+/** A runtime witness for generic constructor instances; this is not an assertion. */
+export function isInstanceOfKlass<
+  T extends abstract new (
+    ...args: never[]
+  ) => unknown,
+>(value: unknown, klass: T): value is InstanceType<T> {
+  return value instanceof klass;
+}
+
 type NodeConfigRecord<Type extends string, Config> = BaseStaticNodeConfig & {
   readonly [K in Type]?: Config;
 };
