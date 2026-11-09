@@ -1,8 +1,12 @@
-/** The eight upstream declaration/runtime exceptions approved for compatibility. */
+/** Central upstream assertion helpers and public extension wildcard types. */
 import type { NodeKey } from 'lexical';
 import { DequeSet } from './command/deque-set';
 import type { CommandBucket, CommandRegistry } from './command/types';
 import type { LexicalCommand } from './commands';
+import type {
+  LexicalExtension,
+  NormalizedLexicalExtensionArgument,
+} from './extension-core/types';
 import { LexicalNode } from './nodes';
 import type { BaseStaticNodeConfig } from './nodes/config';
 import { assertNodeIdentity } from './nodes/runtime';
@@ -104,3 +108,15 @@ export function compareNumberWithUpstreamType(
 ): -1 | 0 | 1 {
   return Math.sign(a - b) as -1 | 0 | 1;
 }
+
+/** Exact public upstream wildcard aliases: one type-only entry, never a runtime bridge. */
+export type AnyLexicalExtension = LexicalExtension<any, string, any, any>;
+
+export type AnyLexicalExtensionArgument =
+  | AnyLexicalExtension
+  | AnyNormalizedLexicalExtensionArgument;
+
+export type AnyNormalizedLexicalExtensionArgument =
+  NormalizedLexicalExtensionArgument<any, string, any, any>;
+
+export type OutputExtension<Output> = LexicalExtension<any, any, Output, any>;
