@@ -80,3 +80,5 @@ Loro fields.
 - `cargo x deps --check`, `cargo shear`, `just check`
 
 Stage table key layout facts only around the nested native Key dispatch; restore the previous facts before returning, including error paths.
+
+Canonicalize only the explicit null/unset aliases for code theme and token highlightType, alongside existing table/list aliases; retain unknown nulls, non-null values and every underlying Loro field/vector.

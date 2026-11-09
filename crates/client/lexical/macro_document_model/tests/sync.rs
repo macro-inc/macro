@@ -158,3 +158,71 @@ fn draft_commands_restore_original_identity_and_split_runs_around_remote_content
     assert!(editor.extension::<DraftCommentMarks>()?.lifted.is_empty());
     Ok(())
 }
+
+#[test]
+fn nullable_code_export_aliases_match_reconstruction_without_changing_loro() -> Result<()> {
+    for (theme, highlight) in [
+        (serde_json::Value::Null, serde_json::Value::Null),
+        (json!("dark"), json!("keyword")),
+    ] {
+        let raw: SerializedEditorState = serde_json::from_value(
+            json!({"root":{"type":"root","version":1,"children":[{"type":"custom-code","version":1,"language":"plaintext","theme":theme,"previewEnabled":false,"children":[{"type":"code-highlight","version":1,"text":"code","format":0,"detail":0,"mode":"normal","style":"","highlightType":highlight}]}]}}),
+        )?;
+        let mut editor = export_builder().build()?;
+        let state = editor.parse_editor_state(&raw)?;
+        let mut persisted = state.to_json()?;
+        let code = &mut persisted
+            .root
+            .get_mut("children")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()[0];
+        code["theme"] = theme.clone();
+        code["children"][0]["highlightType"] = highlight.clone();
+        let doc = lexical_loro::new_doc(7)?;
+        lexical_loro::mirror::set_synced_state(&doc, &persisted, &lexical_loro::PlainPolicy)?;
+        let value = doc.get_deep_value();
+        let vv = doc.oplog_vv();
+        let reconstructed = lexical_loro::reconstruct_state(&doc, &MACRO_SYNC_POLICY)?;
+        assert_eq!(
+            lexical_loro::synced_json(&state, &MACRO_SYNC_POLICY)?,
+            reconstructed
+        );
+        let canonical = serde_json::to_value(&reconstructed)?;
+        let code = &canonical["root"]["children"][0];
+        if theme.is_null() {
+            assert!(code.get("theme").is_none());
+            assert!(code["children"][0].get("highlightType").is_none());
+        } else {
+            assert_eq!(code["theme"], "dark");
+            assert_eq!(code["children"][0]["highlightType"], "keyword");
+            let mut changed = persisted.clone();
+            changed
+                .root
+                .get_mut("children")
+                .unwrap()
+                .as_array_mut()
+                .unwrap()[0]["theme"] = json!("light");
+            let different = lexical_loro::new_doc(8)?;
+            lexical_loro::mirror::set_synced_state(
+                &different,
+                &changed,
+                &lexical_loro::PlainPolicy,
+            )?;
+            assert_ne!(
+                lexical_loro::reconstruct_state(&different, &MACRO_SYNC_POLICY)?,
+                reconstructed
+            );
+        }
+        let mut unknown = json!({"type":"custom-code","theme":null,"futureField":null})
+            .as_object()
+            .unwrap()
+            .clone();
+        MACRO_SYNC_POLICY.canonicalize_node_json(&mut unknown);
+        assert!(!unknown.contains_key("theme"));
+        assert_eq!(unknown.get("futureField"), Some(&serde_json::Value::Null));
+        assert_eq!(doc.get_deep_value(), value);
+        assert_eq!(doc.oplog_vv(), vv);
+    }
+    Ok(())
+}

@@ -9,7 +9,9 @@ pub struct MacroSyncPolicy;
 pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy;
 impl SyncPolicy for MacroSyncPolicy {
     fn canonicalize_node_json(&self, node: &mut SerializedNode) {
-        // These source exportJSON fields are omitted when unset; Loro stores null.
+        // These specific optional fields use null/unset aliases across source and
+        // native exports. Code getters omit unset values; table imports may
+        // retain explicit null. The persisted Loro values remain untouched.
         let fields: &[&str] = match node.get("type").and_then(serde_json::Value::as_str) {
             Some("table") => &[
                 "colWidths",
@@ -18,6 +20,8 @@ impl SyncPolicy for MacroSyncPolicy {
                 "rowStriping",
             ],
             Some("tablecell") => &["width"],
+            Some("code" | "custom-code") => &["theme"],
+            Some("code-highlight") => &["highlightType"],
             Some("listitem") => &["checked"],
             _ => &[],
         };
