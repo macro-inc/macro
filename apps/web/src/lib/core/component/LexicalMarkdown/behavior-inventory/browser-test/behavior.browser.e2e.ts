@@ -396,3 +396,99 @@ for (const list of [false, true]) {
     await expect(blocks.nth(1)).toHaveText('Second');
   });
 }
+
+async function openRocketMenu(page: Page) {
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type(':rocket');
+  const menu = page.locator('.menu-surface');
+  await expect(menu.getByText('rocket', { exact: true })).toBeVisible();
+  return { body, menu };
+}
+
+test('emoji menu filtering and wrapped keyboard selection preserve the typing caret', async ({
+  page,
+}) => {
+  const { body, menu } = await openRocketMenu(page);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowDown');
+  await expect(body).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(body).toHaveText('🚀');
+  await page.keyboard.type(' tail');
+  await expect(body).toHaveText('🚀 tail');
+});
+
+test('emoji enclosed shortcode resolves with the loaded production catalog', async ({
+  page,
+}) => {
+  const { body, menu } = await openRocketMenu(page);
+  await page.keyboard.type(':');
+  await expect(body).toHaveText('🚀');
+  await expect(menu).toHaveCount(0);
+});
+
+test('emoji Escape preserves the literal search and subsequent text', async ({
+  page,
+}) => {
+  const { body, menu } = await openRocketMenu(page);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(body).toHaveText(':rocket');
+  await page.keyboard.type(' ordinary');
+  await expect(body).toHaveText(':rocket ordinary');
+});
+
+test('emoji trigger stays literal inside a word', async ({ page }) => {
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type('word:rocket');
+  await expect(body).toHaveText('word:rocket');
+  await expect(page.locator('.menu-surface')).toHaveCount(0);
+});
+
+test('emoji pointer or touch selection inserts at the original editor caret', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, menu } = await openRocketMenu(page);
+  const item = menu.getByText('rocket', { exact: true });
+  if (hasTouch) await item.tap();
+  else await item.click();
+  await expect(menu).toHaveCount(0);
+  await expect(body).toHaveText('🚀');
+  await expect(body).toBeFocused();
+  await page.keyboard.type(' tail');
+  await expect(body).toHaveText('🚀 tail');
+});
+
+test('emoji empty results dismiss safely on navigation and Enter', async ({
+  page,
+}) => {
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type(':zzzznomatchemoji999');
+  const menu = page.locator('.menu-surface');
+  await expect(menu.getByText('No results', { exact: true })).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(body).toHaveText(':zzzznomatchemoji999');
+  await expect(body.locator(':scope > p')).toHaveCount(1);
+});
+
+test('emoji first Space dismisses the bare trigger without inserting a space', async ({
+  page,
+}) => {
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type(':');
+  await expect(page.locator('.menu-surface')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('.menu-surface')).toHaveCount(0);
+  await expect(body).toHaveText(':');
+});

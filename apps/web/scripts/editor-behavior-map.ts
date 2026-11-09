@@ -861,5 +861,96 @@ export const EDITOR_BEHAVIOR_MAP = [
       'find and replace edits (once=true) replaces "a+b" with "x" in "a+b a+b"',
     ],
   },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '      INSERT_MEDIA_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image media commands inserts url media with constraints through the real insertion helper',
+      'image media commands inserts sfs media with constraints through the real insertion helper',
+      'image media commands inserts dss media with constraints through the real insertion helper',
+      'video media commands inserts url media with constraints through the real insertion helper',
+      'video media commands inserts sfs media with constraints through the real insertion helper',
+      'video media commands inserts dss media with constraints through the real insertion helper',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '      UPDATE_MEDIA_SIZE_COMMAND,\n      ([key',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image media commands resizes only the matching media kind (matching=true)',
+      'image media commands resizes only the matching media kind (matching=false)',
+      'image media commands ignores a late resize after the node was removed',
+      'video media commands resizes only the matching media kind (matching=true)',
+      'video media commands resizes only the matching media kind (matching=false)',
+      'video media commands ignores a late resize after the node was removed',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor:
+      'mapRegisterDelete(\n      editor,\n      () => {\n        if (consumeNextDelete)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image media commands Backspace removes the selected media and consumes one following character deletion',
+      'image media commands Backspace removes the selected media and consumes one following word deletion',
+      'image media commands Backspace removes the selected media and consumes one following line deletion',
+      'image media commands Delete removes the selected media and consumes one following character deletion',
+      'image media commands Delete removes the selected media and consumes one following word deletion',
+      'image media commands Delete removes the selected media and consumes one following line deletion',
+      'video media commands Backspace removes the selected media and consumes one following character deletion',
+      'video media commands Backspace removes the selected media and consumes one following word deletion',
+      'video media commands Backspace removes the selected media and consumes one following line deletion',
+      'video media commands Delete removes the selected media and consumes one following character deletion',
+      'video media commands Delete removes the selected media and consumes one following word deletion',
+      'video media commands Delete removes the selected media and consumes one following line deletion',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: 'function $deleteSelectedMedia',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image media commands yields Backspace for a text range without removing media',
+      'image media commands yields Delete for a text range without removing media',
+      'video media commands yields Backspace for a text range without removing media',
+      'video media commands yields Delete for a text range without removing media',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '      ON_MEDIA_COMPONENT_MOUNT_COMMAND,\n      ([key',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image media commands mount notifications reflect existing url source without uploading',
+      'image media commands mount notifications reflect existing sfs source without uploading',
+      'video media commands mount notifications reflect existing url source without uploading',
+      'video media commands mount notifications reflect existing sfs source without uploading',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: 'export async function addMediaFromFile',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/media-mutations.test.ts',
+    cases: [
+      'image asynchronous paste editability does not insert if permission is absent before processing=true',
+      'image asynchronous paste editability does not insert if permission is absent before processing=false',
+      'video asynchronous paste editability does not insert if permission is absent before processing=true',
+      'video asynchronous paste editability does not insert if permission is absent before processing=false',
+    ],
+  },
   ...EDITOR_EXISTING_BEHAVIOR_MAP,
 ] as const;
