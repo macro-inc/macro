@@ -9,6 +9,7 @@ use the real development conformance host.
 ## Start here
 
 - `src/editor-dom-config.ts`: full public default render hooks and exact actual-editor config; keep the view's smaller injected hook contract separate.
+- `src/commands.ts`, `src/constants.ts`, `tests/commands/README.md`: pinned engine-independent command identities, primitive constants and actual-core payload contracts; integrate root reexports without recreating objects.
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
 - `src/backend/factory.ts`: typed editor configuration and validated hook-order binding selected after initialization; root module evaluation never loads WASM.
 - `src/backend/conformance.ts`: development backend and its runtime WASM import.

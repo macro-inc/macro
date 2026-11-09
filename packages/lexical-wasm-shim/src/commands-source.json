@@ -1,0 +1,18 @@
+{
+  "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "sourceFingerprint": "3b202f70c51be4f8fc93203df0d64fdc42a50549e08e19830695b70f6faab06e",
+  "sources": {
+    "LexicalCommands.ts": "a548c30f090f85512d6b22772d404b2c4db1914afce67bae42a232934dda9794",
+    "LexicalConstants.ts": "04219b234063d6a8211e84118986df488c2d6ed2ca32866421eed4259dbae478",
+    "LexicalUpdateTags.ts": "19b111105f37c817700df01a583d0fb3b474bf7109b7119c6671c254d855df9a",
+    "LexicalEditor.ts": "90b123cb615bbff6e5e5faef172049374edf45c8ce60b99800f187e9a9d6f238",
+    "environment.ts": "1a42bd9d3b8523ad41cdc1b7a3c56f9aae654dc8b944b3b8ae589f5ac651946a",
+    "nodes/LexicalTextNode.ts": "94d4d76d7df287a0ece9928cb532543ce89a463c1d7a733e0cabe2df1d35ebef"
+  },
+  "retargeting": [
+    "Commands use actual LexicalNode/BaseSelection/LexicalEditor types; primitive aliases remain upstream type-only.",
+    "Constants use the shared view environment module.",
+    "Command identity and mutable diagnostic type field are unchanged.",
+    "Phantom LexicalCommand type uses its canonical primitive type-only alias; no nominal upstream node/editor types. Private TextDetailType literal is preserved from the pinned source."
+  ]
+}
