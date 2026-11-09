@@ -12,3 +12,6 @@ helper or its consumers requires an explicitly reviewed manifest update.
 This command checks the assertion boundary only. It does not activate the
 compatibility initializer or establish namespace, declaration, runtime or
 performance acceptance.
+
+The reviewed DOM import-map association has one central assertion and one
+resolved product call. It does not authorize additional calls or reexports.

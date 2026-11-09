@@ -18,13 +18,14 @@ function fixture(body: (root: string, manifest: unknown) => void) {
   const central =
     Object.values(wildcardAliases).join('\n') +
     '\n' +
-    'export function assumeNodeType<T>(node:unknown):T{return node as T;}\nexport function nodeConfigRecord<T>(record:unknown):T{return record as T;}\nexport function createPointWithUpstreamType<T>(point:unknown):T{return point as T;}\nexport function applyValueOrUpdater<T>(value:unknown):T{return value as T;}\nexport function nodeStateToJSON<T>(value:unknown):T{return value as T;}\nexport function commandBucket<T>(value:unknown):T{return value as T;}\nexport function invokeDOMConversionWithNode<R>(conversion:(node:HTMLElement)=>R,node:Node):R{return conversion(node as HTMLElement); }\nexport function compareNumberWithUpstreamType(a:number,b:number):-1|0|1{return Math.sign(a-b) as -1|0|1;}\nexport function isInstanceOfKlass<T extends abstract new (...args:never[])=>unknown>(value:unknown,klass:T):value is InstanceType<T>{return value instanceof klass;}\n';
+    'export function assumeNodeType<T>(node:unknown):T{return node as T;}\nexport function nodeConfigRecord<T>(record:unknown):T{return record as T;}\nexport function createPointWithUpstreamType<T>(point:unknown):T{return point as T;}\nexport function applyValueOrUpdater<T>(value:unknown):T{return value as T;}\nexport function nodeStateToJSON<T>(value:unknown):T{return value as T;}\nexport function commandBucket<T>(value:unknown):T{return value as T;}\nexport function invokeDOMConversionWithNode<R>(conversion:(node:HTMLElement)=>R,node:Node):R{return conversion(node as HTMLElement); }\nexport function compareNumberWithUpstreamType(a:number,b:number):-1|0|1{return Math.sign(a-b) as -1|0|1;}\nexport function widenTagConversionMap<T>(value:unknown):T{return value as T;}\nexport function isInstanceOfKlass<T extends abstract new (...args:never[])=>unknown>(value:unknown,klass:T):value is InstanceType<T>{return value instanceof klass;}\n';
   const manifest = JSON.parse(
     readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8')
   );
   const hash = createHash('sha256').update(central).digest('hex');
   const files: { [key: string]: string } = {
     'compatibility-exceptions.ts': central,
+    'nodes/build-import-map.ts': `import {widenTagConversionMap} from '../compatibility-exceptions';export function buildImportMap(value:unknown){return widenTagConversionMap(value);}`,
     'nodes/runtime.ts': `export {assumeNodeType,nodeConfigRecord} from '../compatibility-exceptions';`,
     'nodes/base.ts': `import {assumeNodeType as narrow,nodeConfigRecord} from './runtime';export class Node {getParent(){return narrow(1);}getPreviousSibling(){return narrow(1);}getNextSibling(){return narrow(1);}getCommonAncestor(){return narrow(1);}config(){return nodeConfigRecord(1);}}`,
     'nodes/runtime-primitives.ts': `import {assumeNodeType} from '../compatibility-exceptions';export function nodeByKey(){return assumeNodeType(1);}export function nodeWritable(){return assumeNodeType(1);}`,
@@ -63,12 +64,12 @@ function fixture(body: (root: string, manifest: unknown) => void) {
   }
 }
 
-test('central hash, eight assertions, exact witness and aliased/namespace callsites match', () =>
+test('central hash, nine assertions, exact witness and aliased/namespace callsites match', () =>
   fixture((root, manifest) => {
     const result = verifyExceptions(root, manifest);
     assert.equal(
       Object.values(result.assertions).reduce((a, b) => a + b, 0),
-      8
+      9
     );
     assert.equal(result.calls.assumeNodeType.length, 8);
     assert.equal(result.calls.commandBucket.length, 1);
@@ -89,7 +90,7 @@ test('central hash, eight assertions, exact witness and aliased/namespace callsi
     ]);
   }));
 
-test('changed helper bytes or an inline ninth assertion fail closed', () => {
+test('changed helper bytes or an inline tenth assertion fail closed', () => {
   fixture((root, manifest) => {
     const path = join(root, 'src/compatibility-exceptions.ts');
     writeFileSync(path, readFileSync(path, 'utf8') + '\n');
@@ -104,7 +105,7 @@ test('changed helper bytes or an inline ninth assertion fail closed', () => {
   });
 });
 
-test('the eight-assertion list and one sound witness cannot be omitted or expanded', () =>
+test('the nine-assertion list and one sound witness cannot be omitted or expanded', () =>
   fixture((root, manifest) => {
     if (manifest === null || typeof manifest !== 'object')
       throw new Error('Invalid fixture manifest');
@@ -113,7 +114,7 @@ test('the eight-assertion list and one sound witness cannot be omitted or expand
     );
     assert.throws(
       () => verifyExceptions(root, { ...manifest, exceptions: [] }),
-      /Exactly the eight/
+      /Exactly the nine/
     );
     const helpers = [
       'applyValueOrUpdater',
@@ -124,7 +125,8 @@ test('the eight-assertion list and one sound witness cannot be omitted or expand
       'invokeDOMConversionWithNode',
       'nodeConfigRecord',
       'nodeStateToJSON',
-      'ninth',
+      'widenTagConversionMap',
+      'unapproved',
     ];
     assert.throws(
       () =>
@@ -132,7 +134,7 @@ test('the eight-assertion list and one sound witness cannot be omitted or expand
           ...manifest,
           exceptions: helpers.map((helper) => ({ helper, calls: [] })),
         }),
-      /Exactly the eight/
+      /Exactly the nine/
     );
   }));
 

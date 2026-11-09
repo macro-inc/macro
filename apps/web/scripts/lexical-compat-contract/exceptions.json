@@ -1,7 +1,7 @@
 {
   "source": "src/compatibility-exceptions.ts",
-  "implementationCommit": "b46db54ee1212fb0749736f36a9993c97892989f",
-  "implementationSha256": "996b617fcd3e33a9fc35ad209b2c4be19e886c70fa07c4b853c9fb27513a26a6",
+  "implementationCommit": "a7e6718f387150522bc1c86aebd6e1ecfbcc0e8b",
+  "implementationSha256": "bade62da7ec2b1b0ed466102b22dd2df87a5aac76082f2f1e57d68695fdeabf1",
   "compilerControlCommit": "aa19bd3d2df10e58f2b9c200f0b51351f5e060ad",
   "pointDelegationCommit": "0b84f77036",
   "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
@@ -123,9 +123,21 @@
       "evidenceUpstreamCommit": "ead730cf50f4d3e3f93b7c1d23a443a6d14f50d1",
       "evidenceSha256": "84bc6ca0f2379fca035e8d521e79e0ead26c549226fd40eb198b36b35db4847e",
       "evidenceScriptSha256": "0ccc99e38cbf7a1c59135245283778c45006afd4475b5ba365d7c6df24a3e399"
+    },
+    {
+      "helper": "widenTagConversionMap",
+      "contract": "Upstream returns tag-specific DOM conversion factory maps unchanged with a widened HTMLElement map declaration.",
+      "guards": [
+        "exact original map identity",
+        "no enumeration, validation, clone or callback execution"
+      ],
+      "calls": ["nodes/build-import-map.ts:buildImportMap"],
+      "sourceLocations": ["nodes/build-import-map.ts:13"],
+      "upstreamSource": "packages/lexical/src/LexicalNode.ts:365-368",
+      "upstreamSourceSha256": "5503cc78ad06a3ed945f9805db9224fd2610da7fb597a078c0ab899939e43530"
     }
   ],
-  "scope": "Exactly eight named assertions plus one sound runtime-witness guard and one separate public extension wildcard type-only entry (four aliases, nine AnyKeyword tokens). No ninth assertion, namespace or native acceptance.",
+  "scope": "Exactly nine named assertions, one sound runtime-witness guard, and one separate public extension wildcard type-only entry (four aliases, nine AnyKeyword tokens): ten named compatibility entries. No further assertion, namespace or native acceptance.",
   "commandConsumerCommit": "741092a441",
   "runtimeGuards": [
     {
@@ -209,6 +221,7 @@
     "evidenceSha256": "bd1277e407fdb4a75ba25206510ddac27d46da43ee1c7c3d2c711f3fbec11258",
     "rootForwardingCommit": "eb1d5238fb",
     "ordinaryDeclarationSha256": "fd0220616ab92809a406f2cbb91c8b9be41708a4a3e906b21c056e6983428788",
-    "verifiedCompiler": "6.0.3"
+    "verifiedCompiler": "6.0.3",
+    "ordinaryDeclarationCommit": "b46db54ee1212fb0749736f36a9993c97892989f"
   }
 }
