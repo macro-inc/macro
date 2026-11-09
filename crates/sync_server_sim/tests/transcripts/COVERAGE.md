@@ -226,3 +226,14 @@ The corpus also retains the three real Macro comment-root scenarios in
 They cover acceptance of annotation changes and refusal of content changes in
 each gate mode. All 158 Worker recordings use strict normalized comparison;
 the native replay allowlist remains the 18 fully extracted callback scenarios.
+
+Oversized operation storage is additionally exercised by the real-workerd
+`services/sync-service/tests/operation_chunks.test.ts` profile (writer on/off,
+transaction failure/no receipt, mixed legacy cold replay, exact inline boundary,
+snapshot/GC). These multi-megabyte, new-format physical-storage controls opt out
+of capture explicitly; none replaces or relaxes an existing golden scenario.
+The shared codec and simulator independently validate complete bounded chunks.
+
+`services/sync-service/tests/retained_large_update.test.ts` is an opt-in,
+hash-pinned retained-WAL receipt/cold-restart literal; opaque source binaries
+stay outside the repository. It does not claim browser editor hydration.

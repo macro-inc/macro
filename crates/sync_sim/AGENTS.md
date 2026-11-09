@@ -295,3 +295,9 @@ Step::Create constructs without Start, so Init cancellation uses the same real c
 Observe adoption issue and callback consumption by exact client/session/storage ID; enforce no_seed_over_unadopted_wal in ordinary and hostile runs. Keep the randomized startup ordering control (all seed sources, multiple owners, callback orders and timeouts) strict.
 
 Observe committed and redone model selections independently of UndoManager metadata; redo_restores_selection compares durable endpoint identities/kinds/offsets using actual undo/redo stack depths for entry lineage, the same observed committed tree and exact session, including hostile safety runs.
+Record actual physical operation chunk sizes and reassembly equality on each
+successful pending write. `oversized_operations_complete` runs in ordinary and
+hostile safety profiles and requires bounded, complete physical storage before
+existing durability/receipt invariants can admit an oversized update. The large
+form story exercises actual fragmentation, hibernation and exact cold replay;
+mutation controls must reject missing, unbounded and checksum-inconsistent proof.

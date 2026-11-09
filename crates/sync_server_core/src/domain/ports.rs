@@ -156,7 +156,8 @@ pub trait RoomStorage {
         &self,
         encoded: &[u8],
     ) -> impl Future<Output = Result<(), Self::Error>>;
-    /// `o/*` in key order. A per-entry error is an unreadable entry (logged and skipped, H8).
+    /// `o/*` in key order. A per-entry error is a legacy unreadable entry (logged and skipped, H8).
+    /// New-format marker or chunk corruption fails the outer load; never replay a partial operation.
     fn pending_operations(
         &self,
     ) -> impl Future<Output = Result<Vec<Result<PendingOperation, Self::Error>>, Self::Error>>;

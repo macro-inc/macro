@@ -33,6 +33,7 @@ pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
     "redo_restores_selection",
     "every_close_terminates",
     "no_seed_over_unadopted_wal",
+    "oversized_operations_complete",
     "no_acked_edit_lost",
     "no_persisted_edit_lost",
     "all_docs_equal",
@@ -57,6 +58,10 @@ pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("all_wals_drained", all_wals_drained),
     ("quiet", quiet),
     ("core_acks_after_writes", core_acks_after_writes),
+    (
+        "oversized_operations_complete",
+        oversized_operations_complete,
+    ),
     ("gate_releases_after_durable", gate_releases_after_durable),
     (
         "refused_updates_never_applied",

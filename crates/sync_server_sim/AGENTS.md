@@ -8,6 +8,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 ## Start here
 
 - `src/migration_test.rs`: real Room recovery at source/target persistence boundaries.
+- `src/ports/storage.rs`: atomic logical/physical operation persistence and corruption handling.
 - `src/ports.rs`: synchronous in-memory ports, ordered effects, clocks, faults,
   output-gate confirmation and socket lifecycle.
 - `src/replay.rs`: the real core Room and the explicit `ENABLED` allowlist.
@@ -87,3 +88,10 @@ separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.
 
 Decode every gzip member and reject corrupt tails when loading fixtures or
 following inventory links; never silently accept only the first member.
+
+Oversized operation writes use the shared physical chunk format in the stored
+map, atomically at one port write generation. Completed-put facts retain the
+logical bytes. `operation_storage_proof` independently reconstructs physical
+records for simulator invariants; missing/corrupt chunks fail rather than replaying
+a prefix. Pruning pending manifests also removes their physical chunks, while
+archives retain theirs.

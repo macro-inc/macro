@@ -7,6 +7,10 @@ build = "build.rs"
 publish = false
 
 [features]
+# Activate only after the always-on chunk reader has reached every room.
+# Default-off reader-only deployments remain safe to roll back to legacy code.
+chunked-operation-writes = []
+
 default = ["owned", "do-sqlite-snapshot-storage", "search-service"]
 no-network-deps = []
 # Test-only persistence fault injection; never enable in deployed workers.

@@ -208,6 +208,9 @@ fn large_form_text_is_one_wal_row_and_multiple_wire_frames() {
     );
     assert!(outcome.events.iter().any(|event| matches!(&event.fact, Fact::PushSent { rows, own_bytes, .. } if rows.len() == 1 && *own_bytes > 900_000)));
     assert!(outcome.events.iter().any(|event| matches!(event.fact, Fact::Frame { kind: FrameKind::Update, frames, .. } if frames > 1)));
+    assert!(outcome.events.iter().any(|event| matches!(&event.fact,
+        Fact::PendingStored { bytes, chunks, complete: true, .. }
+        if *bytes > sync_server_core::domain::operation_chunks::INLINE_BYTES && chunks.len() > 1)));
     println!(
         "large form: own={} bytes, frames={}",
         outcome.stats.own_bytes_pushed, outcome.stats.multi_frame_messages

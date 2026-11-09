@@ -49,3 +49,9 @@ Cloudflare Durable Objects and native simulation.
 
 The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
 separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.
+
+`domain/operation_chunks.rs` defines the bounded physical operation format shared
+by runtime adapters and simulation. Keep legacy inline bytes readable, validate
+complete length/geometry/checksum before replay, and keep physical chunk writes
+below the logical operation/ACK boundary. Activation belongs to the Worker;
+reader support is unconditional and writer activation defaults off.

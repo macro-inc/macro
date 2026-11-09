@@ -400,3 +400,32 @@ pub fn no_spurious_terminal(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
+
+/// Every oversized successful operation has bounded, complete physical storage.
+pub fn oversized_operations_complete(outcome: &Outcome) -> Result<(), Failure> {
+    use sync_server_core::domain::operation_chunks::{CHUNK_BYTES, INLINE_BYTES};
+    for event in &outcome.events {
+        let Fact::PendingStored {
+            key,
+            bytes,
+            chunks,
+            complete,
+            ..
+        } = &event.fact
+        else {
+            continue;
+        };
+        if !complete
+            || (*bytes > INLINE_BYTES
+                && (chunks.is_empty()
+                    || chunks.iter().any(|size| *size == 0 || *size > CHUNK_BYTES)
+                    || chunks.iter().sum::<usize>() != *bytes))
+        {
+            return Err(Failure::new(
+                "oversized_operations_complete",
+                format!("{key}: incomplete or unbounded operation storage"),
+            ));
+        }
+    }
+    Ok(())
+}

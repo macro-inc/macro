@@ -1,9 +1,11 @@
 use crate::error::ResultExt;
-use std::rc::Rc;
+use serde::{Serialize, Serializer};
+use std::{cell::Cell, rc::Rc};
 use sync_server_core::domain::{
     connection::{ConnectionMetadata, SurfaceLifecycle},
     document::DocumentAttribution,
     migration::{SourceState, TargetState},
+    operation_chunks::{CHUNK_BYTES, FORMAT_MARKER_KEY, FORMAT_MARKER_VALUE, Manifest, chunk_key},
     ports::RoomStorage,
     socket::WebSocketId,
     types::{OperationId, PendingOperation, SessionKey},
@@ -11,7 +13,6 @@ use sync_server_core::domain::{
 use worker::{
     ListOptions, Result, Storage,
     js_sys::{self, Reflect},
-    wasm_bindgen::JsCast,
 };
 
 const LAST_VERSION_VECTOR_KEY: &str = "LAST_VERSION_VECTOR";
@@ -27,52 +28,181 @@ const ATTRIBUTION_PREFIX: &str = "actor/";
 #[derive(Clone)]
 pub struct DurableKVStorage {
     inner: Rc<Storage>,
+    operation_writes: OperationWrites,
+    // Durable activation is rediscovered by the existing pending-prefix read,
+    // including after every pending row was compacted and an archive ID repeats.
+    chunked: Rc<Cell<bool>>,
 }
 
-fn do_kv_result_to_result_opt<T>(res: Result<Option<T>>) -> Result<Option<T>> {
-    res
+/// Reader support is unconditional; activation is a separate, default-off build.
+#[derive(Clone, Copy)]
+enum OperationWrites {
+    Legacy,
+    Chunked,
+}
+impl OperationWrites {
+    fn configured() -> Self {
+        if cfg!(feature = "chunked-operation-writes") {
+            Self::Chunked
+        } else {
+            Self::Legacy
+        }
+    }
+}
+
+// Vec<u8> serializes as a JS number array. Physical chunks must instead use
+// byte buffers so structured-clone overhead cannot exceed the SQLite row limit.
+struct ChunkBytes<'a>(&'a [u8]);
+impl Serialize for ChunkBytes<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(self.0)
+    }
+}
+fn manifest(bytes: &[u8]) -> Result<Option<Manifest>> {
+    Manifest::decode(bytes).map_err(|error| worker::Error::RustError(error.to_string()))
 }
 
 impl DurableKVStorage {
     pub fn new(inner: Storage) -> Self {
         Self {
             inner: Rc::new(inner),
+            operation_writes: OperationWrites::configured(),
+            chunked: Rc::default(),
         }
     }
     pub(crate) async fn get_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        do_kv_result_to_result_opt(self.inner.get(key).await)
+        match self.inner.get::<Vec<u8>>(key).await? {
+            Some(bytes) => self.resolve_operation(key, bytes).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(crate) async fn list_do_kv(&self, prefix: &str) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        Ok(self
+        let entries = self
             .inner
             .list_with_options(ListOptions::new().prefix(prefix))
-            .await?
-            .entries()
-            .into_iter()
-            .map(|res| {
-                let entry = res.context("Error getting entry")?;
-                let key: String = Reflect::get_u32(&entry, 0)
+            .await?;
+        let mut result = Vec::new();
+        for entry in entries.entries().into_iter() {
+            let parsed = entry.context("Error getting entry").and_then(|entry| {
+                let key = Reflect::get_u32(&entry, 0)
                     .context("failed to get key")?
                     .as_string()
                     .context("Key is not a string")?;
-
                 let value = Reflect::get_u32(&entry, 1).context("failed to get value")?;
+                Ok((key, js_sys::Uint8Array::new(&value).to_vec()))
+            });
+            let (key, bytes) = match parsed {
+                Ok(entry) => entry,
+                Err(error) => {
+                    result.push(Err(error));
+                    continue;
+                }
+            };
+            // A corrupt/incomplete committed manifest is a storage failure for
+            // the whole load, not an ignorable row yielding a partial document.
+            let bytes = self.resolve_operation(&key, bytes).await?;
+            result.push(Ok((key, bytes)));
+        }
+        Ok(result)
+    }
 
-                let bytes = if value.is_instance_of::<js_sys::Uint8Array>() {
-                    js_sys::Uint8Array::unchecked_from_js_ref(&value).to_vec()
+    async fn resolve_operation(&self, key: &str, bytes: Vec<u8>) -> Result<Vec<u8>> {
+        if key == FORMAT_MARKER_KEY {
+            if bytes != FORMAT_MARKER_VALUE {
+                return Err(worker::Error::RustError(
+                    "invalid operation format marker".into(),
+                ));
+            }
+            self.chunked.set(true);
+            return Ok(bytes);
+        }
+        if !(key.starts_with(PENDING_OP_PREFIX) || key.starts_with(ALL_OP_PREFIX)) {
+            return Ok(bytes);
+        }
+        let Some(header) = manifest(&bytes)? else {
+            return Ok(bytes);
+        };
+        let mut chunks = Vec::new();
+        let keys: Vec<_> = (0..header.count())
+            .map(|index| chunk_key(key, index))
+            .collect();
+        // Read byte buffers through the JS bulk API. Deserializing Vec<u8> from
+        // Uint8Array crosses the WASM boundary per element and stalls cold loads.
+        for batch in keys.chunks(128) {
+            let values = self.inner.get_multiple(batch.to_vec()).await?;
+            for key in batch {
+                let value = values.get(&key.into());
+                if value.is_undefined() {
+                    return Err(worker::Error::RustError("missing operation chunk".into()));
+                }
+                chunks.push(js_sys::Uint8Array::new(&value).to_vec());
+            }
+        }
+        let bytes = header
+            .assemble(&chunks)
+            .map_err(|error| worker::Error::RustError(error.to_string()))?;
+        self.chunked.set(true);
+        Ok(bytes)
+    }
+
+    async fn put_operation(&self, key: String, update: &[u8]) -> Result<()> {
+        let chunked = matches!(self.operation_writes, OperationWrites::Chunked);
+        let header = if chunked {
+            Manifest::for_update(update)
+        } else {
+            None
+        };
+        if header.is_none() && !self.chunked.get() {
+            return self.inner.put(&key, update).await;
+        }
+        let activated = header.is_some();
+        let update = update.to_vec();
+        self.inner
+            .transaction(move |transaction| async move {
+                let existing = transaction
+                    .get_multiple(vec![key.clone()])
+                    .await?
+                    .get(&key.clone().into());
+                if !existing.is_undefined() {
+                    let bytes = js_sys::Uint8Array::new(&existing).to_vec();
+                    if let Some(previous) = manifest(&bytes)? {
+                        for index in 0..previous.count() {
+                            transaction.delete(&chunk_key(&key, index)).await?;
+                        }
+                    }
+                }
+                if let Some(header) = header {
+                    for (index, chunk) in update.chunks(CHUNK_BYTES).enumerate() {
+                        transaction
+                            .put(&chunk_key(&key, index), ChunkBytes(chunk))
+                            .await?;
+                    }
+                    transaction.put(&key, ChunkBytes(&header.encode())).await?;
+                    transaction
+                        .put(FORMAT_MARKER_KEY, ChunkBytes(FORMAT_MARKER_VALUE))
+                        .await?;
                 } else {
-                    js_sys::Uint8Array::new(&value).to_vec()
-                };
-
-                Ok((key, bytes))
+                    // Preserve the deployed small-row structured-clone representation.
+                    transaction.put(&key, update).await?;
+                }
+                Ok(())
             })
-            .collect())
+            .await?;
+        if activated {
+            self.chunked.set(true);
+        }
+        Ok(())
     }
 
     /// get pending operations from the operation log
     pub(crate) async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.list_do_kv(PENDING_OP_PREFIX).await
+        Ok(self
+            .list_do_kv(PENDING_OP_PREFIX)
+            .await?
+            .into_iter()
+            .filter(|entry| !matches!(entry, Ok((key, _)) if key == FORMAT_MARKER_KEY))
+            .collect())
     }
 }
 
@@ -143,13 +273,11 @@ impl RoomStorage for DurableKVStorage {
             .collect())
     }
     async fn put_pending_operation(&self, id: &OperationId, update: &[u8]) -> Result<()> {
-        self.inner
-            .put(&format!("{PENDING_OP_PREFIX}{}", id.as_str()), update)
+        self.put_operation(format!("{PENDING_OP_PREFIX}{}", id.as_str()), update)
             .await
     }
     async fn put_archived_operation(&self, id: &OperationId, update: &[u8]) -> Result<()> {
-        self.inner
-            .put(&format!("{ALL_OP_PREFIX}{}", id.as_str()), update)
+        self.put_operation(format!("{ALL_OP_PREFIX}{}", id.as_str()), update)
             .await
     }
     async fn put_operation_attribution(
@@ -164,15 +292,45 @@ impl RoomStorage for DurableKVStorage {
             .await
     }
     async fn delete_pending_operations(&self, ids: &[OperationId]) -> Result<usize> {
+        let keys: Vec<_> = ids
+            .iter()
+            .map(|id| format!("{PENDING_OP_PREFIX}{}", id.as_str()))
+            .collect();
+        if !self.chunked.get() {
+            return self.inner.delete_multiple(keys).await;
+        }
+        let deleted = Rc::new(Cell::new(0));
+        let count = deleted.clone();
         self.inner
-            .delete_multiple(
-                ids.iter()
-                    .map(|id| format!("{PENDING_OP_PREFIX}{}", id.as_str()))
-                    .collect::<Vec<_>>(),
-            )
-            .await
+            .transaction(move |transaction| async move {
+                let mut deleted = 0;
+                for key in keys {
+                    let existing = transaction
+                        .get_multiple(vec![key.clone()])
+                        .await?
+                        .get(&key.clone().into());
+                    if existing.is_undefined() {
+                        continue;
+                    }
+                    let bytes = js_sys::Uint8Array::new(&existing).to_vec();
+                    if let Some(header) = manifest(&bytes)? {
+                        for index in 0..header.count() {
+                            transaction.delete(&chunk_key(&key, index)).await?;
+                        }
+                    }
+                    transaction.delete(&key).await?;
+                    deleted += 1;
+                }
+                count.set(deleted);
+                Ok(())
+            })
+            .await?;
+        Ok(deleted.get())
     }
+
     async fn delete_all(&self) -> Result<()> {
-        self.inner.delete_all().await.map(|_| ())
+        self.inner.delete_all().await?;
+        self.chunked.set(false);
+        Ok(())
     }
 }

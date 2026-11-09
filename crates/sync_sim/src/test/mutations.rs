@@ -278,3 +278,42 @@ fn wal_query_rejects_an_undrained_surface_orphan_with_a_recovery_session() {
         );
     assert!(invariants::all_wals_drained(&outcome).is_err());
 }
+
+#[test]
+fn oversized_storage_query_rejects_incomplete_or_unbounded_physical_rows() {
+    let mut outcome = baseline();
+    let index = outcome
+        .events
+        .iter()
+        .position(|event| matches!(event.fact, Fact::PendingStored { .. }))
+        .unwrap();
+    if let Fact::PendingStored {
+        bytes,
+        chunks,
+        complete,
+        ..
+    } = &mut outcome.events[index].fact
+    {
+        *bytes = sync_server_core::domain::operation_chunks::INLINE_BYTES + 1;
+        *chunks = vec![sync_server_core::domain::operation_chunks::CHUNK_BYTES; 2];
+        chunks.push(1);
+        *complete = true;
+    }
+    assert!(invariants::oversized_operations_complete(&outcome).is_ok());
+    if let Fact::PendingStored { complete, .. } = &mut outcome.events[index].fact {
+        *complete = false;
+    }
+    assert!(invariants::oversized_operations_complete(&outcome).is_err());
+    if let Fact::PendingStored {
+        complete, chunks, ..
+    } = &mut outcome.events[index].fact
+    {
+        *complete = true;
+        chunks.pop();
+    }
+    assert!(invariants::oversized_operations_complete(&outcome).is_err());
+    if let Fact::PendingStored { chunks, bytes, .. } = &mut outcome.events[index].fact {
+        *chunks = vec![*bytes];
+    }
+    assert!(invariants::oversized_operations_complete(&outcome).is_err());
+}

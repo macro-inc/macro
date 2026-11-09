@@ -377,9 +377,15 @@ impl SimServer {
             }
             let parsed = serde_json::from_value::<Vec<u8>>(value)
                 .map_err(|failure| Failure::new("stored_operation", failure))
-                .and_then(|bytes| spans(&bytes));
+                .and_then(|bytes| {
+                    let (chunks, complete) = self
+                        .ports
+                        .operation_storage_proof(&key, &bytes)
+                        .map_err(|failure| Failure::new("stored_operation", failure))?;
+                    Ok((spans(&bytes)?, bytes.len(), chunks, complete))
+                });
             match parsed {
-                Ok(spans) => {
+                Ok((spans, bytes, chunks, complete)) => {
                     written.extend(spans.clone());
                     facts.push(Fact::PendingStored {
                         doc: self.doc,
@@ -387,6 +393,9 @@ impl SimServer {
                         key,
                         spans,
                         generation,
+                        bytes,
+                        chunks,
+                        complete,
                     });
                 }
                 Err(failure) => error = Some(failure),

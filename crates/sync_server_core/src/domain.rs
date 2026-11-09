@@ -33,3 +33,6 @@ pub mod room;
 
 #[cfg(test)]
 mod test_support;
+
+/// Persisted chunk representation for oversized logical operation records.
+pub mod operation_chunks;

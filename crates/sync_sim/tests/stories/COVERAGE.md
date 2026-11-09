@@ -27,7 +27,7 @@ including raw server-port bytes. `first.rs.inc` and `second.rs.inc` contain the 
 | no echo;2,122 | chatter::two_tabs_do_not_echo_delivered_foreign_updates;200 literal edits |
 | read-only gossip;3 | chatter::read_only_tab_parks_nothing_foreign |
 | retained parked rows;82 | recovery::revoked_rows_remain_parked_and_durable_without_regrant |
-| large paste equivalent;76,89 | durability::large_form_text_is_one_wal_row_and_multiple_wire_frames; real incompressible form text; exactly one delivered update fragment before Hibernate and another afterward |
+| large paste equivalent;76,89 | durability::large_form_text_is_one_wal_row_and_multiple_wire_frames; real incompressible form text; bounded complete physical operation chunks; exactly one delivered update fragment before Hibernate and another afterward |
 | heartbeat;69,70 | transport::heartbeat_death_and_late_pong |
 | connect blackhole;73,75 | transport::connect_timeout_closes_abandoned_socket_then_recovers |
 | pending authorize;72 | transport::reconnect_while_authorizing_keeps_one_token_fetch |

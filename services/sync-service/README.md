@@ -314,3 +314,81 @@ intentional schema change with `SYNC_WRITE_CODEC_FIXTURES=1 npx vitest run
  tests/codec_fixtures.test.ts`. Native ports and transcript loading live in
 `sync_server_sim`; C7 keeps its replay `ENABLED` list empty. Callback replay and
 its coverage floor start with the C8 extraction. The inventory map is in `../../crates/sync_server_sim/tests/transcripts/COVERAGE.md`.
+
+### Oversized operation storage and rollout
+
+WebSocket fragmentation is a transport boundary, not a persistence boundary. A
+single valid Loro update can be larger than a Durable Object SQLite row. Legacy
+`o/` and `a/` records serialize bytes as JavaScript number arrays, whose
+structured-clone representation is larger than the original update. Such writes
+can fail with `SQLITE_TOOBIG`; no receipt is sent. Do not split logical client WAL
+rows or arbitrary Loro byte streams to work around this storage limit.
+
+The reader accepts existing inline operations unchanged. With the default-off
+`chunked-operation-writes` Cargo feature enabled, operations over 512 KiB use
+256 KiB binary-buffer records under `operation-chunks/{logical-key}/...` and a
+versioned manifest at the existing logical key. The manifest records total length,
+chunk count and SHA-256. One storage transaction commits/replaces all chunks and
+the manifest; a failed transaction publishes nothing. Readers require every
+chunk, its exact size and the complete digest before exposing logical bytes.
+Pending-log pruning removes its manifest and chunks transactionally and counts
+logical operations. Archived chunks remain with archived history. Snapshotting,
+causal replay, operation IDs, attribution ordering and receipt timing retain their
+logical contracts. Activation also atomically writes reserved metadata at
+`o/!operation-chunks-v1`. The existing pending-prefix read validates and excludes
+this metadata from operation replay. It survives pending GC so cold rooms still
+clean up archived chunks when a repeated timestamp reuses an archived ID, even
+with the writer disabled. Legacy rooms without that metadata retain their exact
+direct small-write and delete calls.
+
+`SQLITE_ROW_LIMIT_BYTES` names the 2,200,000-byte encoded row ceiling measured
+on the pinned release and current workerd binaries. A single binary column plus
+its five-byte SQLite record header accepts 2,199,995 bytes and rejects
+2,199,996. The effective budget is the minimum of that measured limit and the conservative
+documented production limit of 2,000,000 bytes. Physical 256 KiB buffers leave
+over 85% headroom against both limits for keys and encoding;
+the exact 512 KiB legacy number-array threshold is tested with high byte values
+and valid Loro operations. Do not change the budget based solely on current
+platform documentation: exercise the actual pinned runtime when updating it.
+
+Required deployment order (operator authorization is separate from this guide):
+
+1. Deploy this reader-capable release with `chunked-operation-writes` absent.
+   This configuration writes only the legacy format and can still be rolled back
+   to the preceding release. Wait for the Durable Object code-update deferral to
+   expire and verify that all rooms are on the reader-capable version.
+2. Deploy the same source with `chunked-operation-writes` enabled. This is the
+   format activation. Record that the namespace now requires the new reader.
+3. To disable activation, deploy a reader-capable build with the writer OFF.
+   Existing chunked operations still replay. A blind rollback to older binaries
+   is unsafe: they attempt to import the manifest as Loro and fail. Compaction
+   alone is insufficient to permit downgrade because archived operations remain.
+   Downgrading below reader support requires a separately reviewed history-
+   preserving migration and proof that no chunk manifests remain, including in
+   archives, and that the reserved activation marker has been migrated too.
+   Legacy readers also attempt to import that marker as Loro. Do not delete
+   archive history or activation metadata as an ad hoc downgrade workaround.
+
+Run `SYNC_CHUNK_WRITER=1 npx vitest run tests/operation_chunks.test.ts` against a
+writer-enabled local build for transactional failure, retry, mixed legacy replay,
+cold restart and snapshot/GC controls. To prove reader-only compatibility, first
+run that command with `SYNC_CHUNK_READER_STORE=/absolute/temporary/directory`;
+this preserves its mixed pending/archive records before compaction. Rebuild with
+`chunked-operation-writes` absent, then run the same test file with only
+`SYNC_CHUNK_READER_STORE` set. The reader-only case imports the actual records
+written by the other build and compares full state/VV and archived bytes. Keep
+this temporary directory outside the repository. Neither test deploys a worker.
+
+An additional opt-in literal preserves the actual oversized failure witness
+without committing opaque source data: set `SYNC_CHUNK_WRITER=1` and
+`SYNC_RETAINED_UPDATE_DIR` to its retained binary directory, then run
+`npx vitest run tests/retained_large_update.test.ts` on the writer-enabled build.
+The test pins the exact update and initial-sync hashes, requires a real receipt,
+restarts workerd over the same durable storage and compares full JSON, VV and
+frontiers. This is a Node transport/core proof; actual browser editor hydration
+is a separate admission check.
+
+`SYNC_RETAINED_STORE=/absolute/temporary/directory` optionally retains the literal's
+owned test storage after validation for a separate browser host. Never point it
+at a live client profile. Source binaries are read-only inputs; normal runs use
+and remove only a fresh temporary directory.

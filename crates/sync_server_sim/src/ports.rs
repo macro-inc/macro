@@ -1,6 +1,6 @@
 //! Deterministic in-memory implementations of every room capability.
 //! CS-60/CS-56: futures and errors stay on the calling thread, like Worker ports.
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::{
     cell::RefCell,
@@ -10,8 +10,6 @@ use std::{
 };
 use sync_server_core::domain::{
     connection::{ConnectionMetadata, SurfaceLifecycle},
-    document::DocumentAttribution,
-    migration::{SourceState, TargetState},
     models::{BlameRow, PeerWithUserId},
     ports::*,
     socket::{SocketTagError, WebSocketId},
@@ -20,6 +18,7 @@ use sync_server_core::domain::{
 };
 
 mod comment;
+mod storage;
 pub use comment::CommentEvaluator;
 
 /// An ordered call or delivery at a room port boundary.
@@ -574,161 +573,6 @@ impl Connections for SimPorts {
     }
 }
 
-impl RoomStorage for SimPorts {
-    type Error = SimError;
-    async fn session_key(&self) -> Result<Option<SessionKey>, SimError> {
-        self.enter("storage.get", json!("DOCUMENT_ID")).await?;
-        self.read("DOCUMENT_ID")
-            .map(|value: Option<String>| value.map(SessionKey::new))
-    }
-    async fn surface_lifecycle(&self) -> Result<Option<SurfaceLifecycle>, SimError> {
-        self.enter("storage.get", json!("SURFACE_LIFECYCLE"))
-            .await?;
-        self.read("SURFACE_LIFECYCLE")
-    }
-    async fn source_migration(&self) -> Result<Option<SourceState>, SimError> {
-        self.enter("storage.get", json!("SURFACE_MIGRATION_SOURCE"))
-            .await?;
-        self.read("SURFACE_MIGRATION_SOURCE")
-    }
-    async fn target_migration(&self) -> Result<Option<TargetState>, SimError> {
-        self.enter("storage.get", json!("SURFACE_MIGRATION_TARGET"))
-            .await?;
-        self.read("SURFACE_MIGRATION_TARGET")
-    }
-    async fn saved_version_vector(&self) -> Result<Option<Vec<u8>>, SimError> {
-        self.enter("storage.get", json!("LAST_VERSION_VECTOR"))
-            .await?;
-        self.read("LAST_VERSION_VECTOR")
-    }
-    async fn put_session_key(&self, key: &SessionKey) -> Result<(), SimError> {
-        self.enter(
-            "storage.put",
-            json!({"key":"DOCUMENT_ID","value":key.as_str()}),
-        )
-        .await?;
-        self.put("DOCUMENT_ID", key.as_str())
-    }
-    async fn put_surface_lifecycle(&self, lifecycle: SurfaceLifecycle) -> Result<(), SimError> {
-        self.enter(
-            "storage.put",
-            json!({"key":"SURFACE_LIFECYCLE","value":lifecycle}),
-        )
-        .await?;
-        self.put("SURFACE_LIFECYCLE", lifecycle)
-    }
-    async fn put_source_migration(&self, state: &SourceState) -> Result<(), SimError> {
-        self.enter(
-            "storage.put",
-            json!({"key":"SURFACE_MIGRATION_SOURCE","value":state}),
-        )
-        .await?;
-        self.put("SURFACE_MIGRATION_SOURCE", state)
-    }
-    async fn put_target_migration(&self, state: &TargetState) -> Result<(), SimError> {
-        self.enter(
-            "storage.put",
-            json!({"key":"SURFACE_MIGRATION_TARGET","value":state}),
-        )
-        .await?;
-        self.put("SURFACE_MIGRATION_TARGET", state)
-    }
-    async fn put_saved_version_vector(&self, encoded: &[u8]) -> Result<(), SimError> {
-        self.enter(
-            "storage.put",
-            json!({"key":"LAST_VERSION_VECTOR","value":encoded}),
-        )
-        .await?;
-        self.put("LAST_VERSION_VECTOR", encoded)
-    }
-    async fn connection(&self, id: &WebSocketId) -> Result<Option<ConnectionMetadata>, SimError> {
-        self.enter("storage.get", json!(id.as_str())).await?;
-        self.read(id.as_str())
-    }
-    async fn put_connection(
-        &self,
-        id: &WebSocketId,
-        metadata: &ConnectionMetadata,
-    ) -> Result<(), SimError> {
-        self.enter("storage.put", json!({"key":id.as_str(),"value":metadata}))
-            .await?;
-        self.put(id.as_str(), metadata)
-    }
-    async fn delete_connection(&self, id: &WebSocketId) -> Result<(), SimError> {
-        self.enter("storage.delete", json!(id.as_str())).await?;
-        let mut s = self.0.borrow_mut();
-        s.data.values.remove(id.as_str());
-        s.write();
-        Ok(())
-    }
-    async fn pending_operations(
-        &self,
-    ) -> Result<Vec<Result<PendingOperation, SimError>>, SimError> {
-        self.enter("storage.list", json!("o/")).await?;
-        Ok(self
-            .0
-            .borrow()
-            .data
-            .values
-            .iter()
-            .filter_map(|(key, value)| {
-                key.strip_prefix("o/").map(|id| {
-                    Vec::<u8>::deserialize(value.as_ref())
-                        .map(|update| PendingOperation {
-                            id: OperationId::new(id.into()),
-                            update,
-                        })
-                        .map_err(|e| SimError::Failure(e.to_string()))
-                })
-            })
-            .collect())
-    }
-    async fn put_pending_operation(&self, id: &OperationId, update: &[u8]) -> Result<(), SimError> {
-        let key = format!("o/{}", id.as_str());
-        self.enter("storage.put", json!({"key":key,"value":update}))
-            .await?;
-        self.put(&key, update)
-    }
-    async fn put_archived_operation(
-        &self,
-        id: &OperationId,
-        update: &[u8],
-    ) -> Result<(), SimError> {
-        let key = format!("a/{}", id.as_str());
-        self.enter("storage.put", json!({"key":key,"value":update}))
-            .await?;
-        self.put(&key, update)
-    }
-    async fn put_operation_attribution(
-        &self,
-        id: &OperationId,
-        attribution: &DocumentAttribution,
-    ) -> Result<(), SimError> {
-        let key = format!("actor/{}", id.as_str());
-        self.enter("storage.put", json!({"key":key,"value":attribution}))
-            .await?;
-        self.put(&key, attribution)
-    }
-    async fn delete_pending_operations(&self, ids: &[OperationId]) -> Result<usize, SimError> {
-        let keys: Vec<_> = ids.iter().map(|id| format!("o/{}", id.as_str())).collect();
-        self.enter("storage.delete_multiple", json!(keys)).await?;
-        let mut s = self.0.borrow_mut();
-        let count = keys
-            .iter()
-            .filter(|key| s.data.values.remove(*key).is_some())
-            .count();
-        s.write();
-        Ok(count)
-    }
-    async fn delete_all(&self) -> Result<(), SimError> {
-        self.enter("storage.delete_all", Value::Null).await?;
-        let mut s = self.0.borrow_mut();
-        s.data.values.clear();
-        s.data.snapshots.clear();
-        s.write();
-        Ok(())
-    }
-}
 impl SnapshotStore for SimPorts {
     type Error = SimError;
     fn prepare(&self, key: &SessionKey) -> Result<(), SimError> {
@@ -1022,3 +866,6 @@ impl RoomPorts for SimPorts {
         self
     }
 }
+
+#[cfg(test)]
+mod operation_chunks_test;

@@ -135,3 +135,17 @@ The Worker retains credential verification, body limits, HTTP parsing and runtim
 transports. Native replay and fault recovery run with
 `cargo test -p sync_server_core -p sync_server_sim -p sync_protocol` from the root;
 see `../../crates/sync_server_sim/AGENTS.md` for coverage and transcript recipes.
+
+Oversized operation persistence has an unconditional chunk reader and a typed,
+default-off `chunked-operation-writes` build feature. Keep the writer OFF for the
+first deployment; activate only after all rooms use the reader-capable release.
+Follow README's operation-storage rollout and rollback procedure. Never roll back
+an activated namespace to a build without the reader: legacy readers interpret
+manifests as Loro bytes and cannot load those operations. Disabling the writer
+retains reader support and is the safe rollback configuration.
+
+The explicit oversized-operation workerd tests use `record: false` because they
+validate the new physical format, multi-megabyte payloads and cross-build storage
+outside the existing small-message golden corpus. They still run with the
+transcript feature built; all existing 155 scenarios retain unchanged capture.
+Never disable recording for an existing corpus scenario to conceal a difference.

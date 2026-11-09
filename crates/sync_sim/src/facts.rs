@@ -409,6 +409,12 @@ pub enum Fact {
         spans: Vec<IdSpan>,
         /// Output gate write generation.
         generation: u64,
+        /// Exact logical bytes from the successful storage call.
+        bytes: usize,
+        /// Actual physical chunk lengths (empty for inline rows).
+        chunks: Vec<usize>,
+        /// Physical reassembly including checksum equals the successful call bytes.
+        complete: bool,
     },
     /// Real document import result.
     Imported {

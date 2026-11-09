@@ -61,12 +61,27 @@ export class DocumentSyncSession extends DurableObject {
     super(state, env);
     this.state = state;
     this.env = env;
+    if (env.SYNC_TEST_WALL_MS !== undefined) Date.now = () => Number(env.SYNC_TEST_WALL_MS);
     this.callbacks = new Set();
     this.accepted = 0;
     this.expireAfterAccept = 0;
+    this.operationChunkFailure = 0;
     const storage = new Proxy(state.storage, {
       get: (target, key) => {
         if (key === 'constructor') return Reflect.get(target, key, target);
+        if (key === 'transaction') return callback => target.transaction(transaction => callback(new Proxy(transaction, {
+          get: (transaction, method) => {
+            if (method === 'put') return async (key, value) => {
+              if (String(key).startsWith('operation-chunks/') && this.operationChunkFailure > 0) {
+                this.operationChunkFailure -= 1;
+                if (this.operationChunkFailure === 0) throw new Error('injected operation chunk write failure');
+              }
+              return transaction.put(key, value);
+            };
+            const value = Reflect.get(transaction, method, transaction);
+            return typeof value === 'function' ? value.bind(transaction) : value;
+          },
+        })));
         if (key === 'put') return (...args) => {
           if (String(args[0]).startsWith('ws_id') && this.expireAfterAccept) {
             return new Promise(resolve => setTimeout(resolve, Math.max(0, this.expireAfterAccept - Date.now()))).then(() => target.put(...args));
@@ -104,13 +119,37 @@ export class DocumentSyncSession extends DurableObject {
 
   async fetch(request) {
     const control = new URL(request.url);
+    if (control.pathname === '/__sync_test_operation_chunks') {
+      this.operationChunkFailure = Number(control.searchParams.get('failAt') ?? 0);
+      return new Response(null, { status: 204 });
+    }
+    if (control.pathname === '/__sync_test_sqlite_row_limit') {
+      const size = Number(control.searchParams.get('size'));
+      if (control.searchParams.has('array')) {
+        const bytes = Array(size).fill(255);
+        await this.state.storage.put('row_limit_array_probe', bytes);
+        const stored = await this.state.storage.get('row_limit_array_probe');
+        await this.state.storage.delete('row_limit_array_probe');
+        return Response.json({ array: Array.isArray(stored), length: stored.length,
+          first: stored[0], last: stored.at(-1) });
+      }
+      this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS row_limit_probe (value BLOB)');
+      try {
+        this.state.storage.sql.exec('INSERT INTO row_limit_probe VALUES (?)', new Uint8Array(size));
+        this.state.storage.sql.exec('DELETE FROM row_limit_probe');
+        return new Response(null, { status: 204 });
+      } catch (error) {
+        return new Response(String(error), { status: 413 });
+      }
+    }
     if (control.pathname === '/__sync_test_accept_count') return Response.json(this.accepted);
     if (control.pathname === '/__sync_test_flush_alarm') {
       while (this.callbacks.size) await Promise.allSettled([...this.callbacks]);
-      if (await this.state.storage.getAlarm() !== null) {
+      if (await this.state.storage.getAlarm() !== null || this.env.SYNC_TEST_HOLD_ALARMS) {
         // Model the runtime consuming the scheduled alarm before delivery.
         await this.state.storage.deleteAlarm();
-        await this.alarm();
+        this.forceAlarm = true;
+        try { await this.alarm(); } finally { this.forceAlarm = false; }
       }
       await this.recorder()?.drain();
       return new Response(null, { status: 204 });
@@ -178,6 +217,7 @@ export class DocumentSyncSession extends DurableObject {
   }
 
   async alarm() {
+    if (this.env.SYNC_TEST_HOLD_ALARMS && !this.forceAlarm) return new Response(null, { status: 204 });
     const recorder = this.recorder();
     const callback = recorder?.begin({ in: 'alarm' });
     globalThis.__syncTranscriptCurrent = recorder;

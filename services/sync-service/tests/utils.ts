@@ -49,6 +49,10 @@ export async function setupMiniflare(
   options: {
     persistPath?: string;
     migrate?: boolean;
+    holdAlarms?: boolean;
+    workerScriptPath?: string;
+    record?: boolean;
+    fixedWallTime?: number;
     dssUrl?: string;
     lexicalServiceUrl?: string;
     lexicalServiceAuthKey?: string | null;
@@ -57,13 +61,14 @@ export async function setupMiniflare(
   } = {},
 ) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
-  const capture = process.env.SYNC_RECORD === "1" ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath, options.persistPath) : undefined;
+  const capture = process.env.SYNC_RECORD === "1" && options.record !== false ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath, options.persistPath) : undefined;
   const mf = new Miniflare({
     ...(capture ? { handleRuntimeStdio: capture.stdio } : {}),
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
     },
-    scriptPath: "./tests/worker.mjs",
+    scriptPath: options.workerScriptPath ?? "./tests/worker.mjs",
+    ...(options.workerScriptPath ? { modulesRoot: "/" } : {}),
     modules: true,
     modulesRules: [
       { type: "ESModule", include: ["**/build/index.js", "**/*.mjs", "**/src/transcript/*.js"] },
@@ -88,7 +93,9 @@ export async function setupMiniflare(
     fetchMock: options.fetchMock,
     bindings: {
       COMMENT_GATE_MODE: options.commentGateMode ?? "http",
-      SYNC_RECORD: process.env.SYNC_RECORD === "1",
+      SYNC_RECORD: process.env.SYNC_RECORD === "1" && options.record !== false,
+      ...(options.holdAlarms ? { SYNC_TEST_HOLD_ALARMS: true } : {}),
+      ...(options.fixedWallTime !== undefined ? { SYNC_TEST_WALL_MS: options.fixedWallTime } : {}),
       ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
