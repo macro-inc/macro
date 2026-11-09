@@ -50,6 +50,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - Match upstream layout; do not add content-visibility or intrinsic containment without three-browser pixel/scroll parity and a measured speed benefit.
 - Assert saved table column widths on the declared col styles and rendered cell geometry; WebKit exposes no layout box for col elements.
 
+
 - Isolate Vite and Playwright in a private user/network namespace with loopback
   enabled when host route churn causes ERR_NETWORK_CHANGED; keep checks strict.
 - Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2.

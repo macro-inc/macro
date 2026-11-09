@@ -4,13 +4,13 @@ use super::*;
 /// Borrowed framework record without exposing mutable links.
 #[derive(Clone, Copy)]
 pub struct NodeRef<'state> {
-    pub(super) slot: &'state NodeSlot,
-    pub(super) registry: &'state std::sync::Arc<Registry>,
+    pub(crate) slot: &'state NodeSlot,
+    pub(crate) registry: &'state std::sync::Arc<Registry>,
 }
 /// An owned ephemeral record that cannot mutate a snapshot.
 pub struct NodeRecord {
-    pub(super) slot: NodeSlot,
-    pub(super) registry: std::sync::Arc<Registry>,
+    pub(crate) slot: NodeSlot,
+    pub(crate) registry: std::sync::Arc<Registry>,
 }
 impl NodeRecord {
     /// Borrow the copied framework fields and payload.

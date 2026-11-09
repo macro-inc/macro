@@ -213,6 +213,7 @@ impl ForeignReadSnapshot {
             return Err(Error::ForeignEditorState);
         }
         let mut captured = self.clone();
+        captured.state.foreign_instances = source.foreign_instances.clone();
         let mut origin = source.origin.clone();
         origin.lease = Some(Arc::downgrade(&lease.0));
         captured.origin = Some(origin);
@@ -394,6 +395,17 @@ impl StateRef<'_> {
     /// Materialize an active inherited-native payload projection into the
     /// captured record without invoking a clone hook or changing the source.
     pub fn snapshot_for_foreign_read(self) -> Result<ForeignReadSnapshot, Error> {
+        // A host may hydrate this exact root after capture. Preserve the source
+        // publication's lazy JS cachedText before pending() resets the read memo.
+        if self.state.foreign_instances.has_hooks()
+            && let Some(cache) = self
+                .slot(NodeKey::ROOT)
+                .and_then(|slot| slot.foreign_root_cache.as_ref())
+            && cache.value.get().is_none()
+            && Arc::ptr_eq(&cache.value, &self.state.root_text)
+        {
+            self.foreign_root_cached_text()?;
+        }
         let mut state = self.state.pending();
         state.selection = self
             .state
