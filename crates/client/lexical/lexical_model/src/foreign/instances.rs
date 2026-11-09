@@ -171,6 +171,16 @@ pub(crate) struct ForeignInstances {
     hooks: OnceLock<Arc<dyn ForeignInstanceHooks>>,
 }
 impl ForeignInstances {
+    pub(crate) fn validate_instance(
+        &self,
+        type_name: &str,
+        instance: &ForeignInstance,
+    ) -> Result<(), Error> {
+        self.hooks
+            .get()
+            .ok_or(Error::Invariant("foreign instance host missing"))?
+            .validate_instance(type_name, instance)
+    }
     pub(crate) fn has_hooks(&self) -> bool {
         self.hooks.get().is_some()
     }

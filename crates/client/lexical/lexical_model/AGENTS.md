@@ -225,3 +225,8 @@ NodeSlot::clone. Use clone_fields only for raw read captures and projections.
 Keep deferred foreign payload validation off registries with no runtime payload
 classes. Validate only dirty live records during normal flush/publication; use a
 full check for state replacement/full reconciliation and explicit state validation.
+
+Create already-constructed hosted native instances through
+create_reserved_with_instance: validate owner/class/base before installation and
+bind the new record as writable in its current update, without replaying a JS
+constructor or clone when an owned raw capture incidentally shares the record.
