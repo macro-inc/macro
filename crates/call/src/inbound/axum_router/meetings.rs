@@ -271,6 +271,7 @@ pub async fn share<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriz
 /// Handle `POST /call/meetings/join/{token}` through the call domain service.
 #[utoipa::path(post, operation_id = "meeting_join", path = "/call/meetings/join/{token}",
     params(("token" = String, Path)),
+    request_body(content = ref("#/components/schemas/JoinCallRequest"), content_type = "application/json"),
     responses((status = 200, body = CallTokenResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
 #[tracing::instrument(err, skip_all)]
 pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
