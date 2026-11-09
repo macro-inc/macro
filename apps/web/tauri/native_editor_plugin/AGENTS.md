@@ -16,6 +16,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - `android/src/main/java/com/macro/editor/NativeSessionStorage.kt`: transactional SQLite and live-owner leases.
 - `android/src/main/java/com/macro/editor/NativeSessionAdapters.kt`: storage worker and direct WebSocket I/O.
 - `android/src/main/java/com/macro/editor/NativeEditorSurfaces.kt`: account/surface lifetime, permissions and callbacks.
+- `android/src/androidTest/java/com/macro/editor/NativeEditorTestActivity.kt`: standalone device test window; never a production surface.
 - `schema/bridge.schema.json`: source of the Rust, Kotlin and TypeScript bridge types.
 - `crates/client/document_session_ffi`: generated native API and binding regeneration.
 
