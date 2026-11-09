@@ -860,3 +860,73 @@ async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
         HarnessAccess::Read
     );
 }
+
+/// Binds a new agent owned by `owner` to `harness`, returning its id.
+async fn bound_agent(pool: &PgPool, harness: HarnessId, owner: &str, is_coding: bool) -> Uuid {
+    let bot_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+        VALUES ($1, 'owned', $2, 'Agent', $3, true)
+        "#,
+        bot_id,
+        owner,
+        format!("agent-{bot_id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, $3)
+        "#,
+        bot_id,
+        harness.as_uuid(),
+        is_coding,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    bot_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bound_agents_leave_out_residents_whose_owner_lost_access(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    team_of(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness = private_harness(&pool, OWNER_ID).await;
+    grant_directly(&pool, harness, TEAMMATE_ID).await;
+    let own_resident = bound_agent(&pool, harness, OWNER_ID, false).await;
+    let teammate_resident = bound_agent(&pool, harness, TEAMMATE_ID, false).await;
+    let teammate_coder = bound_agent(&pool, harness, TEAMMATE_ID, true).await;
+
+    let listed = |agents: Vec<HarnessAgent>| {
+        agents
+            .into_iter()
+            .map(|agent| agent.bot_id.as_uuid())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        listed(repo.list_bound_agents(harness).await.unwrap()),
+        [own_resident, teammate_resident, teammate_coder]
+    );
+
+    // Lowered to Read: the teammate's resident stops; a coding agent is
+    // checked per prompt instead, so it stays.
+    sqlx::query!(
+        r#"
+        UPDATE entity_access SET access_level = 'view'
+        WHERE entity_id = $1 AND source_id = $2
+        "#,
+        harness.as_uuid(),
+        TEAMMATE_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        listed(repo.list_bound_agents(harness).await.unwrap()),
+        [own_resident, teammate_coder]
+    );
+}
