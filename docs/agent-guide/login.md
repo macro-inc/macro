@@ -86,6 +86,13 @@ works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 
+A Gmail mailbox that another Macro account already holds as an inbox, and
+that can be neither delegated nor shared (typically it was added to one
+account, then got its own account), is not connected: init answers
+`MAILBOX_CONNECTED_ELSEWHERE` and the callback says the mailbox is already
+connected as an inbox in another Macro account, to remove it there and connect
+it again. The message never names the other account.
+
 ## Signup in Develop
 
 With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
