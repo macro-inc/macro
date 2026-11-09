@@ -1,5 +1,16 @@
 import type { EditorThemeClasses } from 'lexical';
 import { createBackend } from './backend/factory';
+import { dispatchCommand, registerCommand } from './command/registry';
+import type { CommandRegistry } from './command/types';
+import type {
+  CommandListener,
+  CommandPayloadType,
+  LexicalCommand,
+} from './commands';
+import type {
+  CommandListenerPriority,
+  CommandListenerPriorityBefore,
+} from './constants';
 import { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
 import type { NodeClass } from './foreign/registry';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
@@ -13,6 +24,10 @@ import { UpdateController, type UpdateOptions } from './update';
 let activeEditor: LexicalEditor | undefined;
 let activeStateEditor: LexicalEditor | undefined;
 let readOnlyMode = false;
+const synchronousUpdates = new WeakMap<
+  LexicalEditor,
+  (body: () => void, options?: UpdateOptions) => void
+>();
 
 export function isCurrentlyReadOnlyMode(): boolean {
   return readOnlyMode;
@@ -93,6 +108,8 @@ export class EditorState {
 }
 
 export class LexicalEditor {
+  readonly _commands: CommandRegistry = new Map();
+  _updating = false;
   readonly _config: EditorConfig;
   readonly _parentEditor: LexicalEditor | null;
   readonly _keyToDOMMap = new Map<string, HTMLElement>();
@@ -133,7 +150,15 @@ export class LexicalEditor {
     this.state = new EditorState(this, backend.initialVersion);
     this.updates = new UpdateController({
       backend,
-      scope: (body) => this.scope(body),
+      scope: (body) => {
+        const previous = this._updating;
+        this._updating = true;
+        try {
+          return this.scope(body);
+        } finally {
+          this._updating = previous;
+        }
+      },
       apply: (packet) => {
         const metadata: unknown = JSON.parse(packet.metadata_json);
         if (
@@ -150,6 +175,9 @@ export class LexicalEditor {
         else throw error;
       },
     });
+    synchronousUpdates.set(this, (body, options) =>
+      this.updates.updateSync(body, options)
+    );
   }
 
   scope<T>(body: () => T, associated = true, readOnly = false): T {
@@ -194,6 +222,19 @@ export class LexicalEditor {
       listener({ editorState: this.state, prevEditorState });
     });
   }
+  registerCommand<P>(
+    command: LexicalCommand<P>,
+    listener: CommandListener<P>,
+    priority: CommandListenerPriority | CommandListenerPriorityBefore
+  ): () => void {
+    return registerCommand(this, command, listener, priority);
+  }
+  dispatchCommand<TCommand extends LexicalCommand<unknown>>(
+    command: TCommand,
+    payload: CommandPayloadType<TCommand>
+  ): boolean {
+    return dispatchCommand(this, command, payload);
+  }
   registerNodeTransform(
     klass: { getType(): string },
     listener: (node: LexicalNode) => void
@@ -210,6 +251,19 @@ export class LexicalEditor {
   }
   dispose(): void {
     this.updates.dispose();
+  }
+}
+
+export function updateEditorSync(
+  editor: LexicalEditor,
+  body: () => void,
+  options?: UpdateOptions
+): void {
+  if (activeEditor === editor && options === undefined) body();
+  else {
+    const update = synchronousUpdates.get(editor);
+    if (update === undefined) throw new Error('Unknown editor update owner');
+    update(body, options);
   }
 }
 

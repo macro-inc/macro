@@ -50,7 +50,6 @@ export function $getEditor() {
   return getActiveEditor();
 }
 
-
 export {
   BEFORE_INPUT_COMMAND,
   BLUR_COMMAND,
