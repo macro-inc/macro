@@ -30,11 +30,11 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
-      .with(
-        'entity_access_requested',
-        () =>
-          `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`
-      )
+      .with('entity_access_requested', () => {
+        // A runtime has one role to ask for: being a user of it.
+        if (n.entity_type === 'harness') return 'requested to use';
+        return `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`;
+      })
       .with(
         'entity_access_granted',
         () =>

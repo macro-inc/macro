@@ -1,5 +1,3 @@
-DROP TABLE team_invite_harness_grant;
-
 ALTER TABLE entity_access_request DROP COLUMN requested_by_agent;
 
 DROP FUNCTION harness_can_run(uuid, text);

@@ -151,7 +151,9 @@ async function openMenu(page: Page) {
 test('adds a teammate as a user', async ({ page }) => {
   const net = await serve(page);
   await openMenu(page);
-  await expect(page.getByText('alice@example.com')).toBeVisible();
+  await expect(
+    page.locator('[data-runtime-grant]', { hasText: 'alice@example.com' })
+  ).toBeVisible();
 
   const addable = page.locator('[data-runtime-teammate]');
   await expect(addable).toHaveCount(1);
@@ -254,16 +256,17 @@ test('approves a request an agent made, and says an agent asked', async ({
   expect(net.writes.at(-1)?.body).toMatchObject({ grantedLevel: 'edit' });
 });
 
-test('requests access from a teammate’s user card', async ({ page }) => {
+test('requests access from Teammates’ runtimes', async ({ page }) => {
   const net = await serve(page);
   await page.goto('/');
-  const section = page.locator('[data-user-card-runtimes]');
-  await expect(section).toContainText('Build box');
+  const row = page.locator('[data-teammate-runtime="Build box"]');
+  await expect(row).toContainText('Your access: None');
 
-  await section.getByRole('button', { name: 'Request access' }).click();
+  await press(page, row.getByRole('button', { name: 'Request access' }));
 
   await expect(
-    section.getByRole('button', { name: 'Cancel request' })
+    row.getByRole('button', { name: 'Cancel request' })
   ).toBeVisible();
+  await expect(row).toContainText('Your access: Requested');
   expect(net.writes.at(-1)?.body).toMatchObject({ requestedLevel: 'edit' });
 });

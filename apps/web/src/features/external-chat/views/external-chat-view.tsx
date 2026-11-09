@@ -207,11 +207,7 @@ export function ExternalChatView(props: {
     scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
   /** Rows render only once the chat, and so its provider, has loaded. */
   const messageData = (message: ChatMessage) =>
-    chatMessageData(
-      message,
-      props.userId,
-      provider()?.formatting.toMarkdown ?? (() => '')
-    );
+    chatMessageData(message, provider()?.formatting.toMarkdown ?? (() => ''));
   const markRead = () =>
     fireAndForget(conversation.markRead(), 'external-chat.read');
   const rows = () => (source.chat.data ? conversation.rows() : []);

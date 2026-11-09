@@ -1,5 +1,4 @@
 import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
-import { UserRuntimes } from '@app/features/runtime-sharing/views/UserRuntimes';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { isAgentAccount, tryMacroId } from '@core/user';
@@ -118,10 +117,7 @@ function UserCardBody(props: {
 
       <Show when={props.user.id}>
         {(id) => (
-          <Show
-            when={isBotPrincipalId(id())}
-            fallback={<UserRuntimes userId={id()} class="px-6 pb-4" />}
-          >
+          <Show when={isBotPrincipalId(id())}>
             <AgentRuntime
               botId={id().replace(/^bot\|/, '')}
               class="px-6 pb-4"

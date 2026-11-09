@@ -1,6 +1,7 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
 import { paneRoute } from '@app/routes/app-route';
 import {
@@ -298,22 +299,38 @@ function getSupportedHandler(
         )
           return null;
         // A runtime has no page of its own: its requests wait in its Share menu.
-        if (target.entityType === 'harness')
+        if (target.entityType === 'harness') {
+          const harnessId = target.entityId;
           return async (lm: SplitManager, newSplit = false) =>
-            openContent(
-              lm,
-              {
-                type: 'component',
-                id: 'settings',
-                entryMetadata: {
-                  route: paneRoute({
+            Telemetry.span(
+              'access_requests.notification.open',
+              async (span) => {
+                span.setAttr('entity.id', harnessId);
+                span.setAttr('entity.type', 'harness');
+                span.setAttr('notification.id', notification.id);
+                span.setAttr('notification.type', meta.tag);
+                span.setAttr('access_request.id', meta.content.requestId);
+                requestRuntimeShare(
+                  harnessId,
+                  meta.tag === 'entity_access_requested'
+                );
+                openContent(
+                  lm,
+                  {
+                    type: 'component',
                     id: 'settings',
-                    params: { tab: 'harness' },
-                  }),
-                },
-              },
-              { newSplit }
+                    entryMetadata: {
+                      route: paneRoute({
+                        id: 'settings',
+                        params: { tab: 'harness' },
+                      }),
+                    },
+                  },
+                  { newSplit, sourceHandle, onApplied }
+                );
+              }
             );
+        }
         const sharedEntityType = target.entityType;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {

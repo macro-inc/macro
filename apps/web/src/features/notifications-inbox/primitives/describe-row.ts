@@ -150,7 +150,12 @@ function describeNotification(
       subject: metadata.content.taskName ?? entityName,
     }))
     .with({ tag: 'entity_access_requested' }, (metadata) => ({
-      action: join(actor, `requested ${metadata.content.accessLevel} access`),
+      action: join(
+        actor,
+        latest.entity_type === 'harness'
+          ? 'requested to use'
+          : `requested ${metadata.content.accessLevel} access`
+      ),
       subject: metadata.content.entityName || entityName,
     }))
     .with({ tag: 'entity_access_granted' }, (metadata) => ({
