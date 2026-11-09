@@ -376,7 +376,7 @@ export class LexicalNode {
     this.markDirty();
   }
   exportJSON(): SerializedLexicalNode {
-    return { type: this.getType(), version: 1 };
+    return { type: this.__type, version: 1 };
   }
   updateFromJSON(
     serializedNode: LexicalUpdateJSON<SerializedLexicalNode>

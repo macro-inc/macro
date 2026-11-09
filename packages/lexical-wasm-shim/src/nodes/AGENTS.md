@@ -30,6 +30,7 @@ writes; the legacy conformance backend still makes diagnostic native calls.
 - Send writes through the runtime buffer and preserve upstream native-super dispatch.
 - Reuse `lexical-wasm-view/compat` DOM slots and the actual core classes in method signatures.
 - Preserve upstream generic constraints and self returns; use the centralized runtime adapter only for upstream caller-asserted generic APIs.
+- Preserve upstream field reads and getter evaluation counts; formatting flags read latest raw fields and Element JSON samples each text-format/style getter once.
 - Keep upstream MIT notices on ported implementation code.
 
 ## Checks
