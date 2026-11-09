@@ -145,18 +145,21 @@ export const scheduledActionClient = {
     ),
 
   /**
-   * Routines AI picked for the caller from the catalog; reading starts a
-   * generation when they are due. 404 while suggestions are off for them.
+   * The caller's routine suggestions on every surface: AI's first, then
+   * Macro's templates. 404 while suggestions are off for them.
    */
   routineSuggestions: async () =>
     scheduledActionFetch<RoutineSuggestions>('/scheduled-actions/suggestions', {
       method: 'GET',
     }),
 
-  /** Start generating suggestions now; answers the current ones meanwhile. */
-  refreshRoutineSuggestions: async () =>
+  /**
+   * Start the caller's one generation of suggestions, from their inbox and
+   * apps, with schedules in `timezone`. Later calls change nothing.
+   */
+  generateRoutineSuggestions: async (args: { timezone: string }) =>
     scheduledActionFetch<RoutineSuggestions>(
-      '/scheduled-actions/suggestions/refresh',
+      `/scheduled-actions/suggestions/generate?${new URLSearchParams({ timezone: args.timezone })}`,
       { method: 'POST' }
     ),
 

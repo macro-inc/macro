@@ -93,9 +93,7 @@ function RoutinesContent() {
               : []
           }
           onTemplate={startFrom}
-          featured={(templates) => (
-            <RoutineSuggestionsSection fallback={templates} />
-          )}
+          footer={<RoutineSuggestionsSection />}
         />
       }
     >

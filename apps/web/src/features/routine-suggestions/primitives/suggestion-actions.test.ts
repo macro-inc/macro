@@ -1,11 +1,12 @@
+import { analytics } from '@app/lib/analytics';
 import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../../routines/core/draft';
-import { createEmptyDraft } from '../../routines/core/routine-draft';
-import { catalogTemplate } from '../../routines/queries/catalog';
+import { type SuggestionItem, suggestionItem } from '../core/suggestions';
+import { context, forYou, TAGS, template } from '../tests/fixtures';
 import {
   createSuggestionActions,
-  type SuggestionCapabilities,
+  type SuggestionActionsDeps,
 } from './suggestion-actions';
 
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
@@ -17,136 +18,146 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'New routine',
 }));
 
-const INBOX = catalogTemplate({
-  key: 'inbox',
-  surface: 'email',
-  title: 'Sort my inbox',
-  description: 'AI labels new email by topic',
-  request: 'Label new email.',
-  action: 'Label with AI',
-  trigger: {
-    type: 'events',
-    filters: [{ events: ['email.message_received'] }],
-  },
-  code: {
-    type: 'code',
-    title: 'Label by topic',
-    summary: '',
-    source: 'export async function main() {}',
-  },
-  namedKnobs: {},
-  instructions: 'Label this email.',
-  affectsOthers: false,
-  safeDefault: true,
-  template: true,
-});
+function item(suggestion = template): SuggestionItem {
+  const result = suggestionItem(suggestion, [TAGS], context(false));
+  if (!result) throw new Error('expected an item');
+  return result;
+}
 
-function capabilities(
-  overrides: Partial<SuggestionCapabilities> = {}
-): SuggestionCapabilities & { reviewed: ScheduleDraft[] } {
-  const reviewed: ScheduleDraft[] = [];
+function deps(overrides: Partial<SuggestionActionsDeps> = {}) {
+  const created: ScheduleDraft[] = [];
   return {
-    reviewed,
-    catalog: () => [INBOX],
-    defaultModel: () => 'model',
-    codeSteps: () => true,
-    workspace: () => ({ tag: [], channel: [], label: [] }),
-    ensurePersonalTags: vi.fn(async () => {}),
-    draft: vi.fn(async () => 'AI couldn’t draft that.'),
-    review: (draft) => reviewed.push(draft),
-    describe: vi.fn(),
-    dismiss: vi.fn(),
+    created,
+    placement: () => ({ kind: 'sidebar' as const, surface: 'agents' as const }),
+    create: vi.fn(async (draft: ScheduleDraft) => {
+      created.push(draft);
+      return 'routine-1';
+    }),
+    customize: vi.fn(),
+    dismiss: vi.fn(async () => {}),
     notify: vi.fn(),
     ...overrides,
   };
 }
 
-const starter = {
-  id: 'starter-1',
-  kind: 'starter' as const,
-  key: 'inbox',
-  knobs: {},
-  surface: 'email' as const,
-  reason: 'You file a lot of mail.',
-  keepProbability: 0.9,
-  safeDefault: true,
-};
+function withActions(
+  host: SuggestionActionsDeps,
+  run: (actions: ReturnType<typeof createSuggestionActions>) => Promise<void>
+) {
+  return createRoot(async (dispose) => {
+    await run(createSuggestionActions(host));
+    dispose();
+  });
+}
 
-const request = {
-  id: 'request-1',
-  kind: 'request' as const,
-  title: 'Supplier digest',
-  request: 'Every Friday, list deliveries suppliers confirmed.',
-  surface: 'crm' as const,
-  reason: 'Suppliers write every week.',
-  keepProbability: 0.4,
-  safeDefault: false,
-};
+beforeEach(() => vi.mocked(analytics.track).mockClear());
 
 describe('suggestion actions', () => {
-  it('open a catalog suggestion for review, unsaved, pointing back at it', async () => {
-    const host = capabilities();
-    await createRoot(async (dispose) => {
-      await createSuggestionActions(host).review(starter);
-      dispose();
+  it('enable in one click, once, with the row’s edits, and keep the row in place', async () => {
+    const host = deps();
+    await withActions(host, async (actions) => {
+      const row = item();
+      actions.edit(row, { ...actions.editsFor(row), title: 'My tags' });
+      await Promise.all([actions.enable(row), actions.enable(row)]);
+      expect(host.create).toHaveBeenCalledOnce();
+      expect(host.created[0]).toMatchObject({
+        name: 'My tags',
+        enabled: true,
+        suggestionId: 'template-1',
+      });
+      expect(actions.statusFor(row)).toEqual({
+        kind: 'enabled',
+        routineId: 'routine-1',
+      });
+      // The server drops a saved suggestion; its row stays to open it.
+      expect(actions.visible([]).map((kept) => kept.id)).toEqual([
+        'template-1',
+      ]);
     });
-    expect(host.reviewed).toMatchObject([
-      {
-        name: 'Sort my inbox',
-        suggestionId: 'starter-1',
-        steps: [{ kind: 'code', title: 'Label by topic' }],
-      },
-    ]);
+    expect(analytics.track).toHaveBeenCalledWith('routine_suggestion_edited', {
+      suggestionId: 'template-1',
+      surface: 'agents',
+      placement: 'sidebar',
+      from: 'macro',
+      kind: 'catalog',
+      catalogKey: 'email_tags',
+    });
+    expect(analytics.track).toHaveBeenCalledWith(
+      'routine_suggestion_enabled',
+      expect.objectContaining({
+        suggestionId: 'template-1',
+        from: 'macro',
+        routineId: 'routine-1',
+        edited: true,
+      })
+    );
   });
 
-  it('draft a request before review, and fall back to describing it when drafting fails', async () => {
-    const drafted = {
-      ...createEmptyDraft('model'),
-      name: '',
-      prompt: 'List deliveries.',
-    };
-    const host = capabilities({ draft: vi.fn(async () => drafted) });
-    await createRoot(async (dispose) => {
-      await createSuggestionActions(host).review(request);
-      dispose();
+  it('show why enabling failed on the row, and let the person try again', async () => {
+    const host = deps({
+      create: vi.fn(async () => {
+        throw new Error('Scheduler unavailable');
+      }),
     });
-    expect(host.draft).toHaveBeenCalledWith(request.request);
-    expect(host.reviewed).toMatchObject([
-      {
-        name: 'Supplier digest',
-        description: request.request,
-        suggestionId: 'request-1',
-      },
-    ]);
-
-    const failing = capabilities();
-    await createRoot(async (dispose) => {
-      await createSuggestionActions(failing).review(request);
-      dispose();
+    await withActions(host, async (actions) => {
+      const row = item();
+      await actions.enable(row);
+      expect(actions.statusFor(row)).toEqual({
+        kind: 'failed',
+        message: "Couldn't enable this routine. Scheduler unavailable",
+      });
+      expect(actions.visible([])).toEqual([]);
+      actions.edit(row, actions.editsFor(row));
+      expect(actions.statusFor(row).kind).toBe('idle');
     });
-    expect(failing.reviewed).toEqual([]);
-    expect(failing.notify).toHaveBeenCalledWith('AI couldn’t draft that.');
-    expect(failing.describe).toHaveBeenCalledWith(request.request);
   });
 
-  it('say so when the catalog no longer has the routine', async () => {
-    const host = capabilities({ catalog: () => [] });
-    await createRoot(async (dispose) => {
-      await createSuggestionActions(host).review(starter);
-      dispose();
+  it('open the full editor prefilled with the row’s edits, saving nothing', async () => {
+    const host = deps();
+    await withActions(host, async (actions) => {
+      const row = item(forYou);
+      actions.edit(row, { ...actions.editsFor(row), notify: true });
+      actions.customize(row);
     });
-    expect(host.reviewed).toEqual([]);
-    expect(host.notify).toHaveBeenCalled();
+    expect(host.create).not.toHaveBeenCalled();
+    expect(host.customize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        suggestionId: 'pick-1',
+        runVisibility: 'listed',
+      })
+    );
   });
 
-  it('provision personal tags before reviewing a routine that adds them', async () => {
-    const host = capabilities({
-      catalog: () => [{ ...INBOX, namedKnobs: { replyTag: 'tag' } }],
+  it('dismiss through the server, and say so when it refuses', async () => {
+    const host = deps({
+      dismiss: vi.fn(async () => {
+        throw new Error('offline');
+      }),
     });
-    await createRoot(async (dispose) => {
-      await createSuggestionActions(host).review(starter);
-      dispose();
+    await withActions(host, async (actions) => {
+      await actions.dismiss(item(forYou));
     });
-    expect(host.ensurePersonalTags).toHaveBeenCalledOnce();
+    expect(host.dismiss).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'pick-1' })
+    );
+    expect(host.notify).toHaveBeenCalledOnce();
+    expect(analytics.track).toHaveBeenCalledWith(
+      'routine_suggestion_dismissed',
+      expect.objectContaining({ suggestionId: 'pick-1', from: 'for_you' })
+    );
+  });
+
+  it('count a row shown once per list, by its main surface on the Routines page', async () => {
+    const host = deps({ placement: () => ({ kind: 'routines' }) });
+    await withActions(host, async (actions) => {
+      const row = item(forYou);
+      actions.shown(row);
+      actions.shown(row);
+    });
+    expect(analytics.track).toHaveBeenCalledOnce();
+    expect(analytics.track).toHaveBeenCalledWith(
+      'routine_suggestion_shown',
+      expect.objectContaining({ surface: 'email', placement: 'routines' })
+    );
   });
 });

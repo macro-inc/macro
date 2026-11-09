@@ -2,201 +2,160 @@ import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { createPromotionVisibility } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableRoutineCodeSteps,
-  enableRoutineConditions,
-} from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { useEnsureTagSetMutation } from '@queries/properties/tags';
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import {
-  RoutineCard,
-  RoutineCardStrip,
-} from '../routines/components/routine-template-strip';
-import type { RoutineTemplate } from '../routines/core/routine-templates';
+import { Tabs } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
+import { newRoutineDraft } from '../routines/core/routine-templates';
 import { useRoutineCatalog } from '../routines/queries/catalog';
-import { composeRoutine } from '../routines/queries/compose-routine';
-import {
-  useEmailLabelNames,
-  useRoutineTags,
-} from '../routines/queries/step-sources';
-import { useComposerContext } from '../routines/routine-ai-composer';
+import { draftToCreateBody } from '../routines/queries/routine-draft';
+import { useCreateScheduleMutation } from '../routines/queries/schedules';
 import { startRoutineDraft } from '../routines/routine-draft-start';
 import { RoutineSuggestionsCard } from './components/routine-suggestions-card';
 import { RoutineSuggestionsDialog } from './components/routine-suggestions-dialog';
-import { suggestionCard } from './core/suggestion-draft';
-import { type RoutineSurface, SURFACE_COPY } from './core/surfaces';
+import {
+  type SuggestionItem,
+  suggestionItem,
+  suggestionsFor,
+  suggestionTitle,
+} from './core/suggestions';
+import {
+  ROUTINE_SURFACES,
+  type RoutineSurface,
+  SURFACE_COPY,
+} from './core/surfaces';
 import {
   createSuggestionActions,
-  type SuggestionActions,
+  type SuggestionPlacement,
 } from './primitives/suggestion-actions';
 import {
-  refreshRoutineSuggestions,
   useDismissRoutineSuggestionMutation,
   useRoutineSuggestions,
   useRoutineSuggestionsEnabled,
 } from './queries/routine-suggestions';
+import {
+  SuggestionRows,
+  suggestionListView,
+} from './views/suggestion-list-view';
 
-/** Production wiring for accepting and dismissing suggestions. */
-function useProductionActions(onLeave: () => void): SuggestionActions {
+/**
+ * Suggestions as rows, with the routine each saves, and the actions that
+ * enable, edit and dismiss them. Built only where a list is on screen.
+ */
+function useSuggestionList(
+  placement: () => SuggestionPlacement,
+  onLeave: () => void
+) {
   const layout = useSplitLayout();
-  const hasPaidAccess = useHasPaidAccess();
-  const defaultModel = () => defaultModelForPlan(hasPaidAccess());
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
-  const decisions = useFeatureFlag(enableRoutineConditions);
+  const source = useRoutineSuggestions();
   const catalog = useRoutineCatalog();
-  const labels = useEmailLabelNames();
-  const tags = useRoutineTags();
-  const channels = useChannelsContext();
-  const composer = useComposerContext({
-    defaultModel,
-    decisionsEnabled: () => decisions().enabled,
-  });
+  const hasPaidAccess = useHasPaidAccess();
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const create = useCreateScheduleMutation();
   const ensureTagSet = useEnsureTagSetMutation();
   const dismiss = useDismissRoutineSuggestionMutation();
-  return createSuggestionActions({
-    catalog,
-    defaultModel,
-    codeSteps: () => codeSteps().enabled,
-    workspace: () => ({
-      label: labels(),
-      tag: tags()
-        .filter((tag) => tag.scope === 'user')
-        .map((tag) => tag.label),
-      channel: channels
-        .channels()
-        .flatMap((channel) => (channel.name ? [channel.name] : [])),
-    }),
-    async ensurePersonalTags() {
-      await ensureTagSet.mutateAsync({ scope: 'user' });
+
+  const items = createMemo(() => {
+    const suggestions = source.suggestions();
+    if (!suggestions) return undefined;
+    const model = defaultModelForPlan(hasPaidAccess());
+    const context = {
+      target: { kind: 'model' as const, model },
+      codeSteps: codeSteps().enabled,
+      base: newRoutineDraft(undefined, {
+        defaultModel: model,
+        codeSteps: codeSteps().enabled,
+      }),
+    };
+    return suggestions.flatMap((suggestion) => {
+      const item = suggestionItem(suggestion, catalog(), context);
+      return item ? [item] : [];
+    });
+  });
+
+  const actions = createSuggestionActions({
+    placement,
+    async create(draft, item) {
+      // A tagging routine adds the person's own tags, which must exist.
+      if (item.needsPersonalTags)
+        await ensureTagSet.mutateAsync({ scope: 'user' });
+      const created = await create.mutateAsync({
+        body: draftToCreateBody(draft),
+        suggestionId: item.id,
+      });
+      if (!created.id) throw new Error('Created routine has no ID');
+      return created.id;
     },
-    draft: (request) => composeRoutine(request, composer()),
-    review(draft) {
+    customize(draft) {
       onLeave();
       startRoutineDraft(draft);
       openAgentsPage(layout, 'routines', { routineId: 'new' });
     },
-    describe(request) {
-      onLeave();
-      layout.popoverSplit({
-        type: 'component',
-        id: 'routine-compose',
-        params: { initialDescription: request },
-      });
-    },
-    dismiss(id) {
-      dismiss.mutate(id, {
-        onError: () =>
-          toast.alert('Couldn’t dismiss that suggestion', {
-            subtext: 'Try again.',
-          }),
-      });
+    async dismiss(item) {
+      await dismiss.mutateAsync(item.id);
     },
     notify: (message) => toast.alert(message),
   });
+
+  return {
+    source,
+    items,
+    actions,
+    openRoutine(routineId?: string) {
+      onLeave();
+      openAgentsPage(
+        layout,
+        'routines',
+        routineId === undefined ? {} : { routineId }
+      );
+    },
+  };
 }
 
-/** Suggestions as cards, dropping those the catalog can't show. */
-function cards(
-  suggestions: readonly RoutineSuggestion[],
-  catalog: readonly RoutineTemplate[]
-) {
-  return suggestions.flatMap((suggestion) => {
-    const entry =
-      suggestion.kind === 'starter'
-        ? catalog.find((routine) => routine.key === suggestion.key)
-        : undefined;
-    const card = suggestionCard(suggestion, entry);
-    return card ? [{ suggestion, card }] : [];
+/** The sidebar dialog's list, for one surface. */
+function SurfaceSuggestions(props: {
+  surface: RoutineSurface;
+  onLeave(): void;
+}) {
+  const list = useSuggestionList(
+    () => ({ kind: 'sidebar', surface: props.surface }),
+    () => props.onLeave()
+  );
+  const visible = createMemo(() => {
+    const items = suggestionsFor(list.items(), props.surface);
+    return items && list.actions.visible(items);
   });
-}
-
-/**
- * Suggestions as routine cards, the same cards templates use. Choosing one
- * opens it for review; its corner button is Not interested. The actions are
- * built only while shown, since the drafter's workspace context loads
- * several lists.
- */
-function SuggestionCards(props: {
-  suggestions: readonly RoutineSuggestion[];
-  on: 'page' | 'dialog';
-  onLeave?: () => void;
-}) {
-  const catalog = useRoutineCatalog();
-  const actions = useProductionActions(() => props.onLeave?.());
+  const view = () =>
+    suggestionListView({
+      suggestions: visible(),
+      generating: list.source.generating(),
+      failed: list.source.failed(),
+    });
+  usePending('routine_suggestions.load', () => view().kind === 'loading');
   return (
-    <For each={cards(props.suggestions, catalog())}>
-      {({ suggestion, card }) => (
-        <RoutineCard
-          on={props.on}
-          card={card}
-          label={`Review ${card.title}`}
-          status={
-            actions.pending() === suggestion.id
-              ? suggestion.kind === 'request'
-                ? 'Drafting…'
-                : 'Opening…'
-              : undefined
-          }
-          disabled={actions.pending() !== undefined}
-          onUse={() =>
-            fireAndForget(
-              actions.review(suggestion),
-              'routine-suggestions.review'
-            )
-          }
-          onDismiss={() => actions.dismiss(suggestion)}
-          dismissLabel={`Not interested in ${card.title}`}
-        />
-      )}
-    </For>
-  );
-}
-
-/** Every suggestion given, as cards in a dialog. */
-function SuggestionsDialog(props: {
-  open: boolean;
-  onOpenChange(open: boolean): void;
-  title: string;
-  suggestions: readonly RoutineSuggestion[];
-  refreshing: boolean;
-}) {
-  const layout = useSplitLayout();
-  return (
-    <RoutineSuggestionsDialog
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      title={props.title}
-      refreshing={props.refreshing}
-      onRefresh={() =>
-        fireAndForget(refreshRoutineSuggestions(), 'routine-suggestions')
-      }
-      onSeeAll={() => {
-        props.onOpenChange(false);
-        openAgentsPage(layout, 'routines');
-      }}
-    >
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-2.5">
-        <SuggestionCards
-          on="dialog"
-          suggestions={props.suggestions}
-          onLeave={() => props.onOpenChange(false)}
-        />
-      </div>
-    </RoutineSuggestionsDialog>
+    <SuggestionRows
+      view={view()}
+      actions={list.actions}
+      emptyLabel={`No ${SURFACE_COPY[props.surface].label.toLowerCase()} routines to suggest yet. As your workspace grows, new ideas show up here.`}
+      onRetry={list.source.retry}
+      onOpenRoutine={list.openRoutine}
+    />
   );
 }
 
 /**
- * The suggested-routines card at the top of a view sidebar, which opens
- * that surface's suggestions. It shows only while there are some, and
- * closing it hides it on every device.
+ * The "Suggested routines" card at the top of a view sidebar, which opens
+ * that surface's suggestions. It shows only while there are some, and its
+ * close button hides it on every device.
  */
 export function SidebarRoutineSuggestions(props: {
   surface: RoutineSurface;
@@ -211,11 +170,11 @@ export function SidebarRoutineSuggestions(props: {
 }
 
 function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
+  const layout = useSplitLayout();
   const source = useRoutineSuggestions();
+  const catalog = useRoutineCatalog();
   const forSurface = createMemo(() =>
-    source
-      .suggestions()
-      ?.filter((suggestion) => suggestion.surface === props.surface)
+    suggestionsFor(source.suggestions(), props.surface)
   );
   const visibility = createPromotionVisibility(
     () => `routine-suggestions:${props.surface}`,
@@ -224,124 +183,156 @@ function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
       return current === undefined ? undefined : current.length > 0;
     }
   );
-  const catalog = useRoutineCatalog();
+  const [open, setOpen] = createSignal(false);
   const teaser = () => {
-    const [first] = cards(forSurface() ?? [], catalog());
-    return first?.card.title ?? SURFACE_COPY[props.surface].pitch;
+    const [first] = forSurface() ?? [];
+    return (
+      (first && suggestionTitle(first, catalog())) ??
+      SURFACE_COPY[props.surface].pitch
+    );
+  };
+  const openDialog = () => {
+    analytics.track('routine_suggestions_opened', {
+      surface: props.surface,
+      suggestions: forSurface()?.length ?? 0,
+    });
+    // The dialog's list flow joins this, so one trace runs to its rows.
+    const interaction = beginInteraction('routine_suggestions.open', {
+      attributes: { 'routine.suggestion.surface': props.surface },
+      closeOnJoin: true,
+    });
+    try {
+      setOpen(true);
+    } finally {
+      interaction.end();
+    }
   };
   return (
     <Show when={visibility.shown()}>
-      <CardAndDialog
-        surface={props.surface}
+      <RoutineSuggestionsCard
         class={props.class}
-        suggestions={forSurface() ?? []}
         teaser={teaser()}
-        refreshing={source.generating()}
-        onDismissCard={() => {
+        more={Math.max(0, (forSurface()?.length ?? 0) - 1)}
+        onOpen={openDialog}
+        onDismiss={() => {
           analytics.track('routine_suggestions_card_dismissed', {
             surface: props.surface,
           });
+          setOpen(false);
           visibility.dismiss();
         }}
       />
-    </Show>
-  );
-}
-
-/**
- * The card and its dialog. The dialog's open state lives here, so it closes
- * when the card goes away (its last suggestion dismissed) and doesn't come
- * back open with the card.
- */
-function CardAndDialog(props: {
-  surface: RoutineSurface;
-  class?: string;
-  suggestions: readonly RoutineSuggestion[];
-  teaser: string;
-  refreshing: boolean;
-  onDismissCard(): void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  return (
-    <>
-      <RoutineSuggestionsCard
-        class={props.class}
-        teaser={props.teaser}
-        more={Math.max(0, props.suggestions.length - 1)}
-        onOpen={() => {
-          analytics.track('routine_suggestions_opened', {
-            surface: props.surface,
-            suggestions: props.suggestions.length,
-          });
-          setOpen(true);
-        }}
-        onDismiss={() => props.onDismissCard()}
-      />
-      <SuggestionsDialog
+      <RoutineSuggestionsDialog
         open={open()}
         onOpenChange={setOpen}
         title={`Routines for ${SURFACE_COPY[props.surface].label}`}
-        suggestions={props.suggestions}
-        refreshing={props.refreshing}
-      />
-    </>
-  );
-}
-
-/**
- * "Suggested for you" on the Routines page, in place of Macro's templates
- * while there are suggestions.
- */
-export function RoutineSuggestionsSection(props: {
-  /** Shown instead when there are no suggestions, e.g. the templates. */
-  fallback: JSX.Element;
-}) {
-  const enabled = useRoutineSuggestionsEnabled();
-  return (
-    <Show when={enabled()} fallback={props.fallback}>
-      <SuggestedForYou fallback={props.fallback} />
-    </Show>
-  );
-}
-
-/** The Routines page shows one row of this many, like its templates. */
-const ROUTINES_PAGE_SHOWN = 4;
-
-function SuggestedForYou(props: { fallback: JSX.Element }) {
-  const source = useRoutineSuggestions();
-  const [open, setOpen] = createSignal(false);
-  // Best first across areas: AI's estimate that the person keeps it.
-  const ranked = createMemo(() =>
-    (source.suggestions() ?? []).toSorted(
-      (a, b) => b.keepProbability - a.keepProbability
-    )
-  );
-  return (
-    <Show when={ranked().length} fallback={props.fallback}>
-      <RoutineCardStrip
-        heading="Suggested for you"
-        allLabel="All suggestions"
-        showAll={ranked().length > ROUTINES_PAGE_SHOWN}
-        onAll={() => {
-          analytics.track('routine_suggestions_opened', {
-            surface: 'all',
-            suggestions: ranked().length,
-          });
-          setOpen(true);
+        generating={source.generating()}
+        onSeeAll={() => {
+          setOpen(false);
+          openAgentsPage(layout, 'routines');
         }}
       >
-        <SuggestionCards
-          on="page"
-          suggestions={ranked().slice(0, ROUTINES_PAGE_SHOWN)}
-        />
-      </RoutineCardStrip>
-      <SuggestionsDialog
-        open={open()}
-        onOpenChange={setOpen}
-        title="Suggested for you"
-        suggestions={ranked()}
-        refreshing={source.generating()}
-      />
+        <TraceFlow
+          name="routine_suggestions.list"
+          attributes={{
+            'routine.suggestion.placement': 'sidebar',
+            'routine.suggestion.surface': props.surface,
+          }}
+        >
+          <SurfaceSuggestions
+            surface={props.surface}
+            onLeave={() => setOpen(false)}
+          />
+        </TraceFlow>
+      </RoutineSuggestionsDialog>
     </Show>
+  );
+}
+
+type SurfaceFilter = RoutineSurface | 'all';
+
+/** "Suggested for you" below the routines list, filtered by surface. */
+export function RoutineSuggestionsSection() {
+  const enabled = useRoutineSuggestionsEnabled();
+  return (
+    <Show when={enabled()}>
+      <TraceFlow
+        name="routine_suggestions.list"
+        attributes={{ 'routine.suggestion.placement': 'routines' }}
+      >
+        <SuggestedForYou />
+      </TraceFlow>
+    </Show>
+  );
+}
+
+function SuggestedForYou() {
+  const list = useSuggestionList(
+    () => ({ kind: 'routines' }),
+    () => {}
+  );
+  const [filter, setFilter] = createSignal<SurfaceFilter>('all');
+  const all = createMemo(() => {
+    const items = list.items();
+    return items && list.actions.visible(items);
+  });
+  const filterOptions = createMemo(() => {
+    const present = new Set(all()?.flatMap((item) => item.surfaces));
+    return [
+      { value: 'all' as const, label: 'All' },
+      ...ROUTINE_SURFACES.filter((surface) => present.has(surface)).map(
+        (surface) => ({ value: surface, label: SURFACE_COPY[surface].label })
+      ),
+    ];
+  });
+  const visible = (): SuggestionItem[] | undefined => {
+    const current = filter();
+    return current === 'all' ? all() : suggestionsFor(all(), current);
+  };
+  const view = () =>
+    suggestionListView({
+      suggestions: visible(),
+      generating: list.source.generating(),
+      failed: list.source.failed(),
+    });
+  usePending('routine_suggestions.load', () => view().kind === 'loading');
+  return (
+    <section
+      aria-labelledby="routine-suggestions-heading"
+      class="flex flex-col gap-3 border-t border-edge-muted px-4 pt-6 pb-8"
+    >
+      <div class="flex min-w-0 flex-wrap items-center justify-between gap-3 px-1">
+        <div class="min-w-0">
+          <h2
+            id="routine-suggestions-heading"
+            class="text-sm font-semibold text-ink"
+          >
+            Suggested for you
+          </h2>
+          <p class="text-xs text-ink-muted">
+            Routines picked for your workspace, and templates from Macro. Enable
+            one in a click, or open it to edit first.
+          </p>
+        </div>
+        <Show when={filterOptions().length > 2}>
+          <Tabs
+            aria-label="Suggestion area"
+            size="sm"
+            wrap
+            options={filterOptions()}
+            value={filter()}
+            onChange={setFilter}
+          />
+        </Show>
+      </div>
+      <SuggestionRows
+        view={view()}
+        actions={list.actions}
+        showSurface={filter() === 'all'}
+        emptyLabel="No routines to suggest yet. As your workspace grows, new ideas show up here."
+        onRetry={list.source.retry}
+        onOpenRoutine={list.openRoutine}
+      />
+    </section>
   );
 }

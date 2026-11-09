@@ -29,12 +29,15 @@ type SurfaceCopy = {
 export const SURFACE_COPY: Record<RoutineSurface, SurfaceCopy> = {
   email: {
     label: 'Email',
-    pitch: 'Let AI sort, tag and follow up on your mail',
+    pitch: 'Let AI triage, tag, and follow up on your mail',
   },
-  calendar: { label: 'Calendar', pitch: 'Prep for your day before it starts' },
+  calendar: { label: 'Calendar', pitch: 'Prep for meetings before they start' },
   tasks: { label: 'Tasks', pitch: 'Keep tasks moving without the busywork' },
-  files: { label: 'Files', pitch: 'Keep your documents organized' },
-  crm: { label: 'CRM', pitch: 'Keep every deal moving' },
+  files: { label: 'Files', pitch: 'Keep your documents organized and current' },
+  crm: {
+    label: 'CRM',
+    pitch: 'Keep every company and deal in the right place',
+  },
   chat: { label: 'Chat', pitch: 'Never miss what matters in your channels' },
   calls: { label: 'Calls', pitch: 'Turn every call into next steps' },
   reviews: { label: 'Reviews', pitch: 'Stay on top of pull requests' },
