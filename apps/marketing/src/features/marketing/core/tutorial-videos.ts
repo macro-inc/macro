@@ -13,7 +13,7 @@ export const TUTORIAL_VIDEOS = {
   crm: { title: 'Learn how to use Macro CRM', length: '1:26' },
   agents: { title: 'Learn how to use Macro Agents', length: '1:05' },
   macrod: { title: 'Learn how to use MacroD', length: '1:17' },
-  routines: { title: 'Learn how to use Routines', length: '0:57' },
+  routines: { title: 'Learn how to use Routines', length: '1:01' },
   skills: { title: 'Learn how to use Skills', length: '0:49' },
   github: { title: 'Learn how to use Macro with GitHub', length: '1:01' },
   'company-graph': { title: 'Company graph', length: '0:47' },

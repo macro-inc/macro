@@ -92,9 +92,8 @@ export default {
   macrodLength: '1:17',
   routinesTitle: 'Learn how to use Routines',
   routinesBlock: 'Routines',
-  routinesSnippet:
-    'Agents that run on a schedule or when something happens in your workspace',
-  routinesLength: '0:57',
+  routinesSnippet: 'Agents that run when things happen across your workspace',
+  routinesLength: '1:01',
   skillsTitle: 'Learn how to use Skills',
   skillsBlock: 'Skills',
   skillsSnippet: 'Instructions your agents follow, shared with your whole team',
