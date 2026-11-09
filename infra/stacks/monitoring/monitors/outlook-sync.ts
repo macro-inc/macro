@@ -6,13 +6,14 @@
 // a widget or turns a monitor into missing data:
 //
 // - The `outlook mailbox health` INFO log, about once a minute per Outlook
-//   mailbox: `link_id`, `queued`, `parked`, `oldest_waiting_seconds`,
+//   mailbox: `link_id`, `queued`, `parked`, `abandoned`, `oldest_waiting_seconds`,
 //   `parked_until_max_seconds`, `imported_5m`, `seconds_since_last_import`
 //   (numbers), `sync_active`, `needs_reauth` (booleans).
 // - The `outlook import completed` INFO log: `link_id`, `sync_generation`,
 //   `duration_seconds`, `messages`, `folders`, `graph_calls`.
 // - Spans: `outlook.sync.{discover,enumerate,reconcile,project}` (internal, so
-//   Datadog keeps the name as `resource_name`) with `outlook.outcome` and
+//   Datadog keeps the name as `resource_name`) with `outlook.outcome`
+//   (`imported` | `absent` | `deferred` | `abandoned` | `failed`) and
 //   `outlook.defer_reason`; `outlook.notification_lag_ms` on reconcile spans
 //   (Graph change notification received to message imported); the
 //   `outlook.subscription.{maintain,notify}` spans with `outlook.outcome`;
@@ -50,6 +51,7 @@ const HEALTH_SPLITS: LogGroupBy[] = [
 for (const field of [
   'queued',
   'parked',
+  'abandoned',
   'oldest_waiting_seconds',
   'seconds_since_last_import',
   'imported_5m',
@@ -215,6 +217,7 @@ const dashboard = new datadog.Dashboard('outlook-sync', {
       ),
       lines('Claimable messages by mailbox', `max:${MAILBOX('queued')}`),
       lines('Parked messages by mailbox', `max:${MAILBOX('parked')}`),
+      lines('Abandoned messages by mailbox', `max:${MAILBOX('abandoned')}`),
       lines(
         'Oldest claimable message (s) by mailbox',
         `max:${MAILBOX('oldest_waiting_seconds')}`

@@ -5,6 +5,7 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `POST /{document_id}/comments/text` — start a comment thread on a quoted passage
 //! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
 //!   read, calculate and edit a native spreadsheet, by operations or instructions
 //! - `POST /create_spreadsheet` — create a native spreadsheet
@@ -35,6 +36,8 @@ mod tests;
 pub mod ai_edit;
 #[cfg(feature = "ai_tools")]
 pub mod canvas;
+#[cfg(feature = "ai_tools")]
+pub mod comment_on_text;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -59,6 +62,8 @@ pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
 pub mod get_text;
+#[cfg(feature = "ai_tools")]
+pub mod markdown_body;
 #[cfg(feature = "ai_tools")]
 pub mod presentation;
 pub mod put_interaction;
@@ -146,8 +151,25 @@ struct NameTooLongErrorResponse {
     message: &'static str,
 }
 
+#[derive(serde::Serialize)]
+struct CodedErrorResponse {
+    code: &'static str,
+    message: &'static str,
+}
+
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
+        if let DocumentError::EmailAttachmentNotFound = &self {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(CodedErrorResponse {
+                    code: model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+                    message: "email attachment not found",
+                }),
+            )
+                .into_response();
+        }
+
         if let DocumentError::NameTooLong { max } = &self {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -161,7 +183,9 @@ impl IntoResponse for DocumentError {
         }
 
         let status_code = match &self {
-            DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
+            DocumentError::NotFound(_) | DocumentError::EmailAttachmentNotFound => {
+                StatusCode::NOT_FOUND
+            }
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
@@ -220,6 +244,13 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The editing worker that places comment marks in markdown documents and
+    /// serves revision-checked markdown body reads and writes.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
+    /// The shared message service comment threads are posted through.
+    #[cfg(feature = "ai_tools")]
+    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
     /// The Canvas tools' worker, admission, metering and rollout, for the
     /// SDK's canvas routes.
     #[cfg(feature = "ai_tools")]
@@ -290,6 +321,9 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
             #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
+            #[cfg(feature = "ai_tools")]
+            messages: self.messages.clone(),
             canvas: self.canvas.clone(),
             #[cfg(feature = "ai_tools")]
             spreadsheet: self.spreadsheet.clone(),
@@ -413,6 +447,10 @@ where
             axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/comments/text",
+            axum::routing::post(comment_on_text::comment_on_text_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/canvas/scene",
             axum::routing::post(canvas::canvas_scene_handler::<T, Svc, Auth>),
         )
@@ -476,6 +514,13 @@ where
             "/{document_id}/illustrator",
             axum::routing::get(design_files::read_illustrator_document_handler::<T, Svc, Auth>),
         );
+
+    #[cfg(feature = "ai_tools")]
+    let document_id_routes = document_id_routes.route(
+        "/{document_id}/markdown",
+        axum::routing::get(markdown_body::get_markdown_handler::<T, Svc, Auth>)
+            .put(markdown_body::write_markdown_handler::<T, Svc, Auth>),
+    );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),

@@ -4,7 +4,9 @@
 
 On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
-only when pipelines are enabled). The
+only when pipelines are enabled). The new-pipeline dialog's type menu
+(**Companies**, **Contacts**, **Generic**) shows the same icon, title and
+one-line description rows, with a check on the selected type. The
 **Records** section lists **Companies**, **People**, **Sales Tasks**, **Sales Email**,
 **Sales Notes**, and **Sales Calls**, in that order; Pipelines and
 Lists follow. Record-detail tabs keep their unprefixed names.

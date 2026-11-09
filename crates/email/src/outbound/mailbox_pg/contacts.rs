@@ -11,7 +11,7 @@ impl AddressBookRepository for PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind IN ('contacts_catalog','contacts_profile','contacts') AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -237,7 +237,7 @@ impl AddressBookRepository for PgMailboxSync {
     async fn claim_photo(&self, lease_id: Uuid) -> Result<Option<ContactPhotoLease>, MailboxError> {
         let row = sqlx::query!(r#"WITH candidate AS (
             SELECT s.link_id,s.folder_id,s.provider_id FROM email_address_book_sources s JOIN email_links l ON l.id = s.link_id
-            WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.deleted_at IS NULL AND s.photo_due_at <= now()
+            WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.deleted_at IS NULL AND s.photo_due_at <= now()
                 AND (s.photo_lease_until IS NULL OR s.photo_lease_until < now())
             ORDER BY s.photo_due_at,s.link_id,s.folder_id,s.provider_id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
         ) UPDATE email_address_book_sources s SET photo_lease_id = $1,photo_lease_until = now() + interval '3 minutes'

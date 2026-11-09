@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::domain::{
-    history::{InitiativeActivityCursor, InitiativeActivityRecord},
+    history::{
+        InitiativeActivityCursor, InitiativeActivityPage, InitiativeActivityRange,
+        InitiativeActivityRecord,
+    },
     reads::{InitiativePageRequest, InitiativeTasksRequest},
 };
 use ai_toolset::{AsyncTool, ServiceContext, ToolAnnotated, ToolAnnotations};
@@ -272,37 +275,23 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
                 EntityType::Initiative,
             )
             .await?;
-        if self
-            .after
-            .zip(self.before)
-            .is_some_and(|(after, before)| after >= before)
-        {
-            return Err(failure(InitiativeError::BadRequest(
-                "after must precede before".into(),
-            )));
-        }
-        let cursor = self.cursor.clone().or_else(|| {
-            self.before.map(|occurred_at| InitiativeActivityCursor {
-                occurred_at,
-                id: Uuid::nil(),
-            })
-        });
         let page = context
             .history
-            .read(receipt, cursor, u32::from(self.limit.unwrap_or(100)))
+            .read_range(
+                receipt,
+                InitiativeActivityRange {
+                    after: self.after,
+                    before: self.before,
+                    cursor: self.cursor.clone(),
+                    limit: u32::from(self.limit.unwrap_or(100)),
+                },
+            )
             .await
             .map_err(failure)?;
-        let next_cursor = page
-            .next_cursor
-            .filter(|cursor| self.after.is_none_or(|after| cursor.occurred_at >= after));
-        let records = page
-            .records
-            .into_iter()
-            .filter(|record| {
-                self.after.is_none_or(|after| record.occurred_at >= after)
-                    && self.before.is_none_or(|before| record.occurred_at < before)
-            })
-            .collect();
+        let InitiativeActivityPage {
+            records,
+            next_cursor,
+        } = page;
         Ok(ProjectActivityResult {
             records,
             truncated: next_cursor.is_some(),

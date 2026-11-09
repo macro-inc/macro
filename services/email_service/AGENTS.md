@@ -96,6 +96,13 @@ the gateway `/email` prefix.
   would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
+- An attachment row can be deleted after it is claimed: a Gmail draft gets a
+  new message id on every save, and deleting the old revision cascades its
+  attachments. DSS then answers the import with a coded 404
+  (`EMAIL_ATTACHMENT_NOT_FOUND`), surfaced as
+  `UploadAttachmentError::AttachmentDeleted`. Every caller treats it as nothing
+  left to do: skip, no retry, no claim to release. The newer revision imports
+  its own rows.
 - BackfillThread reads a whole thread with one Gmail `threads.get` and writes
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
@@ -170,6 +177,11 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+  Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
+  redelivered instead of held in flight. A probe returns an error, and so is
+  redelivered toward the DLQ, only for transient failures. An `AuthRequired`
+  watch renewal retries once with a fresh token so the token source can set
+  `needs_reauth`, and finishes once that flag is stored.
 - `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
   Outlook import counts every minute, and the task that wins the Redis key
   `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
