@@ -236,7 +236,8 @@ export function importHTML(
         }),
       ];
     }
-    if (tag === 'a')
+    if (tag === 'a') {
+      if (!node.textContent && node.children.length === 0) return [];
       return [
         element('link', values, {
           ...base,
@@ -246,6 +247,7 @@ export function importHTML(
           title: node.getAttribute('title'),
         }),
       ];
+    }
     if (
       tag === 'pre' ||
       codeBlock ||
