@@ -25,6 +25,7 @@ export function createCallMediaPermissionHelp(media: Media) {
     camera: false,
   });
   let revision = 0;
+  let returnFocus: HTMLElement | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -42,14 +43,22 @@ export function createCallMediaPermissionHelp(media: Media) {
     revision++;
     setHelp(undefined);
   };
-  const request = async (device: CallMediaDevice, retry = false) => {
+  const request = async (
+    device: CallMediaDevice,
+    retry = false,
+    trigger?: HTMLElement
+  ) => {
     if (pending()[device] || disposed) return;
     const current = ++revision;
+    const previous = help();
     const anchor =
-      help()?.anchor ??
-      (document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : undefined);
+      trigger ??
+      (retry && previous?.device === device
+        ? previous.anchor
+        : document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : undefined);
+    returnFocus = anchor;
     const blocked = permission(device) === 'denied';
     if (blocked) setHelp({ device, anchor });
     setPending((previous) => ({ ...previous, [device]: true }));
@@ -78,6 +87,15 @@ export function createCallMediaPermissionHelp(media: Media) {
     },
     request,
     close,
+    restoreFocus: () => {
+      if (
+        !help() &&
+        returnFocus?.isConnected &&
+        !returnFocus.matches(':disabled')
+      ) {
+        returnFocus.focus({ preventScroll: true });
+      }
+    },
   };
 }
 
@@ -95,6 +113,7 @@ export function CallMediaPermissionHelp(props: {
   controller: ReturnType<typeof createCallMediaPermissionHelp>;
 }) {
   const control = props.controller;
+  let restoreFocusOnClose = true;
   const title = () =>
     control.help()?.device === 'camera'
       ? t('calls.enableCamera')
@@ -115,7 +134,20 @@ export function CallMediaPermissionHelp(props: {
           undefined
         }
       >
-        <Popover.Content class="menu-surface z-modal w-72 max-w-[calc(100vw-2rem)] rounded-xl p-4 outline-none">
+        <Popover.Content
+          class="menu-surface z-modal w-72 max-w-[calc(100vw-2rem)] rounded-xl p-4 outline-none"
+          aria-label={title()}
+          onOpenAutoFocus={() => {
+            restoreFocusOnClose = true;
+          }}
+          onInteractOutside={() => {
+            restoreFocusOnClose = false;
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (restoreFocusOnClose) control.restoreFocus();
+          }}
+        >
           <Popover.Title class="text-sm font-semibold">{title()}</Popover.Title>
           <Popover.Description class="mt-2 text-sm text-ink-muted">
             {permissionInstructions()}
@@ -149,7 +181,12 @@ export function CallMediaPermissionHelp(props: {
             >
               {t('calls.tryAgain')}
             </Button>
-            <Popover.CloseButton as={Button} size="sm" variant="ghost">
+            <Popover.CloseButton
+              as={Button}
+              size="sm"
+              variant="ghost"
+              aria-label={t('calls.cancelPermissionHelp')}
+            >
               {t('calls.cancelPermissionHelp')}
             </Popover.CloseButton>
           </div>

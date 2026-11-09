@@ -68,3 +68,36 @@ it('keeps camera actions available during an unanswered microphone prompt', asyn
   release();
   await microphone;
 });
+
+it('anchors each device to its own trigger and retains that target across retries', async () => {
+  const toggle = vi.fn(async () => {
+    throw new DOMException('Denied', 'NotAllowedError');
+  });
+  let controller!: ReturnType<typeof createCallMediaPermissionHelp>;
+  const view = render(() => {
+    controller = createCallMediaPermissionHelp({
+      microphonePermission: () => 'denied',
+      cameraPermission: () => 'denied',
+      toggleAudio: toggle,
+      toggleVideo: toggle,
+    });
+    return (
+      <>
+        <button>Microphone</button>
+        <button>Camera</button>
+        <CallMediaPermissionHelp controller={controller} />
+      </>
+    );
+  });
+  const mic = screen.getByRole('button', { name: 'Microphone' });
+  const camera = screen.getByRole('button', { name: 'Camera' });
+  await controller.request('microphone', false, mic);
+  expect(controller.help()?.anchor).toBe(mic);
+  await controller.request('camera', false, camera);
+  expect(controller.help()?.anchor).toBe(camera);
+  await controller.request('camera', true);
+  expect(controller.help()?.anchor).toBe(camera);
+  controller.close();
+  expect(controller.help()).toBeUndefined();
+  view.unmount();
+});

@@ -194,8 +194,14 @@ export function CallMediaControls(props: {
         videoPermission={call.cameraPermission?.()}
         screenSharing={call.isScreenSharing()}
         screenUnavailable={props.screenUnavailable}
-        onToggleAudio={() => fire(() => permissionHelp.request('microphone'))}
-        onToggleVideo={() => fire(() => permissionHelp.request('camera'))}
+        onToggleAudio={(event) => {
+          const trigger = event.currentTarget;
+          fire(() => permissionHelp.request('microphone', false, trigger));
+        }}
+        onToggleVideo={(event) => {
+          const trigger = event.currentTarget;
+          fire(() => permissionHelp.request('camera', false, trigger));
+        }}
         onToggleScreen={() => fire(call.toggleScreenShare)}
         onLeave={() => fire(props.onLeave)}
         error={error()}

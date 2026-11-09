@@ -48,7 +48,7 @@ function MediaSplitButton(props: {
   blocked?: boolean;
   /** Set for a toggle whose icon stays the same in both states. */
   pressed?: boolean;
-  onToggle: () => void;
+  onToggle: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   icon: JSX.Element;
   children: JSX.Element;
   mobileContent: JSX.Element;
@@ -148,8 +148,8 @@ export function CallControlBar(props: {
   videoPermission?: PermissionState;
   screenSharing: boolean;
   screenUnavailable?: boolean;
-  onToggleAudio: () => void;
-  onToggleVideo: () => void;
+  onToggleAudio: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  onToggleVideo: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   onToggleScreen: () => void;
   onLeave: () => void;
   /** Dropdown items for microphone, speaker, and audio processing. */

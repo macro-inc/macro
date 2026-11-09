@@ -348,6 +348,8 @@ browser-specific instructions with Try again; the macOS app also offers Open Sys
 Settings for that device's privacy pane. A pending camera request does not block
 microphone actions, or vice versa. Failed capture recovers after permission changes
 or returning from system settings, without reloading; stale calls cannot recover.
+Help stays anchored to the selected device. Cancel or Escape returns focus to that
+media button; clicking outside preserves the newly focused control.
 Only successful capture clears a previously failed device's warning. Connecting controls remain neutral and
 dimmed. The caret
 opens a settings menu above the toolbar on click only; hovering opens nothing.

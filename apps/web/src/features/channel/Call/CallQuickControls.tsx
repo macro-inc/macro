@@ -106,12 +106,17 @@ export function CallQuickControls(props: {
                 audioBlocked() ? t('calls.microphoneBlockedTooltip') : undefined
               }
               disabled={call.isConnecting()}
-              onClick={() =>
+              onClick={(event: MouseEvent) => {
+                const trigger = event.currentTarget;
                 fireAndForget(
-                  permissionHelp.request('microphone'),
+                  permissionHelp.request(
+                    'microphone',
+                    false,
+                    trigger instanceof HTMLElement ? trigger : undefined
+                  ),
                   'call-quick-controls'
-                )
-              }
+                );
+              }}
             >
               <Show
                 when={call.isAudioMuted() || audioBlocked()}
@@ -143,12 +148,17 @@ export function CallQuickControls(props: {
                   videoBlocked() ? t('calls.cameraBlockedTooltip') : undefined
                 }
                 disabled={call.isConnecting()}
-                onClick={() =>
+                onClick={(event: MouseEvent) => {
+                  const trigger = event.currentTarget;
                   fireAndForget(
-                    permissionHelp.request('camera'),
+                    permissionHelp.request(
+                      'camera',
+                      false,
+                      trigger instanceof HTMLElement ? trigger : undefined
+                    ),
                     'call-quick-controls'
-                  )
-                }
+                  );
+                }}
               >
                 <Show
                   when={call.isVideoMuted() || videoBlocked()}
