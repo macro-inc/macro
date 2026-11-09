@@ -10,6 +10,7 @@ pub use generic::*;
 mod editor;
 pub use editor::*;
 mod session;
+pub use prepared::PreparedAdmission;
 pub use session::*;
 pub use staging::{StagedUpdate, staging_editor_builder};
 #[cfg(feature = "test-faults")]

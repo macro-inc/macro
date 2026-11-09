@@ -69,11 +69,18 @@ impl Plugin for AdoptUpdate {
         "staged-update-admission"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
-            command: CommandKind::Extension(&ADOPT),
-            priority: CommandPriority::Critical,
-            placement: Placement::Before,
-        }];
+        static COMMANDS: [CommandRegistration; 2] = [
+            CommandRegistration {
+                command: CommandKind::Extension(&ADOPT),
+                priority: CommandPriority::Critical,
+                placement: Placement::Before,
+            },
+            CommandRegistration {
+                command: CommandKind::Extension(&crate::prepared::ADOPT_PREPARED),
+                priority: CommandPriority::Critical,
+                placement: Placement::Before,
+            },
+        ];
         &COMMANDS
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
@@ -81,7 +88,7 @@ impl Plugin for AdoptUpdate {
             return Ok(Handled::No);
         };
         let Some(update) = command.payload(&ADOPT) else {
-            return Ok(Handled::No);
+            return crate::prepared::admit_prepared(tx, command);
         };
         let _span = tracing::info_span!("editor.staging.admit").entered();
         let pending = {
