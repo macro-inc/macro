@@ -16,7 +16,8 @@ graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
 notification_inbox = { path = "../notification_inbox" }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -50,7 +50,9 @@ where
         }
     }
 
-    async fn signal(&self, user: &MacroUserIdStr<'static>, keys: &[FeedKey]) {
+    /// Tell the viewer's open feeds that `keys` may have changed. Best
+    /// effort.
+    pub async fn signal(&self, user: &MacroUserIdStr<'static>, keys: &[FeedKey]) {
         self.signals
             .changed(
                 user.clone(),

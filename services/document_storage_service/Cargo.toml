@@ -223,7 +223,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
-notification_inbox = { path = "../../crates/notification_inbox" }
+notification_inbox = { path = "../../crates/notification_inbox", features = ["outbound"] }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }

@@ -2,7 +2,8 @@ use async_graphql::{Enum, ID, Object, SimpleObject, Union};
 use graphql_notification::GraphqlNotification;
 use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use notification_inbox::domain::models::{
-    InboxActor, InboxChange, InboxEntry, InboxPage, InboxRow, InboxRowAction, InboxRowActionKind,
+    ClearAction, ClearStatus, InboxActor, InboxChange, InboxEntry, InboxPage, InboxRow,
+    InboxRowAction, InboxRowActionKind,
 };
 use soup::domain::models::SoupProjectionHydration;
 
@@ -361,6 +362,82 @@ impl<E: SoupEntityEdges> From<InboxChange<SoupProjectionHydration>>
             InboxChange::Removed(group) => Self::Removed(GraphqlNotificationInboxEntryRemoved {
                 group_id: ID(group.id()),
             }),
+        }
+    }
+}
+
+/// Where a clear of the inbox is in its life. Values may be added; treat one
+/// you do not know as still running.
+#[derive(Enum, Clone, Copy, Debug, PartialEq, Eq)]
+#[graphql(name = "NotificationInboxClearStatus")]
+pub enum GraphqlNotificationInboxClearStatus {
+    /// Rows are still being cleared.
+    Applying,
+    /// Every matching row is cleared.
+    Done,
+    /// An undo is restoring what the clear changed.
+    Undoing,
+    /// The undo finished.
+    Undone,
+    /// The clear stopped partway and was given up; what it cleared can still
+    /// be undone.
+    Failed,
+}
+
+impl From<ClearStatus> for GraphqlNotificationInboxClearStatus {
+    fn from(status: ClearStatus) -> Self {
+        match status {
+            ClearStatus::Applying => Self::Applying,
+            ClearStatus::Done => Self::Done,
+            ClearStatus::Undoing => Self::Undoing,
+            ClearStatus::Undone => Self::Undone,
+            ClearStatus::Failed => Self::Failed,
+        }
+    }
+}
+
+/// A clear of the notification inbox: what it covers, frozen when it
+/// started, and how far it has got. While it is applying, hide every row it
+/// covers; once it is undone, show them again.
+#[derive(SimpleObject)]
+#[graphql(name = "NotificationInboxClear")]
+pub struct GraphqlNotificationInboxClear {
+    /// The clear's id. Not `id`: the client cache reads an `id` field as
+    /// entity identity.
+    clear_id: ID,
+    /// Where the clear is in its life.
+    status: GraphqlNotificationInboxClearStatus,
+    /// The row kinds it clears; never empty.
+    row_types: Vec<GraphqlNotificationInboxRowType>,
+    /// Whether it clears unread rows only.
+    unread_only: bool,
+    /// RFC 3339 time; it clears only rows whose newest notification arrived
+    /// at or after it. Absent when it clears rows of any age.
+    since: Option<String>,
+    /// RFC 3339 time the clear started. Notifications that arrived later
+    /// are not cleared.
+    as_of: String,
+    /// Rows cleared so far.
+    row_count: i32,
+    /// Notifications an undo has reopened so far.
+    restored_count: i32,
+    /// Grows with every change to the clear; drop a copy older than one you
+    /// already have.
+    revision: i32,
+}
+
+impl From<ClearAction> for GraphqlNotificationInboxClear {
+    fn from(action: ClearAction) -> Self {
+        Self {
+            clear_id: ID(action.id.to_string()),
+            status: action.status.into(),
+            row_types: action.scope.row_types.into_iter().map(Into::into).collect(),
+            unread_only: action.scope.unread_only,
+            since: action.since.map(|since| since.to_rfc3339()),
+            as_of: action.as_of.to_rfc3339(),
+            row_count: i32::try_from(action.rows).unwrap_or(i32::MAX),
+            restored_count: i32::try_from(action.restored).unwrap_or(i32::MAX),
+            revision: i32::try_from(action.revision).unwrap_or(i32::MAX),
         }
     }
 }

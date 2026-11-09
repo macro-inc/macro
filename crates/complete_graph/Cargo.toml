@@ -72,6 +72,7 @@ models_databases = { path = "../models_databases" }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 attention_feed = { path = "../attention_feed", features = ["inbound"] }
 notification_inbox = { path = "../notification_inbox" }
+tokio-util = { workspace = true, features = ["rt"] }
 work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }

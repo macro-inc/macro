@@ -347,10 +347,6 @@ pub enum FeedError {
     /// A dependency failed.
     #[error("the feed is unavailable: {0}")]
     Unavailable(rootcause::Report),
-    /// The request can't complete yet; nothing changed, and the caller
-    /// retries it.
-    #[error("{0}")]
-    Busy(&'static str),
 }
 
 impl From<rootcause::Report> for FeedError {
