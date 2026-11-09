@@ -54,6 +54,19 @@ stacks. Process isolation belongs to
   (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
   and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
   the native tool gate, so both tools are in `covered_by_code_sdk`.
+- `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
+  `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
+  do, then sends only for a turn a person prompted from an app tab
+  (`TurnPrompter.client`); system turns, routines, triggers and channel
+  mentions answer `no_client`. The path must match `navigable_routes.json`,
+  generated from the web route table by
+  `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
+  (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). Budgets
+  (5 commands and 3 panes a turn, 30 a person a minute) live in Redis; the
+  harness adapters (`agent_harness_service/src/code_mode/ui_commands.rs`) send a
+  `ui_command` frame to `user/{prompter}` through the connection gateway behind
+  the `enable-agent-navigation` flag. No acknowledgement yet: `sent` is the
+  gateway receipt.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
   symbol). Jev ranks entities on their descriptions, in parallel calls of 32

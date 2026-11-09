@@ -85,6 +85,10 @@ private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+`TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
+the turn's prompt in (`ControlRequest.clientId`, refused from runtimes). Every
+`set_turn_prompter` overwrites it, a system turn never stores one, and it only
+addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 
 Archive state lives on `agent_session`: `archived_by`
 (`agent_session_archive_cause`: `user`, `pull_request_merged`,
