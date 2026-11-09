@@ -899,3 +899,34 @@ fn pure_hooks_capture_projected_payloads_without_exposing_native_typed_reads() -
 }
 
 mod publication;
+
+#[test]
+fn origin_update_accessor_preserves_source_not_the_independent_read_peer() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let tx = editor.transaction();
+    let identity = tx.foreign_update_identity();
+    let source = tx.view().snapshot_for_foreign_read()?;
+    source.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        let captured = peer.view().snapshot_for_foreign_read()?;
+        assert_eq!(captured.origin_update_identity(), Some(identity.clone()));
+        assert_ne!(
+            captured.origin_update_identity(),
+            Some(peer.foreign_update_identity())
+        );
+        Ok(())
+    })??;
+    let plain = tx.committed_state().view().snapshot_for_foreign_read()?;
+    assert!(plain.origin_update_identity().is_none());
+    plain.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        assert!(
+            peer.view()
+                .snapshot_for_foreign_read()?
+                .origin_update_identity()
+                .is_none()
+        );
+        Ok(())
+    })??;
+    Ok(())
+}

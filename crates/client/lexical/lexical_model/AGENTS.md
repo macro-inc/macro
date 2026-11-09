@@ -259,3 +259,8 @@ it through clones and advance it only at actual component-invalidating setters.
 Keep render_signature pure and source-ordered for signature-cached decorators;
 compare it only at consuming-view exposure, never increment a counter per write
 or advertise both signature and eager revision policies for one node.
+External publication adapters may associate a callback and its real commit using
+`ForeignReadSnapshot::origin_update_identity` and `Commit::foreign_update`. These
+opaque markers grant no active scope or mutation authority; unowned state reads
+and synthetic no-op commits carry no origin. Never serialize or print marker
+addresses, or infer a new publication from a historical/read-only capture.

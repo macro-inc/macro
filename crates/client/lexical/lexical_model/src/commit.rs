@@ -53,6 +53,9 @@ pub struct WorkCounters {
 /// An atomically published state transition.
 #[derive(Clone, Debug)]
 pub struct Commit {
+    /// Actual originating transaction, never a host-invented publication identity.
+    #[cfg(feature = "foreign-nodes")]
+    pub foreign_update: Option<ForeignUpdateIdentity>,
     /// Host default action was prevented.
     pub default_prevented: bool,
     /// Published follow-up transitions.
@@ -279,6 +282,8 @@ impl Transaction<'_> {
             prev.clone()
         };
         let commit = Commit {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update: Some(self.foreign_update_identity()),
             default_prevented: self.default_prevented,
             following: vec![],
             follow_up_error: None,
@@ -419,6 +424,8 @@ impl Transaction<'_> {
 impl Editor {
     pub(crate) fn noop_commit(&self) -> Commit {
         Commit {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update: None,
             id: CommitId(0),
             prev: self.state.clone(),
             next: self.state.clone(),
