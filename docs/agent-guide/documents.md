@@ -18,6 +18,15 @@ and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Verify engine parity before treating the flagged path as
 ready; native menus and anchored comments also require their view installers.
 
+For native document view performance, run the lexical-wasm-view
+`commit-work.browser.e2e.ts` fixture against a source-matched session artifact.
+Typing in one comment should measure that block's anchors, preserve table cell
+selection without repainting unrelated cells, and retain code ranges in untouched
+blocks. Resize an earlier block and check downstream comment positions before
+paint. The blank-document callback uses the mirror's maintained root-child count.
+This native-view check does not establish compat-core or application rollout
+readiness.
+
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.
 Keep the app shell open for the offline navigation; the app has no asset-caching

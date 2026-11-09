@@ -141,6 +141,11 @@ port.input = (input, after) => {
   admit(input, after);
 };
 const fixture = {
+  async commitWork(size: number) {
+    const { commitWork } = await import('./commit-work');
+    if (!view) throw new Error('Missing mounted native view');
+    return commitWork(view, port, size);
+  },
   unhandledKeyFallback() {
     class UnhandledPort extends SessionPort {
       listeners(): ReadonlyMap<string, number> {

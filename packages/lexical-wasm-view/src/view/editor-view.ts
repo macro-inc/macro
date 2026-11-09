@@ -28,6 +28,7 @@ import type {
 } from './commands';
 import { textLeaf } from './dom';
 import { registerEvents } from './events';
+import { MarkGeometry } from './mark-geometry';
 import { Mirror } from './mirror';
 import type { EditorPort, TextFromView, ViewSink } from './port';
 import { PresenceLayer } from './presence';
@@ -864,6 +865,12 @@ export class EditorView implements ViewSink {
   onCommit(listener: (info: CommitInfo) => void): () => void {
     this.commits.add(listener);
     return () => this.commits.delete(listener);
+  }
+  observeMarkGeometry<Id extends string>(
+    margin: HTMLElement,
+    update: (id: Id, top: number) => void
+  ): MarkGeometry<Id> {
+    return new MarkGeometry(this, margin, update);
   }
   isEmpty(): boolean | null {
     return this.mirror.isEmpty;
