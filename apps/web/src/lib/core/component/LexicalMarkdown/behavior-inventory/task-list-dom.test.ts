@@ -71,6 +71,74 @@ describe('mounted task list DOM slots', () => {
     }
   );
 
+  it.each([
+    ['check', 'bullet'],
+    ['check', 'number'],
+    ['bullet', 'check'],
+    ['bullet', 'number'],
+    ['number', 'check'],
+    ['number', 'bullet'],
+  ] as const)(
+    'replaces the list DOM and chrome when kind changes from %s to %s',
+    (from, to) => {
+      const { editor } = behaviorEditor();
+      const { key, element } = mountList(editor, from);
+      const oldBar = element.querySelector(`:scope > .${TASK_LIST_BAR_CLASS}`);
+      editor.update(
+        () => {
+          const node = $getNodeByKey(key);
+          if (!$isListNode(node)) throw new Error('Expected list');
+          node.setListType(to);
+        },
+        { discrete: true }
+      );
+      const next = editor.getElementByKey(key);
+      if (!next) throw new Error('Missing updated DOM');
+      expect(next).not.toBe(element);
+      expect(element.isConnected).toBe(false);
+      if (oldBar) expect(oldBar.isConnected).toBe(false);
+      expect(next.tagName).toBe(to === 'number' ? 'OL' : 'UL');
+      expect(
+        [...next.querySelectorAll(':scope > li')].map((row) => row.textContent)
+      ).toEqual(['first', 'second']);
+      expect(
+        next.querySelectorAll(`:scope > .${TASK_LIST_BAR_CLASS}`)
+      ).toHaveLength(to === 'check' ? 1 : 0);
+      expect(
+        next.querySelectorAll(':scope > li[role="checkbox"]')
+      ).toHaveLength(to === 'check' ? 2 : 0);
+      editor.read(() => {
+        const node = $getNodeByKey(key);
+        if (!$isListNode(node)) throw new Error('Expected list');
+        expect(node.getListType()).toBe(to);
+      });
+    }
+  );
+
+  it('updates an ordered start in place without replacing managed item DOM', () => {
+    const { editor } = behaviorEditor();
+    const { key, element } = mountList(editor, 'number');
+    const items = [...element.querySelectorAll(':scope > li')];
+    editor.update(
+      () => {
+        const node = $getNodeByKey(key);
+        if (!$isListNode(node)) throw new Error('Expected list');
+        node.setStart(9);
+      },
+      { discrete: true }
+    );
+    expect(editor.getElementByKey(key)).toBe(element);
+    expect(element.getAttribute('start')).toBe('9');
+    const nextItems = [...element.querySelectorAll(':scope > li')];
+    expect(nextItems[0]).toBe(items[0]);
+    expect(nextItems[1]).toBe(items[1]);
+    editor.read(() => {
+      const node = $getNodeByKey(key);
+      if (!$isListNode(node)) throw new Error('Expected list');
+      expect(node.getStart()).toBe(9);
+    });
+  });
+
   for (const operation of ['text', 'append', 'remove', 'reorder'] as const) {
     it(`preserves unmanaged toolbar identity and content through a committed ${operation} edit`, () => {
       const { editor } = behaviorEditor();

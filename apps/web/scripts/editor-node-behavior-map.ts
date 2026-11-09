@@ -47,4 +47,21 @@ export const EDITOR_NODE_BEHAVIOR_MAP = [
       'mounted task list DOM slots upgrades dirty legacy bullet list JSON through the production controls transform',
     ],
   },
+  // The mounted subclass inherits ListNode DOM hooks; these rows pin that
+  // composition, not every dependency implementation branch.
+  {
+    source: 'packages/lexical-core/nodes/TaskListNode.ts',
+    anchor: 'export class TaskListNode extends ListNode {',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/task-list-dom.test.ts',
+    cases: [
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from check to bullet',
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from check to number',
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from bullet to check',
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from bullet to number',
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from number to check',
+      'mounted task list DOM slots replaces the list DOM and chrome when kind changes from number to bullet',
+      'mounted task list DOM slots updates an ordered start in place without replacing managed item DOM',
+    ],
+  },
 ] as const;
