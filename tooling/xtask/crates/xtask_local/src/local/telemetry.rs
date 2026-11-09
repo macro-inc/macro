@@ -122,7 +122,7 @@ impl RunTelemetry {
         started_at: SystemTime,
         detached: bool,
     ) -> Option<Self> {
-        let common = common_fields(instance, kind, detached);
+        let common = || common_fields(instance, kind, detached);
         let recorder = match Recorder::start(paths, started_at, common) {
             Ok(recorder) => recorder?,
             Err(error) => {
@@ -243,6 +243,9 @@ impl RunTelemetry {
 
         let shared = self.shared;
         if !(shared.kind == RunKind::Up && succeeded) {
+            // A rebuild can end right after its build step, before the build
+            // lane has read sccache's counters and recorded.
+            shared.join_lanes();
             fields.insert("steps".to_owned(), Value::from(shared.state().steps));
             if let Some(recorder) = shared.take_recorder() {
                 recorder.finish(fields, ended, wait);
@@ -252,10 +255,7 @@ impl RunTelemetry {
 
         let (done, finished) = mpsc::channel();
         std::thread::spawn(move || {
-            let lanes = std::mem::take(&mut shared.state().lanes);
-            for lane in lanes {
-                let _ = lane.join();
-            }
+            shared.join_lanes();
             if succeeded {
                 inspect_services(&shared, "app");
             }
@@ -308,6 +308,14 @@ impl RunTelemetry {
 }
 
 impl Shared {
+    /// Wait for the build and inspection lanes, so their events are recorded.
+    fn join_lanes(&self) {
+        let lanes = std::mem::take(&mut self.state().lanes);
+        for lane in lanes {
+            let _ = lane.join();
+        }
+    }
+
     fn take_recorder(&self) -> Option<Recorder> {
         self.recorder
             .lock()

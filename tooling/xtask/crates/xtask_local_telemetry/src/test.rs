@@ -128,9 +128,16 @@ fn opted_out_writes_and_sends_nothing() {
         buffer_dir: opted_in.buffer_dir.clone(),
     };
 
-    let recorder = Recorder::start(&paths, SystemTime::now(), common()).expect("start");
+    let built_fields = std::cell::Cell::new(false);
+    let recorder = Recorder::start(&paths, SystemTime::now(), || {
+        built_fields.set(true);
+        common()
+    })
+    .expect("start");
 
     assert!(recorder.is_none());
+    // Building the fields runs git; an opted-out run must not pay for it.
+    assert!(!built_fields.get());
     assert!(!paths.buffer_dir.exists());
     assert!(endpoint.requests("/v1/logs").is_empty());
     assert!(endpoint.requests("/v1/traces").is_empty());
@@ -143,7 +150,7 @@ fn a_run_sends_its_steps_and_run_event_as_otlp() {
     let paths = opt_in(dir.path(), &endpoint.server.uri());
     let started = SystemTime::now();
 
-    let recorder = Recorder::start(&paths, started, common())
+    let recorder = Recorder::start(&paths, started, common)
         .expect("start")
         .expect("opted in");
     let run_id = recorder.run_id().to_owned();
@@ -233,7 +240,7 @@ fn killed_child() {
         config,
         buffer_dir: Path::new(&dir).join("buffer"),
     };
-    let recorder = Recorder::start(&paths, SystemTime::now(), common())
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("opted in");
     recorder.step_started("Starting infra (docker compose up -d --wait)");
@@ -275,7 +282,7 @@ fn a_killed_run_is_sent_by_the_next_one() {
     assert_eq!(buffered_files(&paths).len(), 1);
     assert!(endpoint.requests("/v1/logs").is_empty());
 
-    let next = Recorder::start(&paths, SystemTime::now(), common())
+    let next = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("opted in");
     next.finish(BTreeMap::new(), SystemTime::now(), Duration::from_secs(20));
@@ -313,7 +320,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     let paths = opt_in(dir.path(), &endpoint.server.uri());
 
     let began = Instant::now();
-    let recorder = Recorder::start(&paths, SystemTime::now(), common())
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("opted in");
     for index in 0..50 {
@@ -327,7 +334,7 @@ fn a_slow_endpoint_never_delays_the_run() {
     );
 
     let bounded = Instant::now();
-    let second = Recorder::start(&paths, SystemTime::now(), common())
+    let second = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("opted in");
     second.finish(
@@ -350,7 +357,7 @@ fn an_unreachable_endpoint_keeps_the_events_for_later() {
     drop(closed);
     let paths = opt_in(dir.path(), &format!("http://127.0.0.1:{port}"));
 
-    let recorder = Recorder::start(&paths, SystemTime::now(), common())
+    let recorder = Recorder::start(&paths, SystemTime::now(), common)
         .expect("start")
         .expect("opted in");
     recorder.record(Event::new("step").with("step", "Running migrations"));

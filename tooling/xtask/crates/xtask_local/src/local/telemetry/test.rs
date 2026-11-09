@@ -1,27 +1,44 @@
 use std::os::unix::fs::PermissionsExt;
-use std::time::SystemTime;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use serde_json::json;
-use xtask_local_telemetry::Paths;
+use xtask_local_telemetry::{Event, Paths};
 
 use super::super::instance::Instance;
 use super::{BuildOutput, RunKind, RunTelemetry, SccacheStats, ServiceHealth, step_name};
 
 /// A `stop` exits as soon as it returns, so its run line must already be
 /// buffered then, or the next run reports the stop as interrupted.
-#[test]
-fn an_action_buffers_its_run_event_before_returning() {
-    let dir = tempfile::tempdir().expect("tempdir");
+/// Opt in at a closed local port, so lines stay in the buffer to be read back.
+fn opted_in(dir: &std::path::Path) -> Paths {
     let closed = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = closed.local_addr().expect("addr").port();
     drop(closed);
-    let config = dir.path().join("local-telemetry.toml");
+    let config = dir.join("local-telemetry.toml");
     std::fs::write(&config, format!("endpoint = \"http://127.0.0.1:{port}\"\n")).expect("write");
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
-    let paths = Paths {
+    Paths {
         config,
-        buffer_dir: dir.path().join("buffer"),
-    };
+        buffer_dir: dir.join("buffer"),
+    }
+}
+
+fn buffered_records(paths: &Paths) -> Vec<serde_json::Value> {
+    let buffered: String = std::fs::read_dir(&paths.buffer_dir)
+        .expect("buffer dir")
+        .filter_map(|entry| std::fs::read_to_string(entry.ok()?.path()).ok())
+        .collect();
+    buffered
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect()
+}
+
+#[test]
+fn an_action_buffers_its_run_event_before_returning() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = opted_in(dir.path());
     let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
 
     let telemetry =
@@ -29,16 +46,43 @@ fn an_action_buffers_its_run_event_before_returning() {
     assert!(telemetry.is_some());
     RunTelemetry::finish_action(telemetry, || Ok(())).expect("action");
 
-    let buffered: String = std::fs::read_dir(&paths.buffer_dir)
-        .expect("buffer dir")
-        .filter_map(|entry| std::fs::read_to_string(entry.ok()?.path()).ok())
-        .collect();
-    let run = buffered
-        .lines()
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+    let run = buffered_records(&paths)
+        .into_iter()
         .find(|line| line["event"] == json!("run"))
         .expect("a buffered run event");
     assert_eq!(run["fields"]["outcome"], json!("success"));
+}
+
+/// A rebuild can close while its build lane is still reading sccache's
+/// counters; closing waits for the lane, so the build line is not dropped.
+#[test]
+fn a_rebuild_keeps_the_build_its_lane_records_after_close() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = opted_in(dir.path());
+    let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
+    let telemetry = RunTelemetry::begin_in(
+        &paths,
+        &instance,
+        RunKind::Rebuild,
+        SystemTime::now(),
+        false,
+    )
+    .expect("opted in");
+
+    let shared = Arc::clone(&telemetry.shared);
+    let lane = std::thread::spawn(move || {
+        // Stands in for a slow `sccache --show-stats`.
+        std::thread::sleep(Duration::from_millis(200));
+        shared.record(Event::new("build"));
+    });
+    telemetry.shared.state().lanes.push(lane);
+    telemetry.finish(true, None, Duration::ZERO);
+
+    let events: Vec<_> = buffered_records(&paths)
+        .into_iter()
+        .filter_map(|line| line["event"].as_str().map(str::to_owned))
+        .collect();
+    assert!(events.iter().any(|event| event == "build"), "{events:?}");
 }
 
 #[test]

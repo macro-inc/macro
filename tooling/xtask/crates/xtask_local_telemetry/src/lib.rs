@@ -189,13 +189,15 @@ impl Shared {
 
 impl Recorder {
     /// Start recording a run that began at `started_at`, if the user opted in.
-    /// `common` fields go on every event (kind, mode, instance, host, ...).
+    /// `common` builds the fields every event carries (kind, mode, instance,
+    /// host, ...); it is only called once the user has opted in.
     ///
-    /// `Ok(None)` means opted out: nothing was created and nothing will be sent.
+    /// `Ok(None)` means opted out: nothing was created, `common` was not called,
+    /// and nothing will be sent.
     pub fn start(
         paths: &Paths,
         started_at: SystemTime,
-        common: BTreeMap<String, Value>,
+        common: impl FnOnce() -> BTreeMap<String, Value>,
     ) -> Result<Option<Self>, StartError> {
         let Some(config) = config::Config::load(&paths.config)? else {
             return Ok(None);
@@ -210,7 +212,7 @@ impl Recorder {
         let begin = Begin {
             run_id,
             started_ns: unix_ns(started_at),
-            common,
+            common: common(),
         };
         let own_file = paths.buffer_dir.join(format!("{}.jsonl", begin.run_id));
         // Locked and holding its begin line before it gets the name other
