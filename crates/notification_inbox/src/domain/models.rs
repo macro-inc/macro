@@ -15,7 +15,8 @@ mod test;
 
 /// The kinds of inbox row, which callers can narrow the inbox to. Kinds are
 /// added as the inbox learns new sources; callers present a kind they do not
-/// know as a generic row.
+/// know as a generic row. A stored clear keeps the kinds it takes by their
+/// serialized names, so a kind's name never changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InboxRowType {
