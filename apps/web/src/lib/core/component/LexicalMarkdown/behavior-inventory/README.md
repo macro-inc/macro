@@ -39,6 +39,12 @@ arithmetic, missing selection and hidden-keyboard edits. Existing iOS Backspace
 mappings supply the platform constant and observe keydown cancellation/text;
 they do not establish glide deletion, native keyboard delivery or animation.
 
+Blame-hover cases use the production controller/store, mounted nodes and stable
+IDs, and native DOM selection. They cover nearest-ID lookup, touch/selection
+suppression, dismissal events, root replacement and listener disposal. The
+pointing-device boundary is supplied; tooltip rendering and remote attribution
+data remain unverified.
+
 From this worktree's `apps/web`, with its own dependencies:
 
 ```sh
@@ -77,7 +83,7 @@ bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor
 `scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts`,
 `editor-async-behavior-map.ts`, `editor-node-behavior-map.ts` and
 `editor-menu-behavior-map.ts`, `editor-checklist-behavior-map.ts` and
-`editor-platform-behavior-map.ts` map
+`editor-platform-behavior-map.ts` and `editor-hover-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
