@@ -51,6 +51,7 @@ pub fn event_payload(
     let encoders: &[Encoder] = &[
         // WP-58 Group B host requests.
         crate::plugins_group_b::event_payload,
+        crate::plugins_group_a::menu::event_payload,
     ];
     for encode in encoders {
         if let Some(payload) = encode(event)? {
