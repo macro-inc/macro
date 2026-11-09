@@ -163,6 +163,8 @@ pub enum CompatOperation {
     NodeSelectionClear = 52,
     NodeSelectionHas = 53,
     SelectionHasFormat = 54,
+    SetCompositionKey = 55,
+    CreateTableSelection = 56,
 }
 
 impl ::core::convert::TryFrom<u16> for CompatOperation {
@@ -225,6 +227,8 @@ impl ::core::convert::TryFrom<u16> for CompatOperation {
             52 => Ok(CompatOperation::NodeSelectionClear),
             53 => Ok(CompatOperation::NodeSelectionHas),
             54 => Ok(CompatOperation::SelectionHasFormat),
+            55 => Ok(CompatOperation::SetCompositionKey),
+            56 => Ok(CompatOperation::CreateTableSelection),
             d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
         }
     }
@@ -288,6 +292,8 @@ impl ::core::convert::From<CompatOperation> for u16 {
             CompatOperation::NodeSelectionClear => 52,
             CompatOperation::NodeSelectionHas => 53,
             CompatOperation::SelectionHasFormat => 54,
+            CompatOperation::SetCompositionKey => 55,
+            CompatOperation::CreateTableSelection => 56,
         }
     }
 }
@@ -761,6 +767,17 @@ pub enum CompatSelectionData<'raw> {
         has_cached_nodes: bool,
         cached_nodes: ::bebop::SliceWrapper<'raw, ForeignNodeRef>,
     },
+
+    /// Discriminator 4
+    CompatTableSelection {
+        reference: ForeignSelectionRef,
+        table_key: ForeignKey,
+        anchor: CompatPoint,
+        focus: CompatPoint,
+        dirty: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::bebop::SliceWrapper<'raw, ForeignNodeRef>,
+    },
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData<'raw> {
@@ -811,6 +828,24 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData<'raw> {
             => {
                 _reference.serialized_size() +
                 _keys.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+            Self::CompatTableSelection {
+                reference: ref _reference,
+                table_key: ref _table_key,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _reference.serialized_size() +
+                _table_key.serialized_size() +
+                _anchor.serialized_size() +
+                _focus.serialized_size() +
                 _dirty.serialized_size() +
                 _has_cached_nodes.serialized_size() +
                 _cached_nodes.serialized_size()
@@ -866,6 +901,25 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData<'raw> {
                 3u8._serialize_chained(dest)?;
                 _reference._serialize_chained(dest)?;
                 _keys._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+            Self::CompatTableSelection {
+                reference: ref _reference,
+                table_key: ref _table_key,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                4u8._serialize_chained(dest)?;
+                _reference._serialize_chained(dest)?;
+                _table_key._serialize_chained(dest)?;
+                _anchor._serialize_chained(dest)?;
+                _focus._serialize_chained(dest)?;
                 _dirty._serialize_chained(dest)?;
                 _has_cached_nodes._serialize_chained(dest)?;
                 _cached_nodes._serialize_chained(dest)?;
@@ -934,6 +988,32 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData<'raw> {
                     dirty: v2,
                     has_cached_nodes: v3,
                     cached_nodes: v4,
+                }
+            }
+            4 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionData::CompatTableSelection {
+                    reference: v0,
+                    table_key: v1,
+                    anchor: v2,
+                    focus: v3,
+                    dirty: v4,
+                    has_cached_nodes: v5,
+                    cached_nodes: v6,
                 }
             }
             _ => {
@@ -1012,138 +1092,6 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPatch<'raw> {
 }
 
 impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch<'raw> {}
-
-#[repr(u32)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ForeignNativeField {
-    Unknown = 0,
-    AutoLinkNodeIsUnlinked = 1,
-    CodeHighlightNodeHighlightType = 2,
-    CodeNodeIsSyntaxHighlightSupported = 3,
-    CodeNodeLanguage = 4,
-    CodeNodeTheme = 5,
-    HeadingNodeTag = 6,
-    LinkNodeRel = 7,
-    LinkNodeTarget = 8,
-    LinkNodeTitle = 9,
-    LinkNodeUrl = 10,
-    ListItemNodeChecked = 11,
-    ListItemNodeValue = 12,
-    ListNodeListType = 13,
-    ListNodeStart = 14,
-    ListNodeTag = 15,
-    MarkNodeIds = 16,
-    TableCellNodeBackgroundColor = 17,
-    TableCellNodeColSpan = 18,
-    TableCellNodeHeaderState = 19,
-    TableCellNodeRowSpan = 20,
-    TableCellNodeVerticalAlign = 21,
-    TableCellNodeWidth = 22,
-    TableNodeColWidths = 23,
-    TableNodeFrozenColumnCount = 24,
-    TableNodeFrozenRowCount = 25,
-    TableNodeRowStriping = 26,
-    TableRowNodeHeight = 27,
-    RootNodeCachedText = 28,
-}
-
-impl ::core::convert::TryFrom<u32> for ForeignNativeField {
-    type Error = ::bebop::DeserializeError;
-
-    fn try_from(value: u32) -> ::bebop::DeResult<Self> {
-        match value {
-            0 => Ok(ForeignNativeField::Unknown),
-            1 => Ok(ForeignNativeField::AutoLinkNodeIsUnlinked),
-            2 => Ok(ForeignNativeField::CodeHighlightNodeHighlightType),
-            3 => Ok(ForeignNativeField::CodeNodeIsSyntaxHighlightSupported),
-            4 => Ok(ForeignNativeField::CodeNodeLanguage),
-            5 => Ok(ForeignNativeField::CodeNodeTheme),
-            6 => Ok(ForeignNativeField::HeadingNodeTag),
-            7 => Ok(ForeignNativeField::LinkNodeRel),
-            8 => Ok(ForeignNativeField::LinkNodeTarget),
-            9 => Ok(ForeignNativeField::LinkNodeTitle),
-            10 => Ok(ForeignNativeField::LinkNodeUrl),
-            11 => Ok(ForeignNativeField::ListItemNodeChecked),
-            12 => Ok(ForeignNativeField::ListItemNodeValue),
-            13 => Ok(ForeignNativeField::ListNodeListType),
-            14 => Ok(ForeignNativeField::ListNodeStart),
-            15 => Ok(ForeignNativeField::ListNodeTag),
-            16 => Ok(ForeignNativeField::MarkNodeIds),
-            17 => Ok(ForeignNativeField::TableCellNodeBackgroundColor),
-            18 => Ok(ForeignNativeField::TableCellNodeColSpan),
-            19 => Ok(ForeignNativeField::TableCellNodeHeaderState),
-            20 => Ok(ForeignNativeField::TableCellNodeRowSpan),
-            21 => Ok(ForeignNativeField::TableCellNodeVerticalAlign),
-            22 => Ok(ForeignNativeField::TableCellNodeWidth),
-            23 => Ok(ForeignNativeField::TableNodeColWidths),
-            24 => Ok(ForeignNativeField::TableNodeFrozenColumnCount),
-            25 => Ok(ForeignNativeField::TableNodeFrozenRowCount),
-            26 => Ok(ForeignNativeField::TableNodeRowStriping),
-            27 => Ok(ForeignNativeField::TableRowNodeHeight),
-            28 => Ok(ForeignNativeField::RootNodeCachedText),
-            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
-        }
-    }
-}
-
-impl ::core::convert::From<ForeignNativeField> for u32 {
-    fn from(value: ForeignNativeField) -> Self {
-        match value {
-            ForeignNativeField::Unknown => 0,
-            ForeignNativeField::AutoLinkNodeIsUnlinked => 1,
-            ForeignNativeField::CodeHighlightNodeHighlightType => 2,
-            ForeignNativeField::CodeNodeIsSyntaxHighlightSupported => 3,
-            ForeignNativeField::CodeNodeLanguage => 4,
-            ForeignNativeField::CodeNodeTheme => 5,
-            ForeignNativeField::HeadingNodeTag => 6,
-            ForeignNativeField::LinkNodeRel => 7,
-            ForeignNativeField::LinkNodeTarget => 8,
-            ForeignNativeField::LinkNodeTitle => 9,
-            ForeignNativeField::LinkNodeUrl => 10,
-            ForeignNativeField::ListItemNodeChecked => 11,
-            ForeignNativeField::ListItemNodeValue => 12,
-            ForeignNativeField::ListNodeListType => 13,
-            ForeignNativeField::ListNodeStart => 14,
-            ForeignNativeField::ListNodeTag => 15,
-            ForeignNativeField::MarkNodeIds => 16,
-            ForeignNativeField::TableCellNodeBackgroundColor => 17,
-            ForeignNativeField::TableCellNodeColSpan => 18,
-            ForeignNativeField::TableCellNodeHeaderState => 19,
-            ForeignNativeField::TableCellNodeRowSpan => 20,
-            ForeignNativeField::TableCellNodeVerticalAlign => 21,
-            ForeignNativeField::TableCellNodeWidth => 22,
-            ForeignNativeField::TableNodeColWidths => 23,
-            ForeignNativeField::TableNodeFrozenColumnCount => 24,
-            ForeignNativeField::TableNodeFrozenRowCount => 25,
-            ForeignNativeField::TableNodeRowStriping => 26,
-            ForeignNativeField::TableRowNodeHeight => 27,
-            ForeignNativeField::RootNodeCachedText => 28,
-        }
-    }
-}
-
-impl ::bebop::SubRecord<'_> for ForeignNativeField {
-    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
-    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u32>());
-
-    #[inline]
-    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u32>() }
-
-    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
-        u32::from(zelf)._serialize_chained(dest)
-    });
-
-    #[inline]
-    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
-        let (n, v) = u32::_deserialize_chained(raw)?;
-        Ok((n, v.try_into()?))
-    }
-}
-
-impl ::bebop::FixedSized for ForeignNativeField {
-    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
-}
-
 
 pub const FOREIGN_HOST_PROTOCOL_MAJOR: u32 = 1;
 
@@ -4096,6 +4044,138 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignRenderBatch<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for ForeignRenderBatch<'raw> {}
 
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ForeignNativeField {
+    Unknown = 0,
+    AutoLinkNodeIsUnlinked = 1,
+    CodeHighlightNodeHighlightType = 2,
+    CodeNodeIsSyntaxHighlightSupported = 3,
+    CodeNodeLanguage = 4,
+    CodeNodeTheme = 5,
+    HeadingNodeTag = 6,
+    LinkNodeRel = 7,
+    LinkNodeTarget = 8,
+    LinkNodeTitle = 9,
+    LinkNodeUrl = 10,
+    ListItemNodeChecked = 11,
+    ListItemNodeValue = 12,
+    ListNodeListType = 13,
+    ListNodeStart = 14,
+    ListNodeTag = 15,
+    MarkNodeIds = 16,
+    TableCellNodeBackgroundColor = 17,
+    TableCellNodeColSpan = 18,
+    TableCellNodeHeaderState = 19,
+    TableCellNodeRowSpan = 20,
+    TableCellNodeVerticalAlign = 21,
+    TableCellNodeWidth = 22,
+    TableNodeColWidths = 23,
+    TableNodeFrozenColumnCount = 24,
+    TableNodeFrozenRowCount = 25,
+    TableNodeRowStriping = 26,
+    TableRowNodeHeight = 27,
+    RootNodeCachedText = 28,
+}
+
+impl ::core::convert::TryFrom<u32> for ForeignNativeField {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u32) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(ForeignNativeField::Unknown),
+            1 => Ok(ForeignNativeField::AutoLinkNodeIsUnlinked),
+            2 => Ok(ForeignNativeField::CodeHighlightNodeHighlightType),
+            3 => Ok(ForeignNativeField::CodeNodeIsSyntaxHighlightSupported),
+            4 => Ok(ForeignNativeField::CodeNodeLanguage),
+            5 => Ok(ForeignNativeField::CodeNodeTheme),
+            6 => Ok(ForeignNativeField::HeadingNodeTag),
+            7 => Ok(ForeignNativeField::LinkNodeRel),
+            8 => Ok(ForeignNativeField::LinkNodeTarget),
+            9 => Ok(ForeignNativeField::LinkNodeTitle),
+            10 => Ok(ForeignNativeField::LinkNodeUrl),
+            11 => Ok(ForeignNativeField::ListItemNodeChecked),
+            12 => Ok(ForeignNativeField::ListItemNodeValue),
+            13 => Ok(ForeignNativeField::ListNodeListType),
+            14 => Ok(ForeignNativeField::ListNodeStart),
+            15 => Ok(ForeignNativeField::ListNodeTag),
+            16 => Ok(ForeignNativeField::MarkNodeIds),
+            17 => Ok(ForeignNativeField::TableCellNodeBackgroundColor),
+            18 => Ok(ForeignNativeField::TableCellNodeColSpan),
+            19 => Ok(ForeignNativeField::TableCellNodeHeaderState),
+            20 => Ok(ForeignNativeField::TableCellNodeRowSpan),
+            21 => Ok(ForeignNativeField::TableCellNodeVerticalAlign),
+            22 => Ok(ForeignNativeField::TableCellNodeWidth),
+            23 => Ok(ForeignNativeField::TableNodeColWidths),
+            24 => Ok(ForeignNativeField::TableNodeFrozenColumnCount),
+            25 => Ok(ForeignNativeField::TableNodeFrozenRowCount),
+            26 => Ok(ForeignNativeField::TableNodeRowStriping),
+            27 => Ok(ForeignNativeField::TableRowNodeHeight),
+            28 => Ok(ForeignNativeField::RootNodeCachedText),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<ForeignNativeField> for u32 {
+    fn from(value: ForeignNativeField) -> Self {
+        match value {
+            ForeignNativeField::Unknown => 0,
+            ForeignNativeField::AutoLinkNodeIsUnlinked => 1,
+            ForeignNativeField::CodeHighlightNodeHighlightType => 2,
+            ForeignNativeField::CodeNodeIsSyntaxHighlightSupported => 3,
+            ForeignNativeField::CodeNodeLanguage => 4,
+            ForeignNativeField::CodeNodeTheme => 5,
+            ForeignNativeField::HeadingNodeTag => 6,
+            ForeignNativeField::LinkNodeRel => 7,
+            ForeignNativeField::LinkNodeTarget => 8,
+            ForeignNativeField::LinkNodeTitle => 9,
+            ForeignNativeField::LinkNodeUrl => 10,
+            ForeignNativeField::ListItemNodeChecked => 11,
+            ForeignNativeField::ListItemNodeValue => 12,
+            ForeignNativeField::ListNodeListType => 13,
+            ForeignNativeField::ListNodeStart => 14,
+            ForeignNativeField::ListNodeTag => 15,
+            ForeignNativeField::MarkNodeIds => 16,
+            ForeignNativeField::TableCellNodeBackgroundColor => 17,
+            ForeignNativeField::TableCellNodeColSpan => 18,
+            ForeignNativeField::TableCellNodeHeaderState => 19,
+            ForeignNativeField::TableCellNodeRowSpan => 20,
+            ForeignNativeField::TableCellNodeVerticalAlign => 21,
+            ForeignNativeField::TableCellNodeWidth => 22,
+            ForeignNativeField::TableNodeColWidths => 23,
+            ForeignNativeField::TableNodeFrozenColumnCount => 24,
+            ForeignNativeField::TableNodeFrozenRowCount => 25,
+            ForeignNativeField::TableNodeRowStriping => 26,
+            ForeignNativeField::TableRowNodeHeight => 27,
+            ForeignNativeField::RootNodeCachedText => 28,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for ForeignNativeField {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u32>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u32>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u32::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u32::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for ForeignNativeField {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
+}
+
+
 #[cfg(feature = "bebop-owned-all")]
 pub mod owned {
     #![allow(warnings)]
@@ -4557,6 +4637,17 @@ pub mod owned {
             has_cached_nodes: bool,
             cached_nodes: ::std::vec::Vec<ForeignNodeRef>,
         },
+
+        /// Discriminator 4
+        CompatTableSelection {
+            reference: ForeignSelectionRef,
+            table_key: ForeignKey,
+            anchor: CompatPoint,
+            focus: CompatPoint,
+            dirty: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<ForeignNodeRef>,
+        },
     }
 
     impl<'raw> ::core::convert::From<super::CompatSelectionData<'raw>> for CompatSelectionData {
@@ -4608,6 +4699,26 @@ pub mod owned {
                     Self::CompatNodeSelection {
                         reference: _reference,
                         keys: _keys.iter().map(|value| value).collect(),
+                        dirty: _dirty,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes.iter().map(|value| value).collect(),
+                    }
+                }
+                super::CompatSelectionData::CompatTableSelection {
+                    reference: _reference,
+                    table_key: _table_key,
+                    anchor: _anchor,
+                    focus: _focus,
+                    dirty: _dirty,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatTableSelection {
+                        reference: _reference,
+                        table_key: _table_key,
+                        anchor: _anchor,
+                        focus: _focus,
                         dirty: _dirty,
                         has_cached_nodes: _has_cached_nodes,
                         cached_nodes: _cached_nodes.iter().map(|value| value).collect(),
@@ -4669,6 +4780,24 @@ pub mod owned {
                     _has_cached_nodes.serialized_size() +
                     _cached_nodes.serialized_size()
                 }
+                Self::CompatTableSelection {
+                    reference: ref _reference,
+                    table_key: ref _table_key,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _reference.serialized_size() +
+                    _table_key.serialized_size() +
+                    _anchor.serialized_size() +
+                    _focus.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
             }
         }
 
@@ -4720,6 +4849,25 @@ pub mod owned {
                     3u8._serialize_chained(dest)?;
                     _reference._serialize_chained(dest)?;
                     _keys._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+                Self::CompatTableSelection {
+                    reference: ref _reference,
+                    table_key: ref _table_key,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    4u8._serialize_chained(dest)?;
+                    _reference._serialize_chained(dest)?;
+                    _table_key._serialize_chained(dest)?;
+                    _anchor._serialize_chained(dest)?;
+                    _focus._serialize_chained(dest)?;
                     _dirty._serialize_chained(dest)?;
                     _has_cached_nodes._serialize_chained(dest)?;
                     _cached_nodes._serialize_chained(dest)?;
@@ -4788,6 +4936,32 @@ pub mod owned {
                         dirty: v2,
                         has_cached_nodes: v3,
                         cached_nodes: v4,
+                    }
+                }
+                4 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionData::CompatTableSelection {
+                        reference: v0,
+                        table_key: v1,
+                        anchor: v2,
+                        focus: v3,
+                        dirty: v4,
+                        has_cached_nodes: v5,
+                        cached_nodes: v6,
                     }
                 }
                 _ => {
@@ -4877,8 +5051,6 @@ pub mod owned {
     }
 
     impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch {}
-
-    pub use super::ForeignNativeField;
 
     pub use super::FOREIGN_HOST_PROTOCOL_MAJOR;
 
@@ -7395,4 +7567,9 @@ pub mod owned {
         }
     }
 
-    impl<'raw> ::bebop::Record<'raw> for ForeignRenderBatch {}}
+    impl<'raw> ::bebop::Record<'raw> for ForeignRenderBatch {}
+
+    pub use super::ForeignNativeField;}
+
+/// Exact source schema fingerprint for the paired compatibility adapter.
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "6fa1a5da990a2c205e8f3469ae21405fc223b24692d364389c45fe309048db09";
