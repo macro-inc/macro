@@ -6,13 +6,12 @@ import {
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
-import { Spinner } from '@ui';
+import { Spinner, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 
 export function CallRecordingSummarySection(props: {
   record: CallRecord;
   hideHeading?: boolean;
-  inlineAttribution?: boolean;
 }) {
   const summary = createMemo(() => {
     const value = props.record.summary;
@@ -31,26 +30,19 @@ export function CallRecordingSummarySection(props: {
   return (
     <Show when={shouldShow()}>
       <section class="flex flex-col gap-5">
-        <div
-          class="flex gap-2"
-          classList={{
-            'flex-col': !props.inlineAttribution,
-            'flex-row items-center justify-between flex-wrap':
-              props.inlineAttribution,
-          }}
-        >
-          <Show when={!props.hideHeading}>
-            <h3 class="flex min-h-7 items-center text-base font-semibold text-ink">
+        <Show when={!props.hideHeading}>
+          <h3 class="flex min-h-7 items-center text-base font-semibold text-ink">
+            <Tooltip
+              as="span"
+              label={t('calls.detailAttribution')}
+              class="gap-2"
+              tabIndex={0}
+            >
+              <SparkleIcon class="size-4 shrink-0" />
               {t('calls.detailSummary')}
-            </h3>
-          </Show>
-          <Show when={summary()}>
-            <span class="flex items-center gap-1 text-xs text-ink-muted">
-              <SparkleIcon class="size-3.5" />
-              {t('calls.detailAttribution')}
-            </span>
-          </Show>
-        </div>
+            </Tooltip>
+          </h3>
+        </Show>
         <Show
           when={summary()}
           fallback={

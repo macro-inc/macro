@@ -3,6 +3,66 @@ import { expect, test } from '@playwright/test';
 const fixture = '/src/features/block-call/browser-test/view.html';
 
 for (const theme of ['light', 'dark']) {
+  for (const width of [1600, 680]) {
+    test(`summary explains its AI credit in a tooltip (${theme}, ${width}px)`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1600, height: 900 });
+      await page.goto(`${fixture}?theme=${theme}&pane=${width}`);
+      const summary =
+        width === 680
+          ? page.locator('label').filter({ hasText: /^Summary$/ })
+          : page
+              .getByRole('heading', { name: 'Summary', exact: true })
+              .locator('span')
+              .first();
+      await expect(
+        page.getByText('Written by Macro after the call', { exact: true })
+      ).toHaveCount(0);
+      await expect(summary.locator('[data-macro-icon="sparkle"]')).toHaveCount(
+        1
+      );
+      if (width === 680) {
+        await page.getByRole('radio', { name: 'Summary', exact: true }).focus();
+        await expect(page.getByRole('tooltip')).toHaveText(
+          'Written by Macro after the call'
+        );
+        await page
+          .getByRole('radio', { name: 'Summary', exact: true })
+          .press('Escape');
+        await expect(page.getByRole('tooltip')).toHaveCount(0);
+        await page.getByRole('button', { name: 'Share', exact: true }).focus();
+        await expect(page.getByRole('tooltip')).toHaveCount(0);
+      }
+      await summary.hover();
+      await expect(page.getByRole('tooltip')).toHaveText(
+        'Written by Macro after the call'
+      );
+      if (width === 680) {
+        await page.mouse.move(0, 0);
+        await page
+          .locator('label')
+          .filter({ hasText: /^Transcript$/ })
+          .click();
+        await page
+          .locator('label')
+          .filter({ hasText: /^Summary$/ })
+          .click();
+        await expect(
+          page.getByRole('radio', { name: 'Summary', exact: true })
+        ).toBeChecked();
+        await page.mouse.move(0, 0);
+        await summary.hover();
+        await expect(page.getByRole('tooltip')).toHaveText(
+          'Written by Macro after the call'
+        );
+      }
+      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d62-${theme}-${width}.png`,
+        });
+    });
+  }
   test(`Call again is a header action before Ask Macro (${theme})`, async ({
     page,
   }) => {
@@ -33,6 +93,12 @@ for (const theme of ['light', 'dark']) {
       try {
         const page = await context.newPage();
         await page.goto(`${fixture}?theme=${theme}&pane=${width}`);
+        await expect(
+          page.getByRole('radio', { name: 'Summary', exact: true })
+        ).toHaveAttribute(
+          'aria-description',
+          'Written by Macro after the call'
+        );
         await page
           .locator('label')
           .filter({ hasText: /^Transcript$/ })

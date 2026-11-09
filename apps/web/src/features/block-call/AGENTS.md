@@ -22,6 +22,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Keep one media element across summary, transcript, chat and pinned controls; preserve idle-control visibility, menu focus and native volume state.
 - Animate each control surface by its own height with 240ms transform/opacity transitions; keep controls mounted and reduce motion to the fade only.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
+- Show the summary AI icon before its tab/heading label and put attribution in a shared hover/focus tooltip, not a separate line.
 - Let CallRecordingBody own the floating details SidePanel.Layout below the full-width header; keep the details toggle in that header.
 - Put the existing available Call again action in the desktop header before Ask Macro; keep active-call Join call below the title.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.

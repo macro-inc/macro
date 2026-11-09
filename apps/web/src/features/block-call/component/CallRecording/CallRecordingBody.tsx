@@ -12,6 +12,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, Layer, Tabs } from '@ui';
@@ -343,6 +344,8 @@ export function CallRecordingBody(props: {
                                     {
                                       value: 'summary',
                                       label: t('calls.detailSummary'),
+                                      icon: SparkleIcon,
+                                      tooltip: t('calls.detailAttribution'),
                                     },
                                     {
                                       value: 'transcript',
@@ -388,7 +391,6 @@ export function CallRecordingBody(props: {
                                     <CallRecordingSummarySection
                                       record={props.record}
                                       hideHeading={!wideTranscript()}
-                                      inlineAttribution={wideTranscript()}
                                     />
                                     <Show when={!isMobile()}>
                                       <CallRecordingChat

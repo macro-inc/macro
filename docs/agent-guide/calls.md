@@ -85,8 +85,10 @@ An editable switch stays disabled while its change is pending.
 Below that threshold, medium-size Summary/Transcript tabs sit below the recording.
 The inline transcript list has no horizontal padding, aligning its row edges with
 the tabs and Summary. The tab selection and one mounted video/transcript survive resizing in either
-direction. On wide panes, Summary has its own heading with attribution on the
-right; narrow panes keep attribution below the tabs. Details starts closed and
+direction. Summary has an AI icon before its tab label and wide-pane heading;
+hovering or focusing either shows “Written by Macro after the call” in a tooltip, rather than
+a separate credit line. The credit remains the Summary tab's accessible description
+on touch, where tooltips stay disabled. Details starts closed and
 floats over content without moving it. Playback remains reachable in a pinned bar
 after the recording scrolls above the viewport. Its width follows the left column
 on wide panes and the centered content column on narrow panes. Show video returns
