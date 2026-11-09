@@ -7,7 +7,10 @@ boundaries, equation/table picker commands, menu navigation, Android input
 triggers, emoji/tag lifecycle, checklist input, word counts, location restoration,
 metadata/accessories, platform formatting, decorator navigation, list transform
 boundaries, mention insertion/deletion/history and media mutation/permission
-guards. HEIC conversion and transport are boundary stubs in media unit cases;
+guards and checkbox-to-task conversion. Task creation is a service boundary stub;
+its tests exercise actual selection/parsing, parallel completion, batched node
+replacement, partial failures and deleted targets, not remote task creation
+or host authorization. HEIC conversion and transport are boundary stubs in media unit cases;
 these do not establish actual decoding or uploads. Direct transformer calls
 cover import/typing modes; direct mention commands do not establish menu UI
 coverage. Remote-label history tests establish grouping, not preservation of
@@ -48,7 +51,8 @@ Optional trailing arguments are OFF Vitest JSON reports from separate runs:
 bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor-results.json
 ```
 
-`scripts/editor-behavior-map.ts` and `editor-existing-behavior-map.ts` map
+`scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts` and
+`editor-async-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
