@@ -38,7 +38,7 @@ use scheduled_action::domain::ports::{
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::suggestions::{
-    RoutineSuggestionService, StoredSuggestionOrigins, SuggestionAgent,
+    RoutineBriefing, RoutineSuggestionService, StoredSuggestionOrigins,
 };
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
@@ -68,6 +68,10 @@ use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
+use suggestion_generation::domain::model::GenerationAgent;
+use suggestion_generation::domain::service::GenerationService;
+use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
+use suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -86,8 +90,10 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
-/// How often suggestion sessions a stopped process left behind are cleaned up.
-const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often generation sessions a stopped process left behind are cleaned up.
+const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often people in their night are checked for a nightly generation.
+const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// What a session's programs created, from the activity recorded for its
 /// code-mode invocations.
@@ -184,6 +190,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
+    let generation_ready = ready.clone();
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
@@ -459,12 +466,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         })
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
-    // Suggestions run once per person, when their inbox connects, in hidden
-    // sessions of the in-process Macro agent on the free tier's model, as
-    // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
-    // their usage is recorded, never billed; each session hands back its
-    // suggestions through `macro.routines.suggest`. They read the newest mail through
-    // email_service, which reads it from the provider.
+    // Generations: hidden sessions of the in-process Macro agent on the free
+    // tier's model, at onboarding and in each person's night, opened
+    // non-billable (`SessionBilling::NonBillable`), so their usage is
+    // recorded, never billed. Ideas sessions write through `macro.ideas.*`;
+    // routines sessions through `macro.routines.suggest`, reading the newest
+    // mail through email_service, which reads it from the provider.
+    let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),
         suggestion_repo,
@@ -477,33 +485,61 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
             ),
         }),
-        sessions,
         suggestion_code,
         request_sessions,
+        generations.clone(),
+        generations.clone(),
         template_flags.clone(),
-        SuggestionAgent {
-            bot: bot_id::MACRO_NEW_BOT_ID,
+        RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+        },
+    ));
+    let ideas = Arc::new(IdeaService::new(
+        Arc::new(PgIdeaRepo::new(db.clone())),
+        Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+        correlation_sessions,
+        generations.clone(),
+        generations.clone(),
+        template_flags.clone(),
+    ));
+    let generation = Arc::new(GenerationService::new(
+        generations,
+        sessions,
+        Arc::clone(&suggestions),
+        Arc::clone(&ideas),
+        template_flags.clone(),
+        GenerationAgent {
+            bot: bot_id::MACRO_NEW_BOT_ID,
             model: chat::domain::models::FREE_MODEL.to_owned(),
         },
         lifecycle.workers.clone(),
         lifecycle.stop_workers.clone(),
     ));
-    // Suggestion sessions a stopped process left behind lose their session.
+    // Generation sessions a stopped process left behind lose their session;
+    // once ready, people in their night get their nightly generation.
     {
-        let suggestions = Arc::clone(&suggestions);
+        let generation = Arc::clone(&generation);
         let stop = lifecycle.stop_workers.clone();
+        let mut ready = generation_ready;
         lifecycle.workers.spawn(async move {
-            let mut every = tokio::time::interval(SUGGESTION_SWEEP_INTERVAL);
-            every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+            }
+            let mut sweep = tokio::time::interval(GENERATION_SWEEP_INTERVAL);
+            sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
+            nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
+                // Each is logged by its own span.
                 tokio::select! {
                     biased;
                     _ = stop.cancelled() => return,
-                    _ = every.tick() => {}
+                    _ = sweep.tick() => { let _ = generation.sweep().await; }
+                    _ = nightly.tick() => { let _ = generation.nightly().await; }
                 }
-                // Logged by the sweep's span.
-                let _ = suggestions.sweep().await;
             }
         });
     }
@@ -511,17 +547,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
-    // Ideas: written and managed by hidden generation sessions through
+    // Ideas: written and managed by generation sessions through
     // `macro.ideas.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
-    // generation with.
+    // generations with.
     let idea_state = IdeaRouterState {
-        service: Arc::new(IdeaService::new(
-            Arc::new(PgIdeaRepo::new(db.clone())),
-            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
-            correlation_sessions,
-            template_flags.clone(),
-        )),
+        service: ideas,
+        authorization_state: authorization_state.clone(),
+    };
+    let generation_state = GenerationRouterState {
+        service: generation,
         authorization_state: authorization_state.clone(),
     };
     let template_state = RoutineTemplateRouterState {
@@ -546,7 +581,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
-        .merge(idea_router::<_, _, ()>(idea_state));
+        .merge(idea_router::<_, _, ()>(idea_state))
+        .merge(generation_router::<_, _, ()>(generation_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -569,6 +605,7 @@ fn mount_router(routes: Router) -> Router {
 fn openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = ApiDoc::openapi();
     openapi.merge(ideas::swagger::IdeasApiDoc::openapi());
+    openapi.merge(suggestion_generation::swagger::GenerationApiDoc::openapi());
     openapi
 }
 

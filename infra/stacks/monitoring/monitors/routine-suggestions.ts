@@ -1,6 +1,6 @@
-// Routine suggestions in agent-harness-service: hidden agent sessions that
-// suggest routines once a person's inbox connects, and what people save and
-// dismiss from them.
+// Routine suggestions in agent-harness-service: the routines sessions of a
+// person's generations (at onboarding and nightly, run by
+// `crates/suggestion_generation`), and what people save and dismiss from them.
 //
 // Every metric below is built from INFO logs that
 // `crates/scheduled_action/src/domain/suggestions.rs` and `service.rs` emit,
@@ -8,14 +8,15 @@
 // renaming one there silently empties a widget or turns the monitor into
 // missing data:
 //
-// - `routine_suggestions.generated`, once per generation: `outcome`
-//   (`ready` | `partial` | `failed` | `cancelled`), `sessions`, `kept`,
-//   `retries`, `inbox_messages`, `surfaces_filled` (of 9), `first_ms` (absent
-//   when nothing was kept), `duration_ms`. `failed` means no session suggested
-//   anything after one retry, so the person gets Macro's templates only.
-// - `routine_suggestions.surface`, once per surface per generation: `outcome`,
-//   `surface`, `filled` (AI suggested at least one routine for it),
-//   `suggestions`.
+// - `routine_suggestions.generated`, once per generation with routines
+//   sessions: `trigger` (`onboarding` | `nightly`), `outcome` (`ready` |
+//   `partial` | `failed` | `cancelled`), `sessions`, `kept`, `retries`,
+//   `surfaces_filled` (of 9), `first_ms` (absent when nothing was kept),
+//   `duration_ms`. `failed` means no session kept a suggestion (onboarding
+//   retries each once), so the person gets Macro's templates only.
+// - `routine_suggestions.surface`, once per surface per generation:
+//   `trigger`, `outcome`, `surface`, `filled` (the person has at least one
+//   open AI suggestion for it), `suggestions`.
 // - `routine_suggestions.suggested`, once per `macro.routines.suggest` call:
 //   `kind` (`catalog` | `routine`), `surface`, `ok` (kept, or rejected by its
 //   checks), `problems`.
@@ -24,9 +25,9 @@
 // - `routine_suggestions.saved`, a routine saved from a suggestion: `from`,
 //   `kind`, `surface` (absent if the suggestion could not be read), `enabled`.
 //
-// Each generation is one trace under the `routine.suggestions.generate` span,
-// with a `routine.suggestions.session` span per session and a
-// `routine.suggestions.suggest` span per call; see the runbook. No field holds
+// Each generation is one trace under the `suggestion.generation` span, with a
+// `suggestion.session` span per session and a `routine.suggestions.suggest`
+// span per call; see the runbook. No field holds
 // a user id, mail or prompt text.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
@@ -41,11 +42,14 @@ const tag = (field: string): LogGroupBy => ({
 const ENV: LogGroupBy = { path: 'env', tagName: 'env' };
 const logs = (event: string) =>
   `service:${SERVICE} status:info @event:routine_suggestions.${event}`;
+// Generation health is signup health: a nightly run that finds nothing
+// missing keeps nothing, which these metrics would count as failed.
+const onboarding = (event: string) => `${logs(event)} @trigger:onboarding`;
 
 new datadog.LogsMetric('routine-suggestions-generation', {
   name: 'macro.routine_suggestions.generation',
   compute: { aggregationType: 'count' },
-  filter: { query: logs('generated') },
+  filter: { query: onboarding('generated') },
   groupBies: [ENV, tag('outcome')],
 });
 
@@ -58,7 +62,7 @@ for (const field of ['first_ms', 'duration_ms', 'surfaces_filled']) {
       path: `@${field}`,
       includePercentiles: true,
     },
-    filter: { query: logs('generated') },
+    filter: { query: onboarding('generated') },
     groupBies: [ENV, tag('outcome')],
   });
 }
@@ -66,7 +70,7 @@ for (const field of ['first_ms', 'duration_ms', 'surfaces_filled']) {
 new datadog.LogsMetric('routine-suggestions-surface', {
   name: 'macro.routine_suggestions.surface',
   compute: { aggregationType: 'count' },
-  filter: { query: logs('surface') },
+  filter: { query: onboarding('surface') },
   groupBies: [ENV, tag('surface'), tag('filled')],
 });
 
