@@ -390,14 +390,6 @@ fn push_thread_candidate_select(
 
     push_source_scope(builder, params, source, per_link_fanout);
 
-    // Every CRM candidate, including the caller's own copy and explicit
-    // shares, must satisfy current mailbox consent and domain exclusions.
-    if let Some(team_id) = params.team_id {
-        builder.push(" AND crm_email_thread_allowed(");
-        builder.push_bind(team_id);
-        builder.push(", t.id)");
-    }
-
     let view_thread_filter = build_view_thread_filter(view);
     if !view_thread_filter.is_empty() {
         view_thread_filter.push_into(builder, &params.user_id);
@@ -647,6 +639,7 @@ fn build_query(
             r#"
                 SELECT DISTINCT ON (dedupe_key) *
                 FROM (
+                SELECT * FROM (
         "#,
         );
     }
@@ -711,9 +704,22 @@ fn build_query(
         );
     }
 
-    if params.team_id.is_some() {
+    if let Some(team_id) = params.team_id {
+        // Every CRM candidate, including the caller's own copy and explicit
+        // shares, must satisfy current mailbox consent and domain exclusions.
+        // The check walks every participant of a thread, so it runs on the
+        // fenced candidate set: `OFFSET 0` stops the planner from pushing it
+        // into the thread scan, where it ran once per thread in each team
+        // mailbox before the cheap filters had narrowed anything.
         builder.push(
             r#"
+                OFFSET 0
+                ) AS unchecked_candidates
+                WHERE crm_email_thread_allowed("#,
+        );
+        builder.push_bind(team_id);
+        builder.push(
+            r#", unchecked_candidates.id)
                 ) AS candidate_threads
                 ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC
             ) AS deduped_threads
@@ -1088,7 +1094,8 @@ pub(crate) async fn dynamic_email_thread_cursor(
         },
     );
 
-    qb.build()
+    let query = qb
+        .build()
         // Unnamed statement: the SQL text varies per filter shape (and per
         // interpolated date literal), so cached prepared statements get
         // little reuse but do flip to generic plans after five executions —
@@ -1118,7 +1125,24 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 owner_id: row.try_get("owner_id")?,
                 link_id: row.try_get("link_id")?,
             })
-        })
-        .fetch_all(pool)
-        .await
+        });
+
+    if team_id.is_none() {
+        return query.fetch_all(pool).await;
+    }
+
+    // Team-scoped (CRM) queries check privacy on every candidate thread
+    // before the LIMIT, so a domain that covers most of a mailbox can run
+    // for tens of minutes. The client gives up after 12s and the server
+    // never cancels the query, so bound it in the database instead.
+    let mut transaction = pool.begin().await?;
+    sqlx::query(TEAM_SCOPED_STATEMENT_TIMEOUT)
+        .execute(&mut *transaction)
+        .await?;
+    let rows = query.fetch_all(&mut *transaction).await?;
+    transaction.commit().await?;
+    Ok(rows)
 }
+
+/// Slightly above the web client's 12s Soup request timeout.
+const TEAM_SCOPED_STATEMENT_TIMEOUT: &str = "SET LOCAL statement_timeout = '15s'";
