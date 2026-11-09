@@ -9,7 +9,19 @@ import type {
 } from '../../../lexical-wasm-view/src/compat/dom-slot';
 import type { LexicalEditor } from '../editor';
 import type { BaseSelection } from '../selection';
+import type { DOMConversionMap } from './dom-types';
 import type { ElementNode, LexicalNode } from './index';
+import type { Klass } from './replacement/types';
+
+export type DOMExportOutputMap = Map<
+  Klass<LexicalNode>,
+  (editor: LexicalEditor, target: LexicalNode) => DOMExportOutput
+>;
+
+export type HTMLConfig = {
+  export?: DOMExportOutputMap;
+  import?: DOMConversionMap;
+};
 
 export interface EditorConfig {
   dom?: EditorDOMRenderConfig;

@@ -19,6 +19,9 @@ injection; its own guide separates pure algorithms from hosted state acceptance.
 `editor-config.ts` carries the full public render configuration with actual core
 node and editor types. Public node methods use it rather than the view's minimal
 internal configuration; resolve configured DOM hooks through the actual editor.
+HTMLConfig uses actual registered classes and JS import/export callbacks. Keep
+editable notifications outside dollar scopes while queuing ordinary listener
+updates; noneditable editors still permit programmatic updates.
 Preserve the upstream public config-record alias and its constraints; the
 central exception's internal return shape uses the actual core config types.
 `runtime-primitives.ts` resolves nodes, writable captures and native-backed field

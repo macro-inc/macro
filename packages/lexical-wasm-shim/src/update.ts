@@ -49,6 +49,18 @@ export class UpdateController {
     this.performUpdate(body, options, false);
   }
 
+  /** Non-update listeners enqueue ordinary updates without granting a scope. */
+  notify(body: () => void): void {
+    const previous = this.running;
+    this.running = true;
+    try {
+      this.host.notificationScope(body);
+    } finally {
+      this.running = previous;
+      if (this.disposed && !previous) this.release();
+    }
+  }
+
   /** Internal command updates bypass the ordinary enqueued-update boundary. */
   updateSync(body: () => void, options: UpdateOptions = {}): void {
     if (this.disposed) throw new Error('editor is disposed');

@@ -29,7 +29,12 @@ function getNodeDOMSlot(
 export const DEFAULT_EDITOR_DOM_CONFIG: EditorDOMRenderConfig = {
   $createDOM: (node, editor) => node.createDOM(editor._config, editor),
   $decorateDOM: () => {},
-  $exportDOM: (node, editor) => node.exportDOM(editor),
+  $exportDOM: (node, editor) => {
+    const registered = editor._nodes.get(node.getType());
+    return registered && registered.exportDOM !== undefined
+      ? registered.exportDOM(editor, node)
+      : node.exportDOM(editor);
+  },
   $extractWithChild: (node, child, selection, destination) =>
     node instanceof ElementNode &&
     node.extractWithChild(child, selection, destination),
