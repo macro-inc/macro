@@ -336,5 +336,10 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         agent_code_mode::domain::ExecutionStatus::Cancelled
     );
     runner.shutdown().await;
-    assert_eq!(std::fs::read_dir(scratch.path()).unwrap().count(), 0);
+    assert_eq!(
+        std::fs::read_dir(scratch.path().join("runs"))
+            .unwrap()
+            .count(),
+        0
+    );
 }
