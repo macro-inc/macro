@@ -17,6 +17,16 @@ class NativeEditorInputTest {
         instrumentation.runOnMainSync { NativeInputScenario.consumedEnter(instrumentation.targetContext) }
     }
 
+    @Test fun newlineCommitAppliesFinalCharactersBeforeCompositionEnd() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeInputScenario.newlineCommit(instrumentation.targetContext, listOf(true)) }
+    }
+
+    @Test fun newlineOnlyCommitUsesLiveElementBeforeCompositionEnd() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeInputScenario.newlineCommit(instrumentation.targetContext, listOf(false)) }
+    }
+
     @Test fun inputConnectionCommitsUnicodeCompositionAndUndo() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeInputScenario.run(instrumentation.targetContext) }

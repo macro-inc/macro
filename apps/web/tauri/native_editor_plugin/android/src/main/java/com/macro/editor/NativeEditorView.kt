@@ -34,6 +34,7 @@ class NativeEditorView(
     private var ready = false
     private var inputGeneration = 0L
     private var composing = false
+    private var compositionData = ""
     private var platformEnter = false
     private var editable = initiallyEditable
     private var interactable = initiallyInteractable
@@ -350,9 +351,11 @@ class NativeEditorView(
         return super.onTextContextMenuItem(id)
     }
 
-    private fun finishComposition() {
-        if (!composing) return
+    private fun finishComposition(force: Boolean = false) {
+        if (!composing && !force) return
         composing = false
+        val data = compositionData
+        compositionData = ""
         BaseInputConnectionCompat.finish(text)
         if (!canEditContent()) {
             admit(FfiInput.Composition(CompositionEvent.Clear, ViewSelection.KeepModel))
@@ -364,8 +367,10 @@ class NativeEditorView(
             val focus = (end as? Point.Text)?.takeIf { it.key == point.key }?.offset
             admit(FfiInput.TextDeltaFromView(ViewTextDelta(
                 point.key, point.offset, 0u, "", point.offset, focus,
-                true, "", ViewSelection.KeepModel,
+                true, data, ViewSelection.KeepModel,
             )))
+        } else if (point is Point.Element && data.endsWith("\n")) {
+            admit(FfiInput.Composition(CompositionEvent.End(point.key, "", null, null, data), ViewSelection.KeepModel))
         } else {
             admit(FfiInput.Composition(CompositionEvent.Clear, ViewSelection.KeepModel))
         }
@@ -377,6 +382,7 @@ class NativeEditorView(
         val generation = ++inputGeneration
         fun current() = ready && canEditContent() && generation == inputGeneration
         fun composingText(value: CharSequence?) {
+            compositionData = ""
             if (!composing) {
                 composing = true
                 admit(FfiInput.Composition(CompositionEvent.Start(value?.toString() ?: ""),
@@ -388,18 +394,33 @@ class NativeEditorView(
             if (!composing) {
                 composing = true
                 admit(FfiInput.Composition(CompositionEvent.Start(""),
-                    projectionLayout.selection(start, end)))
+                    projectionLayout.selection(selectionStart, selectionEnd)))
             }
             return true
         }
-        fun commit(value: CharSequence?, operation: () -> Boolean): Boolean {
+        var committing = false
+        fun commit(value: CharSequence?, operation: (CharSequence?) -> Boolean): Boolean {
+            if (committing) return operation(value)
             val previousEnter = platformEnter
-            if (!platformEnter && value?.toString() == "\n" && !composing) {
+            var nativeText = value
+            val newlineEnd = composing && value?.toString()?.endsWith("\n") == true
+            if (composing) {
+                compositionData = value?.toString() ?: ""
+                if (newlineEnd) nativeText = value?.subSequence(0, value.length - 1)
+            } else if (!platformEnter && value?.toString() == "\n") {
                 if (routeEnter(FfiKeyEvent("Enter", "Enter", false, false, false, false, false, false),
                     projectionLayout.selection(selectionStart, selectionEnd))) return true
                 platformEnter = true
             }
-            try { return operation() } finally { platformEnter = previousEnter }
+            committing = true
+            try {
+                val committed = operation(nativeText)
+                if (committed) finishComposition(newlineEnd)
+                return committed
+            } finally {
+                committing = false
+                platformEnter = previousEnter
+            }
         }
         val guarded = object : InputConnectionWrapper(connection, false) {
             private var batches = 0
@@ -457,11 +478,7 @@ class NativeEditorView(
 
             override fun commitText(value: CharSequence?, newCursorPosition: Int): Boolean {
                 if (!current()) return false
-                return commit(value) {
-                    val committed = super.commitText(value, newCursorPosition)
-                    if (committed) finishComposition()
-                    committed
-                }
+                return commit(value) { nativeText -> super.commitText(nativeText, newCursorPosition) }
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
@@ -495,7 +512,7 @@ class NativeEditorView(
                 return finished
             }
         }
-        return modernInputConnection(guarded, ::current, ::composingText, ::composingRegion, ::finishComposition, ::commit)
+        return modernInputConnection(guarded, ::current, ::composingText, ::composingRegion, { finishComposition() }, ::commit)
     }
 }
 

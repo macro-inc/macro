@@ -258,4 +258,101 @@ internal object NativeInputScenario {
         } finally { session.close() }
     }
 
+
+    fun newlineCommit(targetContext: Context, cases: List<Boolean> = listOf(true, false)) {
+        val context = ContextThemeWrapper(targetContext, androidx.appcompat.R.style.Theme_AppCompat)
+        for (changed in cases) {
+            var tick = 0uL
+            val admitted = mutableListOf<FfiInput>()
+            val host = object : NativeEditorHost {
+                override fun now() = FfiNow(++tick, 1_000_000L + tick.toLong())
+                override fun execute(output: FfiOutput, admit: (FfiInput) -> Unit) {
+                    assertTrue(output.io.all { it is FfiIoEffect.Telemetry })
+                }
+                override fun viewEffect(effect: FfiViewEffect) { if (effect is FfiViewEffect.Error) fail(effect.message) }
+                override fun failed(error: Exception) { throw AssertionError(error) }
+            }
+            val session = NativeEditorSession(config(), null, host.now())
+            try {
+                val observed = object : NativeEditorSessionInterface by session {
+                    override fun handle(now: FfiNow, input: FfiInput): FfiOutput {
+                        admitted += input
+                        val end = input is FfiInput.TextDeltaFromView && input.delta.compositionEnd ||
+                            input is FfiInput.Composition && input.event is CompositionEvent.End
+                        if (end) println("NATIVE_IME changed=$changed pre-End points=${(session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff).selection} cursors=${session.query(FfiQuery.SelectionCursors)}")
+                        val output = session.handle(now, input)
+                        if (end || input is FfiInput.TextDeltaFromView || input is FfiInput.Undo || input is FfiInput.Redo) {
+                            println("NATIVE_IME changed=$changed post-${input.javaClass.simpleName} points=${(session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff).selection} cursors=${session.query(FfiQuery.SelectionCursors)}")
+                        }
+                        return output
+                    }
+                }
+                val view = NativeEditorView(context, observed, host, true, true)
+                view.admit(FfiInput.Start)
+                view.admit(FfiInput.Seed(SeedKind.OPTIMISTIC, byteArrayOf()))
+                val initial = if (changed) {
+                    """{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"か"}]}]}}"""
+                } else {
+                    """{"root":{"type":"root","children":[{"type":"paragraph","children":[]}]}}"""
+                }
+                view.admit(FfiInput.SetState(BridgeJson.root(initial)))
+                val before = session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff
+                val backing = before.diff.ops.filterIsInstance<DiffOp.CreateText>().firstOrNull()
+                val point = if (backing != null) Point.Text(backing.key, 1u) else Point.Element(
+                    before.diff.ops.filterIsInstance<DiffOp.CreateElement>().first { it.key.index != 0u }.key, 0u)
+                view.admit(FfiInput.SelectionFromView(ViewSelection.Range(point, point, false), null))
+                view.admit(FfiInput.Command(FfiCommand.ClearHistory, ViewSelection.KeepModel))
+                val input = requireNotNull(view.onCreateInputConnection(EditorInfo()))
+                if (changed) {
+                    assertTrue(input.setComposingRegion(0, 1))
+                    val current = session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff
+                    assertEquals(ViewSelection.Range(point, point, false), current.selection)
+                } else assertTrue(input.setComposingText("", 1))
+                admitted.clear()
+                val finalText = if (changed) "漢\n" else "\n"
+                if (!changed && android.os.Build.VERSION.SDK_INT >= 33) {
+                    assertTrue(input.commitText(finalText, 1, android.view.inputmethod.TextAttribute.Builder().build()))
+                } else assertTrue(input.commitText(finalText, 1))
+                val endings = admitted.mapNotNull {
+                    when (it) {
+                        is FfiInput.TextDeltaFromView -> if (it.delta.compositionEnd) it.delta.compositionData else null
+                        is FfiInput.Composition -> (it.event as? CompositionEvent.End)?.data
+                        else -> null
+                    }
+                }
+                assertEquals(listOf(finalText), endings)
+                val textAdmissions = admitted.filterIsInstance<FfiInput.TextDeltaFromView>().filter { !it.delta.compositionEnd }
+                assertTrue(textAdmissions.none { it.delta.inserted.endsWith("\n") })
+                if (changed) assertEquals("漢", textAdmissions.single().delta.inserted)
+                val state = session.query(FfiQuery.State) as FfiQueryReply.State
+                val blocks = mapper.readTree(BridgeJson.state(state.root)).get("root").get("children")
+                assertEquals(2, blocks.size())
+                assertEquals("paragraph", blocks[0].get("type").textValue())
+                assertEquals("paragraph", blocks[1].get("type").textValue())
+                assertEquals(if (changed) "漢\n" else "\n", view.text.toString())
+                assertEquals(if (changed) 2 else 1, view.selectionStart)
+                assertEquals(view.selectionStart, view.selectionEnd)
+                assertFalse(admitted.any { it is FfiInput.Command && it.command is FfiCommand.InsertParagraph })
+                val after = session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff
+                val last = after.diff.ops.filterIsInstance<DiffOp.Children>().first { it.parent.index == 0u }.children.last()
+                assertEquals(ViewSelection.Range(Point.Element(last, 0u), Point.Element(last, 0u), false), after.selection)
+                val committedCursors = session.query(FfiQuery.SelectionCursors) as FfiQueryReply.Cursors
+                val committedAnchor = requireNotNull(committedCursors.anchor).nodeId
+                val committedFocus = requireNotNull(committedCursors.focus).nodeId
+                view.admit(FfiInput.Undo)
+                assertEquals(if (changed) "か" else "", view.text.toString())
+                assertEquals(if (changed) 1 else 0, view.selectionStart)
+                view.admit(FfiInput.Redo)
+                val redoneCursors = session.query(FfiQuery.SelectionCursors) as FfiQueryReply.Cursors
+                assertEquals(committedAnchor, requireNotNull(redoneCursors.anchor).nodeId)
+                assertEquals(committedFocus, requireNotNull(redoneCursors.focus).nodeId)
+                val redone = session.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff
+                val redoneLast = redone.diff.ops.filterIsInstance<DiffOp.Children>().first { it.parent.index == 0u }.children.last()
+                assertEquals(ViewSelection.Range(Point.Element(redoneLast, 0u), Point.Element(redoneLast, 0u), false), redone.selection)
+                assertEquals(if (changed) "漢\n" else "\n", view.text.toString())
+                assertEquals(if (changed) 2 else 1, view.selectionStart)
+            } finally { session.close() }
+        }
+    }
+
 }

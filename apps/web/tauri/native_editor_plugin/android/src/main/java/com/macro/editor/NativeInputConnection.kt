@@ -17,12 +17,12 @@ internal fun modernInputConnection(
     composingText: (CharSequence?) -> Unit,
     composingRegion: (Int, Int) -> Boolean,
     committed: () -> Unit,
-    commit: (CharSequence, () -> Boolean) -> Boolean,
+    commit: (CharSequence?, (CharSequence?) -> Boolean) -> Boolean,
 ): InputConnection {
     var connection = input
     if (Build.VERSION.SDK_INT >= 25) connection = InputApi25.wrap(connection, current)
     if (Build.VERSION.SDK_INT >= 31) connection = InputApi31.wrap(connection, current)
-    if (Build.VERSION.SDK_INT >= 33) connection = InputApi33.wrap(connection, current, composingText, composingRegion, committed, commit)
+    if (Build.VERSION.SDK_INT >= 33) connection = InputApi33.wrap(connection, current, composingText, composingRegion, commit)
     if (Build.VERSION.SDK_INT >= 34) connection = InputApi34.wrap(connection, current, committed)
     return connection
 }
@@ -52,8 +52,8 @@ private object InputApi31 {
 private object InputApi33 {
     @DoNotInline
     fun wrap(input: InputConnection, current: () -> Boolean, composingText: (CharSequence?) -> Unit,
-        composingRegion: (Int, Int) -> Boolean, committed: () -> Unit,
-        commit: (CharSequence, () -> Boolean) -> Boolean): InputConnection =
+        composingRegion: (Int, Int) -> Boolean,
+        commit: (CharSequence?, (CharSequence?) -> Boolean) -> Boolean): InputConnection =
         object : InputConnectionWrapper(input, false) {
             override fun setComposingText(text: CharSequence, cursor: Int, attributes: TextAttribute?): Boolean {
                 if (!current()) return false
@@ -66,7 +66,7 @@ private object InputApi33 {
             }
             override fun commitText(text: CharSequence, cursor: Int, attributes: TextAttribute?): Boolean {
                 if (!current()) return false
-                return commit(text) { super.commitText(text, cursor, attributes).also { if (it) committed() } }
+                return commit(text) { nativeText -> super.commitText(requireNotNull(nativeText), cursor, attributes) }
             }
             override fun requestCursorUpdates(mode: Int, filter: Int): Boolean =
                 current() && super.requestCursorUpdates(mode, filter)
