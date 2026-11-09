@@ -12,6 +12,7 @@ pub(super) struct Capture {
     pub source: Arc<ForeignReadSnapshot>,
     pub identity: ForeignRecordIdentity,
     pub output: compat::ForeignRenderRecord,
+    pub retired: bool,
 }
 pub(super) fn key(key: NodeKey) -> compat::ForeignKey {
     compat::ForeignKey {
@@ -63,6 +64,13 @@ pub(super) fn base_patch(value: &BaseData) -> compat::ForeignBasePatch {
     }
 }
 
+struct RecordScope {
+    version: u64,
+    update: u32,
+    access: compat::ForeignAccess,
+    retired: bool,
+}
+
 impl Host {
     pub(super) fn records(
         &mut self,
@@ -73,9 +81,57 @@ impl Host {
         access: compat::ForeignAccess,
         options: CaptureOptions<'_>,
     ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
+        let records = source.render_records(keys)?;
+        self.encode_records(
+            source,
+            records,
+            options,
+            RecordScope {
+                version,
+                update,
+                access,
+                retired: false,
+            },
+        )
+    }
+    pub(super) fn retired_records(
+        &mut self,
+        source: Arc<ForeignReadSnapshot>,
+        keys: Vec<NodeKey>,
+        version: u64,
+        update: u32,
+    ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
+        let records = source.render_retired_records(keys)?;
+        self.encode_records(
+            source,
+            records,
+            CaptureOptions {
+                writable: &[],
+                include_root_cache: false,
+            },
+            RecordScope {
+                version,
+                update,
+                access: compat::ForeignAccess::Read,
+                retired: true,
+            },
+        )
+    }
+    fn encode_records(
+        &mut self,
+        source: Arc<ForeignReadSnapshot>,
+        records: Vec<lexical_model::ForeignRenderRecord>,
+        options: CaptureOptions<'_>,
+        scope: RecordScope,
+    ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
+        let RecordScope {
+            version,
+            update,
+            access,
+            retired,
+        } = scope;
         let writable: std::collections::HashSet<_> = options.writable.iter().copied().collect();
-        source
-            .render_records(keys)?
+        records
             .into_iter()
             .map(|record| {
                 let node = record.record();
@@ -114,6 +170,7 @@ impl Host {
                     reference,
                     record.identity().clone(),
                     root_cache.is_some(),
+                    retired,
                 );
                 if let Some(id) = self.capture_index.get(&capture_key) {
                     let capture = self
@@ -188,6 +245,7 @@ impl Host {
                         source: source.clone(),
                         identity: record.identity().clone(),
                         output: output.clone(),
+                        retired,
                     },
                 );
                 Ok(output)

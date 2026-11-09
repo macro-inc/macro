@@ -164,8 +164,9 @@ outputs; a native declaration must not grow optional compatibility stubs.
 
 The first compact batch consumer synchronously flushes a single pending update,
 validates Begin/Continue authority, and acknowledges successful prefix plus caught
-failure effects before allowing a retry. It does not yet implement compact
-admission; reject finalize envelopes before execution. Apply exact capture leases
+failure effects before allowing a retry. Hosted compact admission invokes a
+validated Mutable Reconcile stage before ordinary session admission; unsupported
+host callbacks and opaque reconciliation patches still reject explicitly. Apply exact capture leases
 atomically before operations, retain input operands through execution and hold
 constructed operands until their update retires. Reserved
 construction supports exact core/heading instance seeds, with real key tickets
@@ -207,3 +208,18 @@ never hold them while a native plan or normalizer invokes JS. Scoped callbacks
 must not normalize/admit recursively; the outer flush owns normalization. Advance
 the mutation epoch before execution and return its actual latest value so child
 operations are not overwritten by the parent receipt.
+
+Resolve compact no-op receipts to the retained committed publication (including
+version zero), not the burned pending version. Normalize admission mutations
+after executing them, but never replay an already-flushed pipeline at admission.
+Recover and reopen only unadopted policy refusals; consumed failures are fatal,
+and a real publication plus an error must retain its published receipt rather
+than fabricate rollback. Apply every prefix/detached selection sidecar before
+surfacing a callback failure. Reject recursive Begin/finalize in callback scopes.
+
+Ship final typed retired-record fields alongside removed keys so retained JS
+instances receive their final scalar/link state before map deletion. Keep retired
+capture authority indexed separately, raw reads exact and normal graph lookup
+unable to resurrect collected nodes. Union pending retirements (including nodes
+created and collected within one update) with committed subtree removals, filter
+final live membership, and bypass public exportJSON/getters during this path.

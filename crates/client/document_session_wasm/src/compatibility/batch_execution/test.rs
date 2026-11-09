@@ -60,11 +60,11 @@ fn scoped_callbacks_leave_normalization_to_the_outer_flush() -> Result<(), Bound
             tx.append(paragraph, &[first.key(), second.key()])?;
             tx.append(NodeKey::ROOT, &[paragraph.key()])?;
             scopes::with_pending_frame(host, || {
-                let pending = execute(tx, &[], false, vec![])?;
+                let pending = execute(tx, &[], batch_execution::Normalization::Deferred, vec![])?;
                 assert!(!pending.published && !pending.noop);
                 assert!(tx.needs_flush());
                 assert_eq!(tx.children_keys(paragraph)?.len(), 2);
-                let normalized = execute(tx, &[], true, vec![])?;
+                let normalized = execute(tx, &[], batch_execution::Normalization::Updater, vec![])?;
                 assert!(matches!(
                     normalized.outcome,
                     compat::CompatBatchOutcome::CompatBatchSuccess {}

@@ -2,6 +2,36 @@
 use super::*;
 
 impl Host {
+    pub(super) fn pin_batch_inputs(
+        &mut self,
+        owner: capture_leases::NativeOwner,
+        operations: &[compat::CompatBatchOperation],
+    ) -> Result<(), BoundaryError> {
+        let mut input_captures = Vec::new();
+        for operation in operations {
+            if let compat::CompatNodeOperand::CompatCapturedNode { record } = &operation.receiver {
+                input_captures.push(record.capture_id);
+            }
+            for argument in &operation.args {
+                match argument {
+                    compat::CompatBatchArgument::CompatNodeArgument {
+                        value: compat::CompatNodeOperand::CompatCapturedNode { record },
+                    } => input_captures.push(record.capture_id),
+                    compat::CompatBatchArgument::CompatNodeArrayArgument { values } => {
+                        for value in values {
+                            if let compat::CompatNodeOperand::CompatCapturedNode { record } = value
+                            {
+                                input_captures.push(record.capture_id);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.capture_leases.hold(owner, &input_captures)?;
+        Ok(())
+    }
     pub(super) fn remove_captures(&mut self, ids: Vec<u64>) {
         for id in ids {
             let capture = self
