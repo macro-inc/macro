@@ -10,7 +10,10 @@ boundaries, mention insertion/deletion/history and media mutation/permission
 guards and checkbox-to-task conversion. Task creation is a service boundary stub;
 its tests exercise actual selection/parsing, parallel completion, batched node
 replacement, partial failures and deleted targets, not remote task creation
-or host authorization. TaskList DOM cases use the mounted jsdom host to check
+or host authorization. Checklist collector/planner mappings
+cover actual node metadata and supplied task facts. The current planner dims
+filtered rows and counts progress; row grouping/collapse is not implemented.
+Its legacy hideFiltered setting is ignored rather than hiding rows. TaskList DOM cases use the mounted jsdom host to check
 unmanaged toolbar identity through committed child edits, HTML export and
 removal, list-kind DOM replacement and ordered-start updates that preserve
 managed item identity. These exercise the inherited ListNode DOM hooks in the
@@ -60,7 +63,7 @@ bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor
 
 `scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts`,
 `editor-async-behavior-map.ts`, `editor-node-behavior-map.ts` and
-`editor-menu-behavior-map.ts` map
+`editor-menu-behavior-map.ts` and `editor-checklist-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
