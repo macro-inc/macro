@@ -158,18 +158,23 @@ function openManualNotificationLink(
     }
 
     // Tasks, notes and files are all documents; their block comes from the
-    // document itself.
-    const { fetchDocumentMetadata } = await import(
-      '@queries/storage/document-metadata'
+    // document itself, or plain document routing when it can't be loaded.
+    const metadata = await catchToResult(async () =>
+      (
+        await import('@queries/storage/document-metadata')
+      ).fetchDocumentMetadata(id)
     );
-    const document = await fetchDocumentMetadata(id);
+    if (metadata.isErr()) {
+      Telemetry.error(metadata.error, { surface: 'notification-navigation' });
+    }
+    const document = metadata.isOk() ? metadata.value : undefined;
     openSplitIfNotOpen(
       lm,
       itemToBlockName({
         type: 'document',
-        fileType: document.fileType ?? undefined,
+        fileType: document?.fileType ?? undefined,
         subType:
-          document.subType && document.subType !== 'initiative_description'
+          document?.subType && document.subType !== 'initiative_description'
             ? { type: document.subType }
             : undefined,
       }),

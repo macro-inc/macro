@@ -76,7 +76,6 @@ function notificationContent(notification: Notification): string | undefined {
     return `Requested ${metadata.content.accessLevel} access`;
   if (metadata.tag === 'entity_access_granted')
     return `Granted you ${metadata.content.accessLevel} access`;
-  if (metadata.tag === 'manual') return manualText(metadata.content);
   const field =
     NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];
   if (!field) return undefined;
@@ -117,6 +116,9 @@ export function itemContent(
   ) {
     return;
   }
+
+  // What the sender wrote, not the linked channel's latest message.
+  if (meta?.tag === 'manual') return manualText(meta.content);
 
   const channel = channelMessageContent(entity);
   if (channel) return channel;
