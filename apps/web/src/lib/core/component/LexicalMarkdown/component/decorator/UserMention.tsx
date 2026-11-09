@@ -2,23 +2,16 @@ import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
-import { createEffect, createMemo, useContext } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { UPDATE_USER_DISPLAY_NAME_COMMAND } from '../../plugins';
+import { createEffect, createMemo } from 'solid-js';
+import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
 
 function emailLocalPart(email: string): string {
   return email.split('@')[0] || email;
 }
 
 export function UserMention(props: UserMentionDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const selection = () => lexicalWrapper?.selection;
-
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
+  const host = useDecoratorHost();
+  const isSelectedAsNode = () => host.isSelected(props.key);
 
   // Convert String wrapper to primitive string
   const userId = () => String(props.userId);
@@ -60,12 +53,7 @@ export function UserMention(props: UserMentionDecoratorProps) {
     if (!nextDisplayName || nextDisplayName === propDisplayName()) return;
 
     setTimeout(() => {
-      lexicalWrapper?.editor?.dispatchCommand(
-        UPDATE_USER_DISPLAY_NAME_COMMAND,
-        {
-          [userId()]: nextDisplayName,
-        }
-      );
+      host.updateUserDisplayName(userId(), nextDisplayName);
     });
   });
 
