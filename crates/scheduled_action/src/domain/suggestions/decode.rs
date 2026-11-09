@@ -18,7 +18,7 @@ use serde_json::{Map, Value};
 pub(super) use shown_text::line;
 use shown_text::personal_detail;
 
-use super::model::{CheckedSuggestion, StoredPick};
+use super::model::{CheckedRoutineIdea, CheckedSuggestion, RoutineIdea, StoredPick};
 use crate::domain::models::ActionConfiguration;
 
 #[cfg(test)]
@@ -61,6 +61,7 @@ pub fn catalog_pick(
                     key: routine.key.to_owned(),
                     knobs,
                 },
+                idea: None,
             })
         }
         _ => Err(problems),
@@ -68,15 +69,31 @@ pub fn catalog_pick(
 }
 
 /// A drafted routine whose check passed, checked as a suggestion: kept
-/// switched off, never acting as the person.
+/// switched off, never acting as the person, and shown among the person's
+/// ideas as `idea` says.
 pub fn drafted_pick(
     mut routine: ActionConfiguration,
     reason: &str,
     surfaces: Vec<Surface>,
     keep_probability: f32,
+    idea: RoutineIdea,
     allowed: &[Surface],
 ) -> Result<CheckedSuggestion, Vec<String>> {
     let mut problems = Vec::new();
+    let title = ideas::domain::check::text(
+        &idea.title,
+        "`idea.title`",
+        ideas::domain::check::MAX_TITLE_CHARS,
+        &mut problems,
+    );
+    let importance = ideas::domain::check::importance(idea.importance, &mut problems);
+    let idea = title
+        .zip(importance)
+        .map(|(title, importance)| CheckedRoutineIdea {
+            title,
+            importance,
+            categories: ideas::domain::check::categories(idea.categories),
+        });
     if let Some(detail) = drafted_texts(&routine)
         .into_iter()
         .find_map(|text| personal_detail(&text))
@@ -106,6 +123,7 @@ pub fn drafted_pick(
                 reason,
                 keep_probability,
                 pick: StoredPick::Routine { routine },
+                idea,
             })
         }
         _ => Err(problems),

@@ -88,7 +88,11 @@ each run.
   (the `GenerationSessions` port, found from the request's code-mode
   invocation like a draft's check; anything else is 403 `NotSuggesting`).
   Suggestions are never rewritten; a retired catalog pick may be suggested
-  again, a dismissed one never. Every kept and retired suggestion is logged in
+  again, a dismissed one never. A drafted routine comes with its `idea` (title,
+  importance, categories) and is written with its routine idea in one
+  transaction (`ideas_db_utils`), refused when the idea would pass the ideas
+  limits; dismissing, retiring or saving it from the suggestion closes that idea
+  in the same transaction. A catalog pick takes no `idea`. Every kept and retired suggestion is logged in
   `suggestion_change`. `suggestions/decode.rs` is the trust boundary: a
   catalog key with knob values that fit their knob, or a drafted routine that
   passes saving's checks, kept switched off and never acting as the user; a

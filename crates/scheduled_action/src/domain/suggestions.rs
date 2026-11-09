@@ -43,7 +43,9 @@ use self::model::{
     RoutineSuggestion, RoutineSuggestions, StoredPick, StoredSuggestion, SuggestOutcome,
     SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
-use self::ports::{GenerationStatuses, SuggestionRepo, SuggestionSources};
+use ideas::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
+
+use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
 use super::models::ActionPolicyError;
 use super::ports::{
     RequestSessions, RoutineCode, ScheduledActionService, SuggestionOrigin, SuggestionOrigins,
@@ -254,7 +256,14 @@ where
                 reason,
                 surfaces,
                 keep_probability,
+                idea,
             } => {
+                if idea.is_some() {
+                    return Ok(rejected(vec![
+                        "only a drafted routine is shown among ideas; leave `idea` out of a catalog routine"
+                            .to_owned(),
+                    ]));
+                }
                 let (stored, dismissed) = tokio::try_join!(
                     self.repo.suggestions(user),
                     self.repo.dismissed_templates(user),
@@ -282,6 +291,7 @@ where
                 reason,
                 surfaces,
                 keep_probability,
+                idea,
             } => {
                 let check = self
                     .actions
@@ -301,6 +311,7 @@ where
                         &reason,
                         surfaces,
                         keep_probability,
+                        idea,
                         allowed,
                     ),
                     Some(check),
@@ -309,7 +320,7 @@ where
         };
         match checked {
             Ok(checked) => {
-                let id = self
+                let kept = self
                     .repo
                     .add(
                         user,
@@ -319,11 +330,29 @@ where
                         Utc::now(),
                     )
                     .await?;
+                let problem = match kept {
+                    Kept::Stored(id) => {
+                        return Ok(SuggestOutcome {
+                            ok: true,
+                            problems: Vec::new(),
+                            check,
+                            id: Some(id),
+                        });
+                    }
+                    Kept::IdeasFull => format!(
+                        "the user has {OPEN_LIMIT} open ideas, and a drafted routine is one; \
+                         retire a suggestion that matters less first"
+                    ),
+                    Kept::NightFull => format!(
+                        "this generation added {NEW_PER_GENERATION} ideas, the most for one night, \
+                         and a drafted routine is one; stop drafting"
+                    ),
+                };
                 Ok(SuggestOutcome {
-                    ok: true,
-                    problems: Vec::new(),
+                    ok: false,
+                    problems: vec![problem],
                     check,
-                    id: Some(id),
+                    id: None,
                 })
             }
             Err(problems) => Ok(SuggestOutcome {

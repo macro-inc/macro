@@ -23,6 +23,7 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shown_text = { path = "../shown_text" }
+ideas_db_utils = { path = "../ideas_db_utils" }
 sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

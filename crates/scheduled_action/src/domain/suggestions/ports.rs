@@ -23,7 +23,8 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32>> + Send;
 
     /// Keep `suggestion`, handed back by `session` of `generation` for the
-    /// person, and log it; its id.
+    /// person, with its routine idea when it has one, and log both; its id,
+    /// or which ideas limit the idea would pass, keeping nothing.
     fn add(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -31,10 +32,10 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         generation: Uuid,
         suggestion: &CheckedSuggestion,
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Uuid>> + Send;
+    ) -> impl Future<Output = Result<Kept>> + Send;
 
-    /// Retire the person's open suggestion `id` for `reason`, logged as
-    /// `session` of `generation`'s; whether it was open.
+    /// Retire the person's open suggestion `id` and its routine idea for
+    /// `reason`, logged as `session` of `generation`'s; whether it was open.
     fn retire(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -58,7 +59,8 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
 
-    /// Dismiss the person's suggestion `id` for good; whether it was theirs.
+    /// Dismiss the person's suggestion `id` and its routine idea for good;
+    /// whether it was theirs.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -189,4 +191,15 @@ pub trait GenerationStatuses: Send + Sync + 'static {
     /// The status of the person's latest generation; none when they never
     /// had one.
     async fn latest(&self, user: &MacroUserIdStr<'_>) -> Result<Option<GenerationStatus>>;
+}
+
+/// What keeping a suggestion did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kept {
+    /// Stored, with this id.
+    Stored(Uuid),
+    /// Its routine idea would pass the person's open ideas limit.
+    IdeasFull,
+    /// Its routine idea would pass the generation's new ideas limit.
+    NightFull,
 }

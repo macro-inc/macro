@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea SET state = 'done', state_reason = NULL, updated_at = $2, state_changed_at = $2\n           WHERE id = (SELECT idea_id FROM idea_routine WHERE routine_suggestion_id = $1)\n             AND state IN ('proposed', 'accepted')\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1af507db27e13bd08f02c39444a0642c7f5b30be8f4b2bc56e5171016fff8998"
+}
