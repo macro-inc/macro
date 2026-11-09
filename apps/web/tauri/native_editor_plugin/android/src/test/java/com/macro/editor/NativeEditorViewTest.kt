@@ -9,6 +9,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class NativeEditorViewTest {
+    @Test fun defaultCodeRedoPreservesRawJsonAndCaret() {
+        NativeHistoryScenario.restoredCodeIdentity(RuntimeEnvironment.getApplication(), false)
+    }
+    @Test fun applicationCodeRedoPreservesRawJsonAndCaret() {
+        NativeHistoryScenario.restoredCodeIdentity(RuntimeEnvironment.getApplication(), true)
+    }
+
     @Test fun consumedEnterKeepsTextAndPreventionAfterEffectFailure() {
         NativeInputScenario.consumedEnter(RuntimeEnvironment.getApplication())
     }

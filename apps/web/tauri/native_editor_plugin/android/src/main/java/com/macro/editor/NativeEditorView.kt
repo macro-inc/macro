@@ -334,7 +334,12 @@ class NativeEditorView(
                 else -> null
             }
             if (command != null) {
-                admit(FfiInput.Command(command, projectionLayout.selection(selectionStart, selectionEnd)))
+                val letter = android.view.KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")
+                val facts = FfiKeyEvent(if (event.isShiftPressed) letter else letter.lowercase(java.util.Locale.ROOT),
+                    "Key$letter", event.isShiftPressed, event.isAltPressed, event.isCtrlPressed,
+                    event.isMetaPressed, event.repeatCount > 0, composing)
+                admit(FfiInput.KeyDown(facts, command, true,
+                    projectionLayout.selection(selectionStart, selectionEnd)))
                 return true
             }
         }

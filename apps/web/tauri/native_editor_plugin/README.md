@@ -115,6 +115,10 @@ standalone builds package a device library only when explicitly selected.
 
 `connectedDebugAndroidTest` exercises the same real-session input scenario on a
 device. Compiling its APK does not establish device or IME acceptance.
+The shared `NativeHistoryScenario` also pins full exported JSON, durable text IDs
+and both native/model caret offsets across repeated physical Undo/Redo, for the
+default code registry and the full application custom-code registry. Physical
+editing shortcuts pass their modifier facts through the shared KeyDown route.
 
 Bridge records for all three languages are generated from `schema/bridge.schema.json`.
 Install the private generator
