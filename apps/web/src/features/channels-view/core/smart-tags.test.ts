@@ -29,6 +29,57 @@ const label = (id: string, channelIds: string[]): ChannelLabel => ({
   rule,
 });
 
+it('unions explicit picks and authorized shared rules without hiding unjoined members', () => {
+  const result = resolveChannelLabelMemberships(
+    [
+      {
+        ...label('shared', ['picked', 'renamed', 'unloaded']),
+        teamId: 'team',
+        explicitChannelIds: ['picked'],
+      },
+    ],
+    [
+      { ...channel('picked', 'General'), teamId: 'team', isParticipant: false },
+      { ...channel('renamed', 'Sales'), teamId: 'team', isParticipant: true },
+      {
+        ...channel('new-match', 'Support'),
+        teamId: 'team',
+        isParticipant: false,
+      },
+      {
+        ...channel('foreign', 'Support'),
+        teamId: 'other-team',
+        isParticipant: true,
+      },
+      { ...channel('unknown', 'Support'), isParticipant: true },
+    ]
+  );
+  expect(result[0].channelIds).toEqual(['unloaded', 'picked', 'new-match']);
+  expect(result[0].explicitChannelIds).toEqual(['picked']);
+  expect(result[0].channelCount).toBe(3);
+});
+
+it('keeps personal section membership participant-only even for explicit picks', () => {
+  const result = resolveChannelLabelMemberships(
+    [
+      {
+        ...label('personal', ['picked', 'not-joined']),
+        explicitChannelIds: ['picked', 'not-joined'],
+      },
+    ],
+    [
+      { ...channel('picked', 'General', 'private'), isParticipant: true },
+      {
+        ...channel('not-joined', 'Support'),
+        teamId: 'team',
+        isParticipant: false,
+      },
+    ]
+  );
+  expect(result[0].channelIds).toEqual(['picked']);
+  expect(result[0].explicitChannelIds).toEqual(['picked']);
+});
+
 describe('smart tag matching', () => {
   it('matches literal substrings ignoring case for team channels, excluding empty patterns', () => {
     expect(channelMatchesSmartTag(channel('a', 'Acme SUPPORT'), rule)).toBe(
