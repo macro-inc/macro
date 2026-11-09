@@ -138,7 +138,7 @@ const getItemName = (item: CombinedEntity): string => {
  * dependencies have to be injected via the component.
  */
 export type HandlerDependencies = {
-  editor: LexicalEditor;
+  editor: Pick<LexicalEditor, 'dispatchCommand'>;
   blockName?: BlockName;
   blockId?: string;
   onUserMention?: (record: UserMentionRecord) => void;

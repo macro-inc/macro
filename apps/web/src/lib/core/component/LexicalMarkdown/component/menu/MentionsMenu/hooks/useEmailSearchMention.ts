@@ -16,6 +16,8 @@ type UseEmailSearchMentionOptions = {
 };
 
 type UseEmailSearchMentionResult = {
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown>;
   emails: Accessor<EntityItem[]>;
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
@@ -101,6 +103,17 @@ export function useEmailSearchMention(
   });
 
   return {
+    isLoading: () =>
+      listEnabled() &&
+      (usesQuickAccess()
+        ? cachedEmails.isLoading()
+        : emailSearchQuery.isLoading),
+    error: () =>
+      listEnabled()
+        ? usesQuickAccess()
+          ? cachedEmails.error()
+          : emailSearchQuery.error
+        : undefined,
     emails,
     totalCount: () =>
       usesQuickAccess() ? cachedEmails.totalCount() : emails().length,

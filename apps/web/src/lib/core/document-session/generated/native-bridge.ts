@@ -152,7 +152,7 @@ export interface MenuChoice {
 
 export interface MenuAgentSession {
   id: string;
-  label: string;
+  label?: string;
   mentionUuid?: string;
 }
 
@@ -183,7 +183,7 @@ export interface MenuDate {
 
 export interface MenuDocument {
   blockName: string;
-  blockParams: { [key: string]: string };
+  blockParams?: { [key: string]: string };
   channelType?: string;
   collapsed?: boolean;
   createdAt?: number;
@@ -220,6 +220,7 @@ export interface MenuIdentity {
 export interface MenuRowsRequest {
   buckets: MenuBucket[];
   identity: MenuIdentity;
+  rejectedRowId?: string;
   rows: MenuRow[];
   scope: SurfaceScope;
 }
@@ -237,6 +238,7 @@ export interface MenuBucket {
 export interface MenuRow {
   bucketId: string;
   detail?: string;
+  disabled?: boolean;
   id: string;
   label: string;
 }

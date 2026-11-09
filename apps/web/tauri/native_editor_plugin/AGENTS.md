@@ -27,6 +27,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - Execute host effects after the FFI call returns, and report durable writes only
   after the storage transaction commits.
 - Reject stale menu identities at both bridge endpoints and validate the exact native query span again in the shared model; close popups on blur, locks and unmount.
+- Release pending menu picks only on their matching commit or explicit row rejection; finish active composition and revalidate identity before selecting a row.
 - Match mount generations independently of session generations before placement, focus or unmount; clear pending mount configuration on unmount.
 - Retain retired surface generations until the account changes; never reuse a stopped generation.
 - Check the process-wide lease registry before opening a lease file; use one channel per live OS lease.

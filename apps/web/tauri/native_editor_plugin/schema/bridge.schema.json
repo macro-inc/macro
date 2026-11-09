@@ -675,6 +675,9 @@
         },
         "bucketId": {
           "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -741,6 +744,9 @@
           "items": {
             "$ref": "#/definitions/MenuBucket"
           }
+        },
+        "rejectedRowId": {
+          "type": "string"
         }
       },
       "required": [
@@ -807,8 +813,7 @@
       "required": [
         "documentId",
         "documentName",
-        "blockName",
-        "blockParams"
+        "blockName"
       ]
     },
     "MenuDate": {
@@ -845,8 +850,7 @@
         }
       },
       "required": [
-        "id",
-        "label"
+        "id"
       ]
     },
     "MenuBookingLink": {

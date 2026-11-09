@@ -122,6 +122,12 @@ registered node types. Answer through `menuRows()` and `menuCommit()` on that
 surface; both discard replaced queries before queued IPC. A late close cannot
 clear a newer query. Providers retain typed identity/payloads, loaded counts,
 loading/error state and pagination; native rows never carry executable callbacks.
-Menu selection IPC is traced without query text or row labels. Application
-provider composition and complete source menu lifecycle parity are separate
-prerequisites for admission.
+Menu selection IPC is traced without query text or row labels.
+`NativeMentionSources` mounts the actual `MentionsMenu` providers and controller
+without its DOM presentation or keyboard listeners. It retains source ranking,
+category expansion, pagination, loading/errors and typed insertion handlers.
+Replies must match the current query, surface and selection attempt after every
+async boundary; a rejected or unavailable row releases the native pending pick.
+The source label helper supplies native row text without reducing insertion
+payloads to labels. Complete source menu lifecycle parity and application mounting
+remain prerequisites for admission.

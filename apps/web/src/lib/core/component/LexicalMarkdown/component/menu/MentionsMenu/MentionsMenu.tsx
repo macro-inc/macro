@@ -4,10 +4,9 @@ import { useRoutineMentionSource } from '@app/features/routines/routine-mentions
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
-import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   enableCrm,
   enableWhatsappLinked,
@@ -22,27 +21,20 @@ import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts'
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
-import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
-import type { HistoryItem as Item } from '@queries/history/history';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { createVirtualizer } from '@tanstack/solid-virtual';
 import { Surface } from '@ui';
-import type { LexicalEditor } from 'lexical';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
-  For,
   onCleanup,
   onMount,
   Show,
@@ -52,17 +44,16 @@ import {
 import { floatWithElement } from '../../../directive/floatWithElement';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
-import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
   AgentSessionMentionItem,
   DateMentionItem,
   ExternalChatMentionItem,
   MentionItem,
-  UserMentionRecord,
 } from '../../../utils/mentionsUtils';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
+import { VirtualizedItemList } from './components/VirtualizedItemList';
 import { createMentionPageLoader } from './hooks/createMentionPageLoader';
 import { useBookingLinkMention } from './hooks/useBookingLinkMention';
 import { useCalendarEventMention } from './hooks/useCalendarEventMention';
@@ -74,12 +65,13 @@ import {
 import { useUsersMention } from './hooks/useUsersMention';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
+import { presentMentionsNatively } from './native-presentation';
+import type { MentionsMenuProps } from './props';
 import { rankMentions } from './utils/mention-ranking';
 import { createItemHandler } from './utils/mentionHandlers';
 import { sortMobileMentions } from './utils/mobileSort';
 
 const TARGET_ITEMS = 8;
-const VIRTUAL_ITEM_HEIGHT = 36;
 // Height consumed by Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
 const MAX_CONTENT_HEIGHT = 256;
@@ -94,45 +86,6 @@ const DEFAULT_DOCUMENT_BUCKETS: EntityBucket[] = [
   'form',
   'initiative',
 ];
-
-type MentionsMenuProps = {
-  menu: MenuOperations;
-  /** pass in a custom users list if necessary */
-  users?: Accessor<IUser[]>;
-  /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
-  entities?: Accessor<EntityItem[]>;
-  /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
-  useBlockBoundary?: boolean;
-  portalScope?: PortalScope;
-  /** Mounts the menu here instead of by `portalScope`. */
-  portalMount?: HTMLElement;
-  block?: BlockName;
-  anchor?: HTMLElement | null;
-  onUserMention?: (mention: UserMentionRecord) => void;
-  onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
-  onEmailMention?: (item: EmailEntity) => void;
-  disableMentionTracking?: boolean;
-  /**
-   * The document hosting the editor, which records inserted mentions.
-   * Defaults to the enclosing legacy block, which routed documents lack.
-   */
-  sourceDocumentId?: string;
-  /** whether to show open tabs as a bucket in the menu */
-  showOpenTabs?: boolean;
-  /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
-  sources?: MentionBucketId[];
-  /** Restrict the document bucket at the query source (e.g. task-only reference fields). */
-  documentBuckets?: EntityBucket[];
-  /** Scalar person fields cannot store group mentions. Defaults to true. */
-  includeGroups?: boolean;
-  /** Disable CRM references for fields that only store Macro user identities. */
-  includeContacts?: boolean;
-  /** Repeated cell editing opens immediately instead of animating each picker. */
-  animate?: boolean;
-} & (
-  | { editor: LexicalEditor; onPick?: never }
-  | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
-);
 
 export function MentionsMenu(props: MentionsMenuProps) {
   return (
@@ -172,7 +125,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
-  const { usersAndGroups, groups } = useUsersMention({
+  const {
+    usersAndGroups,
+    groups,
+    isLoading: isLoadingUsers,
+    error: errorUsers,
+  } = useUsersMention({
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
@@ -256,6 +214,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     )
   );
   const crmMention = {
+    isLoading: () =>
+      (companyMention?.isLoading() ?? false) ||
+      (contactsEnabled() && (contactMention?.isLoading() ?? false)),
+    error: () =>
+      companyMention?.error() ??
+      (contactsEnabled() ? contactMention?.error() : undefined),
     entities: crmItems,
     totalCount: () => crmItems().length,
     hasMore: () =>
@@ -274,6 +238,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const {
     emails,
+    isLoading: isLoadingEmails,
+    error: errorEmails,
     totalCount: totalEmailCount,
     hasMore: hasMoreEmails,
     isLoadingMore: isLoadingMoreEmails,
@@ -281,6 +247,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   } = hasCustomEntities()
     ? {
         emails: () => [],
+        isLoading: () => false,
+        error: () => undefined,
         totalCount: () => 0,
         hasMore: () => false,
         isLoadingMore: () => false,
@@ -346,11 +314,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     props.menu.isOpen() &&
     !hasCustomEntities() &&
     (!props.sources || props.sources.includes('bookingLinks'));
-  const { bookingLinks } = useBookingLinkMention({
+  const {
+    bookingLinks,
+    isLoading: isLoadingBooking,
+    error: errorBooking,
+  } = useBookingLinkMention({
     enabled: bookingLinksEnabled,
     searchTerm,
   });
-  const { events: calendarEvents } = useCalendarEventMention({
+  const {
+    events: calendarEvents,
+    isLoading: isLoadingCalendar,
+    error: errorCalendar,
+  } = useCalendarEventMention({
     enabled: () =>
       props.menu.isOpen() &&
       !hasCustomEntities() &&
@@ -607,14 +583,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     item.kind === 'user' && item.data.offline === true;
 
   const itemAction = async (item: MentionItem) => {
-    if (isOffline(item)) return;
+    if (isOffline(item)) return false;
     analytics.track('mentions_menu_use', { itemType: item.kind });
     if (props.onPick) props.onPick(item);
     else await itemActionHandler?.(item);
+    return true;
   };
 
   createEffect(() => {
-    if (props.anchor) return;
+    if (props.anchor && !props.nativePresentation) return;
     if (menuOpen()) {
       setMountSelection(document.getSelection());
       controller.reset();
@@ -635,7 +612,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const canExitViewAll = () => controller.isViewAllMode() && !isMobile();
 
   useMenuKeyboardNavigation({
-    isActive: menuOpen,
+    isActive: () => !props.nativePresentation && menuOpen(),
     onUp: () => {
       controller.selectPrev();
     },
@@ -708,6 +685,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   };
 
   onMount(() => {
+    if (props.nativePresentation) return;
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
       document.removeEventListener('focusout', focusOut);
@@ -818,6 +796,73 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
         }
       : undefined;
+
+  function nativeStatus(id: string) {
+    const sources: {
+      id: MentionBucketId;
+      loading: () => boolean;
+      error: () => unknown;
+    }[] = [
+      { id: 'users', loading: isLoadingUsers, error: errorUsers },
+      {
+        id: 'documents',
+        loading: docsMention.isLoading,
+        error: docsMention.error,
+      },
+      {
+        id: 'channels',
+        loading: channelsMention.isLoading,
+        error: channelsMention.error,
+      },
+      { id: 'crm', loading: crmMention.isLoading, error: crmMention.error },
+      { id: 'emails', loading: isLoadingEmails, error: errorEmails },
+      {
+        id: 'calendarEvents',
+        loading: isLoadingCalendar,
+        error: errorCalendar,
+      },
+      { id: 'bookingLinks', loading: isLoadingBooking, error: errorBooking },
+      {
+        id: 'agentSessions',
+        loading: () => sessionList?.isLoading() ?? false,
+        error: () => sessionList?.error(),
+      },
+      {
+        id: 'externalChats',
+        loading: () => externalChatsEnabled() && externalChatsQuery.isLoading,
+        error: () =>
+          externalChatsEnabled() ? externalChatsQuery.error : undefined,
+      },
+      { id: 'routines', loading: routines.isLoading, error: routines.error },
+    ];
+    const statuses = sources
+      .filter(
+        (source) =>
+          (id === 'all' || source.id === id) && sourceEnabled(source.id)
+      )
+      .map((source) => ({ loading: source.loading(), error: source.error() }));
+    return {
+      isLoading: statuses.some((status) => status.loading),
+      error: statuses.some(
+        (status) => status.error !== null && status.error !== undefined
+      )
+        ? 'Search unavailable'
+        : undefined,
+    };
+  }
+
+  if (props.nativePresentation) {
+    presentMentionsNatively(
+      props.nativePresentation,
+      menuOpen,
+      activeSearchTerm,
+      nativeStatus,
+      bucketConfigs,
+      controller,
+      itemAction
+    );
+    return null;
+  }
 
   return (
     <Show when={menuOpen()}>
@@ -953,99 +998,5 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         </div>
       </ScopedPortal>
     </Show>
-  );
-}
-
-function VirtualizedItemList(props: {
-  items: MentionItem[];
-  selectedIndex: number;
-  itemAction: (item: MentionItem) => void;
-  /** Whether an item's agent runtime is away; such rows are not pickable. */
-  offline: (item: MentionItem) => boolean;
-  setIndex: (index: number) => void;
-  setOpen: (open: boolean) => void;
-  maxHeight?: number;
-  hasMore: boolean;
-  isLoadingMore: boolean;
-  onEndReached: () => void;
-}) {
-  let scrollContainerRef: HTMLDivElement | undefined;
-
-  const virtualizer = createVirtualizer({
-    get count() {
-      return props.items.length;
-    },
-    getScrollElement: () => scrollContainerRef ?? null,
-    estimateSize: () => VIRTUAL_ITEM_HEIGHT,
-    overscan: 5,
-  });
-
-  // Scroll selected item into view
-  createEffect(() => {
-    const index = props.selectedIndex;
-    const itemCount = untrack(() => props.items.length);
-    if (index >= 0 && index < itemCount) {
-      virtualizer.scrollToIndex(index, { align: 'auto' });
-    }
-  });
-
-  return (
-    <div
-      ref={scrollContainerRef}
-      onScroll={(event) => {
-        if (!props.hasMore || props.isLoadingMore) return;
-        const target = event.currentTarget;
-        const remaining =
-          target.scrollHeight - target.scrollTop - target.clientHeight;
-        if (remaining <= VIRTUAL_ITEM_HEIGHT * 5) props.onEndReached();
-      }}
-      class="overflow-y-auto scrollbar-hidden"
-      style={{
-        'max-height':
-          props.maxHeight !== undefined ? `${props.maxHeight}px` : '16rem',
-      }}
-    >
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        <For each={virtualizer.getVirtualItems()}>
-          {(virtualRow) => {
-            const item = () => props.items[virtualRow.index];
-            return (
-              <Show when={item()}>
-                {(currentItem) => (
-                  <div
-                    class="ph-no-capture"
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <MentionsMenuItem
-                      item={currentItem()}
-                      index={virtualRow.index}
-                      selected={virtualRow.index === props.selectedIndex}
-                      itemAction={props.itemAction}
-                      setIndex={props.setIndex}
-                      setOpen={props.setOpen}
-                      offline={props.offline(currentItem())}
-                      disableScrollIntoView
-                    />
-                  </div>
-                )}
-              </Show>
-            );
-          }}
-        </For>
-      </div>
-    </div>
   );
 }

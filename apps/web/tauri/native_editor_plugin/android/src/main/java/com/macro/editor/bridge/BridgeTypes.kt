@@ -422,8 +422,7 @@ data class MenuAgentSession (
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val id: String,
 
-    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
-    val label: String,
+    val label: String? = null,
 
     @get:JsonProperty("mentionUuid")@field:JsonProperty("mentionUuid")
     val mentionUUID: String? = null
@@ -485,9 +484,7 @@ data class MenuDocument (
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val blockName: String,
 
-    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
-    val blockParams: Map<String, String>,
-
+    val blockParams: Map<String, String>? = null,
     val channelType: String? = null,
     val collapsed: Boolean? = null,
     val createdAt: Long? = null,
@@ -563,6 +560,9 @@ data class MenuRowsRequest (
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val identity: MenuIdentity,
 
+    @get:JsonProperty("rejectedRowId")@field:JsonProperty("rejectedRowId")
+    val rejectedRowID: String? = null,
+
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val rows: List<MenuRow>,
 
@@ -597,6 +597,7 @@ data class MenuRow (
     val bucketID: String,
 
     val detail: String? = null,
+    val disabled: Boolean? = null,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val id: String,

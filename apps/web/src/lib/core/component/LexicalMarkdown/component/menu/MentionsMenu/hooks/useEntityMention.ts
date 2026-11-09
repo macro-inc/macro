@@ -14,6 +14,7 @@ type UseEntityMentionOptions = {
 };
 
 type UseEntityMentionResult = {
+  error: Accessor<unknown>;
   entities: Accessor<EntityItem[]>;
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
@@ -41,6 +42,7 @@ export function useEntityMention(
   );
 
   return {
+    error: () => entityList.error(),
     entities,
     totalCount: () =>
       usesRankedList() ? entityList.totalCount() : entities().length,
@@ -79,6 +81,7 @@ export function useEntityMentionFromList(
   );
 
   return {
+    error: () => undefined,
     entities,
     totalCount: () => entities().length,
     hasMore: () => false,
