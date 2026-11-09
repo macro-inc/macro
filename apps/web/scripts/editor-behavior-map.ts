@@ -2,6 +2,7 @@
 // A mapped case covers its named assertions, not every branch in its source file.
 // Execution status belongs to the supplied run evidence, never this registry.
 import { EDITOR_ASYNC_BEHAVIOR_MAP } from './editor-async-behavior-map';
+import { EDITOR_CHECKLIST_BEHAVIOR_MAP } from './editor-checklist-behavior-map';
 import { EDITOR_EXISTING_BEHAVIOR_MAP } from './editor-existing-behavior-map';
 import { EDITOR_MENU_BEHAVIOR_MAP } from './editor-menu-behavior-map';
 import { EDITOR_NODE_BEHAVIOR_MAP } from './editor-node-behavior-map';
@@ -959,4 +960,5 @@ export const EDITOR_BEHAVIOR_MAP = [
   ...EDITOR_ASYNC_BEHAVIOR_MAP,
   ...EDITOR_NODE_BEHAVIOR_MAP,
   ...EDITOR_MENU_BEHAVIOR_MAP,
+  ...EDITOR_CHECKLIST_BEHAVIOR_MAP,
 ] as const;
