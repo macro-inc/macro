@@ -141,13 +141,98 @@ impl SupportFollowUpScheduler {
     }
 }
 
+/// Reads and posts in support channels as the follow-up's sender, with that
+/// sender's own channel membership.
+pub(crate) struct FollowUpSender<A> {
+    pub(crate) messages: Arc<dyn MessageServiceApi>,
+    pub(crate) access: Arc<A>,
+}
+
+impl<A: EntityAccessService> FollowUpSender<A> {
+    /// Whether anyone has posted in the channel besides the welcome and the
+    /// follow-up `message_id`.
+    async fn has_conversation(&self, channel_id: Uuid, message_id: Uuid) -> Result<bool, Report> {
+        let sender = sender()?;
+        let view = self
+            .access
+            .generate_entity_access_receipt::<MessageView>(
+                &sender,
+                None,
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .context("support follow-up sender must be a channel member")?;
+        let roots = self
+            .messages
+            .timeline(
+                view,
+                MessageTimelineQuery {
+                    limit: Some(3),
+                    ..Default::default()
+                },
+            )
+            .await
+            .context("failed to read the support channel")?
+            .items;
+        let roots = roots
+            .iter()
+            .map(|root| (root.message.id, root.thread.reply_count));
+        Ok(conversation_started(roots, message_id))
+    }
+
+    /// Post the follow-up to `user`. Posting with the queued `message_id`
+    /// makes a retry return the first post.
+    async fn post(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        user: &MacroUserIdStr<'static>,
+        content: String,
+    ) -> Result<(), Report> {
+        let sender = sender()?;
+        let write = self
+            .access
+            .generate_entity_access_receipt::<MessageWrite>(
+                &sender,
+                None,
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .context("support follow-up sender must be a channel member")?;
+        self.messages
+            .post_from_event(
+                write,
+                message_id,
+                PostMessage {
+                    id: None,
+                    attribution: MessageAttribution::Unprompted,
+                    notification_policy: PostMessageNotificationPolicy::MentionsOnly,
+                    content,
+                    thread_id: None,
+                    anchor: None,
+                    mentions: vec![SimpleMention::user(user)],
+                    attachments: Vec::new(),
+                    nonce: None,
+                },
+            )
+            .await
+            .context("failed to post support follow-up")?;
+        Ok(())
+    }
+}
+
+fn sender() -> Result<MacroUserIdStr<'static>, Report> {
+    Ok(MacroUserIdStr::try_from_email(SENDER_EMAIL).context("invalid support follow-up sender")?)
+}
+
 /// Sends queued follow-ups when they come due. Every replica runs one; a
 /// one-minute row claim keeps two from sending the same follow-up.
 pub(crate) struct SupportFollowUpWorker<A, T, O, C, G, I> {
     pub(crate) queue: PgSupportFollowUps,
     pub(crate) db: PgPool,
-    pub(crate) messages: Arc<dyn MessageServiceApi>,
-    pub(crate) access: Arc<A>,
+    pub(crate) sender: FollowUpSender<A>,
     pub(crate) teams: T,
     pub(crate) onboarding: O,
     pub(crate) connections: C,
@@ -253,48 +338,13 @@ where
 
         let signals = self.signals(&pending, finished_setup, now).await?;
 
-        let sender = MacroUserIdStr::try_from_email(SENDER_EMAIL)
-            .context("invalid support follow-up sender")?;
-        let channel_id = pending.channel_id.to_string();
-        let view = self
-            .access
-            .generate_entity_access_receipt::<MessageView>(
-                &sender,
-                None,
-                &channel_id,
-                EntityType::Channel,
-            )
-            .await
-            .context("support follow-up sender must be a channel member")?;
-        let write = self
-            .access
-            .generate_entity_access_receipt::<MessageWrite>(
-                &sender,
-                None,
-                &channel_id,
-                EntityType::Channel,
-            )
-            .await
-            .context("support follow-up sender must be a channel member")?;
-
         // Read the channel last, so nothing slow sits between this check and
         // the post.
-        let roots = self
-            .messages
-            .timeline(
-                view,
-                MessageTimelineQuery {
-                    limit: Some(3),
-                    ..Default::default()
-                },
-            )
-            .await
-            .context("failed to read the support channel")?
-            .items;
-        let roots = roots
-            .iter()
-            .map(|root| (root.message.id, root.thread.reply_count));
-        if conversation_started(roots, message_id) {
+        if self
+            .sender
+            .has_conversation(pending.channel_id, message_id)
+            .await?
+        {
             return self.skip(&pending, "conversation_started").await;
         }
 
@@ -308,26 +358,14 @@ where
         let path_name: &'static str = (&path).into();
         span.record("path", path_name);
         let mention = user_mention(user).context("failed to mention the user")?;
-
-        // Posting with the queued id makes a retry return the first post.
-        self.messages
-            .post_from_event(
-                write,
+        self.sender
+            .post(
+                pending.channel_id,
                 message_id,
-                PostMessage {
-                    id: None,
-                    attribution: MessageAttribution::Unprompted,
-                    notification_policy: PostMessageNotificationPolicy::MentionsOnly,
-                    content: message(&mention, &path),
-                    thread_id: None,
-                    anchor: None,
-                    mentions: vec![SimpleMention::user(user)],
-                    attachments: Vec::new(),
-                    nonce: None,
-                },
+                user,
+                message(&mention, &path),
             )
-            .await
-            .context("failed to post support follow-up")?;
+            .await?;
 
         self.queue
             .finish(pending.channel_id)
@@ -564,6 +602,43 @@ impl MailProvider {
     }
 }
 
+/// A tool Macro can import from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Importable {
+    Notion,
+    Linear,
+    Slack,
+}
+
+impl Importable {
+    /// The app slugs it connects under; Slack's connector is `slack_v2`, and
+    /// `slack` is its older name.
+    fn slugs(self) -> &'static [&'static str] {
+        match self {
+            Self::Notion => &["notion"],
+            Self::Linear => &["linear"],
+            Self::Slack => &["slack", "slack_v2"],
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Notion => "Notion",
+            Self::Linear => "Linear",
+            Self::Slack => "Slack",
+        }
+    }
+
+    /// What Macro brings over from it.
+    fn brings(self) -> &'static str {
+        match self {
+            Self::Notion => "pages",
+            Self::Linear => "issues",
+            Self::Slack => "channels",
+        }
+    }
+}
+
 /// A connected tool's app slug, lowercase, and display name.
 #[derive(Debug, Clone)]
 struct Tool {
@@ -610,6 +685,7 @@ enum Path<'a> {
     Pricing,
     Phone,
     Team(&'a str),
+    SeveralImports(Vec<Importable>),
     Notion,
     Linear,
     Slack,
@@ -663,18 +739,23 @@ fn choose(s: &Signals) -> Option<Path<'_>> {
     })
 }
 
-/// Tools Macro can import first, then GitHub, then up to two others by name.
+/// Tools Macro can import first, together when there are several, then
+/// GitHub, then up to two others by name.
 fn tool_path(tools: &[Tool]) -> Option<Path<'_>> {
     let has = |slug: &str| tools.iter().any(|tool| tool.slug == slug);
-    for (slug, path) in [
-        ("notion", Path::Notion),
-        ("linear", Path::Linear),
-        ("slack", Path::Slack),
-        ("github", Path::Github),
-    ] {
-        if has(slug) {
-            return Some(path);
-        }
+    let importable: Vec<Importable> = [Importable::Notion, Importable::Linear, Importable::Slack]
+        .into_iter()
+        .filter(|tool| tool.slugs().iter().any(|slug| has(slug)))
+        .collect();
+    match importable.as_slice() {
+        [] => {}
+        [Importable::Notion] => return Some(Path::Notion),
+        [Importable::Linear] => return Some(Path::Linear),
+        [Importable::Slack] => return Some(Path::Slack),
+        _ => return Some(Path::SeveralImports(importable)),
+    }
+    if has("github") {
+        return Some(Path::Github);
     }
     let names: Vec<&str> = tools
         .iter()
@@ -712,6 +793,16 @@ fn message(user: &str, path: &Path<'_>) -> String {
             "Excited to have {team} on Macro. Want to do a quick call to help get the rest of the \
              team on board?"
         ),
+        Path::SeveralImports(tools) => {
+            let names: Vec<&str> = tools.iter().map(|tool| tool.name()).collect();
+            let brings: Vec<&str> = tools.iter().map(|tool| tool.brings()).collect();
+            format!(
+                "I saw you connected {}. Are you moving your team off them or keeping them \
+                 alongside Macro? If you're moving, Macro can bring your {} over.",
+                listed(&names),
+                listed(&brings)
+            )
+        }
         Path::Notion => "I saw you connected Notion. Are you moving off it or keeping both? If \
              you're moving, Macro can bring your Notion pages over."
             .to_owned(),
@@ -721,14 +812,14 @@ fn message(user: &str, path: &Path<'_>) -> String {
         Path::Slack => "I saw you connected Slack. Is your team moving its chat into Macro or \
              keeping Slack? If you're moving, Macro can bring your channels over."
             .to_owned(),
-        Path::Github => {
-            "I saw you connected GitHub. What do you want Macro doing with your repos?".to_owned()
-        }
+        Path::Github => "I saw you connected GitHub. Are you planning to have Macro's agents \
+             write code in your repos, or mainly to review pull requests here?"
+            .to_owned(),
         Path::OtherTools(names) => {
             let it = if names.len() == 1 { "it" } else { "them" };
             format!(
                 "I saw you connected {}. What do you want Macro's AI doing with {it}?",
-                names.join(" and ")
+                listed(names)
             )
         }
         Path::Teammate(team) => format!(
@@ -738,11 +829,19 @@ fn message(user: &str, path: &Path<'_>) -> String {
         Path::SoloWork => {
             "Are you trying Macro just for yourself, or for the rest of your team too?".to_owned()
         }
-        Path::Personal => "Curious what brought you here. Is Macro for work, a side project, or \
-             your own life?"
+        Path::Personal => "What are you hoping Macro takes over for you: email, docs, tasks, \
+             or something else?"
             .to_owned(),
     };
     format!("Hey {user}! Chaitanya here, also on the Macro team. {body}")
+}
+
+/// Names as they read in a sentence: "a", "a and b", "a, b and c".
+fn listed(items: &[&str]) -> String {
+    match items {
+        [first @ .., last] if !first.is_empty() => format!("{} and {last}", first.join(", ")),
+        _ => items.concat(),
+    }
 }
 
 /// A team or tool name short and plain enough to put in a sentence; markup
