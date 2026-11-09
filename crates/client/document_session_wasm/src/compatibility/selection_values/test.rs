@@ -459,3 +459,51 @@ fn active_capture_invalidates_node_cache_only_after_semantic_change() -> Result<
     assert_eq!(ledger.get(reference)?.cached_nodes, None);
     Ok(())
 }
+
+#[test]
+fn detached_snapshot_reemits_raw_metadata_and_full_cached_references() -> Result<(), BoundaryError>
+{
+    let mut ledger = SelectionValues::new(7);
+    let value =
+        Selection::Range(RangeSelection::at_root()).with_foreign_value_metadata(true, Some(true));
+    let reference = ledger.allocate(value, 2, 1)?;
+    let cached = compat::ForeignNodeRef {
+        editor_id: 7,
+        version: 9,
+        key: key(NodeKey::ROOT),
+        instance_owner_id: 7,
+        class_id: 4,
+        instance_id: 91,
+    };
+    let mut data = ledger.get(reference)?.encoded();
+    if let compat::CompatSelectionData::CompatRangeSelection {
+        has_cached_nodes,
+        cached_nodes,
+        ..
+    } = &mut data
+    {
+        *has_cached_nodes = true;
+        *cached_nodes = vec![cached];
+    }
+    ledger.patch(
+        reference,
+        data.clone(),
+        Scope {
+            historical: true,
+            state_version: 9,
+            update: 2,
+            activate: false,
+        },
+    )?;
+    let snapshot = ledger.get(reference)?;
+    assert_eq!(snapshot.origin, Origin::Detached { update: 1 });
+    assert!(snapshot.value.is_dirty());
+    assert_eq!(
+        snapshot.value.as_range().unwrap().cached_is_backward(),
+        Some(true)
+    );
+    assert_eq!(snapshot.cached_nodes, Some(vec![cached]));
+    assert_eq!(snapshot.encoded(), data);
+    assert_eq!(ledger.get(reference)?.encoded(), data);
+    Ok(())
+}
