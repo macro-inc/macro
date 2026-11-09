@@ -45,7 +45,9 @@ stacks. Process isolation belongs to
   `macro:programs` and `on` from `macro:client` (`macro_client.ts`). Programs
   check alone, then with the client; each bundles alone and the client
   bundles without program source. Diagnostics name blocks, not generated
-  files.
+  files. `demos/` holds pages that recreate built-in features this way;
+  the ignored Deno test `every_demo_page_builds` builds each one, so keep
+  them building when the SDK changes.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
