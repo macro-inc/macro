@@ -1,4 +1,9 @@
-import { constructNode, nodeCall, nodeField } from './runtime';
+import {
+  constructNode,
+  nodeCall,
+  nodeField,
+  withNativeHydration,
+} from './runtime';
 
 function stringResult(value: unknown): string {
   if (typeof value !== 'string') throw new Error('expected model string');
@@ -207,29 +212,22 @@ function defineNodeFields(node: LexicalNode): void {
   }
 }
 
-/** Hydration does not run a constructor or allocate another model record. */
+/** Hydrate builtins with their actual typed classes and no new model record. */
 export function nativeNode(type: string): LexicalNode {
-  let prototype: object;
-  switch (type) {
-    case 'root':
-      prototype = RootNode.prototype;
-      break;
-    case 'paragraph':
-      prototype = ParagraphNode.prototype;
-      break;
-    case 'text':
-      prototype = TextNode.prototype;
-      break;
-    case 'tab':
-      prototype = TabNode.prototype;
-      break;
-    case 'linebreak':
-      prototype = LineBreakNode.prototype;
-      break;
-    default:
-      throw new Error(`unregistered JS node type ${type}`);
-  }
-  const node: LexicalNode = Object.create(prototype);
-  defineNodeFields(node);
-  return node;
+  return withNativeHydration(() => {
+    switch (type) {
+      case 'root':
+        return new RootNode();
+      case 'paragraph':
+        return new ParagraphNode();
+      case 'text':
+        return new TextNode();
+      case 'tab':
+        return new TabNode();
+      case 'linebreak':
+        return new LineBreakNode();
+      default:
+        throw new Error(`unregistered JS node type ${type}`);
+    }
+  });
 }
