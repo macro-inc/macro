@@ -64,7 +64,16 @@ fn element_props(view: StateRef<'_>, key: NodeKey) -> Result<ElementProps, Error
     let data = view.element_data(key)?;
     Ok(ElementProps {
         format: data.format,
-        indent: view.indent(key),
+        indent: {
+            #[cfg(feature = "foreign-nodes")]
+            if view.state.foreign_instances.has_hooks() {
+                data.indent
+            } else {
+                view.indent(key)
+            }
+            #[cfg(not(feature = "foreign-nodes"))]
+            view.indent(key)
+        },
         direction: data.direction,
         text_format: data.text_format,
         style: data.style.clone(),
@@ -165,6 +174,22 @@ pub enum DiffOp {
     },
 }
 fn own_props(view: StateRef<'_>, key: NodeKey) -> Result<SerializedNode, Error> {
+    #[cfg(feature = "foreign-nodes")]
+    let mut props = if view.state.foreign_instances.has_hooks() {
+        let slot = view.slot(key).ok_or(Error::NodeNotFound(key))?;
+        if let Some(payload) = slot
+            .data
+            .as_any()
+            .downcast_ref::<crate::foreign::projection::ForeignPayload>()
+        {
+            payload.native.to_json()?
+        } else {
+            slot.data.to_json()?
+        }
+    } else {
+        view.export_json(key)?
+    };
+    #[cfg(not(feature = "foreign-nodes"))]
     let mut props = view.export_json(key)?;
     let base: &[&str] = match view.kind(key) {
         Some(NodeKind::Text) => &["format", "detail", "mode", "style", "text"],
@@ -185,6 +210,10 @@ fn own_props(view: StateRef<'_>, key: NodeKey) -> Result<SerializedNode, Error> 
     Ok(props)
 }
 fn state_props(view: StateRef<'_>, key: NodeKey) -> Result<Option<SerializedNode>, Error> {
+    #[cfg(feature = "foreign-nodes")]
+    if view.state.foreign_instances.has_hooks() {
+        return Ok(None);
+    }
     let slot = view.slot(key).ok_or(Error::NodeNotFound(key))?;
     Ok(slot.state.as_ref().map(|state| {
         let mut json = SerializedNode::new();
@@ -404,9 +433,11 @@ impl Commit {
                     props: own_props(next, key)?,
                 });
             }
-            if options.include_state
-                && !NodeState::equivalent(a.state.as_deref(), b.state.as_deref())
-            {
+            #[cfg(feature = "foreign-nodes")]
+            let include_state = options.include_state && !next.state.foreign_instances.has_hooks();
+            #[cfg(not(feature = "foreign-nodes"))]
+            let include_state = options.include_state;
+            if include_state && !NodeState::equivalent(a.state.as_deref(), b.state.as_deref()) {
                 emit(DiffOp::State {
                     key,
                     state: state_props(next, key)?,
