@@ -1,8 +1,12 @@
-/** The three upstream caller-assertion exceptions approved for compatibility. */
+/** The six upstream caller-assertion exceptions approved for compatibility. */
 import type { NodeKey } from 'lexical';
+import { DequeSet } from './command/deque-set';
+import type { CommandBucket, CommandRegistry } from './command/types';
+import type { LexicalCommand } from './commands';
 import { LexicalNode } from './nodes';
 import type { BaseStaticNodeConfig } from './nodes/config';
 import { assertNodeIdentity } from './nodes/runtime';
+import type { NodeStateJSON, ValueOrUpdater } from './nodes/state/types';
 import type { PointType } from './selection';
 import { Point } from './selection/point';
 
@@ -42,4 +46,36 @@ export function createPointWithUpstreamType(
   )
     throw new Error('invalid owner-less point construction');
   return point as PointType;
+}
+
+export function applyValueOrUpdater<V>(
+  valueOrUpdater: ValueOrUpdater<V>,
+  previous: V
+): V {
+  return typeof valueOrUpdater === 'function'
+    ? (valueOrUpdater as (value: V) => V)(previous)
+    : valueOrUpdater;
+}
+
+export function nodeStateToJSON<T extends LexicalNode>(
+  value: Record<string, unknown>
+): NodeStateJSON<T> {
+  return value as NodeStateJSON<T>;
+}
+
+export function commandBucket<P>(
+  registry: CommandRegistry,
+  command: LexicalCommand<P>
+): CommandBucket<P> {
+  const bucket = registry.get(command);
+  if (bucket === undefined) throw new Error('Command bucket is not registered');
+  if (
+    !Array.isArray(bucket) ||
+    bucket.length !== 5 ||
+    !Array.from(bucket).every((listeners) => listeners instanceof DequeSet)
+  )
+    throw new Error(
+      'Command bucket must contain five DequeSet priority groups'
+    );
+  return bucket as CommandBucket<P>;
 }
