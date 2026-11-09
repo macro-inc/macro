@@ -1,5 +1,5 @@
 //! Owned foreign selections and their leases, independent of editor graphs.
-use crate::{BoundaryError, compatibility_generated::owned as compat};
+use crate::{compatibility_generated::owned as compat, BoundaryError};
 use lexical_model::{
     ForeignSelectionIdentity, KeyParts, NodeKey, NodeSelection, Point, RangeSelection, Selection,
     TableSelection, TextFormat,
@@ -81,7 +81,7 @@ impl SelectionValues {
             // The same JS object retains its raw caches and allocation reference.
             // A frozen object can never become writable through recapture.
             if entry.value.origin != Origin::Frozen {
-                if !same_value(&entry.value.value, value) {
+                if !same_selected_nodes(&entry.value.value, value) {
                     entry.value.cached_nodes = None;
                 }
                 entry.value.value = raw_copy(value);
@@ -295,8 +295,10 @@ fn raw_copy(value: &Selection) -> Selection {
 fn same_kind(a: &Selection, b: &Selection) -> bool {
     std::mem::discriminant(a) == std::mem::discriminant(b)
 }
-fn same_value(a: &Selection, b: &Selection) -> bool {
+fn same_selected_nodes(a: &Selection, b: &Selection) -> bool {
     match (a, b) {
+        // Typing format/style and raw metadata do not change selected nodes.
+        (Selection::Range(a), Selection::Range(b)) => a.anchor == b.anchor && a.focus == b.focus,
         // NodeSelection equality intentionally ignores insertion order.
         (Selection::Node(a), Selection::Node(b)) => a.keys().eq(b.keys()),
         _ => a == b,
