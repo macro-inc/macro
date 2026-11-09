@@ -1,4 +1,3 @@
-import type { TableSelection } from '@lexical/table';
 import {
   type CompatOperation,
   CompatPointKind,
@@ -8,20 +7,27 @@ import {
   type IForeignCallbackValue,
   type IForeignSelectionRef,
 } from '@macro-inc/collaboration/session/compatibility.generated';
-import type { BaseSelection, LexicalNode, PointType } from 'lexical';
+import type { LexicalNode } from '../nodes';
 import { NodeSelection } from './node';
+import type { PointType } from './point';
 import { $createPoint } from './point';
 import { RangeSelection } from './range';
+import type {
+  BaseSelection,
+  RawSelectionPoint,
+  RawTableSelectionValue,
+  SelectionValue,
+} from './runtime';
 import { getSelectionRuntime, type SelectionRuntime } from './runtime';
 
 const captures = new WeakMap<
   SelectionRuntime,
-  Map<string, WeakRef<BaseSelection>>
+  Map<string, WeakRef<SelectionValue>>
 >();
 const collected = new FinalizationRegistry<{
-  cache: Map<string, WeakRef<BaseSelection>>;
+  cache: Map<string, WeakRef<SelectionValue>>;
   key: string;
-  reference: WeakRef<BaseSelection>;
+  reference: WeakRef<SelectionValue>;
 }>(({ cache, key, reference }) => {
   if (cache.get(key) === reference) {
     cache.delete(key);
@@ -33,7 +39,7 @@ function identity(reference: IForeignSelectionRef): string {
 }
 
 export function bindSelectionReference(
-  selection: BaseSelection,
+  selection: SelectionValue,
   reference: IForeignSelectionRef
 ): void {
   if (reference.selectionId === 0) {
@@ -63,13 +69,13 @@ export function bindSelectionReference(
 
 export function selectionFromReference(
   reference: IForeignSelectionRef
-): BaseSelection | undefined {
+): SelectionValue | undefined {
   return captures.get(getSelectionRuntime())?.get(identity(reference))?.deref();
 }
 
 export function selectionFromNativeValue(
   value: IForeignCallbackValue
-): BaseSelection | null {
+): SelectionValue | null {
   const data = value.data;
   if (data.discriminator === 1 && data.value.value.data.discriminator === 3) {
     return null;
@@ -98,7 +104,7 @@ export function fromUtf16(units: readonly number[]): string {
   return result;
 }
 
-function encodePoint(point: PointType): ICompatPoint {
+function encodePoint(point: RawSelectionPoint): ICompatPoint {
   return {
     key: getSelectionRuntime().nativeKey(point.key),
     offset: point.offset,
@@ -121,14 +127,14 @@ function decodePoint(point: ICompatPoint): PointType {
   );
 }
 
-function updatePoint(target: PointType, source: ICompatPoint): void {
+function updatePoint(target: RawSelectionPoint, source: ICompatPoint): void {
   const decoded = decodePoint(source);
   target.key = decoded.key;
   target.offset = decoded.offset;
   target.type = decoded.type;
 }
 
-export function validateSelectionClass(selection: BaseSelection): void {
+export function validateSelectionClass(selection: SelectionValue): void {
   if (
     !(selection instanceof RangeSelection) &&
     !(selection instanceof NodeSelection) &&
@@ -139,7 +145,7 @@ export function validateSelectionClass(selection: BaseSelection): void {
 }
 
 export function selectionToSnapshot(
-  selection: BaseSelection | null
+  selection: SelectionValue | null
 ): CompatSelectionData {
   if (selection === null) {
     return CompatSelectionData.fromCompatNoSelection({});
@@ -150,13 +156,19 @@ export function selectionToSnapshot(
   if (reference === undefined) {
     throw new Error('Selection has no native reference');
   }
-  const cached = selection.getCachedNodes();
+  const cached = selection._cachedNodes;
   const common = {
     reference,
     dirty: selection.dirty,
     hasCachedNodes: cached !== null,
     cachedNodes:
-      cached === null ? [] : cached.map((node) => runtime.nodeReference(node)),
+      cached === null
+        ? []
+        : cached.map((node) => {
+            if (!runtime.isLexicalNode(node))
+              throw new Error('Selection cache contains a non-core node');
+            return runtime.nodeReference(node);
+          }),
   };
   if (selection instanceof RangeSelection) {
     return CompatSelectionData.fromCompatRangeSelection({
@@ -188,7 +200,7 @@ export function selectionToSnapshot(
 
 export function selectionFromSnapshot(
   snapshot: CompatSelectionData
-): BaseSelection | null {
+): SelectionValue | null {
   const data = snapshot.data;
   if (data.discriminator === 1) {
     return null;
@@ -211,7 +223,7 @@ export function selectionFromSnapshot(
     }
     return existing;
   }
-  let selection: RangeSelection | NodeSelection | TableSelection;
+  let selection: RangeSelection | NodeSelection | RawTableSelectionValue;
   if (data.discriminator === 2) {
     const range = data.value;
     if (existing !== undefined && !(existing instanceof RangeSelection)) {

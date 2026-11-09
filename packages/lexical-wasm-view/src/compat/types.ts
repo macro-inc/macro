@@ -168,15 +168,13 @@ export interface CompatNodeSelection extends BaseSelection {
 }
 
 export interface CompatRangeSelection extends BaseSelection {
+  _cachedNodes: CompatNode[] | null;
+  _cachedIsBackward: boolean | null;
   format: number;
   style: string;
   anchor: PointType;
   focus: PointType;
-  _cachedNodes: Array<CompatNode> | null;
-  _cachedIsBackward: boolean | null;
   dirty: boolean;
-  getCachedNodes(): CompatNode[] | null;
-  setCachedNodes(nodes: CompatNode[] | null): void;
   is(selection: null | BaseSelection): boolean;
   isCollapsed(): boolean;
   getNodes(): Array<CompatNode>;

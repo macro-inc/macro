@@ -2,25 +2,24 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * Licensed under the MIT license in the upstream Lexical source tree.
  */
+import type { NodeKey, TextFormatType } from 'lexical';
+import type {
+  ElementNode,
+  LexicalNode,
+  LineBreakNode,
+  TextNode,
+} from '../nodes';
+import { validateSelectionClass } from './codec';
+import { NodeSelection } from './node';
+import type { PointType } from './point';
+import { $createPoint } from './point';
+import { RangeSelection } from './range';
 import type {
   BaseSelection,
   CaretRange,
-  EditorState,
-  ElementNode,
-  LexicalEditor,
-  LexicalNode,
-  LineBreakNode,
   NodeCaret,
-  NodeKey,
   PointCaret,
-  PointType,
-  TextFormatType,
-  TextNode,
-} from 'lexical';
-import { validateSelectionClass } from './codec';
-import { NodeSelection } from './node';
-import { $createPoint } from './point';
-import { RangeSelection } from './range';
+} from './runtime';
 import { getSelectionRuntime } from './runtime';
 
 export const textFormats: Record<TextFormatType, number> = {
@@ -120,9 +119,7 @@ export function $internalMakeRangeSelection(
   return selection;
 }
 
-export function $normalizeSelection<T extends import('lexical').RangeSelection>(
-  selection: T
-): T {
+export function $normalizeSelection<T extends RangeSelection>(selection: T): T {
   normalizePoint(selection.anchor);
   normalizePoint(selection.focus);
   return selection;
@@ -410,8 +407,8 @@ function $updateSelectionResolveTextNodes(selection: RangeSelection): void {
 }
 
 export function applySelectionTransforms(
-  nextEditorState: EditorState,
-  editor: LexicalEditor
+  nextEditorState: { _selection: BaseSelection | null },
+  editor: { getEditorState(): { _selection: BaseSelection | null } }
 ): void {
   const prevEditorState = editor.getEditorState();
   const prevSelection = prevEditorState._selection;

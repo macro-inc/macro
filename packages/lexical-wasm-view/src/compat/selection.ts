@@ -51,57 +51,48 @@ import {
 
 export const __DEV__ = process.env.NODE_ENV !== 'production';
 
-export type TextPointType = {
-  _selection: BaseSelection;
-  getNode: () => TextNode;
-  is: (point: PointType) => boolean;
-  isBefore: (point: PointType) => boolean;
+/** Internal calls on actual Point instances; owner/cache fields are not read here. */
+export interface TextPointType {
+  getNode(): TextNode;
+  is(point: PointType): boolean;
+  isBefore(point: PointType): boolean;
   key: NodeKey;
   offset: number;
-  set: (
+  set(
     key: NodeKey,
     offset: number,
     type: 'text' | 'element',
     onlyIfChanged?: boolean
-  ) => void;
+  ): void;
   type: 'text';
-};
-
-export type ElementPointType = {
-  _selection: BaseSelection;
-  getNode: () => ElementNode;
-  is: (point: PointType) => boolean;
-  isBefore: (point: PointType) => boolean;
+}
+export interface ElementPointType {
+  getNode(): ElementNode;
+  is(point: PointType): boolean;
+  isBefore(point: PointType): boolean;
   key: NodeKey;
   offset: number;
-  set: (
+  set(
     key: NodeKey,
     offset: number,
     type: 'text' | 'element',
     onlyIfChanged?: boolean
-  ) => void;
+  ): void;
   type: 'element';
-};
+}
 
 export type PointType = TextPointType | ElementPointType;
 
 export interface BaseSelection {
-  _cachedNodes: Array<LexicalNode> | null;
   dirty: boolean;
 
   clone(): BaseSelection;
-  extract(): Array<LexicalNode>;
   getNodes(): Array<LexicalNode>;
   getTextContent(): string;
-  insertText(text: string): void;
   insertRawText(text: string): void;
   is(selection: null | BaseSelection): boolean;
-  insertNodes(nodes: Array<LexicalNode>): void;
-  getStartEndPoints(): null | [PointType, PointType];
   isCollapsed(): boolean;
   isBackward(): boolean;
-  getCachedNodes(): LexicalNode[] | null;
-  setCachedNodes(nodes: LexicalNode[] | null): void;
 }
 
 export function shouldResolveAncestor(
