@@ -13,6 +13,16 @@ const propertyValue = z.discriminatedUnion('valueType', [
       .nullable(),
   }),
   z.object({
+    valueType: z.literal('DATE_RANGE'),
+    value: z
+      .object({
+        allDay: z.boolean(),
+        start: z.iso.datetime().transform((value) => new Date(value)),
+        end: z.iso.datetime().transform((value) => new Date(value)),
+      })
+      .nullable(),
+  }),
+  z.object({
     valueType: z.literal('SELECT_STRING'),
     values: z.array(z.string()).nullable(),
   }),

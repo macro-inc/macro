@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
 import { createComputed, createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -65,6 +66,46 @@ it('saves before sending and recovers a pending request after a restart and prol
   await pending;
   expect(loadTaskSubmissions('alice')).toHaveLength(1);
 });
+
+it.each([true, false, null])(
+  'recovers DATE_RANGE properties and template defaults with allDay=%s',
+  async (allDay) => {
+    const range: PropertyApiValues = {
+      valueType: 'DATE_RANGE',
+      value:
+        allDay === null
+          ? null
+          : {
+              allDay,
+              start: new Date('2026-10-22T00:00:00Z'),
+              end: new Date('2026-10-23T00:00:00Z'),
+            },
+    };
+    const next: TaskComposerSubmission = {
+      ...submission,
+      draft: {
+        ...submission.draft,
+        propertyValues: { range },
+        templateBaseline: {
+          propertyIds: ['range'],
+          propertyDefaults: { range },
+          descriptionMarkdown: '',
+        },
+      },
+    };
+    saveTaskComposerDraft(next.draft);
+    expect(loadTaskComposerDraft()?.propertyValues.range).toEqual(range);
+    expect(
+      loadTaskComposerDraft()?.templateBaseline?.propertyDefaults.range
+    ).toEqual(range);
+    await submitTaskDraft(client, next, async () => null);
+    const recovered = loadTaskSubmissions('alice')[0];
+    expect(recovered?.draft.propertyValues.range).toEqual(range);
+    expect(recovered?.draft.templateBaseline?.propertyDefaults.range).toEqual(
+      range
+    );
+  }
+);
 
 it('late success removes only its own submission and leaves newer composer input intact', async () => {
   const response = Promise.withResolvers<{ documentId: string }>();
