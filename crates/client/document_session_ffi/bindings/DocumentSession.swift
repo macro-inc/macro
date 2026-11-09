@@ -10564,6 +10564,10 @@ public enum ModifyTarget: Equatable, Hashable {
          * Host range is reversed.
          */isBackwardInDom: Bool
     )
+    /**
+     * Explicit model-only Unicode segmentation, independent of host layout.
+     */
+    case modelSegmentation
 
 
 
@@ -10592,6 +10596,8 @@ public struct FfiConverterTypeModifyTarget: FfiConverterRustBuffer {
         case 3: return .view(anchor: try FfiConverterTypePoint.read(from: &buf), focus: try FfiConverterTypePoint.read(from: &buf), resolutionDirty: try FfiConverterBool.read(from: &buf), isBackwardInDom: try FfiConverterBool.read(from: &buf)
         )
         
+        case 4: return .modelSegmentation
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -10615,6 +10621,10 @@ public struct FfiConverterTypeModifyTarget: FfiConverterRustBuffer {
             FfiConverterBool.write(resolutionDirty, into: &buf)
             FfiConverterBool.write(isBackwardInDom, into: &buf)
             
+        
+        case .modelSegmentation:
+            writeInt(&buf, Int32(4))
+        
         }
     }
 }

@@ -194,11 +194,67 @@ fn literal_native_editor_uses_structured_diff_and_one_dom_first_call_without_io(
             .is_err()
     );
     assert_eq!(session.text_content().unwrap(), "a😀");
-    let stopped = session
+    let required = session
         .handle(
             FfiNow {
                 mono_ms: 4,
                 wall_ms: 1_000_004,
+            },
+            FfiInput::Command {
+                command: FfiCommand::DeleteCharacter {
+                    direction: EditDirection::Backward,
+                    target: ModifyTarget::RequireView,
+                },
+                selection: ViewSelection::Range {
+                    anchor: Point::text(key, Utf16Offset(3)),
+                    focus: Point::text(key, Utf16Offset(3)),
+                    resolution_dirty: false,
+                },
+            },
+        )
+        .unwrap();
+    assert!(
+        required
+            .view
+            .iter()
+            .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+    );
+    assert_eq!(session.text_content().unwrap(), "a😀");
+    let target = <ModifyTarget as uniffi::FfiConverter<UniFfiTag>>::try_lift(
+        <ModifyTarget as uniffi::FfiConverter<UniFfiTag>>::lower(ModifyTarget::ModelSegmentation),
+    )
+    .expect("explicit model segmentation target");
+    let deleted = session
+        .handle(
+            FfiNow {
+                mono_ms: 5,
+                wall_ms: 1_000_005,
+            },
+            FfiInput::Command {
+                command: FfiCommand::DeleteCharacter {
+                    direction: EditDirection::Backward,
+                    target,
+                },
+                selection: ViewSelection::Range {
+                    anchor: Point::text(key, Utf16Offset(3)),
+                    focus: Point::text(key, Utf16Offset(3)),
+                    resolution_dirty: false,
+                },
+            },
+        )
+        .unwrap();
+    assert!(
+        !deleted
+            .view
+            .iter()
+            .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+    );
+    assert_eq!(session.text_content().unwrap(), "a");
+    let stopped = session
+        .handle(
+            FfiNow {
+                mono_ms: 6,
+                wall_ms: 1_000_006,
             },
             FfiInput::Stop {
                 request: RequestId(7),
@@ -577,4 +633,29 @@ fn raw_alignment_uses_the_source_empty_native_name_without_mutating_model_bits()
             .expect("named alignment"),
         ElementFormat::Center
     );
+}
+
+#[test]
+fn every_native_modify_target_round_trips_with_an_exhaustive_feature_stable_shape() {
+    let key = NodeKey::from_parts(KeyParts {
+        index: 1,
+        generation: 0,
+    });
+    for target in [
+        ModifyTarget::RequireView,
+        ModifyTarget::NoView,
+        ModifyTarget::View {
+            anchor: Point::text(key, Utf16Offset(1)),
+            focus: Point::text(key, Utf16Offset(3)),
+            resolution_dirty: true,
+            is_backward_in_dom: true,
+        },
+        ModifyTarget::ModelSegmentation,
+    ] {
+        let lifted = <ModifyTarget as uniffi::FfiConverter<UniFfiTag>>::try_lift(
+            <ModifyTarget as uniffi::FfiConverter<UniFfiTag>>::lower(target.clone()),
+        )
+        .expect("native modify target");
+        assert_eq!(lifted, target);
+    }
 }

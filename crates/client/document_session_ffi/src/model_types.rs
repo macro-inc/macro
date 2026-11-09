@@ -90,6 +90,8 @@ pub enum ModifyTarget {
         /// Host range is reversed.
         is_backward_in_dom: bool,
     },
+    /// Explicit model-only Unicode segmentation, independent of host layout.
+    ModelSegmentation,
 }
 
 /// Native TextFormatType; fields retain their domain meaning.

@@ -37,3 +37,4 @@ Expose element alignment through its public names: lower unknown raw model numbe
 
 Keep production native FFI dependencies on explicit default-features=false with application policy only; never enable session compatibility or foreign nodes in native builds.
 
+Enable model-segmentation explicitly for a feature-stable exhaustive ModifyTarget mirror; never substitute it for a missing required host layout answer.
