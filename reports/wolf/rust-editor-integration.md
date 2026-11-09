@@ -1,6 +1,63 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current integrated checkpoint
+## Current snippet and history-ledger checkpoint
+
+Source freeze `d8bca8854812e0a64a14af68955cec3e5b13ff3b` integrates the native
+preset parser extraction `c1e536a3dc` as `e4a584050d`, snippet source resolver
+`12f8ccea67` as `899da55737`, and structural-undo failure ledger `4a734d82af` as
+`d8bca88548`. The private build source is
+`8ba034a30a474e584bdcd30c7d317dde06f576dd`; every code, test, Cargo and recipe
+file matches main after the picks. Only the independently updated auth report
+differs. Swift, Kotlin and C declarations stay paired with the actual FFI source.
+No later snippet bridge/provider, optional decorator or clipboard caller was added.
+
+The typed FFI source resolver uses the shared native preset parser, issued-request
+and Await identity guards, and ordinary session admission. It preserves the
+confirmed source extraction-cache behavior for empty, malformed and late/deleted
+answers. Host fetching, provider/popup wiring, permissions integration, device and
+application admission remain separate; this is not actual JS named-plugin parity.
+
+Own validation passes: 66 Macro library tests and the complete package integration
+suite including the 20,000-case service oracle, nine FFI tests, replay 1,421/1,421,
+strict all-target/all-feature package Clippy, WASM32, dependency checks and exact
+binding freshness. The exact known-failure ledger passes its one literal while
+requiring the existing unsafe undo failure: structural undo hides foreign text,
+its operation remains durable, and immediate redo recovers the exact tree. All
+invariants and generated suites remain enabled; this does not establish undo
+ownership safety or full T0 acceptance.
+
+The matching host JNI consumer passes 29/29 with no failures, errors or skips,
+and instrumentation compiles. Android and iOS-simulator FFI cross-target checks
+pass; no device execution or new APK link is claimed. The four workspace gates
+pass in order at nice 19 / two Cargo jobs without formatting changes. The native
+build passes 263 view tests, view/app type checks, the normal production web build,
+and 18 keyboard/history cases across Chromium, Firefox and WebKit. Scoped checks
+and independent source audit pass; owner receipts remain separately bound.
+
+The installed native-only WASM SHA256 is
+`54c77cc5832ff6689b062f0f600b4edd9c8fa6e119e3106d46137f07a67f9dc1`:
+8,461,411 raw / 1,921,326 Brotli bytes, 5,454 Brotli bytes above the preceding
+preview and 321,326 above the advisory ceiling. The actual module initializes,
+exports createMacro and has zero compatibility exports. No profile, optimization
+or feature-isolation rule changed, and no latency improvement is claimed.
+
+All five isolated live flows pass on the installed bytes: existing document, new
+document, typing, undo/redo and fresh sign-in. Both redo shortcuts preserve exact
+raw JSON, durable IDs and model/DOM caret. All four fetched WASM responses match
+the installed hash, page errors are empty, and observed refresh calls return 200.
+The previous artifact set is backed up. No server process or dependency directory
+was changed by this install.
+
+Evidence uses `snippet-ledger-*`, `snippet-*` and `history-known-ledger.log` under
+the existing external evidence directory. JNI provenance seals the actual host
+library and source hashes; workspace and web receipts, artifact manifest, install
+backup and live hash proof remain distinct. Paste `b20cf9a0c6` is held for its
+owner's completed workspace sequence; remote hold `6ba1d9b235` is held for native
+wiring. Full compatibility initializer/namespace/GC/performance, the unchanged
+2,396 crossing failure, and prior table/comment UI gaps remain open. No ownership
+flip or Integration3 acceptance is implied.
+
+## Previous integrated checkpoint
 
 Source freeze `68329003951f1ef0e004ac78fdda6fee66ab6a1a` is committed and the
 native-only preview is installed. Its tracked tree exactly matches the audited
