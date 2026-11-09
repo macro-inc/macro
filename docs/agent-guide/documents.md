@@ -3223,3 +3223,16 @@ Editor engine parity uses the paired browser harness in
 `apps/web/src/features/block-md/browser-test/parity/README.md`. Use synthetic
 documents and an independent browser profile; saved-state and compatibility
 evidence must be present before treating matching screenshots as acceptance.
+
+
+## Native preview installation checks
+
+Run the [six-step install check](../../apps/web/scripts/editor-live-check/README.md)
+for every native preview candidate and again after installation. Check sign-in,
+existing document, new document, typing, undo/redo and a normal-size document with
+heading, list, checklist, custom code, table, quote, link, mention, equation, image
+and comment anchor. Require the actual update ACK and committed WAL delivery (or
+its matching snapshot cover), then compare full JSON, durable IDs and DOM after
+warm reload and a new context without IndexedDB. Keep missing renderers, different
+IDs and failed durability as failures. Local recovery, rendered counts and fixed
+waits do not establish server persistence. Qualify mega-paste restoration separately.
