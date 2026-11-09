@@ -7,6 +7,7 @@ shares this view through EditorPort; it does not supply production model code.
 
 ## Boundaries
 
+- Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
