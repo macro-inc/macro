@@ -843,6 +843,14 @@ public protocol NativeEditorSessionProtocol: AnyObject, Sendable {
     func query(request: FfiQuery) throws  -> FfiQueryReply
     
     /**
+     * Resolve one live snippet placeholder using shared source/target Markdown policy.
+     * Source is the full structured serialized editor state, including its root.
+     * None clears a failed fetch. Empty/malformed fetched states follow the
+     * existing source extractor retention policy; no host I/O runs here.
+     */
+    func resolveSnippet(now: FfiNow, key: NodeKey, awaitId: String, source: JsonValue?) throws  -> FfiOutput
+    
+    /**
      * Read cached native root text.
      */
     func textContent() throws  -> String
@@ -986,6 +994,25 @@ open func query(request: FfiQuery)throws  -> FfiQueryReply  {
     uniffi_document_session_ffi_fn_method_nativeeditorsession_query(
             self.uniffiCloneHandle(),
         FfiConverterTypeFfiQuery_lower(request),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Resolve one live snippet placeholder using shared source/target Markdown policy.
+     * Source is the full structured serialized editor state, including its root.
+     * None clears a failed fetch. Empty/malformed fetched states follow the
+     * existing source extractor retention policy; no host I/O runs here.
+     */
+open func resolveSnippet(now: FfiNow, key: NodeKey, awaitId: String, source: JsonValue?)throws  -> FfiOutput  {
+    return try  FfiConverterTypeFfiOutput_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_method_nativeeditorsession_resolve_snippet(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiNow_lower(now),
+        FfiConverterTypeNodeKey_lower(key),
+        FfiConverterString.lower(awaitId),
+        FfiConverterOptionTypeJsonValue.lower(source),uniffiCallStatus
     )
 })
 }
@@ -15623,6 +15650,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_query() != 3516) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_resolve_snippet() != 21361) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_text_content() != 4807) {

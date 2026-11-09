@@ -42,6 +42,14 @@ The application field selects the same surface preset, MACRO_SYNC_POLICY, commen
 factory, supplied wall clock and continuing per-peer entropy used by WASM. Leave
 it absent for portable core/rich nodes. Application command/query catalogs and
 plugin-event payloads remain typed native values; host I/O stays outside Rust.
+`resolve_snippet` consumes a matching pending key/await ID and the full structured
+source state. Shared Rust extracts internal Markdown, parses the selected native
+preset and merges the resolved replacement into history. None clears a failed
+fetch request; empty or malformed fetched states retain the previous extraction
+state, including the recorded source behavior. Only issued source-instance tokens
+can update the extractor; a deleted placeholder can never reinsert content.
+Execute every returned effect, including diagnostics, rather than treating the
+call as host I/O.
 Application Markdown uses internal/external transformers and the supplied
 hostname; SavedState returns the download projection with regenerated search text.
 

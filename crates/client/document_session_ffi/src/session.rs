@@ -131,6 +131,38 @@ impl NativeEditorSession {
             SessionInput::Editor(Input::Command { command, selection }),
         )
     }
+    /// Resolve one live snippet placeholder using shared source/target Markdown policy.
+    /// Source is the full structured serialized editor state, including its root.
+    /// None clears a failed fetch. Empty/malformed fetched states follow the
+    /// existing source extractor retention policy; no host I/O runs here.
+    pub fn resolve_snippet(
+        &self,
+        now: FfiNow,
+        key: NodeKey,
+        await_id: String,
+        source: Option<JsonValue>,
+    ) -> Result<FfiOutput, FfiSessionError> {
+        let mut host = lock(&self.inner)?;
+        let preset = host
+            .application
+            .as_ref()
+            .ok_or_else(|| invalid("snippet resolution requires an application preset"))?
+            .editor_type;
+        let source = source
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(invalid)?;
+        let command = macro_document_model::plugins_group_a::menu::resolve_snippet_source(
+            key, await_id, source, preset,
+        );
+        host.handle_native(
+            now,
+            SessionInput::Editor(Input::Command {
+                command,
+                selection: ViewSelection::KeepModel,
+            }),
+        )
+    }
     /// Query the shared application catalog without changing model state.
     pub fn application_query(
         &self,
