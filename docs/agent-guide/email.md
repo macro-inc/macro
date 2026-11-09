@@ -48,8 +48,9 @@ order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
 `g i` or `g o`. Calendar mail remains available through the calendar filter and
-existing Calendar route. Mobile keeps its original tabs and order, including
-separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
+existing Calendar route. Touch shows the same Inbox pills as desktop: Signal
+and Noise, with Focus first when enabled. Other mailboxes show their current
+name instead of a strip of every mailbox; use the sidebar to switch destinations.
 The top of Signal shows a pinned **Learn how to use Macro Mail** row
 (`TutorialRow` from `features/video-tutorials`, shared by every block). Clicking it opens the tutorial video in a dialog at 80% of
 the window (a bottom sheet on phones) that never autoplays: the play pill

@@ -8,7 +8,8 @@ import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
-import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { PillTabs } from '@components/app/mobile/PillTabs';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -28,11 +29,15 @@ import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_TABS } from './constants';
+import {
+  EMAIL_INBOX_TAB_IDS,
+  EMAIL_TAB_LABELS,
+  isEmailInboxTab,
+} from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
-import type { EmailTab, EmailViewStateOptions } from './types';
+import type { EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 import { useVisibleEmailTab } from './use-visible-email-tab';
@@ -184,20 +189,17 @@ function EmailLayout(props: {
   );
 }
 
-// Focus leads, as it does in the desktop Inbox tabs.
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
-  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
-  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
-].map((tab) => ({
-  value: tab.id,
-  get label() {
-    return tab.label;
-  },
-}));
-
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setTab } = useEmailView();
+  const { state, setTab, tagViewTitle } = useEmailView();
+  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const tabs = () =>
+    inboxSelected()
+      ? EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
+          value: id,
+          label: EMAIL_TAB_LABELS[id],
+        }))
+      : [];
 
   return (
     <>
@@ -215,7 +217,16 @@ function EmailMobileLayout(props: ParentProps) {
               <EmailFilterDrawer />
             </>
           }
-          items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
+          items={tabs()}
+          trailing={
+            <Show when={!inboxSelected()}>
+              <HeaderIsland>
+                <span class="truncate text-sm font-medium">
+                  {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
+                </span>
+              </HeaderIsland>
+            </Show>
+          }
           value={state.tab}
           onChange={setTab}
         />
