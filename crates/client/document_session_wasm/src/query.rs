@@ -12,6 +12,53 @@ pub(crate) fn export_flavor(session: &crate::EditorSession) -> ExportFlavor {
         ExportFlavor::Upstream
     }
 }
+pub(crate) fn markdown_for_session(
+    session: &crate::EditorSession,
+    flavor: u32,
+    selected: bool,
+) -> Result<String, BoundaryError> {
+    if matches!(export_flavor(session), ExportFlavor::Upstream) {
+        return markdown(session.surface().state(), flavor, selected);
+    }
+    let list = match flavor {
+        0 => "internal",
+        1 => "external",
+        _ => return Err(BoundaryError::Invalid("markdown flavor")),
+    };
+    let callbacks = macro_document_model::transformers::transformers(
+        list,
+        &macro_document_model::transformers::MacroMarkdownOptions {
+            app_hostname: session.hostname.as_deref().map(Into::into),
+        },
+    )?;
+    let state = session.surface().state();
+    let options = lexical_markdown::MarkdownOptions {
+        list_indent: 2,
+        ..Default::default()
+    };
+    if selected {
+        Ok(lexical_markdown::convert_selection_to_markdown_string(
+            state,
+            &callbacks,
+            state.selection(),
+            &options,
+        )?)
+    } else {
+        Ok(lexical_markdown::convert_to_markdown_string(
+            state, &callbacks, None, &options,
+        )?)
+    }
+}
+pub(crate) fn saved_state(session: &crate::EditorSession) -> Result<String, BoundaryError> {
+    let state = session.surface().state();
+    if matches!(export_flavor(session), ExportFlavor::Macro) {
+        Ok(serde_json::to_string(
+            &macro_document_model::save::saved_state(state)?,
+        )?)
+    } else {
+        Ok(serde_json::to_string(&state.to_json()?)?)
+    }
+}
 pub(crate) fn markdown(
     state: &EditorState,
     flavor: u32,
@@ -256,7 +303,7 @@ pub(crate) fn query(
     };
     match msg.kind {
         0 => reply.text = html(state, msg.flags & 1 != 0, export_flavor(session))?,
-        1 => reply.text = markdown(state, msg.flags & 1, true)?,
+        1 => reply.text = markdown_for_session(session, msg.flags & 1, true)?,
         2 => {
             use lexical_rich_nodes::utils::matcher::RegexMatcher;
             let matcher = RegexMatcher::new(&msg.text, if msg.flags & 1 != 0 { "iu" } else { "u" })
