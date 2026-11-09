@@ -8,7 +8,7 @@ use crate::{PeerPresence, UnixMillis};
 pub struct PresenceError;
 
 /// S7 presence operations. Implementations must use supplied wall time, never a clock read.
-pub trait PresenceBackend {
+pub trait PresenceBackend: Send {
     /// Set one local value; clearing is a Null value, not deletion.
     fn set(
         &mut self,

@@ -15,6 +15,14 @@ fn portable_values_have_explicit_boundary_contracts() -> Result<(), Error> {
     );
     assert_eq!(key.generation(), 7);
     assert_eq!(key.index(), 12);
+    assert_eq!(NodeTypeIndex::from_raw(65535).get(), 65535);
+    let editor = EditorBuilder::new(EditorMode::Headless).build().unwrap();
+    assert!(
+        editor
+            .registry()
+            .node(NodeTypeIndex::from_raw(65535))
+            .is_none()
+    );
     let text = TextBuffer::new("abc");
     assert_eq!(text.as_str(), "abc");
     assert_eq!(text.byte_offset(Utf16Offset(2))?, 2);

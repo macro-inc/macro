@@ -10,6 +10,10 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeTypeIndex(pub(crate) u16);
 impl NodeTypeIndex {
+    /// Reconstruct a boundary index. Resolve it with `Registry::node` before use.
+    pub fn from_raw(value: u16) -> Self {
+        Self(value)
+    }
     /// Numeric index for boundary encoding.
     pub fn get(self) -> u16 {
         self.0
