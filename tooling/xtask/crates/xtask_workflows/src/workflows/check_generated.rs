@@ -4,12 +4,12 @@
 //! (and the kafka topics file) are defined in Rust" enforceable rather than
 //! aspirational.
 
-use gh_workflow::{Event, Job, PullRequest, Step, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps};
 
-/// Files whose change runs the workflow, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**"),
     xtask_paths::repo_glob!("crates/macro_event_topics/**"),
@@ -19,16 +19,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 
 /// Build the workflow.
 pub fn check_generated_workflows() -> Workflow {
-    let pull_request = PullRequest::default().add_branch("main");
-
     Workflow::new("check generated workflows")
-        .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
-            .workflow_call(WorkflowCall::default()))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("check-workflows", check_workflows())
 }
 

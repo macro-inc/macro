@@ -77,7 +77,7 @@ describe('createTemplateActivation', () => {
   it('fills a routine with steps on its Ask AI step and keeps its code', () => {
     createRoot((dispose) => {
       const label = {
-        type: 'code',
+        type: 'code' as const,
         title: 'Label invoices',
         source: 'export async function main() {}',
       };

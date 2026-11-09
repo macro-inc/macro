@@ -282,7 +282,7 @@ where
                     backfill: is_import,
                     upload_destination: destination,
                 };
-                crate::util::upload_attachment::store_attachment(
+                let stored = crate::util::upload_attachment::store_attachment(
                     crate::util::upload_attachment::AttachmentStorageContext {
                         db: &self.db,
                         dss_client: &self.dss,
@@ -293,8 +293,15 @@ where
                     &args,
                     data,
                 )
-                .await
-                .map_err(|error| match error {
+                .await;
+                // The deleted row took its claim with it; nothing is pending.
+                if let Err(
+                    crate::util::upload_attachment::UploadAttachmentError::AttachmentDeleted,
+                ) = stored
+                {
+                    return Ok(());
+                }
+                stored.map_err(|error| match error {
                     // Its message is already a string, so no SQLSTATE survives.
                     crate::util::upload_attachment::UploadAttachmentError::DatabaseError(_) => {
                         database_failed(&error, None)

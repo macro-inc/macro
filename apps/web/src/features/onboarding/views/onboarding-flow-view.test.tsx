@@ -1,6 +1,11 @@
+import type {
+  RoutineSuggestion,
+  Surface,
+} from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CheckoutReturn } from '../core/checkout';
+import type { EmailAccount } from '../core/email-accounts';
 import type { OnboardingStep } from '../core/steps';
 import {
   readSavedStep,
@@ -17,6 +22,55 @@ import {
   stubOnboardingBrowser,
 } from '../tests/render';
 import { OnboardingFlowView } from './onboarding-flow-view';
+
+function catalogSuggestion(
+  id: string,
+  key: string,
+  options: {
+    onByDefault?: boolean;
+    from?: 'for_you' | 'macro';
+    reason?: string;
+    surface?: Surface;
+  } = {}
+): RoutineSuggestion {
+  const from = options.from ?? 'for_you';
+  return {
+    id,
+    kind: 'catalog',
+    key,
+    knobs: {},
+    from,
+    surfaces: [options.surface ?? 'email'],
+    reason: from === 'for_you' ? (options.reason ?? null) : null,
+    keepProbability: from === 'for_you' ? 0.9 : null,
+    onByDefault: options.onByDefault ?? false,
+  };
+}
+
+function inbox(address: string): EmailAccount {
+  return { address, isPrimary: true, ownerId: FAKE_VIEWER_ID };
+}
+
+function draftedSuggestion(id: string, name: string): RoutineSuggestion {
+  return {
+    id,
+    kind: 'routine',
+    routine: {
+      name,
+      description: 'Every Friday, list the week’s deliveries.',
+      kind: 'Agent',
+      trigger: { type: 'events', filters: [{ events: ['task.created'] }] },
+      task: { steps: [] },
+      enabled: false,
+    },
+    from: 'for_you',
+    surfaces: ['crm'],
+    reason: 'Suppliers write every week.',
+    keepProbability: 0.95,
+    // Even marked, a drafted routine is never switched on for the person.
+    onByDefault: true,
+  };
+}
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -154,6 +208,75 @@ describe('onboarding flow', () => {
       expect(fake.calls()).toContain(
         'createTeam:Acme:grace@acme.com,alan@acme.com:closed'
       )
+    );
+  });
+
+  it('explains each domain switch without toggling it', async () => {
+    setup({ resume: 'team' });
+    await heading('Built for teams.');
+    await screen.findByDisplayValue('Acme');
+
+    const domainJoin = screen.getByRole('switch', {
+      name: /^Allow @acme.com emails to join/,
+    }) as HTMLInputElement;
+    const joinInfo = screen.getByRole('button', { name: 'About domain join' });
+    expect(joinInfo.getAttribute('aria-description')).toMatch(
+      /joins this team automatically/
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'About the team email' })
+        .getAttribute('aria-description')
+    ).toMatch(/contacts who aren't on Macro yet/);
+
+    fireEvent.click(joinInfo);
+    expect(domainJoin.checked).toBe(true);
+    // The info button stays out of the switch's accessible name.
+    expect(
+      screen.queryByRole('switch', { name: /About domain join/ })
+    ).toBeNull();
+  });
+
+  it('notifies the domain only while domain join is on', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    await screen.findByDisplayValue('Acme');
+
+    const domainJoin = screen.getByRole('switch', {
+      name: /^Allow @acme.com emails to join/,
+    }) as HTMLInputElement;
+    const notify = screen.getByRole('switch', {
+      name: /^Notify your team via email/,
+    }) as HTMLInputElement;
+    expect(notify.checked).toBe(true);
+    expect(notify.disabled).toBe(false);
+
+    // Without domain join the notice can't go out, so it reads as off.
+    fireEvent.click(domainJoin);
+    await waitFor(() => expect(notify.disabled).toBe(true));
+    expect(notify.checked).toBe(false);
+
+    // Turning domain join back on restores the earlier choice.
+    fireEvent.click(domainJoin);
+    await waitFor(() => expect(notify.disabled).toBe(false));
+    expect(notify.checked).toBe(true);
+
+    fireEvent.click(notify);
+    click('Create team & invite 2');
+    await waitFor(() =>
+      expect(fake.calls()).toContainEqual(
+        expect.stringMatching(/^createTeam:Acme:[^:]+:quiet$/)
+      )
+    );
+    expect(fake.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'onboarding_v4_team',
+        data: expect.objectContaining({
+          action: 'created',
+          allow_domain_join: true,
+          notify_domain: false,
+        }),
+      })
     );
   });
 
@@ -681,6 +804,348 @@ describe('onboarding flow', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Built for teams.' })
     ).toBeTruthy();
+  });
+
+  it('ends with routines: AI’s picks marked on by default, drafted ones off, and only the chosen turned on', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            // Marked on by default, but drafted: never switched on.
+            draftedSuggestion('digest', 'Supplier digest'),
+            catalogSuggestion('sort', 'inbox', {
+              onByDefault: true,
+              reason: 'You get a lot of newsletters.',
+            }),
+            catalogSuggestion('triage', 'triage', { onByDefault: true }),
+            // A third marked on by default is past the cap of two.
+            catalogSuggestion('brief', 'brief', { onByDefault: true }),
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    expect(
+      screen.getByText('For you · You get a lot of newsletters.')
+    ).toBeTruthy();
+    expect(screen.getByText('Template from Macro')).toBeTruthy();
+    const toggle = (name: string) =>
+      screen.getByRole('switch', { name: `Turn on ${name}` });
+    expect(toggle('Sort my inbox')).toHaveProperty('checked', true);
+    expect(toggle('Triage new tasks')).toHaveProperty('checked', true);
+    expect(toggle('Morning brief')).toHaveProperty('checked', false);
+    expect(toggle('Supplier digest')).toHaveProperty('checked', false);
+    expect(toggle('Share updates')).toHaveProperty('checked', false);
+    fireEvent.click(toggle('Triage new tasks'));
+    fireEvent.click(toggle('Supplier digest'));
+    click('Turn on 2 routines');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.world.routinesCreated).toEqual(['digest', 'sort']);
+    expect(fake.calls()).toContain('completeOnboarding');
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines',
+      data: {
+        suggested: 5,
+        recommended: 2,
+        enabled: 2,
+        recommended_kept: 1,
+        for_you_enabled: 2,
+      },
+    });
+  });
+
+  it('streams AI’s suggestions in, fills only surfaces still empty after the wait, and tops up once AI is done', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // The server always fills each surface with Macro's templates.
+      const emailTemplate = catalogSuggestion('updates', 'updates', {
+        from: 'macro',
+        surface: 'email',
+      });
+      const tasksTemplate = catalogSuggestion('triage', 'triage', {
+        from: 'macro',
+        surface: 'tasks',
+      });
+      const sort = catalogSuggestion('sort', 'inbox', {
+        reason: 'Busy inbox.',
+        surface: 'email',
+      });
+      const stuck = catalogSuggestion('stuck', 'stuck', {
+        reason: 'Tasks pile up.',
+        surface: 'tasks',
+      });
+      const answer =
+        (status: 'generating' | 'ready', ...suggestions: RoutineSuggestion[]) =>
+        (draft: FakeOnboardingWorld) => {
+          draft.routineSuggestions = { status, suggestions };
+        };
+      const { fake } = setup({
+        resume: 'routines',
+        world: {
+          routineSuggestionsEnabled: true,
+          routineSuggestions: {
+            status: 'generating',
+            suggestions: [emailTemplate, tasksTemplate],
+          },
+        },
+      });
+      await heading('Put your busywork on autopilot.');
+      // Templates wait while AI is suggesting.
+      expect(screen.queryByText('Share updates')).toBeNull();
+      expect(screen.queryByText('Triage new tasks')).toBeNull();
+      expect(
+        screen.getByText(/Studying your workspace to suggest routines/)
+      ).toBeTruthy();
+
+      fake.update(answer('generating', sort, emailTemplate, tasksTemplate));
+      await screen.findByText('Sort my inbox');
+      expect(screen.getByText('Finding more routines for you…')).toBeTruthy();
+      expect(screen.queryByText('Share updates')).toBeNull();
+
+      // The wait runs out: only Tasks, still empty, fills with templates.
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.findByText('Triage new tasks');
+      expect(screen.queryByText('Share updates')).toBeNull();
+      expect(screen.getByText('Finding more routines for you…')).toBeTruthy();
+      expect(fake.events()).toContainEqual({
+        event: 'onboarding_v4_routines_shown',
+        data: expect.objectContaining({
+          shown: 2,
+          for_you: 1,
+          fallback: false,
+          waited_out: true,
+          status: 'generating',
+        }),
+      });
+
+      // AI keeps landing; the filled templates stay.
+      fake.update(
+        answer('generating', sort, emailTemplate, stuck, tasksTemplate)
+      );
+      await screen.findByText('Chase stuck tasks');
+      expect(screen.getByText('Triage new tasks')).toBeTruthy();
+      expect(screen.queryByText('Share updates')).toBeNull();
+
+      // AI is done: every surface tops up with its templates.
+      fake.update(answer('ready', sort, emailTemplate, stuck, tasksTemplate));
+      await screen.findByText('Share updates');
+      expect(screen.queryByText('Finding more routines for you…')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tops up with templates as soon as AI finishes, before the wait is over', async () => {
+    const { fake } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'generating',
+          suggestions: [
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    expect(screen.queryByText('Share updates')).toBeNull();
+    fake.update((draft) => {
+      draft.routineSuggestions = {
+        status: 'ready',
+        suggestions: [
+          catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
+          catalogSuggestion('updates', 'updates', { from: 'macro' }),
+        ],
+      };
+    });
+    await screen.findByText('Share updates');
+    expect(screen.getByText('Sort my inbox')).toBeTruthy();
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines_shown',
+      data: expect.objectContaining({
+        shown: 2,
+        for_you: 1,
+        waited_out: false,
+        status: 'ready',
+      }),
+    });
+  });
+
+  it('falls back to Macro’s templates when AI gave none in time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { fake } = setup({
+        resume: 'routines',
+        world: {
+          routineSuggestionsEnabled: true,
+          routineSuggestions: {
+            status: 'generating',
+            suggestions: [
+              catalogSuggestion('updates', 'updates', { from: 'macro' }),
+              catalogSuggestion('triage', 'triage', {
+                from: 'macro',
+                surface: 'tasks',
+              }),
+            ],
+          },
+        },
+      });
+      await heading('Put your busywork on autopilot.');
+      expect(screen.queryByText('Share updates')).toBeNull();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.findByText('Share updates');
+      expect(screen.getByText('Triage new tasks')).toBeTruthy();
+      expect(fake.events()).toContainEqual({
+        event: 'onboarding_v4_routines_shown',
+        data: expect.objectContaining({
+          for_you: 0,
+          fallback: true,
+          first_suggestion_ms: null,
+        }),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows templates at once without an inbox', async () => {
+    setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'none',
+          suggestions: [
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    expect(screen.getByText('Share updates')).toBeTruthy();
+    expect(screen.getByText('Template from Macro')).toBeTruthy();
+  });
+
+  it('keeps a routine that failed to turn on and retries only it', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineCreateFailures: ['triage'],
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { onByDefault: true }),
+            catalogSuggestion('triage', 'triage', { onByDefault: true }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    click('Turn on 2 routines');
+    await screen.findByText(
+      'Couldn’t turn this on. Try again, or leave it off.'
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    fake.update((draft) => {
+      draft.routineCreateFailures = [];
+    });
+    await screen.findByRole('button', { name: 'Turn on 2 routines' });
+    click('Turn on 2 routines');
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(
+      fake.calls().filter((call) => call.startsWith('createRoutine:'))
+    ).toEqual([
+      'createRoutine:sort:Sort my inbox',
+      'createRoutine:triage:Triage new tasks',
+      'createRoutine:triage:Triage new tasks',
+    ]);
+  });
+
+  it('creates a routine under the name the person gave it', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'ready',
+          suggestions: [
+            catalogSuggestion('sort', 'inbox', { onByDefault: true }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    fireEvent.click(screen.getByRole('button', { name: /Sort my inbox/ }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.input(name, { target: { value: 'Label my mail' } });
+    click('Turn on 1 routine');
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(fake.calls()).toContain('createRoutine:sort:Label my mail');
+  });
+
+  it('ends with the routines step once a plan is chosen, where suggestions are on', async () => {
+    const { fake, navigate } = setup({
+      resume: 'plan',
+      world: { routineSuggestionsEnabled: true },
+    });
+    await heading('Free Claude & GPT for 30 days.');
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
+    await heading('Put your busywork on autopilot.');
+    expect(fake.calls()).not.toContain('completeOnboarding');
+    // The plan is settled: no going back to it.
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    click('Continue to workspace');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'onboarding_v4_completed',
+        data: expect.objectContaining({ plan: 'free' }),
+      })
+    );
+  });
+
+  it('starts AI suggesting routines once, as soon as an inbox is connected', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: { routineSuggestionsEnabled: true },
+    });
+    await heading('Connect your tools.');
+    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
+    fake.update((draft) => {
+      draft.emailAccounts = [inbox('work@example.com')];
+    });
+    await waitFor(() =>
+      expect(fake.calls()).toContain('generateRoutineSuggestions')
+    );
+    fake.update((draft) => {
+      draft.emailAccounts = [
+        inbox('work@example.com'),
+        inbox('home@example.com'),
+      ];
+    });
+    await Promise.resolve();
+    expect(
+      fake.calls().filter((call) => call === 'generateRoutineSuggestions')
+    ).toHaveLength(1);
+  });
+
+  it('never starts suggesting where suggestions are off', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: {
+        emailAccounts: [inbox('work@example.com')],
+      },
+    });
+    await heading('Connect your tools.');
+    expect(fake.calls()).not.toContain('generateRoutineSuggestions');
   });
 });
 

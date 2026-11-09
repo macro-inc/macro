@@ -301,7 +301,7 @@ describe('forwarding with selected access', () => {
       await submitted;
       expect(onSubmit).toHaveBeenCalledOnce();
       expect(mocks.success).toHaveBeenCalledWith(
-        'Message sent successfully',
+        'Message sent',
         expect.any(Object)
       );
     }

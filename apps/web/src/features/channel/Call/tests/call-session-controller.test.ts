@@ -22,6 +22,7 @@ const token: CallTokenResponse = {
   serverUrl: 'wss://example.com',
   token: 'scoped-token',
   participantId: 'guest-1',
+  started: false,
   shareToken: 'meeting-secret',
 };
 

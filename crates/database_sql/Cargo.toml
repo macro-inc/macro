@@ -19,7 +19,7 @@ cli = ["dep:specta-serde", "dep:specta-typescript"]
 schema = ["dep:schemars", "models_databases/schema"]
 
 # Needs the exporter and a filesystem to write to, which the library does not.
-# Not `export_types`, which `agent_fold` already builds into the same target.
+# Not `export_types`, which `agent_runtime_protocol` already builds into the same target.
 [[bin]]
 name = "database_sql_types"
 required-features = ["cli"]

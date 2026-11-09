@@ -12,8 +12,7 @@ import { traceInboxClear, traceInboxRows } from './inbox-telemetry';
 export type InboxListView =
   | { t: 'loading' }
   | { t: 'error' }
-  /** `filtered` when rows exist but the status filter hides them all. */
-  | { t: 'empty'; filtered: boolean }
+  | { t: 'empty' }
   | {
       t: 'ready';
       rows: readonly NotificationInboxRow[];
@@ -52,8 +51,7 @@ export type InboxDoneNotices = {
  */
 export function createInboxList(
   feed: InboxFeedSource,
-  notices: InboxDoneNotices,
-  include: (row: NotificationInboxRow) => boolean = () => true
+  notices: InboxDoneNotices
 ) {
   const view = (): InboxListView => {
     const loaded = feed.rows();
@@ -61,11 +59,9 @@ export function createInboxList(
     if (loaded === undefined) {
       return error ? { t: 'error' } : { t: 'loading' };
     }
-    const rows = loaded.filter(include);
+    const rows = loaded;
     if (rows.length === 0 && !feed.hasMore()) {
-      return error
-        ? { t: 'error' }
-        : { t: 'empty', filtered: loaded.length > 0 };
+      return error ? { t: 'error' } : { t: 'empty' };
     }
     return {
       t: 'ready',

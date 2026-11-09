@@ -1,4 +1,4 @@
-use gh_workflow::{Event, Job, PullRequest, Push, Run, Step, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Push, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{steps, vars};
@@ -6,7 +6,7 @@ use crate::workflows::{steps, vars};
 #[cfg(test)]
 mod test;
 
-/// Files whose change runs the workflow, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("packages/sdk/**"),
     xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
@@ -16,17 +16,9 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 /// checked by the web app workflow's `Generated Code Check`, which builds the
 /// spec binaries once for every Rust-generated artifact.
 pub fn sdk_check() -> Workflow {
-    let pull_request = PullRequest::default().add_branch("main");
-
     Workflow::new("SDK Check")
         .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
-            // `Release SDK` publishes from `main` without re-checking the
-            // package, so the same suite has to guard what lands there.
+            // Guard SDK changes with the same validation used before publishing.
             .push(
                 PATHS
                     .iter()
@@ -40,17 +32,31 @@ pub fn sdk_check() -> Workflow {
 }
 
 /// Typecheck, test, and coverage-check the package as committed. Needs nothing
-/// but Bun, so it stays a cheap gate that can run on every SDK change.
+/// but Bun and Node, including isolated consumers of the packed SDK.
 fn check_package() -> Job {
     Job::default()
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
+        .add_step(
+            Step::new("Setup Node")
+                .uses(
+                    "actions",
+                    "setup-node",
+                    "49933ea5288caeca8642d1e84afbd3f7d6820020",
+                )
+                .add_with(("node-version", "24")),
+        )
         .add_step(install_dependencies())
         .add_step(typecheck())
         .add_step(run_tests())
         .add_step(check_coverage())
+        .add_step(
+            Step::new("Check packed SDK")
+                .run("bun run build && bun run check:pack")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk")),
+        )
 }
 
 fn install_dependencies() -> Step<Run> {

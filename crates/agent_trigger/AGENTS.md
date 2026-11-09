@@ -13,6 +13,9 @@ session that results.
   — mention detection, admission, and dispatch.
 - `src/domain/sources.rs`: the trigger sources (explicit mention, implicit
   reply, task/project assignment).
+- `src/domain/broker_events.rs`: the events, and `NewAgentSessionEvent::origin`,
+  which says what opened the session (`trigger_context::TriggerOrigin`). Only `New`
+  events tell it: a runtime already has the sessions it is following up in.
 - `src/domain/context.rs`: structured context assembled for the agent
   prompt (thread history, people, discussion). Message attachments travel on
   each `ContextMessage` so the prompt XML and ACP file links can see files

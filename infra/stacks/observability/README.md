@@ -107,8 +107,7 @@ export step. The role can submit telemetry but cannot read stored traces or obta
 Grafana's OAuth credentials. The provider is account-wide and protected; import it
 into Pulumi if another stack creates it before this rollout.
 
-Build, publish and smoke-boot a NixOS image with `ci-dashboard.nix`, then pin its AMI
-and deploy normally to provision the dashboard. The workflow starts observing after
+Deploy the host (see [Deploying](#deploying)) to provision the dashboard. The workflow starts observing after
 merge to `main`; add new workflow names to its list when they are introduced.
 GitHub's three-level `workflow_run` chaining limit still applies. Keep
 `trace-artifacts-glob` unset so the exporter never downloads PR-produced artifacts.
@@ -283,8 +282,8 @@ boundary; split roles/hosts when stronger isolation is required.
 
 ## First deployment
 
-The stack is deliberately absent from `.github/services-config.json`, so this PR
-does not enroll it in automatic deployments. Use the repository's Pulumi backend
+The stack is deliberately absent from `.github/services-config.json`; it deploys
+only through the manual workflow in [Deploying](#deploying). Use the repository's Pulumi backend
 and AWS account `569036502058`, region `us-east-2`. Deployment requires the
 existing public `macro-internal.com` Route53 zone; this stack creates its own VPC/NAT and
 DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
@@ -310,8 +309,9 @@ DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
    delivery destination must remain accessible during a production outage.
    Configuration rejects secrets and topics in another region; the host reads
    the local secret directly, without fetching credentials from production.
-4. Build, publish and smoke-boot the NixOS image as described below. Set its
-   reviewed Ohio AMI ID; there is deliberately no mutable "latest image" lookup.
+4. Build, publish and smoke-boot the NixOS image: run **Deploy Observability**
+   as a dry run (see [Deploying](#deploying)). Pulumi finds the AMI tagged for
+   this checkout's image source; there is no `amiId` setting.
 5. Set the nonsecret configuration below, substituting actual identifiers.
    Placeholder credentials are not usable for deployment.
 
@@ -321,7 +321,6 @@ bun install --frozen-lockfile
 \cd stacks/observability
 pulumi stack select macro-inc/dev --create
 pulumi config set aws:region us-east-2
-pulumi config set amiId '<reviewed NixOS AMI ID in Ohio>'
 pulumi config set secretArn '<existing Secrets Manager ARN>'
 pulumi config set alarmTopicArn '<existing monitored SNS topic ARN>'
 pulumi preview --diff
@@ -354,44 +353,134 @@ Before enabling application traffic, validate all of these against AWS:
 
 ## Operations and recovery
 
-### NixOS image build and publication
+### Deploying
 
-From `infra/stacks/observability`, on an x86_64 Linux Nix builder:
+Run **Deploy Observability** (`.github/workflows/deploy-observability.yml`,
+generated from `tooling/xtask/crates/xtask_workflows/src/workflows/deploy_observability.rs`)
+from `main` in the Actions tab. Nothing starts it automatically.
+
+> **A rollout causes downtime.** It replaces the single host: Grafana, Loki,
+> Tempo, Prometheus and GoAlert are unavailable, and OTLP ingestion is refused,
+> for several minutes, until the new host passes its load-balancer health checks.
+> Producers retry rejected OTLP requests; pages from Datadog to GoAlert fail
+> during the window. Run it when that is acceptable.
+
+The `dry_run` input defaults to on. A dry run does everything except replace
+the host: build, publish, smoke boot, preview and the permission check. Untick it
+to roll out. The steps, all in `deploy/release.ts`:
+
+1. **Refuse a stale commit.** Branches other than `main`, and a re-run of an old
+   run whose commit is behind main's last change to this stack, fail, so a rerun
+   never rolls production back.
+2. **Find the image.** `deploy/image-key.ts` hashes the image's source (the
+   git-tracked `flake.nix`, `flake.lock`, `nixos/` and `assets/`, minus
+   `nixos/database-collector/`). An available AMI with the tag key
+   `ImageSource:<hash>` has already passed a smoke boot for this source: skip to
+   step 5. Otherwise, if an AMI already boots the same NixOS system
+   (`NixSystem` tag, from `nix eval` of the toplevel) and passed, it gets this
+   source's tag and the host is not replaced. If one exists but has not passed,
+   go to step 4.
+3. **Build and publish.** `nix build .` makes the UEFI VHD (its builder needs the
+   `kvm` system feature; without `/dev/kvm` QEMU emulates, more slowly).
+   `deploy/publish.ts` uploads it to `macro-observability-images-569036502058-us-east-2`,
+   imports an encrypted snapshot through the `macro-observability-vmimport` role
+   and registers a private AMI tagged `project`, `ImageSHA256`, `NixSystem` and
+   `GitCommit`. A rerun reuses an AMI or import task for the same VHD.
+4. **Smoke boot.** `deploy/smoke.ts` creates this run's own resources, named
+   after the run: two buckets (`observability-smoke-<run>-logs` and `-traces`),
+   a secret `observability/smoke-<run>` of fresh throwaway values, and an IAM
+   role and instance profile under the path `/observability-smoke/` that may
+   only reach those buckets and that secret, plus SSM. It launches the AMI as an
+   `m7i.xlarge` in the host's subnet and security group with a blank 20 GiB
+   volume. Never production storage: Loki and Tempo compactors delete blocks they
+   consider expired. The smoke host has no CloudWatch, SNS or production access,
+   and its alarm topic does not exist, so it cannot page anyone. Over SSM it waits up to 15 minutes for every unit to be
+   active and for `/healthz`, `/goalert-healthz`, Loki, Tempo and Prometheus to
+   answer, then sends an OTLP log and span and finds them in Loki and Tempo, and
+   checks ingestion refuses a missing token. Cleanup stops the host, detaches and
+   terminates it (the calls a rollout makes), then deletes the volume, buckets,
+   secret, instance profile and role. It sweeps every smoke resource, not only
+   this run's, so a cancelled or crashed run's leftovers go too, and a cleanup
+   that cannot delete something fails the run. A pass
+   tags the AMI `Smoke=passed` and `ImageSource:<hash>`; a failure tags
+   `Smoke=failed`, prints the failing units' journals and the console, and stops
+   the run with production untouched.
+5. **Check the plan.** `pulumi preview --json --show-sames` on `prod`;
+   `deploy/plan.ts` allows only replacing or updating the instance, its volume and
+   target-group attachments, and updating the alarms that name it. Any other
+   change (network, IAM, DNS, buckets, the data volume) stops the run: apply it
+   with a reviewed manual `pulumi up`. The data volume and both buckets must be
+   listed unchanged. Then `deploy/iam-preflight.ts` runs IAM's policy simulator
+   for every call the replacement makes, on the stack's real ARNs, so a missing
+   permission fails here instead of after the old host is gone.
+6. **Roll out** (not in a dry run). `pulumi up --target <instance> --target-dependents`,
+   so nothing else changes even if the stack moved since the preview. Then it waits
+   up to 25 minutes for the new instance to pass both target groups' health
+   checks and for `https://grafana.macro-internal.com/api/health`, and prints how
+   long the update took.
+
+One rollout runs at a time (concurrency group `deploy-observability-prod`,
+never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`
+label) builds it through `.github/workflows/observability_image.yml`, with no
+credentials, so a broken image fails before merge. The deploy job uses the
+repository's deploy credentials (`AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` and
+`PULUMI_ACCESS_TOKEN`), the same ones `deploy_on_push` and `deploy_web_app` use.
+Nothing needs setting up first.
+
+**If the new host fails after the rollout.** The old instance is already gone:
+the stack deletes it before creating the replacement, since one host owns the
+data volume. The run fails loudly; follow [Runtime](#runtime) to debug over SSM.
+To roll back, revert the commit on `main` and run the workflow again: the
+previous source's AMI still carries its tag, so nothing is rebuilt. Rolling an
+AMI back does not roll back Grafana or GoAlert schema migrations; use a tested
+snapshot recovery when the old version cannot read current data.
+
+**What survives a replacement.** Nothing the services keep is on the replaced
+host:
+
+- Loki chunks and Tempo blocks are in the two S3 buckets, which Pulumi protects
+  and retains (`durable`), and nothing about them depends on the image.
+- Everything local is on the `observability-data` EBS volume: Grafana's SQLite
+  (users, dashboards, settings), Loki and Tempo WALs and indexes, Prometheus
+  TSDB, Alloy's WAL and GoAlert's Postgres. The volume is protected and retained,
+  and none of its inputs change with the image, so the plan check requires it to
+  be unchanged.
+- Only the volume attachment is replaced. It has `stopInstanceBeforeDetaching`,
+  so the old host stops cleanly (systemd gives each service 90 seconds) before
+  the detach, and `forceDetach: false`.
+- The new host's bootstrap waits for that exact volume ID, mounts it without
+  formatting (`prepare-volume.sh` formats only a disk with no filesystem or
+  signatures), and stable uids keep file ownership. Every service checks the
+  mount before starting, so none falls back to the root disk.
+- The root disk is disposable and holds nothing to keep. OTLP data accepted
+  into Alloy's in-memory queues during shutdown can be lost; producer retries
+  cover requests rejected while the host is down.
+
+**Images and cleanup.** Retain the previous AMI and snapshot until the new host
+has passed acceptance; the workflow never deletes AMIs. Remove obsolete image
+artifacts, AMIs and their root snapshots through the normal infrastructure
+cleanup process; they are separate from the protected telemetry volume and its
+daily snapshots. Do not run an ad-hoc `nixos-rebuild switch` on the host: the
+image built from `main` is the source of truth. For host changes or security
+updates, update `nixos/host.nix` or the pinned input with
+`nix flake update nixpkgs`, merge, then deploy.
+
+**Prerequisites.** The image bucket and `macro-observability-vmimport` role
+above, which earlier hand publishing created. Nothing persistent exists for the
+smoke boot; each run creates and deletes its own resources.
+
+To publish by hand, with credentials that may write the bucket and import:
 
 ```bash
+\cd infra/stacks/observability
 nix build . --cores 2
-python3 nixos/publish-image.py result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
+bun deploy/publish.ts result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
 ```
 
-The build produces a UEFI VHD with the complete host configuration. KVM speeds up
-image creation; software emulation is supported but slower. The publishing command
-is an explicit AWS write: it uploads the image, imports an encrypted snapshot and
-registers a private AMI in `us-east-2`. It never launches or modifies an instance.
-It requires an existing private S3 artifact bucket in Ohio and an operator with
-the [VM Import permissions and service role](https://docs.aws.amazon.com/vm-import/latest/userguide/required-permissions.html)
-plus image registration/tagging permissions. Use `--role` for a dedicated import
-role; scope its S3 access to the artifact bucket. This role is separate from the
-runtime EC2 role. Publishing credentials never enter the image.
-
-Record the printed image SHA256, import task, snapshot and AMI ID with the release.
-If publication is interrupted, inspect those identifiers before retrying; do not
-blindly create duplicate import tasks. Retain the previous AMI and snapshot until
-the replacement has passed acceptance checks. Remove obsolete image artifacts,
-AMIs and their root snapshots through the normal infrastructure cleanup process;
-they are separate from the protected telemetry volume and its daily snapshots.
-
-Review the AMI and boot it in the pilot's private subnet before enabling ingestion.
-Check SSM access, the OS version, exact data volume mount, service health, reboot,
-secret-outage recovery and replacement/reattachment. Pin `amiId` only after review.
-The AWS image import and actual EC2 boot checks require deployment access and are
-separate from local configuration and startup validation.
-
-For host changes or security updates, update `nixos/host.nix` or the pinned input
-with `nix flake update nixpkgs`, build/test/publish a new image, then change `amiId`
-and review `pulumi preview`. Do not run an ad-hoc `nixos-rebuild switch` on the
-host: Pulumi's pinned image is the source of truth. Rolling back an AMI does not
-roll back Grafana schema migrations or telemetry state; use a tested snapshot
-recovery plan when the old application version cannot read current data.
+A hand-published AMI has no `ImageSource` or `NixSystem` tag, so neither Pulumi
+nor the workflow's `find` step uses it. The workflow builds its own image; only
+when that build produces a byte-identical VHD does `publish` reuse the
+hand-published AMI (matched by `ImageSHA256`) and tag it.
 
 ### Runtime
 
@@ -424,9 +513,9 @@ credential copies from systemd. Secret-service outages retry every 30 seconds;
 Loki, Tempo, Prometheus and host collection can run independently of that service.
 Systemd restarts crashed processes individually with memory and filesystem limits.
 
-Configuration/image changes require a new image and reviewed `amiId`; runtime
-value changes do not need an image rebuild. Both kinds of changes replace the
-instance and cause downtime. The old instance is deleted before replacement, its
+Configuration/image changes require a new image; runtime value changes do not
+need an image rebuild. Both kinds of changes replace the instance and cause
+downtime (see [Deploying](#deploying)). The old instance is deleted before replacement, its
 volume is detached, then the new host waits for that retained volume. This pilot
 has not been deployed with the earlier container layout; an existing container
 installation would need an explicit ownership/path migration before using this image.
@@ -546,8 +635,8 @@ without SMTP credentials. The configured topic already has wolf@macro.com and
 teo@macro.com subscriptions; each recipient must confirm their SNS subscription.
 Test the contact point and verify receipt before relying on notifications.
 
-User-data schema 6 adds `oncallHost`. Deploy it together with the new reviewed
-AMI; a schema-5 image cannot boot schema-6 user data.
+User-data schema 6 adds `oncallHost`. Deploy it together with the image that
+reads it; a schema-5 image cannot boot schema-6 user data.
 
 ## On-call paging (GoAlert)
 
@@ -612,7 +701,7 @@ point's alerts with 401 and Grafana shows it as failing.
 
 ### First deployment
 
-1. Add the secrets above, then build, publish and deploy the AMI as usual. The
+1. Add the secrets above, then deploy the host as usual. The
    certificate gains the on-call name, so Pulumi replaces the ACM certificate and
    updates the listener.
 2. Sign in as `admin`. Create the escalation policies and services below, and a

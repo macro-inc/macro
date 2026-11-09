@@ -57,6 +57,13 @@ export function createEmailLogin(
   const [verifyError, setVerifyError] = createSignal<string>();
   const [resendIn, setResendIn] = createSignal(0);
 
+  let attempt = 0;
+  let verifiedAttempt: number | undefined;
+  const resetAttempt = () => {
+    attempt += 1;
+    verifiedAttempt = undefined;
+  };
+
   let countdown: ReturnType<typeof setInterval> | undefined;
   const startResendCountdown = () => {
     clearInterval(countdown);
@@ -83,25 +90,40 @@ export function createEmailLogin(
     if (verifying() || !isCompleteCode(value) || !address) return;
     setVerifying(true);
     setVerifyError();
-    const result = await context.verifyEmailCode({
-      email: address,
-      code: value,
-    });
-    if (result.t === 'verified') {
-      await finish();
-      return;
+    const currentAttempt = attempt;
+    if (verifiedAttempt !== currentAttempt) {
+      const result = await context.verifyEmailCode({
+        email: address,
+        code: value,
+      });
+      if (attempt !== currentAttempt) {
+        setVerifying(false);
+        return;
+      }
+      if (result.t !== 'verified') {
+        setVerifying(false);
+        // A rejected code must not spend another attempt on Verify.
+        if (result.t === 'invalid-code') setCode('');
+        setVerifyError(VERIFY_ERRORS[result.t]);
+        return;
+      }
+      // The one-time code is consumed even if local session cleanup fails.
+      // Only this attempt may retry completion without verifying it again.
+      verifiedAttempt = currentAttempt;
     }
-    setVerifying(false);
-    // The auth service allows only a few attempts a minute per address, and
-    // a rejected code left in the boxes would spend another on Verify.
-    if (result.t === 'invalid-code') setCode('');
-    setVerifyError(VERIFY_ERRORS[result.t]);
+    try {
+      await finish();
+    } catch (error) {
+      setVerifying(false);
+      throw error;
+    }
   };
 
   /** Send (or resend) the code; reports whether a code went out. */
   const send = async (): Promise<boolean> => {
     const address = email().trim();
     if (sending() || !address) return false;
+    resetAttempt();
     setSending(true);
     setSendError();
     try {
@@ -144,7 +166,10 @@ export function createEmailLogin(
   return {
     step,
     email,
-    setEmail,
+    setEmail: (address: string) => {
+      if (address !== email()) resetAttempt();
+      return setEmail(address);
+    },
     password,
     setPassword,
     passwordRequired,
@@ -157,6 +182,7 @@ export function createEmailLogin(
     resendIn,
     canVerify: () => isCompleteCode(code()) && !verifying(),
     chooseEmail: () => {
+      resetAttempt();
       if (options.intent !== 'login')
         context.track('sign_up_click', { method: 'email' });
       setStep('email');
@@ -169,6 +195,7 @@ export function createEmailLogin(
       if (!(await send())) setResendIn(0);
     },
     back: () => {
+      resetAttempt();
       if (step() === 'verify') {
         setCode('');
         setVerifyError();

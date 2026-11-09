@@ -1,6 +1,10 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
+import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
+import { TEST_CATALOG } from '@app/features/routines/tests/catalog';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
+import type { RoutineSuggestions } from '@service-scheduled-action/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -14,6 +18,10 @@ import type {
   ViewerState,
 } from '../context/onboarding-context';
 import type { EmailAccount } from '../core/email-accounts';
+import {
+  catalogSuggestionDraft,
+  suggestionByline,
+} from '../core/routine-suggestions';
 import {
   nativeToolSlug,
   onboardingConnectedTools,
@@ -53,6 +61,15 @@ export type FakeOnboardingWorld = {
   /** How many refreshes a checkout's webhook takes to land. */
   webhookDelayPolls: number;
   accent: string | undefined;
+  /** Suggestions are on, so the flow ends with the routines step. */
+  routineSuggestionsEnabled: boolean;
+  /** The scheduler's answer; undefined until it is first read. */
+  routineSuggestions: RoutineSuggestions | undefined;
+  routineCatalog: RoutineTemplate[];
+  /** Suggestions whose routine fails to be created. */
+  routineCreateFailures: string[];
+  /** Routines created from suggestions, by suggestion id. */
+  routinesCreated: string[];
   /** Capabilities that fail, with the message they report. */
   failures: Partial<
     Record<
@@ -136,8 +153,21 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
+    routineSuggestionsEnabled: false,
+    routineSuggestions: { status: 'none', suggestions: [] },
+    routineCatalog: TEST_CATALOG,
+    routineCreateFailures: [],
+    routinesCreated: [],
     failures: {},
   };
+}
+
+/** How a recorded createTeam call marks domain join: `:closed` without it,
+ * `:quiet` with it but no notice, nothing when both are on. */
+function domainSuffix(allowDomainJoin: boolean, notifyDomain: boolean) {
+  if (!allowDomainJoin) return ':closed';
+  if (!notifyDomain) return ':quiet';
+  return '';
 }
 
 /**
@@ -312,9 +342,9 @@ export function createFakeOnboarding(
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
-    createTeam: async ({ name, invites, allowDomainJoin }) => {
+    createTeam: async ({ name, invites, allowDomainJoin, notifyDomain }) => {
       call(
-        `createTeam:${name}:${invites.join(',')}${allowDomainJoin ? '' : ':closed'}`
+        `createTeam:${name}:${invites.join(',')}${domainSuffix(allowDomainJoin, notifyDomain)}`
       );
       fail('createTeam');
       update((draft) => {
@@ -376,6 +406,51 @@ export function createFakeOnboarding(
       });
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled: () => world.routineSuggestionsEnabled,
+    generateRoutineSuggestions: () => call('generateRoutineSuggestions'),
+    createRoutinesStep: () => ({
+      answer: () => world.routineSuggestions,
+      failed: () => false,
+      refresh: async () => call('refreshRoutineSuggestions'),
+      row: (suggestion) => {
+        const byline = suggestionByline(suggestion);
+        const surface = suggestion.surfaces[0] ?? 'agents';
+        if (suggestion.kind === 'routine')
+          return {
+            id: suggestion.id,
+            surface,
+            title: suggestion.routine.name,
+            does: suggestion.routine.description ?? '',
+            byline,
+          };
+        const entry = world.routineCatalog.find(
+          (routine) => routine.key === suggestion.key
+        );
+        if (!entry) return undefined;
+        const draft = catalogSuggestionDraft(
+          suggestion,
+          entry,
+          { ...createEmptyDraft('model'), triggers: [], enabled: true },
+          { target: { kind: 'model', model: 'model' }, codeSteps: true }
+        );
+        return {
+          id: suggestion.id,
+          surface,
+          title: entry.title,
+          does: draft.description || entry.description,
+          byline,
+        };
+      },
+      create: async (suggestion, edits) => {
+        call(`createRoutine:${suggestion.id}:${edits.name}`);
+        if (world.routineCreateFailures.includes(suggestion.id))
+          throw new Error('create failed');
+        update((draft) => {
+          draft.routinesCreated.push(suggestion.id);
+        });
+        return `routine-${suggestion.id}`;
+      },
+    }),
     repairTutorial: async () => {
       call('repairTutorial');
       update((draft) => {

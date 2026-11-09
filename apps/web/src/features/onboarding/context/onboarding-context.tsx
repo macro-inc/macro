@@ -2,9 +2,17 @@ import type { PaidPlanTier } from '@app/features/paywall/plans';
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
+import type {
+  RoutineSuggestion,
+  RoutineSuggestions,
+} from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { CheckoutTerms } from '../core/checkout';
 import type { EmailAccount } from '../core/email-accounts';
+import type {
+  SuggestionEdits,
+  SuggestionRow,
+} from '../core/routine-suggestions';
 
 /** Data availability as a source reports it; primitives decide presentation. */
 export type Loadable<T> =
@@ -125,12 +133,14 @@ export type OnboardingContext = {
   configureGithubRepositories(): void;
   createTeamDirectory(): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
-  /** `allowDomainJoin` lets people on the owner's work domain join, and
-   * tells the owner's same-domain contacts the team exists. */
+  /** `allowDomainJoin` lets people on the owner's work domain join.
+   * `notifyDomain` also emails the owner's same-domain contacts that the team
+   * exists; the server sends it only to a team with an auto-join domain. */
   createTeam(input: {
     name: string;
     invites: string[];
     allowDomainJoin: boolean;
+    notifyDomain: boolean;
   }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;
@@ -167,12 +177,39 @@ export type OnboardingContext = {
    * `skipped` records that the user left without going through the steps.
    */
   completeOnboarding(options: { skipped: boolean }): Promise<CompletionResult>;
+  /** Routine suggestions are on: the flow ends with the routines step. */
+  routineSuggestionsEnabled: Accessor<boolean>;
+  /**
+   * Starts AI suggesting routines from the inbox just connected, in this
+   * browser's time zone. The server runs it once per person.
+   */
+  generateRoutineSuggestions(): void;
+  createRoutinesStep(): RoutinesStepSource;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
   applyAccent(color: string, viewerId: string): void;
   createGithubStars(): Accessor<number | undefined>;
   track: TrackOnboarding;
   notifyFailure(message: string): void;
+};
+
+/** The last step's routine suggestions, and how to turn them on. */
+export type RoutinesStepSource = {
+  /** The scheduler's answer; undefined until first read. */
+  answer: Accessor<RoutineSuggestions | undefined>;
+  /** It couldn't be read, and nothing was read before. */
+  failed: Accessor<boolean>;
+  refresh(): Promise<unknown>;
+  /** How a suggestion reads; undefined when it can't be built here. */
+  row(suggestion: RoutineSuggestion): SuggestionRow | undefined;
+  /**
+   * Creates it, on, recorded as saved from its suggestion; resolves with the
+   * routine's id and rejects on failure.
+   */
+  create(
+    suggestion: RoutineSuggestion,
+    edits: SuggestionEdits
+  ): Promise<string>;
 };
 
 const Context = createContext<OnboardingContext>();

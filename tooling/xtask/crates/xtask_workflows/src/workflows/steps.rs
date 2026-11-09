@@ -475,14 +475,13 @@ pub fn show_sccache_stats() -> Step<Run> {
 }
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only where
-/// the path filter matched, on non-draft PRs unless the run was requested with
-/// the `PR CI` label. Shared by `check` and `test`.
+/// the path filter matched. Shared by `check` and `test`.
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
         .cond(Expression::new(
-        "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')",
-    ))
+            "needs.path-check.outputs.should_run == 'true'",
+        ))
 }
 
 // ---------------------------------------------------------------------------
@@ -517,7 +516,10 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 /// stale uploads; the deploy job logs the same hash on read.
 pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
     Step::new("Upload handoff artifact")
-        .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
+        .run(format!(
+            "bun .github/scripts/upload-handoff-artifact.ts {file} \"$DEST\""
+        ))
+        .timeout_minutes(20u32)
         .shell("bash")
         .add_env(Env::new(
             "DEST",
