@@ -145,11 +145,20 @@ export async function historyFixture(codeSubtree = false) {
     }
     if (!code) return;
     event.preventDefault();
+    if (!selection || selection.kind !== 2)
+      throw new Error('missing native range selection before key admission');
     session.keyDown(
       0,
       (event.shiftKey ? 1 : 0) | (event.ctrlKey ? 4 : 0),
       code,
       event.key,
+      selection.anchor.key,
+      selection.anchor.offset,
+      selection.anchor.type,
+      selection.focus.key,
+      selection.focus.offset,
+      selection.focus.type,
+      0,
       ++tick
     );
     drain();
