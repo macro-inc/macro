@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { ElementNode, LexicalEditor, TextNode } from 'lexical';
+
 import { IS_ALL_FORMATTING } from './constants';
 import { CAN_USE_BEFORE_INPUT, IS_FIREFOX } from './environment';
 import { eventsState } from './events-state';
@@ -44,6 +44,11 @@ import {
 } from './runtime';
 import { $internalCreateRangeSelection } from './selection';
 import { invariant } from './support';
+import type {
+  CompatElementNode as ElementNode,
+  CompatEditor as LexicalEditor,
+  CompatTextNode as TextNode,
+} from './types';
 import {
   $findMatchingParent,
   $getDOMTextNode,

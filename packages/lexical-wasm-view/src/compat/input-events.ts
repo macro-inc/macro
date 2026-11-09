@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { LexicalEditor } from 'lexical';
+
 import { COMPOSITION_START_CHAR, DOUBLE_LINE_BREAK } from './constants';
 import {
   CAN_USE_BEFORE_INPUT,
@@ -59,6 +59,7 @@ import {
   updateEditorSync,
 } from './runtime';
 import { invariant } from './support';
+import type { CompatEditor as LexicalEditor } from './types';
 import {
   $flushMutations,
   $getAdjacentNode,

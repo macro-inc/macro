@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import type { RangeSelection } from 'lexical';
+
 import { removeDOMBlockCursorElement } from './block-cursor';
 import {
   $getDOMTextNode,
@@ -17,26 +17,70 @@ import {
   $internalResolveSelectionPoints,
   setDOMSelectionBaseAndExtent,
 } from './selection';
+import type { CompatRangeSelection as RangeSelection } from './types';
 
-export type SelectionDOMRuntime = CompatRuntime &
-  Pick<
-    typeof import('lexical'),
-    | '$caretFromPoint'
-    | '$isExtendableTextPointCaret'
-    | '$extendCaretToRange'
-    | '$isChildCaret'
-    | '$normalizeCaret'
-    | '$setPointFromCaret'
-    | '$createNodeSelection'
-    | '$setSelection'
-    | '$isElementNode'
-    | '$isTextNode'
-    | '$isRootNode'
-    | '$isDecoratorNode'
-    | '$getNearestRootOrShadowRoot'
-    | '$hasAncestor'
-    | '$normalizeSelection__EXPERIMENTAL'
-  >;
+type CaretDirection = 'next' | 'previous';
+interface SiblingCaret<D extends CaretDirection>
+  extends Iterable<SiblingCaret<D>> {
+  readonly type: 'sibling';
+  readonly direction: D;
+  readonly origin: import('./types').CompatNode;
+}
+interface ChildCaret<D extends CaretDirection>
+  extends Iterable<SiblingCaret<D>> {
+  readonly type: 'child';
+  readonly direction: D;
+  readonly origin: import('./types').CompatElementNode;
+}
+interface TextCaret<D extends CaretDirection>
+  extends Iterable<SiblingCaret<D>> {
+  readonly type: 'text';
+  readonly direction: D;
+  readonly origin: import('./types').CompatTextNode;
+}
+type PointCaret<D extends CaretDirection> =
+  | SiblingCaret<D>
+  | ChildCaret<D>
+  | TextCaret<D>;
+export interface SelectionDOMRuntime extends CompatRuntime {
+  $caretFromPoint: <D extends CaretDirection>(
+    point: Pick<import('./selection').PointType, 'type' | 'key' | 'offset'>,
+    direction: D
+  ) => PointCaret<D>;
+  $isExtendableTextPointCaret: <D extends CaretDirection>(
+    caret: PointCaret<D>
+  ) => caret is TextCaret<D> & {
+    getNodeAtCaret(): import('./types').CompatTextNode;
+  };
+  $extendCaretToRange: <D extends CaretDirection>(
+    anchor: PointCaret<D>
+  ) => {
+    iterNodeCarets(
+      rootMode?: 'root' | 'shadowRoot'
+    ): Iterable<SiblingCaret<D> | ChildCaret<D>>;
+  };
+  $isChildCaret: <D extends CaretDirection>(
+    caret: PointCaret<D> | null | undefined
+  ) => caret is ChildCaret<D>;
+  $normalizeCaret: <D extends CaretDirection>(
+    caret: PointCaret<D>
+  ) => PointCaret<D>;
+  $setPointFromCaret: <D extends CaretDirection>(
+    point: import('./selection').PointType,
+    caret: PointCaret<D>
+  ) => void;
+  $createNodeSelection: () => import('./types').CompatNodeSelection;
+  $getNearestRootOrShadowRoot: (
+    node: import('./types').CompatNode
+  ) => import('./types').CompatRootNode | import('./types').CompatElementNode;
+  $hasAncestor: (
+    child: import('./types').CompatNode,
+    target: import('./types').CompatNode
+  ) => boolean;
+  $normalizeSelection__EXPERIMENTAL: <T extends RangeSelection>(
+    selection: T
+  ) => T;
+}
 
 /** DOM-facing RangeSelection methods; core movement primitives remain injected. */
 export function createSelectionDOMMethods(runtime: SelectionDOMRuntime) {

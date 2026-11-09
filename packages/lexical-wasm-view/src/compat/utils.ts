@@ -2,14 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type {
-  EditorState,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
-  RootNode,
-  TextNode,
-} from 'lexical';
+import type { NodeKey } from 'lexical';
 import {
   COMPOSITION_START_CHAR,
   COMPOSITION_SUFFIX,
@@ -44,6 +37,13 @@ import {
   type RangeSelection,
 } from './runtime';
 import type { BaseSelection } from './selection';
+import type {
+  CompatEditorState as EditorState,
+  CompatEditor as LexicalEditor,
+  CompatNode as LexicalNode,
+  CompatRootNode as RootNode,
+  CompatTextNode as TextNode,
+} from './types';
 
 export function $isSelectionCapturedInDecorator(node: Node): boolean {
   return $isDecoratorNode($getNearestNodeFromDOMNode(node));

@@ -6,12 +6,13 @@
  *
  */
 
-import type { ElementNode } from 'lexical';
 import { IS_APPLE_WEBKIT, IS_IOS, IS_SAFARI } from './environment';
 import { $getEditor } from './runtime';
 import { invariant } from './support';
-// Retargeted from lexical@0.45.0; model operations are injected by runtime.ts.
-import type { LexicalPrivateDOM } from './types';
+import type {
+  CompatElementNode as ElementNode,
+  LexicalPrivateDOM,
+} from './types';
 
 /**
  * The editor has at most one block cursor element

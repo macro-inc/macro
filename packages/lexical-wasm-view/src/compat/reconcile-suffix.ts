@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { ElementNode, NodeKey } from 'lexical';
+import type { NodeKey } from 'lexical';
 import { DOUBLE_LINE_BREAK } from './constants';
 import type { ElementDOMSlot } from './dom-slot';
 import { $reconcileNode } from './reconcile-children';
@@ -16,7 +16,10 @@ import {
 import { reconcilerState } from './reconciler-state';
 import { $isElementNode, $isTextNode } from './runtime';
 import { invariant } from './support';
-import type { LexicalPrivateDOM } from './types';
+import type {
+  CompatElementNode as ElementNode,
+  LexicalPrivateDOM,
+} from './types';
 
 export function $buildDirtyChildrenByParent(): Map<NodeKey, Set<NodeKey>> {
   const map = new Map<NodeKey, Set<NodeKey>>();

@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { ElementNode, LexicalNode, NodeKey, NodeMap } from 'lexical';
+import type { NodeKey } from 'lexical';
 import {
   DOUBLE_LINE_BREAK,
   IS_ALIGN_CENTER,
@@ -28,7 +28,12 @@ import {
   $isTextNode,
 } from './runtime';
 import { invariant } from './support';
-import type { LexicalPrivateDOM } from './types';
+import type {
+  CompatElementNode as ElementNode,
+  CompatNode as LexicalNode,
+  LexicalPrivateDOM,
+  CompatNodeMap as NodeMap,
+} from './types';
 import {
   $createChildrenArray,
   $getDOMSlot,

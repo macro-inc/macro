@@ -14,6 +14,10 @@ export {
   selectionFromSnapshot,
   selectionToSnapshot,
 } from './codec';
+export type {
+  SelectionObservableActual,
+  SelectionObservableExpected,
+} from './contract.type-test';
 export * from './helpers';
 export { $normalizeSelection as $normalizeSelection__EXPERIMENTAL } from './helpers';
 export { NodeSelection } from './node';

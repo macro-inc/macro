@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { EditorState, ElementNode, LexicalEditor, NodeKey } from 'lexical';
+import type { NodeKey } from 'lexical';
 import { DOUBLE_LINE_BREAK, FULL_RECONCILE } from './constants';
 import type { ElementDOMSlot } from './dom-slot';
 import {
@@ -27,7 +27,12 @@ import {
   DEFAULT_EDITOR_DOM_CONFIG,
 } from './runtime';
 import { cloneMap, invariant } from './support';
-import type { MutatedNodes } from './types';
+import type {
+  CompatEditorState as EditorState,
+  CompatElementNode as ElementNode,
+  CompatEditor as LexicalEditor,
+  MutatedNodes,
+} from './types';
 import { getElementByKeyOrThrow, setNodeKeyOnDOMNode } from './utils';
 
 export function $reconcileNodeChildren(

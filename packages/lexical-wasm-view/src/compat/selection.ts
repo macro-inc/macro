@@ -7,13 +7,7 @@
  */
 
 // Retargeted from lexical@0.45.0; model operations are injected by runtime.ts.
-import type {
-  ElementNode,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
-  TextNode,
-} from 'lexical';
+import type { NodeKey } from 'lexical';
 import { IS_FIREFOX } from './environment';
 import {
   markCollapsedSelectionFormat,
@@ -34,6 +28,12 @@ import {
   SKIP_SELECTION_FOCUS_TAG,
 } from './runtime';
 import { invariant } from './support';
+import type {
+  CompatElementNode as ElementNode,
+  CompatEditor as LexicalEditor,
+  CompatNode as LexicalNode,
+  CompatTextNode as TextNode,
+} from './types';
 import {
   $getDOMSlot,
   $getDOMTextNode,
