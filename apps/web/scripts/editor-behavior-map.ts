@@ -3,6 +3,7 @@
 // Execution status belongs to the supplied run evidence, never this registry.
 import { EDITOR_ASYNC_BEHAVIOR_MAP } from './editor-async-behavior-map';
 import { EDITOR_CHECKLIST_BEHAVIOR_MAP } from './editor-checklist-behavior-map';
+import { EDITOR_CLIPBOARD_BEHAVIOR_MAP } from './editor-clipboard-behavior-map';
 import { EDITOR_EXISTING_BEHAVIOR_MAP } from './editor-existing-behavior-map';
 import { EDITOR_HOVER_BEHAVIOR_MAP } from './editor-hover-behavior-map';
 import { EDITOR_MENU_BEHAVIOR_MAP } from './editor-menu-behavior-map';
@@ -963,6 +964,7 @@ export const EDITOR_BEHAVIOR_MAP = [
   ...EDITOR_NODE_BEHAVIOR_MAP,
   ...EDITOR_MENU_BEHAVIOR_MAP,
   ...EDITOR_CHECKLIST_BEHAVIOR_MAP,
+  ...EDITOR_CLIPBOARD_BEHAVIOR_MAP,
   ...EDITOR_PLATFORM_BEHAVIOR_MAP,
   ...EDITOR_HOVER_BEHAVIOR_MAP,
 ] as const;
