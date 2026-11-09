@@ -145,6 +145,8 @@ impl Transaction<'_> {
     }
     /// Flush pending writes and publish atomically; any error leaves the editor unchanged.
     pub fn commit(mut self) -> Result<Commit, Error> {
+        #[cfg(feature = "foreign-nodes")]
+        self.guard_foreign_publication()?;
         if self.dirty_since_flush {
             self.flush()?;
         }
@@ -163,6 +165,7 @@ impl Transaction<'_> {
         mut self,
         prepare: impl FnOnce(&Commit) -> Result<T, E>,
     ) -> Result<(Commit, T), E> {
+        self.guard_foreign_publication()?;
         if self.dirty_since_flush {
             self.flush()?;
         }
@@ -173,6 +176,8 @@ impl Transaction<'_> {
         &mut self,
         prepare: impl FnOnce(&Commit) -> Result<T, E>,
     ) -> Result<(Commit, T), E> {
+        #[cfg(feature = "foreign-nodes")]
+        self.guard_foreign_publication()?;
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
             return Err(Error::ForeignReadOnly.into());
@@ -363,6 +368,8 @@ impl Transaction<'_> {
     /// Publish pending work first, then seal the transaction around the installed state.
     pub fn set_editor_state(&mut self, state: EditorState, tags: TagSet) -> Result<(), Error> {
         self.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        self.guard_foreign_publication()?;
         if !Arc::ptr_eq(&state.registry, &self.pending.registry) {
             return Err(Error::ForeignEditorState);
         }
