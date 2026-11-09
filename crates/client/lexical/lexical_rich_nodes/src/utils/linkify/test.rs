@@ -63,6 +63,33 @@ fn linkify_it_5_0_2_differential_corpus() -> Result<(), LinkifyError> {
             cache.insert(key.clone(), matcher);
         }
         let matcher = cache.get(&key).expect("matcher");
+        if let Some(tlds) = case.tlds.as_ref().filter(|_| !case.keep) {
+            let direct = LinkifyIt::with_replaced_tlds(case.options, tlds)?;
+            assert_eq!(
+                direct.matches(&case.text),
+                case.matches,
+                "direct TLD match {:?}",
+                case.text
+            );
+            assert_eq!(
+                direct.test(&case.text),
+                case.test,
+                "direct TLD test {:?}",
+                case.text
+            );
+            assert_eq!(
+                direct.pretest(&case.text),
+                case.pretest,
+                "direct TLD pretest {:?}",
+                case.text
+            );
+            assert_eq!(
+                direct.match_at_start(&case.text),
+                case.at_start,
+                "direct TLD start {:?}",
+                case.text
+            );
+        }
         assert_eq!(
             matcher.matches(&case.text),
             case.matches,
