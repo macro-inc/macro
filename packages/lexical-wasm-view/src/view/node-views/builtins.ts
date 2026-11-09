@@ -97,10 +97,6 @@ function elementProps(
       fields?.format ?? 0
     ] ?? '';
   dom.style.textAlign = alignment;
-  if (node.parent === 0) {
-    dom.style.contentVisibility = 'auto';
-    dom.style.containIntrinsicBlockSize = 'auto 24px';
-  }
   if (fields?.indent) dom.style.paddingInlineStart = `${fields.indent * 40}px`;
   if (node.type === 'link' || node.type === 'autolink') {
     // The model stores the URL; the view only applies a safe DOM attribute.

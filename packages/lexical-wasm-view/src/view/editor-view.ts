@@ -584,10 +584,6 @@ export class EditorView implements ViewSink {
     this.keys.set(dom, node.key);
     dom.setAttribute('data-lexical-key', String(node.key));
     Reflect.set(dom, `__lexicalKey_${this.options.namespace}`, node.key);
-    if (node.parent === 0 && node.kind === 'element') {
-      dom.style.contentVisibility = 'auto';
-      dom.style.containIntrinsicBlockSize = 'auto 24px';
-    }
     if (node.kind === 'decorator') {
       dom.contentEditable = 'false';
       dom.setAttribute('data-lexical-decorator', 'true');
@@ -626,11 +622,6 @@ export class EditorView implements ViewSink {
       if (!child) throw new Error('Missing child DOM: ' + key);
       if (child === current) current = current.nextSibling;
       else slot.element.insertBefore(child, current ?? slot.before ?? null);
-      const childNode = this.node(key);
-      if (node.kind === 'root' && childNode?.kind === 'element') {
-        child.style.contentVisibility = 'auto';
-        child.style.containIntrinsicBlockSize = 'auto 24px';
-      }
     }
     while (current && current !== slot.before) {
       const next = current.nextSibling;

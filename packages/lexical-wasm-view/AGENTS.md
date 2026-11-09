@@ -22,7 +22,7 @@ shares this view through EditorPort; it does not supply production model code.
   lower-priority view listeners, including queued inputs.
 - Send marked typing style for 200 ms and Android post-delete context through the
   selection-change input; primitive caret moves stay available without context.
-- Keep lexical and @lexical packages out of the production dependency graph.
+- Preserve the production lexical/@lexical compatibility API over Rust; native optimizations must retain existing JS node hooks and plugins.
 - Retarget copied DOM code from Lexical 0.45.0; preserve its MIT notice and pin.
 - Keep HTML import and code highlighting off the startup path.
 - Use mountLocalSessionView for local composers and read-only views; keep transport, durability and chatter disabled and seed before importing content.
@@ -41,11 +41,11 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing and Enter against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
-- Browser tests launch their own headless Chromium; never connect to a person's
-  browser or the shared CDP instance. No existing-server reuse.
+- Run browser/performance coverage in owned Chromium, Firefox and WebKit instances; never connect to a person's browser or shared CDP. No existing-server reuse.
+- Match upstream layout; do not add content-visibility or intrinsic containment without three-browser pixel/scroll parity and a measured speed benefit.
 - Isolate Vite and Playwright in a private user/network namespace with loopback
   enabled when host route churn causes ERR_NETWORK_CHANGED; keep checks strict.
-- Build document_session_wasm before session browser tests, with TMPDIR and -j4.
+- Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2.
 - `just check`, `just pr-privacy`
 
 ## Related
