@@ -90,15 +90,38 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         .node
         .version;
     assert_eq!(initial_version, 0);
+    let allocated_before = editor.compatibility.as_ref().unwrap().keys.last_allocated();
+    assert!(editor
+        .compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
+            tags: vec![],
+            reserve_keys: 3,
+            class_mask_patches: vec![compat::CompatClassMaskPatch {
+                owner_id: 99,
+                class_id: 1,
+                hooks: 0
+            }],
+        })?)
+        .is_err());
+    assert!(editor.compatibility.as_ref().unwrap().pending.is_none());
+    assert_eq!(
+        editor.compatibility.as_ref().unwrap().keys.last_allocated(),
+        allocated_before
+    );
     assert!(editor
         .compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
             tags: vec![],
             reserve_keys: u32::MAX,
+            class_mask_patches: vec![],
         })?)
         .is_err());
     assert!(editor.compatibility.as_ref().unwrap().pending.is_none());
     let compact = editor.compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
         tags: vec!["history-push".into(), "fixture-tag".into()],
+        class_mask_patches: vec![compat::CompatClassMaskPatch {
+            owner_id: 1,
+            class_id: 1,
+            hooks: 0,
+        }],
         reserve_keys: 3,
     })?)?;
     assert_eq!(compact.reservation.keys.len(), 3);
