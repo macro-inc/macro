@@ -66,6 +66,31 @@ Android Chrome native backspace uses a typed composition clear and a bounded
 (200 ms), DOM resolution and post-delete restoration facts when needed. Routed
 modifier deletes obtain a browser layout target before sending the command.
 
+Native performance uses sampled `editor.paste` and `editor.reconcile` spans;
+`ViewOptions.startPerformance` lets the app own paint completion and shared
+browser timing. `Mirror.textLength` maintains UTF-16 text size from accepted
+mutations without scanning the document. The native document host measures
+bounded `editor.scroll` windows; see the app observability guide for attributes
+and browser-support limits.
+
+Reserve a private harness port with `LEXICAL_WASM_VIEW_TEST_PORT` and use a fresh
+`LEXICAL_WASM_VIEW_TEST_CACHE_DIR` for cold-cache verification without changing
+another preview's dependency cache.
+
+Generate a reproducible mixed-document HTML fixture from a local book without
+an account or network requests:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/stock-chrome \
+  bun browser-test/generate-mega-document.ts /path/to/book.html /path/to/fixture.html 13542
+```
+
+The sibling JSON records input/output SHA256, browser identity, bytes and HTML
+block candidates. The target counts HTML candidates; qualify model blocks,
+decorators and DOM nodes after the real app paste. Candidate images or mentions
+that the import path drops do not count as decorator coverage. Preserve fixture
+bytes and candidate hashes for before/after comparisons.
+
 On Linux hosts with route churn, isolate both test processes without changing
 their assertions or retry policy:
 

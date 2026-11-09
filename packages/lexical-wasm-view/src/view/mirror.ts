@@ -97,6 +97,7 @@ export class Mirror {
   private readonly records = new Map<NodeKey, ViewNode>();
   private readonly types: ReadonlyMap<number, TypeRow>;
   private generation: number | null = null;
+  private textLengthValue = 0;
   private readonly nonemptyRootChildren = new Set<NodeKey>();
   constructor(types: readonly TypeRow[]) {
     const table = new Map<number, TypeRow>();
@@ -119,6 +120,10 @@ export class Mirror {
   }
   get size(): number {
     return this.records.size;
+  }
+  /** UTF-16 code units in mirrored text nodes; maintained from accepted mutations. */
+  get textLength(): number {
+    return this.textLengthValue;
   }
   get keyGeneration(): number | null {
     return this.generation;
@@ -157,6 +162,7 @@ export class Mirror {
   /** Initialize is the only operation that may replace the key generation. */
   initialize(words: Uint32Array, strings: Uint8Array): AppliedDiff {
     this.records.clear();
+    this.textLengthValue = 0;
     this.nonemptyRootChildren.clear();
     this.generation = null;
     return this.apply(words, strings);
@@ -168,6 +174,11 @@ export class Mirror {
       const diff = this.applyDiff(words, strings, undo);
       // Do not alter derived counts until all packet and graph validation passes.
       this.updateEmptiness(diff.mutations);
+      for (const { before, after } of diff.mutations.values()) {
+        this.textLengthValue +=
+          (after?.kind === 'text' ? after.text.length : 0) -
+          (before?.kind === 'text' ? before.text.length : 0);
+      }
       return diff;
     } catch (error) {
       for (const [key, node] of undo) {

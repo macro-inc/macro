@@ -532,6 +532,44 @@ values, selectors, namespaces or labels are exported.
   opening event. Do not join them with the retired
   `typing.paint_opportunity_*` series.
 
+## Native editor performance
+
+The native document body emits `editor.scroll`, `editor.paste` and
+`editor.reconcile` in the `perf` sampling class through the Telemetry facade.
+Each carries `document.id`, `editor.engine`, model node and top-level block
+counts, mirrored text size in UTF-16 code units, keyed DOM node count and
+decorator count. DOM counts cover the view's maintained keyed elements, excluding
+text leaves, nested semantic wrappers and decorator internals; telemetry never
+walks the whole DOM to count it. Full DOM counts belong in profiling captures. No document
+text, clipboard values, selection contents or labels are exported.
+
+Ordinary reconcile samples are limited to one per second per view, with initialization,
+paste and diffs of at least 64 KiB also measured. `editor.elapsed_ms` measures native
+work before telemetry finalization. Paste phases separate clipboard reads,
+import-module loading, HTML conversion, native input and any queued completion
+wait. A queued paste stays open until native completion or cancellation.
+The app finishes successful work after two animation-frame opportunities so
+the shared observer can deliver the task that just ran; `ui.*` includes this
+paint approximation and is not hardware presentation time.
+
+Scroll samples cover at most one second and end after 180 ms without scroll
+events. Frames are sampled only during these windows, with at most 240
+intervals retained. `editor.frame.{count,p95_ms,max_ms,over_budget_count,
+jank_count,dropped_count}` records frame gaps against a 60 Hz budget, with
+0.5 ms tolerance; jank means a gap above two frame budgets plus tolerance.
+No percentile is emitted without a measured interval. These are animation-frame
+opportunities, not a compositor FPS measurement.
+
+`editor.long_task.*` and `editor.long_animation_frame.*` reuse the app's shared
+bounded browser observer. Inspect their `supported` flags and
+`editor.blocking_work.coverage` before comparing browsers. Unsupported metrics
+are absent rather than zero. Counts and durations describe overlapping browser
+work, including unrelated work in the same window, rather than causal editor
+CPU time. No additional PerformanceObserver is installed by an editor.
+
+Filter paste roots by `ui.operation=editor.paste` and the `perf` sampling class;
+the existing native phase with the same span name is a separate measurement.
+
 For local comparisons, capture CDP traces at 4× throttle with about 200 edits
 per surface and check that the text reached the intended editor. Keep short
 Command-K queries below universal-compose promotion. For large documents use

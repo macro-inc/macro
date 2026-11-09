@@ -30,6 +30,10 @@ import { textLeaf } from './dom';
 import { registerEvents } from './events';
 import { MarkGeometry } from './mark-geometry';
 import { Mirror } from './mirror';
+import {
+  type EditorPerformanceOperation,
+  startEditorPerformance,
+} from './performance';
 import type { EditorPort, TextFromView, ViewSink } from './port';
 import { PresenceLayer } from './presence';
 import { BulkQueries } from './queries';
@@ -72,6 +76,10 @@ export interface ViewOptions {
   readonly onError: (error: unknown) => void;
   /** Caller-owned loading span; never ended by the view. */
   readonly parentSpan?: Span;
+  /** Host-owned UI operation, including shared browser timing and paint completion. */
+  readonly startPerformance?: (
+    name: 'editor.paste' | 'editor.reconcile'
+  ) => EditorPerformanceOperation;
   /** Application/provider owner captured before an asynchronous mount. */
   readonly owner?: Owner;
 }
@@ -125,6 +133,13 @@ export class EditorView implements ViewSink {
   private paintFrame: number | null = null;
   private revisionValue = 0;
   private documentRevisionValue = 0;
+  private nextReconcileSample = 0;
+  get keyedDOMNodeCount(): number {
+    return this.dom.size;
+  }
+  get decoratorCount(): number {
+    return this.decorators.size;
+  }
   /** Content revision for drags; selection-only commits keep the source valid. */
   get documentRevision(): number {
     return this.documentRevisionValue;
@@ -369,20 +384,47 @@ export class EditorView implements ViewSink {
     const paste = effects.some(
       (effect) => effect.kind === 11 && effect.keys.includes('paste')
     );
-    if (!initialize && !paste) {
+    const now = performance.now();
+    const sampled =
+      Telemetry.config.sampled('perf') &&
+      (initialize ||
+        paste ||
+        words.byteLength + strings.byteLength >= 65536 ||
+        now >= this.nextReconcileSample);
+    if (!initialize && !paste && !sampled) {
       this.applyOutput(words, strings, effects);
       return;
     }
+    if (sampled) this.nextReconcileSample = now + 1000;
     const load = initialize
       ? (this.openingSpan?.span('state.load') ?? Telemetry.span('state.load'))
       : undefined;
-    const phase = load?.span('view.reconcile') ?? Telemetry.span('view.apply');
+    const phase = load?.span('view.reconcile');
+    let measurement: ReturnType<typeof startEditorPerformance> | undefined;
+    if (sampled) {
+      measurement = phase
+        ? phase.run(() => startEditorPerformance(this, 'editor.reconcile'))
+        : startEditorPerformance(this, 'editor.reconcile');
+    }
+    measurement?.span.setAttr(
+      'editor.reconcile.diff_bytes',
+      words.byteLength + strings.byteLength
+    );
+    measurement?.span.setAttr('editor.reconcile.initialize', initialize);
+    measurement?.span.setAttr('editor.reconcile.paste', paste);
     try {
-      phase.run(() => this.applyOutput(words, strings, effects));
-      phase.setAttr('nodes', this.dom.size);
-      phase.setAttr('decorators', this.decorators.size);
+      const span = measurement?.span ?? phase;
+      if (span) span.run(() => this.applyOutput(words, strings, effects));
+      else this.applyOutput(words, strings, effects);
+      phase?.setAttr('nodes', this.dom.size);
+      phase?.setAttr('decorators', this.decorators.size);
+    } catch (error) {
+      measurement?.span.error('reconcile failed');
+      measurement?.finish('error');
+      throw error;
     } finally {
-      phase.end();
+      measurement?.finish('success');
+      phase?.end();
       load?.end();
     }
     const window = this.root.ownerDocument.defaultView;

@@ -1,3 +1,4 @@
+import { startEditorOperation } from '@app/observability/editor';
 import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -138,7 +139,12 @@ export function createRustEditorSession(
     const runtime = mountSessionView(
       options.root,
       options.registry,
-      options.view,
+      {
+        ...options.view,
+        startPerformance:
+          options.view.startPerformance ??
+          ((name) => startEditorOperation(name, options.documentId)),
+      },
       configured.session
     );
     mounted = runtime;
