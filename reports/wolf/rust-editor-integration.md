@@ -105,7 +105,7 @@ directory: `compat-table-schema-reproduction.json`,
 
 Latest schema-only checkpoint `7a101d5de7` is integrated as `4f222d8ed4`.
 `CompatInstanceBind` carries an exact record plus instance-owner, class and
-instance IDs. Its current source fingerprint is
+instance IDs. Its instance-binding checkpoint fingerprint is
 `8feac1f170dc0613b15934c07fa4f001add1fb0f07f3facd5b36b8b9cf7acddf`;
 generated Rust SHA is
 `2b407548a30d84b93bd22cd091b179d0dd0b5001fd2e815b9e3d475649ff4be1`,
@@ -118,6 +118,32 @@ alone does not implement them. No live glue/artifact or app switch changed.
 Evidence: `compat-instance-schema-{reproduction.json,reproduction.log,wasm-tests.log,shim-check.log,root-check.log}`.
 The compatibility owner separately reports 163 optimized conformance tests
 across 31 files; that is not production Rust Tier B or initializer acceptance.
+
+
+The publication envelope `6a52b4fbf9`, cold typed configuration `23e2b17731`
+and executor `runSync` `5bb990bbcc` are integrated as `2e78f1a546`,
+`3bbb38097e` and `9891e72e8b`. `CompatPublications` retains typed commit
+metadata; queue delivery and actual dirty/tag/current-version receipts remain
+the native consumer's responsibility. The latest schema fingerprint is
+`f54016202934ac63303df846dbcb5abdc26e3cb57aa3797a74c238ce417af999`,
+verified independently against the three source files and both generated
+languages. Freshness checking passes.
+
+`runSync` rejects busy, queued and closing/closed executors before invoking or
+queueing the rejected call, then uses normal output application and synchronous
+completion. It does not transfer asynchronous host-close ownership or close a
+borrowed session on root unbinding. Own real-WASM session tests pass **86/86**,
+including all **25 executor tests**. The cold typed binding passes all **166
+conformance tests in 32 files**, full shim TypeScript/hook checks, collaboration
+package and session-test type checks, and a fresh module import with WebAssembly
+compile/instantiate/constructors plus fetch disabled (zero calls). This proves
+cold module evaluation only. WASM native tests remain 23/23; scoped root checks
+and audit pass, with existing warnings retained. No production backend,
+initializer, Rust Tier B or application activation is established by this batch.
+Logs: `compat-cold-config-{shim-tests,shim-check,import}.log`,
+`compat-run-sync-{session-tests,types,test-types}.log`,
+`compat-publications-{schema-check,wasm-tests,cold-sync-check}.log` and
+`compat-publications-fingerprint.json`.
 
 
 A frozen flag-OFF build with real timing marks is served at local port 39870,
