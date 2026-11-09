@@ -227,7 +227,6 @@ fn validate_glob(path: &str, repo_root: &Path, context: String) -> Result<()> {
     // S4 requires filters before the corresponding work packages create their directories.
     // Keep this exception closed, scoped to these groups, and tied to a committed citation.
     let planned = [
-        "packages/lexical-wasm-shim/**",
         "crates/client/doc_sync_core/**",
         "crates/client/document_session*/**",
         "crates/sync_protocol/**",

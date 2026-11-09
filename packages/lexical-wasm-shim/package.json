@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "check": "tsc --noEmit && bun run check:hooks",
+    "check": "tsc --noEmit && bun run check:hooks && bun run check:exports",
+    "check:exports": "bun tests/export-surface/run.ts",
     "derive-hooks": "bun scripts/derive-hooks.ts",
     "check:hooks": "bun scripts/derive-hooks.ts --check"
   },

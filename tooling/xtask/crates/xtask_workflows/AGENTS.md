@@ -35,3 +35,7 @@ TypeScript job logic in the owning package.
 - Step conditions use `if_condition` after `run` or `uses`; job conditions use `cond`.
 - Lexical nightly and PR checks share builders. Session artifacts are pending
   until their crate lands; missing bundles fail the actual web-build bundle gate.
+
+Keep the web Typecheck export check on the pinned full namespace comparison, including
+blocked modules and ordinary emitted declarations; never filter failures to the
+subset of names currently used by callers.
