@@ -39,6 +39,22 @@ test('flag off constructs the existing subtree without requesting native WASM', 
   expect(binaries).toEqual([]);
 });
 
+test('a document factory receives the real durable session synchronously after preload', async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  const sockets: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
+  page.on('websocket', (socket) => sockets.push(socket.url()));
+  await page.goto(fixture);
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Attach durable session' }).click();
+  await expect(page.getByText('Durable attachment closed')).toBeVisible();
+  const host = new URL(page.url()).host;
+  expect(sockets.filter((url) => new URL(url).host !== host)).toEqual([]);
+  expect(failures).toEqual([]);
+});
+
 test('a failed native load preserves the shell and retries the shared engine', async ({
   page,
 }) => {

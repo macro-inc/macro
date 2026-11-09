@@ -1,10 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 const flags = fileURLToPath(new URL('./flags.ts', import.meta.url));
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), tsconfigPaths()],
   optimizeDeps: {
     entries: ['src/lib/core/document-session/browser-test/index.html'],
   },

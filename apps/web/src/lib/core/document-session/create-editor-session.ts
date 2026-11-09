@@ -1,5 +1,6 @@
 import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ABI_MAJOR,
   type IViewEffectMsg,
@@ -19,7 +20,7 @@ import type { Span } from '@macro-inc/observability';
 type SessionModule = typeof import('@macro-inc/collaboration/session/wasm');
 
 /** App configuration over the shared SessionExecutor/SessionPort view composition. */
-export async function createRustEditorSession(options: {
+export function createRustEditorSession(options: {
   module: SessionModule;
   root: HTMLElement;
   registry: NodeViewRegistry;
@@ -37,8 +38,9 @@ export async function createRustEditorSession(options: {
   const owner = crypto.randomUUID();
   const sessionSpan = options.span.span('doc.session');
   const telemetry = new SessionTelemetry(sessionSpan);
+  let mounted: ReturnType<typeof mountSessionView> | undefined;
   try {
-    const mounted = await mountSessionView(
+    const runtime = mountSessionView(
       options.root,
       options.registry,
       options.view,
@@ -89,16 +91,11 @@ export async function createRustEditorSession(options: {
         onStatus: options.onStatus,
       }
     );
-    let editing: NativeMarkdownEditingPort | undefined;
-    try {
-      editing = options.installEditing?.(mounted.view);
-    } catch (error) {
-      await mounted.close();
-      throw error;
-    }
+    mounted = runtime;
+    const editing = options.installEditing?.(runtime.view);
     let closing: Promise<void> | undefined;
     return {
-      ...mounted,
+      ...runtime,
       editing,
       close() {
         closing ??= (async () => {
@@ -106,7 +103,7 @@ export async function createRustEditorSession(options: {
             editing?.dispose();
           } finally {
             try {
-              await mounted.close();
+              await runtime.close();
             } finally {
               telemetry.close();
               sessionSpan.end();
@@ -117,8 +114,15 @@ export async function createRustEditorSession(options: {
       },
     };
   } catch (error) {
-    telemetry.close();
-    sessionSpan.end();
+    const closeFailed = async () => {
+      try {
+        await mounted?.close();
+      } finally {
+        telemetry.close();
+        sessionSpan.end();
+      }
+    };
+    fireAndForget(closeFailed(), 'rust-editor.mount.close');
     throw error;
   }
 }

@@ -33,6 +33,10 @@ Macro editor from an authorized source identity, native view registry, platform
 and loading span. Documents and collaborative surfaces use the same sync socket
 route; their authorization adapters supply tokens from the appropriate endpoint.
 Server-backed sessions always retain their actual access level.
+Construction is synchronous after preload, so a compatibility editor factory
+can attach to this exact runtime before its first update. It never needs a
+temporary local model. Closing and failed-construction cleanup still drain
+terminal I/O asynchronously.
 
 The optional `installEditing` callback installs the surface's native UI port.
 The returned runtime disposes that port before the view and session and closes
@@ -49,9 +53,11 @@ Both view mount functions construct and seed synchronously after the module is
 ready. Builders may supply a detached root, then connect that exact root from
 their shared shell. Closing remains asynchronous so terminal native I/O drains.
 
-Checks: `bunx vitest run --project core src/lib/core/document-session/editor-engine-state.test.ts`
+Checks: `bunx vitest run --project core src/lib/core/document-session`
 and `bunx playwright test --config src/lib/core/document-session/browser-test/playwright.config.ts`
 from `apps/web`. The browser fixture uses the real production WASM and readiness
 provider with a deterministic flag source. It checks shell visibility during a
-held binary fetch, flag-off network behavior and failed-load retry without a
-fixture-only error boundary.
+held binary fetch, flag-off network behavior, a synchronous real durable
+attachment with authorization refused, and failed-load retry without a
+fixture-only error boundary. Resolver checks cover both bundling and the test
+runner's SSR module pipeline.
