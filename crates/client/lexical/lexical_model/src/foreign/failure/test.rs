@@ -236,3 +236,39 @@ fn caught_nested_failure_restores_the_latest_native_projection_without_writeback
     );
     Ok(())
 }
+
+#[test]
+fn failed_scopes_block_native_writes_only_on_the_invoking_thread() -> Result<(), Error> {
+    let rendezvous = std::sync::Barrier::new(2);
+    std::thread::scope(|threads| -> Result<(), Error> {
+        let failed = threads.spawn(|| -> Result<(), Error> {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("editor");
+            let scope = ForeignReadOperation::begin()?;
+            ForeignReadOperation::defer(Error::Invariant("blocked callback"))?;
+            rendezvous.wait();
+            let blocked = editor.transaction().create_text("blocked").is_err();
+            rendezvous.wait();
+            assert!(blocked);
+            assert!(scope.finish::<_, Error>(Ok(())).is_err());
+            editor.transaction().create_text("recovered")?;
+            Ok(())
+        });
+        let ordinary = threads.spawn(|| -> Result<(), Error> {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("editor");
+            rendezvous.wait();
+            let active = ForeignReadOperation::is_active();
+            let created = editor.transaction().create_text("independent").map(|_| ());
+            rendezvous.wait();
+            assert!(!active);
+            created?;
+            Ok(())
+        });
+        failed.join().expect("failed-scope thread")?;
+        ordinary.join().expect("ordinary thread")?;
+        Ok(())
+    })
+}

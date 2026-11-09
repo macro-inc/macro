@@ -230,3 +230,7 @@ Create already-constructed hosted native instances through
 create_reserved_with_instance: validate owner/class/base before installation and
 bind the new record as writable in its current update, without replaying a JS
 constructor or clone when an owned raw capture incidentally shares the record.
+
+Keep the foreign failure stack thread-local without synchronization locks; scopes
+cannot move between threads. Preserve failure checks for native editors invoked
+inside a failed foreign callback, even when their registry has no foreign classes.

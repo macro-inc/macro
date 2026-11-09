@@ -1,9 +1,6 @@
 //! Fallible host-operation boundaries for infallible runtime read predicates.
 use crate::Error;
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, marker::PhantomData, sync::Arc};
 
 struct Frame {
     token: Arc<()>,
@@ -11,7 +8,7 @@ struct Frame {
 }
 thread_local! {
     // Failure transport only. Editor/update/lease capabilities authorize reads.
-    static FRAMES: Mutex<Vec<Frame>> = const { Mutex::new(Vec::new()) };
+    static FRAMES: RefCell<Vec<Frame>> = const { RefCell::new(Vec::new()) };
 }
 
 /// A synchronous development host operation that can report read-hook failures.
@@ -32,8 +29,8 @@ impl ForeignReadOperation {
         let token = Arc::new(());
         FRAMES.with(|frames| {
             frames
-                .lock()
-                .map_err(|_| Error::Invariant("foreign failure store poisoned"))?
+                .try_borrow_mut()
+                .map_err(|_| Error::Invariant("foreign failure store is borrowed"))?
                 .push(Frame {
                     token: token.clone(),
                     error: None,
@@ -48,7 +45,7 @@ impl ForeignReadOperation {
 
     /// Whether this thread is executing a fallible host operation.
     pub fn is_active() -> bool {
-        FRAMES.with(|frames| frames.lock().is_ok_and(|frames| !frames.is_empty()))
+        FRAMES.with(|frames| frames.try_borrow().is_ok_and(|frames| !frames.is_empty()))
     }
 
     /// Save the first read-hook failure of the current operation.
@@ -56,8 +53,8 @@ impl ForeignReadOperation {
     pub fn defer(error: Error) -> Result<(), Error> {
         FRAMES.with(|frames| {
             let mut frames = frames
-                .lock()
-                .map_err(|_| Error::Invariant("foreign failure store poisoned"))?;
+                .try_borrow_mut()
+                .map_err(|_| Error::Invariant("foreign failure store is borrowed"))?;
             let frame = frames.last_mut().ok_or(Error::Invariant(
                 "foreign read hook requires a fallible operation",
             ))?;
@@ -77,8 +74,8 @@ impl ForeignReadOperation {
         let error = FRAMES.with(|frames| {
             Ok::<_, Error>(
                 frames
-                    .lock()
-                    .map_err(|_| Error::Invariant("foreign failure store poisoned"))?
+                    .try_borrow()
+                    .map_err(|_| Error::Invariant("foreign failure store is borrowed"))?
                     .last()
                     .and_then(|frame| frame.error.clone()),
             )
@@ -97,8 +94,8 @@ impl ForeignReadOperation {
     ) -> Result<Value, Failure> {
         let check = FRAMES.with(|frames| {
             let frames = frames
-                .lock()
-                .map_err(|_| Error::Invariant("foreign failure store poisoned"))?;
+                .try_borrow()
+                .map_err(|_| Error::Invariant("foreign failure store is borrowed"))?;
             let frame = frames
                 .last()
                 .filter(|frame| Arc::ptr_eq(&frame.token, &self.token))
@@ -117,7 +114,7 @@ impl ForeignReadOperation {
 impl Drop for ForeignReadOperation {
     fn drop(&mut self) {
         let removed = FRAMES.with(|frames| {
-            let Ok(mut frames) = frames.lock() else {
+            let Ok(mut frames) = frames.try_borrow_mut() else {
                 return None;
             };
             let index = frames
