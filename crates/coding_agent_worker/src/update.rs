@@ -3,7 +3,10 @@
 //! A release build polls the repository's latest GitHub release (or the
 //! `MACROD_UPDATE_SOURCE` mirror). When it is newer, the platform archive is
 //! downloaded, checked against its published SHA-256, and its binary staged
-//! and smoke-tested.
+//! and smoke-tested. The staged binary then has to serve this process's
+//! config when started the way the update restarts it, and accept it
+//! (`macrod check-config`): a release that resolves another file or rejects
+//! this one is never installed.
 //!
 //! On Unix the control panel then swaps the binary in and `execve`s into it
 //! once no agent turn is running, handing the running agent process over
@@ -18,7 +21,8 @@
 //! builds) never update, and `[update] auto = false` or `MACROD_NO_UPDATE=1`
 //! turns updating off.
 
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tokio::sync::oneshot;
@@ -67,7 +71,8 @@ pub const VERSION: &str = match RELEASE_TAG {
 /// client 60 API requests an hour, so this stays well inside it.
 const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
-/// How long the staged binary gets to print its version.
+/// How long the staged binary gets to print its version, and to check the
+/// config.
 const SMOKE_TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why one update attempt failed.
@@ -79,6 +84,30 @@ enum UpdateError {
     Stage(#[from] StageError),
     #[error("the staged binary failed its smoke test: {0}")]
     SmokeTest(String),
+    #[error("the staged binary {0}")]
+    ConfigCheck(ConfigCheckFailure),
+}
+
+/// Why the staged binary would not serve this process's config. Paths and the
+/// binary's own message go to the Logs tab, not the update log.
+#[derive(Debug, thiserror::Error)]
+enum ConfigCheckFailure {
+    #[error("does not accept the config")]
+    Rejected,
+    #[error("would serve a different config")]
+    OtherConfig,
+    #[error("could not check the config: {0}")]
+    Failed(String),
+}
+
+/// How an update restarts this process, so the new binary can be checked
+/// against it first.
+#[derive(Debug, Clone)]
+pub struct Relaunch {
+    /// The new binary's `argv`, starting with `argv[0]`.
+    pub arguments: Vec<OsString>,
+    /// The config this process serves; the new binary must serve it too.
+    pub config: PathBuf,
 }
 
 /// A newer binary, verified, smoke-tested, and ready.
@@ -151,8 +180,9 @@ pub struct UpdatePoller {
 }
 
 /// Start polling for releases, or `None` when this build cannot update
-/// itself or updating is turned off (`auto` is `[update] auto`).
-pub fn start_poller(auto: bool) -> Option<UpdatePoller> {
+/// itself or updating is turned off (`auto` is `[update] auto`). A newer
+/// release is staged only once it checks out against `relaunch`.
+pub fn start_poller(auto: bool, relaunch: Relaunch) -> Option<UpdatePoller> {
     let no_update =
         environment::MacrodNoUpdate::new().and_then(|value| value.value().map(str::to_owned));
     if !updates_enabled(RELEASE_TAG, auto, no_update.as_deref()) {
@@ -183,7 +213,14 @@ pub fn start_poller(auto: bool) -> Option<UpdatePoller> {
         .and_then(|value| value.value()?.parse().ok())
         .map_or(CHECK_EVERY, Duration::from_secs);
     let (staged_tx, staged) = oneshot::channel();
-    let task = tokio::spawn(poll(client, current, installation, staged_tx, every));
+    let task = tokio::spawn(poll(
+        client,
+        current,
+        installation,
+        relaunch,
+        staged_tx,
+        every,
+    ));
     Some(UpdatePoller {
         staged,
         _task: AbortOnDropHandle::new(task),
@@ -194,11 +231,12 @@ async fn poll(
     client: ReleaseClient,
     current: ReleaseVersion,
     installation: Installation,
+    relaunch: Relaunch,
     staged_tx: oneshot::Sender<StagedUpdate>,
     every: Duration,
 ) {
     loop {
-        match check_and_stage(&client, current, &installation).await {
+        match check_and_stage(&client, current, &installation, &relaunch).await {
             Ok(Some(update)) => {
                 let _ = staged_tx.send(update);
                 return;
@@ -216,6 +254,7 @@ async fn check_and_stage(
     client: &ReleaseClient,
     current: ReleaseVersion,
     installation: &Installation,
+    relaunch: &Relaunch,
 ) -> Result<Option<StagedUpdate>, UpdateError> {
     let check = tracing::info_span!(
         "macrod.update.check",
@@ -276,7 +315,11 @@ async fn check_and_stage(
         })
         .await
         .map_err(|error| StageError::Io(std::io::Error::other(error)))??;
-        smoke_test(&staged).await.inspect_err(|_| {
+        let checked = async {
+            smoke_test(&staged).await?;
+            check_config(&staged, relaunch).await
+        };
+        checked.await.inspect_err(|_| {
             let _ = std::fs::remove_file(&staged);
         })?;
         Ok::<_, UpdateError>(staged)
@@ -326,7 +369,7 @@ async fn check_and_stage(
 
 /// The staged binary must run on this machine before it replaces the one
 /// that does.
-async fn smoke_test(staged: &std::path::Path) -> Result<(), UpdateError> {
+async fn smoke_test(staged: &Path) -> Result<(), UpdateError> {
     let output = tokio::time::timeout(
         SMOKE_TEST_TIMEOUT,
         tokio::process::Command::new(staged)
@@ -345,4 +388,60 @@ async fn smoke_test(staged: &std::path::Path) -> Result<(), UpdateError> {
             output.status
         )))
     }
+}
+
+/// The staged binary, given the arguments the update restarts this process
+/// with, must select this process's config and load it. A release that moved
+/// the default config or stopped reading a setting would otherwise come up
+/// on another runtime, or not at all.
+async fn check_config(staged: &Path, relaunch: &Relaunch) -> Result<(), UpdateError> {
+    let span = tracing::info_span!(
+        "macrod.update.check_config",
+        outcome = tracing::field::Empty
+    );
+    let failed = |failure: ConfigCheckFailure| {
+        span.record(
+            "outcome",
+            match &failure {
+                ConfigCheckFailure::Rejected => "rejected",
+                ConfigCheckFailure::OtherConfig => "other_config",
+                ConfigCheckFailure::Failed(_) => "failed",
+            },
+        );
+        UpdateError::ConfigCheck(failure)
+    };
+    let output = tokio::time::timeout(
+        SMOKE_TEST_TIMEOUT,
+        tokio::process::Command::new(staged)
+            .args(relaunch.arguments.iter().skip(1))
+            .arg("check-config")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .instrument(span.clone())
+    .await
+    .map_err(|_| failed(ConfigCheckFailure::Failed("timed out".to_owned())))?
+    .map_err(|error| failed(ConfigCheckFailure::Failed(error.to_string())))?;
+    if !output.status.success() {
+        tracing::warn!(
+            parent: &span,
+            config = %relaunch.config.display(),
+            status = %output.status,
+            message = %String::from_utf8_lossy(&output.stderr).trim(),
+            "the new macrod does not accept this config; staying on this version"
+        );
+        return Err(failed(ConfigCheckFailure::Rejected));
+    }
+    let served = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim_end());
+    if !crate::profiles::is_same_file(&served, &relaunch.config) {
+        tracing::warn!(
+            parent: &span,
+            config = %relaunch.config.display(),
+            served = %served.display(),
+            "the new macrod would serve a different config; staying on this version"
+        );
+        return Err(failed(ConfigCheckFailure::OtherConfig));
+    }
+    span.record("outcome", "accepted");
+    Ok(())
 }

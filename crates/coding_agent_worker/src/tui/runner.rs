@@ -36,9 +36,11 @@ const TICK: Duration = Duration::from_millis(120);
 
 /// Run the control panel - and the daemon inside it - until the user quits,
 /// or until a self-update is installed and the caller should relaunch.
-/// `inherited` is the agent a previous macrod handed over.
+/// `inherited` is the agent a previous macrod handed over; `relaunch` is how
+/// an update would restart this process.
 pub async fn run(
     selection: &ConfigSelection,
+    relaunch: &update::Relaunch,
     logs: LogBuffer,
     inherited: Option<InheritedAgent>,
 ) -> rootcause::Result<Option<Restart>> {
@@ -103,7 +105,14 @@ pub async fn run(
             return Err(error);
         }
     };
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
+    let outcome = run_loop(
+        &mut terminal,
+        &mut app,
+        relaunch,
+        &mut input_rx,
+        quickstarted,
+    )
+    .await;
     ratatui::restore();
     outcome
 }
@@ -193,11 +202,12 @@ fn config_is_working(config: &Config) -> bool {
 async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
+    relaunch: &update::Relaunch,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
 ) -> rootcause::Result<Option<Restart>> {
     let mut tick = tokio::time::interval(TICK);
-    let mut poller = update::start_poller(app.config.update.auto);
+    let mut poller = update::start_poller(app.config.update.auto, relaunch.clone());
     let mut staged: Option<StagedUpdate> = None;
     // Paired already? Start serving before the first frame.
     if app.paired() {
