@@ -27,6 +27,7 @@ enum CompatOperation : uint16 {
   SelectionExtract = 47; SelectionIsCollapsed = 48; SelectionIsBackward = 49;
   NodeSelectionAdd = 50; NodeSelectionDelete = 51; NodeSelectionClear = 52;
   NodeSelectionHas = 53; SelectionHasFormat = 54;
+  SetCompositionKey = 55; CreateTableSelection = 56;
 }
 struct CompatRequest {
   CompatOperation operation;
@@ -68,6 +69,11 @@ union CompatSelectionData {
   }
   3 -> struct CompatNodeSelection {
     ForeignSelectionRef reference; ForeignKey[] keys; bool dirty;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+  4 -> struct CompatTableSelection {
+    ForeignSelectionRef reference; ForeignKey tableKey;
+    CompatPoint anchor; CompatPoint focus; bool dirty;
     bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
   }
 }
