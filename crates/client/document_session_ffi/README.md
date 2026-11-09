@@ -28,8 +28,12 @@ No `doc_store_turso` executor exists in this workspace yet. Passing `store_path`
 returns `StoreNotConfigured`; use `None` and execute typed storage effects in the
 host. This permits durable operation without silently discarding a storage path.
 WAL adoption retains the exact loaded expected rows for atomic source validation.
-The default registry contains core and portable rich nodes; application registry
-wiring remains the shared session's separate integration point.
+The application field selects the same surface preset, MACRO_SYNC_POLICY, comment
+factory, supplied wall clock and continuing per-peer entropy used by WASM. Leave
+it absent for portable core/rich nodes. Application command/query catalogs and
+plugin-event payloads remain typed native values; host I/O stays outside Rust.
+Application Markdown uses internal/external transformers and the supplied
+hostname; SavedState returns the download projection with regenerated search text.
 
 `cargo test -p document_session_ffi --features conformance -j2` runs literal native
 session scenarios and the unchanged Tier A interpreter through its generated C
@@ -46,10 +50,14 @@ x86_64-linux-android` (or `aarch64-linux-android`). This selects the API 24
 compiler/linker and limits Cargo to two jobs. Generated bindings stay in this
 crate; Android host integration lives in `apps/web/tauri/native_editor_plugin`.
 
-Native typing uses `FfiInput::TextDeltaFromView(ViewTextDelta)` with UTF-16
+Query `ShouldInsertText` before native insertion: a true result requires the
+model insertion command, including changed typing attributes and token boundaries.
+Other native typing uses `FfiInput::TextDeltaFromView(ViewTextDelta)` with UTF-16
 start/deletion lengths and only the inserted text. Full `TextFromView` is explicit
 resynchronization. Use `ModifyTarget::RequireView` when layout endpoints are
 required and unavailable; never silently substitute `NoView`.
+Reattach a running editor with `ViewDiff` and its current selection; do not
+restart or reseed the session to repaint a view.
 Binding generation pins this worktree's target directory and explicitly selects
 the compiler's host triple for both library and generator, so inherited
 `CARGO_TARGET_DIR` or `CARGO_BUILD_TARGET` overrides cannot select stale artifacts.

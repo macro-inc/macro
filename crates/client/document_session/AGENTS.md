@@ -82,3 +82,5 @@ acknowledges host Close only after the original terminal WAL barrier completes.
 
 
 Portable HTML and Markdown exports are available through the typed native FFI.
+
+Enable the application feature to share application_editor_config and application exporters across native and WASM hosts; supply the same clock and continuing per-peer entropy streams, never server composers.

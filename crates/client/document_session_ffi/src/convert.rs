@@ -106,6 +106,8 @@ pub(crate) fn output(out: &SessionOutput) -> Result<FfiOutput, FfiSessionError> 
                     },
                     Effect::PluginEvent(event) => FfiViewEffect::PluginEvent {
                         name: event.name().into(),
+                        payload: macro_document_model::surface::event_payload(event)
+                            .map_err(invalid)?,
                     },
                     Effect::FollowUpFailed {
                         plugin,

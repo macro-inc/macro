@@ -8,16 +8,45 @@ enum FfiMarkdownFlavor {
     Application,
 }
 pub(crate) fn markdown(
-    state: &EditorState,
+    session: &DocumentSession<EditorSurface>,
+    application: Option<&FfiApplicationConfig>,
     flavor: FfiMarkdownFlavor,
+    selected: bool,
 ) -> Result<String, FfiSessionError> {
-    export_markdown(state, flavor, false).map_err(invalid)
+    let state = session.surface().state();
+    let Some(application) = application else {
+        return export_markdown(state, flavor, selected).map_err(invalid);
+    };
+    export_application_markdown(
+        state,
+        matches!(flavor, MarkdownFlavor::Application),
+        selected,
+        application.hostname.as_deref(),
+    )
+    .map_err(invalid)
+}
+
+fn html(
+    state: &EditorState,
+    application: Option<&FfiApplicationConfig>,
+    selected: bool,
+) -> Result<String, FfiSessionError> {
+    if application.is_none() {
+        return export_html(state, selected).map_err(invalid);
+    }
+    export_application_html_for_selection(state, if selected { state.selection() } else { None })
+        .map_err(invalid)
 }
 /// Bulk query performed synchronously without I/O.
 #[derive(uniffi::Enum)]
 pub enum FfiQuery {
     /// Repaint the current view without resetting sync, history or model selection.
     ViewDiff,
+    /// Whether native insertion must use a model command rather than a text splice.
+    ShouldInsertText {
+        /// Proposed inserted text at the current model selection.
+        text: String,
+    },
     /// Read one node's serialized properties.
     Node {
         /// Generation-aware native key.
@@ -25,6 +54,8 @@ pub enum FfiQuery {
     },
     /// Read the editor's complete serialized root.
     State,
+    /// Download projection with regenerated search text and transient nodes removed.
+    SavedState,
     /// Export HTML for the whole document or selection.
     Html {
         /// Select current selection only.
@@ -66,10 +97,22 @@ pub enum FfiQuery {
 /// A native query result, with only the requested payload.
 #[derive(uniffi::Enum)]
 pub enum FfiQueryReply {
+    /// Model insertion policy decision.
+    Boolean {
+        /// Whether the host must admit an insertion command.
+        value: bool,
+    },
+    /// Application projection as typed JSON values.
+    Value {
+        /// Projected data.
+        value: JsonValue,
+    },
     /// Full keyed view patch from an empty renderer.
     ViewDiff {
         /// Structured native patch.
         diff: Diff,
+        /// Current selection for a newly attached native view.
+        selection: ViewSelection,
     },
     /// UTF-8 text export.
     Text {
@@ -151,6 +194,7 @@ pub struct FfiTypeFlags {
 }
 pub(crate) fn query(
     session: &DocumentSession<EditorSurface>,
+    application: Option<&FfiApplicationConfig>,
     request: FfiQuery,
 ) -> Result<FfiQueryReply, FfiSessionError> {
     let surface = session.surface();
@@ -159,19 +203,40 @@ pub(crate) fn query(
     Ok(match request {
         FfiQuery::ViewDiff => FfiQueryReply::ViewDiff {
             diff: surface.view_diff().map_err(invalid)?,
+            selection: view_selection(state.selection()),
         },
         FfiQuery::Node { key } => FfiQueryReply::Nodes {
             keys: vec![key],
             nodes: vec![view.export_json(key).map_err(invalid)?],
         },
+        FfiQuery::ShouldInsertText { text } => FfiQueryReply::Boolean {
+            value: match state.selection().and_then(Selection::as_range) {
+                Some(selection) => state
+                    .view()
+                    .should_prevent_default_and_insert_text(
+                        selection,
+                        &text,
+                        InsertTextFacts::default(),
+                    )
+                    .map_err(invalid)?,
+                None => true,
+            },
+        },
         FfiQuery::State => FfiQueryReply::State {
             root: state.to_json().map_err(invalid)?.root,
         },
+        FfiQuery::SavedState => FfiQueryReply::Value {
+            value: if application.is_some() {
+                macro_document_model::save::saved_state(state).map_err(invalid)?
+            } else {
+                serde_json::to_value(state.to_json().map_err(invalid)?).map_err(invalid)?
+            },
+        },
         FfiQuery::Html { selected } => FfiQueryReply::Text {
-            text: export_html(state, selected).map_err(invalid)?,
+            text: html(state, application, selected)?,
         },
         FfiQuery::SelectedMarkdown { flavor } => FfiQueryReply::Text {
-            text: export_markdown(state, flavor, true).map_err(invalid)?,
+            text: markdown(session, application, flavor, true)?,
         },
         FfiQuery::WordCount => FfiQueryReply::Count {
             count: state.root_text_content().split_whitespace().count() as u64,
@@ -184,7 +249,11 @@ pub(crate) fn query(
             )
             .map_err(invalid)?;
             if state.selection().is_some() {
-                entries.insert("text/html", export_html(state, true).map_err(invalid)?);
+                entries.insert("text/html", html(state, application, true)?);
+                entries.insert(
+                    "text/markdown",
+                    markdown(session, application, MarkdownFlavor::Application, true)?,
+                );
             }
             FfiQueryReply::Clipboard {
                 entries: entries

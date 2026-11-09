@@ -99,6 +99,8 @@ pub enum FfiViewEffect {
     PluginEvent {
         /// Stable event name.
         name: String,
+        /// Typed application payload for host-owned menus, media and interactions.
+        payload: Option<JsonValue>,
     },
     /// A follow-up failed after earlier commits already published.
     FollowUpFailed {

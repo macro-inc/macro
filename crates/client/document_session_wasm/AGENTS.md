@@ -38,7 +38,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 - Emit foreign render metadata through ForeignRenderBatch alongside the unchanged flat eleven-op Diff; captureId identifies an exact host-scoped owned capture, never an allocator address. Deliver state/instance-only changes even when no flat operation exists, and hydrate unbound records before JS rendering.
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
-- `src/macro_editor.rs`: application MarkdownSync surface preset/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
+- `src/macro_editor.rs`: delegate the MarkdownSync preset to document_session::application_editor_config for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
 - Serialize application PluginEvent payloads through surface.rs group encoders into the existing editor-effect envelope; never perform host I/O in the model.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
@@ -82,7 +82,7 @@ Generate compatibility_generated.rs and collaboration/session/compatibility.gene
 Use editor/update-bound native key reservations for compact buffered writes; never invent keys or reuse discarded reservations. Batch capture retains before releases, preserve leased frozen records, and invalidate root text caches in incremental deltas instead of retransmitting document text.
 
 Use compatBeginCompact/compatReserveKeys for real native allocator tickets; blocks are bounded to 65,536 keys and belong to one editor/update. Retire unused tickets on commit/discard/no-op without rolling the allocator back. These additive reservation exports do not provide batch construction by themselves.
-Use document_session export helpers for upstream HTML/Markdown so native and WASM share the same renderer; keep Macro export policy in the application branch.
+Use document_session export helpers for upstream and application HTML/Markdown so native and WASM share the same registry and transformer policy.
 
 Keep selection value identity separate from its allocation graph: exact leased references survive graph retirement/discard, while each call chooses its read graph. Rehydrate current raw detached values before querying a reused pending slot. Reconcile the actual active identity before publication so replaced values remain mutable; only the final published selection freezes. Historical getPreviousSelection reads the current editor publication. Retire dropped legacy-finalizer values/pins on rejection while preserving invalid-envelope staging; a failed compact batch remains a per-request failure, not a poisoned update.
 

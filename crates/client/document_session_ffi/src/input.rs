@@ -13,8 +13,29 @@ pub struct FfiSessionConfig {
     pub os: ViewOs,
     /// Headless editor mode for non-view native integrations.
     pub headless: bool,
+    /// Application surface registry; absent selects portable core and rich nodes.
+    pub application: Option<FfiApplicationConfig>,
     /// Generic containers whose changes the host observes.
     pub observed: Vec<ContainerPath>,
+}
+/// Application policy selected by the actual editing surface.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiApplicationConfig {
+    /// Registry and behavior preset; shared with browser surfaces.
+    pub editor_type: FfiEditorType,
+    /// Optional app hostname for external document-link exports.
+    pub hostname: Option<String>,
+}
+/// Application editor presets from the shared model.
+pub type FfiEditorType = macro_document_model::EditorType;
+#[uniffi::remote(Enum)]
+enum FfiEditorType {
+    PlainText,
+    Title,
+    Markdown,
+    MarkdownSync,
+    Chat,
+    Calendar,
 }
 /// Typed native editing commands; extension plugin payloads remain application-owned.
 #[derive(Clone, Debug, uniffi::Enum)]
