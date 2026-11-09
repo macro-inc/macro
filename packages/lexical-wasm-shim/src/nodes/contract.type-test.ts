@@ -1,4 +1,9 @@
-import type { BaseStaticNodeConfig, StaticNodeConfigValue } from './config';
+import type { StaticNodeConfigRecord as UpstreamStaticNodeConfigRecord } from 'lexical';
+import type {
+  BaseStaticNodeConfig,
+  StaticNodeConfigRecord,
+  StaticNodeConfigValue,
+} from './config';
 import {
   type ElementNode,
   type LexicalNode,
@@ -50,3 +55,18 @@ export const configuredAsBase: BaseStaticNodeConfig = configured;
 export const configuredWithSelf:
   | StaticNodeConfigValue<CustomText, 'custom-text'>
   | undefined = configured['custom-text'];
+
+type ConfigMarker = { readonly type: 'marker' };
+declare const upstreamRecord: UpstreamStaticNodeConfigRecord<
+  'marker',
+  ConfigMarker
+>;
+declare const publicRecord: StaticNodeConfigRecord<'marker', ConfigMarker>;
+export const upstreamRecordAccepted: StaticNodeConfigRecord<
+  'marker',
+  ConfigMarker
+> = upstreamRecord;
+export const publicRecordAccepted: UpstreamStaticNodeConfigRecord<
+  'marker',
+  ConfigMarker
+> = publicRecord;
