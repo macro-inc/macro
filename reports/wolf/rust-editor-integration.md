@@ -80,6 +80,77 @@ for both engines. No DOM exception was applied. These checkpoints supersede the
 earlier pixel differences in the historical evidence below; none passes the
 production compatibility gate.
 
+## Full native document parity round
+
+The 34-case round completed under `parity-runs/20261109-005924`. Targeted
+corrections/reruns are in `20261109-011710` and `20261109-012121`. No case passes
+the production compatibility gate: all saved JSON and full AX comparisons remain
+blocked, and all captured raw DOM comparisons differ. No DOM allowlist is used.
+The superseding per-case results are:
+
+| Case | Completed captures | Pixels | Markdown | Raw DOM |
+| --- | --- | --- | --- | --- |
+| bold | both | pass | pass | fail |
+| bullet | both | pass | pass | fail |
+| checklist | both | fail | pass | fail |
+| code | both | fail | fail | fail |
+| comment | OFF only | blocked | blocked | blocked |
+| divider | both | fail | fail | fail |
+| drag-block | OFF only | blocked | blocked | blocked |
+| empty | both | pass | pass | fail |
+| heading-enter | both | pass | pass | fail |
+| heading1 | both | pass | pass | fail |
+| heading2 | both | pass | pass | fail |
+| inline-code | both | pass | pass | fail |
+| italic | both | pass | pass | fail |
+| link | both | fail | pass | fail |
+| mention | OFF only | blocked | blocked | blocked |
+| nested-list | both | fail | fail | fail |
+| number | both | pass | pass | fail |
+| paste-file | OFF only | blocked | blocked | blocked |
+| paste-html | both | pass | pass | fail |
+| paste-image | OFF only | blocked | blocked | blocked |
+| paste-markdown | both | pass | pass | fail |
+| paste-text | both | pass | pass | fail |
+| properties | both | pass | pass | fail |
+| quote | both | pass | pass | fail |
+| reload | ON only | blocked | blocked | blocked |
+| slash | OFF only | blocked | blocked | blocked |
+| snippet | OFF only | blocked | blocked | blocked |
+| strike | both | pass | pass | fail |
+| table | OFF only | blocked | blocked | blocked |
+| tags | both | pass | pass | fail |
+| title | OFF only | blocked | blocked | blocked |
+| toggle-checklist | OFF only | blocked | blocked | blocked |
+| two-tab-collaboration | both | pass | pass | fail |
+| undo-redo | both | fail | pass | fail |
+
+Totals after targeted reruns: pixels 17 exact / 6 different / 11 blocked;
+Markdown 20 exact / 3 different / 11 blocked; raw DOM 23 different / 11 blocked.
+Standard Playwright reports and hashed sidecars accompany every run. Tests
+explicitly fail closed instead of accepting the available matches.
+
+Harness corrections wait for the actual new document route rather than its
+transient loading route, select the named Table action and confirm its size
+picker, click the rendered checkbox marker, and wait for body readiness after
+reload. DOM selection is now recorded read-only before screenshots. These are
+real UI interactions; no editor state or product debug API was injected.
+
+Concrete gaps: title Tab-to-body navigation, slash/mention/snippet menus,
+file/image paste, table insertion, checklist toggling, comments and block drag
+complete OFF but not ON. Code omits the OFF plaintext language and Macro code
+styling/accessories; a divider gains a leading newline; list Tab inserts a tab
+instead of indenting; links/checklists differ visually. Undo/redo exports match
+but caret placement differs (DOM selection artifacts retained). The corrected
+collaboration case matches pixels and Markdown. Reload retained text ON while
+OFF reopened empty after immediate reload; this remains an OFF baseline failure,
+not an ON persistence failure or a parity pass. It is not silently delayed away.
+
+This round exercises the pre-compat native document path. Shared chrome exists,
+but unchanged JavaScript plugins/node classes still await the actual production
+compat initializer, typed session factory and exact-root lifecycle. The new DOM
+adapter's upstream-model evidence must remain separate from Rust-backed proof.
+
 ## Incremental verification
 
 | Check | Result | Evidence |
