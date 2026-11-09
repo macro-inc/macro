@@ -12,7 +12,7 @@ import type {
 } from 'lexical';
 
 import { ElementDOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
-import type { CompatEditor } from '../../../lexical-wasm-view/src/compat/types';
+import { getEditorDOMRenderConfig, type LexicalEditor } from '../editor';
 import type { BaseSelection } from '../selection';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
@@ -338,7 +338,7 @@ export class ElementNode extends LexicalNode {
   getDOMSlot(element: HTMLElement): ElementDOMSlot<HTMLElement> {
     return new ElementDOMSlot(element);
   }
-  exportDOM(editor: CompatEditor): DOMExportOutput {
+  exportDOM(editor: LexicalEditor): DOMExportOutput {
     const { element } = super.exportDOM(editor);
     if (element instanceof HTMLElement) {
       const indent = this.getIndent();
@@ -351,10 +351,12 @@ export class ElementNode extends LexicalNode {
     }
     return { element };
   }
-  reconcileObservedMutation(dom: HTMLElement, editor: CompatEditor): void {
-    const slot =
-      editor._config.dom?.$getDOMSlot(this, dom, editor) ??
-      this.getDOMSlot(dom);
+  reconcileObservedMutation(dom: HTMLElement, editor: LexicalEditor): void {
+    const slot = getEditorDOMRenderConfig(editor).$getDOMSlot(
+      this,
+      dom,
+      editor
+    );
     let current = slot.getFirstChild();
     for (const child of this.getChildren()) {
       const correct = editor.getElementByKey(child.__key);

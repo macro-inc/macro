@@ -6,8 +6,8 @@ import type { EditorThemeClasses } from 'lexical';
 import { COMPOSITION_SUFFIX } from '../../../lexical-wasm-view/src/compat/constants';
 import type { DOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
 import { IS_FIREFOX } from '../../../lexical-wasm-view/src/compat/environment';
-import type { CompatEditorConfig } from '../../../lexical-wasm-view/src/compat/types';
 import { setDOMStyleFromCSS } from './dom-style';
+import type { EditorConfig } from './editor-config';
 import { textFormats } from './format';
 import type { TextNode } from './index';
 import { numberResult, stringResult } from './results';
@@ -115,7 +115,7 @@ function setText(
 
 export function createTextDOM(
   node: TextNode,
-  config: CompatEditorConfig,
+  config: EditorConfig,
   composing: boolean,
   slotFor: (dom: HTMLElement) => DOMSlot<HTMLElement>
 ): HTMLElement {
@@ -141,7 +141,7 @@ export function updateTextDOM(
   node: TextNode,
   prev: TextNode,
   dom: HTMLElement,
-  config: CompatEditorConfig,
+  config: EditorConfig,
   composing: boolean,
   slotFor: (dom: HTMLElement) => DOMSlot<HTMLElement>
 ): boolean {
