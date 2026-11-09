@@ -1,6 +1,38 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: development metadata and open production compatibility gates
+## Current checkpoint: source compatibility and open runtime gates
+
+Commands/constants `112dbf7cd4` are integrated as `869f53a49f`, followed by the
+authorized six-helper/state-core checkpoint `8faf05b48e` as `24d832a49e`.
+The central helper SHA256 is now
+`7f094707ad04a9a24e0dd4ade0a3685a88637dc4d7ec709accae4d2dac45712e`:
+exactly six assertions, one per helper. The new direct product state calls are in
+`nodes/state/helpers.ts` and `record.ts`; existing runtime reexports are unchanged.
+There is no `command/registry.ts` consumer in this tree yet. That consumer remains
+pending; no substitute callsite, factory or runtime binding was added.
+
+Typed per-config state storage preserves opaque values and live known-state reads;
+unsupported direct known-state mutation throws. Sparse/wrong-kind command buckets
+reject rather than accepting holes. Static preparation, createSharedNodeState,
+actual writable/capture/clone/rollback authority and native state acceptance remain
+blocked on the real runtime. Commands/constants cold evaluation uses the immutable
+upstream source and requires no engine; public root namespace completeness and
+dispatch binding are separate gates.
+
+Independent checks pass12 state/bucket tests,4 command/constants tests, command
+payload types, full shim TypeScript6.0.3 and41 hooks/489 sources, and scoped
+`just check`. Complete shim tests are **219 passed /1 failed of220**: the same
+2,396-crossing assertion; broader transform-phase collection identity remains open.
+The first full declaration emit stopped on TS5011 output layout. Retrying the
+same full tsconfig with only an explicit repository `rootDir` for output emitted129
+ordinary declarations with zero diagnostics: no input exclusions, source rewriting,
+private projection or semantic-option relaxation. Owner provenance SHA256
+`320835f048ff3d44ef160998ec219d267fb9b5a7b4a479d68f3cfaa981dc08c1`
+was rechecked; it is source-contract evidence, not native acceptance. Logs:
+`state-six-{focused-tests,command-tests,command-types,full-shim-check,full-shim-tests,ordinary-declarations,scoped-check}.log`
+and `state-six-source-proof.json` under the acceptance directory. The earlier
+TS5011 log remains preserved. Future CI-oracle exception manifests must use the
+new helper hash when the held oracle hooks are admitted.
 
 Namespace producer `1420c15381` is integrated as `eb15086988`; current compatibility
 schema fingerprint is `2b4d927cf4348931633b31c4d5884ab56832f661537e68fbc27ebdc81739baef`.
@@ -200,7 +232,7 @@ pure selection helpers `cf2ad6509d` as `756710781f`, exact config constraint
 `a234af30cc` as `ce891a4b13`, and generated hook evidence `781b9adfa9` as
 `0c60245bab`. The helpers were consumed independently before the later view
 checkpoint; the whole set was then validated together without rewriting history.
-The three central exceptions retain their budget; helper SHA256 is
+At that earlier configuration checkpoint the central budget was three; its helper SHA256 was
 `05b42b9038f91bc1c17495e8c673d29fe6345bdfac9dbc365b098c9f38ce4d9b`.
 
 Independent whole-set results at that source epoch:
