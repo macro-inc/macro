@@ -369,7 +369,7 @@ export function TaskTemplateControls(props: {
         <Button
           variant="ghost"
           size="sm"
-          class="min-w-0"
+          class="min-w-0 gap-1"
           disabled={props.composer.isSavingTemplate()}
           onClick={props.composer.cancelTemplateEdit}
         >
