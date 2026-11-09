@@ -4483,6 +4483,109 @@ public object FfiConverterTypeTimeouts: FfiConverterRustBuffer<Timeouts> {
 
 
 /**
+ * A native-first UTF-16 splice; full TextFromView remains explicit resynchronization.
+ */
+data class ViewTextDelta (
+    /**
+     * Changed text node, including generation.
+     */
+    var `key`: NodeKey
+    , 
+    /**
+     * UTF-16 start position.
+     */
+    var `offset`: Utf16Offset
+    , 
+    /**
+     * UTF-16 code units to remove.
+     */
+    var `deleted`: Utf16Offset
+    , 
+    /**
+     * Inserted Unicode text.
+     */
+    var `inserted`: kotlin.String
+    , 
+    /**
+     * Native anchor after the edit.
+     */
+    var `anchor`: Utf16Offset?
+    , 
+    /**
+     * Native focus after the edit.
+     */
+    var `focus`: Utf16Offset?
+    , 
+    /**
+     * Whether this finishes composition.
+     */
+    var `compositionEnd`: kotlin.Boolean
+    , 
+    /**
+     * Final composition data when supplied.
+     */
+    var `compositionData`: kotlin.String?
+    , 
+    /**
+     * Host-resolved selection.
+     */
+    var `selection`: ViewSelection
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeViewTextDelta: FfiConverterRustBuffer<ViewTextDelta> {
+    override fun read(buf: ByteBuffer): ViewTextDelta {
+        return ViewTextDelta(
+            FfiConverterTypeNodeKey.read(buf),
+            FfiConverterTypeUtf16Offset.read(buf),
+            FfiConverterTypeUtf16Offset.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeUtf16Offset.read(buf),
+            FfiConverterOptionalTypeUtf16Offset.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeViewSelection.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ViewTextDelta) = (
+            FfiConverterTypeNodeKey.allocationSize(value.`key`) +
+            FfiConverterTypeUtf16Offset.allocationSize(value.`offset`) +
+            FfiConverterTypeUtf16Offset.allocationSize(value.`deleted`) +
+            FfiConverterString.allocationSize(value.`inserted`) +
+            FfiConverterOptionalTypeUtf16Offset.allocationSize(value.`anchor`) +
+            FfiConverterOptionalTypeUtf16Offset.allocationSize(value.`focus`) +
+            FfiConverterBoolean.allocationSize(value.`compositionEnd`) +
+            FfiConverterOptionalString.allocationSize(value.`compositionData`) +
+            FfiConverterTypeViewSelection.allocationSize(value.`selection`)
+    )
+
+    override fun write(value: ViewTextDelta, buf: ByteBuffer) {
+            FfiConverterTypeNodeKey.write(value.`key`, buf)
+            FfiConverterTypeUtf16Offset.write(value.`offset`, buf)
+            FfiConverterTypeUtf16Offset.write(value.`deleted`, buf)
+            FfiConverterString.write(value.`inserted`, buf)
+            FfiConverterOptionalTypeUtf16Offset.write(value.`anchor`, buf)
+            FfiConverterOptionalTypeUtf16Offset.write(value.`focus`, buf)
+            FfiConverterBoolean.write(value.`compositionEnd`, buf)
+            FfiConverterOptionalString.write(value.`compositionData`, buf)
+            FfiConverterTypeViewSelection.write(value.`selection`, buf)
+    }
+}
+
+
+
+/**
  * Native WalPolicy; fields retain their domain meaning.
  */
 data class WalPolicy (
@@ -7093,6 +7196,21 @@ sealed class FfiInput {
     }
     
     /**
+     * Native view already applied one UTF-16 text splice.
+     */
+    data class TextDeltaFromView(
+        /**
+         * Validated by the shared model before any selection write.
+         */
+        val `delta`: com.macro.documentsession.ViewTextDelta) : FfiInput()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
      * Native view already displays this text.
      */
     data class TextFromView(
@@ -7478,7 +7596,10 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
             3 -> FfiInput.SetState(
                 FfiConverterTypeSerializedNode.read(buf),
                 )
-            4 -> FfiInput.TextFromView(
+            4 -> FfiInput.TextDeltaFromView(
+                FfiConverterTypeViewTextDelta.read(buf),
+                )
+            5 -> FfiInput.TextFromView(
                 FfiConverterTypeNodeKey.read(buf),
                 FfiConverterString.read(buf),
                 FfiConverterOptionalTypeUtf16Offset.read(buf),
@@ -7487,72 +7608,72 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
                 FfiConverterOptionalString.read(buf),
                 FfiConverterTypeViewSelection.read(buf),
                 )
-            5 -> FfiInput.SelectionFromView(
+            6 -> FfiInput.SelectionFromView(
                 FfiConverterTypeViewSelection.read(buf),
                 FfiConverterOptionalTypeSelectionChangeContext.read(buf),
                 )
-            6 -> FfiInput.Command(
+            7 -> FfiInput.Command(
                 FfiConverterTypeFfiCommand.read(buf),
                 FfiConverterTypeViewSelection.read(buf),
                 )
-            7 -> FfiInput.Composition(
+            8 -> FfiInput.Composition(
                 FfiConverterTypeCompositionEvent.read(buf),
                 FfiConverterTypeViewSelection.read(buf),
                 )
-            8 -> FfiInput.KeyDown(
+            9 -> FfiInput.KeyDown(
                 FfiConverterTypeKeyEvent.read(buf),
                 FfiConverterOptionalTypeFfiCommand.read(buf),
                 FfiConverterBoolean.read(buf),
                 FfiConverterTypeViewSelection.read(buf),
                 )
-            9 -> FfiInput.Paste(
+            10 -> FfiInput.Paste(
                 FfiConverterTypeFfiClipboardPayload.read(buf),
                 FfiConverterTypeViewSelection.read(buf),
                 )
-            10 -> FfiInput.Undo
-            11 -> FfiInput.Redo
-            12 -> FfiInput.Doc(
+            11 -> FfiInput.Undo
+            12 -> FfiInput.Redo
+            13 -> FfiInput.Doc(
                 FfiConverterSequenceTypeDocOp.read(buf),
                 )
-            13 -> FfiInput.Socket(
+            14 -> FfiInput.Socket(
                 FfiConverterTypeConnId.read(buf),
                 FfiConverterTypeSocketEvent.read(buf),
                 )
-            14 -> FfiInput.Token(
+            15 -> FfiInput.Token(
                 FfiConverterUInt.read(buf),
                 FfiConverterOptionalString.read(buf),
                 FfiConverterTypeWriteAccess.read(buf),
                 )
-            15 -> FfiInput.Storage(
+            16 -> FfiInput.Storage(
                 FfiConverterTypeStorageOpId.read(buf),
                 FfiConverterTypeFfiStorageResult.read(buf),
                 )
-            16 -> FfiInput.Host(
+            17 -> FfiInput.Host(
                 FfiConverterTypeHostSignal.read(buf),
                 )
-            17 -> FfiInput.Authorization(
+            18 -> FfiInput.Authorization(
                 FfiConverterTypeAuthorizationState.read(buf),
                 )
-            18 -> FfiInput.Comment(
+            19 -> FfiInput.Comment(
                 FfiConverterTypeCommentMarkRequest.read(buf),
                 )
-            19 -> FfiInput.Flush(
+            20 -> FfiInput.Flush(
                 FfiConverterTypeRequestId.read(buf),
                 )
-            20 -> FfiInput.Stop(
+            21 -> FfiInput.Stop(
                 FfiConverterTypeRequestId.read(buf),
                 )
-            21 -> FfiInput.Reset
-            22 -> FfiInput.RequestSnapshot(
+            22 -> FfiInput.Reset
+            23 -> FfiInput.RequestSnapshot(
                 FfiConverterTypeRequestId.read(buf),
                 )
-            23 -> FfiInput.Focus(
+            24 -> FfiInput.Focus(
                 FfiConverterBoolean.read(buf),
                 )
-            24 -> FfiInput.AddPeerIds(
+            25 -> FfiInput.AddPeerIds(
                 FfiConverterSequenceULong.read(buf),
                 )
-            25 -> FfiInput.Tick
+            26 -> FfiInput.Tick
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
@@ -7577,6 +7698,13 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
             (
                 4UL
                 + FfiConverterTypeSerializedNode.allocationSize(value.`root`)
+            )
+        }
+        is FfiInput.TextDeltaFromView -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeViewTextDelta.allocationSize(value.`delta`)
             )
         }
         is FfiInput.TextFromView -> {
@@ -7765,8 +7893,13 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
                 FfiConverterTypeSerializedNode.write(value.`root`, buf)
                 Unit
             }
-            is FfiInput.TextFromView -> {
+            is FfiInput.TextDeltaFromView -> {
                 buf.putInt(4)
+                FfiConverterTypeViewTextDelta.write(value.`delta`, buf)
+                Unit
+            }
+            is FfiInput.TextFromView -> {
+                buf.putInt(5)
                 FfiConverterTypeNodeKey.write(value.`key`, buf)
                 FfiConverterString.write(value.`text`, buf)
                 FfiConverterOptionalTypeUtf16Offset.write(value.`anchor`, buf)
@@ -7777,25 +7910,25 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
                 Unit
             }
             is FfiInput.SelectionFromView -> {
-                buf.putInt(5)
+                buf.putInt(6)
                 FfiConverterTypeViewSelection.write(value.`selection`, buf)
                 FfiConverterOptionalTypeSelectionChangeContext.write(value.`change`, buf)
                 Unit
             }
             is FfiInput.Command -> {
-                buf.putInt(6)
+                buf.putInt(7)
                 FfiConverterTypeFfiCommand.write(value.`command`, buf)
                 FfiConverterTypeViewSelection.write(value.`selection`, buf)
                 Unit
             }
             is FfiInput.Composition -> {
-                buf.putInt(7)
+                buf.putInt(8)
                 FfiConverterTypeCompositionEvent.write(value.`event`, buf)
                 FfiConverterTypeViewSelection.write(value.`selection`, buf)
                 Unit
             }
             is FfiInput.KeyDown -> {
-                buf.putInt(8)
+                buf.putInt(9)
                 FfiConverterTypeKeyEvent.write(value.`event`, buf)
                 FfiConverterOptionalTypeFfiCommand.write(value.`routed`, buf)
                 FfiConverterBoolean.write(value.`preventDefault`, buf)
@@ -7803,89 +7936,89 @@ public object FfiConverterTypeFfiInput : FfiConverterRustBuffer<FfiInput>{
                 Unit
             }
             is FfiInput.Paste -> {
-                buf.putInt(9)
+                buf.putInt(10)
                 FfiConverterTypeFfiClipboardPayload.write(value.`payload`, buf)
                 FfiConverterTypeViewSelection.write(value.`selection`, buf)
                 Unit
             }
             is FfiInput.Undo -> {
-                buf.putInt(10)
-                Unit
-            }
-            is FfiInput.Redo -> {
                 buf.putInt(11)
                 Unit
             }
-            is FfiInput.Doc -> {
+            is FfiInput.Redo -> {
                 buf.putInt(12)
+                Unit
+            }
+            is FfiInput.Doc -> {
+                buf.putInt(13)
                 FfiConverterSequenceTypeDocOp.write(value.`operations`, buf)
                 Unit
             }
             is FfiInput.Socket -> {
-                buf.putInt(13)
+                buf.putInt(14)
                 FfiConverterTypeConnId.write(value.`conn`, buf)
                 FfiConverterTypeSocketEvent.write(value.`event`, buf)
                 Unit
             }
             is FfiInput.Token -> {
-                buf.putInt(14)
+                buf.putInt(15)
                 FfiConverterUInt.write(value.`attempt`, buf)
                 FfiConverterOptionalString.write(value.`token`, buf)
                 FfiConverterTypeWriteAccess.write(value.`access`, buf)
                 Unit
             }
             is FfiInput.Storage -> {
-                buf.putInt(15)
+                buf.putInt(16)
                 FfiConverterTypeStorageOpId.write(value.`op`, buf)
                 FfiConverterTypeFfiStorageResult.write(value.`result`, buf)
                 Unit
             }
             is FfiInput.Host -> {
-                buf.putInt(16)
+                buf.putInt(17)
                 FfiConverterTypeHostSignal.write(value.`signal`, buf)
                 Unit
             }
             is FfiInput.Authorization -> {
-                buf.putInt(17)
+                buf.putInt(18)
                 FfiConverterTypeAuthorizationState.write(value.`state`, buf)
                 Unit
             }
             is FfiInput.Comment -> {
-                buf.putInt(18)
+                buf.putInt(19)
                 FfiConverterTypeCommentMarkRequest.write(value.`mark`, buf)
                 Unit
             }
             is FfiInput.Flush -> {
-                buf.putInt(19)
-                FfiConverterTypeRequestId.write(value.`request`, buf)
-                Unit
-            }
-            is FfiInput.Stop -> {
                 buf.putInt(20)
                 FfiConverterTypeRequestId.write(value.`request`, buf)
                 Unit
             }
-            is FfiInput.Reset -> {
+            is FfiInput.Stop -> {
                 buf.putInt(21)
+                FfiConverterTypeRequestId.write(value.`request`, buf)
+                Unit
+            }
+            is FfiInput.Reset -> {
+                buf.putInt(22)
                 Unit
             }
             is FfiInput.RequestSnapshot -> {
-                buf.putInt(22)
+                buf.putInt(23)
                 FfiConverterTypeRequestId.write(value.`request`, buf)
                 Unit
             }
             is FfiInput.Focus -> {
-                buf.putInt(23)
+                buf.putInt(24)
                 FfiConverterBoolean.write(value.`focused`, buf)
                 Unit
             }
             is FfiInput.AddPeerIds -> {
-                buf.putInt(24)
+                buf.putInt(25)
                 FfiConverterSequenceULong.write(value.`ids`, buf)
                 Unit
             }
             is FfiInput.Tick -> {
-                buf.putInt(25)
+                buf.putInt(26)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -11175,6 +11308,12 @@ public object FfiConverterTypeKeyCommand: FfiConverterRustBuffer<KeyCommand> {
 sealed class ModifyTarget {
     
     /**
+     * A view exists but did not provide the required movement endpoints.
+     */
+    object RequireView : ModifyTarget()
+    
+    
+    /**
      * Layout is unavailable; only structural movement runs.
      */
     object NoView : ModifyTarget()
@@ -11223,8 +11362,9 @@ sealed class ModifyTarget {
 public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget>{
     override fun read(buf: ByteBuffer): ModifyTarget {
         return when(buf.getInt()) {
-            1 -> ModifyTarget.NoView
-            2 -> ModifyTarget.View(
+            1 -> ModifyTarget.RequireView
+            2 -> ModifyTarget.NoView
+            3 -> ModifyTarget.View(
                 FfiConverterTypePoint.read(buf),
                 FfiConverterTypePoint.read(buf),
                 FfiConverterBoolean.read(buf),
@@ -11235,6 +11375,12 @@ public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget
     }
 
     override fun allocationSize(value: ModifyTarget): ULong = when(value) {
+        is ModifyTarget.RequireView -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
         is ModifyTarget.NoView -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
@@ -11255,12 +11401,16 @@ public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget
 
     override fun write(value: ModifyTarget, buf: ByteBuffer) {
         when(value) {
-            is ModifyTarget.NoView -> {
+            is ModifyTarget.RequireView -> {
                 buf.putInt(1)
                 Unit
             }
-            is ModifyTarget.View -> {
+            is ModifyTarget.NoView -> {
                 buf.putInt(2)
+                Unit
+            }
+            is ModifyTarget.View -> {
+                buf.putInt(3)
                 FfiConverterTypePoint.write(value.`anchor`, buf)
                 FfiConverterTypePoint.write(value.`focus`, buf)
                 FfiConverterBoolean.write(value.`resolutionDirty`, buf)
