@@ -124,7 +124,7 @@ export function createTextDOM(
   const inner = innerTag(format);
   const dom = document.createElement(outer ?? inner);
   let content = dom;
-  if (format & textFormats.code) dom.setAttribute('spellcheck', 'false');
+  if (node.hasFormat('code')) dom.setAttribute('spellcheck', 'false');
   if (outer !== null) {
     content = document.createElement(inner);
     dom.appendChild(content);
