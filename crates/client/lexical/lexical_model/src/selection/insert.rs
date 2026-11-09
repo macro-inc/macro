@@ -787,6 +787,13 @@ impl Transaction<'_> {
         &mut self,
         slot: SelectionSlot,
     ) -> Result<(NodeKey, ChildIndex), Error> {
+        // $removeTextAndSplitBlock resolves the current global range after
+        // removing receiver text, even when that receiver is detached.
+        let slot = if self.selection().is_some_and(Selection::is_range) {
+            SelectionSlot::Active
+        } else {
+            slot
+        };
         let point = self.anchor_at(slot)?;
         let mut node = point.key();
         let mut offset = point.offset();

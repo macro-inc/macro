@@ -53,7 +53,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Clamp element offsets during caret reads while retaining the stored selection points.
 - Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
 - Selection direction caches survive text-only edits; point setters and range clones invalidate them.
-- Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
+- Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects; inline insertion derives its split index from the current Active range and splices the receiver block, while empty block insertion skips that split.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
 - Read SharedKeyCounter::last_allocated when a host must observe temporary allocations without retaining nodes.

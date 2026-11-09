@@ -996,3 +996,59 @@ fn inline_insertion_on_a_nested_block_container_rejects_without_changes() -> Res
     assert_eq!(editor.state().selection(), before.selection());
     Ok(())
 }
+
+#[test]
+fn detached_line_break_uses_active_split_index_in_receivers_block() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let mut tx = editor.transaction();
+    let a = tx.create(Paragraph::default())?;
+    let active = tx.create_text("active")?;
+    let b = tx.create(Paragraph::default())?;
+    let detached = tx.create_text("ab")?;
+    tx.append(a, &[active.key()])?;
+    tx.append(b, &[detached.key()])?;
+    tx.append(NodeKey::ROOT, &[a.key(), b.key()])?;
+    tx.replace_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::text(active, Utf16Offset(2)),
+    ))))?;
+    let slot = tx.detach_selection(Selection::Range(RangeSelection::collapsed(Point::text(
+        detached,
+        Utf16Offset(1),
+    ))));
+    tx.insert_line_break_at(slot, true)?;
+    assert_eq!(tx.text_content(a), "active");
+    assert_eq!(tx.text_content(b), "ab\n");
+    assert_eq!(tx.anchor()?, Point::element(b, ChildIndex(1)));
+    assert_eq!(tx.anchor_at(slot)?, Point::text(detached, Utf16Offset(1)));
+    assert_eq!(tx.focus_at(slot)?, Point::text(detached, Utf16Offset(1)));
+    Ok(())
+}
+
+#[test]
+fn detached_empty_block_insertion_does_not_split_the_active_block() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((a, active, b), _) = editor.update(|tx| {
+        let a = tx.create(Paragraph::default())?;
+        let active = tx.create_text("active")?;
+        let b = tx.create(Paragraph::default())?;
+        tx.append(a, &[active.key()])?;
+        tx.append(NodeKey::ROOT, &[a.key(), b.key()])?;
+        tx.replace_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(active, Utf16Offset(2)),
+        ))))?;
+        Ok((a.key(), active.key(), b.key()))
+    })?;
+    let mut tx = editor.transaction();
+    let slot = tx.detach_selection(Selection::Range(RangeSelection::collapsed(Point::element(
+        b,
+        ChildIndex(0),
+    ))));
+    let inserted = tx.create(Paragraph::default())?;
+    let text = tx.create_text("inserted")?;
+    tx.append(inserted, &[text.key()])?;
+    tx.insert_nodes_at(slot, &[inserted.key()])?;
+    assert_eq!(tx.children_keys(a)?, vec![active]);
+    assert_eq!(tx.text_content(a), "active");
+    assert!(!tx.is_dirty_leaf(active));
+    Ok(())
+}
