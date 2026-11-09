@@ -92,6 +92,9 @@ struct CompatSelectionPatch {
   bool activate; CompatSelectionData selection;
 }
 
+// Cold audit only: no capture allocation, GC, or pending-update graph ambiguity.
+struct CompatAuditSnapshot { uint64 retainedCaptures; uint64 liveNodes; }
+
 // Compact transaction construction uses only keys issued by the native allocator.
 // Reservations are scoped to the editor/update, single use, and burned on discard.
 struct CompatKeyReservation {

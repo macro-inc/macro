@@ -109,3 +109,5 @@ acknowledgements still require their own validated reconciliation stage.
 
 Capture compatibility snapshots and publication metadata without materializing
 root text; raw cache absence must survive hydration and transport refresh.
+
+Keep CompatAuditSnapshot cold and read-only: count retained captures and actual live nodes without allocation or collection, reject pending updates, and measure it outside update/read/key windows.
