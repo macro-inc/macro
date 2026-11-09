@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channel to tasks</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --ok: #2f9e44; --pick: #edf2ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --ok: #69db7c; --pick: #232a45; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  button, select, input { font: inherit; color: inherit; }
+  select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; max-width: 240px; }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  main { padding: 0 16px 96px; max-width: 820px; }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  li { display: flex; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li.picked { background: var(--pick); }
+  li input { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
+  .body { flex: 1; min-width: 0; }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .text { word-break: break-word; white-space: pre-wrap; }
+  .tracked { color: var(--ok); font-weight: 600; }
+  .empty { color: var(--muted); padding: 24px 16px; text-align: center; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; padding: 12px 16px; background: var(--panel); border-top: 1px solid var(--line); }
+  .bar .count { margin-right: auto; font-weight: 550; }
+  .bar label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Channel to tasks</h1>
+  <select id="channel" aria-label="Channel"></select>
+</header>
+<p class="status" id="status">Loading…</p>
+<main id="messages"></main>
+<div class="bar">
+  <span class="count" id="count">Pick messages to track</span>
+  <label>Due <select id="due" aria-label="Due date">
+    <option value="0">No date</option>
+    <option value="2">In 2 days</option>
+    <option value="7" selected>In a week</option>
+  </select></label>
+  <label><input type="checkbox" id="mine" checked> Assign to me</label>
+  <button id="create" disabled>Create tasks</button>
+</div>
+
+<script type="text/macro" id="channels" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const page = await macro.workspace.page({ includeTypes: ['channel'], limit: 40 });
+    return page.items.flatMap((item) =>
+      item.type === 'channel' && item.name ? [{ id: item.id, name: item.name }] : [],
+    );
+  }
+</script>
+
+<script type="text/macro" id="messages" lang="ts">
+  const TRACKED = '✅';
+
+  /** Message text with mention markup shown as names. */
+  function plain(text: string): string {
+    return text.replace(/<m-([a-z]+)-mention>(.*?)<\/m-[a-z]+-mention>/g, (_match, _kind: string, json: string) => {
+      try {
+        const mention = JSON.parse(json) as { email?: string; userId?: string; documentName?: string };
+        if (mention.documentName) return mention.documentName;
+        const email = mention.email ?? mention.userId?.replace(/^macro\|/, '');
+        return `@${email?.split('@')[0] ?? 'someone'}`;
+      } catch {
+        return '@someone';
+      }
+    }).replace(/<[^>]+>/g, '');
+  }
+
+  export default async function ({ channelId }: { channelId: string }, { macro }: ProgramContext) {
+    const me = await macro.myPrincipalId();
+    const recent = [];
+    for await (const message of macro.channels.byId(channelId).messages({ pageSize: 30 })) {
+      recent.push(message);
+      if (recent.length === 30) break;
+    }
+    const names = new Map<string, Promise<string>>();
+    const rows = await Promise.all(recent.map(async (message) => {
+      const author = await message.author();
+      if (!names.has(author.id)) {
+        const fallback = author.email()?.split('@')[0] ?? 'Someone';
+        names.set(author.id, author.name().then((name) => name ?? fallback, () => fallback));
+      }
+      // A message this page turned into a task carries the viewer's ✅.
+      const reactions = message.toJSON().detail?.reactions ?? [];
+      return {
+        id: message.id,
+        author: await names.get(author.id)!,
+        text: plain(await message.content()),
+        at: await message.createdAt(),
+        tracked: reactions.some((reaction) => reaction.emoji === TRACKED && reaction.users.includes(me)),
+      };
+    }));
+    return rows.filter((row) => row.text.trim().length > 0);
+  }
+</script>
+
+<script type="text/macro" id="convert" lang="ts">
+  const TRACKED = '✅';
+
+  /** Message text with mention markup shown as names. */
+  function plain(text: string): string {
+    return text.replace(/<m-([a-z]+)-mention>(.*?)<\/m-[a-z]+-mention>/g, (_match, _kind: string, json: string) => {
+      try {
+        const mention = JSON.parse(json) as { email?: string; userId?: string; documentName?: string };
+        if (mention.documentName) return mention.documentName;
+        const email = mention.email ?? mention.userId?.replace(/^macro\|/, '');
+        return `@${email?.split('@')[0] ?? 'someone'}`;
+      } catch {
+        return '@someone';
+      }
+    }).replace(/<[^>]+>/g, '');
+  }
+
+  export default async function (
+    { channelId, messageIds, dueInDays, assignToMe }:
+      { channelId: string; messageIds: string[]; dueInDays: number; assignToMe: boolean },
+    { macro }: ProgramContext,
+  ) {
+    const channel = macro.channels.byId(channelId);
+    const channelName = (await channel.name()) ?? 'channel';
+    const dueDate = dueInDays > 0 ? new Date(Date.now() + dueInDays * 86_400_000) : undefined;
+    const created = [];
+    // One at a time: each message gets its task, a reply linking to it, and a ✅.
+    for (const id of messageIds.slice(0, 10)) {
+      const message = channel.message(id);
+      const text = plain(await message.content()).trim();
+      const author = await message.author();
+      const who = (await author.name().catch(() => undefined)) ?? author.email() ?? 'someone';
+      const firstLine = text.split('\n')[0] ?? text;
+      const name = firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
+      const quoted = text.split('\n').map((line) => `> ${line}`).join('\n');
+      const task = await macro.tasks.create({
+        name,
+        markdown: `${quoted}\n\nFrom #${channelName}, posted by ${who}. [Open the channel](${channel.webUrl()})`,
+        dueDate,
+        assignees: assignToMe ? undefined : [],
+      });
+      await task.name();
+      const link = task.toMention();
+      await message.reply({ content: `Tracked as ${link.tag}`, mentions: [link.mention] });
+      await message.react(TRACKED);
+      created.push({ id: task.id, name });
+    }
+    return created;
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { channels, convert, messages } from 'macro:programs';
+
+  type Row = Awaited<ReturnType<typeof messages>>[number];
+
+  const root = document.getElementById('messages')!;
+  const status = document.getElementById('status')!;
+  const channelSelect = document.getElementById('channel') as HTMLSelectElement;
+  const count = document.getElementById('count')!;
+  const due = document.getElementById('due') as HTMLSelectElement;
+  const mine = document.getElementById('mine') as HTMLInputElement;
+  const create = document.getElementById('create') as HTMLButtonElement;
+  const picked = new Set<string>();
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function updateBar() {
+    count.textContent = picked.size ? `${picked.size} selected` : 'Pick messages to track';
+    create.disabled = picked.size === 0;
+  }
+
+  function render(rows: Row[]) {
+    for (const id of [...picked]) {
+      if (!rows.some((row) => row.id === id && !row.tracked)) picked.delete(id);
+    }
+    updateBar();
+    if (rows.length === 0) {
+      root.replaceChildren(el('p', 'empty', 'No messages in this channel yet.'));
+      return;
+    }
+    const list = el('ul');
+    for (const row of rows) {
+      const li = el('li', picked.has(row.id) ? 'picked' : '');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.checked = picked.has(row.id);
+      box.disabled = row.tracked;
+      box.setAttribute('aria-label', `Track: ${row.text.slice(0, 60)}`);
+      box.addEventListener('change', () => {
+        if (box.checked) picked.add(row.id);
+        else picked.delete(row.id);
+        li.classList.toggle('picked', box.checked);
+        updateBar();
+      });
+      const meta = el('div', 'meta');
+      meta.append(el('span', '', row.author), el('span', '', new Date(row.at).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })));
+      if (row.tracked) meta.append(el('span', 'tracked', '✓ Tracked as a task'));
+      const body = el('div', 'body');
+      body.append(meta, el('div', 'text', row.text));
+      li.append(box, body);
+      list.append(li);
+    }
+    root.replaceChildren(list);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    if (!channelSelect.value) return;
+    try {
+      render(await messages({ channelId: channelSelect.value }));
+      status.textContent = 'Each picked message becomes a task, gets a reply linking to it, and a ✅.';
+    } catch (error) {
+      status.textContent = `Couldn't load messages: ${String(error)}`;
+    }
+  }
+
+  create.addEventListener('click', async () => {
+    const ids = [...picked];
+    create.disabled = true;
+    status.textContent = `Creating ${ids.length} task${ids.length === 1 ? '' : 's'}…`;
+    try {
+      const made = await convert({
+        channelId: channelSelect.value,
+        messageIds: ids,
+        dueInDays: Number(due.value),
+        assignToMe: mine.checked,
+      });
+      picked.clear();
+      status.textContent = `Created ${made.map((task) => `“${task.name}”`).join(', ')}.`;
+    } catch (error) {
+      status.textContent = `Couldn't create tasks: ${String(error)}`;
+    }
+    await reload();
+  });
+  channelSelect.addEventListener('change', () => {
+    picked.clear();
+    reload();
+  });
+
+  const list = await channels();
+  if (list.length === 0) {
+    status.textContent = 'Join a channel to turn its messages into tasks.';
+  } else {
+    channelSelect.replaceChildren(...list.map((channel) => {
+      const option = el('option', '', `#${channel.name}`);
+      option.value = channel.id;
+      return option;
+    }));
+    on(['message.posted', 'message.patched', 'message.deleted'], reload);
+    await reload();
+  }
+</script>
+</body>
+</html>
