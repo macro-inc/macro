@@ -20,14 +20,20 @@ pub(super) struct CaptureKey {
     update: u32,
     access: u8,
     identity: ForeignRecordIdentity,
+    root_cache: bool,
 }
 impl CaptureKey {
-    pub fn new(reference: compat::ForeignRecordRef, identity: ForeignRecordIdentity) -> Self {
+    pub fn new(
+        reference: compat::ForeignRecordRef,
+        identity: ForeignRecordIdentity,
+        root_cache: bool,
+    ) -> Self {
         Self {
             node: node_identity(reference.node),
             update: reference.update_id,
             access: reference.access as u8,
             identity,
+            root_cache,
         }
     }
 }

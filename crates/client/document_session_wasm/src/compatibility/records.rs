@@ -2,6 +2,11 @@
 use super::*;
 use lexical_model::*;
 
+pub(super) struct CaptureOptions<'a> {
+    pub writable: &'a [NodeKey],
+    pub include_root_cache: bool,
+}
+
 pub(super) struct Capture {
     pub reference: compat::ForeignRecordRef,
     pub source: Arc<ForeignReadSnapshot>,
@@ -28,9 +33,9 @@ impl Host {
         version: u64,
         update: u32,
         access: compat::ForeignAccess,
-        writable: &[NodeKey],
+        options: CaptureOptions<'_>,
     ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
-        let writable: std::collections::HashSet<_> = writable.iter().copied().collect();
+        let writable: std::collections::HashSet<_> = options.writable.iter().copied().collect();
         source
             .render_records(keys)?
             .into_iter()
@@ -64,8 +69,15 @@ impl Host {
                     },
                     capture_id: self.next_capture,
                 };
-                let capture_key =
-                    capture_index::CaptureKey::new(reference, record.identity().clone());
+                let root_cache = options
+                    .include_root_cache
+                    .then(|| record.root_cached_text())
+                    .flatten();
+                let capture_key = capture_index::CaptureKey::new(
+                    reference,
+                    record.identity().clone(),
+                    root_cache.is_some(),
+                );
                 if let Some(id) = self.capture_index.get(&capture_key) {
                     return self
                         .captures
@@ -160,12 +172,8 @@ impl Host {
                         size: links.size,
                     },
                     native_projection: projection,
-                    has_root_cached_text: record.root_cached_text().is_some(),
-                    root_cached_text: record
-                        .root_cached_text()
-                        .unwrap_or("")
-                        .encode_utf16()
-                        .collect(),
+                    has_root_cached_text: root_cache.is_some(),
+                    root_cached_text: root_cache.unwrap_or("").encode_utf16().collect(),
                 };
                 self.capture_index.insert(capture_key, reference.capture_id);
                 self.captures.insert(
@@ -193,7 +201,17 @@ impl Host {
             update_id: 0,
             version,
             full_reconcile: true,
-            records: self.records(source, keys, version, 0, compat::ForeignAccess::Frozen, &[])?,
+            records: self.records(
+                source,
+                keys,
+                version,
+                0,
+                compat::ForeignAccess::Frozen,
+                CaptureOptions {
+                    writable: &[],
+                    include_root_cache: true,
+                },
+            )?,
             removed_keys: vec![],
         })
     }

@@ -12,6 +12,7 @@ mod class_masks;
 mod lifecycle;
 mod native_calls;
 pub(crate) mod observer;
+mod publication_delta;
 mod records;
 mod reservations;
 mod scopes;

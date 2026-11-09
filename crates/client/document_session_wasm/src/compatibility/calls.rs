@@ -306,7 +306,10 @@ impl Host {
             } else {
                 compat::ForeignAccess::Writable
             },
-            writable,
+            records::CaptureOptions {
+                writable,
+                include_root_cache: false,
+            },
         )?;
         let references: std::collections::HashMap<_, _> = records
             .iter()

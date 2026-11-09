@@ -229,29 +229,34 @@ impl EditorSession {
         let mut leaves = vec![];
         let mut elements: Vec<compat::CompatDirtyElement> = vec![];
         let mut tags = vec![];
+        let mut seen_leaves = std::collections::HashSet::new();
+        let mut element_indices: HashMap<NodeKey, usize> = HashMap::new();
+        let mut seen_tags = std::collections::HashSet::new();
         let mut changed = false;
         for commit in &commits {
             changed |= !commit.changes.is_empty()
                 || commit.prev.selection() != commit.next.selection()
                 || commit.composition_changed;
             for key in &commit.changes.dirty_leaves {
-                let key = records::key(*key);
-                if !leaves.contains(&key) {
-                    leaves.push(key);
+                if seen_leaves.insert(*key) {
+                    leaves.push(records::key(*key));
                 }
             }
             for (key, intent) in &commit.changes.dirty_elements {
-                let key = records::key(*key);
                 let intentional = *intent == DirtyIntent::Intentional;
-                if let Some(existing) = elements.iter_mut().find(|entry| entry.key == key) {
-                    existing.intentional |= intentional;
+                if let Some(index) = element_indices.get(key) {
+                    elements[*index].intentional |= intentional;
                 } else {
-                    elements.push(compat::CompatDirtyElement { key, intentional });
+                    element_indices.insert(*key, elements.len());
+                    elements.push(compat::CompatDirtyElement {
+                        key: records::key(*key),
+                        intentional,
+                    });
                 }
             }
             for tag in commit.tags.iter() {
                 let tag = tag.to_string();
-                if !tags.contains(&tag) {
+                if seen_tags.insert(tag.clone()) {
                     tags.push(tag);
                 }
             }
@@ -265,7 +270,7 @@ impl EditorSession {
             dirty_leaves: leaves,
             dirty_elements: elements,
             tags,
-            batch: host.batch(&state, host.version)?,
+            batch: host.publication_batch(&state, &commits, host.version)?,
             selection: host.selection(&source, host.version)?,
         })
     }
