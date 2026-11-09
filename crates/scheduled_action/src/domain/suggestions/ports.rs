@@ -191,3 +191,19 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
         request: SuggestRequest,
     ) -> impl Future<Output = Result<SuggestOutcome>> + Send;
 }
+
+/// The fast first wave: one tool-free structured completion that picks
+/// catalog routines, answered in `schema`'s shape, while the sessions work.
+/// Usage is the person's, metered as non-billable. Object-safe, so a host
+/// without it runs sessions only.
+#[async_trait::async_trait]
+pub trait QuickPicks: Send + Sync + 'static {
+    /// The answer, or none when the model failed or gave no usable JSON.
+    async fn pick(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        instructions: &str,
+        prompt: &str,
+        schema: &serde_json::Value,
+    ) -> Option<serde_json::Value>;
+}
