@@ -2133,6 +2133,7 @@ fn event_only_commits_preserve_the_typing_history_group() {
     assert!(!session.surface().history().can_undo);
 }
 
+mod comment_factory;
 mod ime;
 
 mod presence;

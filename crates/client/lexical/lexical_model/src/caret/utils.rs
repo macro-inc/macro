@@ -162,6 +162,7 @@ impl Transaction<'_> {
     }
     /// Set a range selection, preserving existing range format and style.
     pub fn set_selection_from_caret_range(&mut self, range: CaretRange) -> Result<(), Error> {
+        let preserves_range = self.selection().is_some_and(Selection::is_range);
         let mut selection = self
             .view()
             .selection()
@@ -174,7 +175,11 @@ impl Transaction<'_> {
                 )
             });
         range_selection_from_caret_range(self.view(), &mut selection, range)?;
-        self.set_selection(Some(Selection::Range(selection)))
+        if preserves_range {
+            self.set_selection(Some(Selection::Range(selection)))
+        } else {
+            self.replace_selection(Some(Selection::Range(selection)))
+        }
     }
     /// Update the active range endpoints.
     pub fn update_range_selection_from_caret_range(

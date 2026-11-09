@@ -6614,6 +6614,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
  "proptest",
  "rootcause",
  "serde",
@@ -9909,6 +9910,7 @@ dependencies = [
  "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.1.5",
+ "serde",
 ]
 
 [[package]]
@@ -11865,18 +11867,30 @@ dependencies = [
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "clap",
+ "js-sys",
+ "lexical_conformance",
  "lexical_loro",
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
  "macro_document_composers",
  "macro_document_model",
+ "postcard",
  "regress",
+ "rootcause",
+ "scoped-tls-hkt",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
+ "syn 2.0.117",
  "thiserror 2.0.18",
  "wasm-bindgen",
+ "wasm-encoder",
+ "wasmparser",
 ]
 
 [[package]]
@@ -11948,6 +11962,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "strum 0.27.2",
+ "syn 2.0.117",
  "thiserror 2.0.18",
  "unicode-segmentation",
 ]
@@ -12459,8 +12474,6 @@ dependencies = [
 [[package]]
 name = "loro-internal"
 version = "1.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -18019,6 +18032,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
+name = "scoped-tls-hkt"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9603871ffe5df3ac39cb624790c296dbd47a400d202f56bf3e414045099524d"
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20338,8 +20357,11 @@ dependencies = [
  "document_session",
  "futures",
  "lexical_loro",
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
  "macro_env_var",
  "macro_sync_service_jwt",
  "postcard",
@@ -20348,6 +20370,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "specta",
  "specta-serde",
  "specta-typescript",
@@ -20358,6 +20381,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
  "xxhash-rust",
 ]
@@ -22299,6 +22323,7 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap 2.14.0",
  "semver",
+ "serde",
 ]
 
 [[package]]

@@ -6,4 +6,4 @@ const compressed=brotliCompressSync(bytes,{params:{[constants.BROTLI_PARAM_QUALI
 console.log(`document_session_wasm: raw=${bytes.length} brotli=${compressed.length}`);
 if(bytes.length>8_000_000)throw new Error('Session wasm exceeds the 8 MB artifact gate');
 // Provisional D5 cap; WP-59 measures real startup cost before finalizing it.
-if(compressed.length>1_130_000)throw new Error('Session wasm exceeds the provisional 1,130 KB brotli gate');
+if(compressed.length>1_130_000)throw new Error('Session wasm exceeds the provisional 1,130,000-byte brotli gate');

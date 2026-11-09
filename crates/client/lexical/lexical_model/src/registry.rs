@@ -512,6 +512,8 @@ impl EditorBuilder {
                 scratch.nodes.insert(
                     key,
                     Arc::new(crate::node::NodeSlot {
+                        #[cfg(feature = "foreign-nodes")]
+                        foreign_identity: Default::default(),
                         key,
                         type_index: node.index,
                         links: Default::default(),

@@ -31,8 +31,8 @@ mod tests {
     use lexical_model::*;
 
     #[test]
-    fn macro_bulk_export_uses_external_custom_nodes_and_download_projection()
-    -> Result<(), BoundaryError> {
+    fn macro_bulk_export_uses_external_custom_nodes_and_download_projection(
+    ) -> Result<(), BoundaryError> {
         let config = wire::SessionConfigMsg {
             doc: "query-fixture".into(),
             session: "00000000-0000-0000-0000-000000000001".into(),

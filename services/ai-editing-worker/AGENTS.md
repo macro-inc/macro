@@ -12,6 +12,7 @@ before touching the edit flow.
 
 - `src/index.ts` / `src/endpoints/index.ts`: the hono app and route table
   (`POST /edit` and friends).
+- `src/editing-workspace.ts`: real session/engine ownership and the borrowed Writer capability; keep its types independent of agent dispatch.
 - `src/run-edit.ts`: `runEditSession` — joins the sync-service WebSocket,
   drives the agents, flushes commits back.
 - `src/canvas/`: bounded CanvasEditor SDK, real QuickJS runner, live graphics/Loro
@@ -73,6 +74,9 @@ before touching the edit flow.
   `src/server.ts` that no longer exists.)
 
 ## Gotchas
+
+- Select application list fixtures with `$isTaskListNode`; the worker registry replaces
+  upstream list nodes with `task-list` nodes.
 
 - This worker never deploys without explicit approval — `just deploy-dev` /
   `deploy-prod` run `generate-sandbox` first; don't run them unprompted.

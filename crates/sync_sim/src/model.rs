@@ -212,6 +212,8 @@ impl Default for Budgets {
 pub enum SeedDocument {
     /// A rich-text document initialized through the real editor projection.
     Editor(serde_json::Value),
+    /// Existing persisted editor JSON, retained verbatim before client initialization.
+    StoredEditor(serde_json::Value),
     /// Empty fields and the configured ordered field list.
     #[default]
     Empty,
@@ -242,6 +244,8 @@ pub struct SimConfig {
     pub session: crate::SessionDefaults,
     /// Per-document seed histories; omitted documents start empty.
     pub seeds: BTreeMap<DocIx, SeedDocument>,
+    /// Clients with a test-only local serialization fault producer.
+    pub faulty_editor_clients: BTreeSet<ClientName>,
     /// Network conditions.
     pub net: NetProfile,
     /// Storage conditions.
@@ -263,6 +267,7 @@ impl SimConfig {
             fields: 8,
             documents: 1,
             seeds: BTreeMap::new(),
+            faulty_editor_clients: BTreeSet::new(),
             surfaces: BTreeSet::new(),
             session: crate::SessionDefaults::production(),
             net: NetProfile::calm(),

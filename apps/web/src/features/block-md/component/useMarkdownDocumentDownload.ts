@@ -14,10 +14,14 @@ export function useDownloadDocumentAsMarkdownText() {
 
   return createCallback(() => {
     const editor = state.editor.md.editor;
-    if (editor === undefined) return;
+    const runtime = state.editor.md.nativeRuntime;
+    if (!editor && !runtime) return;
 
     const fileNameWithExtension = `${fileName()}.md`;
-    const markdownString = editorStateAsMarkdown(editor, 'external');
+    const markdownString = runtime
+      ? runtime.executor.session.markdown(1)
+      : editor && editorStateAsMarkdown(editor, 'external');
+    if (markdownString === undefined) return;
 
     const blob = new Blob([markdownString], { type: 'text/markdown' });
     fireAndForget(
@@ -32,12 +36,15 @@ export function useCopyDocumentAsMarkdown() {
 
   return createCallback(async () => {
     const editor = state.editor.md.editor;
-    if (!editor) return;
+    const runtime = state.editor.md.nativeRuntime;
+    if (!editor && !runtime) return;
 
     try {
-      await navigator.clipboard.writeText(
-        editorStateAsMarkdown(editor, 'external')
-      );
+      const markdown = runtime
+        ? runtime.executor.session.markdown(1)
+        : editor && editorStateAsMarkdown(editor, 'external');
+      if (markdown === undefined) return;
+      await navigator.clipboard.writeText(markdown);
       toast.success('Markdown copied to clipboard');
     } catch (error) {
       console.error('Failed to copy markdown', error);
@@ -52,11 +59,12 @@ export function useDownloadDocumentAsJson() {
 
   return createCallback(() => {
     const editor = state.editor.md.editor;
-    if (!editor) {
-      return;
-    }
+    const runtime = state.editor.md.nativeRuntime;
+    if (!editor && !runtime) return;
     const fileNameWithExtension = `${fileName()}.json`;
-    const json = getSaveState(editor.getEditorState());
+    const json = runtime
+      ? JSON.parse(runtime.executor.session.savedState())
+      : editor && getSaveState(editor.getEditorState());
     const blob = new Blob([JSON.stringify(json, null, 2)], {
       type: 'application/json',
     });

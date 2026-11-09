@@ -62,7 +62,7 @@ import { shouldAutofocusDocument } from './should-autofocus-document';
  *     where there are three or more editors on one page.
  */
 function titleNavigationPlugin(
-  documentEditor: LexicalEditor,
+  documentEditor: { prependParagraph(): void; atStart(): void },
   ignoreArrows: Accessor<boolean>
 ) {
   return (titleEditor: LexicalEditor) =>
@@ -75,16 +75,7 @@ function titleNavigationPlugin(
           if (ignoreArrows()) return true;
           event?.preventDefault();
           // Prepend a new paragraph to the main editor.
-          documentEditor.update(() => {
-            const root = $getRoot();
-            const firstChild = root.getFirstChild();
-            const paragraph = $createParagraphNode();
-            paragraph.append($createTextNode(''));
-            firstChild
-              ? firstChild.insertBefore(paragraph)
-              : root.append(paragraph);
-            paragraph.selectEnd();
-          });
+          documentEditor.prependParagraph();
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -101,8 +92,7 @@ function titleNavigationPlugin(
 
           event?.preventDefault();
           // A node selection places no DOM caret, so focus the body first.
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
+          documentEditor.atStart();
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -123,8 +113,7 @@ function titleNavigationPlugin(
 
           event?.preventDefault();
           // A node selection places no DOM caret, so focus the body first.
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
+          documentEditor.atStart();
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -138,8 +127,7 @@ function titleNavigationPlugin(
           if (event.shiftKey) return false;
 
           event.preventDefault();
-          documentEditor.getRootElement()?.focus({ preventScroll: true });
-          documentEditor.update($selectDocumentStart);
+          documentEditor.atStart();
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -272,8 +260,42 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   // Wait for the main editor to be mounted, then register the navigate plugin.
   createEffect(() => {
     const mainDocumentEditor = mdData.editor;
-    if (!mainDocumentEditor) return;
-    plugins.use(titleNavigationPlugin(mainDocumentEditor, inlineMenuOpen));
+    if (mainDocumentEditor) {
+      plugins.use(
+        titleNavigationPlugin(
+          {
+            prependParagraph() {
+              mainDocumentEditor.update(() => {
+                const root = $getRoot();
+                const firstChild = root.getFirstChild();
+                const paragraph = $createParagraphNode();
+                paragraph.append($createTextNode(''));
+                firstChild
+                  ? firstChild.insertBefore(paragraph)
+                  : root.append(paragraph);
+                paragraph.selectEnd();
+              });
+            },
+            atStart() {
+              mainDocumentEditor
+                .getRootElement()
+                ?.focus({ preventScroll: true });
+              mainDocumentEditor.update($selectDocumentStart);
+            },
+          },
+          inlineMenuOpen
+        )
+      );
+      return;
+    }
+    const editing = mdData.nativeRuntime?.editing;
+    if (!editing) return;
+    plugins.use(
+      titleNavigationPlugin(
+        editing.focus,
+        () => inlineMenuOpen() || editing.menus.isOpen()
+      )
+    );
   });
 
   function onBlur() {

@@ -26,7 +26,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
 - Parse notification attributes in source order and unescape embedded internal link payloads.
 - Share URL matching and preview/search/embedding projections through links.rs and parsers.rs.
-- Keep permission gate imports fail-closed; bind each approved source divergence to its full oracle row and exact error, and reject stale entries.
+- Keep permission gate imports fail-closed; bind each approved source divergence to its full oracle row, exact native error and captured source parse-error messages, and reject stale entries.
 - Custom-code import applies peer/id setters in source order; later imports consult editor-local learned state configs.
 - Keep saved download JSON separate from live sync JSON: regenerate top-level searchText before lifting draft comment wrappers and stripping completion, inline-search and custom-code children.
 - Preserve immutable export reads and shallow JSON order; see [EXPORTS.md](EXPORTS.md) for the S1 Q8 acceptance boundary.
@@ -46,6 +46,11 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Match transformer constructor arguments independently of static JSON import policy.
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.
+
+Canonicalize only top-level null unset table options, tablecell width and listitem
+checked in the sync policy, matching source exportJSON. Preserve backgroundColor:null,
+nested array nulls, unknown nulls and every nonnull value; never erase the underlying
+Loro fields.
 
 ## Checks
 

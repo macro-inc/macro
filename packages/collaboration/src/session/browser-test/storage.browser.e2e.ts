@@ -1,16 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type {} from './fixture';
 
 const owner = '00000000-0000-0000-0000-000000000001';
 const other = '00000000-0000-0000-0000-000000000002';
 const url = '/src/session/browser-test/index.html';
+
+async function openFixture(page: Page) {
+  await page.goto(url);
+  await page.waitForFunction(() => window.storageFixture !== undefined);
+}
+
 test('SC-1/4/8: durable completion survives a renderer crash and is adopted once', async ({
   browser,
 }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const doc = crypto.randomUUID();
-  await page.goto(url);
+  await openFixture(page);
   await page.evaluate(
     async ({ doc, owner }) => {
       await window.storageFixture.open(doc, owner);
@@ -25,7 +31,7 @@ test('SC-1/4/8: durable completion survives a renderer crash and is adopted once
   await crashed;
   await page.close();
   await request;
-  await reopened.goto(url);
+  await openFixture(reopened);
   await reopened.evaluate(
     async ({ doc, other }) => window.storageFixture.open(doc, other),
     { doc, other }
@@ -80,8 +86,8 @@ test('SC-2/6/9: lock grant gates FIFO writes and uncertain replay stays idempote
   const a = await context.newPage();
   const b = await context.newPage();
   const doc = crypto.randomUUID();
-  await a.goto(url);
-  await b.goto(url);
+  await openFixture(a);
+  await openFixture(b);
   await a.evaluate(
     async ({ doc, owner }) => window.storageFixture.open(doc, owner),
     { doc, owner }
@@ -115,7 +121,7 @@ test('SC-3/5/7: errors never wipe; snapshot deletion retains undelivered rows', 
   page,
 }) => {
   const doc = crypto.randomUUID();
-  await page.goto(url);
+  await openFixture(page);
   await page.evaluate(
     async ({ doc, owner }) => {
       await window.storageFixture.open(doc, owner);
@@ -149,8 +155,8 @@ test('live owners supply assist rows; closing a tab frees its lock and preserves
   const a = await context.newPage();
   const b = await context.newPage();
   const doc = crypto.randomUUID();
-  await a.goto(url);
-  await b.goto(url);
+  await openFixture(a);
+  await openFixture(b);
   await a.evaluate(
     async ({ doc, owner }) => {
       await window.storageFixture.open(doc, owner);
@@ -192,7 +198,7 @@ test('SC-3: a proven rollback retries once without duplicate rows in real Indexe
   page,
 }) => {
   const doc = crypto.randomUUID();
-  await page.goto(url);
+  await openFixture(page);
   const result = await page.evaluate(
     async ({ doc, owner }) => {
       await window.storageFixture.open(doc, owner);
@@ -210,7 +216,7 @@ test('SC-5: quota failure returns an error and preserves durable rows in real In
   page,
 }) => {
   const doc = crypto.randomUUID();
-  await page.goto(url);
+  await openFixture(page);
   const result = await page.evaluate(
     async ({ doc, owner }) => {
       await window.storageFixture.open(doc, owner);

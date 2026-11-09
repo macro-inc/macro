@@ -137,6 +137,16 @@ impl TextMut<'_, '_> {
     /// s2: TX-08
     pub fn set_text_content(&mut self, text: &str) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceTextContent,
+            |hooks, tx| hooks.coerce_text_content(tx, self.key, text),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -169,6 +179,16 @@ impl TextMut<'_, '_> {
     /// Set format through the node's coercion hook.
     pub fn set_format(&mut self, value: TextFormat) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceFormat,
+            |hooks, tx| hooks.coerce_format(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -202,6 +222,16 @@ impl TextMut<'_, '_> {
     /// Set detail through the node's coercion hook.
     pub fn set_detail(&mut self, value: TextDetail) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceDetail,
+            |hooks, tx| hooks.coerce_detail(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -235,6 +265,16 @@ impl TextMut<'_, '_> {
     /// Set mode through the node's coercion hook.
     pub fn set_mode(&mut self, value: TextMode) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceMode,
+            |hooks, tx| hooks.coerce_mode(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -285,12 +325,18 @@ impl TextMut<'_, '_> {
     /// Toggle direction detection.
     pub fn toggle_directionless(&mut self) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
-        self.set_detail(self.data().detail ^ TextDetail::DIRECTIONLESS)
+        let data = self.data_mut()?;
+        data.detail ^= TextDetail::DIRECTIONLESS;
+        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        Ok(self)
     }
     /// Toggle merge prevention.
     pub fn toggle_unmergeable(&mut self) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
-        self.set_detail(self.data().detail ^ TextDetail::UNMERGEABLE)
+        let data = self.data_mut()?;
+        data.detail ^= TextDetail::UNMERGEABLE;
+        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        Ok(self)
     }
     /// Splice valid UTF-16 boundaries, optionally collapsing selection after inserted text.
     /// s2: TX-09
@@ -301,6 +347,18 @@ impl TextMut<'_, '_> {
         move_selection: bool,
     ) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CheckSpliceText,
+            |hooks, tx| {
+                hooks.check_splice_text(tx, self.key, range.clone(), insert, move_selection)
+            },
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -334,11 +392,13 @@ impl TextMut<'_, '_> {
         let mut value = self.data().text.as_str().to_owned();
         value.replace_range(start..end, insert);
         // spliceText acquires a writable record even when the result is unchanged.
-        self.data_mut()?;
-        self.set_text_content(&value)?;
-        if move_selection {
+        let data = self.data_mut()?;
+        data.text = TextBuffer::new(value);
+        data.absent.remove(crate::node::AbsentKeys::TEXT);
+        if move_selection && self.tx.selection().is_some_and(Selection::is_range) {
             let offset = range.start + TextBuffer::new(insert).utf16_len();
-            self.select(Some(offset), Some(offset))?;
+            self.tx
+                .set_text_node_range(self.key, offset, self.key, offset)?;
         }
         Ok(self)
     }
@@ -357,8 +417,13 @@ impl TextMut<'_, '_> {
                 return Err(Error::Utf16OffsetOutOfRange(offset));
             }
         }
-        self.tx
-            .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
+        if self.tx.selection().is_some_and(Selection::is_range) {
+            self.tx
+                .set_text_node_range(self.key, anchor, self.key, focus)
+        } else {
+            self.tx
+                .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
+        }
     }
     /// Split into plain text nodes, retaining text properties and state but not mode.
     /// s2: TX-05

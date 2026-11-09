@@ -19,7 +19,10 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 ## Boundaries
 
 - Depends on the pure core and protocol; never Worker, Tokio, HTTP clients or a DB.
-- Used by native replay and the later sync simulation driver.
+- Used by native replay and the sync simulation driver.
+- Keep recorded comment verdicts ahead of an optional pure application evaluator;
+  absent both, fail closed. Preserve the evaluator across cold durable forks and
+  pass actual proposed roots plus the injected port clock.
 - The explicit `ENABLED` list grows with extracted callbacks. Reject unsupported
   callbacks; never replay recorded outputs as if the core produced them. Enable fixtures only
   with the corresponding callback extraction and complete effect comparison.

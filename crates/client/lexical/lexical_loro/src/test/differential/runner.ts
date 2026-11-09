@@ -72,9 +72,11 @@ if (input.pair) {
 	if (
 		catalog.workspaces.catalog["loro-crdt"] !== "1.17.1" ||
 		installed.version !== "1.17.1" ||
-		// The server retains its deployed Loro bytes; the portable client is 1.17.1.
+		// The frozen Worker transcript driver uses its preserved server version;
+		// this differential runs the workspace editor mirror on 1.17.1.
 		sync.packages["node_modules/loro-crdt"].version !== "1.16.3" ||
 		!cargo.includes('loro = "=1.17.1"') ||
+		!cargo.includes('loro_server = { package = "loro", path = "vendor/loro-server/loro" }') ||
 		!rustLock.includes('name = "loro"\nversion = "1.17.1"') ||
 		!bunLock.includes('"loro-crdt": "1.17.1"') ||
 		!bunLock.includes('"loro-crdt@1.17.1"')

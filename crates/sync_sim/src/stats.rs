@@ -44,6 +44,17 @@ impl RunStats {
                     let kind = match op {
                         AbstractOp::Editor(EditorOp::Type { .. }) => "Type",
                         AbstractOp::Editor(EditorOp::Select { .. }) => "EditorSelect",
+                        AbstractOp::Editor(EditorOp::SetBlock { .. }) => "SetBlock",
+                        AbstractOp::Editor(EditorOp::ToggleList { .. }) => "ToggleList",
+                        AbstractOp::Editor(EditorOp::InsertTable { .. }) => "InsertTable",
+                        AbstractOp::Editor(EditorOp::PasteMarkdown { .. }) => "PasteMarkdown",
+                        AbstractOp::Editor(EditorOp::MarkdownShortcut { .. }) => "MarkdownShortcut",
+                        AbstractOp::Editor(EditorOp::Backspace { .. }) => "Backspace",
+                        AbstractOp::Editor(EditorOp::DeleteRange { .. }) => "DeleteRange",
+                        AbstractOp::Editor(EditorOp::SplitBlock { .. }) => "SplitBlock",
+                        AbstractOp::Editor(EditorOp::Format { .. }) => "Format",
+                        AbstractOp::Editor(EditorOp::Indent { .. }) => "Indent",
+                        AbstractOp::Editor(EditorOp::Outdent { .. }) => "Outdent",
                         AbstractOp::Editor(EditorOp::Undo) => "Undo",
                         AbstractOp::Editor(EditorOp::Redo) => "Redo",
                         AbstractOp::FormSet { .. } => "FormSet",
@@ -132,6 +143,7 @@ impl RunStats {
                         multi_tab.insert(profile.clone());
                     }
                 }
+                Fact::ProjectionRecovered { .. } => self.resets += 1,
                 Fact::Telemetry {
                     name,
                     phase: TelemetryPhase::Start,

@@ -87,6 +87,10 @@ impl Surface for EditorSurface {
             result => result,
         }
     }
+    #[cfg(feature = "conformance")]
+    fn take_undo_applied(&mut self) -> Vec<crate::UndoObservation> {
+        std::mem::take(&mut self.undo_applied)
+    }
     fn take_resynced(&mut self) -> bool {
         std::mem::take(&mut self.resynced)
     }

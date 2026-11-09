@@ -48,10 +48,17 @@ impl Default for TableConfig {
 }
 /// Register table nodes, selection hooks, integrity transforms and configured policies.
 pub fn register_table(builder: EditorBuilder, config: &TableConfig) -> EditorBuilder {
+    register_table_behavior(
+        builder
+            .node::<TableNode>()
+            .node::<TableRowNode>()
+            .node::<TableCellNode>(),
+        config,
+    )
+}
+/// Install table hooks and transforms when the parent registry already owns the nodes.
+pub fn register_table_behavior(builder: EditorBuilder, config: &TableConfig) -> EditorBuilder {
     let mut builder = builder
-        .node::<TableNode>()
-        .node::<TableRowNode>()
-        .node::<TableCellNode>()
         .node_trait::<TableNode, dyn CanSelectBefore>(|node| node)
         .table_selection_hooks(TableSelectionHooksImpl)
         .transform::<TableNode>(transforms::table_transform)

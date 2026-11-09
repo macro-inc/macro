@@ -12,6 +12,10 @@
     "@sinonjs/fake-timers": "13.0.5",
     "fake-indexeddb": "6.2.5",
     "loro-crdt": "catalog:",
+    "@macro-inc/lexical-core": "workspace:*",
+    "lexical": "catalog:",
+    "@lexical/list": "catalog:",
+    "@lexical/markdown": "catalog:",
     "loro-crdt-legacy": "npm:loro-crdt@1.16.3"
   },
   "devDependencies": {

@@ -12,6 +12,15 @@ use std::sync::{
 
 pub(crate) fn config(mut config: EditorConfig, clock: Arc<AtomicI64>) -> EditorConfig {
     config.policy = &macro_document_model::sync::MACRO_SYNC_POLICY;
+    config.comment_node = |tx, ids| {
+        Ok(macro_document_model::nodes::create_comment_node(
+            tx,
+            ids,
+            Default::default(),
+            Some(false),
+        )?
+        .key())
+    };
     // Rebuilds and cold repaint editors must not restart a live peer's ID stream.
     let streams = Mutex::new(std::collections::BTreeMap::new());
     config.builder = Arc::new(move |mode, peer| {

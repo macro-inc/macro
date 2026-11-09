@@ -10,15 +10,15 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and per-editor published snapshot and retired-record pins; return clones before any model or host call.
-- `src/replay/selections.rs`: shared mutable-frame selection identities and activation revisions; no model call executes under its lock.
+- `src/replay/selections.rs`: shared selection objects with transaction-local slot caches and activation revisions; no model call executes under its lock.
 - `src/replay/carets.rs`: shared caret metadata and owned single-consumption cursors; move cursors out before model traversal.
 - `src/replay/editors.rs`: per-editor installation and selection slots; prune dead record pointers only after checking all retained snapshots.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
-- `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames, shared metadata and exact editor/scope checks.
-- `src/api/session.rs`: owned editor/pending-update boundary; with_context preserves preconfigured weak callback registrations; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
+- `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames and owned scoped read peers; exact update provenance authorizes reads through publication, while mutable dispatch stops before it. The read scope shares owned value identities, keeps peer slot metadata local and grants no source transaction access.
+- `src/api/session.rs`: owned editor/pending-update boundary and published host version; with_context preserves preconfigured weak callback registrations; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.
@@ -75,3 +75,71 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Retain Context::callbacks weak capabilities in callback owners; pinned snapshots retain their node registry and callbacks, so strong binding references would form a cycle.
 - Defer host version collection until any update borrowing that committed or pending version ends.
 - Report pass/fail/ledger totals by source package; ledgered cases do not count toward the 50-fixture core gate.
+
+Session runtime transform registration operates on the owned editor even while its
+update is suspended. CallbackContext::node uses the same encoded identity store as
+indexed dispatch; it validates the exact active editor and pending update first.
+
+Session application listeners reuse the model priority pipeline; command dispatch
+requires an explicit pending update. JS identity and opaque values belong to the
+development WASM adapter, not the portable shared API value encoding.
+
+$getNodeByKey follows the upstream Map lookup for absent or non-key arguments:
+return null instead of failing raw-key binding resolution. The WASM host retains
+JSON null distinctly from the fixture encoding for undefined.
+
+Session::finish_noop closes an unchanged suspended update without a model commit,
+retaining detached API value objects. It must reject selection, composition,
+extension, event, reconciliation and queued-work effects; tags alone may close.
+
+Session::commit_prepared encodes artifacts against the upcoming host version before
+model publication. Preparation errors invalidate pending handles and retain the
+last committed host version; already published preceding transitions are retained.
+
+Node indexed dispatch uses model tree queries and predicates for all node kinds.
+Keep element alignment/style/text-format fields distinct from text format/detail,
+and preserve null versus undefined when decoding getFormatFlags alignment.
+
+Preserve selection direction memos in host captures, detached-handle transfers and rollback values; clear them only for explicit upstream selection clones and active update clones.
+
+Route indexed text splicing, JSON updates, copy predicates and element creation through the model; retain D-6 surrogate and D-7 unsigned-offset checks at the bridge.
+
+Context/Session call_native uses the shared API index and model-derived hook names; accept only indexed node hooks and preserve the exact mutable callback frame. Native-super bypasses one outer foreign dispatch, never a whole native operation. Pure indexed read dispatch uses CallbackRead; lifecycle construction scopes remain unfinished.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
+
+Key RecordIdentities by immutable model tokens, not allocation addresses; resolve owner versions by matching the source token before encoding handles. Token retention must not pin records or force COW, including native-projection read peers.
+
+Keep conformance.createForeignNode an internal development constructor in the shared indexed dispatcher; return through the normal captured-node identity encoder and honor read-mode guards before allocation.
+
+Preserve original encoded indexed-hook arguments in exact node/hook scopes before native normalization; consume once at JS dispatch and restore guards on every exit. Native-super installs no original-argument frame, so nested virtual calls receive their actual model arguments. Retain owned JSON only, with no transaction borrow or lock across host calls.
+
+Resolve hosted node return values with CallbackContext::returned_node in the exact active update. Require a known captured node handle whose key still exists; reject raw keys, non-node values and stale callback capabilities.
+
+CallbackContext::selection encodes an existing active or detached transaction slot in the shared selection identity store without cloning or activating it. Preserve the exact callback update capability and reuse prior slot handles.
+
+Synchronize selection slot bindings by model object tokens before/after dispatch and when encoding callback selections. Reuse tokens when hydrating host values, including read frames and explicit reactivation; never infer replacement identity solely from the resettable selection_replacements counter or snapshot old values after callbacks.
+
+Share selection IDs, tokens and owned values across dispatch frames, but keep slot caches and activation revisions local to each transaction frame. Resolve handles through the invoking transaction token and lazily hydrate saved detached values; never decode a peer selection using another frame's slot index. Mutable nested callbacks share their exact frame; owned read peers require a separate frame.
+
+Use CallbackContext::with_read_scope for a whole pure callback, keeping one guarded owned peer across indexed calls. Reject command, tag and scheduling effects at the dispatcher boundary. Save only newly allocated, locally created selection values at scope exit, including error exits; never overwrite inherited captured values. Read peers never hydrate saved tokens absent from their capture; mutable frames may hydrate them after the read ends. Inherited selection object writes and absent cross-scope values currently reject until ancestor synchronization is implemented; full JS pure-hook hosting remains unfinished.
+
+Route lexical.$parseSerializedNode through Transaction::import_node and the normal captured-node encoder; recursive children and virtual append belong to the model import algorithm, never a second shim tree builder.
+
+Register the committed selection before the update rollback backup; getPreviousSelection reuses that object token. Own its selection and point handles with the committed version, and reuse existing token slots during hydration. Indexed selectionTransform uses the guarded model vtable; preserve original arguments before computing model-triggered previous/current fallback values.
+
+Gate Session commit_prepared's implicit pipeline pass with Transaction::needs_flush, matching model commit. Explicit flush remains unconditional; a write or queued update after flushing requires another pass.
+
+CallbackRead::node encodes the captured source record in the shared identity store. Consume original pure-hook arguments through that same read capability, never by borrowing an ancestor transaction.
+
+Commit preparation authorizes only commit.next through callbacks/publication.rs. Capture ForeignReadContext metadata after flush without pinning pending records; pair exact canonical state captures inside an RAII lease. Validate both editor/update and the installed lease on every derived read, and remove/drop prepared owners outside locks. Unrelated and expired captures reject.
+
+Session::read_state reads a retained immutable version with its editor associated, without flushing suspended writes. Use nested CallbackRead/CallbackContext state reads while the Session is leased; restore prior authority on every exit. Historical graph ownership differs from the latest committed selection/point owner. Editor-less reads and inherited selection synchronization remain separate work.
+
+Retain newly created selection values from published-state reads independently of a surrounding pending rollback. Preserve their IDs and ordinary fields; never let surviving historical-version handles alias truncated or reused selection indices.
+
+Indexed calls, captured-field reads and Session update/commit bodies bracket ForeignReadOperation. Check deferred failures before selection synchronization, encoding, captures and publication; nested calls isolate caught exceptions without granting new editor authority. Finish the entire commit workflow result, including cleanup and early failures, so a secondary error cannot replace the first deferred failure.
+
+The indexed lexical.$copyNode entry delegates to Transaction.copy_node, preserving the normal clone and reset hooks, fresh keys and empty child/parent links.
+
+Node and markdown selection-export APIs pass ForeignSelectionCapture values through StateRef metadata so native extractWithChild callbacks reuse their original ordinary selection handles.

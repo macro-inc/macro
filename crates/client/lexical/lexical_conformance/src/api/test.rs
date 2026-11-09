@@ -3,6 +3,106 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn parse_serialized_nodes_appends_fresh_copies_like_the_upstream_editor_example()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("Hello world")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    let mut replay = Replayer::default();
+    let id = api::index()
+        .binary_search(&"lexical.$parseSerializedNode")
+        .expect("parse") as u32;
+    let parsed = api::call_by_id(
+        &mut replay,
+        &mut tx,
+        id,
+        json!([{
+            "type":"paragraph", "version":1, "direction":null, "format":"", "indent":0,
+            "children":[{"type":"text", "version":1, "text":"Hello world", "format":0,
+                         "style":"", "detail":0, "mode":"normal"}]
+        }]),
+        None,
+    )?;
+    let copy = crate::replay::node_key(&parsed)?;
+    assert_ne!(copy, paragraph);
+    let child = tx.children(copy).next().expect("child");
+    assert_ne!(child, text);
+    assert_eq!(tx.text_content(copy), "Hello world");
+    tx.append(NodeKey::ROOT, &[copy])?;
+    assert_eq!(tx.text_content(NodeKey::ROOT), "Hello world\n\nHello world");
+    Ok(())
+}
+
+#[test]
+fn parse_serialized_nodes_uses_registered_types_and_rejects_nonobjects()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let mut replay = Replayer::default();
+    let id = api::index()
+        .binary_search(&"lexical.$parseSerializedNode")
+        .expect("parse") as u32;
+    let error = api::call_by_id(&mut replay, &mut tx, id, json!([{"type":"missing"}]), None)
+        .expect_err("unregistered");
+    assert_eq!(
+        error.to_string(),
+        "parseEditorState: type \"missing\" + not found"
+    );
+    let error = api::call_by_id(&mut replay, &mut tx, id, json!([null]), None).expect_err("object");
+    assert_eq!(error.to_string(), "serialized node must be an object");
+    assert_eq!(tx.children(NodeKey::ROOT).count(), 0);
+    let parsed = api::call_by_id(
+        &mut replay,
+        &mut tx,
+        id,
+        json!([{
+            "type":"text", "version":1, "text":"😀é", "format":1,
+            "style":"color: red;", "detail":0, "mode":"normal"
+        }]),
+        None,
+    )?;
+    let key = crate::replay::node_key(&parsed)?;
+    assert_eq!(tx.text_content(key), "😀é");
+    assert_eq!(tx.text_content_size(key), Utf16Offset(4));
+    assert_eq!(tx.view().text_data(key)?.format, TextFormat::BOLD);
+    Ok(())
+}
+
+#[test]
+fn absent_node_keys_return_null_like_the_upstream_map_lookup()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let mut replay = Replayer::default();
+    for args in [
+        json!(["missing"]),
+        json!([]),
+        json!([null]),
+        json!([7]),
+        json!([{"$undef":true}]),
+    ] {
+        assert_eq!(
+            api::lexical::call(
+                &mut replay,
+                &mut tx,
+                &json!({"fn":"lexical.$getNodeByKey", "args":args})
+            )?,
+            serde_json::Value::Null
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn indexed_calls_mutate_the_same_model_and_keep_captured_records()
 -> Result<(), crate::replay::ReplayError> {
     let mut editor = Editor::builder(EditorMode::Headless)
@@ -464,12 +564,18 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
             }
         );
         assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
+        let slot = selections
+            .resolve(&mut tx, 0)?
+            .ok_or_else(|| crate::replay::fail("selection handle"))?;
         assert_eq!(
-            tx.range_at(selections.slot(0)?)?.anchor.offset(),
+            tx.range_at(slot)?.anchor.offset(),
             if return_to_original { 2 } else { 0 }
         );
+        let slot = selections
+            .resolve(&mut tx, 1)?
+            .ok_or_else(|| crate::replay::fail("selection handle"))?;
         assert_eq!(
-            tx.range_at(selections.slot(1)?)?.anchor.offset(),
+            tx.range_at(slot)?.anchor.offset(),
             if return_to_original { 0 } else { 2 }
         );
         let nested = seen.lock().expect("test log")[0].clone();
@@ -616,7 +722,10 @@ fn paragraph_insertion_keeps_a_selection_activated_by_its_foreign_hook()
         json!({"$selection":1,"kind":"range"})
     );
     assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
-    assert_eq!(tx.range_at(selections.slot(0)?)?.anchor.offset(), 5);
+    let slot = selections
+        .resolve(&mut tx, 0)?
+        .ok_or_else(|| crate::replay::fail("selection handle"))?;
+    assert_eq!(tx.range_at(slot)?.anchor.offset(), 5);
     tx.commit()?;
     Ok(())
 }

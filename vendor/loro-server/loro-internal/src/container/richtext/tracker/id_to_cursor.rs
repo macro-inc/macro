@@ -461,9 +461,7 @@ mod insert_set {
             for &(from, to, leaf) in updates {
                 debug_assert!(from <= to);
                 debug_assert!(to <= len);
-                for i in from..to {
-                    dense[i] = leaf;
-                }
+                dense[from..to].fill(leaf);
             }
 
             let mut new_set: SmallVec<[Insert; 1]> = SmallVec::new();
@@ -1217,6 +1215,41 @@ mod test {
         assert_ne!(set.get_insert(199), Some(new_leaf));
         for i in 200..300 {
             assert_eq!(set.get_insert(i), Some(new_leaf));
+        }
+    }
+
+    #[test]
+    fn dense_batch_matches_ordered_updates_with_overlaps_and_empty_ranges() {
+        // Push enough elements to obtain genuinely different B-tree leaves.
+        let mut tree = BTree::<DummyTree>::new();
+        let mut leaves = Vec::new();
+        for _ in 0..2_000 {
+            let leaf = tree.push(DummyElem).leaf;
+            if leaves.last() != Some(&leaf) {
+                leaves.push(leaf);
+            }
+            if leaves.len() == 6 {
+                break;
+            }
+        }
+        assert_eq!(leaves.len(), 6);
+        for len in [1, 2, 255, 256, 300] {
+            let mut batch = insert_set::InsertSet::new(leaves[0], len);
+            let mut sequential = insert_set::InsertSet::new(leaves[0], len);
+            let updates = [
+                (0, len, leaves[1]),
+                (len / 4, len * 3 / 4, leaves[2]),
+                (len / 2, len / 2, leaves[3]),
+                (0, len / 3, leaves[4]),
+                (len - 1, len, leaves[5]),
+            ];
+            batch.update_many(&updates);
+            for (from, to, leaf) in updates {
+                sequential.update(from, to, leaf);
+            }
+            for index in 0..len {
+                assert_eq!(batch.get_insert(index), sequential.get_insert(index));
+            }
         }
     }
 }

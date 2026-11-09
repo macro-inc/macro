@@ -55,12 +55,19 @@ impl Transaction<'_> {
     }
     pub(crate) fn drain_updates(&mut self) -> Result<bool, Error> {
         let mut skip_transforms = false;
-        while let Some((update, options)) = self.nested.pop_front() {
+        loop {
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
+            let Some((update, options)) = self.nested.pop_front() else {
+                break;
+            };
             skip_transforms |= options.skip_transforms;
             for tag in options.tags.iter() {
                 self.add_tag(tag.clone());
             }
             update(self)?;
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
         }
         Ok(skip_transforms)
     }
@@ -81,7 +88,11 @@ impl Transaction<'_> {
         if self.sealed {
             return Ok(());
         }
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         let result = self.flush_inner(mode);
+        #[cfg(feature = "foreign-nodes")]
+        let result = result.and_then(|()| ForeignReadOperation::check());
         #[cfg(feature = "foreign-nodes")]
         let result = result.and_then(|()| self.view().check_foreign_payloads());
         self.transform_iterations = 0;
@@ -97,7 +108,7 @@ impl Transaction<'_> {
             .map(|range| range.anchor);
         let mut anchor_key = None;
         if let Some(Point::Text { key, .. }) = anchor {
-            self.run_selection_transform(key)?;
+            self.selection_transform(key)?;
             anchor_key = Some(key);
         }
         // The anchor hook may move the live focus, including to a newly created node.
@@ -106,7 +117,7 @@ impl Transaction<'_> {
             .map(|range| range.focus)
             && Some(key) != anchor_key
         {
-            self.run_selection_transform(key)?;
+            self.selection_transform(key)?;
         }
         if !self.dirty_leaves.is_empty() || !self.dirty_elements.is_empty() {
             if mode == FlushMode::NormalizeOnly
@@ -120,6 +131,8 @@ impl Transaction<'_> {
                 transforms::apply(self)?;
             }
             self.drain_updates()?;
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             gc::collect(self);
         }
         if let Some(Selection::Range(range)) = &self.pending.selection
@@ -130,6 +143,8 @@ impl Transaction<'_> {
         }
         if matches!(&self.pending.selection, Some(Selection::Node(selection)) if selection.nodes.is_empty())
         {
+            #[cfg(feature = "foreign-nodes")]
+            self.retire_foreign_selection();
             self.pending.selection = None;
         }
         #[cfg(debug_assertions)]
@@ -145,7 +160,9 @@ impl Transaction<'_> {
         }
         Ok(())
     }
-    fn run_selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
+    /// Run one node's virtual selection transform in the current mutable update.
+    pub fn selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
+        self.guard_write()?;
         let index = self.type_index(key).ok_or(Error::PointNodeNotFound(key))?;
         (self.pending.registry.vtable(index).selection_transform)(self, key)
     }
@@ -181,6 +198,8 @@ impl Transaction<'_> {
         Ok(())
     }
     pub(crate) fn guard_write(&self) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
             return Err(Error::ForeignReadOnly);

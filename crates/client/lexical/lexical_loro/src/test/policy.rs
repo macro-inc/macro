@@ -303,3 +303,67 @@ fn remote_compare_can_ignore_a_field_and_keep_local_when_other_fields_change() -
         .expect("local field retained");
     Ok(())
 }
+
+#[test]
+fn initial_transparent_cleanup_is_observed_read_only_then_preserves_local_fields() -> Result<()> {
+    let mut source = Editor::builder(EditorMode::Headless)
+        .node::<lexical_rich_nodes::mark::MarkNode>()
+        .build()
+        .expect("editor");
+    source.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let mark = tx.create(lexical_rich_nodes::mark::MarkNode {
+            ids: vec!["draft".into()],
+        })?;
+        let text = tx.create_text("retained🦀")?;
+        tx.set_state(NodeKey::ROOT, &ID, "root".into())?;
+        tx.set_state(NodeKey::ROOT, &LOCAL, json!({"root":true}).into())?;
+        tx.set_state(p, &ID, "p".into())?;
+        tx.set_state(p, &LOCAL, json!({"paragraph":true}).into())?;
+        tx.set_state(mark, &ID, "wrap".into())?;
+        tx.set_state(text, &ID, "text".into())?;
+        tx.append(mark, &[text.key()])?;
+        tx.append(p, &[mark.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(())
+    })?;
+    let doc = new_doc(91)?;
+    mirror::set_state(
+        &doc,
+        &serde_json::Value::Object(source.state().to_json()?.root),
+    )?;
+    let before = doc.export(ExportMode::Snapshot)?;
+    let vv = doc.oplog_vv();
+    let initial = reconstruct_initial_state(&doc, &FILTER)?;
+    assert!(initial.has_transparent_wrappers);
+    assert_eq!(
+        initial.state.root["children"][0]["children"][0]["type"],
+        "text"
+    );
+    assert_eq!(doc.oplog_vv(), vv);
+    assert_eq!(doc.export(ExportMode::Snapshot)?, before);
+    let loaded = Editor::builder(EditorMode::Headless)
+        .node::<lexical_rich_nodes::mark::MarkNode>()
+        .initial_state(initial.state)
+        .build()
+        .expect("loaded editor");
+    let synced = synced_json(loaded.state(), &FILTER)?;
+    mirror::set_synced_state(&doc, &synced, &FILTER)?;
+    let cleaned = reconstruct_initial_state(&doc, &FILTER)?;
+    assert!(!cleaned.has_transparent_wrappers);
+    assert_eq!(cleaned.state, synced);
+    let raw = schema::from_loro(&doc.get_deep_value())?;
+    assert_eq!(raw["root"]["$"]["local"], json!({"root":true}));
+    assert_eq!(
+        raw["root"]["children"][0]["$"]["local"],
+        json!({"paragraph":true})
+    );
+    assert_eq!(
+        raw["root"]["children"][0]["children"][0]["text"],
+        "retained🦀"
+    );
+    let stable = doc.oplog_vv();
+    mirror::set_synced_state(&doc, &synced, &FILTER)?;
+    assert_eq!(doc.oplog_vv(), stable);
+    Ok(())
+}

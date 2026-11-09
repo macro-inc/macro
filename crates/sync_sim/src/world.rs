@@ -161,10 +161,7 @@ impl Sim {
             stats: self.stats,
             per_step_failures: self.failures,
             external_clients: self.external.keys().cloned().collect(),
-            pending_adapters: vec![
-                "remaining editor command/story producers and undo removal attribution".into(),
-                "macro_document_model comment-only gate and lexical-service parity".into(),
-            ],
+            pending_adapters: vec!["remaining editor command/story producers".into()],
         }
     }
     fn emit(&mut self, fact: Fact) {

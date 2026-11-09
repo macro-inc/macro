@@ -3,18 +3,15 @@ use crate::replay::*;
 use lexical_model::*;
 use serde_json::{Value, json};
 pub(crate) fn activate(r: &mut Replayer, tx: &mut Transaction<'_>, value: &Value) -> Result<()> {
-    if let Some(old) = r.selections.take_active()?
-        && let Some(selection) = tx.selection().cloned()
-    {
-        r.selections.set_slot(old, tx.detach_selection(selection))?;
-    }
     if value.is_null() {
-        tx.set_selection(None)?;
+        tx.replace_selection(None)?;
+        r.selections.synchronize(tx)?;
         return Ok(());
     }
     let id = integer(&value["$selection"])? as usize;
-    let selection = tx.selection_at(r.selections.slot(id)?)?.cloned();
-    tx.set_selection(selection)?;
+    let slot = r.selection_slot(tx, id)?;
+    tx.activate_foreign_selection(slot)?;
+    r.selections.synchronize(tx)?;
     r.selections.set_slot(id, SelectionSlot::Active)?;
     r.selections.set_active(Some(id))?;
     Ok(())
@@ -28,7 +25,7 @@ pub(crate) fn call(
 ) -> Result<Value> {
     if let Some(point) = receiver.get("$point") {
         let id = integer(&point["selection"])? as usize;
-        let slot = r.selections.slot(id)?;
+        let slot = r.selection_slot(tx, id)?;
         let role = if point["role"] == "anchor" {
             PointRole::Anchor
         } else {
@@ -50,7 +47,7 @@ pub(crate) fn call(
             "isBefore" | "is" => {
                 let other = a.first().ok_or_else(|| fail("point"))?;
                 let other_id = integer(&other["$point"]["selection"])? as usize;
-                let other_slot = r.selections.slot(other_id)?;
+                let other_slot = r.selection_slot(tx, other_id)?;
                 let other = if other["$point"]["role"] == "anchor" {
                     tx.anchor_at(other_slot)?
                 } else {
@@ -66,12 +63,11 @@ pub(crate) fn call(
         };
     }
     let id = integer(&receiver["$selection"])? as usize;
-    let slot = r.selections.slot(id)?;
+    let slot = r.selection_slot(tx, id)?;
     let selection = tx
         .selection_at(slot)?
-        .cloned()
+        .map(Selection::snapshot_for_foreign_read)
         .ok_or_else(|| fail("empty selection handle"))?;
-    let active = r.selections.active()?;
     match method {
         "add" => {
             let key = key_arg(r, a.first().ok_or_else(|| fail("key"))?)?;
@@ -83,7 +79,12 @@ pub(crate) fn call(
             if slot == SelectionSlot::Active {
                 tx.set_selection(Some(value))?;
             } else {
-                r.selections.set_slot(id, tx.detach_selection(value))?;
+                let identity = r
+                    .selections
+                    .identity(id)?
+                    .ok_or_else(|| fail("selection identity"))?;
+                r.selections
+                    .set_slot(id, tx.detach_foreign_selection(value, identity))?;
             }
             Ok(undefined())
         }
@@ -153,18 +154,15 @@ pub(crate) fn call(
         }
         "insertNodes" => {
             tx.insert_nodes_at(slot, &node_args(a.first().ok_or_else(|| fail("nodes"))?)?)?;
-            r.selections.clear_if_active(active)?;
             Ok(undefined())
         }
         "insertParagraph" => {
             let node = tx.insert_paragraph_at(slot)?;
-            r.selections.clear_if_active(active)?;
             node.map(|key| r.node(tx.view(), key))
                 .unwrap_or(Ok(Value::Null))
         }
         "insertLineBreak" => {
             tx.insert_line_break_at(slot, a.first().and_then(Value::as_bool).unwrap_or(false))?;
-            r.selections.clear_if_active(active)?;
             Ok(undefined())
         }
         "formatText" => {
@@ -207,7 +205,11 @@ pub(crate) fn call(
             } else {
                 "node"
             };
-            let new_id = r.selections.push(tx.detach_selection(selection))?;
+            let slot = tx.detach_selection(selection);
+            let identity = tx
+                .foreign_selection_identity(slot)
+                .ok_or_else(|| fail("selection identity"))?;
+            let new_id = r.selections.push(slot, identity)?;
             Ok(json!({"$selection":new_id,"kind":kind}))
         }
         _ => Err(fail(format!("unmapped API: RangeSelection.{method}"))),

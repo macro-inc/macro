@@ -187,17 +187,25 @@ pub(crate) fn open_map(map: &LoroMap) -> Result<SerializedNode> {
     Ok(result)
 }
 pub(crate) fn read_node(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<SerializedNode> {
+    read_node_for_init(map, policy, &mut false)
+}
+pub(crate) fn read_node_for_init(
+    map: &LoroMap,
+    policy: &dyn SyncPolicy,
+    transparent: &mut bool,
+) -> Result<SerializedNode> {
     let mut node = own_map(map)?;
     mask_local(&mut node, policy);
     if let Some(list) = children(map)? {
         let mut result = Vec::new();
         for i in 0..list.len() {
             let child = map_at(list.get(i), "children item")?;
-            let json = read_node(&child, policy)?;
+            let json = read_node_for_init(&child, policy, transparent)?;
             if policy.is_dropped_json(&json) {
                 continue;
             }
             if policy.is_transparent_json(&json) {
+                *transparent = true;
                 if let Some(Value::Array(children)) = json.get("children") {
                     result.extend(children.iter().cloned())
                 }

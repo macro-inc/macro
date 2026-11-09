@@ -333,3 +333,221 @@ fn old_ts_bundle_delivers_actual_native_rows_and_preserves_owner_metadata() {
     first.compare_replay(&again).unwrap();
     assert_eq!(wire, replayed);
 }
+
+fn editor_native_and_shipping_worker(seed: u64) -> (Outcome, Vec<String>) {
+    let mut world = Mixed::with_config(SimConfig::editor(seed));
+    world
+        .sim
+        .apply_step(Step::Open(OpenSpec::form("native", "one")))
+        .unwrap();
+    world.sim.apply_step(Step::Run(Millis(500))).unwrap();
+    world.open_editor("editor", "two");
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::Type {
+                at: Pos::default(),
+                text: "ts🦀 ".into(),
+            },
+        },
+    );
+    world
+        .sim
+        .apply_step(Step::Edit {
+            client: ClientName("native".into()),
+            op: AbstractOp::Editor(EditorOp::Type {
+                at: Pos {
+                    block: 0,
+                    offset: 5,
+                },
+                text: "native ".into(),
+            }),
+        })
+        .unwrap();
+    world.pump(1000);
+    world
+        .sim
+        .apply_step(Step::Edit {
+            client: ClientName("native".into()),
+            op: AbstractOp::Editor(EditorOp::Undo),
+        })
+        .unwrap();
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::Format {
+                from: Pos::default(),
+                to: Pos {
+                    block: 0,
+                    offset: 2,
+                },
+                format: 0,
+            },
+        },
+    );
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::SetBlock {
+                at: Pos::default(),
+                kind: 4,
+            },
+        },
+    );
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::InsertTable {
+                at: Pos::default(),
+                rows: 1,
+                cols: 1,
+            },
+        },
+    );
+    world.pump(1000);
+    let (outcome, peers, wire) = world.finish();
+    let peer = &peers[&ClientName("editor".into())];
+    assert!(peer.initialized);
+    assert!(peer.rows.iter().all(|row| row.delivered));
+    let editor: serde_json::Value =
+        serde_json::from_str(peer.editor_json.as_ref().unwrap()).unwrap();
+    let native = outcome.finals.clients[&ClientName("native".into())]
+        .editor
+        .as_ref()
+        .unwrap();
+    assert_eq!(editor, native.synced_json);
+    assert_eq!(editor, native.reconstructed);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&peer.value_json).unwrap(),
+        outcome.finals.servers[&DocIx(0)].deep_value
+    );
+    let vv = peer
+        .vv
+        .iter()
+        .map(|(peer, counter)| (peer.parse().unwrap(), *counter))
+        .collect::<Vv>();
+    assert_eq!(vv, outcome.finals.servers[&DocIx(0)].persisted_vv);
+    let ai_peers = outcome
+        .events
+        .iter()
+        .filter_map(|event| match &event.fact {
+            Fact::ExternalCommit { client, spans, .. } if client.0 == "editor" => Some(spans),
+            _ => None,
+        })
+        .flatten()
+        .map(|span| span.peer)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(
+        ai_peers.len() > 1,
+        "real workspace rotates its authoring peer"
+    );
+    for peer in ai_peers {
+        assert!(
+            (doc_sync_core::AI_PEER_BASE
+                ..doc_sync_core::AI_PEER_BASE + doc_sync_core::AI_PEER_COUNT)
+                .contains(&peer)
+        );
+        assert!(
+            !outcome.finals.servers[&DocIx(0)]
+                .active_peers_without_ai
+                .contains(&peer)
+        );
+    }
+    assert!(editor.to_string().contains("ts"));
+    assert!(!editor.to_string().contains("native "));
+    let blocks = editor["root"]["children"].as_array().unwrap();
+    assert!(blocks.iter().any(|block| block["type"] == "quote"));
+    let table = blocks
+        .iter()
+        .find(|block| block["type"] == "table")
+        .unwrap();
+    assert_eq!(table["children"].as_array().unwrap().len(), 2);
+    assert!(
+        outcome
+            .events
+            .iter()
+            .any(|event| matches!(event.fact, Fact::UndoApplied { .. }))
+    );
+    (outcome, wire)
+}
+
+#[test]
+fn real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays_exactly() {
+    let (first, wire) = editor_native_and_shipping_worker(761);
+    let (again, replayed) = editor_native_and_shipping_worker(761);
+    first.compare_replay(&again).unwrap();
+    assert_eq!(wire, replayed);
+}
+
+fn markdown_native_and_shipping_worker(seed: u64, snippet: u8) -> (Outcome, Vec<String>) {
+    let mut world = Mixed::with_config(SimConfig::editor(seed));
+    world
+        .sim
+        .apply_step(Step::Open(OpenSpec::form("native", "one")))
+        .unwrap();
+    world.sim.apply_step(Step::Run(Millis(500))).unwrap();
+    world.open_editor("editor", "two");
+    world.pump(500);
+    world.command(
+        "editor",
+        PeerCommand::Editor {
+            client: "editor".into(),
+            op: EditorOp::PasteMarkdown {
+                at: Pos::default(),
+                snippet,
+            },
+        },
+    );
+    world.pump(500);
+    world
+        .sim
+        .apply_step(Step::Edit {
+            client: ClientName("native".into()),
+            op: AbstractOp::Editor(EditorOp::Type {
+                at: Pos::default(),
+                text: "native🦀".into(),
+            }),
+        })
+        .unwrap();
+    world.pump(500);
+    let (outcome, peers, wire) = world.finish();
+    let peer = &peers[&ClientName("editor".into())];
+    let editor: serde_json::Value =
+        serde_json::from_str(peer.editor_json.as_ref().unwrap()).unwrap();
+    let native = outcome.finals.clients[&ClientName("native".into())]
+        .editor
+        .as_ref()
+        .unwrap();
+    assert_eq!(editor, native.synced_json);
+    assert_eq!(editor, native.reconstructed);
+    assert!(peer.rows.iter().all(|row| row.delivered));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&peer.value_json).unwrap(),
+        outcome.finals.servers[&DocIx(0)].deep_value
+    );
+    let vv = peer
+        .vv
+        .iter()
+        .map(|(peer, counter)| (peer.parse().unwrap(), *counter))
+        .collect::<Vv>();
+    assert_eq!(vv, outcome.finals.servers[&DocIx(0)].persisted_vv);
+    (outcome, wire)
+}
+#[test]
+fn real_shipping_markdown_pastes_interoperate_and_replay_exactly() {
+    for snippet in 0..3 {
+        let (first, wire) = markdown_native_and_shipping_worker(809 + u64::from(snippet), snippet);
+        let (again, replayed) =
+            markdown_native_and_shipping_worker(809 + u64::from(snippet), snippet);
+        first.compare_replay(&again).unwrap();
+        assert_eq!(wire, replayed);
+    }
+}

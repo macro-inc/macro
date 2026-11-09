@@ -23,6 +23,11 @@ impl NodeRecord {
 }
 impl<'state> NodeRef<'state> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn foreign_record_identity(self) -> &'state ForeignRecordIdentity {
+        &self.slot.foreign_identity.0
+    }
+
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) fn from_retired(
         slot: &'state NodeSlot,
         registry: &'state std::sync::Arc<Registry>,
@@ -42,6 +47,23 @@ impl<'state> NodeRef<'state> {
     /// Make an independent ephemeral record, applying the clone hook.
     /// s2: ID-07
     pub fn to_owned(self) -> NodeRecord {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.to_owned_impl(None)
+        }
+        #[cfg(not(feature = "foreign-nodes"))]
+        {
+            self.to_owned_impl()
+        }
+    }
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn to_owned_with_source(self, source: ForeignReadSnapshot) -> NodeRecord {
+        self.to_owned_impl(Some(source))
+    }
+    fn to_owned_impl(
+        self,
+        #[cfg(feature = "foreign-nodes")] source: Option<ForeignReadSnapshot>,
+    ) -> NodeRecord {
         let mut slot = self.slot.clone();
         #[cfg(feature = "foreign-nodes")]
         let replacement = crate::foreign::payload::clone_payload(
@@ -50,6 +72,7 @@ impl<'state> NodeRef<'state> {
             slot.key,
             slot.key,
             &slot.data,
+            source,
         );
         #[cfg(not(feature = "foreign-nodes"))]
         let replacement = slot.data.after_clone();

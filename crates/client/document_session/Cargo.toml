@@ -17,6 +17,7 @@ rootcause.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+macro_document_model.workspace = true
 uuid_value.workspace = true
 sync_protocol.workspace = true
 bebop.workspace = true
@@ -25,6 +26,8 @@ proptest.workspace = true
 
 [features]
 conformance = []
+# Simulation-only malformed projection producer; never ship enabled.
+test-faults = []
 
 [[example]]
 name = "collab"

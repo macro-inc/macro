@@ -1,0 +1,183 @@
+import { ConformanceBackend } from './backend/conformance';
+import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
+import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
+import { UpdateController, type UpdateOptions } from './update';
+
+let activeEditor: LexicalEditor | undefined;
+let activeStateEditor: LexicalEditor | undefined;
+
+export function getActiveEditor(): LexicalEditor {
+  if (activeEditor === undefined)
+    throw new Error(
+      'Unable to find an active editor. This method can only be used synchronously during the callback of editor.update() or editor.read().'
+    );
+  return activeEditor;
+}
+
+export function getActiveStateEditor(): LexicalEditor {
+  if (activeStateEditor === undefined)
+    throw new Error(
+      'Unable to find an active editor state. State helpers or node methods can only be used synchronously during the callback of editor.update(), editor.read(), or editorState.read().'
+    );
+  return activeStateEditor;
+}
+
+export interface EditorConfig {
+  readonly namespace?: string;
+  readonly onError?: (error: unknown, editor: LexicalEditor) => void;
+}
+
+export class EditorState {
+  private readonly ownership: object;
+  private readonly snapshot: unknown;
+
+  constructor(
+    private readonly editor: LexicalEditor,
+    private readonly version: number
+  ) {
+    this.ownership = editor.runtime.handles.pinVersion(version);
+    this.snapshot = editor.runtime.backend.readState(String(version), () =>
+      editor.runtime.backend.call('LexicalEditor.getEditorState', [])
+    );
+  }
+
+  read<T>(body: () => T, options?: { editor?: LexicalEditor }): T {
+    if (options?.editor !== undefined && options.editor !== this.editor)
+      throw new Error('state belongs to another editor');
+    // The closure pins the version owner through callbacks and synchronous GC.
+    const owner = this.ownership;
+    let result: { value: T } | undefined;
+    this.editor.runtime.backend.readState(String(this.version), () => {
+      result = {
+        value: this.editor.scope(body, options?.editor !== undefined),
+      };
+      return owner;
+    });
+    if (result === undefined) throw new Error('state read did not run');
+    return result.value;
+  }
+
+  isEmpty(): boolean {
+    return this.read(() => {
+      const root = this.editor.runtime.call('lexical.$getRoot', []);
+      if (!(root instanceof RootNode)) throw new Error('expected model root');
+      return (
+        root.getChildrenSize() === 0 &&
+        this.editor.runtime.call('lexical.$getSelection', []) === null
+      );
+    });
+  }
+
+  toJSON(): unknown {
+    return this.read(() =>
+      this.editor.runtime.backend.call('EditorState.toJSON', [], this.snapshot)
+    );
+  }
+}
+
+export class LexicalEditor {
+  readonly runtime: NodeRuntime;
+  private readonly updates: UpdateController;
+  private state: EditorState;
+
+  constructor(config: EditorConfig = {}) {
+    const backend = new ConformanceBackend({
+      namespace: config.namespace ?? '',
+    });
+    this.runtime = new NodeRuntime(backend, nativeNode);
+    this.state = new EditorState(this, 0);
+    this.updates = new UpdateController({
+      backend,
+      scope: (body) => this.scope(body),
+      apply: (packet) => {
+        const metadata: unknown = JSON.parse(packet.metadata_json);
+        if (
+          metadata === null ||
+          typeof metadata !== 'object' ||
+          !('version' in metadata) ||
+          typeof metadata.version !== 'number'
+        )
+          throw new Error('invalid committed model version');
+        this.state = new EditorState(this, metadata.version);
+      },
+      onError: (error) => {
+        if (config.onError !== undefined) config.onError(error, this);
+        else throw error;
+      },
+    });
+  }
+
+  scope<T>(body: () => T, associated = true): T {
+    const previous = activeEditor;
+    const previousState = activeStateEditor;
+    activeEditor = associated ? this : undefined;
+    activeStateEditor = this;
+    try {
+      return withNodeRuntime(this.runtime, body);
+    } finally {
+      activeEditor = previous;
+      activeStateEditor = previousState;
+    }
+  }
+
+  update(body: () => void, options?: UpdateOptions): void {
+    this.updates.update(body, options);
+  }
+  read<T>(body: () => T): T {
+    this.updates.flush();
+    return this.state.read(body, { editor: this });
+  }
+  getEditorState(): EditorState {
+    return this.state;
+  }
+  registerUpdateListener(
+    listener: (payload: {
+      editorState: EditorState;
+      prevEditorState: EditorState;
+    }) => void
+  ): () => void {
+    let previous = this.state;
+    return this.updates.addUpdateListener(() => {
+      const prevEditorState = previous;
+      previous = this.state;
+      listener({ editorState: this.state, prevEditorState });
+    });
+  }
+  registerNodeTransform(
+    klass: { getType(): string },
+    listener: (node: LexicalNode) => void
+  ): () => void {
+    const id = this.runtime.backend.registerTransform(klass.getType(), (raw) =>
+      this.scope(() => {
+        const node = this.runtime.decode(raw);
+        if (!(node instanceof LexicalNode))
+          throw new Error('expected transform node');
+        listener(node);
+      })
+    );
+    return () => this.runtime.backend.unregister(id);
+  }
+  dispose(): void {
+    this.updates.dispose();
+  }
+}
+
+export function createEditor(config?: EditorConfig): LexicalEditor {
+  return new LexicalEditor(config);
+}
+
+export function $getRoot(): RootNode {
+  const node = getActiveStateEditor().runtime.call('lexical.$getRoot', []);
+  if (!(node instanceof RootNode)) throw new Error('expected model root');
+  return node;
+}
+export function $getNodeByKey(key: string): LexicalNode | null {
+  const node = getActiveStateEditor().runtime.call('lexical.$getNodeByKey', [
+    key,
+  ]);
+  if (node === null || node instanceof LexicalNode) return node;
+  throw new Error('expected model node');
+}
+export function $isElementNode(node: unknown): node is ElementNode {
+  return node instanceof ElementNode;
+}

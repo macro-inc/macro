@@ -1,7 +1,10 @@
-//! Static command listeners and bounded, shared post-commit rounds.
+//! Static command listeners and bounded shared/conditional post-commit rounds.
 use crate::collections::IndexMap;
 use crate::*;
 use std::sync::Arc;
+/// One isolated follow-up: true publishes it; false discards all staged changes.
+/// Allocated keys remain consumed even when the transaction is discarded.
+pub type ConditionalUpdate<'a> = Box<dyn FnOnce(&mut Transaction<'_>) -> Result<bool, Error> + 'a>;
 /// Immutable extension behavior; mutable state belongs in ExtensionState.
 pub trait Plugin: Send + Sync + 'static {
     /// Diagnostic name.
@@ -10,6 +13,15 @@ pub trait Plugin: Send + Sync + 'static {
     fn commands(&self) -> &[CommandRegistration];
     /// Handle one subscribed command.
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error>;
+    /// Prepare an isolated update after the shared hooks, borrowing committed facts.
+    /// Return None when no follow-up is needed. False drops the update, including
+    /// any early flushes; true commits it through the normal bounded hook rounds.
+    fn conditional_after_commit<'a>(
+        &'a self,
+        _commit: &'a Commit,
+    ) -> Option<ConditionalUpdate<'a>> {
+        None
+    }
     /// Queue an update in the shared follow-up transaction after a commit.
     fn after_commit(&self, _tx: &mut Transaction<'_>, _commit: &Commit) -> Result<(), Error> {
         Ok(())
@@ -229,7 +241,7 @@ impl Editor {
         let commit = tx.commit()?;
         Ok((handled, self.run_after_commit(commit)))
     }
-    /// Run shared follow-up transactions, capturing failures after published commits.
+    /// Run bounded shared and conditional follow-ups, retaining published main commits.
     /// s2: TF-08
     pub fn run_after_commit(&mut self, mut commit: Commit) -> Commit {
         let plugins = self.plugins.clone();
@@ -311,11 +323,51 @@ impl Editor {
                     break;
                 }
             };
-            let mut next_previous = Vec::new();
-            if !following.is_noop() {
-                next_previous.extend(following.chain().filter(|c| !c.is_noop()).cloned());
-                commit.following.push(following);
+            let mut following = if following.is_noop() {
+                vec![]
+            } else {
+                vec![following]
+            };
+            'conditional: for prior in &previous {
+                for plugin in &plugins {
+                    let Some(update) = plugin.conditional_after_commit(prior) else {
+                        continue;
+                    };
+                    match self.conditional_update(update) {
+                        Ok(Some(next)) if next.chain().any(|entry| !entry.is_noop()) => {
+                            following.push(next)
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            failed = Some(FollowUpError {
+                                plugin: plugin.name(),
+                                error: Arc::new(error),
+                            });
+                            break 'conditional;
+                        }
+                    }
+                }
             }
+            if let Some(error) = failed {
+                rollback(self);
+                commit.follow_up_error = Some(error);
+                break;
+            }
+            if rounds >= 99 && !following.is_empty() {
+                rollback(self);
+                commit.follow_up_error = Some(FollowUpError {
+                    plugin: "follow-up",
+                    error: Arc::new(Error::EndlessFollowUps),
+                });
+                break;
+            }
+            let mut next_previous = following
+                .iter()
+                .flat_map(Commit::chain)
+                .filter(|c| !c.is_noop())
+                .cloned()
+                .collect::<Vec<_>>();
+            commit.following.extend(following);
             for prior in &previous {
                 for (name, hook) in &isolated {
                     let state = self.state.clone();
@@ -386,6 +438,30 @@ impl Editor {
             previous = next_previous;
         }
         commit
+    }
+    fn conditional_update(
+        &mut self,
+        update: ConditionalUpdate<'_>,
+    ) -> Result<Option<Commit>, Error> {
+        let state = self.state.clone();
+        let extensions = self.extensions.clone();
+        let tags = self.carried_tags.clone();
+        let composition = self.composition_key;
+        let mut tx = self.transaction();
+        let result = match update(&mut tx) {
+            Ok(true) => tx.commit().map(Some),
+            result => {
+                drop(tx);
+                result.map(|_| None)
+            }
+        };
+        if !matches!(&result, Ok(Some(_))) {
+            self.state = state;
+            self.extensions = extensions;
+            self.carried_tags = tags;
+            self.composition_key = composition;
+        }
+        result
     }
     /// Drain build-time follow-up commits once.
     pub fn take_initial_commits(&mut self) -> Vec<Commit> {

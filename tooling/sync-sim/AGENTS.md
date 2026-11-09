@@ -3,7 +3,8 @@
 ## What it is
 
 Test-only Bun host for the shipping collaboration SyncEngine, BrowserWALStore,
-WALSyncer and LoroManager GenericMirror. Rust owns the same real SimServer used
+WALSyncer and LoroManager GenericMirror, plus the actual AI EditingWorkspace
+for editor peers. Rust owns the same real SimServer used
 by native clients. No shipped package depends on this directory.
 
 ## Start here
@@ -11,6 +12,10 @@ by native clients. No shipped package depends on this directory.
 - `runtime.ts`: install deterministic clock/entropy and block fetch before imports.
 - `transport.ts`: WebSocket byte port below the shipping socket/framing stack.
 - `peer.ts`: real engine, WAL and GenericMirror integration.
+- `editor-peer.ts`: shipping AI workspace, editor bindings and rotating peer commits.
+- `editor-ops.ts`: live upstream positions and package editing operations.
+- `../../crates/sync_sim/fixtures/`: exact Markdown corpus shared with native sessions.
+- `storage.ts`: actual storage observations shared by both hosts.
 - `ts-peer.ts`: JSON-lines command/report adapter; stdout is protocol only.
 - `../../crates/sync_sim/tests/mixed_versions.rs`: native host and assertions.
 
@@ -29,7 +34,18 @@ by native clients. No shipped package depends on this directory.
   They do not establish shared browser ABI, database identity or async Web Lock parity.
   Legacy rows have no user identity and are attributed to the importing current user
   per S7 O-2; these handoffs do not establish mixed-account cache convergence.
-- GenericMirror tests do not establish Lexical editor, selection or AI-binding parity.
+- Editor peers use the actual AI worker registry, bindings, engine and WAL. Reject
+  undo/redo, browser shortcuts and movement commands absent from that shipping workspace;
+  native DocumentSession stories exercise those paths. Do not emulate a binding.
+- Record local-update ranges from decoded subscription bytes, including rotated AI
+  peers, before forwarding frames. Imported VV growth is not authorship evidence.
+- Await stdout completion before shutdown; table snapshots can exceed a pipe buffer.
+- Seed Node random-fill and Node webcrypto as well as global crypto before importing
+  either shipped Nanoid version.
+- Paste Markdown with the actual source ALL_TRANSFORMERS and selection insertNodes;
+  read the committed native corpus, never substitute a second parser. Independent
+  short-snippet literals do not establish compound heading-start insertion parity.
+- GenericMirror tests alone do not establish editor or browser-selection parity.
 
 ## Checks
 
