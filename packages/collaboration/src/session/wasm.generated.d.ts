@@ -301,6 +301,12 @@ export class SyncRouter {
     wakeAt(): number;
 }
 
+/**
+ * Prepare the MarkdownSync linkifier before editors accept their first paste.
+ * The host schedules this after paint while preparing the shared editor engine.
+ */
+export function prepareMacroPaste(): void;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -362,6 +368,7 @@ export interface InitOutput {
     readonly editorsession_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_typeTable: (a: number) => [number, number, number, number];
     readonly editorsession_wakeAt: (a: number) => number;
+    readonly prepareMacroPaste: () => void;
     readonly syncrouter_attach: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly syncrouter_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly syncrouter_detach: (a: number, b: number, c: number) => [number, number, number];

@@ -22,6 +22,10 @@ mod query;
 mod router;
 mod storage;
 mod telemetry;
+
+mod paste_init;
+pub use paste_init::prepare_macro_paste;
+
 use bebop::Record;
 pub use document::DocSession;
 pub use editor::EditorSession;

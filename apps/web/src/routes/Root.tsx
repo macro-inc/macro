@@ -23,6 +23,7 @@ import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { UserContextProvider, useUserInfo } from '@core/context/user';
+import { EditorEngineProvider } from '@core/document-session/editor-engine';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
@@ -226,44 +227,46 @@ export function Root() {
       <MetaProvider>
         <AnalyticsContextProvider>
           <PosthogProvider>
-            <EntityProvider>
-              <UserContextProvider>
-                <EmailLinksContextProvider>
-                  <BrowserNotificationModal />
-                  <FullScreenCallPrompt />
-                  <IosPushNotificationModal />
-                  <IpadUnsupportedDialog />
-                  <GlobalShareInboxConflictDialog />
-                  <ChannelsContextProvider>
-                    <CallProvider>
-                      <CallKitSync />
-                      <CallStartedNotifier />
-                      <IncomingCallEvents />
-                      <QuickAccessProvider>
-                        <Title>{tabTitle()}</Title>
-                        <MeetingSessionProvider>
-                          {/* Loading boundaries belong inside RootFrame so
+            <EditorEngineProvider>
+              <EntityProvider>
+                <UserContextProvider>
+                  <EmailLinksContextProvider>
+                    <BrowserNotificationModal />
+                    <FullScreenCallPrompt />
+                    <IosPushNotificationModal />
+                    <IpadUnsupportedDialog />
+                    <GlobalShareInboxConflictDialog />
+                    <ChannelsContextProvider>
+                      <CallProvider>
+                        <CallKitSync />
+                        <CallStartedNotifier />
+                        <IncomingCallEvents />
+                        <QuickAccessProvider>
+                          <Title>{tabTitle()}</Title>
+                          <MeetingSessionProvider>
+                            {/* Loading boundaries belong inside RootFrame so
                                     a pending resource cannot detach the frame. */}
-                          <IsomorphicRouter
-                            transformUrl={transformShortIdInUrlPathname}
-                            root={AppRouteFrame}
-                            rootPreload={rootPreload}
-                            base={ROUTER_BASE}
-                          >
-                            {{
-                              path: '/',
-                              component: TauriRouteListener,
-                              children: ROUTES,
-                            }}
-                          </IsomorphicRouter>
-                        </MeetingSessionProvider>
-                        <ToastRegion />
-                      </QuickAccessProvider>
-                    </CallProvider>
-                  </ChannelsContextProvider>
-                </EmailLinksContextProvider>
-              </UserContextProvider>
-            </EntityProvider>
+                            <IsomorphicRouter
+                              transformUrl={transformShortIdInUrlPathname}
+                              root={AppRouteFrame}
+                              rootPreload={rootPreload}
+                              base={ROUTER_BASE}
+                            >
+                              {{
+                                path: '/',
+                                component: TauriRouteListener,
+                                children: ROUTES,
+                              }}
+                            </IsomorphicRouter>
+                          </MeetingSessionProvider>
+                          <ToastRegion />
+                        </QuickAccessProvider>
+                      </CallProvider>
+                    </ChannelsContextProvider>
+                  </EmailLinksContextProvider>
+                </UserContextProvider>
+              </EntityProvider>
+            </EditorEngineProvider>
           </PosthogProvider>
         </AnalyticsContextProvider>
       </MetaProvider>

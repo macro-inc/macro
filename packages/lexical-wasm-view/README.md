@@ -13,6 +13,8 @@ Local read-only views retain native edit access for host content imports while
 the view is non-editable; this never changes collaborative authorization.
 Close the returned runtime when its owning surface is disposed. Closing twice
 shares one completion and releases the native view before draining the executor.
+Construction is synchronous once WASM is ready: builders may mount on a detached
+root and later connect that same root without replacing its native session.
 
 `@macro-inc/lexical-wasm-view/compat` exports the compatibility DOM adapter and
 its runtime contract. It binds only the root supplied through setRootElement;
