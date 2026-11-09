@@ -144,7 +144,7 @@ describe('applyOpen', () => {
     if (outcome.kind !== 'opened') return;
     expect(router.panes()).toEqual([agentPane, outcome.pane]);
     expect(manager.activeSplitId()).toBe(agentPane);
-    expect(arrivals.holds(outcome.pane)).toBe(true);
+    expect(arrivals.holds(outcome.pane, router.entry(outcome.pane))).toBe(true);
     expect(
       manager.splits().map((split) => [split.content.type, split.content.id])
     ).toContainEqual(['md', 'doc-1']);
@@ -152,7 +152,44 @@ describe('applyOpen', () => {
     await outcome.undo();
 
     expect(router.panes()).toEqual([agentPane]);
-    expect(arrivals.holds(outcome.pane)).toBe(false);
+  });
+
+  it('leaves an item already on screen as it is', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const { frame, location } = command(router);
+    const deps = { router, manager, arrivals, stacked: false };
+    const first = await applyOpen(deps, frame, location);
+    if (first.kind !== 'opened') throw new Error('expected an open');
+    const [agentPane] = router.panes();
+    manager.activateSplit(agentPane as never);
+
+    const again = await applyOpen(deps, frame, location);
+
+    expect(again.kind).toBe('shown');
+    expect(router.panes()).toEqual([agentPane, first.pane]);
+    expect(manager.activeSplitId()).toBe(agentPane);
+  });
+
+  it('Undo keeps what the person changed since, taking away only its pane', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const [agentPane] = router.panes();
+    const { frame, location } = command(router);
+    const outcome = await applyOpen(
+      { router, manager, arrivals, stacked: false },
+      frame,
+      location
+    );
+    if (outcome.kind !== 'opened') throw new Error('expected an open');
+    await router.navigatePane(agentPane!, '/tasks');
+
+    await outcome.undo();
+
+    expect(router.panes()).toEqual([agentPane]);
+    expect(router.entry(agentPane!)?.location.route.matches.at(-1)?.id).toBe(
+      'view-tasks'
+    );
   });
 
   it('never replaces a pane when there is no room for another', async () => {

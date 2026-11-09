@@ -1,11 +1,13 @@
 import {
+  type AgentArrivals,
   AgentArrivalsProvider,
   createAgentArrivals,
+  OPENED_BY_AGENT,
 } from '@app/features/agent-navigation/context/agent-arrivals';
-import type { PaneId } from '@app/lib/split-router';
+import type { Entry, PaneId } from '@app/lib/split-router';
 import { PaneContext } from '@app/lib/split-router/solid/context';
 import { render } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { createRoot, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EmailReadMarker,
@@ -164,26 +166,39 @@ describe('background notification read markers', () => {
   });
 });
 
+const AGENT_ENTRY: Entry = {
+  id: 'entry-1',
+  location: { route: { matches: [{ id: 'drive-document', params: {} }] } },
+  meta: { ...OPENED_BY_AGENT },
+};
+
 describe('read markers in a pane an agent opened', () => {
-  it('wait until the person touches the pane', () => {
-    const arrivals = createAgentArrivals();
-    arrivals.add('pane-1' as PaneId);
-    const view = render(() => (
+  function inAgentPane(arrivals: AgentArrivals, children: () => JSX.Element) {
+    return (
       <AgentArrivalsProvider arrivals={arrivals}>
         <PaneContext.Provider
           value={{
             pane: () => 'pane-1' as PaneId,
-            entry: () => undefined,
+            entry: () => AGENT_ENTRY,
             depth: () => 0,
           }}
         >
-          <NotificationReadMarker
-            notificationSource={source}
-            entity={{ type: 'document', id: 'doc' }}
-          />
+          {children()}
         </PaneContext.Provider>
       </AgentArrivalsProvider>
-    ));
+    );
+  }
+
+  it('wait until the person touches the pane', () => {
+    const arrivals = createAgentArrivals();
+    const view = render(() =>
+      inAgentPane(arrivals, () => (
+        <NotificationReadMarker
+          notificationSource={source}
+          entity={{ type: 'document', id: 'doc' }}
+        />
+      ))
+    );
     dispose = view.unmount;
     expect(mocks.markInBackground).not.toHaveBeenCalled();
 
@@ -193,5 +208,25 @@ describe('read markers in a pane an agent opened', () => {
       type: 'document',
       id: 'doc',
     });
+  });
+
+  it('keep an email thread unseen until then too', () => {
+    const arrivals = createAgentArrivals();
+    const view = render(() =>
+      inAgentPane(arrivals, () => (
+        <EmailReadMarker
+          notificationSource={source}
+          threadId="thread"
+          debounceTime={0}
+        />
+      ))
+    );
+    dispose = view.unmount;
+    expect(mocks.markThread).not.toHaveBeenCalled();
+    expect(mocks.markInBackground).not.toHaveBeenCalled();
+
+    arrivals.release('pane-1' as PaneId);
+
+    expect(mocks.markThread).toHaveBeenCalledOnce();
   });
 });

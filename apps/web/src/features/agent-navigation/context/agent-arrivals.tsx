@@ -2,9 +2,13 @@
  * Panes an agent opened that the person hasn't touched yet. An agent opening
  * an item doesn't mean the person read it, so read markers inside such a
  * pane wait until the person interacts with it.
+ *
+ * The open marks its entry (`meta.openedByAgent`), so the hold is in place
+ * from the moment the pane's content mounts, cached content included; the
+ * person's first click or key press in the pane releases it.
  */
 
-import type { PaneId } from '@app/lib/split-router';
+import type { Entry, PaneId } from '@app/lib/split-router';
 import { PaneContext } from '@app/lib/split-router/solid/context';
 import {
   type Accessor,
@@ -14,29 +18,30 @@ import {
   useContext,
 } from 'solid-js';
 
+/** Entry meta an agent's open sets on the entry it creates. */
+export const OPENED_BY_AGENT = { openedByAgent: true } as const;
+
 export type AgentArrivals = {
-  /** The pane is an agent's arrival the person hasn't touched. */
-  holds: (pane: PaneId) => boolean;
-  add: (pane: PaneId) => void;
+  /** Whether reads wait in `pane`, which shows `entry`. */
+  holds: (pane: PaneId, entry: Entry | undefined) => boolean;
+  /** The person touched `pane`: reads there go ahead. */
   release: (pane: PaneId) => void;
 };
 
 const AgentArrivalsContext = createContext<AgentArrivals>();
 
+function openedByAgent(entry: Entry | undefined): boolean {
+  return entry?.meta?.openedByAgent === true;
+}
+
 export function createAgentArrivals(): AgentArrivals {
-  const [panes, setPanes] = createSignal<readonly PaneId[]>([]);
+  const [touched, setTouched] = createSignal<readonly PaneId[]>([]);
 
   return {
-    holds: (pane) => panes().includes(pane),
-    add: (pane) =>
-      setPanes((current) =>
-        current.includes(pane) ? current : [...current, pane]
-      ),
+    holds: (pane, entry) => openedByAgent(entry) && !touched().includes(pane),
     release: (pane) =>
-      setPanes((current) =>
-        current.includes(pane)
-          ? current.filter((held) => held !== pane)
-          : current
+      setTouched((current) =>
+        current.includes(pane) ? current : [...current, pane]
       ),
   };
 }
@@ -62,6 +67,6 @@ export function useReadsHeldByAgentArrival(): Accessor<boolean> {
   return () => {
     if (!pane || !arrivals) return false;
 
-    return arrivals.holds(pane.pane());
+    return arrivals.holds(pane.pane(), pane.entry());
   };
 }

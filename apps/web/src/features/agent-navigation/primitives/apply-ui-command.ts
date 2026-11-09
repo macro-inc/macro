@@ -4,19 +4,20 @@
  * were working in keep focus, and Undo puts the layout back as it was.
  */
 
-import type {
-  LayoutSnapshot,
-  PaneId,
-  SplitLocation,
-  SplitRouter,
+import {
+  claimOf,
+  type LayoutSnapshot,
+  type PaneId,
+  type SplitLocation,
+  type SplitRouter,
 } from '@app/lib/split-router';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { splitOf } from '@components/app/split-layout/layoutManager';
-import type { AgentArrivals } from '../context/agent-arrivals';
+import { deepEqual } from '@core/util/compareUtils';
+import { type AgentArrivals, OPENED_BY_AGENT } from '../context/agent-arrivals';
 import type { UiCommandFrame } from '../core/ui-command';
 import {
   capturePaneRects,
-  paneElement,
   playArrival,
   playDeparture,
   playSettle,
@@ -33,7 +34,7 @@ export type ApplyDeps = {
 export type ApplyOutcome =
   /** A new pane shows it; `undo` takes it away again. */
   | { kind: 'opened'; pane: PaneId; undo: () => Promise<void> }
-  /** A pane already showing it was brought up; nothing to undo. */
+  /** Already on screen; left as it is, nothing to undo. */
   | { kind: 'shown' }
   /** No room for another pane, and the agent never replaces one. */
   | { kind: 'no_room' }
@@ -55,15 +56,21 @@ function paneShowingSession(
     );
 }
 
-function samePanes(left: readonly PaneId[], right: readonly PaneId[]) {
-  return (
-    left.length === right.length && left.every((pane) => right.includes(pane))
-  );
+/** Already shown by a pane or a preview: an open would only bring it forward. */
+function alreadyShown(router: SplitRouter, location: SplitLocation): boolean {
+  const claim = claimOf(router.routes, location.route);
+
+  return claim !== undefined && router.claims.holderOf(claim) !== undefined;
 }
 
-/** The person's first touch of an arrival makes it theirs. */
+/**
+ * The person's first touch of an arrival makes it theirs. Listens on the
+ * split panel, which tiled and stacked layouts both render.
+ */
 function releaseOnTouch(arrivals: AgentArrivals, pane: PaneId) {
-  const element = paneElement(pane);
+  const element = [...document.querySelectorAll('[data-split-id]')].find(
+    (panel) => panel instanceof HTMLElement && panel.dataset.splitId === pane
+  );
   if (!element) return;
 
   const release = () => {
@@ -93,16 +100,17 @@ async function undo(
   deps: ApplyDeps,
   pane: PaneId,
   snapshot: LayoutSnapshot,
-  before: readonly PaneId[]
+  opened: LayoutSnapshot
 ) {
   deps.arrivals.release(pane);
   const others = deps.router.panes().filter((open) => open !== pane);
   const rects = capturePaneRects(others);
   if (!deps.stacked) await playDeparture(pane);
 
-  // Restore the layout as it was when nothing else changed since; otherwise
-  // take away only the agent's pane and leave the person's changes.
-  const untouched = samePanes(deps.router.panes(), [...before, pane]);
+  // Restore the layout as it was when nothing else changed since (panes,
+  // sizes, order, where each pane is); otherwise take away only the agent's
+  // pane and keep the person's changes.
+  const untouched = deepEqual(deps.router.layoutSnapshot(), opened);
   await (untouched
     ? deps.router.restoreLayout(snapshot)
     : deps.router.remove(pane));
@@ -122,6 +130,8 @@ export async function applyOpen(
     ? (manager?.canSplit(splitOf(split.pane), split.side) ?? true)
     : (manager?.canAppendSplit() ?? true);
   if (!deps.stacked && !roomy) return { kind: 'no_room' };
+  // Opening it again would bring its pane forward and take focus.
+  if (alreadyShown(router, location)) return { kind: 'shown' };
 
   const before = router.panes();
   const snapshot = router.layoutSnapshot();
@@ -129,11 +139,12 @@ export async function applyOpen(
 
   // The person keeps working where they were: the new split neither becomes
   // active nor takes focus (the manager's `activate: false`), so a caret
-  // mid-sentence in a composer stays put.
+  // mid-sentence in a composer stays put. The entry is marked as the agent's
+  // before anything mounts, so its read markers wait from the start.
   const result = await router.open(
     { location },
     { newPane: true, source, intent: { direct: true, split } },
-    { meta: { activate: false } }
+    { meta: { activate: false, ...OPENED_BY_AGENT } }
   );
 
   if (result.status === 'cancelled') return { kind: 'cancelled' };
@@ -142,7 +153,7 @@ export async function applyOpen(
   }
 
   const pane = result.pane;
-  deps.arrivals.add(pane);
+  const opened = router.layoutSnapshot();
   requestAnimationFrame(() => {
     releaseOnTouch(deps.arrivals, pane);
     if (!deps.stacked) playArrival(pane, rects);
@@ -151,6 +162,6 @@ export async function applyOpen(
   return {
     kind: 'opened',
     pane,
-    undo: () => undo(deps, pane, snapshot, before),
+    undo: () => undo(deps, pane, snapshot, opened),
   };
 }

@@ -152,13 +152,26 @@ export function ChannelDebouncedNotificationReadMarker(
   );
 }
 
-export function EmailReadMarker(props: {
+type EmailReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   threadId: string;
   /** The inbox the thread belongs to; scopes mark-as-seen to a non-primary inbox. */
   linkId?: string;
-}) {
+};
+
+/** Marks an email thread seen; waits, like the others, in a pane an agent opened. */
+export function EmailReadMarker(props: EmailReadMarkerProps) {
+  const held = useReadsHeldByAgentArrival();
+
+  return (
+    <Show when={!held()}>
+      <EmailSeenOnMount {...props} />
+    </Show>
+  );
+}
+
+function EmailSeenOnMount(props: EmailReadMarkerProps) {
   const markSeenMutation = useMarkThreadAsSeenMutation();
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
