@@ -19,7 +19,8 @@ not import runtime values from upstream `lexical` or its internal modules.
 - `utils.ts`, `dom-utils.ts`, `block-cursor.ts`: ported DOM/keyboard helpers.
 - `*-state.ts`: shared upstream pass/event state after splitting the source modules.
 - `upstream-harness.ts`: test-only source swapping; this retains the real upstream model.
-- `types.ts` and `node-types.ts`: concrete recursive editor/state/node contracts required by the DOM adapter; these used members do not prove the complete facade.
+- `types.ts` and `node-types.ts`: concrete recursive editor/state/node call subsets required by the DOM adapter; traversal is non-generic internally, while public core generics remain complete.
+- `internal-contract.type-test.ts`: exact DOMInternalCallSubset manifest for the oracle; product modules can only call the members declared here.
 - `upstream-contract.type-test.ts`: exact expected/actual observable declaration bundles for the external CI oracle and direct checks for the DOM-only base slot.
 
 ## Boundaries
@@ -33,7 +34,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Pass a caller-owned parentSpan to root binding or reconciliation when available; the view ends only its own child span.
 - Keep the core's Point/RangeSelection/NodeSelection instances and command object identities.
 - Keep application types bound to upstream declarations; compare DOMObservableExpected/DOMObservableActual only through the test-only whole-graph declaration oracle after strict implementation declaration emission.
-- Use view-owned editor/state/node interfaces in product signatures, preserving recursive generic methods; never import the declaration oracle, strip private members in product types, or introduce a view-to-core package cycle.
+- Use view-owned editor/state/node call subsets in product signatures; keep internal traversal non-generic and public core generics unchanged; never import the declaration oracle, strip private members in product types, or introduce a view-to-core package cycle.
 - Keep JS node classes unchanged; getDOMSlot must return these exported DOMSlot/ElementDOMSlot classes.
 - Keep the upstream MIT notice and preserve DOM structures, command payloads and platform quirks when retargeting source.
 - Distinguish ported DOM over the upstream model from the actual Rust compat engine in every test report.

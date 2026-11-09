@@ -111,7 +111,9 @@ export function getEditorPropertyFromDOMNode(node: Node | null): unknown {
  * Return true if the TextNode is a TabNode or is in token mode.
  */
 export function $isTokenOrTab(node: TextNode): boolean {
-  return $isTabNode(node) || node.isToken();
+  // The internal call subset intentionally has no Tab-only methods.
+  const isTab: boolean = $isTabNode(node);
+  return isTab || node.isToken();
 }
 
 /**

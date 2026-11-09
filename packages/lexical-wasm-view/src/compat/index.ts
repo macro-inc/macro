@@ -30,3 +30,5 @@ export type {
   DOMObservableExpected,
 } from './upstream-contract.type-test';
 export { type CompatCommit, type CompatView, createCompatView } from './view';
+
+export type { DOMInternalCallSubset } from './internal-contract.type-test';
