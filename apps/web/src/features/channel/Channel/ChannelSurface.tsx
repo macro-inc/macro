@@ -49,6 +49,8 @@ export type ChannelResolvedTarget =
 export type ChannelSurfaceApi = {
   /** Live timeline state while messages are mounted, else the last state seen. */
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
+  /** Focus the composer while messages are mounted. */
+  focusInput: () => void;
 };
 
 export type ChannelSurfaceProps = {
@@ -131,7 +133,8 @@ function resolveSync(
  * timeline snapshot; knows nothing about tabs, calls, or host chrome. Layers
  * above attach by passing state down (`targetRequest`) or mounting parts
  * (`ChannelMessages`) — the surface exposes no registration hooks beyond the
- * single `ref` escape hatch for the host's persistence captor.
+ * single `ref` escape hatch for the host's persistence captor and composer
+ * focus.
  *
  * Hosts must remount the surface when `channelId` changes (key it).
  */
@@ -220,6 +223,7 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
   props.ref?.({
     getMessagesStateSnapshot: () =>
       messagesHandle()?.getMessagesStateSnapshot() ?? lastMessagesSnapshot,
+    focusInput: () => messagesHandle()?.focusInput(),
   });
 
   return (

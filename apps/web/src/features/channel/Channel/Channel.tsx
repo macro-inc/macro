@@ -191,6 +191,7 @@ export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
   goToLatest: (behavior?: ScrollBehavior) => void;
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
+  focusInput: () => void;
 };
 
 /** A composer that stays where it is, for a surface with no floating chrome. */
@@ -842,6 +843,7 @@ export function Channel(props: ChannelProps) {
       goToMessage,
       goToLatest,
       getMessagesStateSnapshot,
+      focusInput: () => channelInputHandle()?.focus(),
     });
   });
 

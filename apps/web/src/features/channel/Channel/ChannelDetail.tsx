@@ -52,6 +52,7 @@ import {
   type Accessor,
   children,
   createComputed,
+  createEffect,
   createSignal,
   type JSX,
   Match,
@@ -65,6 +66,7 @@ import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
   ChannelSurface,
+  type ChannelSurfaceApi,
   type ChannelTargetRequest,
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
@@ -103,6 +105,8 @@ export type ChannelDetailProps = {
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
   autofocus?: boolean;
+  /** Focus the composer each time this changes after mount. */
+  composerFocusRequest?: number;
   /** Render the host's header and register any host-specific breadcrumbs. */
   children: (context: ChannelDetailContext) => JSX.Element;
 };
@@ -417,8 +421,25 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     openParticipants: () => setActiveTab('participants'),
   });
 
+  let surface: ChannelSurfaceApi | undefined;
+  createEffect(
+    on(
+      () => props.composerFocusRequest,
+      (request) => {
+        if (request) surface?.focusInput();
+      },
+      { defer: true }
+    )
+  );
+
   return (
-    <ChannelSurface channelId={channelId} targetRequest={targetRequest()}>
+    <ChannelSurface
+      channelId={channelId}
+      targetRequest={targetRequest()}
+      ref={(api) => {
+        surface = api;
+      }}
+    >
       <DebugSuspense name="ChannelDetail.call-event-sync">
         <CallEventSync />
       </DebugSuspense>
