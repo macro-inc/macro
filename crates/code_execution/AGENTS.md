@@ -1,15 +1,19 @@
-# JavaScript execution
+# Program execution
 
 ## Scope
 
-Runs a bounded JavaScript program in a fresh Deno process inside the calling
-service. Session authentication, token issuance and execution storage belong to
-`crates/agent_code_mode` and its composition root.
+Type-checks a bounded TypeScript program against the SDK, then runs it in a
+fresh Deno process inside the calling service. Session authentication, token
+issuance and execution storage belong to `crates/agent_code_mode` and its
+composition root.
 
 ## Start here
 
 - `README.md`: permissions, limits and the program contract.
-- `src/domain/service.rs`: admission and cancellation.
+- `src/domain/service.rs`: admission, the type check before a run, and
+  cancellation.
+- `src/domain/context.rs`: `CodeContext`, the type of an attended `main`'s
+  argument.
 - `src/outbound/deno.rs`: process lifecycle and restricted permissions.
 - `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
   and final JSON protocol.
@@ -39,7 +43,13 @@ host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
 local would point at macro.com.
 
-The bootstrap bans timers before importing `main.mjs`, and the import map points
+`ExecutionService` checks every attended program before it takes a process
+slot; one with type errors fails with `FailureCode::Compile` and the checker's
+messages, and a busy or failed checker fails the run rather than running it
+unchecked. Unattended (routine) programs are checked by their host as a whole
+routine when saved, so their runs aren't checked again.
+
+The bootstrap bans timers before importing `main.ts`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
 the SSE reconnect delay, so a reconnecting event stream fails the same way.
 

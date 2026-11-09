@@ -11,7 +11,7 @@ async fn checker() -> (tempfile::TempDir, DenoChecker) {
     let binary = Command::new("which").arg("deno").output().await.unwrap();
     assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
     let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
-    let checker = DenoChecker::new(binary, root.path().to_owned(), 2, 64 * 1024)
+    let checker = DenoChecker::new(binary, root.path().to_owned(), 2, 4, 64 * 1024)
         .await
         .unwrap();
     (root, checker)
@@ -27,7 +27,13 @@ export async function main({ macro, trigger }: StepContext) {
   return { invoice: (decision.probabilities.invoice ?? 0) > 0.5 };
 }
 "#;
-    assert_eq!(checker.check(source, CONTEXT).await.unwrap(), Vec::new());
+    assert_eq!(
+        checker
+            .check(source, CONTEXT, ProgramImports::Sdk)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
     assert_eq!(checker.sdk_fingerprint(), sdk_fingerprint());
 }
 
@@ -41,7 +47,10 @@ async fn reports_sdk_misuse_at_its_line_without_host_paths() {
   return count;
 }
 "#;
-    let diagnostics = checker.check(source, CONTEXT).await.unwrap();
+    let diagnostics = checker
+        .check(source, CONTEXT, ProgramImports::Sdk)
+        .await
+        .unwrap();
     assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
     assert!(
         diagnostics[0]
@@ -63,7 +72,10 @@ async fn reports_sdk_misuse_at_its_line_without_host_paths() {
 async fn untyped_main_is_an_error() {
     let (_root, checker) = checker().await;
     let source = "export async function main({ macro }) { return macro.users; }\n";
-    let diagnostics = checker.check(source, CONTEXT).await.unwrap();
+    let diagnostics = checker
+        .check(source, CONTEXT, ProgramImports::Sdk)
+        .await
+        .unwrap();
     assert!(
         diagnostics
             .iter()
@@ -90,7 +102,10 @@ async fn cannot_read_files_outside_the_check() {
         let source = format!(
             "{import}\nexport async function main({{ macro }}: StepContext) {{ return 1; }}\n"
         );
-        let diagnostics = checker.check(&source, CONTEXT).await.unwrap();
+        let diagnostics = checker
+            .check(&source, CONTEXT, ProgramImports::Sdk)
+            .await
+            .unwrap();
         assert!(!diagnostics.is_empty(), "{import}");
         assert!(
             diagnostics
@@ -106,11 +121,13 @@ async fn cannot_read_files_outside_the_check() {
 async fn rejects_empty_and_oversized_source() {
     let (_root, checker) = checker().await;
     assert!(matches!(
-        checker.check("  ", CONTEXT).await,
+        checker.check("  ", CONTEXT, ProgramImports::Sdk).await,
         Err(CheckError::InvalidSource)
     ));
     assert!(matches!(
-        checker.check(&"x".repeat(64 * 1024 + 1), CONTEXT).await,
+        checker
+            .check(&"x".repeat(64 * 1024 + 1), CONTEXT, ProgramImports::Sdk)
+            .await,
         Err(CheckError::InvalidSource)
     ));
 }
@@ -132,13 +149,21 @@ async fn modules_checked_together_see_each_others_types_and_report_by_file() {
     };
     assert_eq!(
         checker
-            .check_files(&[first.clone(), second("count")], &declarations)
+            .check_files(
+                &[first.clone(), second("count")],
+                &declarations,
+                ProgramImports::Sdk,
+            )
             .await
             .unwrap(),
         Vec::new()
     );
     let diagnostics = checker
-        .check_files(&[first, second("total")], &declarations)
+        .check_files(
+            &[first, second("total")],
+            &declarations,
+            ProgramImports::Sdk,
+        )
         .await
         .unwrap();
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
@@ -160,8 +185,63 @@ async fn file_names_are_plain_typescript_modules() {
             source: "export const x = 1;".into(),
         };
         assert!(matches!(
-            checker.check_files(&[file], CONTEXT).await,
+            checker
+                .check_files(&[file], CONTEXT, ProgramImports::Sdk)
+                .await,
             Err(CheckError::InvalidSource)
         ));
     }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn handlebars_is_typed_only_where_programs_can_import_it() {
+    let (_root, checker) = checker().await;
+    let source = r#"import Handlebars from 'handlebars';
+export async function main({ macro }: StepContext) {
+  return Handlebars.compile('Hi {{name}}', { strict: true, noEscape: true })({ name: 'Alex' });
+}
+"#;
+    assert_eq!(
+        checker
+            .check(source, CONTEXT, ProgramImports::SdkAndHandlebars)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
+    let misuse = source.replace("Handlebars.compile", "Handlebars.compiled");
+    let diagnostics = checker
+        .check(&misuse, CONTEXT, ProgramImports::SdkAndHandlebars)
+        .await
+        .unwrap();
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("Property 'compiled' does not exist"),
+        "{diagnostics:?}"
+    );
+    let diagnostics = checker
+        .check(source, CONTEXT, ProgramImports::Sdk)
+        .await
+        .unwrap();
+    assert!(!diagnostics.is_empty());
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_check_past_the_queue_is_busy_at_once() {
+    let root = tempfile::tempdir().unwrap();
+    let binary = Command::new("which").arg("deno").output().await.unwrap();
+    let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
+    let checker = DenoChecker::new(binary, root.path().to_owned(), 1, 0, 64 * 1024)
+        .await
+        .unwrap();
+    let source = "export async function main({ macro }: StepContext) { return 1; }\n";
+    // The first check holds the only place; the second is polled after it.
+    let (first, second) = tokio::join!(
+        checker.check(source, CONTEXT, ProgramImports::Sdk),
+        checker.check(source, CONTEXT, ProgramImports::Sdk),
+    );
+    assert_eq!(first.unwrap(), Vec::new());
+    assert!(matches!(second, Err(CheckError::Busy)), "{second:?}");
 }

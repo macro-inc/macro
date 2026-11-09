@@ -1,3 +1,4 @@
+use super::context::program_context;
 use super::*;
 use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};
@@ -9,6 +10,7 @@ use tracing::Instrument;
 #[derive(Clone)]
 pub struct ExecutionService {
     runner: Arc<dyn CodeRunner>,
+    checker: Arc<dyn ProgramChecker>,
     limits: Limits,
     admitted: Arc<Semaphore>,
     running: Arc<Semaphore>,
@@ -17,11 +19,19 @@ pub struct ExecutionService {
 }
 
 impl ExecutionService {
-    /// Validate policy and wire a replaceable process adapter.
-    pub fn new(runner: Arc<dyn CodeRunner>, limits: Limits) -> Result<Self, AdmissionError> {
+    /// Validate policy and wire the process and type-checking adapters. An
+    /// attended program runs only once `checker` finds no type errors in it;
+    /// an unattended one was checked by its host with the rest of its
+    /// program before it was saved.
+    pub fn new(
+        runner: Arc<dyn CodeRunner>,
+        checker: Arc<dyn ProgramChecker>,
+        limits: Limits,
+    ) -> Result<Self, AdmissionError> {
         limits.validate()?;
         Ok(Self {
             runner,
+            checker,
             admitted: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
             running: Arc::new(Semaphore::new(limits.max_running)),
             limits,
@@ -73,38 +83,15 @@ impl ExecutionService {
         let span = tracing::info_span!(
             "code_execution.run",
             run_id = %run_id.0,
+            check = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
         self.tasks.spawn(
             async move {
                 let _admitted = admitted;
-                let queued = tracing::info_span!("code_execution.queue");
                 let outcome = match sink.emit(EventKind::Queued) {
                     Err(error) => error.into(),
-                    Ok(()) => {
-                        tokio::select! {
-                            biased;
-                            _ = token.cancelled() => Outcome::Cancelled,
-                            _ = sink.closed() => Outcome::Cancelled,
-                            _ = sleep_until(job.deadline) => Outcome::TimedOut,
-                            permit = service.running.acquire().instrument(queued) => {
-                                let _permit = permit.expect("execution semaphore is never closed");
-                                match sink.emit(EventKind::Started) {
-                                    Err(error) => error.into(),
-                                    Ok(()) => {
-                                        service
-                                            .runner
-                                            .run(job, &mut sink, token)
-                                            .instrument(tracing::info_span!(
-                                                "code_execution.process",
-                                                result_summarized_from_bytes = tracing::field::Empty,
-                                            ))
-                                            .await
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Ok(()) => service.check_then_run(job, &mut sink, token).await,
                 };
                 let label = match &outcome {
                     Outcome::Succeeded { .. } => "succeeded",
@@ -122,6 +109,81 @@ impl ExecutionService {
             events,
             cancellation,
         })
+    }
+
+    /// Type-check an attended program, then run it once a process slot is
+    /// free. A program that doesn't check, or that couldn't be checked,
+    /// never runs.
+    async fn check_then_run(
+        &self,
+        job: ExecutionJob,
+        sink: &mut EventSink,
+        token: CancellationToken,
+    ) -> Outcome {
+        let span = tracing::Span::current();
+        if job.environment.unattended.is_some() {
+            span.record("check", "skipped");
+        } else {
+            let files = [SourceFile {
+                name: PROGRAM_FILE.to_owned(),
+                source: job.request.source.clone(),
+            }];
+            let declarations = program_context(&job.environment);
+            let checked = tokio::select! {
+                biased;
+                _ = token.cancelled() => return Outcome::Cancelled,
+                _ = sink.closed() => return Outcome::Cancelled,
+                _ = sleep_until(job.deadline) => return Outcome::TimedOut,
+                checked = self.checker.check_files(&files, &declarations, ProgramImports::SdkAndHandlebars) => checked,
+            };
+            let rejection = match checked {
+                Ok(diagnostics) if diagnostics.is_empty() => None,
+                Ok(diagnostics) => Some(("rejected", type_errors(&diagnostics))),
+                Err(CheckError::Busy) => Some((
+                    "busy",
+                    ExecutionFailure::new(
+                        FailureCode::Limit,
+                        "The program wasn't run: Macro is busy type-checking other programs. Run it again shortly.",
+                    ),
+                )),
+                Err(CheckError::InvalidSource | CheckError::Internal) => Some((
+                    "failed",
+                    ExecutionFailure::new(
+                        FailureCode::Internal,
+                        "The program wasn't run: type-checking it failed. Run it again shortly.",
+                    ),
+                )),
+            };
+            match rejection {
+                None => span.record("check", "passed"),
+                Some((label, failure)) => {
+                    span.record("check", label);
+                    return failure.into();
+                }
+            };
+        }
+        let queued = tracing::info_span!("code_execution.queue");
+        tokio::select! {
+            biased;
+            _ = token.cancelled() => Outcome::Cancelled,
+            _ = sink.closed() => Outcome::Cancelled,
+            _ = sleep_until(job.deadline) => Outcome::TimedOut,
+            permit = self.running.acquire().instrument(queued) => {
+                let _permit = permit.expect("execution semaphore is never closed");
+                match sink.emit(EventKind::Started) {
+                    Err(error) => error.into(),
+                    Ok(()) => {
+                        self.runner
+                            .run(job, sink, token)
+                            .instrument(tracing::info_span!(
+                                "code_execution.process",
+                                result_summarized_from_bytes = tracing::field::Empty,
+                            ))
+                            .await
+                    }
+                }
+            }
+        }
     }
 
     /// Stop admission, cancel executions, and wait for process cleanup.
@@ -206,6 +268,31 @@ impl EventSink {
             kind: EventKind::Finished { outcome },
         });
     }
+}
+
+/// What an attended program's module is checked as.
+const PROGRAM_FILE: &str = "main.ts";
+/// Type errors shown to the model; it fixes these and sees the rest next time.
+const MAX_REPORTED_DIAGNOSTICS: usize = 20;
+
+/// The checker's problems, as the model reads them to fix the program. Each
+/// message names its file, line and column (`at main.ts:2:18`).
+fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
+    let mut message = String::from(
+        "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n",
+    );
+    for diagnostic in diagnostics.iter().take(MAX_REPORTED_DIAGNOSTICS) {
+        message.push('\n');
+        message.push_str(&diagnostic.message);
+        message.push('\n');
+    }
+    if diagnostics.len() > MAX_REPORTED_DIAGNOSTICS {
+        message.push_str(&format!(
+            "\n...and {} more errors.\n",
+            diagnostics.len() - MAX_REPORTED_DIAGNOSTICS
+        ));
+    }
+    ExecutionFailure::new(FailureCode::Compile, message)
 }
 
 #[cfg(test)]

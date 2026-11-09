@@ -9,6 +9,12 @@ use tokio::{process::Command, sync::Semaphore};
 
 /// Longest a check may take, including waiting for a slot.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
+/// Where Handlebars' declarations go under the declarations root: its own
+/// (a global script) and a module importing `handlebars` resolves to.
+const HANDLEBARS_TYPES: &str = "handlebars/types.d.ts";
+const HANDLEBARS_MODULE: &str = "handlebars/index.d.ts";
+const HANDLEBARS_MODULE_SOURCE: &str =
+    "/// <reference path=\"./types.d.ts\" />\nexport default Handlebars;\n";
 /// Modules one check takes.
 const MAX_FILES: usize = 40;
 
@@ -18,6 +24,8 @@ pub struct DenoChecker {
     root: PathBuf,
     types: PathBuf,
     fingerprint: String,
+    /// Checks running or waiting for a slot; one more is refused as busy.
+    admitted: Arc<Semaphore>,
     slots: Arc<Semaphore>,
     max_source_bytes: usize,
 }
@@ -26,17 +34,22 @@ pub struct DenoChecker {
 struct SdkTypes {
     fingerprint: String,
     files: BTreeMap<String, String>,
+    /// Handlebars' declarations, outside the fingerprint: routines can't
+    /// import it.
+    handlebars: String,
 }
 
 impl DenoChecker {
     /// Validate the runtime and write the SDK declarations under `scratch`.
     /// `concurrency` checks run at once; each is a type checker in its own
-    /// process.
+    /// process. Up to `max_queued` more wait for a slot; past that a check
+    /// fails as busy at once.
     #[tracing::instrument(skip_all, err)]
     pub async fn new(
         binary: PathBuf,
         scratch: PathBuf,
         concurrency: usize,
+        max_queued: usize,
         max_source_bytes: usize,
     ) -> Result<Self, rootcause::Report> {
         let binary = super::pinned_deno(binary).await?;
@@ -44,7 +57,22 @@ impl DenoChecker {
         let root = tokio::fs::canonicalize(scratch).await?;
         let sdk: SdkTypes = serde_json::from_str(SDK_TYPES)?;
         let types = root.join("types");
-        for (path, text) in &sdk.files {
+        if sdk
+            .files
+            .keys()
+            .any(|path| path == HANDLEBARS_TYPES || path == HANDLEBARS_MODULE)
+        {
+            return Err(rootcause::report!("SDK declarations overlap Handlebars'"));
+        }
+        let files = sdk
+            .files
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str()))
+            .chain([
+                (HANDLEBARS_TYPES, sdk.handlebars.as_str()),
+                (HANDLEBARS_MODULE, HANDLEBARS_MODULE_SOURCE),
+            ]);
+        for (path, text) in files {
             let relative = std::path::Path::new(path);
             if relative.is_absolute()
                 || relative
@@ -65,6 +93,7 @@ impl DenoChecker {
             root,
             types,
             fingerprint: sdk.fingerprint,
+            admitted: Arc::new(Semaphore::new(concurrency.max(1) + max_queued)),
             slots: Arc::new(Semaphore::new(concurrency.max(1))),
             max_source_bytes,
         })
@@ -74,6 +103,7 @@ impl DenoChecker {
         &self,
         files: &[SourceFile],
         declarations: &str,
+        imports: ProgramImports,
     ) -> Result<Vec<Diagnostic>, CheckError> {
         let directory = tempfile::Builder::new()
             .prefix("check-")
@@ -94,15 +124,26 @@ impl DenoChecker {
         // a root that doesn't exist, so the checker can't read (and quote in
         // a diagnostic) any other file, whatever the source imports or
         // references.
-        let imports = serde_json::json!({
-            "imports": BTreeMap::from([
-                ("@macro-inc/sdk".to_owned(), format!("{types_url}src/macro.d.ts")),
-                ("file:///".to_owned(), "file:///unavailable/".to_owned()),
-                (check_url.clone(), check_url.clone()),
-                (types_url.clone(), types_url.clone()),
-            ])
-        });
-        tokio::fs::write(check.join("imports.json"), imports.to_string())
+        let mut map = BTreeMap::from([
+            (
+                "@macro-inc/sdk".to_owned(),
+                format!("{types_url}src/macro.d.ts"),
+            ),
+            ("file:///".to_owned(), "file:///unavailable/".to_owned()),
+            (check_url.clone(), check_url.clone()),
+            (types_url.clone(), types_url.clone()),
+        ]);
+        match imports {
+            ProgramImports::Sdk => {}
+            ProgramImports::SdkAndHandlebars => {
+                map.insert(
+                    "handlebars".to_owned(),
+                    format!("{types_url}{HANDLEBARS_MODULE}"),
+                );
+            }
+        }
+        let map = serde_json::json!({ "imports": map });
+        tokio::fs::write(check.join("imports.json"), map.to_string())
             .await
             .map_err(internal)?;
         let output = Command::new(&self.binary)
@@ -153,9 +194,12 @@ impl ProgramChecker for DenoChecker {
         name = "code_execution.check",
         skip_all,
         fields(
-            files = files.len(),
-            source_bytes = files.iter().map(|file| file.source.len()).sum::<usize>(),
+            files = files.len() as i64,
+            source_bytes = files.iter().map(|file| file.source.len()).sum::<usize>() as i64,
+            imports = ?imports,
+            waited_ms = tracing::field::Empty,
             diagnostics = tracing::field::Empty,
+            outcome = tracing::field::Empty,
         ),
         err
     )]
@@ -163,7 +207,9 @@ impl ProgramChecker for DenoChecker {
         &self,
         files: &[SourceFile],
         declarations: &str,
+        imports: ProgramImports,
     ) -> Result<Vec<Diagnostic>, CheckError> {
+        let span = tracing::Span::current();
         let valid_name = |name: &str| {
             name.strip_suffix(".ts").is_some_and(|stem| {
                 !stem.is_empty()
@@ -180,19 +226,44 @@ impl ProgramChecker for DenoChecker {
                     || file.source.len() > self.max_source_bytes
             })
         {
+            span.record("outcome", "invalid");
             return Err(CheckError::InvalidSource);
         }
+        let Ok(_admitted) = self.admitted.try_acquire() else {
+            span.record("outcome", "busy");
+            return Err(CheckError::Busy);
+        };
+        let queued = tokio::time::Instant::now();
         let checked = tokio::time::timeout(CHECK_TIMEOUT, async {
             let _slot = self
                 .slots
                 .acquire()
                 .await
                 .map_err(|_| CheckError::Internal)?;
-            self.run(files, declarations).await
+            span.record("waited_ms", queued.elapsed().as_millis() as i64);
+            self.run(files, declarations, imports).await
         })
-        .await
-        .map_err(|_| CheckError::Busy)??;
-        tracing::Span::current().record("diagnostics", checked.len());
+        .await;
+        let checked = match checked {
+            Ok(Ok(diagnostics)) => diagnostics,
+            Ok(Err(error)) => {
+                span.record("outcome", "failed");
+                return Err(error);
+            }
+            Err(_) => {
+                span.record("outcome", "timed_out");
+                return Err(CheckError::Busy);
+            }
+        };
+        span.record("diagnostics", checked.len() as i64);
+        span.record(
+            "outcome",
+            if checked.is_empty() {
+                "passed"
+            } else {
+                "rejected"
+            },
+        );
         Ok(checked)
     }
 }

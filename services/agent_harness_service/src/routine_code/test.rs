@@ -190,6 +190,7 @@ impl ProgramChecker for NoChecks {
         &self,
         _: &[code_execution::domain::SourceFile],
         _: &str,
+        _: code_execution::domain::ProgramImports,
     ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
         Ok(Vec::new())
     }
@@ -336,10 +337,13 @@ mod real_deno {
         let runner = DenoRunner::new(deno.clone(), root.path().join("runs"), 128)
             .await
             .unwrap();
-        let executor = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
-        let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
-            .await
-            .unwrap();
+        let checker = Arc::new(
+            DenoChecker::new(deno, root.path().join("checks"), 1, 4, 64 * 1024)
+                .await
+                .unwrap(),
+        );
+        let executor =
+            ExecutionService::new(Arc::new(runner), checker.clone(), Limits::default()).unwrap();
         let endpoints = code_execution::domain::SdkEndpoints {
             hosts: ["cognition", "email", "storage"]
                 .map(|name| (name.to_owned(), host.to_owned()))
@@ -348,7 +352,7 @@ mod real_deno {
         };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
-            Arc::new(checker),
+            checker,
             FixedToken,
             endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
