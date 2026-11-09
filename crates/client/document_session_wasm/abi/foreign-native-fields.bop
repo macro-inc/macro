@@ -28,4 +28,5 @@ enum ForeignNativeField : uint32 {
   TableNodeFrozenRowCount = 25;
   TableNodeRowStriping = 26;
   TableRowNodeHeight = 27;
+  RootNodeCachedText = 28;
 }
