@@ -693,7 +693,7 @@ fn message(user: &str, path: &Path<'_>) -> String {
                 .to_owned()
         }
         Path::GmailTrouble => "Did connecting Gmail give you any trouble? If it was the \
-             permissions screen, I can tell you exactly what Macro does with your email."
+             permissions screen, I can tell you what Macro does with your email."
             .to_owned(),
         Path::Outlook => "Macro works with Outlook, it's just not in setup yet. You can add it \
              from Settings → Email → Connect an Outlook account."
