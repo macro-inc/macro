@@ -173,3 +173,18 @@ async fn billing_errors_fail_closed_without_exposing_reports() {
     assert_eq!(format!("{error:?}"), "Unavailable");
     assert_eq!(billing.calls.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn every_denial_is_terminal_and_only_an_outage_retries() {
+    for reason in [
+        DenyReason::AllowanceExhausted,
+        DenyReason::FreeAllowanceExhausted,
+        DenyReason::OverageLimitReached,
+        DenyReason::OveragePaymentFailed,
+    ] {
+        let error = AiAdmissionError::Denied(reason);
+        assert!(!error.is_retryable(), "{reason} must not be retried");
+        assert_eq!(error.to_string(), reason.message());
+    }
+    assert!(AiAdmissionError::Unavailable.is_retryable());
+}
