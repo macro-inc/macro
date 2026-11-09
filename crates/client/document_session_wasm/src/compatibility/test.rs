@@ -90,9 +90,25 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         .node
         .version;
     assert_eq!(initial_version, 0);
-    editor.compat_begin_inner(&bytes(&compat::CompatBegin {
+    assert!(editor
+        .compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
+            tags: vec![],
+            reserve_keys: u32::MAX,
+        })?)
+        .is_err());
+    assert!(editor.compatibility.as_ref().unwrap().pending.is_none());
+    let compact = editor.compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
         tags: vec!["history-push".into(), "fixture-tag".into()],
+        reserve_keys: 3,
     })?)?;
+    assert_eq!(compact.reservation.keys.len(), 3);
+    assert!(compact.reservation.keys.iter().all(|key| key.index != 0));
+    let reserved = editor.compat_reserve_keys_inner(2)?;
+    let reservation_id = reserved.reservation_id;
+    let first_reservation_id = compact.reservation.reservation_id;
+    assert!(reservation_id > first_reservation_id);
+    let last_reserved = reserved.keys.last().unwrap().index;
+
     assert!(editor
         .compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)
         .is_err());
@@ -126,6 +142,7 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     let Value::ForeignNodeArgument { value: p } = reply.value else {
         panic!("paragraph");
     };
+    assert!(p.key.index > last_reserved);
     let paragraph = reply
         .records
         .iter()
@@ -159,6 +176,13 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     assert!(session.surface().state().is_empty_state());
     let committed = editor.compat_commit_inner(2.0, 2.0)?;
     assert!(committed.changed);
+    assert!(editor
+        .compatibility
+        .as_ref()
+        .unwrap()
+        .reservations
+        .is_empty());
+    assert!(editor.compat_reserve_keys_inner(1).is_err());
     assert!(committed.version > seeded_version);
     assert_ne!(committed.flags, 0);
     assert!(committed.tags.contains(&"fixture-tag".to_owned()));
@@ -233,8 +257,18 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         matches!(raw.value,Value::ForeignStringArgument{value} if String::from_utf16(&value).unwrap()=="native text")
     );
     assert!(raw.records.is_empty());
+    let discarded_tickets = editor.compat_reserve_keys_inner(1)?;
+    let discarded_key = discarded_tickets.keys[0];
     editor.compat_discard().expect("discard staged update");
+    assert!(editor
+        .compatibility
+        .as_ref()
+        .unwrap()
+        .reservations
+        .is_empty());
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
+    let new_tickets = editor.compat_reserve_keys_inner(1)?;
+    assert!(new_tickets.keys[0].index > discarded_key.index);
     request.operation = Op::GetNodeByKey;
     request.has_receiver = false;
     let mut forged_record = frozen_text;
@@ -254,6 +288,12 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     assert!(next.records[0].record.node.version > discarded_version);
     editor.compat_flush_inner()?;
     assert!(editor.compat_finish_noop_inner()?);
+    assert!(editor
+        .compatibility
+        .as_ref()
+        .unwrap()
+        .reservations
+        .is_empty());
     assert_eq!(editor.compat_current_version_inner()?, committed.version);
     request.has_receiver = true;
     request.receiver = frozen_text;
