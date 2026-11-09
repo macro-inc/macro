@@ -38,9 +38,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to the camera to take photos and videos for attachments.</string>
+	<string>Macro uses the camera for video calls and for photos and videos you attach.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs access to the microphone to record videos for attachments.</string>
+	<string>Macro uses the microphone for calls and for videos you record to attach.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to upload attachments.</string>
 	<key>NSUserActivityTypes</key>

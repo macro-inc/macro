@@ -8,6 +8,7 @@ import {
   onDatabaseBatchCommitted,
   onDatabaseTableAdvanced,
   useDatabaseDetailQuery,
+  useDatabasesQuery,
 } from '@queries/storage/databases';
 import {
   useDatabaseAwareness,
@@ -71,6 +72,7 @@ import {
 import { createMacroDatabaseApi, editorTable } from '../queries/editor-api';
 import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
+import { relationTargets } from '../queries/relation-targets';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
 import { refreshCardPositions } from '../queries/views';
@@ -295,13 +297,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   );
   const remoteUsers = () =>
     awareness.remote().filter((user) => user.tableId === props.tableId);
+  const viewerDatabases = useDatabasesQuery();
   const relationTables = () =>
-    detail.isSuccess
-      ? detail.data.tables.map(({ table }) => ({
-          id: table.id,
-          name: table.name,
-        }))
-      : [];
+    relationTargets(
+      detail.isSuccess ? detail.data : undefined,
+      viewerDatabases.isSuccess ? viewerDatabases.data : []
+    );
   const formsAsking = useFormsAskingColumns(() => databaseId);
   const columnCasts = createColumnCasts({
     databaseId,
