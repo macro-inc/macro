@@ -26,9 +26,9 @@ git diff "$base" -- '*.rs' '*.sql' | grep -nE '^[+-].*(sqlx::query|query_as|quer
 | SQL that runs in a service: `sqlx::query*!` call sites, `.sqlx/` entries, `QueryBuilder` or other assembled SQL, Soup or GraphQL filters that become SQL, or a SQL function, view, or trigger that queries call | [`query-review`](../query-review/SKILL.md) |
 | A caller of an existing query: a new loop around it, a new page or job that fires it, or a wider scope passed to it (one user → a team, one item → a list) | [`query-review`](../query-review/SKILL.md) |
 | A file under a `migrations/` directory | [`migration-review`](../migration-review/SKILL.md), and `query-review` for any function, view, or trigger it defines |
-| Nothing above | [`qc`](../qc/SKILL.md) |
+| Nothing above | A general review of the diff by a reviewer that did not write it: [`qc`](../qc/SKILL.md), or the review your session already runs before a push |
 
-When a database row matches, `qc` is optional.
+When a database row matches, the general review is optional.
 
 ## 2. Run them
 
