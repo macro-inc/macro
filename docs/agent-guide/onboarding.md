@@ -42,8 +42,9 @@ The last step, after the plan is chosen (Continue with Free, a paid checkout
 return, or a licensed team member), is **Put your busywork on autopilot.**
 It shows with `enable-routine-suggestions` and `enable-routine-code-steps` on.
 As soon as an inbox is connected during onboarding, AI starts suggesting
-routines (`POST /scheduled-actions/suggestions/generate?timezone=<zone>`,
-once per person).
+routines (`POST /scheduled-action/suggestions/generate?timezone=<zone>`,
+once per person; the same run writes the person's ideas when `enable-ideas`
+is on, and the step reads only the routine suggestions).
 
 - The server fills every area to three with Macro's templates (drafted
   routines, then catalog picks, then templates). While its status is
