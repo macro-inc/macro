@@ -197,6 +197,7 @@ async fn run_loop(
     let mut tick = tokio::time::interval(TICK);
     let mut poller = update::start_poller(app.config.update.auto);
     let mut staged: Option<StagedUpdate> = None;
+    app.watch_viewer();
     // Paired already? Start serving before the first frame.
     if app.paired() {
         app.restart_daemon().await;

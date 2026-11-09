@@ -4,58 +4,34 @@ use ratatui::style::{Modifier, Style, Stylize as _};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Tabs};
 
-use super::theme::{ACCENT, DIM, ERR, OK, THEME, WARN};
+use super::status::header_line;
+use super::theme::{ACCENT, DIM, ERR, OK, THEME};
 use crate::tui::app::{App, Mode, Tab};
 
 pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let (dot, dot_style, state) = match &app.snapshot.harness {
-        Some(harness) if harness.connected => ("●", Style::new().fg(OK), "connected"),
-        Some(_) if app.runtime_connected() => (
-            "●",
-            Style::new().fg(ERR),
-            "machine connected, service reports offline",
-        ),
-        Some(_) => ("●", Style::new().fg(WARN), "paired, machine not dialed in"),
-        None if app.paired() => ("○", Style::new().fg(WARN), "paired, unreachable"),
-        None => ("○", Style::new().fg(DIM), "not paired"),
-    };
     let name = app
         .snapshot
         .harness
         .as_ref()
         .map_or_else(|| app.machine_name.clone(), |harness| harness.name.clone());
-
-    let serving: Vec<Span> = if app.serving() {
-        vec![Span::styled("  ⏵ serving SSE", Style::new().fg(OK))]
-    } else if app.paired() {
-        vec![Span::styled("  ⏸ daemon stopped", Style::new().fg(ERR))]
-    } else {
-        Vec::new()
-    };
-    let mut spans = vec![
+    let title = Line::from(vec![
         Span::styled(
             " macrod ",
             Style::new().fg(THEME.accent_text).bg(ACCENT).bold(),
         ),
         Span::raw(" "),
         Span::styled(name, Style::new().bold()),
-        Span::raw("  "),
-        Span::styled(dot, dot_style),
-        Span::raw(" "),
-        Span::styled(state, Style::new().fg(DIM)),
-    ];
-    spans.extend(serving);
-    spans.push(Span::styled(
-        format!("  pid {}", app.pid),
-        Style::new().fg(DIM),
-    ));
-    let title = Line::from(spans);
+        Span::styled(format!("  pid {}", app.pid), Style::new().fg(DIM)),
+    ]);
     let block = Block::default()
         .style(Style::new().fg(THEME.text).bg(THEME.surface))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(THEME.border));
-    frame.render_widget(Paragraph::new(title).block(block), area);
+    frame.render_widget(
+        Paragraph::new(vec![title, header_line(&app.health(), app.pid)]).block(block),
+        area,
+    );
 }
 
 pub(super) fn render_tabs(frame: &mut Frame, app: &App, area: Rect) {
