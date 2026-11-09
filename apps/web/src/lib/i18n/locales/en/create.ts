@@ -341,7 +341,6 @@ export default {
   taskTemplateSwitchBody:
     'Replace the current fields, task title, and description? Your launch context will stay.',
   taskTemplateSwitch: 'Switch template',
-  taskTemplateEdit: 'Edit template',
   taskCreate: 'Create task',
   taskCreateMore: 'Create another',
   taskTemplatePickerTitle: 'Task templates',

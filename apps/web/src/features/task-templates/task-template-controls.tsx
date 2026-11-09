@@ -1,4 +1,6 @@
+import { ViewBreadcrumbs } from '@app/components/view-shell/ViewBreadcrumbs';
 import { t } from '@app/lib/i18n';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -7,12 +9,14 @@ import { thrownResultErrorHasCode } from '@core/util/result';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import FileIcon from '@icon/system/regular/file.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import {
   Button,
   ConfirmDialog,
   type ManagedDialogProps,
   openDialog,
+  Tooltip,
   useImperativeDialog,
 } from '@ui';
 import {
@@ -168,9 +172,15 @@ export function TaskTemplateControls(props: {
   const selectedLabel = () => {
     const selection = props.composer.templateSelection();
     if (selection.kind === 'none') return t('create.taskTemplateNone');
-    if (selection.kind === 'new') return t('create.taskTemplateNew');
-    if (selection.kind === 'editing') return t('create.taskTemplateEdit');
+    if (selection.kind === 'new' || selection.kind === 'editing')
+      return selection.name || t('create.taskTemplates');
     return selection.template.name;
+  };
+  const templateName = () => {
+    const selection = props.composer.templateSelection();
+    return selection.kind === 'new' || selection.kind === 'editing'
+      ? selection.name
+      : '';
   };
   const editableTemplate = (template: TaskTemplate) => ({
     id: template.id,
@@ -366,16 +376,33 @@ export function TaskTemplateControls(props: {
           </Show>
         }
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          class="min-w-0 gap-1"
-          disabled={props.composer.isSavingTemplate()}
-          onClick={props.composer.cancelTemplateEdit}
-        >
-          <CaretLeftIcon class="size-4 shrink-0" />
-          <span class="truncate">{selectedLabel()}</span>
-        </Button>
+        <div class="min-w-0 flex-1 flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="shrink-0 gap-1"
+            disabled={props.composer.isSavingTemplate()}
+            onClick={props.composer.cancelTemplateEdit}
+          >
+            <CaretLeftIcon class="size-4 shrink-0" />
+            {t('create.taskTemplates')}
+          </Button>
+          <ViewBreadcrumbs.Separator />
+          <Tooltip
+            class="min-w-0 flex-1"
+            label={templateName() || t('create.taskTemplateNamePlaceholder')}
+          >
+            <InlineTitleEditor
+              value={templateName()}
+              onValueChange={props.composer.setTemplateName}
+              placeholder={t('create.taskTemplateNamePlaceholder')}
+              ariaLabel={t('create.taskTemplateName')}
+              class="ph-no-capture w-full text-sm"
+              disabled={props.composer.isSavingTemplate()}
+              autofocus={props.composer.templateSelection().kind === 'new'}
+            />
+          </Tooltip>
+        </div>
         <Show
           when={
             props.composer.templateSelection().kind === 'editing' &&
@@ -384,7 +411,9 @@ export function TaskTemplateControls(props: {
         >
           <Button
             variant="secondary"
-            size="xs"
+            size={isTouchDevice() ? 'icon-sm' : 'xs'}
+            aria-label={t('create.taskTemplateDelete')}
+            tooltip={t('create.taskTemplateDelete')}
             disabled={props.composer.isSavingTemplate()}
             onClick={() => {
               const selection = props.composer.templateSelection();
@@ -392,7 +421,12 @@ export function TaskTemplateControls(props: {
                 deleteTemplate(selection.template);
             }}
           >
-            {t('create.taskTemplateDelete')}
+            <Show
+              when={isTouchDevice()}
+              fallback={t('create.taskTemplateDelete')}
+            >
+              <TrashIcon class="size-4 shrink-0" />
+            </Show>
           </Button>
         </Show>
       </Show>

@@ -31,7 +31,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Open New template and Edit as a separate template editing session; keep the underlying task draft unchanged until saving.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
 - Preserve existing task title, prose, and attachments after saving a template; fill title and description only when blank.
-- Retain template mode's existing name editor without a leading icon; keep default title data separate until the title/name layout changes.
+- Edit the template name in the header beside Templates and the shared caret breadcrumb separator, not a literal slash; keep the body title as the default task title.
+- Reuse `InlineTitleEditor` with controlled draft updates for the header name; focus new-template names and disable editing during saves.
+- Keep the header name flexible and truncated; use the shared touch icon action for Delete while retaining the composer's existing Close or sheet Save action.
 - Keep attachments and Create More hidden in template mode.
 - Keep new-template ownership on the footer's team switch.
 - Show Shared with the owning team when editing team templates; show no ownership label for personal templates.

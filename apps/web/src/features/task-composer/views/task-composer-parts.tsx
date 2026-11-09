@@ -5,7 +5,6 @@ import { RecoverTaskDrafts } from '@block-md/component/RecoverTaskDrafts';
 import { TaskComposerPropertyEditor } from '@block-md/component/TaskComposerPropertyEditor';
 import { SimilarTasksSection } from '@block-md/component/TaskDuplicateList';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -199,32 +198,11 @@ function Title() {
       <Show when={composer.isTemplateMode() ? 'template' : 'task'} keyed>
         {(mode) => (
           <ComposeTaskTitleEditor
-            value={() => {
-              const selection = composer.templateSelection();
-              return mode === 'template' &&
-                (selection.kind === 'new' || selection.kind === 'editing')
-                ? selection.name
-                : composer.title();
-            }}
-            onChange={
-              mode === 'template' ? composer.setTemplateName : composer.setTitle
-            }
-            placeholder={
-              mode === 'template'
-                ? t('create.taskTemplateNamePlaceholder')
-                : undefined
-            }
-            label={
-              mode === 'template' ? t('create.taskTemplateName') : undefined
-            }
+            value={composer.title}
+            onChange={composer.setTitle}
             disabled={composer.isCreating}
             onSubmit={() =>
-              fireAndForget(
-                mode === 'template'
-                  ? composer.saveTemplate()
-                  : composer.createTask(),
-                'compose-task'
-              )
+              fireAndForget(composer.createTask(), 'compose-task')
             }
             bodyEditor={composer.bodyEditor}
             containerRef={composer.containerRef}
@@ -247,9 +225,7 @@ function Title() {
             }
             portalScope={composer.portalScope()}
             ref={composer.setTitleEditorRoot}
-            autofocus={
-              mode === 'template' ? !isTouchDevice() : composer.autofocusTitle
-            }
+            autofocus={mode === 'task' && composer.autofocusTitle}
           />
         )}
       </Show>
