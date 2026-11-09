@@ -239,7 +239,7 @@ async fn run_loop(
                     }
                 }
                 #[cfg(unix)]
-                if let Some(installed) = install_when_idle(app, &mut staged) {
+                if let Some(installed) = install_when_idle(app, &mut staged).await {
                     let agent = match app.daemon.take() {
                         Some(daemon) => daemon.hand_off().await,
                         None => None,
@@ -263,7 +263,7 @@ async fn run_loop(
 /// when its runtime connection closes, so a turn in flight would still be
 /// cut off in Macro: the swap waits for one to finish.
 #[cfg(unix)]
-fn install_when_idle(
+async fn install_when_idle(
     app: &mut App,
     staged: &mut Option<StagedUpdate>,
 ) -> Option<update::Installed> {
@@ -274,7 +274,7 @@ fn install_when_idle(
     }
     let update = staged.take()?;
     let tag = update.tag().to_owned();
-    match update.swap() {
+    match update.swap().await {
         Ok(installed) => Some(installed),
         Err(error) => {
             app.fail(format!("Could not install macrod {tag}: {error}"));

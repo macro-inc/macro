@@ -50,8 +50,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   GitHub release hourly (or the `MACROD_UPDATE_SOURCE` mirror: `latest.json`
   plus the archives beside it), verifies and smoke-tests the new binary, and
   once `Daemon::is_idle` (no `session/prompt` outstanding, `src/turns.rs`)
-  swaps it in and `execve`s. Spans: `macrod.update.check`,
-  `macrod.update.download`, `macrod.update.apply`, `macrod.update.handoff`.
+  swaps it in and `execve`s. macrods sharing one executable stage to
+  `.macrod.new.<pid>` beside it and swap under `.macrod.update.lock`; one that
+  finds that release or a newer one installed restarts into it. Spans:
+  `macrod.update.check`, `macrod.update.download`, `macrod.update.apply`,
+  `macrod.update.handoff`.
   Off with `[update] auto = false` or `MACROD_NO_UPDATE=1`. Every check,
   download, apply and TUI startup appends a JSON line to
   `~/.macrod/logs/update.log` (`src/update/log.rs`; 0600, rotated at 1 MB to

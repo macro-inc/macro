@@ -1,7 +1,7 @@
 use super::*;
 
 /// A release archive the way the workflow packs one: `tar -czf` of one file.
-fn archive_with(name: &str, contents: &[u8]) -> Vec<u8> {
+pub(in crate::update) fn archive_with(name: &str, contents: &[u8]) -> Vec<u8> {
     let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(
         Vec::new(),
         flate2::Compression::default(),
@@ -14,14 +14,14 @@ fn archive_with(name: &str, contents: &[u8]) -> Vec<u8> {
     builder.into_inner().unwrap().finish().unwrap()
 }
 
-fn checksum_file(archive: &[u8], name: &str) -> String {
+pub(in crate::update) fn checksum_file(archive: &[u8], name: &str) -> String {
     format!("{}  {name}\n", hex::encode(Sha256::digest(archive)))
 }
 
 #[test]
 fn stages_the_verified_binary_next_to_the_executable() {
     let directory = tempfile::tempdir().unwrap();
-    let installation = Installation::at(directory.path().join("macrod"));
+    let installation = Installation::at(directory.path().join("macrod"), 4242);
     let archive = archive_with("macrod", b"new macrod");
 
     let staged = installation
@@ -32,7 +32,7 @@ fn stages_the_verified_binary_next_to_the_executable() {
         )
         .unwrap();
 
-    assert_eq!(staged, directory.path().join(".macrod.new"));
+    assert_eq!(staged, directory.path().join(".macrod.new.4242"));
     assert_eq!(std::fs::read(&staged).unwrap(), b"new macrod");
     {
         use std::os::unix::fs::PermissionsExt as _;
@@ -44,9 +44,9 @@ fn stages_the_verified_binary_next_to_the_executable() {
 #[test]
 fn restaging_replaces_an_earlier_staged_binary() {
     let directory = tempfile::tempdir().unwrap();
-    let installation = Installation::at(directory.path().join("macrod"));
+    let installation = Installation::at(directory.path().join("macrod"), 4242);
     std::fs::write(
-        directory.path().join(".macrod.new"),
+        directory.path().join(".macrod.new.4242"),
         b"interrupted download",
     )
     .unwrap();
@@ -66,7 +66,7 @@ fn restaging_replaces_an_earlier_staged_binary() {
 #[test]
 fn a_checksum_mismatch_stages_nothing() {
     let directory = tempfile::tempdir().unwrap();
-    let installation = Installation::at(directory.path().join("macrod"));
+    let installation = Installation::at(directory.path().join("macrod"), 4242);
     let archive = archive_with("macrod", b"new macrod");
     let other = archive_with("macrod", b"tampered macrod");
 
@@ -82,13 +82,13 @@ fn a_checksum_mismatch_stages_nothing() {
         matches!(error, StageError::ChecksumMismatch { .. }),
         "{error:?}"
     );
-    assert!(!directory.path().join(".macrod.new").exists());
+    assert!(!directory.path().join(".macrod.new.4242").exists());
 }
 
 #[test]
 fn a_checksum_file_without_a_digest_is_rejected() {
     let directory = tempfile::tempdir().unwrap();
-    let installation = Installation::at(directory.path().join("macrod"));
+    let installation = Installation::at(directory.path().join("macrod"), 4242);
     let archive = archive_with("macrod", b"new macrod");
 
     for checksum in ["", "Not Found", "abc123  macrod.tar.gz"] {
@@ -105,7 +105,7 @@ fn a_checksum_file_without_a_digest_is_rejected() {
 #[test]
 fn an_archive_without_the_binary_stages_nothing() {
     let directory = tempfile::tempdir().unwrap();
-    let installation = Installation::at(directory.path().join("macrod"));
+    let installation = Installation::at(directory.path().join("macrod"), 4242);
     let archive = archive_with("README.md", b"not a binary");
 
     let error = installation
@@ -117,7 +117,7 @@ fn an_archive_without_the_binary_stages_nothing() {
         .unwrap_err();
 
     assert!(matches!(error, StageError::MissingExecutable), "{error:?}");
-    assert!(!directory.path().join(".macrod.new").exists());
+    assert!(!directory.path().join(".macrod.new.4242").exists());
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn swapping_replaces_the_executable_and_leaves_nothing_staged() {
     let directory = tempfile::tempdir().unwrap();
     let executable = directory.path().join("macrod");
     std::fs::write(&executable, b"old macrod").unwrap();
-    let installation = Installation::at(executable.clone());
+    let installation = Installation::at(executable.clone(), 4242);
     let archive = archive_with("macrod", b"new macrod");
     let staged = installation
         .stage(
@@ -147,15 +147,28 @@ fn swapping_replaces_the_executable_and_leaves_nothing_staged() {
 }
 
 #[test]
-fn leftovers_from_an_earlier_run_are_removed() {
+fn leftovers_of_exited_macrods_are_removed_and_a_running_ones_staged_binary_kept() {
     let directory = tempfile::tempdir().unwrap();
     let executable = directory.path().join("macrod");
     std::fs::write(&executable, b"macrod").unwrap();
-    std::fs::write(directory.path().join(".macrod.new"), b"never swapped").unwrap();
-    let installation = Installation::at(executable.clone());
+    let mut exited = std::process::Command::new("true").spawn().unwrap();
+    exited.wait().unwrap();
+    let exited = directory
+        .path()
+        .join(format!(".macrod.new.{}", exited.id()));
+    let running = directory
+        .path()
+        .join(format!(".macrod.new.{}", std::process::id()));
+    let unnumbered = directory.path().join(".macrod.new");
+    for staged in [&exited, &running, &unnumbered] {
+        std::fs::write(staged, b"never swapped").unwrap();
+    }
+    let installation = Installation::at(executable.clone(), 4242);
 
     installation.remove_leftovers();
 
-    assert!(!directory.path().join(".macrod.new").exists());
+    assert!(!exited.exists());
+    assert!(!unnumbered.exists());
+    assert_eq!(std::fs::read(running).unwrap(), b"never swapped");
     assert_eq!(std::fs::read(executable).unwrap(), b"macrod");
 }
