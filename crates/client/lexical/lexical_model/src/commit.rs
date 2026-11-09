@@ -236,7 +236,7 @@ impl Transaction<'_> {
                 changes.mutations.insert(*key, mutation);
             }
         }
-        crate::pipeline::apply_model_caches(self);
+        crate::pipeline::apply_model_caches(self)?;
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
@@ -307,7 +307,15 @@ impl Transaction<'_> {
         #[cfg(feature = "foreign-nodes")]
         self.retire_foreign_selection();
         self.pending = state.pending();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.pending.foreign_instances = self.editor.foreign_instances.clone();
+        }
         for key in self.pending.nodes.keys().copied().collect::<Vec<_>>() {
+            #[cfg(feature = "foreign-nodes")]
+            if self.clone_foreign_instance_for_restore(key)? {
+                continue;
+            }
             #[cfg(feature = "foreign-nodes")]
             let clone_source = self.foreign_clone_source(key)?;
             let slot = self
@@ -355,6 +363,10 @@ impl Transaction<'_> {
         #[cfg(feature = "foreign-nodes")]
         self.retire_foreign_selection();
         self.pending = state.pending();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.pending.foreign_instances = self.editor.foreign_instances.clone();
+        }
         self.composition_key = None;
         self.dirty_leaves.clear();
         self.dirty_elements.clear();

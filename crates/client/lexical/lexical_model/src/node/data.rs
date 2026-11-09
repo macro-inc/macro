@@ -133,6 +133,12 @@ pub(crate) struct Links {
 #[derive(Clone)]
 pub(crate) struct NodeSlot {
     #[cfg(feature = "foreign-nodes")]
+    pub foreign_instance: Arc<std::sync::OnceLock<ForeignInstance>>,
+    #[cfg(feature = "foreign-nodes")]
+    pub foreign_instance_write: Option<ForeignUpdateIdentity>,
+    #[cfg(feature = "foreign-nodes")]
+    pub foreign_root_cache: Option<crate::foreign::instances::ForeignRootCache>,
+    #[cfg(feature = "foreign-nodes")]
     pub foreign_identity: crate::foreign::RecordIdentityMarker,
     pub key: NodeKey,
     pub type_index: NodeTypeIndex,

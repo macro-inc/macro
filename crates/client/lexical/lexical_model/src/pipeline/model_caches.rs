@@ -2,26 +2,79 @@ use crate::*;
 use std::sync::Arc;
 /// Cache writes happen after mutation reporting. Root reconciliation retains
 /// upstream's intentional dirty mark without adding a cache-only mutation.
-pub(crate) fn apply(tx: &mut Transaction<'_>) {
+pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
     if tx.editor.mode() != EditorMode::ViewAttached {
-        return;
+        return Ok(());
     }
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
-    if root_text_changed(tx)
-        && {
+    let root_changed = root_text_changed(tx);
+    #[cfg(feature = "foreign-nodes")]
+    let root_changed = {
+        let root = tx
+            .pending
+            .nodes
+            .get(&NodeKey::ROOT)
+            .ok_or(Error::NodeNotFound(NodeKey::ROOT))?;
+        if let Some(instance) = root.foreign_instance.get() {
+            match &root.foreign_root_cache {
+                None => true,
+                Some(cache) if cache.derived => {
+                    !Arc::ptr_eq(&cache.value, &tx.pending.root_text)
+                        && tx
+                            .editor
+                            .state
+                            .view()
+                            .foreign_instance(NodeKey::ROOT)
+                            .as_ref()
+                            == Some(instance)
+                        && root_changed
+                }
+                Some(cache) => cache.value.get().is_none_or(|cached| {
+                    cached.as_ref() != tx.view().cached_root_text_content().as_ref()
+                }),
+            }
+        } else {
+            root_changed
+        }
+    };
+    if root_changed && {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            ForeignReadOperation::check().is_ok()
+        }
+        #[cfg(not(feature = "foreign-nodes"))]
+        {
+            true
+        }
+    } {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            // Bound JS instances expose the reconciler's actual string, even
+            // after a capture installs its independent root-text read memo.
+            if tx
+                .pending
+                .nodes
+                .get(&NodeKey::ROOT)
+                .is_some_and(|root| root.foreign_instance.get().is_some())
+            {
+                let _ = tx.view().cached_root_text_content();
+                ForeignReadOperation::check()?;
+            }
+            tx.clone_foreign_instance_for_write(NodeKey::ROOT)?;
+        }
+        if let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT) {
+            let root = Arc::make_mut(root);
             #[cfg(feature = "foreign-nodes")]
             {
-                ForeignReadOperation::check().is_ok()
+                root.foreign_root_cache = Some(crate::foreign::instances::ForeignRootCache {
+                    value: tx.pending.root_text.clone(),
+                    derived: true,
+                });
             }
             #[cfg(not(feature = "foreign-nodes"))]
-            {
-                true
-            }
+            let _ = root;
         }
-        && let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT)
-    {
-        Arc::make_mut(root);
         tx.dirty_elements
             .insert(NodeKey::ROOT, DirtyIntent::Intentional);
     }
@@ -33,7 +86,7 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
     for key in keys {
         #[cfg(feature = "foreign-nodes")]
         if ForeignReadOperation::check().is_err() {
-            return;
+            return Ok(());
         }
         if !tx.editor.state.nodes.contains_key(&key) || tx.is_root_or_shadow_root(key) {
             continue;
@@ -50,20 +103,29 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         };
         #[cfg(feature = "foreign-nodes")]
         if ForeignReadOperation::check().is_err() {
-            return;
+            return Ok(());
         }
         if tx
             .view()
             .element(key)
             .is_some_and(|data| data.text_format != format || data.text_style != style)
-            && let Some(record) = tx.pending.nodes.get_mut(&key)
-            && let BaseData::Element(data) = &mut Arc::make_mut(record).base
         {
+            #[cfg(feature = "foreign-nodes")]
+            tx.clone_foreign_instance_for_write(key)?;
+            let record = tx
+                .pending
+                .nodes
+                .get_mut(&key)
+                .ok_or(Error::NodeNotFound(key))?;
+            let BaseData::Element(data) = &mut Arc::make_mut(record).base else {
+                return Err(Error::NotAnElement(key));
+            };
             data.text_format = format;
             data.text_style = style;
             tx.dirty_elements.insert(key, DirtyIntent::Intentional);
         }
     }
+    Ok(())
 }
 
 // A single leaf replacement in an otherwise identical tree changes the root

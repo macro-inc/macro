@@ -11,6 +11,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `build.rs` derives development ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
+- `src/foreign/instances.rs` stages semantic JS instance clones with editor-owner namespaces and opaque IDs; validate every base/payload/link acknowledgement before installing the record. Track writable instance updates separately from Rust Arc sharing so read captures never run additional JS constructors.
 - `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
 - `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
@@ -175,7 +176,7 @@ ForeignReadSnapshot::is_originless_capture_of compares the exact canonical recor
 
 Bracket fallible development runtime reads with ForeignReadOperation. Its thread-local stack transports owned failures only and grants no editor authority; nested failures are isolated, first error wins, and unscoped deferral rejects without retaining thread state. Check before callbacks, writes, memo publication, projection writeback and commit publication; infallible native signatures alone cannot report JS exceptions. Restore native scopes from the latest already-decoded payload even after a child failure; block payload writeback instead of restoring stale typed fields.
 
-ForeignCloneContext exposes an owned source read only during payload cloning. Capture after materializing the persistent-map path but before borrowing its writable record; no transaction pointer enters TLS. Normal native/default-feature clones are unchanged.
+Preserve bound instance IDs through raw captures and state installs; use explicit CopyOnWrite, Copy, Restore and Ephemeral staging only at semantic clone sites. Materialize bound root cached text before cache publication and exact-publication hydration; keep root cache metadata separate from native payload patches. ForeignCloneContext exposes an owned source read only during payload cloning. Capture after materializing the persistent-map path but before borrowing its writable record; no transaction pointer enters TLS. Normal native/default-feature clones are unchanged.
 
 ForeignSelectionCapture owns an explicit ordinary argument and optional identity. StateRef.with_foreign_selection_argument carries provenance through native traversal; recognize exact objects, never infer identity from equal selection fields. Owned read snapshots hydrate captured arguments without granting graph write authority.
 

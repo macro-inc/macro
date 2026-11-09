@@ -933,9 +933,7 @@ impl<'state> StateRef<'state> {
     /// The resulting snapshot retains node identities and cannot mutate this view.
     pub fn with_text_slice(self, key: NodeKey, text: &str) -> Result<EditorState, Error> {
         #[cfg(feature = "foreign-nodes")]
-        let mut record = self
-            .node_or_err(key)?
-            .to_owned_with_source(self.snapshot_for_foreign_read()?);
+        let mut record = self.clone_foreign_record(key, ForeignCloneMode::Ephemeral)?;
         #[cfg(not(feature = "foreign-nodes"))]
         let mut record = self.node_or_err(key)?.to_owned();
         let BaseData::Text(data) = &mut record.slot.base else {

@@ -275,6 +275,10 @@ impl<'editor> Transaction<'editor> {
             ancestor = self.parent(key);
         }
         #[cfg(feature = "foreign-nodes")]
+        if self.clone_foreign_instance_for_write(key)? {
+            return Ok(());
+        }
+        #[cfg(feature = "foreign-nodes")]
         let clone_source = self.foreign_clone_source(key)?;
         let slot = self
             .pending
@@ -485,6 +489,12 @@ impl<'editor> Transaction<'editor> {
             Arc::new(NodeSlot {
                 #[cfg(feature = "foreign-nodes")]
                 foreign_identity: Default::default(),
+                #[cfg(feature = "foreign-nodes")]
+                foreign_instance: Default::default(),
+                #[cfg(feature = "foreign-nodes")]
+                foreign_instance_write: None,
+                #[cfg(feature = "foreign-nodes")]
+                foreign_root_cache: None,
                 key,
                 type_index: index,
                 links: Links::default(),
@@ -545,7 +555,8 @@ impl<'editor> Transaction<'editor> {
             .registry
             .registered(original.type_index)
             .foreign
-            .is_some();
+            .is_some()
+            || original.foreign_instance.get().is_some();
         #[cfg(not(feature = "foreign-nodes"))]
         let foreign = false;
         #[cfg(feature = "foreign-nodes")]
@@ -562,6 +573,9 @@ impl<'editor> Transaction<'editor> {
                 .after_clone()
                 .unwrap_or_else(|| original.data.clone())
         };
+        #[cfg(feature = "foreign-nodes")]
+        let mut base = original.base.clone();
+        #[cfg(not(feature = "foreign-nodes"))]
         let mut base = original.base;
         if let BaseData::Element(data) = &mut base {
             data.first = None;
@@ -570,7 +584,31 @@ impl<'editor> Transaction<'editor> {
         }
         let copy = self.insert_record(original.type_index, data, base)?;
         #[cfg(feature = "foreign-nodes")]
+        let instance_copy = if original.foreign_instance.get().is_some() {
+            let source = clone_source
+                .as_ref()
+                .ok_or(Error::Invariant("foreign copy source"))?
+                .clone();
+            let base = self
+                .pending
+                .nodes
+                .get(&copy)
+                .ok_or(Error::NodeNotFound(copy))?
+                .base
+                .clone();
+            match self.clone_foreign_instance_for_copy(&original, source, copy, base) {
+                Ok(copied) => copied,
+                Err(error) => {
+                    self.remove_record(copy);
+                    return Err(error);
+                }
+            }
+        } else {
+            false
+        };
+        #[cfg(feature = "foreign-nodes")]
         if foreign
+            && !instance_copy
             && let Some(data) = crate::foreign::payload::clone_payload(
                 &self.pending.registry,
                 original.type_index,
