@@ -229,6 +229,12 @@ separate from the template's `name`; description Markdown fills a blank task bod
 Read the default with `template.title()`. Omitted update fields stay unchanged;
 pass `title: ''` to clear the default.
 
+An optional `shareWithTeam` controls task sharing independently of the template's
+own `team`; `false` is an explicit private-task default. Omission leaves the
+composer switch unchanged. Read it with `template.shareWithTeam()` and update it
+with `template.update({ shareWithTeam: false })`. Property-only updates retain it.
+Without a current team the composer hides the switch and ignores the saved value.
+
 Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
 when retrying creation. The server returns the same template rather than creating
 a duplicate; changed content or ownership conflicts.
@@ -238,6 +244,7 @@ const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008
 const template = await macro.taskTemplates.create({
   name: 'Bug report',
   title: 'Investigate issue',
+  shareWithTeam: false, // create private tasks even from a team-owned template
   team: await macro.teams.current(), // omit for a personal template
   properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
   descriptionMarkdown: '## Details\n\n- [ ] Describe the task',

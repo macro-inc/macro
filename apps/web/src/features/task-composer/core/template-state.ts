@@ -6,6 +6,17 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskTemplateSelection } from './template-selection';
 import type { ComposeTaskProps } from './types';
 
+/** Hidden sharing controls must not overwrite a saved template's default. */
+export function taskTemplateSharing(
+  current: boolean,
+  selection: TaskTemplateSelection,
+  hasTeam: boolean
+): boolean | undefined {
+  if (!hasTeam && (selection.kind === 'saved' || selection.kind === 'editing'))
+    return selection.template.contents.shareWithTeam;
+  return current;
+}
+
 /** Switching templates confirms changed task text, fields, or template metadata. */
 export function isTemplateStateDirty(
   current: TaskTemplateContents,
@@ -27,6 +38,7 @@ export function isTemplateStateDirty(
     return true;
   if (!baseline) return true;
   if ((current.title ?? '') !== (baseline.title ?? '')) return true;
+  if (current.shareWithTeam !== baseline.shareWithTeam) return true;
   if (
     JSON.stringify(current.propertyIds) !== JSON.stringify(baseline.propertyIds)
   )
@@ -82,6 +94,7 @@ export function restoreTemplateFields(
   else delete propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE];
   return {
     ...current,
+    shareWithTeam: baseline.shareWithTeam ?? current.shareWithTeam,
     propertyIds: [
       ...baseline.propertyIds.filter((id) => id !== SYSTEM_PROPERTY_IDS.SOURCE),
       ...current.propertyIds.filter((id) => id === SYSTEM_PROPERTY_IDS.SOURCE),

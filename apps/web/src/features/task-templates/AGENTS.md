@@ -3,7 +3,7 @@
 ## What it is
 
 Personal and team task templates for the existing task composer. Templates store
-selected property definitions, optional default values and task title, and description Markdown.
+selected property definitions, optional default values and task title, task sharing, and description Markdown.
 Task creation also preserves the composer's selected fields as per-task pins.
 
 ## Start here
@@ -15,7 +15,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 ## Scope
 
-- Store the optional default task title separately from the template name; keep sharing mode and attachments outside template content.
+- Store optional default task title and `shareWithTeam` separately from the template name and ownership; exclude attachments.
 - Replace untouched template fields and task text directly; confirm before replacing edited fields, title, or description.
 - Preserve contextual Source values and explicit launch property presets across template replacement.
 - Detach a deleted selected template without resetting the current draft.
@@ -37,6 +37,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Stack visibility below the name inside the strip on phones; keep the task-title editor independent.
 - Keep attachments and Create More hidden in template mode.
 - Keep template visibility in the name strip separate from the footer's task-sharing switch.
+- Capture and apply the optional task-sharing default; leave the switch unchanged when absent and ignore it without a team.
+- Include task sharing in changed-field dots, Reset, and Update template; preserve task title and description during those actions.
+- Preserve task sharing through template cancellation, draft recovery, and Create another; keep template edits out of global sharing defaults.
 
 ## Boundaries
 
@@ -63,7 +66,8 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 - `bun run test src/features/task-templates src/features/task-composer` from `apps/web`.
 - `bun run check` from `apps/web`, then `just check` from the repository root.
-- Check default task-title capture, application, draft recovery, and repeated creation.
+- Check title and task-sharing capture, application, omitted sharing defaults, draft recovery, and repeated creation.
+- Check task-sharing dots, Reset, Update, personal templates creating shared tasks, and team templates creating private tasks.
 - Check application against existing draft text, contextual Source/Project values,
   empty custom fields, deleted definitions, and Create More.
 - Check personal isolation, team member use, creator/admin management, and former-member denial.

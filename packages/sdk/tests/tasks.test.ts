@@ -436,3 +436,90 @@ describe('TaskTemplate default titles', () => {
     ).toBeUndefined();
   });
 });
+
+describe('TaskTemplate task sharing', () => {
+  test.each([
+    true,
+    false,
+    undefined,
+  ])('creates and reads sharing %s independently of template ownership', async (sharing) => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      const body = await request.json();
+      return Response.json({
+        id: '0198a4cc-e138-7670-a308-a6b766602740',
+        ...body,
+        revision: 1,
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = await macro.taskTemplates.create({
+      name: 'Reusable task',
+      shareWithTeam: sharing,
+    });
+    expect(await template.shareWithTeam()).toBe(sharing);
+    const body = await requests[0].json();
+    expect(body.teamId).toBeUndefined();
+    expect(body.configuration.shareWithTeam).toBe(sharing);
+    expect(Object.hasOwn(body.configuration, 'shareWithTeam')).toBe(
+      sharing !== undefined,
+    );
+  });
+
+  test.each([
+    true,
+    false,
+    undefined,
+  ])('retains sharing %s on property updates and accepts an explicit replacement', async (sharing) => {
+    const requests: Request[] = [];
+    let record = {
+      id: '0198a4cc-e138-7670-a308-a6b766602740',
+      name: 'Reusable task',
+      teamId: '0198a4cc-e138-7670-a308-a6b766602741',
+      revision: 1,
+      configuration: {
+        shareWithTeam: sharing,
+        propertyIds: ['priority'],
+        defaults: [],
+        descriptionMarkdown: '',
+      },
+    };
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      if (request.method === 'PUT') {
+        const body = await request.json();
+        record = { ...record, ...body, revision: record.revision + 1 };
+      }
+      return Response.json(record);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = macro.taskTemplates.byId(record.id);
+    await template.update({ properties: [] });
+    expect(await template.shareWithTeam()).toBe(sharing);
+    const replacement = sharing === false;
+    await template.update({ shareWithTeam: replacement });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    await template.update({ properties: [] });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    await template.update({ name: 'Renamed template' });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    const writes = requests.filter((request) => request.method === 'PUT');
+    expect((await writes[0].json()).configuration.shareWithTeam).toBe(sharing);
+    for (const request of writes.slice(1))
+      expect((await request.json()).configuration.shareWithTeam).toBe(
+        replacement,
+      );
+    expect(record.teamId).toBe('0198a4cc-e138-7670-a308-a6b766602741');
+  });
+});

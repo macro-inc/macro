@@ -850,7 +850,8 @@ persist as you type, including clearing the name, which disables Save. A new
 template's visibility dropdown offers Only me and the current team; editing a
 team template shows the fixed team avatar and name, while a personal template
 shows no ownership label. This visibility is separate from the footer's task
-sharing switch. The ordinary task title, description, and fields remain below
+sharing switch. New template captures that switch, and editing changes the stored
+task-sharing default. The ordinary task title, description, and fields remain below
 the strip. Both hide Attach and Create More. Save template
 saves only the template, then returns with its fields applied. Existing task
 title, prose, and attachments stay intact; blank title or description takes
@@ -860,13 +861,13 @@ Cancel restores the task draft, including rich text and attachments. Closing
 and reopening must not replace the task draft with template edits. Source links
 are never reusable defaults.
 
-Changing an applied template's fields adds an accent dot to its button and
-selected picker row. Task title and description changes alone do not add the
+Changing an applied template's fields or task-sharing switch adds an accent dot
+to its button and selected picker row. Task title and description changes alone do not add the
 dot. Keep the existing property pills without per-field dots. Managers get Reset
 and Update template at the bottom of the picker, following saved-view actions.
-Reset restores fields without replacing the task title or description. Update
-template saves fields immediately but keeps the template's saved title and
-description. Conflicts leave the current task draft available. Delete template
+Reset restores fields and task sharing without replacing the task title or
+description. Update template saves fields and task sharing immediately but keeps
+the template's saved title and description. Conflicts leave the current task draft available. Delete template
 appears as a small secondary text action beside Close in template mode, or the
 shared icon-only action on touch. Its existing confirmation must leave existing
 tasks and the preserved draft unchanged; deleting the selected template only
@@ -874,7 +875,13 @@ detaches its selection.
 
 Create More uses Create another and reapplies the selected saved defaults,
 including task title and description, to each fresh task, discarding task-specific
-edits while retaining launch presets. Verify personal/team creation, draft
+field edits while retaining launch presets. The current task-sharing switch
+survives Create another, including overrides; the changed-field dot stays when it
+differs from the saved default. A template without a sharing value leaves the
+switch alone. Test a team template with sharing off
+and a personal template with sharing on. Confirm the switch is hidden without a
+team and stored sharing is ignored. Reopen task and template-editor drafts to
+check each switch value; Cancel restores the underlying draft's switch. Verify personal/team creation, draft
 preservation, field-only update
 and reset, no-template selection, repeated Create More, editing, cancellation,
 conflicts, and deletion. Touch retains the tall composer, with Save in its

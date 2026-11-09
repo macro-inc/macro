@@ -26,6 +26,8 @@ export interface CreateTaskTemplateOptions {
   name: string;
   /** Default task title, separate from the template name. */
   title?: string;
+  /** Default task sharing, independent of the template's owning team. */
+  shareWithTeam?: boolean;
   /** Description Markdown inserted into a blank task description. */
   descriptionMarkdown?: string;
   /** Selected fields and optional default values. */
@@ -40,6 +42,8 @@ export interface UpdateTaskTemplateOptions {
   name?: string;
   /** Replacement default task title; an empty string clears the default. */
   title?: string;
+  /** Replacement task-sharing default; omission keeps the saved value. */
+  shareWithTeam?: boolean;
   /** Replacement description Markdown. */
   descriptionMarkdown?: string;
   /** Replacement selected fields and defaults; an empty array removes all fields. */
@@ -50,9 +54,11 @@ function configuration(
   fields: readonly TaskTemplateProperty[],
   descriptionMarkdown: string,
   title?: string,
+  shareWithTeam?: boolean,
 ): TaskTemplateConfiguration {
   return {
     title,
+    shareWithTeam,
     propertyIds: fields.map((field) => field.property.id),
     defaults: fields.flatMap((field) =>
       field.defaultValue === undefined
@@ -104,6 +110,7 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
             opts.properties ?? [],
             opts.descriptionMarkdown ?? '',
             opts.title,
+            opts.shareWithTeam,
           ),
         },
       }),
@@ -118,6 +125,12 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
   readonly title = this.mappedField(
     'configuration',
     (value) => value.title ?? undefined,
+  );
+
+  /** Default task sharing; absent means leave the composer's current choice unchanged. */
+  readonly shareWithTeam = this.mappedField(
+    'configuration',
+    (value) => value.shareWithTeam ?? undefined,
   );
 
   /** Whether the current actor can update or delete this template. */
@@ -173,6 +186,8 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
               ? {
                   ...current.configuration,
                   title: opts.title ?? current.configuration.title,
+                  shareWithTeam:
+                    opts.shareWithTeam ?? current.configuration.shareWithTeam,
                   descriptionMarkdown:
                     opts.descriptionMarkdown ??
                     current.configuration.descriptionMarkdown,
@@ -182,6 +197,9 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
                   opts.descriptionMarkdown ??
                     current.configuration.descriptionMarkdown,
                   opts.title ?? current.configuration.title ?? undefined,
+                  opts.shareWithTeam ??
+                    current.configuration.shareWithTeam ??
+                    undefined,
                 ),
         },
       }),

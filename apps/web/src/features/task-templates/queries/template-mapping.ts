@@ -62,6 +62,7 @@ export function taskTemplateContents(
   }
   return {
     title: configuration.title ?? undefined,
+    shareWithTeam: configuration.shareWithTeam ?? undefined,
     propertyIds: [...configuration.propertyIds],
     propertyDefaults,
     descriptionMarkdown: configuration.descriptionMarkdown,
@@ -83,6 +84,7 @@ export function taskTemplateConfiguration(
   const retained = new Set(retainedIds);
   return {
     title: contents.title,
+    shareWithTeam: contents.shareWithTeam,
     propertyIds: [...new Set([...contents.propertyIds, ...retainedIds])],
     defaults: [
       ...contents.propertyIds.flatMap((id) => {
@@ -122,6 +124,7 @@ export function isConfirmedTemplateUpdate(
   const normalize = (configuration: TaskTemplateConfiguration) =>
     JSON.stringify({
       title: configuration.title ?? '',
+      shareWithTeam: configuration.shareWithTeam ?? undefined,
       propertyIds: configuration.propertyIds,
       descriptionMarkdown: configuration.descriptionMarkdown,
       defaults: (configuration.defaults ?? [])

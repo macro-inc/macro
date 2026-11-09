@@ -11,6 +11,7 @@ import {
   areTemplateFieldsDirty,
   isTemplateStateDirty,
   restoreTemplateFields,
+  taskTemplateSharing,
 } from '@app/features/task-composer/core/template-state';
 import type { TaskComposerHost } from '@app/features/task-composer/primitives/task-composer';
 import { createTemplateWorkflow } from '@app/features/task-composer/primitives/template-workflow';
@@ -19,6 +20,11 @@ import {
   fillTaskTemplate,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
+import {
+  isConfirmedTemplateUpdate,
+  taskTemplateConfiguration,
+  taskTemplateContents,
+} from '@app/features/task-templates/queries/template-mapping';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -311,6 +317,7 @@ function createTemplateSession() {
     });
     const [contents, setContents] = createSignal<TaskTemplateContents>({
       title: 'Keep this task title',
+      shareWithTeam: true,
       propertyIds: ['priority'],
       propertyDefaults: { priority: { valueType: 'STRING', value: 'High' } },
       descriptionMarkdown: 'Task-specific prose',
@@ -340,6 +347,7 @@ function createTemplateSession() {
       setSelection(draft.templateSelection ?? { kind: 'none' });
       setContents({
         title: draft.title,
+        shareWithTeam: draft.shareWithTeam,
         propertyIds: draft.visiblePropertyIds ?? [],
         propertyDefaults: draft.propertyValues,
         descriptionMarkdown: draft.content,
@@ -376,6 +384,7 @@ function createTemplateSession() {
       setSelection,
       captureTask: () => ({
         title: 'Keep this task title',
+        shareWithTeam: contents().shareWithTeam,
         content: contents().descriptionMarkdown,
         visiblePropertyIds: contents().propertyIds,
         propertyValues: contents().propertyDefaults,
@@ -442,6 +451,7 @@ it('keeps the task draft underneath template edits and restores it on cancel', (
   );
   session.setContents({
     propertyIds: [],
+    shareWithTeam: false,
     propertyDefaults: {},
     descriptionMarkdown: 'Template-only edits',
   });
@@ -449,15 +459,22 @@ it('keeps the task draft underneath template edits and restores it on cancel', (
   expect(snapshot.title).toBe(original.title);
   expect(snapshot.content).toBe(original.content);
   expect(snapshot.propertyValues).toEqual(original.propertyValues);
+  expect(snapshot.shareWithTeam).toBe(true);
+  expect(snapshot.templateEditor?.contents.shareWithTeam).toBe(false);
   expect(snapshot.editorState).toEqual(original.editorState);
   expect(snapshot.templateEditor?.contents.descriptionMarkdown).toBe(
     'Template-only edits'
   );
   saveTaskComposerDraft(snapshot);
+  expect(loadTaskComposerDraft()?.shareWithTeam).toBe(true);
+  expect(loadTaskComposerDraft()?.templateEditor?.contents.shareWithTeam).toBe(
+    false
+  );
   expect(
     loadTaskComposerDraft()?.templateEditor?.contents.descriptionMarkdown
   ).toBe('Template-only edits');
   session.workflow.cancelTemplateEdit();
+  expect(session.contents().shareWithTeam).toBe(true);
   expect(session.workflow.snapshot()).toEqual(original);
   expect(session.create).not.toHaveBeenCalled();
   session.dispose();
@@ -479,6 +496,7 @@ it('saves only the template and restores the task before applying the saved sele
   expect(session.create).toHaveBeenCalledTimes(1);
   expect(session.create.mock.calls[0][1].name).toBe('Reusable');
   expect(session.create.mock.calls[0][2].title).toBe('Keep this task title');
+  expect(session.create.mock.calls[0][2].shareWithTeam).toBe(true);
   expect(session.restore).toHaveBeenCalledWith(original);
   expect(session.apply).toHaveBeenCalledWith(
     expect.objectContaining({ id: '0195dbd0-7b5d-7000-8000-000000000002' }),
@@ -542,10 +560,16 @@ it('updates field defaults without copying task-specific title or description', 
   session.setContents({
     ...session.contents(),
     title: 'Task-specific title',
+    shareWithTeam: false,
     propertyDefaults: { priority: { valueType: 'STRING', value: 'Low' } },
   });
   await session.workflow.updateTemplateFields();
   expect(session.update.mock.calls[0][2].title).toBe('Saved title');
+  expect(session.update.mock.calls[0][2].shareWithTeam).toBe(false);
+  expect(session.baseline().shareWithTeam).toBe(false);
+  expect(areTemplateFieldsDirty(session.contents(), session.baseline())).toBe(
+    false
+  );
   expect(session.update.mock.calls[0][2].descriptionMarkdown).toBe(
     'Saved description'
   );
@@ -799,3 +823,171 @@ it('restores draft sharing without letting template edits change the global defa
     dispose();
   });
 });
+
+it.each([true, false, undefined])(
+  'preserves saved sharing %s when no team can expose the switch',
+  (sharing) => {
+    const template: SavedTaskTemplate = {
+      id: 'saved',
+      name: 'Reusable',
+      teamId: null,
+      revision: 1,
+      contents: {
+        shareWithTeam: sharing,
+        propertyIds: [],
+        propertyDefaults: {},
+        descriptionMarkdown: '',
+      },
+    };
+    expect(taskTemplateSharing(true, { kind: 'saved', template }, false)).toBe(
+      sharing
+    );
+    expect(
+      taskTemplateSharing(
+        true,
+        { kind: 'editing', template, name: template.name },
+        false
+      )
+    ).toBe(sharing);
+    expect(
+      taskTemplateSharing(
+        false,
+        { kind: 'editing', template, name: template.name },
+        true
+      )
+    ).toBe(false);
+  }
+);
+
+it.each([true, false])(
+  'captures and applies template task sharing %s independently of template ownership',
+  (sharing) => {
+    const initial: TaskTemplateContents = {
+      shareWithTeam: !sharing,
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: '',
+    };
+    const captured = captureTaskTemplate(
+      { ...initial, shareWithTeam: sharing },
+      new Set(),
+      new Set()
+    );
+    expect(captured.shareWithTeam).toBe(sharing);
+    expect(fillTaskTemplate(initial, captured, new Set()).shareWithTeam).toBe(
+      sharing
+    );
+    const next = freshTaskFromTemplate(initial, captured, new Set(), new Set());
+    expect(next.shareWithTeam).toBe(sharing);
+    expect(
+      freshTaskFromTemplate(next, captured, new Set(), new Set()).shareWithTeam
+    ).toBe(sharing);
+  }
+);
+
+it.each([true, false])(
+  'keeps the current sharing %s when a template omits sharing',
+  (sharing) => {
+    const initial: TaskTemplateContents = {
+      shareWithTeam: sharing,
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: '',
+    };
+    const template = {
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: '',
+    };
+    expect(fillTaskTemplate(initial, template, new Set()).shareWithTeam).toBe(
+      sharing
+    );
+    expect(
+      freshTaskFromTemplate(initial, template, new Set(), new Set())
+        .shareWithTeam
+    ).toBe(sharing);
+  }
+);
+
+it.each([true, false])(
+  'marks and resets sharing %s as a template field without changing task text',
+  (sharing) => {
+    const baseline: TaskTemplateContents = {
+      title: 'Saved title',
+      shareWithTeam: sharing,
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: 'Saved prose',
+    };
+    const changed = {
+      ...baseline,
+      shareWithTeam: !sharing,
+      title: 'Task title',
+      descriptionMarkdown: 'Task prose',
+    };
+    expect(areTemplateFieldsDirty(changed, baseline)).toBe(true);
+    const reset = restoreTemplateFields(changed, baseline);
+    expect(reset.shareWithTeam).toBe(sharing);
+    expect(reset.title).toBe('Task title');
+    expect(reset.descriptionMarkdown).toBe('Task prose');
+    expect(areTemplateFieldsDirty(reset, baseline)).toBe(false);
+  }
+);
+
+it.each([true, false, undefined])(
+  'round-trips optional sharing %s through template API mapping',
+  (sharing) => {
+    const contents: TaskTemplateContents = {
+      shareWithTeam: sharing,
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: '',
+    };
+    const configuration = taskTemplateConfiguration(contents, []);
+    const wire = JSON.parse(JSON.stringify(configuration));
+    expect(wire.shareWithTeam).toBe(sharing);
+    expect(taskTemplateContents(wire, []).shareWithTeam).toBe(sharing);
+    const original: SavedTaskTemplate = {
+      id: 'saved',
+      name: 'Reusable',
+      teamId: null,
+      revision: 1,
+      contents,
+    };
+    const observed = {
+      id: original.id,
+      name: original.name,
+      userId: 'viewer',
+      creatorId: 'viewer',
+      revision: 2,
+      configuration,
+      canManage: true,
+      createdAt: '',
+      updatedAt: '',
+    };
+    expect(
+      isConfirmedTemplateUpdate(
+        observed,
+        original,
+        'viewer',
+        'Reusable',
+        configuration
+      )
+    ).toBe(true);
+    expect(
+      isConfirmedTemplateUpdate(
+        {
+          ...observed,
+          configuration: {
+            ...configuration,
+            shareWithTeam: sharing === undefined ? false : !sharing,
+          },
+        },
+        original,
+        'viewer',
+        'Reusable',
+        configuration
+      )
+    ).toBe(false);
+  }
+);

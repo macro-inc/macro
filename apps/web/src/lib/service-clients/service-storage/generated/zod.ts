@@ -73633,6 +73633,12 @@ export const listTaskTemplatesResponseItem = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
         title: zod
           .string()
           .nullish()
@@ -73641,7 +73647,7 @@ export const listTaskTemplatesResponseItem = zod
           ),
       })
       .describe(
-        'Selected fields, optional task title and default values, and description Markdown.'
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod
@@ -73855,6 +73861,12 @@ export const createTaskTemplateBody = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
         title: zod
           .string()
           .nullish()
@@ -73863,7 +73875,7 @@ export const createTaskTemplateBody = zod
           ),
       })
       .describe(
-        'Selected fields, optional task title and default values, and description Markdown.'
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
       ),
     id: zod
       .uuid()
@@ -74073,6 +74085,12 @@ export const getTaskTemplateResponse = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
         title: zod
           .string()
           .nullish()
@@ -74081,7 +74099,7 @@ export const getTaskTemplateResponse = zod
           ),
       })
       .describe(
-        'Selected fields, optional task title and default values, and description Markdown.'
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod
@@ -74296,6 +74314,12 @@ export const updateTaskTemplateBody = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
         title: zod
           .string()
           .nullish()
@@ -74304,7 +74328,7 @@ export const updateTaskTemplateBody = zod
           ),
       })
       .describe(
-        'Selected fields, optional task title and default values, and description Markdown.'
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
       ),
     name: zod.string().describe('Replacement name.'),
     revision: zod.number().describe('Revision observed when editing began.'),
@@ -74501,6 +74525,12 @@ export const updateTaskTemplateResponse = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
         title: zod
           .string()
           .nullish()
@@ -74509,7 +74539,7 @@ export const updateTaskTemplateResponse = zod
           ),
       })
       .describe(
-        'Selected fields, optional task title and default values, and description Markdown.'
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod

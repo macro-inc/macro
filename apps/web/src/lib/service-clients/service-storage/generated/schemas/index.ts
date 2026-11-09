@@ -2870,6 +2870,7 @@ export * from './taskSimilaritySearchRequestMarkdown';
 export * from './taskSimilaritySearchResponse';
 export * from './taskTemplate';
 export * from './taskTemplateConfiguration';
+export * from './taskTemplateConfigurationShareWithTeam';
 export * from './taskTemplateConfigurationTitle';
 export * from './taskTemplateCreatorId';
 export * from './taskTemplateTeamId';

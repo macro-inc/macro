@@ -71,6 +71,7 @@ import {
 import {
   isTemplateStateDirty,
   restoreTemplateFields,
+  taskTemplateSharing,
   templateContextualIds,
   areTemplateFieldsDirty as templateFieldsDiffer,
 } from '../core/template-state';
@@ -314,7 +315,7 @@ export function createTaskComposer(
     setVisiblePropertyIds,
     availableProperties,
     writableProperties: templateProperties,
-    definitionsReady,
+    definitionsReady: propertyDefinitionsReady,
     addProperty,
     saveHandler,
     composerTags,
@@ -328,8 +329,11 @@ export function createTaskComposer(
       : undefined,
     allDefinitions: true,
   });
+  const definitionsReady = () =>
+    propertyDefinitionsReady() && !userTeams.isPending;
   const originalTemplateContents: TaskTemplateContents = {
     title: props.initialTitle ?? '',
+    shareWithTeam: shareWithTeam(),
     propertyIds:
       props.composerContext?.visiblePropertyIds ??
       DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
@@ -339,6 +343,11 @@ export function createTaskComposer(
   const contextualPropertyIds = templateContextualIds(props);
   const currentTemplateState = (): TaskTemplateContents => ({
     title: title(),
+    shareWithTeam: taskTemplateSharing(
+      shareWithTeam(),
+      templateSelection(),
+      Boolean(team())
+    ),
     propertyIds: [...visiblePropertyIds()],
     propertyDefaults: structuredClone(unwrap(propertyValues)),
     descriptionMarkdown: content(),
@@ -468,12 +477,21 @@ export function createTaskComposer(
     const selected = templateSelection();
     if (selected.kind === 'saved') {
       const fresh = freshTaskFromTemplate(
-        { ...originalTemplateContents, title: '', descriptionMarkdown: '' },
+        {
+          ...originalTemplateContents,
+          title: '',
+          descriptionMarkdown: '',
+          shareWithTeam: shareWithTeam(),
+        },
         selected.template.contents,
         new Set(available.map((definition) => definition.id)),
         contextualPropertyIds
       );
-      replaceTemplateState(fresh);
+      replaceTemplateState({ ...fresh, shareWithTeam: shareWithTeam() });
+      setTemplateBaseline({
+        ...currentTemplateState(),
+        shareWithTeam: team() ? fresh.shareWithTeam : shareWithTeam(),
+      });
     } else {
       setContent('');
       const editor = bodyEditor();
@@ -701,6 +719,8 @@ export function createTaskComposer(
         : applyTemplateToEditor(template, bodyEditor());
     batch(() => {
       setTitle(next.title ?? '');
+      if (team() && next.shareWithTeam !== undefined)
+        setShareWithTeam(next.shareWithTeam);
       setVisiblePropertyIds([...next.propertyIds]);
       setPropertyValues(reconcile(structuredClone(next.propertyDefaults)));
       setContent(next.descriptionMarkdown);
@@ -762,7 +782,12 @@ export function createTaskComposer(
   ) => {
     if (!canChangeTemplate() || !definitionsReady()) return;
     const next = freshTaskFromTemplate(
-      { ...originalTemplateContents, title: '', descriptionMarkdown: '' },
+      {
+        ...originalTemplateContents,
+        title: '',
+        descriptionMarkdown: '',
+        shareWithTeam: shareWithTeam(),
+      },
       template.contents,
       new Set(templateProperties().map((definition) => definition.id)),
       contextualPropertyIds,
@@ -771,17 +796,19 @@ export function createTaskComposer(
     if (preserveTaskText && title().trim()) next.title = title();
     if (preserveTaskText && content().trim())
       next.descriptionMarkdown = content();
-    replaceTemplateState(next);
-    if (preserveTaskText) {
-      setTemplateBaseline({
-        ...currentTemplateState(),
-        title: template.contents.title,
-        descriptionMarkdown: template.contents.descriptionMarkdown,
+    batch(() => {
+      setTemplateSelection({
+        kind: 'saved',
+        template: structuredClone(template),
       });
-    }
-    setTemplateSelection({
-      kind: 'saved',
-      template: structuredClone(template),
+      replaceTemplateState(next);
+      if (preserveTaskText) {
+        setTemplateBaseline({
+          ...currentTemplateState(),
+          title: template.contents.title,
+          descriptionMarkdown: template.contents.descriptionMarkdown,
+        });
+      }
     });
   };
 
@@ -859,6 +886,8 @@ export function createTaskComposer(
       return;
     const next = restoreTemplateFields(currentTemplateState(), baseline);
     batch(() => {
+      if (team() && next.shareWithTeam !== undefined)
+        setShareWithTeam(next.shareWithTeam);
       setVisiblePropertyIds([...next.propertyIds]);
       setPropertyValues(reconcile(next.propertyDefaults));
     });

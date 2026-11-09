@@ -21,13 +21,16 @@ pub struct PropertyDefault {
     pub value: SetPropertyValue,
 }
 
-/// Selected fields, optional task title and default values, and description Markdown.
+/// Selected fields, optional task title and sharing defaults, and description Markdown.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TaskTemplateConfiguration {
     /// Default task title, separate from the template name; absence leaves the task untitled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Default task sharing, independent of template ownership; absence preserves the current choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub share_with_team: Option<bool>,
     /// Visible definition IDs, including fields without a default value.
     pub property_ids: Vec<Uuid>,
     /// Defaults for selected fields only.
