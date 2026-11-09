@@ -2,8 +2,8 @@
 
 ## Current checkpoint: native view/history preview and notification correction
 
-The LIVE native-view O(edit) chain is integrated as 0f754d883f,7b875ec594,
-af7fd810ae,07b29bd983 and956002830c. History-selection fix c9282eaa41 is
+The LIVE native-view O(edit) chain is integrated as 0f754d883f, 7b875ec594,
+af7fd810ae, 07b29bd983 and 956002830c. History-selection fix c9282eaa41 is
 integrated as 336b3700de, preserving newer TextDelta input/feedback branches.
 The original flag-OFF MarkdownEditor and legacy comment-layout body are byte
 identical to the pre-view source; no OFF browser rerun is inferred from that.
@@ -15,12 +15,32 @@ produced ABI 2 / Diff 1 WASM SHA256
 advisory ceiling by 444,034 bytes; startup/open strict latency gates remain
 unmeasured. The normal document-session-wasm profile, six hot caller crates at
 opt3 and wasm-opt -Oz --converge were used with two Cargo jobs. Matching generated
-declarations are committed as9dc6a842ec. The candidate five-file set was briefly installed, then the exact previous
-known-good a4e515 artifact set was restored after a reported blank shell. Own
-browser diagnostics recorded widespread ERR_NETWORK_CHANGED before editor
-construction, with no JavaScript errors. A private-network candidate-only browser
-retry is in progress. No dependency writes or stack restart occurred; no live
-comments/table/code/undo acceptance is claimed yet.
+declarations are committed as 9dc6a842ec. The candidate was briefly rolled back
+after a blank-shell report, then reinstalled after controlled old/new comparison.
+Blank-shell diagnostics observed host network churn; corrected private controls
+subsequently opened both old and new builds. Early isolated skeleton runs
+were invalidated by a harness proxy-log backpressure bug and an unbridged HMR
+port; corrected private IPv4/IPv6 bridges cover ports 24009 and 24010 and drain
+logs continuously. No dependency writes or stack restart occurred.
+
+The installed-browser rerun independently fetched the exact WASM hash above.
+Both old and new builds open synthetic documents and render/type code without
+JavaScript errors. The following remain OPEN in both exact controls:
+
+| Interaction | Installed build | Old build |
+| --- | --- | --- |
+| Open and type code | pass | pass |
+| Ctrl-Z changes typed code | fail: unchanged | same failure |
+| `/table` picker | absent | absent |
+| Comment button after text selection | absent | absent |
+
+Redo is blocked behind the failed undo assertion. These are open acceptance gaps,
+not passes or new regressions attributed to this batch. The new build is installed
+for local preview with those gaps retained. No full parity acceptance is claimed.
+Evidence: `preview-live-view-history-{installed,old-exact-spots}-results.json`,
+matching screenshots/logs and `live-view-history-preview-authorized-install.json`.
+The invalid premature `/app/component/loading` reload controls and incomplete
+bridge diagnostics remain excluded from passing evidence.
 
 Independent checks pass 482 model, 54 session, 46 projection, 5 targeted undo
 simulator, 263 view and 51 app-comment tests; package/app types, scoped check,
@@ -29,11 +49,11 @@ cases pass in Chromium, Firefox and Linux WebKit: S8/L128 anchor reads 1/1,
 table attribute writes 0/0 and equal positive code-range work. These are component
 correctness/counter checks, not whole-editor latency or Safari qualification.
 
-Full private Chromium native-view tests are 49 passed /1 failed of 50. The strict
+Full private Chromium native-view tests are 49 passed / 1 failed of 50. The strict
 large-HTML raw-DOM comparison remains RED while model/Markdown pass. A controlled
 pre-view JS source 46c54f1060 with the SAME new WASM fails identically: the native
 DOM and upstream DOM are each byte-identical across old/current view. The mismatch
-is 166 empty class attributes, 166 empty style attributes and166 data-lexical-key
+is 166 empty class attributes, 166 empty style attributes and 166 data-lexical-key
 attributes. No comparator mask, allowlist or rebaseline was introduced. This
 isolates the view-chain regression question, not an old-binary baseline.
 
@@ -43,7 +63,7 @@ updating flag was incorrect during update listeners/deferred notifications. The
 actual parent-command reproduction failed before correction and matches its
 unchanged upstream control after a7e71dcbc1 (integrated as a85e3d1455). Exact
 reproduction plus command/update tests pass 15/15; full shim tests pass 234/235,
-with only the unchanged2,396 native-crossing assertion failing. Full TypeScript 6
+with only the unchanged 2,396 native-crossing assertion failing. Full TypeScript 6
 and 41 hooks / 489 sources, plus scoped check pass. No production initializer,
 FIFO/native callback, collection-identity or zero-crossing acceptance is claimed.
 
@@ -54,7 +74,20 @@ Evidence is under `/home/wolf/tmp/integration3-acceptance`: the
 `js-command-notification-{full-tests,package-check,scoped-check}.log` and
 `live-view-history-integration-audit.md`. The first baseline path attempt and an
 interrupted overlapping diagnostic are retained and excluded from passing proof.
-Integration3 and compatibility/parity gates remain unchecked. Replay is also held: fixture047e1 op20 getText fails on an untouched baseline; no current1,421-green claim is made pending snapshot-ownership diagnosis.
+Integration3 and compatibility/parity gates remain unchecked. Replay checkpoints
+`a8a44d71f5` and `ac07ec1d4f` are integrated as 8239ca782a and 5037e93b05:
+a literal two-editor notification regression and removal of only three obsolete
+root-cache exclusions (57 to 54). The stale-unexpected-pass guard is unchanged.
+The reported fixture047e1/op20 failure belongs to an older diagnostic checkout;
+required captured-getter/snapshot-ownership fixes are already present here.
+The integrated replay rerun now passes all 1,421 harness checks: 1,367 actual
+passes and 54 expected ledger outcomes, zero failures. Both flat-diff tests pass,
+and all 452 Macro fixtures are actual passes. The new
+two-editor retained-notification literal also passes, and scoped check passes.
+Evidence: `replay-graduated-integration.log`,
+`replay-retained-notification-literal.log` and `replay-graduated-scoped-check.log`.
+The native owner has confirmed the keyboard-undo dispatch gap and is preparing
+a separate fix; the existing direct undo-selection tests do not clear that gap.
 
 ## Previous checkpoint: source compatibility and open runtime gates
 
@@ -134,7 +167,7 @@ registration. The real-WASM diagnostic failed before `29b7a9a6b6` and passed aft
 its integration as `9099dd64d9`. Registration, command dispatch and flush now use
 observed-only refresh. The diagnostic source/hash and red/green logs are preserved
 externally; the temporary test was removed before the final whole-suite run.
-That run is **207 passed /1 failed of208**, with only the unchanged2,396-versus-zero
+That run is **207 passed /1 failed of208**, with only the unchanged 2,396-versus-zero
 graph-read crossing assertion. The three raw-cache failures and unhandled error
 are gone at this epoch. Temporary Set/Map identity across native transform queue
 swaps remains an explicit development gap; no unconditional callback refresh or
