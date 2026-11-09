@@ -168,7 +168,11 @@ impl EventStreamClient {
             .context("could not reach the service to open the event stream")?;
         let status = response.status();
         if !status.is_success() {
-            let message = response.text().await.unwrap_or_default();
+            let message = tokio::time::timeout(READ_TIMEOUT, response.text())
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default();
             rootcause::bail!("the service answered {status} to open the event stream: {message}");
         }
         Ok(EventStream::new(response.bytes_stream()))
