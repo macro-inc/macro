@@ -1,7 +1,7 @@
 {
   "source": "src/compatibility-exceptions.ts",
-  "implementationCommit": "e31d238d61dc1529ec6ce6c80e5547b1fbb75bac",
-  "implementationSha256": "a6dd8fa7d53fb03684646ca9ac33ecac6b9a8160670d8a9612f428ce0adb920f",
+  "implementationCommit": "b46db54ee1212fb0749736f36a9993c97892989f",
+  "implementationSha256": "996b617fcd3e33a9fc35ad209b2c4be19e886c70fa07c4b853c9fb27513a26a6",
   "compilerControlCommit": "aa19bd3d2df10e58f2b9c200f0b51351f5e060ad",
   "pointDelegationCommit": "0b84f77036",
   "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
@@ -125,7 +125,7 @@
       "evidenceScriptSha256": "0ccc99e38cbf7a1c59135245283778c45006afd4475b5ba365d7c6df24a3e399"
     }
   ],
-  "scope": "Exactly eight named assertions in one central module, plus one separately AST-verified sound runtime-witness guard. No ninth assertion, full namespace or native runtime replacement acceptance is granted.",
+  "scope": "Exactly eight named assertions plus one sound runtime-witness guard and one separate public extension wildcard type-only entry (four aliases, nine AnyKeyword tokens). No ninth assertion, namespace or native acceptance.",
   "commandConsumerCommit": "741092a441",
   "runtimeGuards": [
     {
@@ -153,5 +153,62 @@
     "barrel": "nodes/replacement/index.ts:15",
     "upstream": "lexical:LexicalNodeReplacement",
     "declarationEvidenceSha256": "f9aaab6e1d20489c5f8f9cb8e67988714f927d7a4e92715b5f95e22fa6bb1815"
+  },
+  "typeOnlyException": {
+    "kind": "public extension wildcard types (type-only)",
+    "assertions": 0,
+    "anyKeywords": 9,
+    "aliases": {
+      "AnyLexicalExtension": "export type AnyLexicalExtension = LexicalExtension<any, string, any, any>;",
+      "AnyLexicalExtensionArgument": "export type AnyLexicalExtensionArgument = AnyLexicalExtension | AnyNormalizedLexicalExtensionArgument;",
+      "AnyNormalizedLexicalExtensionArgument": "export type AnyNormalizedLexicalExtensionArgument = NormalizedLexicalExtensionArgument<any, string, any, any>;",
+      "OutputExtension": "export type OutputExtension<Output> = LexicalExtension<any, any, Output, any>;"
+    },
+    "references": [
+      "extension-core/types.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:ImportSpecifier",
+      "extension-core/types.ts:OutputExtension:ImportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtension:ExportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/types.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/types.ts:OutputExtension:ExportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:OutputExtension:TypeReference",
+      "compatibility-exceptions.ts:AnyLexicalExtension:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:AnyLexicalExtensionArgument:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:AnyLexicalExtension:TypeReference",
+      "compatibility-exceptions.ts:AnyNormalizedLexicalExtensionArgument:TypeReference",
+      "compatibility-exceptions.ts:AnyNormalizedLexicalExtensionArgument:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:OutputExtension:TypeAliasDeclaration",
+      "extension-core/defineExtension.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/defineExtension.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/contract.type-test.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/contract.type-test.ts:OutputExtension:ImportSpecifier",
+      "extension-core/contract.type-test.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/contract.type-test.ts:OutputExtension:TypeReference",
+      "extension-core/index.ts:AnyLexicalExtension:ExportSpecifier",
+      "extension-core/index.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/index.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/index.ts:OutputExtension:ExportSpecifier",
+      "index.ts:AnyLexicalExtension:ExportSpecifier",
+      "index.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "index.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "index.ts:OutputExtension:ExportSpecifier"
+    ],
+    "evidenceSha256": "bd1277e407fdb4a75ba25206510ddac27d46da43ee1c7c3d2c711f3fbec11258",
+    "rootForwardingCommit": "eb1d5238fb",
+    "ordinaryDeclarationSha256": "fd0220616ab92809a406f2cbb91c8b9be41708a4a3e906b21c056e6983428788",
+    "verifiedCompiler": "6.0.3"
   }
 }

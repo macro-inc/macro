@@ -11,10 +11,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'vitest';
 import { verifyExceptions } from './exceptions-check';
+import { wildcardAliases } from './wildcard-types';
 
 function fixture(body: (root: string, manifest: unknown) => void) {
   const root = mkdtempSync(join(tmpdir(), 'compat-exception-guard-'));
   const central =
+    Object.values(wildcardAliases).join('\n') +
+    '\n' +
     'export function assumeNodeType<T>(node:unknown):T{return node as T;}\nexport function nodeConfigRecord<T>(record:unknown):T{return record as T;}\nexport function createPointWithUpstreamType<T>(point:unknown):T{return point as T;}\nexport function applyValueOrUpdater<T>(value:unknown):T{return value as T;}\nexport function nodeStateToJSON<T>(value:unknown):T{return value as T;}\nexport function commandBucket<T>(value:unknown):T{return value as T;}\nexport function invokeDOMConversionWithNode<R>(conversion:(node:HTMLElement)=>R,node:Node):R{return conversion(node as HTMLElement); }\nexport function compareNumberWithUpstreamType(a:number,b:number):-1|0|1{return Math.sign(a-b) as -1|0|1;}\nexport function isInstanceOfKlass<T extends abstract new (...args:never[])=>unknown>(value:unknown,klass:T):value is InstanceType<T>{return value instanceof klass;}\n';
   const manifest = JSON.parse(
     readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8')
@@ -40,7 +43,21 @@ function fixture(body: (root: string, manifest: unknown) => void) {
     writeFileSync(full, source);
   }
   try {
-    body(root, { ...manifest, implementationSha256: hash });
+    body(root, {
+      ...manifest,
+      implementationSha256: hash,
+      typeOnlyException: {
+        ...manifest.typeOnlyException,
+        references: [
+          ...Object.keys(wildcardAliases).map(
+            (alias) =>
+              'compatibility-exceptions.ts:' + alias + ':TypeAliasDeclaration'
+          ),
+          'compatibility-exceptions.ts:AnyLexicalExtension:TypeReference',
+          'compatibility-exceptions.ts:AnyNormalizedLexicalExtensionArgument:TypeReference',
+        ],
+      },
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -282,6 +299,49 @@ test('the caret comparison has exactly its approved direct consumer and no reexp
       assert.throws(
         () => verifyExceptions(root, manifest),
         /callsites differ|only be directly invoked|reexports differ/
+      );
+    });
+});
+
+test('public wildcard aliases retain exactly their sanctioned any positions', () => {
+  for (const [before, after] of [
+    [
+      'LexicalExtension<any, string, any, any>',
+      'LexicalExtension<any, any, any, any>',
+    ],
+    ['OutputExtension<Output>', 'OutputExtension<Output = any>'],
+    ['export type OutputExtension', 'type OutputExtension'],
+  ])
+    fixture((root, manifest) => {
+      const path = join(root, 'src/compatibility-exceptions.ts');
+      const changed = readFileSync(path, 'utf8').replace(before, after);
+      writeFileSync(path, changed);
+      if (manifest === null || typeof manifest !== 'object')
+        throw new Error('Invalid fixture manifest');
+      assert.throws(
+        () =>
+          verifyExceptions(root, {
+            ...manifest,
+            implementationSha256: createHash('sha256')
+              .update(changed)
+              .digest('hex'),
+          }),
+        /wildcard alias definitions/
+      );
+    });
+});
+
+test('wildcard permission cannot expand to other aliases or source positions', () => {
+  for (const extra of [
+    'export type Hidden = any;',
+    "import type {AnyLexicalExtension} from './compatibility-exceptions';export type Extra = AnyLexicalExtension;",
+    "export {AnyLexicalExtension} from './compatibility-exceptions';",
+  ])
+    fixture((root, manifest) => {
+      writeFileSync(join(root, 'src/extra.ts'), extra);
+      assert.throws(
+        () => verifyExceptions(root, manifest),
+        /Unapproved type-level any|reference inventory|type-only exports/
       );
     });
 });
