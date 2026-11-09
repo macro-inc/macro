@@ -34,3 +34,6 @@ Read sync_defaults when constructing host configuration; keep timeout, retry, WA
 Generate application paste facts through clipboard_paste_facts; never mirror their MIME/JSON wire fields in native hosts.
 
 Expose element alignment through its public names: lower unknown raw model numbers to Unset, preserving source empty alignment semantics and leaving stored model bits unchanged.
+
+Keep production native FFI dependencies on explicit default-features=false with application policy only; never enable session compatibility or foreign nodes in native builds.
+
