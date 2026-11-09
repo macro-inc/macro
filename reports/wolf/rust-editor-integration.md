@@ -1,37 +1,105 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current local-stack recovery status
+## Current native preview checkpoint
 
-After the disk-full event and orchestrator recovery, a new isolated-browser check
-fails at authentication: fresh UI passwordless login returns HTTP 500 with
-"unable to lookup identity providers", and saved-session refresh returns 500.
-The existing document stays on skeleton-only Drive; creation fails. Typing and
-undo/redo are blocked by those prerequisites, not counted as passes. No page
-errors occurred, and both contexts fetched the expected native `1a8200` WASM.
-FusionAuth is unhealthy; read-only logs show PostgreSQL connection failures,
-SQLTransientConnectionException, timeouts and NoRouteToHostException. Auth handler
-source maps failed identity-provider lookup to the observed response. OTLP proxy
-requests also return 502. No service, credential or artifact changes were made
-for this diagnosis; the orchestrator received the failure details.
+Source freeze `cafc3c1f80da8c92778e0b9e9a02da2d11c741ea` is built and installed
+with compatibility disabled. The artifact-only update preserves matching glue and
+declarations; no live dependency directories or server processes were changed.
+The isolated browser passed sign-in, existing document, new document, typing and
+undo/redo. Both redo shortcuts restore exact raw JSON, durable subtree IDs and
+model/DOM caret positions. All four fetched WASM responses match SHA256
+`badfaa20badd88e28d7ccd17c3022b8d2eb1c8930e1528360e931ee4f26c2231`.
+No page errors occurred. Telemetry proxy requests still return 502; the raw
+network list also retains GitHub-link status 404 and navigation-aborted requests.
+These do not block the five exercised flows; telemetry connectivity is unverified.
 
-The old private proxy socket was absent after restart, so this check used new
-per-run IPv4/IPv6 bridges for ports 24009/24010 with isolated DNS/network/PID state.
-The failed missing-socket harness attempt never opened a browser. Raw browser
-results are `preview-recovery-results.json`; the prerequisite classification is
-`preview-recovery-summary.json`, with `preview-recovery-auth-health.json` and
-failure screenshots alongside them in the external evidence directory.
-The earlier successful live history check below predates the infrastructure
-outage and remains historical acceptance evidence, not a post-recovery pass.
+This freeze integrates:
 
-Critical build/browser outputs completed before 14:20. A post-restart rehash
-verified all 11 archived native/compat files and five installed files unchanged;
-critical proof JSON parses correctly. The interrupted dependency-hash run has an
-unknown exit and is invalidated; its replacement is still pending. No partial
-output from the disk-full window is accepted. Four explicitly owned stale
-scratch paths were removed after sealing the archives (about 14 GiB), without
-changing source, live dependencies, stack volumes or other workers' targets.
+- FFI ModelSegmentation `45d44144af` as `5ce32e1aa3`, with the explicit pure
+  Unicode feature, exhaustive appended mirror tag and matching native bindings.
+- Remote typed-state preservation `4a64ac6333` as `b4eec6d20b`, retaining the
+  current shared-state configuration path. Ordinary JSON fast import explicitly
+  reparses; only raw remote updates retain an unchanged serialized typed value.
+- Provider replacement `3136d12239` as `870bd3cc8d` and native physical shortcut
+  plus exact history fixture `14c52649e0` as `70fb4a620d`.
+- Compact batch/reserved construction/recovery/scoped metadata and exact capture
+  prerequisites through `3386e98687` as `5d1f672778`, plus the empty registry
+  residual `dc972f4bd4` as `dc59d1db25`. Unsupported admission/selection intents
+  still reject; this is not a complete compatibility initializer.
+- Pipeline prerequisite `ec39fe9bef` as `f7b9095e10`, then generic staging
+  `4f269b9334` as `cafc3c1f80`. The prior staging validation union passed its four
+  workspace gates; its receipt remains separately bound. Current freeze gates
+  run independently.
 
-## Completed source/artifact checkpoint: native feature isolation
+Current freeze tests pass: 517 model, 85 WASM adapter, 59 native application
+session plus telemetry, 61 all-feature session plus telemetry, seven FFI,
+1,421 unchanged replay and two flat-diff tests. Matching binding freshness,
+26 JVM tests with zero failures/errors/skips, instrumentation compilation,
+schema freshness, nine feature graphs and scoped checks pass. The new native
+artifact passed 263 view tests and 18 keyboard/history cases across Chromium,
+Firefox and WebKit. The production web build passed with the usual optimizations
+and a 12 GiB Node heap. The current full workspace rust-check/clippy/format/hakari
+sequence is still running; no completed current-union broad claim is made yet.
+
+Size is 8,421,630 raw / 1,913,972 Brotli bytes, 2,009 Brotli bytes above the prior
+native artifact and 313,972 above the advisory ceiling. Actual export inspection
+finds createMacro and no compatibility exports. Glue and declarations are byte
+identical to the prior native set. No new latency or full compatibility acceptance
+is inferred. External evidence uses the `cafc-freeze-*`, `cafc-native-*` and
+`cafc-live-*` prefixes; `cafc-preview-install.json` records the previous-set backup.
+
+## Bounded collector source integration
+
+After core-owner adoption, collector `c026d6341d` / native state proof
+`84b55162e4` / shared capture owners `bfe81636ed` are integrated as
+`cda7027af2` / `f036345a56` / `c5e713e659`. Minimal dependencies are the existing
+scalar values, exact CapturedRecords, acknowledged CaptureLeases with local
+ownership lookup, diagnostic measurement glue/runtime, and the sole NodeHandles
+lifetime port `6054f87488`. No production backend body or initializer was installed.
+These additions change no Rust, native build recipe or shipping WASM inputs.
+
+Independent validation passes 26 component tests, 12 real native lifetime/GC
+cases, 28 measurement tests, strict actual-artifact type checking, ordinary
+external declaration emission and scoped checks. The native cases preserve their
+exact `3386e98687` source/artifact pin (WASM `395a7da5`), not the CAF preview.
+
+The host instrumentation check is a new qualified source-overlay proof: unchanged
+historical host file SHA `90e824ec` and body `564fa631`, actual CAF compiler config,
+TypeScript 6.0.3 and actual generated a50 schema. The original on-disk host remains
+unchanged; TypeScript's readFile overlay receives the transformed virtual input
+SHA `89b9b80e`. The provenance labels that virtual source separately and rehashes
+the other disk inputs. Earlier missing-host/config and declaration-output-layout
+attempts remain retained failures; final results use complete actual inputs and
+an explicit external root/output layout, without source projection or stubs.
+
+The proof is bounded to components and real native acknowledgements/finalizers.
+Full backend installation, namespace acceptance, full Macro GC/performance and
+the compatibility initializer remain open. Evidence uses `collector-chain-*`,
+including separate native raw proof and host-overlay provenance.
+
+## Disk-full recovery evidence
+
+The initial post-outage check failed at authentication (HTTP 500 identity-provider
+lookup and refresh), then the next check passed sign-in while documents remained
+on skeletons. After the infrastructure DNS/alias repair, the prior native set
+passed all five checks; the newly installed set independently passes them too.
+The earlier failures remain in `preview-recovery-results.json` and
+`preview-recovery-repaired-results.json`; final recovery is recorded separately
+in `preview-recovery-final-results.json`. None was trimmed or relabeled.
+
+Per-run IPv4/IPv6 bridges for ports 24009/24010 use isolated DNS/network/PID state.
+The initial missing-socket harness failure never opened a browser. No stack or
+authentication data changes were made for these checks.
+
+Critical prior build/browser outputs completed before the disk-full event. The
+post-restart rehash verified all 11 archived native/compat files and five installed
+files unchanged. Partial disk-window outputs were invalidated. The subsequent
+Linux dependency-hash rebuild completed exit zero with its declared hash unchanged;
+Darwin verification is unavailable on this Linux host. Only explicitly owned stale
+scratch paths were removed after sealing archives, without touching live
+dependencies, stack volumes or other targets.
+
+## Historical source/artifact checkpoint: native feature isolation
 
 The native compiled-feature 5% comparison is superseded. Production native,
 FFI, server/headless and current native web builds exclude compatibility and
@@ -98,9 +166,9 @@ Actual package-export type proof confirms native has no compatibility methods,
 while the separate generated compatibility class does. The web production bundle
 passes with the same 12 GB build heap used previously; no optimization was relaxed.
 The Linux node-modules fixed-output verification was interrupted during the
-disk-full/restart window and has been restarted in an isolated Nix build after
-the type-only manifest export. Its completion is pending. Darwin verification is
-unavailable on this Linux host. Neither dependency-hash check is claimed green.
+disk-full/restart window. Its subsequent isolated Linux Nix rebuild after the
+type-only manifest export completed exit zero with the declared hash unchanged.
+Darwin verification remains unavailable on this Linux host and is not claimed green.
 
 Evidence under `/home/wolf/tmp/integration3-acceptance/` includes
 `native-profile-artifact-manifest.json`, `compat-profile-artifact-manifest.json`,
@@ -113,9 +181,10 @@ Evidence under `/home/wolf/tmp/integration3-acceptance/` includes
 
 Table-picker/comment-button gaps, full compatibility/initializer/parity and
 Android device/app-surface acceptance remain open. The separate full-preset root
-metadata missing-to-null redo issue remains owner-tracked pending the actual
-source/JNI follow-up. Generic staging, capture-consumer and metadata checkpoints
-are queued separately; none is folded into this frozen artifact proof.
+metadata missing-to-null redo issue was pending at this older checkpoint; the
+current CAF metadata/JNI follow-up above passes its strict history controls.
+Generic staging, capture-consumer and metadata results are bound to the later
+freeze, not folded into this historical artifact proof.
 Integration 3 remains unchecked.
 
 ## Prior checkpoint: stable subtree identities and Android prerequisites
@@ -264,7 +333,7 @@ logs continuously. No dependency writes or stack restart occurred.
 
 The installed-browser rerun independently fetched the exact WASM hash above.
 Both old and new builds open synthetic documents and render/type code without
-JavaScript errors. The following remain OPEN in both exact controls:
+JavaScript errors. The following were OPEN in both exact controls at that checkpoint:
 
 | Interaction | Installed build | Old build |
 | --- | --- | --- |
@@ -273,7 +342,9 @@ JavaScript errors. The following remain OPEN in both exact controls:
 | `/table` picker | absent | absent |
 | Comment button after text selection | absent | absent |
 
-Redo is blocked behind the failed undo assertion. These are open acceptance gaps,
+At that checkpoint redo was blocked behind the failed undo assertion. The later
+routed-history and CAF checks close that keyboard failure; table/comment UI
+coverage remains open. The historical failures are retained acceptance observations,
 not passes or new regressions attributed to this batch. The new build is installed
 for local preview with those gaps retained. No full parity acceptance is claimed.
 Evidence: `preview-live-view-history-{installed,old-exact-spots}-results.json`,
