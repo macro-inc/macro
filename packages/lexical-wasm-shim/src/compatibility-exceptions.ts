@@ -1,4 +1,4 @@
-/** The six upstream caller-assertion exceptions approved for compatibility. */
+/** The seven upstream declaration/runtime exceptions approved for compatibility. */
 import type { NodeKey } from 'lexical';
 import { DequeSet } from './command/deque-set';
 import type { CommandBucket, CommandRegistry } from './command/types';
@@ -87,4 +87,12 @@ export function commandBucket<P>(
       'Command bucket must contain five DequeSet priority groups'
     );
   return bucket as CommandBucket<P>;
+}
+
+/** Upstream invokes HTMLElement-declared DOM factories/converters with real Node. */
+export function invokeDOMConversionWithNode<R>(
+  conversion: (node: HTMLElement) => R,
+  node: Node
+): R {
+  return conversion(node as HTMLElement);
 }
