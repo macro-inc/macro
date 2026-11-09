@@ -1,7 +1,13 @@
 //! Runtime NodeState codecs over unparsed JSON slots.
 use crate::{collections::IndexMap, node_state::DeclaredStateKey, *};
 use serde_json::Value;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    borrow::Cow,
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 /// One development JS StateConfig; codec identity distinguishes configs with the same key.
 #[derive(Clone)]
@@ -24,10 +30,16 @@ type Configs = IndexMap<&'static str, Arc<ForeignStateConfig>>;
 
 /// Registration is shared by snapshots; guards are dropped before any codec callout.
 #[derive(Default)]
-pub(crate) struct ForeignStateRegistry(RwLock<Configs>);
+pub(crate) struct ForeignStateRegistry {
+    configs: RwLock<Configs>,
+    populated: AtomicBool,
+}
 impl ForeignStateRegistry {
     pub(crate) fn register(&self, config: ForeignStateConfig) -> Result<(), &'static str> {
-        let mut configs = self.0.write().unwrap_or_else(|error| error.into_inner());
+        let mut configs = self
+            .configs
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
         if let Some((name, existing)) = configs.get_key_value(config.key.as_ref()) {
             if existing.flat == config.flat && Arc::ptr_eq(&existing.codec, &config.codec) {
                 return Ok(());
@@ -38,20 +50,30 @@ impl ForeignStateRegistry {
         // The leaked name contains no callbacks or JS values.
         let name = Box::leak(config.key.to_string().into_boxed_str());
         configs.insert(name, Arc::new(config));
+        self.populated.store(true, Ordering::Release);
         Ok(())
     }
-    pub(crate) fn layout(&self, layout: &StateLayout) -> StateLayout {
+    pub(crate) fn layout<'a>(&self, layout: &'a StateLayout) -> Cow<'a, StateLayout> {
+        if !self.populated.load(Ordering::Acquire) {
+            return Cow::Borrowed(layout);
+        }
         let mut layout = layout.clone();
-        let configs = self.0.read().unwrap_or_else(|error| error.into_inner());
+        let configs = self
+            .configs
+            .read()
+            .unwrap_or_else(|error| error.into_inner());
         for (name, config) in configs.iter() {
             if config.flat && !layout.entries.iter().any(|entry| entry.key.name() == *name) {
                 layout.entries.push(RequiredState::foreign(name, true));
             }
         }
-        layout
+        Cow::Owned(layout)
     }
     fn get(&self, key: &str) -> Option<(&'static str, Arc<ForeignStateConfig>)> {
-        self.0
+        if !self.populated.load(Ordering::Acquire) {
+            return None;
+        }
+        self.configs
             .read()
             .unwrap_or_else(|error| error.into_inner())
             .get_key_value(key)
@@ -60,31 +82,44 @@ impl ForeignStateRegistry {
 }
 /// A read memo: imported slots stay unknown until a config is actually read or written.
 #[derive(Default)]
-pub(crate) struct ForeignBindings(Mutex<Configs>);
+pub(crate) struct ForeignBindings {
+    configs: Mutex<Configs>,
+    populated: AtomicBool,
+}
 impl Clone for ForeignBindings {
     fn clone(&self) -> Self {
-        Self(Mutex::new(self.configs()))
+        let configs = self.configs();
+        Self {
+            populated: AtomicBool::new(!configs.is_empty()),
+            configs: Mutex::new(configs),
+        }
     }
 }
 impl ForeignBindings {
     fn configs(&self) -> Configs {
-        self.0
+        if !self.populated.load(Ordering::Acquire) {
+            return Configs::default();
+        }
+        self.configs
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .clone()
     }
     fn bind(&self, name: &'static str, config: Arc<ForeignStateConfig>) {
-        self.0
+        self.configs
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .entry(name)
             .or_insert(config);
+        self.populated.store(true, Ordering::Release);
     }
     pub(crate) fn contains(&self, name: &str) -> bool {
-        self.0
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(name)
+        self.populated.load(Ordering::Acquire)
+            && self
+                .configs
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .contains_key(name)
     }
     pub(crate) fn export(
         &self,

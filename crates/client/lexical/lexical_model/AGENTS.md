@@ -234,3 +234,9 @@ constructor or clone when an owned raw capture incidentally shares the record.
 Keep the foreign failure stack thread-local without synchronization locks; scopes
 cannot move between threads. Preserve failure checks for native editors invoked
 inside a failed foreign callback, even when their registry has no foreign classes.
+
+Skip empty foreign-state metadata through the actual ForeignStateRegistry and
+ForeignBindings population markers, borrowing unchanged layouts and avoiding
+empty configuration lock/map clones. Never use foreign payload node presence as
+that guard: builtin text can carry registered JS NodeState and must preserve its
+codec behavior, lazy reads, flat serialization and previous snapshots.
