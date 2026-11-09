@@ -24,6 +24,7 @@ import {
   ParagraphNode,
   TextNode,
 } from './index';
+import { $applyNodeReplacement } from './replacement/helpers';
 import { isRootOrShadowRoot } from './results';
 import {
   assumeNodeType,
@@ -342,7 +343,7 @@ export class LexicalNode {
     return false;
   }
   createParentElementNode(): ElementNode {
-    return new ParagraphNode();
+    return $applyNodeReplacement(new ParagraphNode());
   }
   selectStart(): RangeSelection {
     return this.selectPrevious();

@@ -24,6 +24,7 @@ import {
 } from './dom-import';
 import type { EditorConfig } from './editor-config';
 import { ElementNode } from './element';
+import { $applyNodeReplacement } from './replacement/helpers';
 import { nodeByKey } from './runtime';
 import { TextNode } from './text';
 import { classNames } from './text-dom';
@@ -40,7 +41,7 @@ export class ParagraphNode extends ElementNode {
     return new ParagraphNode(node.__key);
   }
   static importJSON(node: SerializedParagraphNode): ParagraphNode {
-    return new ParagraphNode().updateFromJSON(node);
+    return $applyNodeReplacement(new ParagraphNode()).updateFromJSON(node);
   }
   createDOM(config: EditorConfig): HTMLElement {
     const dom = document.createElement('p');
@@ -80,7 +81,7 @@ export class ParagraphNode extends ElementNode {
     selection: RangeSelection,
     restoreSelection: boolean
   ): ParagraphNode {
-    const node = new ParagraphNode()
+    const node = $applyNodeReplacement(new ParagraphNode())
       .setTextFormat(selection.format)
       .setTextStyle(selection.style)
       .setDirection(this.getDirection())
@@ -184,7 +185,7 @@ export class LineBreakNode extends LexicalNode {
     return new LineBreakNode(node.__key);
   }
   static importJSON(node: SerializedLexicalNode): LineBreakNode {
-    return new LineBreakNode().updateFromJSON(node);
+    return $applyNodeReplacement(new LineBreakNode()).updateFromJSON(node);
   }
   getTextContent(): '\n' {
     return '\n';

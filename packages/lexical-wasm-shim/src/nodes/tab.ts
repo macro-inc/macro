@@ -8,6 +8,7 @@ type TextDetailType = 'directionless' | 'unmergable';
 
 import type { DOMConversionMap } from './dom-import';
 import type { EditorConfig } from './editor-config';
+import { $applyNodeReplacement } from './replacement/helpers';
 import { TextNode } from './text';
 import { classNames } from './text-dom';
 
@@ -25,7 +26,7 @@ export class TabNode extends TextNode {
     return new TabNode(node.__key);
   }
   static importJSON(node: SerializedTextNode): TabNode {
-    return new TabNode().updateFromJSON(node);
+    return $applyNodeReplacement(new TabNode()).updateFromJSON(node);
   }
   createDOM(config: EditorConfig): HTMLElement {
     const dom = super.createDOM(config);
