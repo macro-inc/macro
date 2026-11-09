@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { createEditor as createOriginal } from 'lexical';
 import { expect, test } from 'vitest';
 import { getDOMNodeConversionFunction } from '../configuration/html-conversions';
