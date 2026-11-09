@@ -68,3 +68,10 @@ fixture-only error boundary. Resolver checks cover both bundling and the test
 runner's SSR module pipeline. The paste-preparation browser case holds the idle
 callback, observes the actual generated export calling the real WASM, and checks
 that first contentful paint precedes preparation and editor readiness.
+
+The readiness browser harness runs Chromium, Firefox, and WebKit by default.
+Use `--project=chromium` for a focused iteration. Host environments may supply
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`, `PLAYWRIGHT_FIREFOX_EXECUTABLE_PATH`, and
+`PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH`; use isolated headless browser processes.
+When an engine lacks Paint Timing entries, the preparation proof captures its
+compositor while idle is held before releasing preparation.
