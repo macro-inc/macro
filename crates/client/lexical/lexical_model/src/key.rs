@@ -65,6 +65,25 @@ impl fmt::Display for NodeKey {
         }
     }
 }
+/// One native-issued, single-use constructor key from an exact allocation stream.
+#[cfg(feature = "foreign-nodes")]
+pub struct ForeignReservedKey {
+    key: NodeKey,
+    counter: Arc<AtomicU64>,
+}
+#[cfg(feature = "foreign-nodes")]
+impl ForeignReservedKey {
+    /// The already allocated key; this does not construct a node.
+    pub fn key(&self) -> NodeKey {
+        self.key
+    }
+    pub(crate) fn consume(self, keys: &SharedKeyCounter) -> Result<NodeKey, Error> {
+        if !Arc::ptr_eq(&self.counter, &keys.0) {
+            return Err(Error::Invariant("reserved key allocation stream mismatch"));
+        }
+        Ok(self.key)
+    }
+}
 /// A cloneable shared allocation counter, never rolled back with a transaction.
 #[derive(Clone, Debug, Default)]
 pub struct SharedKeyCounter(Arc<AtomicU64>, Arc<AtomicU64>);
@@ -104,6 +123,14 @@ impl SharedKeyCounter {
     #[cfg(feature = "foreign-nodes")]
     pub fn allocate_for_foreign_host(&self) -> Result<NodeKey, Error> {
         self.next()
+    }
+    /// Reserve a constructor capability without creating a node or publishing state.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn reserve_for_foreign_host(&self) -> Result<ForeignReservedKey, Error> {
+        Ok(ForeignReservedKey {
+            key: self.next()?,
+            counter: self.0.clone(),
+        })
     }
     pub(crate) fn next_commit(&self) -> Result<crate::CommitId, Error> {
         self.1
