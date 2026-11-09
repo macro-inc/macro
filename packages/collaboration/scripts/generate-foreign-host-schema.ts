@@ -3,6 +3,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../../..');
+execFileSync(
+  'bun',
+  [
+    'packages/collaboration/scripts/generate-native-fields.ts',
+    ...(process.argv.includes('--check') ? ['--check'] : []),
+  ],
+  { cwd: root, stdio: 'inherit' }
+);
 const outputs = [
   'crates/client/document_session_wasm/src/foreign_host_generated.rs',
   'packages/collaboration/src/session/foreign-host.generated.ts',
