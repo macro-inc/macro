@@ -131,6 +131,13 @@ Outlook (Microsoft Graph) outbound adapters.
   bundled chrono-tz lacks: Outlook writes send local times computed with
   them, so stale rules move an event. British Columbia, Alberta and Manitoba
   Standard Time are held out that way until current tz data ships.
+- Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
+  takes the field or shape that failed (`read_json` gives the JSON path and a
+  missing field's name) and must never quote the response, which can carry
+  mail content.
+- An Outlook invitation whose `$value` read fails for anything but throttling
+  or credentials still reads, with `MailboxMessage::calendar_parts_unavailable`
+  set; mailbox sync decides whether to wait for the parts.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

@@ -10,12 +10,12 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod test;
 
-/// Who provider ids are, as far as the chat knows: people seen in it (with
-/// their verified Macro user) and the roster's names.
+/// Who the people of a chat are, as far as the chat knows: by the provider
+/// ids that mentions, system lines and votes name, and by the stored person
+/// that sent, reacted or voted.
 #[derive(Debug)]
 pub struct People {
     by_id: HashMap<String, ExternalChatPersonRef>,
-    /// What the provider calls people stored without a name.
     by_person: HashMap<Uuid, String>,
     unnamed: fn(&str) -> Option<String>,
 }
@@ -37,33 +37,15 @@ impl People {
         }
     }
 
-    /// Learn what to call a person stored without a name (WhatsApp: their
-    /// contact name or phone number); the first name given wins.
-    pub fn learn_person(&mut self, person: Uuid, name: String) {
-        self.by_person.entry(person).or_insert(name);
-    }
-
-    /// A stored sender or voter: the name stored with them, else what the
-    /// provider calls them, else a generic name.
-    pub fn stored(&self, person: &StoredPerson) -> ExternalChatPersonRef {
-        let name = person
-            .name
-            .as_deref()
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
-            .or_else(|| self.by_person.get(&person.person_id).cloned())
-            .unwrap_or_else(|| UNKNOWN_PERSON.to_owned());
-        ExternalChatPersonRef {
-            name,
-            user_id: person.user_id.clone(),
-        }
-    }
-
     /// Learn a person's name; the first name given for an id wins, so pass
     /// the better sources first.
     pub fn learn(&mut self, id: &str, person: ExternalChatPersonRef) {
         self.by_id.entry(id.to_owned()).or_insert(person);
+    }
+
+    /// Learn what a stored person is called.
+    pub fn name_person(&mut self, person: Uuid, name: String) {
+        self.by_person.insert(person, name);
     }
 
     /// The person behind an id: their name when known, else what `unnamed`
@@ -75,6 +57,19 @@ impl People {
         ExternalChatPersonRef {
             name: (self.unnamed)(id).unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
             user_id: None,
+        }
+    }
+
+    /// A stored person by the name the provider gave them, else a generic
+    /// name.
+    pub fn person(&self, person: &StoredPerson) -> ExternalChatPersonRef {
+        ExternalChatPersonRef {
+            name: self
+                .by_person
+                .get(&person.person_id)
+                .cloned()
+                .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
+            user_id: person.user_id.clone(),
         }
     }
 }
@@ -91,18 +86,6 @@ pub struct StoredVote {
     pub selected: Vec<String>,
     /// Who voted.
     pub voter: StoredPerson,
-}
-
-/// A person as stored with a message or vote: the provider name is `None`
-/// when no name was ever seen, and [`People::stored`] names them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredPerson {
-    /// External person identity.
-    pub person_id: Uuid,
-    /// Verified Macro user association, if present.
-    pub user_id: Option<String>,
-    /// The provider's name for them, untrusted.
-    pub name: Option<String>,
 }
 
 /// The mentions of a body, by name.
@@ -128,7 +111,7 @@ fn poll_option(
     let voters: Vec<ExternalChatPersonRef> = votes
         .iter()
         .filter(|vote| vote.selected.contains(&option.hash))
-        .map(|vote| people.stored(&vote.voter))
+        .map(|vote| people.person(&vote.voter))
         .collect();
     ExternalChatPollOption {
         name: option.name.clone(),
@@ -210,7 +193,7 @@ pub fn message_view(
     viewer: &str,
     people: &People,
 ) -> ExternalChatMessage {
-    let sender = people.stored(&message.sender);
+    let sender = people.person(&message.sender);
     let votes: Vec<&StoredVote> = message.votes.iter().collect();
     ExternalChatMessage {
         id: message.id,
@@ -220,8 +203,8 @@ pub fn message_view(
             .and_then(|content| rich_view(content, &sender, &votes, viewer, people)),
         sender: ExternalChatSender {
             person_id: message.sender.person_id,
-            user_id: sender.user_id.clone(),
-            name: sender.name.clone(),
+            user_id: sender.user_id,
+            name: sender.name,
         },
         body: message.body,
         reply_to: message.reply_to,
@@ -229,11 +212,37 @@ pub fn message_view(
         received_at: message.received_at,
         edited_at: message.edited_at,
         deleted: message.deleted,
-        reactions: message.reactions,
+        reactions: message
+            .reactions
+            .into_iter()
+            .map(|reaction| ExternalChatReaction {
+                emoji: reaction.emoji,
+                reactors: reaction
+                    .reactors
+                    .iter()
+                    .map(|reactor| people.person(reactor))
+                    .collect(),
+                mine: reaction.mine,
+            })
+            .collect(),
         attachments: message.attachments,
         delivery_state,
         kind: message.kind,
         forwarded: message.forwarded,
         view_once: message.view_once,
     }
+}
+
+/// The stored people a message names by person: its sender, reactors and
+/// voters.
+pub fn stored_people(message: &StoredMessage) -> impl Iterator<Item = Uuid> + '_ {
+    let reactors = message
+        .reactions
+        .iter()
+        .flat_map(|reaction| &reaction.reactors);
+    let voters = message.votes.iter().map(|vote| &vote.voter);
+    std::iter::once(&message.sender)
+        .chain(reactors)
+        .chain(voters)
+        .map(|person| person.person_id)
 }

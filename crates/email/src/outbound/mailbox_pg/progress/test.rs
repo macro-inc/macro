@@ -296,8 +296,126 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
     );
     // Projection effects that fail outside the database are reported apart.
     assert_eq!(
-        crate::domain::mailbox::telemetry::defer_reason(&MailboxError::Effect),
+        crate::domain::mailbox::telemetry::defer_reason(&MailboxError::Effect(
+            crate::domain::mailbox::EffectFailure::Downstream
+        )),
         "effect"
+    );
+}
+
+/// Projection effects whose view refresh waits on an attachment upload.
+struct PendingUpload(Uuid);
+
+impl crate::domain::mailbox::projection::MailboxProjectionEffects for PendingUpload {
+    async fn publish(&self, _: crate::domain::events::EmailMacroEvent) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn refresh(
+        &self,
+        _: Uuid,
+        _: &std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        Err(MailboxError::Effect(
+            crate::domain::mailbox::EffectFailure::AttachmentUploadPending {
+                attachment_id: self.0,
+                claim_age_seconds: 42,
+            },
+        ))
+    }
+    async fn notify(
+        &self,
+        _: crate::domain::mailbox::projection::MailboxNotification,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn contacts(
+        &self,
+        _: crate::domain::mailbox::projection::CorrespondenceProjection,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn attachments(
+        &self,
+        _: MailboxKey,
+        _: &crate::domain::mailbox::projection::ProjectionContext,
+        _: bool,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn invitations(
+        &self,
+        _: Uuid,
+        _: &[crate::domain::models::calendar_invitation::CalendarInvitation],
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn effect_deferrals_name_the_effect_and_its_attachment(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = super::super::test::fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,attempts) VALUES ($1,$2,1,$3,4)",
+        macro_uuid::generate_uuid_v7(),
+        link,
+        serde_json::json!({"kind": "link_changed"})
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let attachment = Uuid::from_u128(7);
+    let service = crate::domain::mailbox::projection::MailboxProjectionService::new(
+        repo,
+        PendingUpload(attachment),
+    );
+
+    assert!(matches!(
+        service.project_once().await,
+        Err(MailboxError::Effect(_))
+    ));
+
+    let spans = telemetry.spans("outlook.sync.project");
+    let fields: Vec<_> = spans
+        .iter()
+        .map(|span| {
+            (
+                span["outlook.attempts"].as_str(),
+                span["outlook.defer_reason"].as_str(),
+                span["outlook.effect"].as_str(),
+                span["outlook.attachment_id"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        fields,
+        [(
+            "5",
+            "effect",
+            "attachment_upload_pending",
+            attachment.to_string()
+        )]
+    );
+    let deferrals = telemetry.events("mailbox sync work deferred");
+    let logged: Vec<_> = deferrals
+        .iter()
+        .map(|(level, fields)| {
+            (
+                *level,
+                fields["attachment_id"].clone(),
+                fields["error"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        logged,
+        [(
+            tracing::Level::WARN,
+            attachment.to_string(),
+            "a mailbox projection effect is unavailable: attachment upload claimed 42 s ago"
+                .to_owned()
+        )]
     );
 }
 

@@ -162,6 +162,9 @@ pub struct MailboxMessage {
     pub draft_correlation: Option<uuid::Uuid>,
     /// Existing content and invitation representation consumed by ingestion.
     pub content: MessageWithCalendarParts,
+    /// The message reads as an invitation, but its MIME source could not be
+    /// read, so `content.calendar_parts` is empty rather than complete.
+    pub calendar_parts_unavailable: bool,
     /// Normalized mailbox facts.
     pub state: MailboxState,
     /// Physical parent folder, if the provider uses folders.
