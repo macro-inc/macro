@@ -35,12 +35,12 @@ impl<'state> NodeRef<'state> {
         Self { slot, registry }
     }
 
-    /// Capture raw development host fields without running an upstream clone hook.
+    /// Capture raw native host fields without running an upstream clone hook.
     /// The copied record cannot make a live source slot require snapshot cloning.
     #[cfg(feature = "foreign-nodes")]
     pub fn capture_for_foreign_read(self) -> NodeRecord {
         NodeRecord {
-            slot: self.slot.clone(),
+            slot: self.slot.clone_fields(),
             registry: self.registry.clone(),
         }
     }

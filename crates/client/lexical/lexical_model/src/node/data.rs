@@ -130,7 +130,6 @@ pub(crate) struct Links {
     pub prev: Option<NodeKey>,
     pub next: Option<NodeKey>,
 }
-#[derive(Clone)]
 pub(crate) struct NodeSlot {
     #[cfg(feature = "foreign-nodes")]
     pub foreign_instance: Arc<std::sync::OnceLock<ForeignInstance>>,
@@ -147,6 +146,46 @@ pub(crate) struct NodeSlot {
     pub state: Option<Arc<NodeState>>,
     pub data: Arc<dyn AnyNodeData>,
 }
+impl NodeSlot {
+    /// Copy raw fields for an owned read while retaining hydration of the exact record.
+    pub(crate) fn clone_fields(&self) -> Self {
+        Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instance: self.foreign_instance.clone(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instance_write: self.foreign_instance_write.clone(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_root_cache: self.foreign_root_cache.clone(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_identity: self.foreign_identity.clone(),
+            key: self.key,
+            type_index: self.type_index,
+            links: self.links,
+            base: self.base.clone(),
+            state: self.state.clone(),
+            data: self.data.clone(),
+        }
+    }
+}
+impl Clone for NodeSlot {
+    fn clone(&self) -> Self {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            let mut copy = self.clone_fields();
+            // A future hydration must not assign one JS instance to distinct
+            // records after an unbound record was copied for a write.
+            if self.foreign_instance.get().is_none() {
+                copy.foreign_instance = Default::default();
+            }
+            copy
+        }
+        #[cfg(not(feature = "foreign-nodes"))]
+        {
+            self.clone_fields()
+        }
+    }
+}
+
 pub(crate) trait AnyNodeData: Any + fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;

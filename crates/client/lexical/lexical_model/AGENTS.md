@@ -71,9 +71,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 
-- Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration, opaque editor/update identity markers and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
+- Feature-gated `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration, opaque editor/update identity markers and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
 - Use Transaction::has_foreign_effects before closing a host no-op; selection, composition, extension state, events, reconciliation and queued work must survive even without node diff operations.
-- Use dev-only Transaction::commit_foreign for fallible prepublication encoding; preparation errors drop current effects without rolling back previously published commits or reusing allocated identities.
+- Use Transaction::commit_foreign for fallible prepublication encoding; preparation errors drop current effects without rolling back previously published commits or reusing allocated identities.
 - Preserve getNodesBetween's directional walk and crossed ancestors in Read::nodes_between; it is not a slice of document preorder, especially for ancestor/root endpoints.
 - Resolve descendant_by_index past the child count through the last child's last descendant; an in-range child resolves through its first descendant.
 - Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
@@ -211,3 +211,11 @@ Read captured/retired root __cachedText through NodeRef::foreign_raw_root_cached
 Apply ForeignBaseField assignments only to existing writable records, without virtual setter dispatch or another semantic clone; keep unknown u32 element formats raw while their exported/public alignment name is empty, matching the pinned numeric-property fallback.
 
 EditorCore output exposes the selection accepted before an input runs, including explicit clearing and resolved view boundaries; external collaborative history must use it rather than reconstruct raw host points. This is native metadata, not a host wire field.
+
+Use ForeignBaseField::apply_owned for independent clone-stage scalar validation
+without repeated base copies; retain writable/update authorization in transaction
+entry points. Captured composition ownership belongs to the exact read snapshot.
+
+Preserve shared unbound hydration cells only in exact read copies; isolate them
+when cloning a record for mutation, without invoking JS constructors from
+NodeSlot::clone. Use clone_fields only for raw read captures and projections.

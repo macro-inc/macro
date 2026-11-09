@@ -856,3 +856,50 @@ fn external_reconciler_root_hydration_preserves_null_cache() -> Result<(), Error
     );
     Ok(())
 }
+
+#[test]
+fn late_hydration_separates_unbound_writes_but_shares_exact_read_captures() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let host = Arc::new(Host {
+        classes: vec![(1, "text")],
+        next: AtomicU32::new(3),
+        failure: AtomicU32::new(0),
+        calls: Mutex::new(vec![]),
+    });
+    editor.install_foreign_instance_hooks(host.clone())?;
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text.key())
+    })?;
+    let old = editor.state().clone();
+    editor.update(|tx| tx.text(key)?.set_text_content("after").map(|_| ()))?;
+    let current = editor.state().clone();
+    let read = current.view().node_or_err(key)?.capture_for_foreign_read();
+    old.view().bind_foreign_instance(
+        key,
+        &old.view().foreign_record_identity(key)?,
+        ForeignInstance::new(editor.foreign_instance_owner(), 1, 1)?,
+    )?;
+    assert!(current.view().foreign_instance(key).is_none());
+    assert!(read.as_ref().foreign_instance().is_none());
+    current.view().bind_foreign_instance(
+        key,
+        &current.view().foreign_record_identity(key)?,
+        ForeignInstance::new(editor.foreign_instance_owner(), 1, 2)?,
+    )?;
+    assert_eq!(old.view().foreign_instance(key).unwrap().instance_id(), 1);
+    assert_eq!(
+        current.view().foreign_instance(key).unwrap().instance_id(),
+        2
+    );
+    assert_eq!(read.as_ref().foreign_instance().unwrap().instance_id(), 2);
+    assert_eq!(old.view().text_content(key), "before");
+    assert_eq!(current.view().text_content(key), "after");
+    assert!(host.calls.lock().unwrap().is_empty());
+    Ok(())
+}

@@ -337,3 +337,27 @@ fn raw_root_cache_reads_exact_captures_without_materializing_lazy_text() -> Resu
     );
     Ok(())
 }
+
+#[test]
+fn weak_owner_hash_keys_keep_identity_after_expiry_without_retaining_editors() {
+    let first = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("first");
+    let second = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("second");
+    let alias = first.foreign_instance_owner().downgrade();
+    let same = first.foreign_instance_owner().downgrade();
+    let other = second.foreign_instance_owner().downgrade();
+    let mut owners = std::collections::HashSet::new();
+    assert!(owners.insert(alias.clone()));
+    assert!(owners.contains(&same));
+    assert!(owners.insert(other.clone()));
+    assert_eq!(owners.len(), 2);
+    drop(first);
+    assert!(alias.upgrade().is_none());
+    assert!(owners.contains(&same));
+    owners.retain(|owner| owner.upgrade().is_some());
+    assert_eq!(owners.len(), 1);
+    assert!(owners.contains(&other));
+}
