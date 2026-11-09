@@ -26,6 +26,7 @@ import {
   type SelectionData,
 } from '../plugins';
 import { theme as baseTheme } from '../theme';
+import { allocateEditorNamespace } from './editor-namespace';
 
 type LexicalWrapperProps = {
   type: EditorType;
@@ -56,9 +57,6 @@ export type LexicalWrapper = LexicalWrapperBase | LexicalWrapperWithMapping;
 
 export const LexicalWrapperContext = createContext<LexicalWrapper>();
 
-// Simple increasing id to differentiate multiple editors on page.
-let _id = 0;
-
 /**
  * Create a Lexical wrapper with extra utilities for adding plugins and tracking
  * cleanup functions.
@@ -87,7 +85,7 @@ export function createLexicalWrapper({
   theme,
 }: LexicalWrapperProps): LexicalWrapper {
   const owner = getOwner();
-  _id++;
+  const editorNamespace = allocateEditorNamespace(namespace);
 
   const nodes = RegisteredNodesByType[type];
   const replacements = NodeReplacements.filter((replacement) => {
@@ -100,7 +98,7 @@ export function createLexicalWrapper({
 
   const editor = createEditor({
     theme: theme ?? baseTheme,
-    namespace: namespace + '_' + _id,
+    namespace: editorNamespace,
     nodes: [...nodes, ...replacements],
     onError: (error) =>
       Telemetry.error(error, {
