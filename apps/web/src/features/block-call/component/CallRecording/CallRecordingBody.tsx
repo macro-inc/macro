@@ -13,7 +13,7 @@ import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, Layer, Tabs } from '@ui';
+import { Button, ButtonGroup, Layer, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -258,6 +258,16 @@ export function CallRecordingBody(props: {
                 >
                   <SidePanel.HeaderActions>
                     <HeaderActionGroup label={t('calls.detailActions')}>
+                      <Show
+                        when={
+                          !isMobile() && !record().isActive && canCallAgain()
+                        }
+                      >
+                        <ButtonGroup.Button onClick={callAgain}>
+                          <PhoneCallIcon class="size-4" />
+                          {t('calls.detailCallAgain')}
+                        </ButtonGroup.Button>
+                      </Show>
                       <AskMacroButton
                         grouped
                         entity={{

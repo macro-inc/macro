@@ -99,6 +99,7 @@ render(
           </SidePanel.Section>
           <header class="flex shrink-0 items-center gap-2 p-4">
             <span class="mr-auto">Recording fixture</span>
+            <SidePanel.HeaderActionsOutlet />
             <Button size="sm">Share</Button>
             <SidePanel.Toggle />
           </header>

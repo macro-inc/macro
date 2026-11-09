@@ -3,13 +3,11 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
-import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
 import { isSameDay } from 'date-fns';
 import { createSignal, Show, Suspense } from 'solid-js';
-import { useCallAgain } from '../use-call-again';
 import {
   CallRecordingAvatars,
   CallRecordingParticipantsSection,
@@ -17,10 +15,6 @@ import {
 
 export function CallRecordingTitle(props: { record: CallRecord }) {
   const [participantsOpen, setParticipantsOpen] = createSignal(false);
-  const { canCallAgain, callAgain } = useCallAgain(
-    () => props.record.callId,
-    () => props.record.channelId
-  );
   const dateRange = () => {
     const start = new Date(props.record.startedAt);
     const end = props.record.endedAt
@@ -82,20 +76,6 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
           </Button>
         </Show>
         <span class="mr-auto">{dateRange()}</span>
-        <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={callAgain}
-            tooltip={t('calls.detailCallAgain')}
-            aria-label={t('calls.detailCallAgain')}
-          >
-            <PhoneCallIcon class="size-4" />
-            <span class="@max-[440px]/call-title:hidden">
-              {t('calls.detailCallAgain')}
-            </span>
-          </Button>
-        </Show>
       </div>
       <div class="mt-2 flex flex-wrap gap-2">
         <Suspense fallback={null}>

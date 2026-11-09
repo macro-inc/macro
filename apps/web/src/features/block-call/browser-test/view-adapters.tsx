@@ -1,3 +1,4 @@
+import { ButtonGroup } from '@ui';
 import {
   createContext,
   createSignal,
@@ -7,10 +8,12 @@ import {
 
 export const useCallContextOptional = () => undefined;
 export const useCallAgain = () => ({
-  canCallAgain: () => false,
+  canCallAgain: () => true,
   callAgain: () => {},
 });
-export const AskMacroButton = () => null;
+export const AskMacroButton = () => (
+  <ButtonGroup.Button>Ask Macro</ButtonGroup.Button>
+);
 export const InlineFetchedEntityTagsPill = () => null;
 export const CallRecordingMobileActions = () => null;
 export const CallRecordingMobilePlayback = () => null;
