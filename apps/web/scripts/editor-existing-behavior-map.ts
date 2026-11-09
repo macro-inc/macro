@@ -350,4 +350,60 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'composer link persistence keeps escaped URLs literal when imported into a live editor',
     ],
   },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin.ts',
+    anchor: 'function registerNodeTransform',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin.test.ts',
+    cases: [
+      'block formatting selection boundaries applies quote with backward=false, endAtBlockStart=false',
+      'block formatting selection boundaries applies heading1 with backward=false, endAtBlockStart=false',
+      'block formatting selection boundaries applies quote with backward=false, endAtBlockStart=true',
+      'block formatting selection boundaries applies heading1 with backward=false, endAtBlockStart=true',
+      'block formatting selection boundaries applies quote with backward=true, endAtBlockStart=false',
+      'block formatting selection boundaries applies heading1 with backward=true, endAtBlockStart=false',
+      'block formatting selection boundaries applies quote with backward=true, endAtBlockStart=true',
+      'block formatting selection boundaries applies heading1 with backward=true, endAtBlockStart=true',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/keyboard-shortcuts/keyboardShortcutsPlugin.ts',
+    anchor: 'function registerKeyboardShortcutsPlugin',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/keyboard-shortcuts/keyboardShortcutsPlugin.test.ts',
+    cases: [
+      'keyboardShortcutsPlugin right arrow escapes inline code and inserts a trailing space',
+      'keyboardShortcutsPlugin right arrow escapes inline code and moves past an existing trailing space',
+      'keyboardShortcutsPlugin right arrow inserts a space when the caret is at the start of text after inline code',
+      'keyboardShortcutsPlugin right arrow moves past a space from an element boundary after inline code',
+      'keyboardShortcutsPlugin right arrow inserts a space when selection format is clear at the end of inline code',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/block-decorator-navigation/blockDecoratorNavigationPlugin.ts',
+    anchor: 'function $stopOnBlock',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/block-decorator-navigation/blockDecoratorNavigationPlugin.test.ts',
+    cases: [
+      'arrow keys across a database answer ArrowDown selects the answer, then moves below it',
+      'arrow keys across a database answer ArrowUp selects the answer, then moves above it',
+      'arrow keys across a database answer ArrowDown from a line with more text below it does not select the answer',
+      'arrow keys across a database answer ArrowDown from a caret between blocks on the root selects the answer below it',
+      'arrow keys across a database answer ArrowUp from a caret between blocks on the root selects the answer above it',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/block-decorator-navigation/blockDecoratorNavigationPlugin.ts',
+    anchor: 'export function $selectDocumentStart',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/block-decorator-navigation/blockDecoratorNavigationPlugin.test.ts',
+    cases: [
+      'arrow keys across a database answer entering the document from above selects an answer that opens it',
+      'arrow keys across a database answer entering the document from above puts the caret at the start of its first line',
+    ],
+  },
 ] as const;

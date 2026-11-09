@@ -1,7 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { exactCaseStatus } from './editor-behavior-coverage';
+import { exactCaseStatus, mergeOffReports } from './editor-behavior-coverage';
 
 describe('behavior result evidence', () => {
+  it('keeps overlapping reports ambiguous instead of hiding a retry', () => {
+    const report = {
+      testResults: [
+        {
+          name: '/workspace/test.ts',
+          assertionResults: [{ fullName: 'behavior', status: 'passed' }],
+        },
+      ],
+    };
+    expect(
+      exactCaseStatus(
+        mergeOffReports([report, report]),
+        'test.ts',
+        'behavior',
+        '/workspace'
+      )
+    ).toBe('OFF unverified; ON pending');
+  });
+
+  it('rejects malformed evidence in any supplied report', () => {
+    expect(() =>
+      mergeOffReports([{ testResults: [] }, { testResults: 'invalid' }])
+    ).toThrow();
+  });
+
   it('matches the exact test file and selector before accepting a pass', () => {
     const results = {
       testResults: [
