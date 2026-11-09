@@ -41,7 +41,8 @@ impl SelectionValue {
 struct Entry {
     value: SelectionValue,
     leases: u32,
-    graphs: BTreeSet<u64>,
+    graph_pins: BTreeSet<u64>,
+    emission_pins: BTreeSet<u64>,
 }
 pub(super) struct SelectionValues {
     editor: u32,
@@ -83,10 +84,11 @@ impl SelectionValues {
                 entry.value.value = raw_copy(value);
                 entry.value.origin = origin;
             }
-            entry.graphs.insert(graph_version);
+            entry.graph_pins.insert(graph_version);
+            entry.emission_pins.insert(graph_version);
             id
         } else {
-            self.insert(raw_copy(value), identity, graph_version, origin, 0)?
+            self.insert(raw_copy(value), identity, graph_version, origin)?
         };
         let entry = self
             .entries
@@ -106,7 +108,6 @@ impl SelectionValues {
             ForeignSelectionIdentity::default(),
             graph_version,
             Origin::Detached { update },
-            0,
         )?;
         Ok(self
             .entries
@@ -122,7 +123,6 @@ impl SelectionValues {
         identity: ForeignSelectionIdentity,
         version: u64,
         origin: Origin,
-        leases: u32,
     ) -> Result<u32, BoundaryError> {
         if self.editor == 0 {
             return Err(BoundaryError::Invalid("selection editor"));
@@ -147,8 +147,13 @@ impl SelectionValues {
                     origin,
                     reference,
                 },
-                leases,
-                graphs: [version].into(),
+                leases: 0,
+                graph_pins: if matches!(origin, Origin::Detached { .. }) {
+                    BTreeSet::new()
+                } else {
+                    [version].into()
+                },
+                emission_pins: [version].into(),
             },
         );
         self.next_id = next;
@@ -208,7 +213,7 @@ impl SelectionValues {
             };
         }
         // state_version chooses the graph pin; allocation version never does.
-        entry.graphs.insert(scope.state_version);
+        entry.emission_pins.insert(scope.state_version);
         Ok(entry.value.snapshot())
     }
 
@@ -219,10 +224,12 @@ impl SelectionValues {
             .checked_add(1)
             .ok_or(BoundaryError::Invalid("selection lease exhausted"))?;
         let id = reference.selection_id;
-        self.entries
+        let entry = self
+            .entries
             .get_mut(&id)
-            .ok_or(BoundaryError::Invalid("selection reference"))?
-            .leases = leases;
+            .ok_or(BoundaryError::Invalid("selection reference"))?;
+        entry.leases = leases;
+        entry.emission_pins.clear();
         Ok(())
     }
 
@@ -243,7 +250,8 @@ impl SelectionValues {
 
     pub fn release_graph(&mut self, version: u64) {
         for entry in self.entries.values_mut() {
-            entry.graphs.remove(&version);
+            entry.graph_pins.remove(&version);
+            entry.emission_pins.remove(&version);
         }
         self.prune();
     }
@@ -263,7 +271,8 @@ impl SelectionValues {
 
     fn prune(&mut self) {
         self.entries.retain(|_, entry| {
-            let keep = entry.leases > 0 || !entry.graphs.is_empty();
+            let keep =
+                entry.leases > 0 || !entry.graph_pins.is_empty() || !entry.emission_pins.is_empty();
             if !keep {
                 self.identities.remove(&entry.value.identity);
             }
