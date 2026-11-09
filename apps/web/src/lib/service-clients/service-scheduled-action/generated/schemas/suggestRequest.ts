@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SuggestRequestOneOf } from './suggestRequestOneOf';
-import type { SuggestRequestOneOfFour } from './suggestRequestOneOfFour';
+import type { SuggestRequestOneOfFive } from './suggestRequestOneOfFive';
 
 /**
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
-export type SuggestRequest = SuggestRequestOneOf | SuggestRequestOneOfFour;
+export type SuggestRequest = SuggestRequestOneOf | SuggestRequestOneOfFive;

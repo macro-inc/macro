@@ -8,17 +8,20 @@
 
 import type { ActionConfiguration } from './actionConfiguration';
 import type { CreatedItem } from './createdItem';
-import type { SuggestRequestOneOfFourKind } from './suggestRequestOneOfFourKind';
+import type { RoutineIdea } from './routineIdea';
+import type { SuggestRequestOneOfFiveKind } from './suggestRequestOneOfFiveKind';
 import type { Surface } from './surface';
 
 /**
  * A routine the catalog lacks, checked as saving checks it.
  */
-export type SuggestRequestOneOfFour = {
+export type SuggestRequestOneOfFive = {
   /** What the session created for it, as `macro.routines.check` takes. */
   created?: CreatedItem[];
+  /** How it shows among the person's ideas. */
+  idea: RoutineIdea;
   keepProbability: number;
-  kind: SuggestRequestOneOfFourKind;
+  kind: SuggestRequestOneOfFiveKind;
   reason: string;
   routine: ActionConfiguration;
   surfaces: Surface[];
