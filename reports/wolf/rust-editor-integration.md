@@ -2,6 +2,19 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Hydration prerequisite `fb442f1ee3` is integrated as `254168ddbb` after the cache
+ownership policy. Compat instance binding preserves an absent root cache, and
+snapshot/refresh no longer eagerly requests root-text aggregation. Default native
+binding retains derivation. Independent all-feature library tests pass481 model
+and60 session-WASM cases, including absent-cache hydration/capture controls;
+strict all-target/all-feature Clippy, wasm32 target check and scoped `just check`
+pass. This establishes
+absence preservation, not the missing exact JS derived-cache producer or hosted
+runtime readiness. No ABI change, browser acceptance, shipping build or live
+promotion is claimed. Evidence: `compat-hydration-integrated-{tests,clippy}.log`,
+`compat-hydration-{wasm-check,scoped-check}.log` and
+`compat-hydration-integration-audit.md`.
+
 Cache-ownership prerequisite `7033671fc6` is integrated as `42e6101143`.
 The immutable registry defaults to native cache derivation; only compatibility
 prevalidation/live builders opt out through `without_reconciler_caches()`.
