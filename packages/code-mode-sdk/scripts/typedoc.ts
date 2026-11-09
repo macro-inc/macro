@@ -86,24 +86,7 @@ export function packageEntityDocs(
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      // Agent and host setup share one discovery topic, as do AI calls and
-      // image generation, searching, browsing and AI chats, and the web and
-      // URL previews, keeping the classifier request within its 32-question
-      // contract as the public API grows.
-      prefixes: (directory === 'agents'
-        ? ['agents', 'harnesses']
-        : directory === 'channels'
-          ? ['channels', 'external-chat', 'whatsapp']
-          : directory === 'ai'
-            ? ['ai', 'images']
-            : directory === 'users'
-              ? ['users', 'me']
-              : directory === 'search'
-                ? ['search', 'workspace', 'chats']
-                : directory === 'web'
-                  ? ['web', 'unfurls']
-                  : [directory]
-      ).map((value) => `src/entities/${value}/`),
+      prefixes: [`src/entities/${directory}/`],
     })),
     { name: 'core', prefixes: core },
   ];
@@ -211,7 +194,10 @@ export function packageEntityDocs(
     const symbol = symbolOf.get(path) ?? '';
     const markdown = relink(path, pages.get(path) ?? '');
     if (!path.includes('/classes/')) {
-      symbols[symbol] = markdown.trim();
+      const { header, members } = splitUnion(symbol, markdown.trim());
+      symbols[symbol] = header;
+      for (const member of members)
+        symbols[`${symbol}.${member.name}`] = member.markdown;
       continue;
     }
     const { header, methods } = splitClass(markdown);
@@ -266,6 +252,40 @@ function pageGroup(path: string) {
 }
 
 type Method = { name: string; markdown: string; inherited: boolean };
+
+/** Largest reference ReadCodeDocs serves whole. */
+const REFERENCE_BYTES = 16 * 1024;
+
+/**
+ * A discriminated union too large to read at once, such as an edit operation
+ * vocabulary: its declaration, plus each member's fields on their own, named
+ * by the member's discriminator (`EditOp.setText`). Smaller pages, and unions
+ * whose members don't each carry a distinct string literal, stay whole.
+ */
+function splitUnion(symbol: string, markdown: string) {
+  const whole = { header: markdown, members: [] as Method[] };
+  if (Buffer.byteLength(markdown) <= REFERENCE_BYTES) return whole;
+  const [declaration = '', list] = markdown.split(/^## Union Members$/m);
+  if (list === undefined) return whole;
+  const members = list
+    .split(/^(?=### )/m)
+    .filter((block) => block.startsWith('### '))
+    .map((block) => {
+      const text = block.replace(/\n\*\*\*\s*$/, '').trim();
+      const literal = text.match(/`\w+`: `"([^"]+)"`/);
+      return { name: literal?.[1] ?? '', markdown: text, inherited: false };
+    });
+  const names = new Set(members.map((member) => member.name));
+  if (names.has('') || names.size !== members.length) return whole;
+  const index = members.map((member) => `\`${symbol}.${member.name}\``);
+  return {
+    header: `${declaration.trim()}\n\n## Union Members\n\nRead a member's fields with ReadCodeDocs: ${index.join(', ')}.`,
+    members: members.map((member) => ({
+      ...member,
+      markdown: `# ${symbol}.${member.name}\n\n${member.markdown}`,
+    })),
+  };
+}
 
 /** A class page's own description and fields, and each method on its own. */
 function splitClass(markdown: string) {

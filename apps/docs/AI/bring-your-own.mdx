@@ -2,20 +2,22 @@
 title: "Bring your own agent"
 sidebarTitle: "Bring your own agent"
 icon: "terminal"
-description: "Bring Claude Code, OpenCode, OpenClaw, or Hermes into your Macro workspace with macrod."
+description: "Bring Claude Code, Codex, or another local agent into your Macro workspace with macrod."
 ---
 
 ## Agents and runtimes
 
-An **agent** combines a name, instructions, a default model, and a runtime.
+An **agent** is the name, instructions, and model you @mention. A **runtime** is where that agent runs: in Macro, in Cursor, or on your own machine.
 
-A **runtime** is the harness that powers it: Macro AI, a built-in coding harness, or an agent running on your own machine, like your very own Claude Code.
+Create agents in **Settings → Agents**. Connect a machine in **Settings → Runtimes**.
 
-Manage both in **Settings → General → Agents**. Connect your machine in **Runtimes**, then create an agent that uses it in **Agents**.
+Watch a 1:17 walkthrough of MacroD.
+
+<video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
 ## On the Macro desktop app
 
-The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → General → Agents → Runtimes** and use the **This computer** card: **Set up** detects the coding agents installed on your machine, you pick one and a workspace folder, and **Start running agents here** configures, pairs, and starts the runtime automatically — no terminal and no pairing code. Keep the app open while agents run.
+The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → Runtimes** and use the **This computer** card. **Set up** looks for a coding agent already installed on your machine, then **Set up** that agent configures, pairs, and starts the runtime and creates the agent. No terminal and no pairing code. Open **Options** to choose a different agent, set the **Workspace folder**, or turn on **Full access**. Keep the app open while agents run.
 
 The manual `macrod` steps below are for machines without the desktop app (servers, a second computer), and both kinds of runtime can be paired to the same account.
 
@@ -106,9 +108,9 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
 ## Create an agent that uses your runtime
 
-Return to the **Agents** tab and click **New agent**. Give your agent a name and instructions, choose your connected machine under **Runtime**, and select a default model.
+**This computer** creates the agent for you. For a runtime you paired from a terminal, open **Settings → Agents** and click **Add agent**.
 
-Review sharing and channel access, then save the agent. @mention it in a channel it can access to start a session on your machine.
+In **New agent**, set the name, **@tag**, and instructions. Under **Where it runs**, choose **In your harness** and pick the machine under **Harness**. Under **Who can use it**, choose **Private** or **Team**, then save. @mention the agent to start a session on your machine. A **Private** agent can only be mentioned by you.
 
 ## Keep your runtime connected
 

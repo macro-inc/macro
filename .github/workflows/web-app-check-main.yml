@@ -2,14 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 'on':
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -23,6 +16,9 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        filter: blob:none
+        sparse-checkout: '.github'
     - id: filter
       name: Filter changed paths
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
@@ -42,6 +38,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -67,6 +64,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -105,19 +103,21 @@ jobs:
         [ -n "$base" ] || result "No base commit to compare with." true
         git fetch -q --depth=1 origin "$base"
         names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-        # Every grep here reads all its input. One that stopped at its first
-        # match would close the pipe, and pipefail reads the writer's SIGPIPE as
-        # no match.
-        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
+        manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+        if grep -E "^[-+].*($names)" <<< "$manifests"; then
           result "A schema crate's version changed." true
         fi
+        changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
         while IFS= read -r file; do
+          [ -n "$file" ] || continue
           for revision in HEAD "$base"; do
-            if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
+            [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+            contents=$(git show "$revision:$file")
+            if grep -E "$names" <<< "$contents" > /dev/null; then
               result "$file names a schema item." true
             fi
           done
-        done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+        done <<< "$changed"
         result "No changed Rust file names a schema item." false
       env:
         CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
@@ -340,37 +340,48 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
-    - name: Check Types
-      run: bun run type-check
-      working-directory: apps/web
-    - name: Check Floating Promises
-      run: bun run lint:oxlint --quiet
-    - name: Check Functional Test Types
-      run: bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json
-      working-directory: apps/web
-    - name: Check Collaboration Package Types
-      run: bun run type-check
-      working-directory: packages/collaboration
-    - name: Check Lexical Service Types
-      run: bun run check
-      working-directory: services/lexical-service
-    - name: Test Lexical Service Endpoints
-      run: bun test src
-      working-directory: services/lexical-service
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
-    - name: Check SDK Documentation
-      run: bun run type-check && bun run test
-      working-directory: packages/sdk-docs
-    - name: Check Editing Worker
-      run: bun run type-check
-      working-directory: services/ai-editing-worker
-    - name: Check Code Mode SDK
-      run: bun run type-check && bun run test
-      working-directory: packages/code-mode-sdk
+    - name: Run checks
+      run: |
+        set -uo pipefail
+        logs="$RUNNER_TEMP/typecheck"
+        mkdir -p "$logs"
+        names=()
+        pids=()
+        check() {
+          local name="$1" directory="$2" command="$3"
+          ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
+          names+=("$name")
+          pids+=("$!")
+        }
+        check 'Check Types' 'apps/web' 'bun run type-check'
+        check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
+        check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
+        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
+        check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
+        check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
+        check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
+        check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+        failed=0
+        for index in "${!names[@]}"; do
+          status=0
+          wait "${pids[$index]}" || status=$?
+          echo "::group::${names[$index]} (exit $status)"
+          cat "$logs/$index.log"
+          echo "::endgroup::"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::${names[$index]} failed with exit code $status"
+            failed=1
+          fi
+        done
+        exit "$failed"
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -398,6 +409,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
       timeout-minutes: 15
@@ -468,7 +481,28 @@ jobs:
           exit 0
         fi
 
+        # Installing node_modules is most of a build and changes far less often than the SDK,
+        # so it has its own entry.
+        modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+        modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+        save_modules=false
+
+        if ! nix-store --check-validity "$modules" 2>/dev/null; then
+          # No retries: a retry would restart the stream into the same pipe, and past the limit
+          # a rebuild is faster.
+          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+            echo "node_modules restored from the remote cache"
+          else
+            save_modules=true
+          fi
+        fi
+
         nix build --no-link --print-build-logs .#code-mode-assets
+
+        if [ "$save_modules" = true ] \
+          && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+          echo "::warning::Could not save node_modules to the remote cache"
+        fi
 
         # Losing the upload costs the next job a rebuild, not a failure.
         if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
@@ -480,7 +514,8 @@ jobs:
       run: |
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+          --bin agent_fold_types --bin export_review_types
     - name: Generate API Types
       run: bun run gen-api -- --check
       working-directory: apps/web
@@ -519,6 +554,8 @@ jobs:
           echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
           exit 1
         fi
+      env:
+        SPECTA_BIN_DIR: ${{ github.workspace }}/target/debug
       working-directory: apps/web
     - name: show sccache stats
       if: always()
@@ -544,6 +581,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Run Biome
@@ -561,7 +600,7 @@ jobs:
     needs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
-    name: Test (${{ matrix.shard }}/3)
+    name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     strategy:
       matrix:
@@ -569,6 +608,9 @@ jobs:
         - 1
         - 2
         - 3
+        - 4
+        - 5
+        - 6
       fail-fast: false
     steps:
     - name: Checkout Repo
@@ -587,6 +629,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
     - name: Configure Namespace remote sccache
@@ -628,8 +672,14 @@ jobs:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       timeout-minutes: 15
       working-directory: apps/web
+    - name: Build natural-time WASM for tests
+      run: just build-natural-time-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
     - name: Test
-      run: bun run test --shard=${{ matrix.shard }}/3
+      run: bun run test --shard=${{ matrix.shard }}/6
       env:
         VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
@@ -658,6 +708,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
@@ -742,6 +794,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup
       uses: './.github/actions/setup-reqs-web'
       with:
@@ -825,6 +879,8 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
     - name: Cycles Import Check
@@ -1394,6 +1450,3 @@ jobs:
         fi
 
         echo "All jobs passed or were skipped"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
-  cancel-in-progress: true

@@ -94,3 +94,75 @@ describe('entity move transport', () => {
     ).rejects.toThrow('Forbidden');
   });
 });
+
+const input = {
+  entity: { type: 'DATABASE' as const, id: 'database-1' },
+  projectId: 'folder-1',
+};
+
+describe('moveGraphqlEntity', () => {
+  it('reports a committed move whose cache patches failed to render', async () => {
+    replyWith((operation) => ({
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: null }],
+        },
+      },
+      error: new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'entity type database is not represented in Soup',
+            path: ['moveEntities', 'results', 0, 'effects'],
+          },
+        ],
+      }),
+    }));
+
+    await expect(moveGraphqlEntity(input)).resolves.toEqual({
+      __typename: 'GraphqlMutationSuccess',
+      effects: [],
+    });
+  });
+
+  it('fails on an error outside the result effects', async () => {
+    replyWith((operation) => ({
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        moveEntities: {
+          results: [{ __typename: 'GraphqlMutationSuccess', effects: [] }],
+        },
+      },
+      error: new CombinedError({
+        graphQLErrors: [{ message: 'boom', path: ['moveEntities'] }],
+      }),
+    }));
+
+    await expect(moveGraphqlEntity(input)).rejects.toThrow('boom');
+  });
+
+  it('fails on a typed mutation error', async () => {
+    replyWith((operation) => ({
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        moveEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationError',
+              errorCode: 'FORBIDDEN',
+              message: 'insufficient permission for entity mutation',
+            },
+          ],
+        },
+      },
+    }));
+
+    await expect(moveGraphqlEntity(input)).rejects.toThrow();
+  });
+});

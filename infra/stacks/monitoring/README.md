@@ -6,7 +6,8 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync metrics and retention filter, one other log-based metric, and one downtime.
+`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
+`routine-suggestions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync and routine suggestions metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -48,8 +49,8 @@ its thresholds many times a day.
 
 ## Prod threshold monitors
 
-`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts` and
-`outlook-sync.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
+`outlook-sync.ts` and `routine-suggestions.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -58,7 +59,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts and Outlook sync) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync and Routine suggestions) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -115,11 +116,12 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **90 resources to create**: 70 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
-  notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
-  7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
-  and 1 of them for Outlook sync), the GoAlert synthetic test, the five prod
-  alert dashboards, and the notification retention dashboard. If the paging
+- **102 resources to create**: 73 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+  notification retention, 10 WhatsApp session, 1 native call push, 2 harness
+  presence), 2 webhooks,
+  15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  and 1 of them for Outlook sync, 8 log-based metrics for routine
+  suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -278,3 +280,22 @@ per-mailbox tags before Outlook leaves its rollout flag.
 Thresholds come from the first production import (2026-11-03, two mailboxes,
 about 2,100 messages in 15 minutes); retune them against a few weeks of data.
 The reauthorization thresholds have no baseline yet.
+
+## Routine suggestions coverage
+
+`monitors/routine-suggestions.ts` adds **one monitor, one dashboard and eight
+log-based metrics** for routine suggestions in agent-harness-service. Its
+header lists every log field it reads;
+[the runbook](../../../docs/runbooks/routine-suggestions.md) covers the alert
+and where each generation's trace is.
+
+The dashboard shows generations by outcome, the fallback rate (generations
+that left Macro's templates only), time to first suggestion, per-surface fill,
+rejected suggestions, and saves and dismissals by surface, origin and kind.
+The monitor notifies when more than 10% of an hour's finished generations,
+plus two, fail; it does not page while suggestions are behind
+`enable-routine-suggestions`.
+
+Deploy the agent-harness-service release that emits the
+`routine_suggestions.*` logs before these. Log-based metrics count from deploy
+onward. There is no baseline yet; the 10% threshold is a starting point.

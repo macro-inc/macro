@@ -120,7 +120,7 @@ export async function fetchWithToken<
     result.error.some((error) => error.code === 'UNAUTHORIZED')
   ) {
     const tokenResult = await requestInit.trace.parentSpan.run(() =>
-      fetchToken()
+      fetchToken(init?.signal)
     );
     if (tokenResult.isErr()) {
       // A definitive rejection already carries UNAUTHORIZED; transient refresh

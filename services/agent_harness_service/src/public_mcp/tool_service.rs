@@ -4,7 +4,7 @@ use crate::public_mcp::analytics::{
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
 use crate::public_mcp::tool_response::tool_result_with_media;
 use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
-use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
+use agent_inmem::domain::tool_mode::ToolMode;
 use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use cognition::domain::Cognition;
@@ -59,7 +59,7 @@ impl CalledBy for () {
     async fn called_by(self, _caller: &ToolCaller) -> Self {}
 }
 
-/// Code mode for flagged users: `tools/list` is the SDK entrypoints only.
+/// Code mode: `tools/list` is the SDK entrypoints only.
 pub struct CodeModeSurface {
     /// `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs`.
     pub tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
@@ -67,8 +67,6 @@ pub struct CodeModeSurface {
     pub service: Arc<dyn UserCodeMode>,
     /// Jev, for selecting documentation by task.
     pub cognition: Option<Arc<dyn Cognition>>,
-    /// The `ai-code-mode` flag, per user.
-    pub selector: Arc<dyn ToolModeSelector>,
 }
 
 /// MCP server handler that extracts authenticated user identity from HTTP
@@ -110,7 +108,7 @@ impl<Context> AuthenticatedToolService<Context> {
         }
     }
 
-    /// Offer code mode to users with the `ai-code-mode` flag.
+    /// Offer code mode to every client that accepts it.
     pub fn with_code_mode(mut self, code_mode: Arc<CodeModeSurface>) -> Self {
         self.code_mode = Some(code_mode);
         self
@@ -130,19 +128,16 @@ impl<Context> AuthenticatedToolService<Context> {
         }
     }
 
-    /// The mode for one request. ChatGPT always gets the standard tools: its
-    /// plugin directory refuses generic executors, whatever the user's flag.
-    async fn tool_mode(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        extensions: &rmcp::model::Extensions,
-    ) -> ToolMode {
-        if caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
-            return ToolMode::Standard;
-        }
-        match &self.code_mode {
-            Some(code_mode) => code_mode.selector.select(user_id).await,
-            None => ToolMode::Standard,
+    /// The mode for one request: code mode wherever this deployment can run
+    /// code, except for ChatGPT, whose plugin directory refuses generic
+    /// executors.
+    fn tool_mode(&self, extensions: &rmcp::model::Extensions) -> ToolMode {
+        if self.code_mode.is_none()
+            || caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller))
+        {
+            ToolMode::Standard
+        } else {
+            ToolMode::Code
         }
     }
 
@@ -269,7 +264,7 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&user_id, &context.extensions).await == ToolMode::Code {
+        if self.tool_mode(&context.extensions) == ToolMode::Code {
             let base_url = self.item_base_url.trim_end_matches('/');
             info.instructions = Some(format!(
                 "{}\n\n{}",
@@ -285,8 +280,8 @@ where
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
-        let mode = self.tool_mode(&user_id, &context.extensions).await;
+        Self::authenticated_user_id(&context.extensions)?;
+        let mode = self.tool_mode(&context.extensions);
         let mut tools = self.tool_definitions_for(mode);
         if caller(&context.extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
             tools.retain(|tool| !HIDDEN_FROM_CHATGPT.contains(&tool.name.as_ref()));
@@ -363,7 +358,7 @@ where
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())
         {
-            if self.tool_mode(&user_id, &context.extensions).await != ToolMode::Code {
+            if self.tool_mode(&context.extensions) != ToolMode::Code {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::resource_not_found(
@@ -377,6 +372,9 @@ where
                 .tools
                 .try_tool_call(
                     UserCodeModeToolContext {
+                        session: context.extensions.get::<http::request::Parts>()
+                            .and_then(|parts| parts.extensions.get::<mcp_auth_proxy::inbound::middleware::ManagedAgentSession>())
+                            .map(|session| session.0),
                         service: code_mode.service.clone(),
                         cognition: code_mode.cognition.clone(),
                         caller,

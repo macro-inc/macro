@@ -459,6 +459,32 @@ if (stack === 'prod') {
       },
     ],
   });
+
+  // Route 53 keeps one record set per name and type, so this owns every TXT value
+  // at the apex: SPF included. A value missing here is deleted from DNS on deploy.
+  // Retained so destroying the stack or dropping this resource can't take SPF with it.
+  new aws.route53.Record(
+    'apex-txt',
+    {
+      name: domain,
+      zoneId: zone.zoneId,
+      type: 'TXT',
+      ttl: 300,
+      records: [
+        'v=spf1 include:_spf.google.com include:amazonses.com include:mailgun.org ~all',
+        'google-site-verification=Qq3OQ1d05G4wOqaUfpC9VrYI-E-IhfLWEHjol2dZPD0',
+        '1password-site-verification=4WDFRU6CLJGYDM54E42RIEY3XU',
+        'google-site-verification=VwqOab7iboVZs49aAZZrrSYTpLZO8oCELfj05VsI9rw',
+        'google-site-verification=C8iv1N0NSCeHozm445epWI-fKQQMCRIFSRFEae2R1-E',
+        'google-site-verification=gXDuoHXWgx-OJbnAkfp01Y2zHpTOaai2aqnwWUARueA',
+        '_h5l64nu1n1cgrijoyb1xpqs18feaulp',
+        'MS=ms97745247',
+        // Macro Connect's Google OAuth app.
+        'google-site-verification=v0VjgBSJnZ-Xl6zjn4QFZibcfAsjWJejEOrmuM93a1Y',
+      ],
+    },
+    { retainOnDelete: true }
+  );
 }
 
 if (stack === 'dev') {
