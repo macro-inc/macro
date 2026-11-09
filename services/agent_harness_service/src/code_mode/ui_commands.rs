@@ -28,7 +28,7 @@ const UI_COMMAND_MESSAGE: &str = "ui_command";
 const BUDGET_KEY_PREFIX: &str = "agent-ui-command";
 
 fn storage(error: impl std::fmt::Display) -> CodeModeError {
-    CodeModeError::Storage(rootcause::report!("{error}").into())
+    CodeModeError::Storage(rootcause::report!("{error}"))
 }
 
 /// The session's owner and the prompter of its current turn.
