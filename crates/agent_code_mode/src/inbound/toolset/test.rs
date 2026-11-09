@@ -217,3 +217,100 @@ fn symbols_from_an_index_read_as_their_own_references() {
             .is_err()
     );
 }
+
+/// Answers every run with what it would have run, so a check is all that
+/// stands between an example and success.
+struct Accepts;
+
+#[async_trait::async_trait]
+impl code_execution::domain::CodeRunner for Accepts {
+    async fn run(
+        &self,
+        _job: code_execution::domain::ExecutionJob,
+        _events: &mut code_execution::domain::EventSink,
+        _cancellation: CancellationToken,
+    ) -> code_execution::domain::Outcome {
+        code_execution::domain::Outcome::Succeeded {
+            value: serde_json::Value::Null,
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn every_documented_example_type_checks() {
+    use code_execution::domain::{
+        EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
+    };
+
+    let root = tempfile::tempdir().unwrap();
+    let binary = tokio::process::Command::new("which")
+        .arg("deno")
+        .output()
+        .await
+        .unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        String::from_utf8(binary.stdout).unwrap().trim().into(),
+        root.path().to_owned(),
+        2,
+        8,
+        64 * 1024,
+    )
+    .await
+    .unwrap();
+    let service = ExecutionService::new(
+        std::sync::Arc::new(Accepts),
+        std::sync::Arc::new(checker),
+        Limits::default(),
+    )
+    .unwrap();
+    // The guide topics and the SDK's own entity guides, as models read them.
+    let guides = [
+        include_str!("../../../SKILL.md"),
+        include_str!("guides/ai.md"),
+        include_str!("guides/templates.md"),
+    ]
+    .into_iter()
+    .chain(
+        crate::domain::sdk_documentation()
+            .iter()
+            .filter_map(|entity| entity.guide.as_deref()),
+    );
+    let mut examples = 0;
+    for guide in guides {
+        for block in guide.split("```typescript\n").skip(1) {
+            let source = block.split("```").next().unwrap();
+            if !source.contains("export async function main") {
+                continue;
+            }
+            examples += 1;
+            let mut handle = service
+                .execute(
+                    ExecuteRequest {
+                        source: source.into(),
+                        timeout_ms: 30_000,
+                    },
+                    // Examples may use the session and the execution.
+                    RunEnvironment {
+                        session_id: Some(uuid::Uuid::now_v7()),
+                        execution_id: Some(uuid::Uuid::now_v7()),
+                        ..RunEnvironment::default()
+                    },
+                )
+                .unwrap();
+            let outcome = loop {
+                match handle.events.recv().await.unwrap().kind {
+                    EventKind::Finished { outcome } => break outcome,
+                    _ => continue,
+                }
+            };
+            assert!(
+                matches!(outcome, Outcome::Succeeded { .. }),
+                "{source}\n{outcome:?}"
+            );
+        }
+    }
+    assert_eq!(examples, 7);
+    service.shutdown().await;
+}

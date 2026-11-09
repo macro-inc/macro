@@ -1,14 +1,14 @@
 # Macro code mode
 
-Code mode runs plain JavaScript using the actual public Macro SDK. Prefer it for supported Macro work, even a single precise call. Entity indexes list each class, method with its signature, and type by symbol; read the symbols a program needs with ReadCodeDocs, all together, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides. The entity catalog is always available. Jev loads the indexes of likely relevant entities once per turn, with a short deadline and a catalog-only fallback.
+Code mode runs TypeScript using the actual public Macro SDK. Each program is type-checked against the SDK before it runs; one with type errors never runs, and the errors come back with their line numbers to fix. Prefer it for supported Macro work, even a single precise call. Entity indexes list each class, method with its signature, and type by symbol; read the symbols a program needs with ReadCodeDocs, all together, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides. The entity catalog is always available. Jev loads the indexes of likely relevant entities once per turn, with a short deadline and a catalog-only fallback.
 
 Copy turn_id from the current prompt’s hidden invocation context into ExecuteCode. A stale call must not obtain a replacement ID from discovery or another turn. Choose acting_as explicitly on ExecuteCode. Prefer requester; choose owner only when the request needs the session owner’s access. One account authenticates every operation in the execution. Missing permissions or connections never switch accounts automatically.
 
 ## Program shape
 
-```javascript
+```typescript
 import Handlebars from 'handlebars';
-export async function main({macro, session, execution}) {
+export async function main({macro, session, execution}: CodeContext) {
   const documents = [];
   for await (const doc of macro.documents.recent({pageSize:5})) {
     documents.push({id:doc.id, content:(await doc.content()).slice(0,1000)});
@@ -18,16 +18,16 @@ export async function main({macro, session, execution}) {
 }
 ```
 
-Return an object with data; reviews is optional and defaults to []. Include review references when you prepare editable drafts.
+Type main's argument as CodeContext, and every other parameter the checker cannot infer. Return an object with data; reviews is optional and defaults to []. Include review references when you prepare editable drafts.
 
-macro, session and execution are real SDK handles. You can instead import {Macro} from '@macro-inc/sdk' and construct it with main's token, hosts and webAppUrl. Do not log, return, persist or transmit that credential elsewhere. It is a short-lived normal user credential, with the user's API permissions. SDK operations make real HTTP calls. Messages are attributed to the session's agent, with the selected acting account recorded as the requesting user; do not supply sender identities yourself. No custom sdk.ToolName dispatcher, TypeScript transpilation, runtime help or package installation is involved.
+macro, session and execution are real SDK handles. You can instead import {Macro} from '@macro-inc/sdk' and construct it with main's token, hosts and webAppUrl. Do not log, return, persist or transmit that credential elsewhere. It is a short-lived normal user credential, with the user's API permissions. SDK operations make real HTTP calls. Messages are attributed to the session's agent, with the selected acting account recorded as the requesting user; do not supply sender identities yourself. No custom sdk.ToolName dispatcher, runtime help or package installation is involved.
 
 ## One execution per job
 
 Every execution costs a model turn. Write the whole job as one program when its steps need no judgment from the user in between: put conditionals, loops and dependent reads and writes in code, rather than checking in one execution and acting in the next. Return what the answer needs (IDs, names, outcomes, failures), so no follow-up execution is required. This program checks for a duplicate and creates the task only when there is none:
 
-```javascript
-export async function main({macro}) {
+```typescript
+export async function main({macro}: CodeContext) {
   const title = 'Fix login redirect loop';
   const body = 'Signing in from a deep link returns to the login page.';
   const similar = await macro.tasks.findSimilar({title, body});

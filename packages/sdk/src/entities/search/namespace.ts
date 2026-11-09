@@ -77,15 +77,15 @@ const searchTypes: readonly SearchType[] = [
  *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
- * ```javascript
- * export async function main({macro}) {
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
  *   const outcomes = await Promise.allSettled(queries.map(async query => {
  *     const evidence = [];
  *     let stoppedEarly = false;
  *     for await (const result of macro.search.all(query, {searchOn:'content'})) {
  *       if (evidence.length === 5) { stoppedEarly = true; break; }
- *       evidence.push({type:result.type, id:result.entity.id, name:result.hit.name,
+ *       evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
  *         text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
  *     }
  *     return {query,evidence,stoppedEarly};

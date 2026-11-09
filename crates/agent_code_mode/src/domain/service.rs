@@ -541,7 +541,7 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid("Provide a nonempty TypeScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
     }
     Ok(())
 }
