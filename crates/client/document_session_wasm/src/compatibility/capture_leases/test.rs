@@ -42,6 +42,8 @@ fn invalid_late_id_editor_and_underflow_are_atomic() -> Result<(), BoundaryError
             ..request(&[1], &[])
         },
     ] {
+        assert!(leases.validate(&invalid).is_err());
+        assert_eq!(leases, before);
         assert!(leases.apply(&invalid).is_err());
         assert_eq!(leases, before);
     }
@@ -62,8 +64,28 @@ fn aggregate_retain_overflow_is_checked_before_release_or_pin_transfer() -> Resu
     leases.apply(&request(&[2], &[]))?;
     leases.entries.get_mut(&2).expect("capture").explicit = u64::MAX - 1;
     let before = leases.clone();
+    assert!(leases.validate(&request(&[1, 2, 2], &[2])).is_err());
+    assert_eq!(leases, before);
     assert!(leases.apply(&request(&[1, 2, 2], &[2])).is_err());
     assert_eq!(leases, before);
+    Ok(())
+}
+
+#[test]
+fn validation_does_not_transfer_pins_and_native_holds_can_change_before_apply(
+) -> Result<(), BoundaryError> {
+    let mut leases = CaptureLeases::new(7);
+    leases.emit(reference(1, 10))?;
+    let change = request(&[1], &[1]);
+    let before = leases.clone();
+    leases.validate(&change)?;
+    leases.validate(&request(&[], &[]))?;
+    assert_eq!(leases, before);
+    leases.hold(NativeOwner::Update(4), &[1])?;
+    assert!(leases.apply(&change)?.is_empty());
+    assert!(!leases.entries[&1].graph);
+    assert!(!leases.entries[&1].emission);
+    assert_eq!(leases.release_owner(NativeOwner::Update(4)), vec![1]);
     Ok(())
 }
 
