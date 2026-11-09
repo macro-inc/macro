@@ -12,6 +12,7 @@ mod bindings;
 mod calls;
 mod capture_index;
 mod class_masks;
+mod construction;
 mod instance_runtime;
 mod lifecycle;
 mod native_calls;
@@ -52,6 +53,7 @@ pub(crate) struct Host {
             HashMap<lexical_model::NodeKey, lexical_model::ForeignReservedKey>,
         ),
     >,
+    constructed: HashMap<(u64, lexical_model::NodeKey), compat::ForeignRecordRef>,
     next_reservation: u64,
     mutation_epoch: u64,
     class_masks: Arc<class_masks::ClassMasks>,
@@ -145,6 +147,7 @@ impl EditorSession {
             selection_values: selection_values::SelectionValues::new(registration.editor_id),
             keys,
             reservations: HashMap::new(),
+            constructed: HashMap::new(),
             next_reservation: 1,
             mutation_epoch: 0,
             class_masks,

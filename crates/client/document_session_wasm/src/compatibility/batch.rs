@@ -30,7 +30,15 @@ impl Host {
                 self.validate_record(*record)?;
                 Ok(Some(*record))
             }
-            _ => Err(BoundaryError::Invalid("uninstalled reserved node adapter")),
+            compat::CompatNodeOperand::CompatReservedNode { .. } => {
+                let reference = self
+                    .constructed
+                    .get(&super::construction::reserved(operand)?)
+                    .ok_or(BoundaryError::Invalid("reserved node is not constructed"))?;
+                self.validate_record(*reference)?;
+                Ok(Some(*reference))
+            }
+            _ => Err(BoundaryError::Invalid("unknown node operand")),
         }
     }
     fn batch_request(
@@ -178,7 +186,7 @@ impl EditorSession {
             ));
         }
         for operation in &request.operations {
-            host.batch_request(operation)?;
+            host.validate_batch_operation(operation)?;
         }
         let epoch_steps = match &request.scope {
             compat::CompatBatchScope::CompatBatchBegin { .. } => {
@@ -261,11 +269,26 @@ impl EditorSession {
                 let mut selection_refs = BTreeMap::new();
                 let mut outcome = Outcome::CompatBatchSuccess {};
                 for (index, operation) in request.operations.iter().enumerate() {
-                    let call = host.batch_request(operation)?;
+                    let mut call = None;
                     let guard = ForeignReadOperation::begin()?;
-                    let result = super::scopes::dispatch(host, tx, &call);
+                    let result = if super::construction::creates(operation.operation) {
+                        host.prepare_reserved_creation(operation).and_then(
+                            |(construction, ticket)| {
+                                construction
+                                    .execute(tx, ticket)
+                                    .map(|key| ResultValue::Node(Some(key)))
+                                    .map_err(BoundaryError::Model)
+                            },
+                        )
+                    } else {
+                        host.batch_request(operation).and_then(|request| {
+                            let result = super::scopes::dispatch(host, tx, &request);
+                            call = Some(request);
+                            result
+                        })
+                    };
                     let result = guard.finish(result);
-                    for arg in &call.args {
+                    for arg in call.iter().flat_map(|call| &call.args) {
                         if let compat::ForeignCallbackValue::ForeignSelectionArgument { value } =
                             arg
                         {
@@ -277,12 +300,23 @@ impl EditorSession {
                     }
                     match result {
                         Ok(result) => {
-                            let receiver = if call.has_receiver {
-                                Some(host.receiver(&call)?)
-                            } else {
-                                None
+                            let receiver = match &call {
+                                Some(call) if call.has_receiver => Some(host.receiver(call)?),
+                                _ => None,
                             };
                             let (reply, delta) = host.batch_delta(tx, result, receiver)?;
+                            if super::construction::creates(operation.operation) {
+                                let (reservation, key) =
+                                    super::construction::reserved(&operation.receiver)?;
+                                let record = delta
+                                    .records
+                                    .iter()
+                                    .find(|record| record.record.node.key == records::key(key))
+                                    .ok_or(BoundaryError::Invalid(
+                                        "constructed result record missing",
+                                    ))?;
+                                host.constructed.insert((reservation, key), record.record);
+                            }
                             for selection in reply.selections {
                                 match selection {
                                     compat::CompatSelectionData::CompatRangeSelection {

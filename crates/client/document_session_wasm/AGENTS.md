@@ -165,8 +165,18 @@ outputs; a native declaration must not grow optional compatibility stubs.
 The first compact batch consumer synchronously flushes a single pending update,
 validates Begin/Continue authority, and acknowledges successful prefix plus caught
 failure effects before allowing a retry. It does not yet implement compact
-admission, reserved construction or capture leases; reject those envelopes before
-execution. Keep noop false while the pending update remains open. Normalize under
+admission or capture leases; reject those envelopes before execution. Reserved
+construction supports exact core/heading instance seeds, with real key tickets
+and constructor-global instance IDs; generic classes/creation callbacks remain
+closed until their handlers land. Keep noop false while the pending update remains open. Normalize under
 a scoped metadata frame so clone callbacks can inspect owned source facts without
 a mutable Host borrow. Derive removed keys from actual record retirements, including
 collected descendants, rather than treating missing dirty keys as a complete log.
+
+Validate constructor seed base/projection/class before consuming its key ticket.
+Execute the owned construction plan outside Host borrows, preserve the original
+numeric JS instance, and resolve later reserved operands through the actual result
+capture. Constructor failure burns a consumed ticket/claimed instance identity;
+never rerun it or allocate a substitute key. Clear constructed operand bindings
+when the update retires. Preserve opaque JS fields in the JS instance store rather
+than serializing them into native payloads.
