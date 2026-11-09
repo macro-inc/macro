@@ -21,12 +21,14 @@ pub(super) struct CaptureKey {
     access: u8,
     identity: ForeignRecordIdentity,
     root_cache: bool,
+    retired: bool,
 }
 impl CaptureKey {
     pub fn new(
         reference: compat::ForeignRecordRef,
         identity: ForeignRecordIdentity,
         root_cache: bool,
+        retired: bool,
     ) -> Self {
         Self {
             node: node_identity(reference.node),
@@ -34,6 +36,7 @@ impl CaptureKey {
             access: reference.access as u8,
             identity,
             root_cache,
+            retired,
         }
     }
 }
@@ -58,6 +61,7 @@ impl CaptureIndex {
             capture.reference,
             capture.identity.clone(),
             capture.output.has_root_cached_text,
+            capture.retired,
         );
         let removed = self.exact.remove(&key);
         debug_assert_eq!(removed, Some(capture.reference.capture_id));

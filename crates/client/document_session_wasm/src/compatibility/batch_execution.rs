@@ -5,10 +5,16 @@ use compat::CompatBatchOutcome as Outcome;
 use lexical_model::*;
 use scopes::with_current_host;
 
+pub(super) enum Normalization {
+    Updater,
+    Admission,
+    Deferred,
+}
+
 pub(super) fn execute(
     tx: &mut Transaction<'_>,
     operations: &[compat::CompatBatchOperation],
-    normalize: bool,
+    normalization: Normalization,
     reservations: Vec<compat::CompatKeyReservation>,
 ) -> Result<compat::CompatBatchReply, BoundaryError> {
     let mut results = Vec::new();
@@ -96,6 +102,11 @@ pub(super) fn execute(
             }
         }
     }
+    let normalize = match normalization {
+        Normalization::Updater => true,
+        Normalization::Admission => tx.needs_flush(),
+        Normalization::Deferred => false,
+    };
     if normalize && matches!(outcome, Outcome::CompatBatchSuccess {}) {
         let guard = ForeignReadOperation::begin()?;
         if let Err(error) = guard.finish(tx.flush().map_err(BoundaryError::Model)) {

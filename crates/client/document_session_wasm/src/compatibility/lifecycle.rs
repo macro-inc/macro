@@ -154,12 +154,20 @@ impl EditorSession {
                 .as_ref()
                 .map(|_| (host.update, host.pending_version))
         });
-        let result = self.compat_commit_admitted_inner(now, wall);
+        let mut flags = 0;
+        let result = self
+            .compat_commit_admitted_inner(now, wall, false, &mut flags)
+            .and_then(|(packet, error)| error.map_or(Ok(packet), Err));
         if let (Err(_), Some((update, version))) = (&result, dropped) {
             let host = self
                 .compatibility
                 .as_mut()
                 .ok_or(BoundaryError::Invalid("compatibility session required"))?;
+            if version == Some(host.version) && host.pending_version != version {
+                // A real publication remains authoritative even if its output also
+                // reported an error; never retire that newly published graph here.
+                return result;
+            }
             // The legacy finalizer consumes this update even when admission is
             // refused; retained owned values become detached, not stale Active.
             host.pending = None;
@@ -174,42 +182,60 @@ impl EditorSession {
         }
         result
     }
-    fn compat_commit_admitted_inner(
+    pub(super) fn compat_commit_admitted_inner(
         &mut self,
         now: f64,
         wall: f64,
-    ) -> Result<compat::CompatCommit, BoundaryError> {
+        recover_refusal: bool,
+        observed_flags: &mut u32,
+    ) -> Result<(compat::CompatCommit, Option<BoundaryError>), BoundaryError> {
         let (host, machine) = self.compat_parts()?;
         let pending = host
             .pending
             .take()
             .ok_or(BoundaryError::Invalid("compatibility update required"))?;
-        host.discard_reservations();
+        if !recover_refusal {
+            host.discard_reservations();
+        }
         let adoption = document_session::compatibility::CompatUpdate::new(pending);
         let previous_version = host.version;
         let flags = machine.call(adoption.input(), now, Some(wall))?;
-        let machine::Session::Editor(session) = &machine.session else {
+        *observed_flags = flags;
+        let machine::Session::Editor(session) = &mut machine.session else {
             return Err(BoundaryError::Invalid("compatibility editor surface"));
         };
+        let error = session.last_output().view.iter().find_map(|effect| {
+            if let document_session::ViewEffect::Error(error) = effect {
+                Some(BoundaryError::Model(Error::invariant(error.to_string())))
+            } else {
+                None
+            }
+        });
+        if !adoption.was_adopted() {
+            if recover_refusal {
+                let pending = adoption.recover_unadopted()?.ok_or(BoundaryError::Invalid(
+                    "refused update ownership was consumed",
+                ))?;
+                let (pending, reopened) =
+                    session.with_compat_update(pending, |tx| tx.reopen_foreign_reconciliation())?;
+                host.pending = Some(pending);
+                reopened?;
+            }
+            return Err(error.unwrap_or(BoundaryError::Invalid(
+                "compatibility update was not admitted",
+            )));
+        }
+        if recover_refusal {
+            host.discard_reservations();
+        }
+        let commits = host.refresh(session.surface().state())?;
+        if commits.is_empty() {
+            return Err(error.unwrap_or(BoundaryError::Invalid("adopted update did not publish")));
+        }
         let pending_version = host
             .pending_version
             .take()
             .ok_or(BoundaryError::Invalid("pending publication version"))?;
-        let commits = host.refresh(session.surface().state())?;
-        if let Some(error) = session.last_output().view.iter().find_map(|effect| {
-            if let document_session::ViewEffect::Error(error) = effect {
-                Some(error)
-            } else {
-                None
-            }
-        }) {
-            return Err(BoundaryError::Model(Error::invariant(error.to_string())));
-        }
-        if !adoption.was_adopted() {
-            return Err(BoundaryError::Invalid(
-                "compatibility update was not admitted",
-            ));
-        }
         let refreshed_version = host.version;
         if refreshed_version != previous_version {
             host.states.remove(&refreshed_version);
@@ -262,16 +288,19 @@ impl EditorSession {
         }
         let state = session.surface().state().clone();
         let source = state.view().snapshot_for_foreign_read()?;
-        Ok(compat::CompatCommit {
-            flags,
-            version: host.version,
-            changed,
-            dirty_leaves: leaves,
-            dirty_elements: elements,
-            tags,
-            batch: host.publication_batch(&state, &commits, host.version)?,
-            selection: host.selection(&source, host.version)?,
-        })
+        Ok((
+            compat::CompatCommit {
+                flags,
+                version: host.version,
+                changed,
+                dirty_leaves: leaves,
+                dirty_elements: elements,
+                tags,
+                batch: host.publication_batch(&state, &commits, host.version)?,
+                selection: host.selection(&source, host.version)?,
+            },
+            error,
+        ))
     }
 }
 #[wasm_bindgen]

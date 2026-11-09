@@ -112,7 +112,15 @@ impl Host {
             index: reference.node.key.index,
             generation: reference.node.key.generation,
         });
-        if capture.source.record_identity(key)? != capture.identity {
+        let identity = if capture.retired {
+            capture
+                .source
+                .retired_record_identity(key)
+                .ok_or(BoundaryError::Invalid("retired capture missing"))?
+        } else {
+            capture.source.record_identity(key)?
+        };
+        if identity != capture.identity {
             return Err(BoundaryError::Invalid(
                 "compatibility record identity mismatch",
             ));
@@ -141,7 +149,11 @@ impl Host {
             .get(&capture_id)
             .ok_or(BoundaryError::Invalid("unknown compatibility capture"))?;
         let field = string(request.args.first())?;
-        let records = capture.source.render_records([key])?;
+        let records = if capture.retired {
+            capture.source.render_retired_records([key])?
+        } else {
+            capture.source.render_records([key])?
+        };
         let record = records
             .first()
             .ok_or(BoundaryError::Invalid("captured record missing"))?;

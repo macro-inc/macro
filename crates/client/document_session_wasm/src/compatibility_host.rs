@@ -99,6 +99,12 @@ fn validate_invocation(request: &wire::CompatHostRequest) -> Result<(), Error> {
                 && access == Access::Clone
                 && stage.source == source_record.record.node
         }
+        Call::CompatHostReconcile { stage } => {
+            stage.stage_id != 0
+                && access == Access::Mutable
+                && stage.next_version == request.context.version
+                && stage.previous_version < stage.next_version
+        }
         Call::CompatHostCreation { stage } => {
             stage.stage_id != 0
                 && stage.class_id != 0
@@ -153,6 +159,9 @@ fn validate_reply(
             Call::CompatHostSerializedExport { call },
             Reply::CompatHostSerializedExportAck { ack },
         ) => call.call_id == ack.call_id && call.receiver == ack.record,
+        (Call::CompatHostReconcile { stage }, Reply::CompatHostReconcileAck { ack }) => {
+            stage.stage_id == ack.stage_id && ack.leases.editor_id == request.context.editor_id
+        }
         (Call::CompatHostCreation { stage }, Reply::CompatHostCreationAck { ack }) => {
             stage.stage_id == ack.stage_id
                 && stage.record.record == ack.original

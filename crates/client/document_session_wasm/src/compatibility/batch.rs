@@ -20,6 +20,36 @@ pub(super) fn failure(error: BoundaryError, location: compat::CompatFailureLocat
     }
 }
 impl Host {
+    pub(super) fn refresh_selection_sidecars(
+        &self,
+        selections: impl IntoIterator<Item = compat::CompatSelectionData>,
+    ) -> Result<Vec<compat::CompatSelectionData>, BoundaryError> {
+        let mut references = BTreeMap::new();
+        for selection in selections {
+            let reference = match selection {
+                compat::CompatSelectionData::CompatRangeSelection { reference, .. }
+                | compat::CompatSelectionData::CompatNodeSelection { reference, .. }
+                | compat::CompatSelectionData::CompatTableSelection { reference, .. } => reference,
+                _ => continue,
+            };
+            references.insert(
+                (
+                    reference.editor_id,
+                    reference.version,
+                    reference.selection_id,
+                ),
+                reference,
+            );
+        }
+        references
+            .values()
+            .map(|reference| {
+                self.selection_values
+                    .get(*reference)
+                    .map(|value| value.encoded())
+            })
+            .collect()
+    }
     fn batch_operand(
         &self,
         operand: &compat::CompatNodeOperand,
@@ -137,8 +167,8 @@ impl Host {
             .copied()
             .filter(|key| tx.foreign_is_writable(*key))
             .collect();
-        let reply = self.reply(
-            source,
+        let mut reply = self.reply(
+            source.clone(),
             result,
             ReplyScope {
                 version: self
@@ -150,7 +180,17 @@ impl Host {
                 receiver,
             },
         )?;
-        let mut removed_keys: Vec<_> = tx.foreign_removed_keys().map(records::key).collect();
+        let removed: Vec<_> = tx.foreign_removed_keys().collect();
+        reply.records.extend(
+            self.retired_records(
+                source,
+                removed.clone(),
+                self.pending_version
+                    .ok_or(BoundaryError::Invalid("pending publication version"))?,
+                self.update,
+            )?,
+        );
+        let mut removed_keys: Vec<_> = removed.into_iter().map(records::key).collect();
         removed_keys.sort_by_key(|key| (key.index, key.generation));
         let delta = compat::CompatRecordDelta {
             records: reply.records.clone(),
@@ -173,18 +213,18 @@ impl EditorSession {
         )
         .entered();
         codec::now(request.now, request.wall)?;
-        if request.finalize {
-            return Err(BoundaryError::Invalid(
-                "uninstalled compact admission adapter",
-            ));
-        }
         let host = self
             .compatibility
             .as_ref()
             .ok_or(BoundaryError::Invalid("compatibility session required"))?;
+        if request.finalize && host.instance_runtime.is_none() {
+            return Err(BoundaryError::Invalid(
+                "hosted compact admission runtime required",
+            ));
+        }
         host.capture_leases.validate(&request.leases)?;
         host.retirement_epoch
-            .checked_add(1)
+            .checked_add(if request.finalize { 2 } else { 1 })
             .ok_or(BoundaryError::Invalid("capture retirement epoch exhausted"))?;
         for operation in &request.operations {
             host.validate_batch_operation(operation)?;
@@ -255,29 +295,7 @@ impl EditorSession {
             _ => return Err(BoundaryError::Invalid("unknown batch scope")),
         }
         let (host, machine) = self.compat_parts()?;
-        let mut input_captures = Vec::new();
-        for operation in &request.operations {
-            if let compat::CompatNodeOperand::CompatCapturedNode { record } = &operation.receiver {
-                input_captures.push(record.capture_id);
-            }
-            for argument in &operation.args {
-                match argument {
-                    compat::CompatBatchArgument::CompatNodeArgument {
-                        value: compat::CompatNodeOperand::CompatCapturedNode { record },
-                    } => input_captures.push(record.capture_id),
-                    compat::CompatBatchArgument::CompatNodeArrayArgument { values } => {
-                        for value in values {
-                            if let compat::CompatNodeOperand::CompatCapturedNode { record } = value
-                            {
-                                input_captures.push(record.capture_id);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        host.capture_leases.hold(input_owner, &input_captures)?;
+        host.pin_batch_inputs(input_owner, &request.operations)?;
         if let Err(error) = host.apply_capture_leases(&request.leases) {
             let removed = host.capture_leases.release_owner(input_owner);
             host.remove_captures(removed);
@@ -297,14 +315,182 @@ impl EditorSession {
         host.mutation_epoch = next_epoch;
         let execution = session.with_compat_update(pending, |tx| {
             super::scopes::with_pending_frame(host, || {
-                super::batch_execution::execute(tx, &request.operations, true, reservations)
+                // Final admission of an already-flushed update must not replay
+                // its transforms or selection hooks.
+                let normalize = if request.finalize {
+                    super::batch_execution::Normalization::Admission
+                } else {
+                    super::batch_execution::Normalization::Updater
+                };
+                let mut reply = super::batch_execution::execute(
+                    tx,
+                    &request.operations,
+                    normalize,
+                    reservations,
+                )?;
+                if request.finalize
+                    && reply.changed
+                    && matches!(reply.outcome, Outcome::CompatBatchSuccess {})
+                {
+                    let mut phase_selections = vec![];
+                    let phase = super::reconciliation::run(tx, &reply).and_then(|phase| {
+                        phase_selections = phase.selections;
+                        phase.error.map_or(Ok(()), Err)
+                    });
+                    let mut final_reply = super::batch_execution::execute(
+                        tx,
+                        &[],
+                        super::batch_execution::Normalization::Deferred,
+                        vec![],
+                    )?;
+                    final_reply.results = std::mem::take(&mut reply.results);
+                    final_reply.reservations = std::mem::take(&mut reply.reservations);
+                    final_reply.selection_bindings = std::mem::take(&mut reply.selection_bindings);
+                    let selections = reply.selections.into_iter().chain(phase_selections);
+                    final_reply.selections = super::scopes::with_current_host(|host| {
+                        host.refresh_selection_sidecars(selections)
+                    })?;
+                    if let Err(error) = phase {
+                        final_reply.outcome = failure(
+                            error,
+                            compat::CompatFailureLocation::CompatFinalizeFailure {},
+                        );
+                    }
+                    reply = final_reply;
+                }
+                Ok(reply)
             })
         });
         let removed = host.capture_leases.release_owner(input_owner);
         host.remove_captures(removed);
         let (pending, reply) = execution?;
         host.pending = Some(pending);
-        reply
+        let mut reply = reply?;
+        if !request.finalize || !matches!(reply.outcome, Outcome::CompatBatchSuccess {}) {
+            return Ok(reply);
+        }
+        if !reply.changed {
+            if !self.compat_finish_noop_inner()? {
+                return Err(BoundaryError::Invalid(
+                    "compact no-op retained model effects",
+                ));
+            }
+            let (host, _) = self.compat_parts()?;
+            let state = host
+                .states
+                .get(&host.version)
+                .ok_or(BoundaryError::Invalid(
+                    "current publication is not retained",
+                ))?
+                .clone();
+            let source = state.view().snapshot_for_foreign_read()?;
+            reply.version = host.version;
+            reply.mutation_epoch = host.mutation_epoch;
+            reply.selection = host.selection(&source, host.version)?;
+            reply.selections = host.refresh_selection_sidecars(reply.selections)?;
+            reply.dirty_type = 0;
+            reply.noop = true;
+            return Ok(reply);
+        }
+        let mut flags = 0;
+        match self.compat_commit_admitted_inner(request.now, request.wall, true, &mut flags) {
+            Ok((commit, error)) => {
+                reply.flags = commit.flags;
+                reply.published = true;
+                reply.changed = commit.changed;
+                reply.version = commit.version;
+                reply.selection = commit.selection;
+                reply.tags = commit.tags;
+                reply.dirty_leaves = commit.dirty_leaves;
+                reply.dirty_elements = commit.dirty_elements;
+                reply.dirty_type = 0;
+                // The pending mirror also observed nodes created and collected
+                // inside this update; they are absent from prev/next commit
+                // mutations but still require authoritative removal.
+                let retired_keys: std::collections::HashSet<_> = reply
+                    .delta
+                    .removed_keys
+                    .iter()
+                    .map(|key| (key.index, key.generation))
+                    .collect();
+                let retired_records: Vec<_> = reply
+                    .delta
+                    .records
+                    .iter()
+                    .filter(|record| {
+                        retired_keys.contains(&(
+                            record.record.node.key.index,
+                            record.record.node.key.generation,
+                        ))
+                    })
+                    .cloned()
+                    .collect();
+                let mut removed = BTreeMap::new();
+                for key in reply
+                    .delta
+                    .removed_keys
+                    .into_iter()
+                    .chain(commit.batch.removed_keys)
+                {
+                    removed.insert((key.index, key.generation), key);
+                }
+                let machine::Session::Editor(session) = &self.machine.session else {
+                    return Err(BoundaryError::Invalid("compatibility editor surface"));
+                };
+                let removed_keys = removed
+                    .into_values()
+                    .filter(|key| {
+                        let native = NodeKey::from_parts(KeyParts {
+                            index: key.index,
+                            generation: key.generation,
+                        });
+                        session.surface().state().node(native).is_none()
+                    })
+                    .collect();
+                reply.delta = compat::CompatRecordDelta {
+                    records: commit
+                        .batch
+                        .records
+                        .into_iter()
+                        .chain(retired_records)
+                        .collect(),
+                    removed_keys,
+                    invalidate_root_text: !reply.dirty_leaves.is_empty()
+                        || !reply.dirty_elements.is_empty(),
+                };
+                let (host, _) = self.compat_parts()?;
+                reply.selections = host.refresh_selection_sidecars(reply.selections)?;
+                reply.mutation_epoch = host.mutation_epoch;
+                if let Some(error) = error {
+                    reply.outcome = failure(
+                        error,
+                        compat::CompatFailureLocation::CompatFinalizeFailure {},
+                    );
+                }
+                Ok(reply)
+            }
+            Err(error) => {
+                let (host, _) = self.compat_parts()?;
+                if host.pending.is_none() {
+                    // Consumed/adopted failures cannot be represented as retryable.
+                    // Return a fatal transport error, never a fabricated open scope.
+                    if let Some(version) = host.pending_version.take() {
+                        host.discard_reservations();
+                        host.selection_values.finish_update(host.update, false);
+                        host.selection_values.release_graph(version);
+                        host.abandon_capture_graph(version);
+                    }
+                    return Err(error);
+                }
+                reply.flags = flags;
+                reply.outcome = failure(
+                    error,
+                    compat::CompatFailureLocation::CompatFinalizeFailure {},
+                );
+                reply.mutation_epoch = host.mutation_epoch;
+                Ok(reply)
+            }
+        }
     }
 }
 #[wasm_bindgen]
