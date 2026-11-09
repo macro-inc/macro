@@ -22,6 +22,15 @@ export interface SelectionRuntime {
   isTableSelection(selection: unknown): selection is TableSelection;
   caret: Pick<
     typeof import('lexical'),
+    | '$caretFromPoint'
+    | '$normalizeCaret'
+    | '$comparePointCaretNext'
+    | '$getCaretRangeInDirection'
+    | '$isChildCaret'
+    | '$isSiblingCaret'
+    | '$getChildCaret'
+    | '$getAdjacentChildCaret'
+    | '$isTextPointCaret'
     | '$getSiblingCaret'
     | '$getCaretRange'
     | '$setSelectionFromCaretRange'
@@ -59,6 +68,8 @@ export interface SelectionRuntime {
   getPreviousSelection(): BaseSelection | null;
   getCompositionKey(): NodeKey | null;
   setCompositionKey(key: NodeKey | null): void;
+  isDecoratorNode: typeof import('lexical').$isDecoratorNode;
+  isLineBreakNode: typeof import('lexical').$isLineBreakNode;
   isTextNode(node: LexicalNode | null | undefined): node is TextNode;
   isElementNode(node: LexicalNode | null | undefined): node is ElementNode;
   applyDOMRange(selection: RangeSelection, range: StaticRange): void;

@@ -37,12 +37,15 @@ export class Point {
     if (this.key === point.key) {
       return this.offset < point.offset;
     }
-    return new RangeSelection(
-      $createPoint(point.key, point.offset, point.type),
-      $createPoint(this.key, this.offset, this.type),
-      0,
-      ''
-    ).isBackward();
+    const caret = getSelectionRuntime().caret;
+    const aCaret = caret.$normalizeCaret(
+      caret.$caretFromPoint(
+        $createPoint(this.key, this.offset, this.type),
+        'next'
+      )
+    );
+    const bCaret = caret.$normalizeCaret(caret.$caretFromPoint(point, 'next'));
+    return caret.$comparePointCaretNext(aCaret, bCaret) < 0;
   }
 
   getNode(): LexicalNode {

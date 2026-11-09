@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/selection/tests/constructors.test.ts'],
+    include: ['src/selection/tests/{constructors,reads}.test.ts'],
     environment: 'node',
   },
 });

@@ -13,9 +13,7 @@ import type {
 } from 'lexical';
 import {
   booleanArgument,
-  booleanResult,
   callSelection,
-  fromUtf16,
   nodeArrayResult,
   nodesArgument,
   numberArgument,
@@ -23,6 +21,8 @@ import {
 } from './codec';
 import {
   $generateNodesFromRawText,
+  $getCharacterOffsets,
+  $getNodesFromCaretRangeCompat,
   $getSelection,
   $setSelection,
   textFormats,
@@ -80,9 +80,21 @@ export class RangeSelection implements BaseSelection {
     if (this._cachedNodes !== null) {
       return this._cachedNodes;
     }
-    const nodes = nodeArrayResult(
-      callSelection(this, CompatOperation.SelectionGetNodes)
+    const { caret } = getSelectionRuntime();
+    const range = caret.$getCaretRangeInDirection(
+      caret.$caretRangeFromSelection(this),
+      'next'
     );
+    const nodes = $getNodesFromCaretRangeCompat(range);
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      this.isCollapsed() &&
+      nodes.length > 1
+    ) {
+      throw new Error(
+        `RangeSelection.getNodes() returned ${nodes.length} > 1 nodes in a collapsed selection`
+      );
+    }
     if (!getSelectionRuntime().isReadOnly()) {
       this._cachedNodes = nodes;
     }
@@ -101,11 +113,71 @@ export class RangeSelection implements BaseSelection {
   }
 
   getTextContent(): string {
-    const value = callSelection(this, CompatOperation.SelectionGetTextContent);
-    if (value.data.discriminator !== 10) {
-      throw new Error('Native selection text operation returned a non-string');
+    const {
+      isElementNode: $isElementNode,
+      isTextNode: $isTextNode,
+      isDecoratorNode: $isDecoratorNode,
+      isLineBreakNode: $isLineBreakNode,
+    } = getSelectionRuntime();
+    const nodes = this.getNodes();
+    if (nodes.length === 0) {
+      return '';
     }
-    return fromUtf16(value.data.value.value);
+    const firstNode = nodes[0];
+    const lastNode = nodes[nodes.length - 1];
+    const anchor = this.anchor;
+    const focus = this.focus;
+    const isBefore = anchor.isBefore(focus);
+    const [anchorOffset, focusOffset] = $getCharacterOffsets(this);
+    let textContent = '';
+    let prevWasElement = true;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if ($isElementNode(node) && !node.isInline()) {
+        if (!prevWasElement) {
+          textContent += '\n';
+        }
+        if (node.isEmpty()) {
+          prevWasElement = false;
+        } else {
+          prevWasElement = true;
+        }
+      } else {
+        prevWasElement = false;
+        if ($isTextNode(node)) {
+          let text = node.getTextContent();
+          if (node === firstNode) {
+            if (node === lastNode) {
+              if (
+                anchor.type !== 'element' ||
+                focus.type !== 'element' ||
+                focus.offset === anchor.offset
+              ) {
+                text =
+                  anchorOffset < focusOffset
+                    ? text.slice(anchorOffset, focusOffset)
+                    : text.slice(focusOffset, anchorOffset);
+              }
+            } else {
+              text = isBefore
+                ? text.slice(anchorOffset)
+                : text.slice(focusOffset);
+            }
+          } else if (node === lastNode) {
+            text = isBefore
+              ? text.slice(0, focusOffset)
+              : text.slice(0, anchorOffset);
+          }
+          textContent += text;
+        } else if (
+          ($isDecoratorNode(node) || $isLineBreakNode(node)) &&
+          (node !== lastNode || !this.isCollapsed())
+        ) {
+          textContent += node.getTextContent();
+        }
+      }
+    }
+    return textContent;
   }
 
   applyDOMRange(range: StaticRange): void {
@@ -287,12 +359,7 @@ export class RangeSelection implements BaseSelection {
     if (this._cachedIsBackward !== null) {
       return this._cachedIsBackward;
     }
-    const result =
-      this.focus.key === this.anchor.key
-        ? this.focus.offset < this.anchor.offset
-        : booleanResult(
-            callSelection(this, CompatOperation.SelectionIsBackward)
-          );
+    const result = this.focus.isBefore(this.anchor);
     if (!isSelectionReadOnly()) {
       this._cachedIsBackward = result;
     }
