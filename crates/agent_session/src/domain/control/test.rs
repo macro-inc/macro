@@ -183,24 +183,17 @@ fn a_runtime_cannot_name_a_tab() {
 fn a_program_using_a_persons_credential_cannot_name_a_tab() {
     let tab = crate::domain::model::UiClientId::from_uuid(macro_uuid::Uuid::from_u128(0xc1));
 
-    let named = ControlEvent::authorized(
+    let event = ControlEvent::authorized(
         AgentAction::prompt("open the plan"),
         None,
         None,
         Some(tab),
         ControlPrincipal::Program,
         access(AccessLevel::Edit),
-    );
-    let unnamed = ControlEvent::authorized(
-        AgentAction::prompt("open the plan"),
-        None,
-        None,
-        None,
-        ControlPrincipal::Program,
-        access(AccessLevel::Edit),
     )
     .unwrap();
 
-    assert!(matches!(named, Err(AgentSessionError::Forbidden)));
-    assert_eq!(unnamed.actor, Some(user()));
+    // The prompt still goes through, as the user, but no tab is kept.
+    assert_eq!(event.client, None);
+    assert_eq!(event.actor, Some(user()));
 }

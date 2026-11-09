@@ -13,11 +13,16 @@ use super::ports::ControlEvent;
 pub enum ControlPrincipal {
     /// A user authenticated directly, including a user API key.
     User,
-    /// A user's credential that is not a person in the app: an API key, an
-    /// SDK token or an agent's program. The user's authority, but no app tab.
+    /// A user's credential used by an agent's program: the user's authority,
+    /// but no app tab. A tab it names is dropped, not trusted.
     Program,
     /// A bot, daemon, or internal service, possibly forwarding a user's request.
     Runtime(Option<MacroUserIdStr<'static>>),
+}
+
+enum PrincipalKind {
+    User,
+    Other,
 }
 
 impl ControlEvent {
@@ -44,11 +49,12 @@ impl ControlEvent {
         if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.is_some()) {
             return Err(AgentSessionError::Forbidden);
         }
+        let principal_kind = match &principal {
+            ControlPrincipal::User => PrincipalKind::User,
+            ControlPrincipal::Program | ControlPrincipal::Runtime(_) => PrincipalKind::Other,
+        };
         let actor = match principal {
             ControlPrincipal::User | ControlPrincipal::Program if context.is_some() => {
-                return Err(AgentSessionError::Forbidden);
-            }
-            ControlPrincipal::Program if client.is_some() => {
                 return Err(AgentSessionError::Forbidden);
             }
             ControlPrincipal::User | ControlPrincipal::Program => Some(
@@ -70,6 +76,7 @@ impl ControlEvent {
                 actor
             }
         };
+        let client = client.filter(|_| matches!(principal_kind, PrincipalKind::User));
         Ok(Self {
             action,
             action_id,

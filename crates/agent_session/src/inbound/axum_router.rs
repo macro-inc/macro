@@ -1029,9 +1029,10 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
     Ok(())
 }
 
-/// Who is asking, as control policy tells them apart. Only a person signed in
-/// to the app is `User`, the one principal that may name an app tab: an API
-/// key, an SDK token or an agent's program acts for a user but sits in no tab.
+/// Who is asking, as control policy tells them apart. A user's credential
+/// used by an agent's program (a code-mode run, or a token carrying an
+/// agent's attribution) is `Program`: it acts for the user but sits in no
+/// app tab. The app itself may hold a session or a bearer token.
 pub(crate) fn control_principal(
     caller: &UserBotOrHarnessAuthorization,
     headers: &axum::http::HeaderMap,
@@ -1040,12 +1041,11 @@ pub(crate) fn control_principal(
 
     match caller {
         UserBotOrHarnessAuthorization::User(user)
-            if user.origin == macro_authorization::CredentialOrigin::Session
-                && !macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
         {
-            ControlPrincipal::User
+            ControlPrincipal::Program
         }
-        UserBotOrHarnessAuthorization::User(_) => ControlPrincipal::Program,
+        UserBotOrHarnessAuthorization::User(_) => ControlPrincipal::User,
         authorization => ControlPrincipal::Runtime(
             authorization
                 .acting_user()
