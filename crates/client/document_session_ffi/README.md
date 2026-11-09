@@ -24,6 +24,11 @@ frames and Loro cursors retain their native opaque byte formats. Bebop/postcard
 are not used for this boundary. Host-generated peer identities and both clocks
 are explicit; clock regression is rejected before entering the core.
 
+Native element alignment exposes the source's public names. Unknown numeric
+model alignments lower to Unset (the empty public name); they do not become a
+named alignment or change the stored raw model value. Named native inputs retain
+their corresponding model alignment.
+
 No `doc_store_turso` executor exists in this workspace yet. Passing `store_path`
 returns `StoreNotConfigured`; use `None` and execute typed storage effects in the
 host. This permits durable operation without silently discarding a storage path.

@@ -6864,131 +6864,6 @@ public func FfiConverterTypeEditDirection_lower(_ value: EditDirection) -> RustB
 
 
 /**
- * Native ElementFormat; fields retain their domain meaning.
- */
-
-public enum ElementFormat: Equatable, Hashable {
-    
-    /**
-     * Unset.
-     */
-    case unset
-    /**
-     * Left.
-     */
-    case left
-    /**
-     * Start.
-     */
-    case start
-    /**
-     * Center.
-     */
-    case center
-    /**
-     * Right.
-     */
-    case right
-    /**
-     * End.
-     */
-    case end
-    /**
-     * Justify.
-     */
-    case justify
-
-
-
-
-
-}
-
-#if compiler(>=6)
-extension ElementFormat: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeElementFormat: FfiConverterRustBuffer {
-    typealias SwiftType = ElementFormat
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ElementFormat {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .unset
-        
-        case 2: return .left
-        
-        case 3: return .start
-        
-        case 4: return .center
-        
-        case 5: return .right
-        
-        case 6: return .end
-        
-        case 7: return .justify
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: ElementFormat, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case .unset:
-            writeInt(&buf, Int32(1))
-        
-        
-        case .left:
-            writeInt(&buf, Int32(2))
-        
-        
-        case .start:
-            writeInt(&buf, Int32(3))
-        
-        
-        case .center:
-            writeInt(&buf, Int32(4))
-        
-        
-        case .right:
-            writeInt(&buf, Int32(5))
-        
-        
-        case .end:
-            writeInt(&buf, Int32(6))
-        
-        
-        case .justify:
-            writeInt(&buf, Int32(7))
-        
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeElementFormat_lift(_ buf: RustBuffer) throws -> ElementFormat {
-    return try FfiConverterTypeElementFormat.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeElementFormat_lower(_ value: ElementFormat) -> RustBuffer {
-    return FfiConverterTypeElementFormat.lower(value)
-}
-
-
-
-/**
  * Typed native editing commands; extension plugin payloads remain application-owned.
  */
 
@@ -7500,6 +7375,131 @@ public func FfiConverterTypeFfiEditorType_lift(_ buf: RustBuffer) throws -> FfiE
 #endif
 public func FfiConverterTypeFfiEditorType_lower(_ value: FfiEditorType) -> RustBuffer {
     return FfiConverterTypeFfiEditorType.lower(value)
+}
+
+
+
+/**
+ * Public native alignment names; raw model numbers render as the empty alignment.
+ */
+
+public enum FfiElementFormat: Equatable, Hashable {
+    
+    /**
+     * Unset.
+     */
+    case unset
+    /**
+     * Left.
+     */
+    case left
+    /**
+     * Start.
+     */
+    case start
+    /**
+     * Center.
+     */
+    case center
+    /**
+     * Right.
+     */
+    case right
+    /**
+     * End.
+     */
+    case end
+    /**
+     * Justify.
+     */
+    case justify
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension FfiElementFormat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiElementFormat: FfiConverterRustBuffer {
+    typealias SwiftType = FfiElementFormat
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiElementFormat {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unset
+        
+        case 2: return .left
+        
+        case 3: return .start
+        
+        case 4: return .center
+        
+        case 5: return .right
+        
+        case 6: return .end
+        
+        case 7: return .justify
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FfiElementFormat, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unset:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .left:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .start:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .center:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .right:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .end:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .justify:
+            writeInt(&buf, Int32(7))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiElementFormat_lift(_ buf: RustBuffer) throws -> FfiElementFormat {
+    return try FfiConverterTypeFfiElementFormat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiElementFormat_lower(_ value: FfiElementFormat) -> RustBuffer {
+    return FfiConverterTypeFfiElementFormat.lower(value)
 }
 
 
@@ -14469,6 +14469,46 @@ public func FfiConverterTypeDocValue_lift(_ value: RustBuffer) throws -> DocValu
 #endif
 public func FfiConverterTypeDocValue_lower(_ value: DocValue) -> RustBuffer {
     return FfiConverterTypeDocValue.lower(value)
+}
+
+
+
+public typealias ElementFormat = FfiElementFormat
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeElementFormat: FfiConverter {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ElementFormat {
+        return try FfiConverterTypeFfiElementFormat.read(from: &buf)
+    }
+
+    public static func write(_ value: ElementFormat, into buf: inout [UInt8]) {
+        return FfiConverterTypeFfiElementFormat.write(value, into: &buf)
+    }
+
+    public static func lift(_ value: RustBuffer) throws -> ElementFormat {
+        return try FfiConverterTypeFfiElementFormat_lift(value)
+    }
+
+    public static func lower(_ value: ElementFormat) -> RustBuffer {
+        return FfiConverterTypeFfiElementFormat_lower(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeElementFormat_lift(_ value: RustBuffer) throws -> ElementFormat {
+    return try FfiConverterTypeElementFormat.lift(value)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeElementFormat_lower(_ value: ElementFormat) -> RustBuffer {
+    return FfiConverterTypeElementFormat.lower(value)
 }
 
 

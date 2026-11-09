@@ -555,3 +555,26 @@ fn native_selection_context_and_ordered_maps_cross_the_typed_boundary() {
 }
 
 mod application;
+
+#[test]
+fn raw_alignment_uses_the_source_empty_native_name_without_mutating_model_bits() {
+    let raw = ElementFormat::from_bits(99);
+    assert_eq!(raw.bits(), 99);
+    assert_eq!(raw.as_str(), "");
+    assert_eq!(
+        model_types::FfiElementFormat::from(raw),
+        model_types::FfiElementFormat::Unset
+    );
+    assert_eq!(raw.bits(), 99);
+    let native = <ElementFormat as uniffi::FfiConverter<UniFfiTag>>::lower(raw);
+    let lifted = <ElementFormat as uniffi::FfiConverter<UniFfiTag>>::try_lift(native)
+        .expect("native alignment");
+    assert_eq!(lifted, ElementFormat::Unset);
+    assert_eq!(lifted.as_str(), "");
+    let named = <ElementFormat as uniffi::FfiConverter<UniFfiTag>>::lower(ElementFormat::Center);
+    assert_eq!(
+        <ElementFormat as uniffi::FfiConverter<UniFfiTag>>::try_lift(named)
+            .expect("named alignment"),
+        ElementFormat::Center
+    );
+}
