@@ -120,11 +120,9 @@ impl Machine {
             _ => None,
         };
         let submitted_selection = match &input {
-            SessionInput::Editor(Input::SelectionFromView { selection, .. })
-                if *selection != lexical_model::ViewSelection::KeepModel =>
-            {
-                Some(selection.clone())
-            }
+            SessionInput::Editor(
+                Input::SelectionFromView { selection, .. } | Input::TextFromView { selection, .. },
+            ) if *selection != lexical_model::ViewSelection::KeepModel => Some(selection.clone()),
             _ => None,
         };
         let previous_typing = if submitted_selection.is_some() {
@@ -156,6 +154,64 @@ impl Machine {
             Session::Doc(s) => (s.last_output(), None),
         };
         let wake_changed = self.wake != out.wake_at;
+        let nonzero_output = !out.view.is_empty()
+            || !out.io.is_empty()
+            || out.need_peer_ids
+            || wake_changed
+            || !messages.is_empty();
+        let text_mismatch =
+            submitted
+                .as_ref()
+                .zip(surface)
+                .is_some_and(|((key, submitted), surface)| {
+                    surface
+                        .state()
+                        .view()
+                        .text(*key)
+                        .is_none_or(|text| text.text.as_str() != submitted)
+                });
+        // Only exact accepted selections may use the zero-output acknowledgement.
+        // Notifications, IO and rejected/normalized points need final model facts.
+        let selection_feedback =
+            if let (Some(mut submitted), Some(surface)) = (submitted_selection, surface) {
+                if let lexical_model::ViewSelection::Range {
+                    resolution_dirty, ..
+                } = &mut submitted
+                {
+                    *resolution_dirty = false;
+                }
+                let selection = surface.state().selection();
+                let actual = lexical_model::view_selection(selection);
+                let authoritative = out.view.iter().any(|effect| {
+                    matches!(
+                        effect,
+                        ViewEffect::Editor(lexical_model::Effect::SetViewSelection { .. })
+                    )
+                });
+                let nonzero = nonzero_output || text_mismatch;
+                let typing = selection
+                    .and_then(lexical_model::Selection::as_range)
+                    .map(|range| (range.format, range.style.clone()));
+                if !authoritative && (submitted != actual || nonzero || typing != previous_typing) {
+                    let (format, style) = selection
+                        .and_then(lexical_model::Selection::as_range)
+                        .map_or(
+                            (lexical_model::TextFormat::empty(), Arc::from("")),
+                            |range| (range.format, range.style.clone()),
+                        );
+                    Some(ViewEffect::Editor(
+                        lexical_model::Effect::SetViewSelection {
+                            selection: actual,
+                            format,
+                            style,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
         // A zero return is an exact acknowledgement of the DOM edit. Every
         // other result carries authoritative text, including rejected edits
         // whose rollback would otherwise produce no model Diff.
@@ -163,11 +219,7 @@ impl Machine {
             let state = surface.state();
             if let Some(text) = state.view().text(key) {
                 let exact = text.text.as_str() == submitted;
-                let nonzero = !out.view.is_empty()
-                    || !out.io.is_empty()
-                    || out.need_peer_ids
-                    || wake_changed
-                    || !messages.is_empty();
+                let nonzero = nonzero_output || selection_feedback.is_some();
                 if exact && !nonzero {
                     None
                 } else {
@@ -196,52 +248,6 @@ impl Machine {
         } else {
             None
         };
-        // Only exact accepted selections may use the zero-output acknowledgement.
-        // Notifications, IO and rejected/normalized points need final model facts.
-        let selection_feedback =
-            if let (Some(mut submitted), Some(surface)) = (submitted_selection, surface) {
-                if let lexical_model::ViewSelection::Range {
-                    resolution_dirty, ..
-                } = &mut submitted
-                {
-                    *resolution_dirty = false;
-                }
-                let selection = surface.state().selection();
-                let actual = lexical_model::view_selection(selection);
-                let authoritative = out.view.iter().any(|effect| {
-                    matches!(
-                        effect,
-                        ViewEffect::Editor(lexical_model::Effect::SetViewSelection { .. })
-                    )
-                });
-                let nonzero = !out.view.is_empty()
-                    || !out.io.is_empty()
-                    || out.need_peer_ids
-                    || wake_changed
-                    || !messages.is_empty();
-                let typing = selection
-                    .and_then(lexical_model::Selection::as_range)
-                    .map(|range| (range.format, range.style.clone()));
-                if !authoritative && (submitted != actual || nonzero || typing != previous_typing) {
-                    let (format, style) = selection
-                        .and_then(lexical_model::Selection::as_range)
-                        .map_or(
-                            (lexical_model::TextFormat::empty(), Arc::from("")),
-                            |range| (range.format, range.style.clone()),
-                        );
-                    Some(ViewEffect::Editor(
-                        lexical_model::Effect::SetViewSelection {
-                            selection: actual,
-                            format,
-                            style,
-                        },
-                    ))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
         let mut flags = output::encode(
             out,
             self.terminal,
