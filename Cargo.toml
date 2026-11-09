@@ -705,3 +705,22 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = "debuginfo"
+
+# Paired native-paste browser diagnostics favor speed on these callers.
+[profile.document-session-wasm.package.lexical_model]
+opt-level = 3
+
+[profile.document-session-wasm.package.lexical_loro]
+opt-level = 3
+
+[profile.document-session-wasm.package.lexical_rich_nodes]
+opt-level = 3
+
+[profile.document-session-wasm.package.macro_document_model]
+opt-level = 3
+
+[profile.document-session-wasm.package.document_session]
+opt-level = 3
+
+[profile.document-session-wasm.package.document_session_wasm]
+opt-level = 3

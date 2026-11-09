@@ -57,6 +57,7 @@ Hosts own clocks, identities, transport, storage and telemetry. Generated artifa
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
 Use `createMacro` for application markdown; `create` retains the generic rich-text registry for portable clients and conformance. Keep server composers out of both constructors.
 Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
+The document-session-wasm profile optimizes the measured group of six paste caller crates at level 3; keep dependency tuning separate and compare fresh paired browser samples before changing the group.
 Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.
 Preserve keystroke work counters when changing code-generation or post-processing settings.
 
