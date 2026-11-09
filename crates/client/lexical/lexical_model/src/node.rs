@@ -412,6 +412,12 @@ pub trait DecoratorNode: NodeType<Kind = DecoratorKind> {
     fn as_parent_mut(&mut self) -> Option<&mut Self::Parent>;
     common_node_hooks!(DecoratorView, DecoratorNode);
 
+    /// Optional nonserialized component lifetime, read without graph or host callbacks.
+    /// Clones retain this value; only the node's actual invalidating setter changes it.
+    fn render_revision(&self) -> Option<u64> {
+        self.as_parent().render_revision()
+    }
+
     /// Inherited `is_inline` hook.
     fn is_inline(&self, node: DecoratorView<'_>) -> bool {
         self.as_parent().is_inline(node)

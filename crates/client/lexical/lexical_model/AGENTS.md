@@ -253,3 +253,6 @@ authority or rollback a published transition.
 Render retired records only through the explicit owned metadata API; preserve
 last removed scalar/link fields and identity without restoring graph reachability
 or invoking public export hooks. Live render lookup must still reject those keys.
+
+Keep DecoratorNode::render_revision optional, inherited and nonserialized; preserve
+it through clones and advance it only at actual component-invalidating setters.

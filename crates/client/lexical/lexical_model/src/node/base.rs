@@ -328,6 +328,9 @@ impl NodeType for DecoratorBase {
     }
 }
 impl DecoratorNode for DecoratorBase {
+    fn render_revision(&self) -> Option<u64> {
+        None
+    }
     type Parent = Self;
     fn as_parent(&self) -> &Self {
         self
