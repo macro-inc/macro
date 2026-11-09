@@ -43,7 +43,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/application_exports.rs`: raw serializedState and download-safe savedState; Macro markdown uses internal/external application transformers while generic sessions keep built-ins.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
-- `src/paste_init.rs`: additive prepareMacroPaste export; the shared engine gate calls it during idle preparation after paint, before admitting editor input.
+- `src/paste_init.rs`: additive prepareMacroPaste export; the shared engine gate calls it during idle preparation after paint, before admitting editor input. Reserve 16 MiB through the allocator in that hook so idle initialization owns growth and dlmalloc can reuse the pages.
 - `src/router.rs`: shared RouterCore boundary; outer protocol remains unframed.
 - `src/telemetry.rs`: content-free cold native spans forwarded to the host.
 - `src/storage.rs`: durable metadata conversions; no storage I/O in Rust.

@@ -368,7 +368,7 @@ export interface InitOutput {
     readonly editorsession_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_typeTable: (a: number) => [number, number, number, number];
     readonly editorsession_wakeAt: (a: number) => number;
-    readonly prepareMacroPaste: () => void;
+    readonly prepareMacroPaste: () => [number, number];
     readonly syncrouter_attach: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly syncrouter_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly syncrouter_detach: (a: number, b: number, c: number) => [number, number, number];
