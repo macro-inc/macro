@@ -28,3 +28,5 @@ Generated bindings live under this crate; Android host integration lives in apps
 Preserve current commit tags, resolved peer cursors, forced composition end and WAL adoption expected rows at the boundary. Reattach views through ViewDiff without resetting history or synchronization.
 
 Select the actual surface with FfiApplicationConfig; reuse document_session::application_editor_config rather than duplicating registry/policy/clock/entropy setup. Application command/query and plugin payloads cross as typed values.
+
+Read sync_defaults when constructing host configuration; keep timeout, retry, WAL and recovery constants in the shared core.

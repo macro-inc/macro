@@ -2918,6 +2918,115 @@ public func FfiConverterTypeFfiSessionConfig_lower(_ value: FfiSessionConfig) ->
 
 
 /**
+ * Shared policy defaults for native host configuration, without copied constants.
+ */
+public struct FfiSyncDefaults: Equatable, Hashable {
+    /**
+     * Shared operation deadlines.
+     */
+    public var timeouts: Timeouts
+    /**
+     * Shared connection heartbeat policy.
+     */
+    public var heartbeat: HeartbeatPolicy
+    /**
+     * Shared reconnect policy.
+     */
+    public var backoff: BackoffPolicy
+    /**
+     * Shared convergence policy.
+     */
+    public var converge: ConvergePolicy
+    /**
+     * Shared WAL scheduling and retention policy.
+     */
+    public var wal: WalPolicy
+    /**
+     * Shared recovery budget.
+     */
+    public var resetBudget: ResetBudget
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Shared operation deadlines.
+         */timeouts: Timeouts, 
+        /**
+         * Shared connection heartbeat policy.
+         */heartbeat: HeartbeatPolicy, 
+        /**
+         * Shared reconnect policy.
+         */backoff: BackoffPolicy, 
+        /**
+         * Shared convergence policy.
+         */converge: ConvergePolicy, 
+        /**
+         * Shared WAL scheduling and retention policy.
+         */wal: WalPolicy, 
+        /**
+         * Shared recovery budget.
+         */resetBudget: ResetBudget) {
+        self.timeouts = timeouts
+        self.heartbeat = heartbeat
+        self.backoff = backoff
+        self.converge = converge
+        self.wal = wal
+        self.resetBudget = resetBudget
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiSyncDefaults: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiSyncDefaults: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiSyncDefaults {
+        return
+            try FfiSyncDefaults(
+                timeouts: FfiConverterTypeTimeouts.read(from: &buf), 
+                heartbeat: FfiConverterTypeHeartbeatPolicy.read(from: &buf), 
+                backoff: FfiConverterTypeBackoffPolicy.read(from: &buf), 
+                converge: FfiConverterTypeConvergePolicy.read(from: &buf), 
+                wal: FfiConverterTypeWalPolicy.read(from: &buf), 
+                resetBudget: FfiConverterTypeResetBudget.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiSyncDefaults, into buf: inout [UInt8]) {
+        FfiConverterTypeTimeouts.write(value.timeouts, into: &buf)
+        FfiConverterTypeHeartbeatPolicy.write(value.heartbeat, into: &buf)
+        FfiConverterTypeBackoffPolicy.write(value.backoff, into: &buf)
+        FfiConverterTypeConvergePolicy.write(value.converge, into: &buf)
+        FfiConverterTypeWalPolicy.write(value.wal, into: &buf)
+        FfiConverterTypeResetBudget.write(value.resetBudget, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiSyncDefaults_lift(_ buf: RustBuffer) throws -> FfiSyncDefaults {
+    return try FfiConverterTypeFfiSyncDefaults.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiSyncDefaults_lower(_ value: FfiSyncDefaults) -> RustBuffer {
+    return FfiConverterTypeFfiSyncDefaults.lower(value)
+}
+
+
+/**
  * Host-managed span correlation and attributes.
  */
 public struct FfiTelemetry: Equatable, Hashable {
@@ -15296,6 +15405,16 @@ public func FfiConverterTypeWallDuration_lower(_ value: WallDuration) -> Int64 {
     return FfiConverterTypeWallDuration.lower(value)
 }
 
+/**
+ * Read policy defaults from the shared core before supplying surface-specific settings.
+ */
+public func syncDefaults() -> FfiSyncDefaults  {
+    return try!  FfiConverterTypeFfiSyncDefaults_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_func_sync_defaults(uniffiCallStatus
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -15311,6 +15430,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_document_session_ffi_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_func_sync_defaults() != 56654) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativedocsession_handle() != 23845) {
         return InitializationResult.apiChecksumMismatch
