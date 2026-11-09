@@ -288,10 +288,13 @@ impl ComputerRepo for FakeRepo {
 
     async fn mark_enrolled(
         &self,
-        _computer_id: ComputerId,
-        _now: DateTime<Utc>,
+        computer_id: ComputerId,
+        now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id) {
+            computer.enrolled_at.get_or_insert(now);
+        }
         Ok(())
     }
 

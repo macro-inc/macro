@@ -14,7 +14,7 @@ use super::*;
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{ControlPlaneId, HostRegistration, NewComputer};
-use crate::domain::ports::HostedPairing;
+use crate::domain::ports::{DefaultAgent, HostedPairing};
 use crate::domain::size::ComputerSize;
 
 const HARNESS: HarnessId =
@@ -240,12 +240,15 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
 }
 
 /// Records each hosted pairing created; `lose_response` drops the next
-/// response after the pairing exists.
+/// response after the pairing exists. `fail_default_agent` fails every
+/// default agent request after recording it.
 #[derive(Default)]
 struct FakeHarnesses {
     claimed: std::sync::atomic::AtomicBool,
     lose_response: std::sync::atomic::AtomicBool,
     enrollments: Mutex<Vec<Option<HarnessId>>>,
+    fail_default_agent: std::sync::atomic::AtomicBool,
+    default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -283,6 +286,21 @@ impl Harnesses for FakeHarnesses {
 
     async fn revoke(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
         Ok(())
+    }
+
+    async fn create_default_agent(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<DefaultAgent, FakeError> {
+        self.default_agents
+            .lock()
+            .unwrap()
+            .push((computer.id, harness_id));
+        if self.fail_default_agent.load(Ordering::SeqCst) {
+            return Err(FakeError);
+        }
+        Ok(DefaultAgent::Created)
     }
 }
 
@@ -482,6 +500,58 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
         vec![format!("clear_enrollment {id}")]
+    );
+}
+
+#[tokio::test]
+async fn the_first_connection_gives_the_team_a_default_agent_once() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    operator.run_fleet_effects().await.unwrap();
+
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    operator.macrod_disconnected(HARNESS).await.unwrap();
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+
+    assert_eq!(
+        *operator.harnesses.default_agents.lock().unwrap(),
+        vec![(id, HARNESS)]
+    );
+}
+
+/// The agent is a convenience: failing to create it never holds up setup,
+/// and a later connection does not try again.
+#[tokio::test]
+async fn a_failed_default_agent_still_makes_the_computer_ready() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    operator.run_fleet_effects().await.unwrap();
+    operator
+        .harnesses
+        .fail_default_agent
+        .store(true, Ordering::SeqCst);
+
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    let ready = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(ready.state.phase, Phase::Running { host: HOST });
+    assert!(ready.enrolled_at.is_some());
+    assert_eq!(
+        *operator.fleet.calls.lock().unwrap(),
+        vec![format!("clear_enrollment {id}")]
+    );
+
+    operator.macrod_disconnected(HARNESS).await.unwrap();
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert_eq!(
+        *operator.harnesses.default_agents.lock().unwrap(),
+        vec![(id, HARNESS)]
     );
 }
 

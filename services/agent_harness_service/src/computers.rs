@@ -26,7 +26,7 @@ use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
-use hosted_runtimes::domain::ports::{Harnesses, HostedPairing};
+use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
@@ -43,7 +43,10 @@ use crate::config::{ComputerFleetConfig, Config};
 
 pub(crate) mod claude;
 pub(crate) mod control;
+pub(crate) mod default_agent;
 mod presence;
+
+use default_agent::{DefaultAgentRequest, DefaultAgents};
 
 use presence::PresenceGuard;
 
@@ -65,6 +68,7 @@ pub(crate) async fn operator(
     fleet_config: Option<ComputerFleetConfig>,
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
+    default_agents: Arc<dyn DefaultAgents>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -133,7 +137,10 @@ pub(crate) async fn operator(
     let operator = ComputerOperator::start(
         PgComputerRepo::new(pool.clone()),
         fleet,
-        HostedHarnesses { service: harnesses },
+        HostedHarnesses {
+            service: harnesses,
+            default_agents,
+        },
         SystemClock,
         EnrollmentDefaults {
             service_url_overrides,
@@ -318,15 +325,19 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
 }
 
 /// [`Harnesses`] over the harnesses crate: the buyer owns an approved harness
-/// shared with the team, so macrod claims it without a pairing code.
+/// shared with the team, so macrod claims it without a pairing code. The
+/// team's default agent on it comes from the bots crate.
 pub struct HostedHarnesses {
     service: Arc<dyn HostedHarnessService>,
+    default_agents: Arc<dyn DefaultAgents>,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum HostedHarnessError {
     #[error(transparent)]
     Harness(#[from] HarnessError),
+    #[error(transparent)]
+    DefaultAgent(#[from] default_agent::DefaultAgentError),
 }
 
 impl Harnesses for HostedHarnesses {
@@ -362,6 +373,22 @@ impl Harnesses for HostedHarnesses {
 
     async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    }
+
+    async fn create_default_agent(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<DefaultAgent, Self::Err> {
+        Ok(self
+            .default_agents
+            .create(DefaultAgentRequest {
+                team_id: computer.team_id,
+                buyer: computer.created_by.clone(),
+                computer_name: computer.name.as_str().to_owned(),
+                harness_id,
+            })
+            .await?)
     }
 }
 

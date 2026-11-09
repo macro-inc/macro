@@ -56,6 +56,11 @@ Pulumi stacks; they do not host extra agent processes.
   an Incus override must not silently use the shared `macro-box` alias.
   HostedHarnesses pairing retains the buying admin as the harness owner and
   grants the computer's team User access, so every teammate can run agents on it.
+  `src/computers/default_agent.rs` creates the team's `Claude Code · <computer>`
+  coding agent through `BotService::create_agent` as the buyer (macrod harness,
+  `default` model, all channels, owner connections, prompts for permissions),
+  skipping a harness `HarnessAssignments::bots_on_harness` already lists; the
+  handle is the settings editor's slug, suffixed past handles the buyer sees.
 - Computer lifecycle and gateway adapters carry canonical `ComputerId` and
   `HarnessId`; unwrap only at the harness/storage boundary.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes

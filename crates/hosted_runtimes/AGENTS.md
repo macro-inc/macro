@@ -200,6 +200,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   avoid lock inversion. Power-off, successful wake and release clear the wait.
   Runtimes and Billing show "Waiting for space on the host" with a hint to turn
   off or release another computer. Waiting computers remain power-manageable.
+- **Default agent**: the first macrod connection (`enrolled_at` unset) calls
+  `Harnesses::create_default_agent`, which gives the team a coding agent on the
+  computer's harness unless one is already bound (`DefaultAgent::{Created, AlreadyBound}`).
+  It never runs again, so a deleted or rebound agent stays gone; a failure is
+  recorded on the `computer.default_agent` span and enrollment carries on.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. Pending payment

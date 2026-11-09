@@ -1316,6 +1316,13 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
             PgHarnessRepo::new(pool.clone()),
         )),
+        Arc::new(computers::default_agent::BotDefaultAgents::new(
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                broker.clone(),
+            ),
+            PgBotsRepo::new(pool.clone()),
+        )),
     )
     .await?;
     let anthropic_gateway = anthropic_gateway::router(

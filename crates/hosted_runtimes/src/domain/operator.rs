@@ -15,8 +15,8 @@ use crate::domain::lifecycle::{
 };
 use crate::domain::models::{Computer, ComputerRecord, EnrollmentDefaults};
 use crate::domain::ports::{
-    ComputerRepo, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses, InstanceStatus,
-    PendingEffect,
+    ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
+    InstanceStatus, PendingEffect,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -646,6 +646,8 @@ where
             super::telemetry::provisioned(
                 (now - computer.created_at).num_milliseconds() as f64 / 1000.0,
             );
+            // A convenience: the span records a failure, and setup carries on.
+            self.create_default_agent(&computer, harness_id).await.ok();
         }
         // The pairing is claimed, so the code is useless; remove it anyway.
         self.fleet
@@ -654,6 +656,30 @@ where
             .inspect_err(|error| tracing::warn!(computer_id = %computer.id, error = ?error, "could not clear enrollment"))
             .ok();
         Ok(true)
+    }
+
+    /// Give the team its first agent on a computer that just became ready.
+    /// Only the first connection asks, so an agent the team deleted or moved
+    /// is never recreated.
+    #[tracing::instrument(
+        name = "computer.default_agent",
+        skip_all,
+        fields(computer_id = %computer.id, team_id = %computer.team_id, harness_id = %harness_id, outcome = tracing::field::Empty),
+        err
+    )]
+    async fn create_default_agent(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> Result<DefaultAgent, ComputerError> {
+        let outcome = self
+            .harnesses
+            .create_default_agent(computer, harness_id)
+            .await
+            .map_err(internal)?;
+        let name: &'static str = outcome.into();
+        tracing::Span::current().record("outcome", name);
+        Ok(outcome)
     }
 
     /// Record a lost macrod connection for the guest harness.

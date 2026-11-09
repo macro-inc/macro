@@ -460,6 +460,24 @@ pub trait Harnesses: Send + Sync + 'static {
     /// Delete the computer's harness and its credential; absent is fine.
     fn revoke(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Give the team a coding agent on the computer's harness, created by the
+    /// buyer. Skips when an agent is already bound to the harness.
+    fn create_default_agent(
+        &self,
+        computer: &Computer,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<DefaultAgent, Self::Err>> + Send;
+}
+
+/// What [`Harnesses::create_default_agent`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum DefaultAgent {
+    /// A new team agent now runs on the harness.
+    Created,
+    /// The harness already had an agent; nothing was created.
+    AlreadyBound,
 }
 
 /// Server-side eligibility for complimentary computers.
