@@ -269,6 +269,13 @@ impl<'state> StateRef<'state> {
     /// Index within parent.
     pub fn index_within_parent(self, key: impl Into<NodeKey>) -> Option<ChildIndex> {
         let key = key.into();
+        let parent = self.element(self.parent(key)?)?;
+        if parent.first == Some(key) {
+            return Some(ChildIndex(0));
+        }
+        if parent.last == Some(key) {
+            return parent.size.checked_sub(1).map(ChildIndex);
+        }
         self.children(self.parent(key)?)
             .position(|child| child == key)
             .and_then(|i| u32::try_from(i).ok())

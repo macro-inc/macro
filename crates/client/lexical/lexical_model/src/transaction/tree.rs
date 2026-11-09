@@ -188,12 +188,16 @@ impl Transaction<'_> {
         restore_selection: bool,
     ) -> Result<(), Error> {
         self.guard_write()?;
-        let old = self.children_keys(parent)?;
+        let element = self
+            .view()
+            .element(parent)
+            .ok_or(Error::NotAnElement(parent))?;
+        let (first, last, size) = (element.first, element.last, element.size);
         let start = start.0 as usize;
         let end = start
             .checked_add(delete_count as usize)
             .ok_or(Error::SpliceOutOfRange)?;
-        if start > old.len() || end > old.len() {
+        if start > size as usize || end > size as usize {
             return Err(Error::SpliceOutOfRange);
         }
         let mut unique = crate::collections::IndexSet::default();
@@ -214,6 +218,33 @@ impl Transaction<'_> {
                 return Err(Error::RootSpliceNonBlock);
             }
         }
+        if !nodes.is_empty()
+            && delete_count == 0
+            && start == size as usize
+            && nodes.iter().all(|key| self.parent(*key).is_none())
+        {
+            let size = size
+                .checked_add(u32::try_from(nodes.len()).map_err(|_| Error::SpliceOutOfRange)?)
+                .ok_or(Error::SpliceOutOfRange)?;
+            if let Some(previous) = last {
+                self.writable(previous)?.links.next = nodes.first().copied();
+            }
+            for (index, key) in nodes.iter().enumerate() {
+                self.writable(*key)?.links = Links {
+                    parent: Some(parent),
+                    prev: index.checked_sub(1).map(|i| nodes[i]).or(last),
+                    next: nodes.get(index + 1).copied(),
+                };
+            }
+            let BaseData::Element(element) = &mut self.writable(parent)?.base else {
+                return Err(Error::NotAnElement(parent));
+            };
+            element.first = first.or_else(|| nodes.first().copied());
+            element.last = nodes.last().copied().or(last);
+            element.size = size;
+            return Ok(());
+        }
+        let old = self.children_keys(parent)?;
         let before: Vec<_> = old
             .iter()
             .take(start)
@@ -239,8 +270,8 @@ impl Transaction<'_> {
         for key in nodes {
             self.remove_from_parent(*key)?;
         }
-        for key in &old {
-            if !result.contains(key) {
+        for key in &old[start..end] {
+            if !unique.contains(key) {
                 self.remove_from_parent(*key)?;
             }
         }
@@ -258,7 +289,7 @@ impl Transaction<'_> {
         let removed: Vec<_> = old[start..end]
             .iter()
             .copied()
-            .filter(|key| !result.contains(key))
+            .filter(|key| !unique.contains(key))
             .collect();
         if delete_count != 0 && restore_selection {
             let affected = self.try_range_at(SelectionSlot::Active).map(|range| {
