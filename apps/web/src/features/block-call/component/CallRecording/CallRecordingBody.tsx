@@ -48,8 +48,9 @@ import {
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
 
-// 520px player + 320px card + 28px section gap + 80px page insets.
-const TRANSCRIPT_LAYOUT_MIN_PX = 948;
+// 520px player + 400px card + 28px section gap + 80px page insets.
+// The 1228px group cap keeps the original 800px content cap (720px + insets).
+const TRANSCRIPT_LAYOUT_MIN_PX = 1028;
 export function CallRecordingBody(props: {
   record: CallRecord;
   callId: string;
@@ -272,12 +273,12 @@ export function CallRecordingBody(props: {
                     data-channel-scroll
                     {...scrollIntent.handlers}
                     onScroll={() => scrollIntent.observeScroll()}
-                    class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden @[948px]/call-column:overflow-hidden"
+                    class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden @[1028px]/call-column:overflow-hidden"
                     ref={setPageScrollRef}
                   >
-                    <div class="mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[948px]/call-column:h-full @[948px]/call-column:max-w-none @[948px]/call-column:pb-4">
-                      <div class="flex flex-col gap-7 @[948px]/call-column:grid @[948px]/call-column:h-full @[948px]/call-column:min-h-0 @[948px]/call-column:grid-cols-[minmax(0,1fr)_clamp(320px,35%,360px)] @[948px]/call-column:grid-rows-[auto_minmax(0,1fr)]">
-                        <div class="flex flex-col gap-7 mobile:order-2 @[948px]/call-column:col-span-2">
+                    <div class="mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[1028px]/call-column:h-full @[1028px]/call-column:max-w-[1228px] @[1028px]/call-column:pb-4">
+                      <div class="flex flex-col gap-7 @[1028px]/call-column:grid @[1028px]/call-column:h-full @[1028px]/call-column:min-h-0 @[1028px]/call-column:grid-cols-[minmax(0,1fr)_400px] @[1028px]/call-column:grid-rows-[auto_minmax(0,1fr)]">
+                        <div class="flex flex-col gap-7 mobile:order-2 @[1028px]/call-column:col-span-2">
                           <CallRecordingTitle record={record()} />
                           <Show when={canJoin()}>
                             <Button
@@ -291,13 +292,13 @@ export function CallRecordingBody(props: {
                             </Button>
                           </Show>
                         </div>
-                        <div class="contents @[948px]/call-column:relative @[948px]/call-column:flex @[948px]/call-column:min-h-0 @[948px]/call-column:min-w-0 @[948px]/call-column:flex-col">
+                        <div class="contents @[1028px]/call-column:relative @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:min-w-0 @[1028px]/call-column:flex-col">
                           <div
                             ref={setLeftScrollRef}
                             data-recording-scroll="content"
                             {...scrollIntent.handlers}
                             onScroll={() => scrollIntent.observeScroll()}
-                            class="contents @[948px]/call-column:flex @[948px]/call-column:min-h-0 @[948px]/call-column:flex-1 @[948px]/call-column:flex-col @[948px]/call-column:gap-7 @[948px]/call-column:overflow-y-auto @[948px]/call-column:overscroll-contain @[948px]/call-column:scrollbar-hidden @[948px]/call-column:pb-24"
+                            class="contents @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:flex-1 @[1028px]/call-column:flex-col @[1028px]/call-column:gap-7 @[1028px]/call-column:overflow-y-auto @[1028px]/call-column:overscroll-contain @[1028px]/call-column:scrollbar-hidden @[1028px]/call-column:pb-24"
                           >
                             <Show when={record().recordingUrl}>
                               {(url) => (
@@ -322,7 +323,7 @@ export function CallRecordingBody(props: {
                             </Show>
 
                             <div class="flex min-w-0 shrink-0 flex-col gap-2 mobile:order-3">
-                              <div class="@[948px]/call-column:hidden">
+                              <div class="@[1028px]/call-column:hidden">
                                 <Tabs
                                   aria-label={t('calls.detailContent')}
                                   size="md"
@@ -422,7 +423,7 @@ export function CallRecordingBody(props: {
                             }}
                           />
                           <Show when={!isMobile()}>
-                            <div class="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10 @[948px]/call-column:px-0">
+                            <div class="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10 @[1028px]/call-column:px-0">
                               <div
                                 ref={registerSyncTarget}
                                 class="mb-3 empty:hidden"
@@ -445,7 +446,7 @@ export function CallRecordingBody(props: {
                         <Layer offset={wideTranscript() ? 1 : 0}>
                           <aside
                             aria-label={t('calls.detailTranscript')}
-                            class="min-w-0 -mt-5 mobile:order-3 @[948px]/call-column:sticky @[948px]/call-column:top-0 @[948px]/call-column:mt-0 @[948px]/call-column:flex @[948px]/call-column:min-h-0 @[948px]/call-column:flex-col @[948px]/call-column:overflow-hidden @[948px]/call-column:rounded-2xl @[948px]/call-column:bg-surface"
+                            class="min-w-0 -mt-5 mobile:order-3 @[1028px]/call-column:sticky @[1028px]/call-column:top-0 @[1028px]/call-column:mt-0 @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:flex-col @[1028px]/call-column:overflow-hidden @[1028px]/call-column:rounded-2xl @[1028px]/call-column:bg-surface"
                             classList={{
                               hidden:
                                 !wideTranscript() &&

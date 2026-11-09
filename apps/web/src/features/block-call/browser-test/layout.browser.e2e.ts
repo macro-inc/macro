@@ -25,7 +25,7 @@ for (const theme of ['light', 'dark']) {
     ).toBeVisible();
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-left-scrolled.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-left-scrolled.png`,
       });
     await page.getByRole('button', { name: 'Show video', exact: true }).click();
     await expect
@@ -37,11 +37,11 @@ for (const theme of ['light', 'dark']) {
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${FIXTURE}?theme=${theme}&pane=948`);
+    await page.goto(`${FIXTURE}?theme=${theme}&pane=1028`);
     const card = page.getByRole('complementary', { name: 'Transcript' });
     await expect(card).toBeVisible();
     await page.locator('#fixture-pane').evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '947px';
+      element.style.maxWidth = '1027px';
     });
     await expect(
       page.getByRole('radio', { name: 'Summary', exact: true })
@@ -84,7 +84,7 @@ for (const width of [390, 480, 680]) {
         .toBeCloseTo(1);
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-inline-${width}.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-inline-${width}.png`,
         });
     } finally {
       await context.close();

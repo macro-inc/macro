@@ -4,6 +4,7 @@ const fixture = '/src/features/block-call/browser-test/view.html';
 
 for (const theme of ['light', 'dark']) {
   for (const { width, height } of [
+    { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
     { width: 1280, height: 800 },
     { width: 1024, height: 768 },
@@ -26,7 +27,7 @@ for (const theme of ['light', 'dark']) {
         page.getByText('Playback has one transcript line.')
       ).toHaveCount(1);
       await expect(page.getByText('Conversation recap')).toBeVisible();
-      if (width >= 1280) {
+      if (columnWidth >= 1028) {
         await expect(card).toBeVisible();
         await expect(tabs).toBeHidden();
         const geometry = await card.evaluate((element) => {
@@ -37,6 +38,7 @@ for (const theme of ['light', 'dark']) {
           const column = element
             .closest('.\\@container\\/call-column')!
             .getBoundingClientRect();
+          const title = document.querySelector('h1')!.getBoundingClientRect();
           return {
             width: rect.width,
             topDifference: Math.abs(rect.top - player.top),
@@ -51,18 +53,36 @@ for (const theme of ['light', 'dark']) {
             ).borderRadius,
             bottomGap: column.bottom - rect.bottom,
             playerWidth: player.width,
+            gap: rect.left - player.right,
+            leftPadding: player.left - column.left,
+            titleLeft: title.left - player.left,
+            titleRight: title.right - rect.right,
           };
         });
-        expect(geometry.width).toBeGreaterThanOrEqual(320);
-        expect(geometry.width).toBeLessThanOrEqual(360);
+        expect(geometry.width).toBe(400);
         expect(geometry.topDifference).toBeLessThan(3);
-        expect(geometry.rightPadding).toBe(40);
+        expect(geometry.gap).toBe(28);
+        expect(geometry.leftPadding).toBe(geometry.rightPadding);
+        expect(geometry.leftPadding).toBeGreaterThanOrEqual(40);
+        expect(geometry.titleLeft).toBe(0);
+        expect(geometry.titleRight).toBe(0);
         expect(geometry.background).not.toBe(geometry.pageBackground);
         expect(geometry.border).toBe('0px');
         expect(geometry.shadow).toBe('none');
         expect(geometry.radius).toBe(geometry.playerRadius);
         expect(geometry.bottomGap).toBe(16);
         expect(geometry.playerWidth).toBeGreaterThanOrEqual(520);
+        // The original 800px content wrapper includes two 40px page insets.
+        expect(geometry.playerWidth).toBeLessThanOrEqual(720);
+        expect(geometry.playerWidth).toBe(Math.min(720, columnWidth - 508));
+        const utterance = card.getByText(
+          'We can follow up on those changes tomorrow.'
+        );
+        expect(
+          await utterance.evaluate(
+            (element) => element.getBoundingClientRect().height
+          )
+        ).toBe(20);
       } else {
         await expect(card).toBeHidden();
         await expect(tabs).toBeVisible();
@@ -80,16 +100,16 @@ for (const theme of ['light', 'dark']) {
       }
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-${width}.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-${width}.png`,
         });
     });
   }
 
-  test(`split pane switches at 948px without remounting playback or losing the selected tab (${theme})`, async ({
+  test(`split pane switches at 1028px without remounting playback or losing the selected tab (${theme})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${fixture}?theme=${theme}&pane=948`);
+    await page.goto(`${fixture}?theme=${theme}&pane=1028`);
     const pane = page.locator('#fixture-pane');
     const video = page.locator('video');
     const card = page.getByRole('complementary', { name: 'Transcript' });
@@ -119,7 +139,7 @@ for (const theme of ['light', 'dark']) {
         element.setAttribute('data-mount', 'original');
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '947px';
+      element.style.maxWidth = '1027px';
     });
     await expect(transcript).toBeVisible();
     await expect(card).toBeHidden();
@@ -145,13 +165,16 @@ for (const theme of ['light', 'dark']) {
       .toBeGreaterThanOrEqual(1);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-pane-947.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-pane-1027.png`,
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '948px';
+      element.style.maxWidth = '1028px';
     });
     await expect(transcript).toBeHidden();
     await expect(card).toBeVisible();
+    expect(
+      await video.evaluate((element) => element.getBoundingClientRect().width)
+    ).toBe(520);
     await expect(video).toHaveAttribute('data-mount', 'original');
     await expect(
       card.locator('[data-call-transcript-row]').first()
@@ -168,10 +191,10 @@ for (const theme of ['light', 'dark']) {
       .toBeGreaterThanOrEqual(1);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-pane-948.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-pane-1028.png`,
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '947px';
+      element.style.maxWidth = '1027px';
     });
     await expect(transcript).toBeChecked();
     await expect(video).toHaveCount(1);
@@ -228,7 +251,7 @@ for (const theme of ['light', 'dark']) {
     expect(overlap).toBe(true);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-details.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-details.png`,
       });
     await page.getByRole('button', { name: 'Hide details' }).click();
     await expect(details).toHaveCount(0);
@@ -245,10 +268,20 @@ for (const theme of ['light', 'dark']) {
     await expect
       .poll(() => left.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(300);
+    const pinned = page
+      .getByRole('group', { name: 'Recording playback' })
+      .filter({
+        has: page.getByRole('button', { name: 'Show video' }),
+      });
+    await expect(pinned).toBeVisible();
+    const playbackBounds = await pinned.boundingBox();
+    const columnBounds = await left.boundingBox();
+    expect(playbackBounds?.x).toBe(columnBounds?.x);
+    expect(playbackBounds?.width).toBe(columnBounds?.width);
     await expect(card).toBeInViewport();
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-left-scrolled.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-left-scrolled.png`,
       });
   });
 }

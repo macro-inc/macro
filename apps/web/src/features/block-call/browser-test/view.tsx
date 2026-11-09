@@ -61,7 +61,10 @@ RECORD.transcript.push(
     endedAt: new Date(
       Date.parse(RECORD.startedAt) + 1120 + index * 20
     ).toISOString(),
-    content: `Additional transcript fixture line ${index + 1}.`,
+    content:
+      index === 0
+        ? 'We can follow up on those changes tomorrow.'
+        : `Additional transcript fixture line ${index + 1}.`,
   }))
 );
 
