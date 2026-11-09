@@ -63,7 +63,7 @@ test('workspace defaults use authenticated normal API with native defaults and g
     expect(request.headers.get('authorization')).toBe('Bearer test-token');
     expect(await request.json()).toEqual({
       ccf: { l: { id: nil } },
-      asf: { l: { inc: true } },
+      asf: { l: 'inc' },
       expand: true,
       limit: 50,
       sort_method: 'updated_at',
@@ -620,7 +620,7 @@ test('agent sessions are listed by default and by type, with their filter, as se
     asf: { l: { o: 'macro|me@example.com' } },
   });
   expect(bodies[0]?.asf).toEqual({
-    '&': [{ l: { o: 'macro|me@example.com' } }, { l: { inc: true } }],
+    '&': [{ l: { o: 'macro|me@example.com' } }, { l: 'inc' }],
   });
   expect(bodies[0]?.df).toEqual({ l: { id: nil } });
   const item = page.items[0];
