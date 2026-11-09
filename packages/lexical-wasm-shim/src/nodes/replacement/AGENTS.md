@@ -7,6 +7,10 @@ Reuse full static factory preparation and shared state collection. Collect stati
 transform identities once per chain and keep configured transform order.
 Do not register or authorize an unlisted withKlass class.
 
+`normalize.ts` captures replacement getters once in replace/with/withKlass order
+and reuses the actual constructor validator. Keep eager list normalization
+separate from the configuration entry's per-row normalization and factory work.
+
 `bindReplacement` captures a class-specific callback and checks the real class
 witness before invoking it. BoundNodeReplacement/InternalNodeConfig are internal
 invokers. Preserve LexicalNodeReplacement through the upstream type-only reexport;

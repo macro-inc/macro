@@ -99,8 +99,8 @@ function validateReplacement(
 
 /** Build metadata only; the editor supplies the complete explicit class list. */
 export function buildRegisteredNodes(
-  configs: readonly InternalNodeConfig[],
-  exportDOM?: ReadonlyMap<NodeClass, NodeDOMExport>
+  configs: Iterable<InternalNodeConfig>,
+  exportDOM?: Pick<ReadonlyMap<NodeClass, NodeDOMExport>, 'get'>
 ): RegisteredNodes {
   const registered: RegisteredNodes = new Map();
   for (const config of configs) {

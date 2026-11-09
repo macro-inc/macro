@@ -6,9 +6,13 @@ Port the public and DOM methods of the pinned Lexical v0.45.0 built-in classes.
 Keep construction, cloning, bindings and model context in `runtime.ts`.
 
 `base.ts`, `element.ts`, `text.ts`, `tab.ts` and `builtins.ts` implement the
-classes; `index.ts` exports them and hydrates built-ins. Import superclass values
-from their defining module so class evaluation does not depend on barrel order.
+classes; `index.ts` exports them and hydrates built-ins. Within that built-in graph,
+import superclass values from their defining module to preserve evaluation order.
 `dom-import.ts` and `text-dom.ts` implement the node DOM methods.
+`artificial.ts` carries the pinned generic Element-based internal ArtificialNode;
+its constructor still requires the real runtime's class registration and authority.
+This separate entry imports ElementNode through the initialized core barrel so
+cold evaluation does not enter the Element/editor dependency cycle midway.
 `config.ts` and `dom-types.ts` carry the actual core's recursive types.
 `state/` contains JavaScript StateConfig/record algorithms and typed runtime
 injection; its own guide separates pure algorithms from hosted state acceptance.
