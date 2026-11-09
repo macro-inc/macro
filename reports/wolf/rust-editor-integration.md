@@ -12,6 +12,48 @@ shared composition `100ea8ba00`, saved/export semantics `a591bbc834`, and headin
 Enter `a486cd43f7`. The production compat initializer and immutable boot switch
 are not yet active, so existing native preview evidence is not compat acceptance.
 
+## Live paste checkpoint
+
+Integrated autolink prefilter `0ae7063905` (source `fa25cc5c73`), layout
+containment removal `29ac2efcac` (source `079423d4d7`), and updated size policy
+`8fc4648aaf` (source `de155ff928`). The policy now reports a 1,600,000-byte
+advisory Brotli ceiling. Startup p95 <50ms and document-open p95 <= OFF remain
+strict and have not been established by this checkpoint. Shared boot preload
+remains nonblocking; owner-branch benchmark files absent here were not restored.
+Updated the web agent guide and session README to reflect this policy.
+
+The source-matched shipping build at `0ae7063905` was installed into the live
+preview as four artifact files only, without dependency writes or a restart:
+raw 6,922,924 bytes, Brotli 1,585,235 bytes, SHA256
+`11c44f6f0e29fe7c198cf6155dabd41e87d4c83363c3716d31362ed0c339ca98`.
+Compilation and optimization passed; the original recipe exited on its old size
+rule. Re-running the updated size reporter passed below the advisory ceiling.
+This build includes the integrated foreign41 foundation.
+
+Own headless Chromium passed an actual live HTML paste of 80 paragraphs with
+160 URL/email links, verifying rendered content and native JSON blocks, with no
+page errors. A second run verified absence of injected content-visibility and
+intrinsic-size styles after the view change. Screenshot:
+`/home/wolf/tmp/integration3-acceptance/preview-paste-prefilter-live.png`.
+This is targeted native proof, not production compatibility parity or a quiet-box
+performance comparison.
+
+Local all-feature rich-node tests passed: 306 unit tests plus 2 integration
+checks, including the 5,018-case upstream linkify corpus and the full-match
+comparison property test. Scoped strict clippy passed; advisory size tests 2/2
+passed under Vitest. Source audit found no false-negative guard defect. Logs:
+`paste-prefilter-tests.log`, `paste-prefilter-clippy.log`,
+`paste-size-policy-vitest.log`, `paste-size-policy.log`,
+`preview-paste-prefilter-no-containment.log`, `audit-paste-prefilter.md` under
+`/home/wolf/tmp/integration3-acceptance/`. The broad integration matrix remains
+stopped for the compatibility pivot; no upstream compat or full parity gate is
+claimed.
+
+The disposable-copy `just check` found inherited Rust formatting drift in
+`document_session/src/editor/builder.rs` and the existing
+`plugins_group_a/mod.rs` declarations-only rule violation; these remain open.
+`git diff --check` passed for this checkpoint.
+
 ## Incremental verification
 
 | Check | Result | Evidence |
