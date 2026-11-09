@@ -1,6 +1,62 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: source compatibility and open runtime gates
+## Current checkpoint: native view/history preview and notification correction
+
+The LIVE native-view O(edit) chain is integrated as 0f754d883f,7b875ec594,
+af7fd810ae,07b29bd983 and956002830c. History-selection fix c9282eaa41 is
+integrated as 336b3700de, preserving newer TextDelta input/feedback branches.
+The original flag-OFF MarkdownEditor and legacy comment-layout body are byte
+identical to the pre-view source; no OFF browser rerun is inferred from that.
+
+A combined source build in the independent validation checkout 6119d8731f
+produced ABI 2 / Diff 1 WASM SHA256
+`d1d6c4a930bad81b1f3154a375c010daf42951389348a54e91c7efe8d65df860`:
+9,072,146 raw bytes / 2,044,034 Brotli bytes. This exceeds the 1,600,000-byte
+advisory ceiling by 444,034 bytes; startup/open strict latency gates remain
+unmeasured. The normal document-session-wasm profile, six hot caller crates at
+opt3 and wasm-opt -Oz --converge were used with two Cargo jobs. Matching generated
+declarations are committed as9dc6a842ec. The candidate five-file set was briefly installed, then the exact previous
+known-good a4e515 artifact set was restored after a reported blank shell. Own
+browser diagnostics recorded widespread ERR_NETWORK_CHANGED before editor
+construction, with no JavaScript errors. A private-network candidate-only browser
+retry is in progress. No dependency writes or stack restart occurred; no live
+comments/table/code/undo acceptance is claimed yet.
+
+Independent checks pass 482 model, 54 session, 46 projection, 5 targeted undo
+simulator, 263 view and 51 app-comment tests; package/app types, scoped check,
+dependency metadata and strict model/session Clippy pass. Work-counter browser
+cases pass in Chromium, Firefox and Linux WebKit: S8/L128 anchor reads 1/1,
+table attribute writes 0/0 and equal positive code-range work. These are component
+correctness/counter checks, not whole-editor latency or Safari qualification.
+
+Full private Chromium native-view tests are 49 passed /1 failed of 50. The strict
+large-HTML raw-DOM comparison remains RED while model/Markdown pass. A controlled
+pre-view JS source 46c54f1060 with the SAME new WASM fails identically: the native
+DOM and upstream DOM are each byte-identical across old/current view. The mismatch
+is 166 empty class attributes, 166 empty style attributes and166 data-lexical-key
+attributes. No comparator mask, allowlist or rebaseline was introduced. This
+isolates the view-chain regression question, not an old-binary baseline.
+
+The JS command registry/root bindings and lazy-batch schema are also integrated;
+command/registry.ts now consumes the central commandBucket helper. The public
+updating flag was incorrect during update listeners/deferred notifications. The
+actual parent-command reproduction failed before correction and matches its
+unchanged upstream control after a7e71dcbc1 (integrated as a85e3d1455). Exact
+reproduction plus command/update tests pass 15/15; full shim tests pass 234/235,
+with only the unchanged2,396 native-crossing assertion failing. Full TypeScript 6
+and 41 hooks / 489 sources, plus scoped check pass. No production initializer,
+FIFO/native callback, collection-identity or zero-crossing acceptance is claimed.
+
+Evidence is under `/home/wolf/tmp/integration3-acceptance`: the
+`live-view-history-*` logs/manifests, controlled
+`pre-live-view-same-wasm-html-baseline.json`,
+`js-command-parent-phase-{negative,fixed-clean}.log`,
+`js-command-notification-{full-tests,package-check,scoped-check}.log` and
+`live-view-history-integration-audit.md`. The first baseline path attempt and an
+interrupted overlapping diagnostic are retained and excluded from passing proof.
+Integration3 and compatibility/parity gates remain unchecked. Replay is also held: fixture047e1 op20 getText fails on an untouched baseline; no current1,421-green claim is made pending snapshot-ownership diagnosis.
+
+## Previous checkpoint: source compatibility and open runtime gates
 
 Static-config module `f5b6913051` is integrated as `2217287f82`, after the six-helper
 source prerequisite. Its four exports prepare actual-class getType/clone/JSON/DOM
