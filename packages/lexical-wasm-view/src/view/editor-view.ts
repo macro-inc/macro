@@ -11,7 +11,13 @@ import {
   type IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { batch, createComponent, createSignal } from 'solid-js';
+import {
+  batch,
+  createComponent,
+  createSignal,
+  getOwner,
+  type Owner,
+} from 'solid-js';
 import { render } from 'solid-js/web';
 import { ClipboardAccess } from './clipboard';
 import type {
@@ -61,8 +67,11 @@ export interface ViewOptions {
   readonly onError: (error: unknown) => void;
   /** Caller-owned loading span; never ended by the view. */
   readonly parentSpan?: Span;
+  /** Application/provider owner captured before an asynchronous mount. */
+  readonly owner?: Owner;
 }
 export class EditorView implements ViewSink {
+  private readonly owner: Owner | undefined;
   readonly mirror: Mirror;
   readonly query: BulkQueries;
   readonly clipboard: ClipboardAccess;
@@ -129,6 +138,7 @@ export class EditorView implements ViewSink {
     readonly options: ViewOptions,
     private openingSpan: Span | undefined
   ) {
+    this.owner = options.owner ?? getOwner() ?? undefined;
     this.root.style.userSelect = 'text';
     this.root.style.whiteSpace = 'pre-wrap';
     this.root.style.wordBreak = 'break-word';
@@ -658,7 +668,9 @@ export class EditorView implements ViewSink {
     dom.appendChild(host);
     const dispose = render(
       () => createComponent(component, { node: value, view: this }),
-      host
+      host,
+      undefined,
+      { owner: this.owner }
     );
     this.decorators.set(key, {
       dispose,
