@@ -587,7 +587,8 @@ export class EditorView implements ViewSink {
                   ?.select(selection.anchorCell, selection.focusCell);
               else if (previousSelection.kind === 'table')
                 this.tables.get(previousSelection.table)?.clear();
-              if (!skipDomSelection) writeSelection(this, selection);
+              if (!skipDomSelection)
+                writeSelection(this, selection, previousSelection);
               break;
             }
             case 1:

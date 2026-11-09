@@ -97,6 +97,8 @@ adapter tests separately check file types, access failures, and split selection.
 
 Keep shared mention, image and equation components on `DecoratorHost`; preserve
 the source host's command order, transaction boundaries and cached media props.
+Register attached Source roots through `createLexicalWrapper`'s actual root
+listener so native selection projection preserves nested editor ownership.
 Their backend-free source interaction check is
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/decorator-host/browser-test/playwright.config.ts`.
 Compare its raw model and DOM captures before and after host refactors in all

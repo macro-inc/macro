@@ -9,6 +9,7 @@ import {
   RegisteredNodesByType,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
+import { registerExternalEditorRoot } from '@macro-inc/lexical-wasm-view/view/editor-roots';
 import { Telemetry } from '@macro-inc/observability';
 import type { NodeKey } from 'lexical';
 import {
@@ -108,6 +109,13 @@ export function createLexicalWrapper({
   });
 
   const plugins = createPluginManager(editor, type);
+  let releaseEditorRoot: (() => void) | undefined;
+  const releaseRootListener = editor.registerRootListener((root) => {
+    releaseEditorRoot?.();
+    releaseEditorRoot = root
+      ? registerExternalEditorRoot(root, editor)
+      : undefined;
+  });
 
   let mapping: NodeIdMappings | undefined;
 
@@ -128,6 +136,8 @@ export function createLexicalWrapper({
 
   const cleanup = () => {
     plugins.cleanup();
+    releaseRootListener();
+    releaseEditorRoot?.();
   };
 
   return {
