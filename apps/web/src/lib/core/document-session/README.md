@@ -139,7 +139,8 @@ an abandoned view. Remount through the same surface to retain document/history.
 Native menu events include their mount/model/invocation/query identity and actual
 registered node types. Answer through `menuRows()` and `menuCommit()` on that
 surface; both discard replaced queries before queued IPC. A late close cannot
-clear a newer query. Providers retain typed identity/payloads, loaded counts,
+clear a newer query. Source adapters retire the previous surface before admitting
+a query from its replacement, including when both signals change in one batch. Providers retain typed identity/payloads, loaded counts,
 loading/error state and pagination; native rows never carry executable callbacks.
 Menu selection IPC is traced without query text or row labels.
 `NativeMentionSources` mounts the actual `MentionsMenu` providers and controller

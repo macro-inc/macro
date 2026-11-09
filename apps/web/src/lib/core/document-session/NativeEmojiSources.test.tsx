@@ -1,6 +1,6 @@
 import { Telemetry } from '@macro-inc/observability';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { searchEmojis } from '../component/Emoji/emoji-catalog';
 import {
@@ -167,3 +167,53 @@ test('failed native insertion releases the pending row without retrying the comm
     surface: 'native-emoji.provider',
   });
 });
+
+test.each([true, false])(
+  'batched emoji replacement retires only the old popup (query first: %s)',
+  async (queryFirst) => {
+    vi.useFakeTimers();
+    await catalog;
+    const original = {
+      menuRows: vi.fn(async () => {}),
+      menuCommit: vi.fn(async () => {}),
+    };
+    const replacement = {
+      menuRows: vi.fn(async () => {}),
+      menuCommit: vi.fn(async () => {}),
+    };
+    const [surface, setSurface] = createSignal(original);
+    const [event, setEvent] = createSignal<MenuEvent>();
+    render(() => (
+      <NativeEmojiSources
+        surface={surface()}
+        event={event}
+        onError={(error) => {
+          throw error;
+        }}
+      />
+    ));
+    setEvent(first);
+    await vi.advanceTimersByTimeAsync(200);
+    batch(() => {
+      if (queryFirst) {
+        setEvent({ ...first });
+        setSurface(replacement);
+      } else {
+        setSurface(replacement);
+        setEvent({ ...first });
+      }
+    });
+    expect(original.menuRows).toHaveBeenLastCalledWith({
+      identity: first.query.identity,
+      rows: [],
+      buckets: [],
+    });
+    expect(replacement.menuRows).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({ label: '🚀' }),
+        ]),
+      })
+    );
+  }
+);

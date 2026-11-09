@@ -74,8 +74,17 @@ export function NativeEmojiSources(props: {
       );
   }
 
+  function synchronizeOwner() {
+    if (owner === props.surface) return;
+    closeOwned();
+    owner = props.surface;
+    setQuery(undefined);
+    selected = false;
+  }
+
   createEffect(
     on(props.event, (event) => {
+      synchronizeOwner();
       if (!event || event.query.kind !== 'emoji' || event.action === 'closed') {
         setQuery(undefined);
         selected = false;
@@ -166,17 +175,7 @@ export function NativeEmojiSources(props: {
     );
   });
 
-  createEffect(
-    on(
-      () => props.surface,
-      () => {
-        closeOwned();
-        setQuery(undefined);
-        selected = false;
-      },
-      { defer: true }
-    )
-  );
+  createEffect(on(() => props.surface, synchronizeOwner, { defer: true }));
   onCleanup(() => {
     disposed = true;
     closeOwned();
