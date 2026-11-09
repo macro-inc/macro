@@ -11,6 +11,7 @@ struct ReplyScope<'a> {
     receiver: Option<NodeKey>,
 }
 pub(super) enum ResultValue {
+    WithSelection(Box<ResultValue>, compat::CompatSelectionData),
     Scalar(Value),
     Node(Option<NodeKey>),
     Nodes(Vec<NodeKey>),
@@ -275,6 +276,10 @@ impl Host {
         result: ResultValue,
         scope: ReplyScope<'_>,
     ) -> Result<compat::CompatReply, BoundaryError> {
+        let (result, mut selections) = match result {
+            ResultValue::WithSelection(result, selection) => (*result, vec![selection]),
+            result => (result, vec![]),
+        };
         let ReplyScope {
             version,
             update,
@@ -322,8 +327,10 @@ impl Host {
                 .copied()
                 .ok_or(BoundaryError::Invalid("result record missing"))
         };
-        let mut selections = vec![];
         let value = match result {
+            ResultValue::WithSelection(_, _) => {
+                return Err(BoundaryError::Invalid("nested selection result"))
+            }
             ResultValue::Scalar(value) => value,
             ResultValue::Node(Some(key)) => Value::ForeignNodeArgument {
                 value: reference(key)?,
