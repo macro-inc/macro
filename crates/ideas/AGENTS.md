@@ -13,8 +13,10 @@ person. Served by the harness under the scheduler's gateway prefix
 - A generation session calls `review` (every idea, open or not, with limits),
   then `suggest` (add, or update the idea with the same `dedupKey`), `rewrite`
   and `retire`. Only the person's open `ideas` session in
-  `suggestion_generation_session`, found from the request's code-mode
-  invocation (`RequestSessions`), may call them; others get 403.
+  `suggestion_generation_session` (`GenerationSessions`), found from the
+  request's code-mode invocation (`RequestSessions`), may call them; others
+  get 403. Reading the feed with `?timezone=` counts the person in for
+  nightly generations (`SuggestionAudience`).
 - Code only validates (`domain/check.rs`), stores and logs. Ranking, wording and
   when an idea stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no
@@ -33,8 +35,12 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - Owns: `idea`, `idea_prompt`, `idea_entity`, `idea_routine`, `idea_target`,
   and its `suggestion_change` rows.
-- Not here: generation runs and their sessions (they write
-  `suggestion_generation*`); routine suggestions → `crates/scheduled_action`.
+- Also: the vocabulary every generation's tools share (`GenerationTrigger`,
+  `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
+  `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
+  the ideas session's brief (`domain/prompt.md`).
+- Not here: generation runs and their sessions → `crates/suggestion_generation`;
+  routine suggestions → `crates/scheduled_action`.
 
 ## Checks
 

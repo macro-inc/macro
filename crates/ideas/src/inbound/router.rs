@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{FromRef, Path, State};
+use axum::extract::{FromRef, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -14,6 +14,8 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
 use macro_uuid::Uuid;
+use serde::Deserialize;
+use utoipa::IntoParams;
 
 use crate::domain::model::{
     IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
@@ -106,11 +108,23 @@ impl IntoResponse for IdeaApiError {
     }
 }
 
+/// The reader's time zone.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct FeedQuery {
+    /// IANA time zone, e.g. `America/New_York`: nightly generations run in
+    /// the reader's night.
+    #[param(value_type = Option<String>)]
+    #[serde(default)]
+    pub timezone: Option<chrono_tz::Tz>,
+}
+
 #[utoipa::path(
     get,
     path = "/ideas",
     tag = "ideas",
     operation_id = "list_ideas",
+    params(FeedQuery),
     responses(
         (status = 200, body = Ideas, description = "The caller's open ideas they can open every item of, best first"),
         (status = 401, body = String),
@@ -122,6 +136,7 @@ impl IntoResponse for IdeaApiError {
 pub async fn list_ideas<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<FeedQuery>,
 ) -> Result<Json<Ideas>, IdeaApiError>
 where
     S: IdeaApi,
@@ -130,7 +145,7 @@ where
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id)
+            .feed(&user.authorization.macro_user_id, query.timezone)
             .await?,
     ))
 }

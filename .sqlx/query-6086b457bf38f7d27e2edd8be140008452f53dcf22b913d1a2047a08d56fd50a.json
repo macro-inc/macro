@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_generation (id, user_id, trigger, status, started_at)\n               SELECT $1, $2, $3, 'generating', $4\n               WHERE NOT EXISTS (\n                   SELECT 1 FROM suggestion_generation\n                   WHERE user_id = $2 AND trigger = 'nightly' AND $3 = 'nightly'\n                     AND started_at > $5)\n               ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6086b457bf38f7d27e2edd8be140008452f53dcf22b913d1a2047a08d56fd50a"
+}

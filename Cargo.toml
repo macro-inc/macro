@@ -10,6 +10,7 @@ members = [
   "crates/routine_program",
   "crates/shown_text",
   "crates/ideas",
+  "crates/suggestion_generation",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",

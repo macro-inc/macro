@@ -5,6 +5,8 @@ use chrono::{SecondsFormat, Utc};
 use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
 use serde_json::{Value, json};
 
+use ideas::domain::model::GenerationTrigger;
+
 use super::decode::line;
 use super::ports::InboxMessage;
 
@@ -28,6 +30,8 @@ const MAX_LIST: usize = 5;
 pub struct BriefData<'a> {
     /// The surfaces this session suggests for.
     pub surfaces: &'a [Surface],
+    /// What started the generation.
+    pub trigger: GenerationTrigger,
     pub inbox: &'a [InboxMessage],
     /// Apps the person connected, by slug.
     pub apps: &'a [String],
@@ -53,7 +57,18 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .filter_map(|value| value.as_str().map(str::to_owned))
         .collect::<Vec<_>>()
         .join(", ");
-    let task = TASK.replace("{surfaces}", &surfaces);
+    let occasion = match data.trigger {
+        GenerationTrigger::Onboarding => "The user just signed up.",
+        GenerationTrigger::Nightly => {
+            "This is the nightly run: first read what you suggested before with \
+             `await macro.routines.review()`, retire with `suggestion.retire(reason)` open ones that \
+             no longer fit the user's work, then suggest only what is missing. Suggestions are never \
+             rewritten; retire one and suggest a better one instead."
+        }
+    };
+    let task = TASK
+        .replace("{surfaces}", &surfaces)
+        .replace("{occasion}", occasion);
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let model = data.agent_model;
     let timezone = data.timezone;

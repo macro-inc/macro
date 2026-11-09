@@ -1,0 +1,52 @@
+# suggestion_generation
+
+## What it is
+
+Generations for Ideas and routine suggestions: runs of hidden agent sessions,
+at onboarding and in each person's night, that write their ideas
+(`crates/ideas`) and routine suggestions (`crates/scheduled_action`) through
+those crates' tools. Hosted by the harness's scheduling runtime.
+
+## How it works
+
+- `POST /scheduled-action/suggestions/generate?timezone=` (onboarding, once the
+  inbox connects) or the nightly tick (`GenerationService::nightly`, every five
+  minutes in the harness) starts a generation: one `suggestion_generation` row,
+  then one ideas session and a routines session per `SessionLayout` group at
+  once, each kind only when its flag is on (`enable-ideas`,
+  `enable-routine-suggestions`).
+- Each session is hidden, the person's, non-billable, and may call its kind's
+  tools while its `suggestion_generation_session` row is open. Its brief comes
+  from the kind's crate (`IdeaApi::brief`, `RoutineSuggestionApi::brief`).
+- Code here only schedules, waits, cleans up and logs. The sessions do all
+  judging through the tools; no reconciliation, ranking or retiring here.
+- Nightly: people seen in the last week (`suggestion_audience`, written by the
+  onboarding start and ideas feed reads with a time zone) whose local hour is
+  2 to 5, with no run going and no nightly run in 20 hours; at most
+  `MAX_NIGHTLY_RUNS` per process.
+
+## Start here
+
+- `src/domain/service.rs`: starting, running and sweeping generations.
+- `src/outbound/pg_generation_repo.rs`: the tables, and the adapter for the
+  ideas and routine suggestion crates' `GenerationSessions`,
+  `SuggestionAudience` and `GenerationStatuses` ports.
+
+## Scope
+
+- Owns: `suggestion_generation`, `suggestion_generation_session`,
+  `suggestion_audience`.
+- Not here: what sessions may write and the change log → `crates/ideas`,
+  `crates/scheduled_action`. Session runtime → `agent_session`, which stays
+  feature-neutral.
+
+## Checks
+
+- `cargo test -p suggestion_generation` (live DB, `SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- At onboarding a routines session that kept nothing is retried once; never
+  nightly, where keeping nothing is a fine answer.
+- `routine_suggestions.generated`/`.surface` logs feed a Datadog dashboard;
+  `RoutineSuggestionApi::record` emits them after the routines sessions.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,\n                      dismissed_at IS NOT NULL AS \"dismissed!\", created_at\n               FROM routine_suggestion\n               WHERE user_id = $1\n               ORDER BY created_at, id",
+  "query": "SELECT id, surfaces, catalog_key, knob_values, routine, reason, keep_probability,\n                      dismissed_at, retired_at, created_at\n               FROM routine_suggestion\n               WHERE user_id = $1\n               ORDER BY created_at, id",
   "describe": {
     "columns": [
       {
@@ -40,11 +40,16 @@
       },
       {
         "ordinal": 7,
-        "name": "dismissed!",
-        "type_info": "Bool"
+        "name": "dismissed_at",
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 8,
+        "name": "retired_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -62,9 +67,10 @@
       true,
       false,
       false,
-      null,
+      true,
+      true,
       false
     ]
   },
-  "hash": "6fec6dc694a8da95fabeff168a706fca94d7afa12eb4b355f399278d5e153b24"
+  "hash": "5f8c0e1c3432c5fe65798a1f44ae184d2be67692154f582a3732ea62ab715df5"
 }

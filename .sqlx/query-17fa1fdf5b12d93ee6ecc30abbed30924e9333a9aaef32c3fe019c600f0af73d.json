@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT session_id, generation_id, user_id, kind\n               FROM suggestion_generation_session\n               WHERE session_id = $1 AND closed_at IS NULL",
+  "query": "SELECT session_id, user_id, agent_id FROM suggestion_generation_session\n               WHERE closed_at IS NULL AND opened_at < $1\n               ORDER BY opened_at\n               LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -10,31 +10,26 @@
       },
       {
         "ordinal": 1,
-        "name": "generation_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
         "name": "user_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
-        "name": "kind",
+        "ordinal": 2,
+        "name": "agent_id",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Timestamptz",
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "c6254f74c16dd7e2859093f5e5667e2a33d31951acad311d562e044ce9f7fbd9"
+  "hash": "17fa1fdf5b12d93ee6ecc30abbed30924e9333a9aaef32c3fe019c600f0af73d"
 }
