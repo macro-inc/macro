@@ -91,3 +91,8 @@ includes initialization and real paste preparation. Upstream emits ready without
 a preload mark; its engine-preload duration is not applicable. The existing boot
 flow emits `macro.boot.interactive` at its actual completion time with an outcome;
 only success is usable as an interactive timing.
+
+Synchronous compatibility transactions use the returned executor’s `runSync`
+method. It rejects reentrant, queued or closing work before admission; accepted
+calls apply native output and invoke completion before returning. Session-only
+factory bindings borrow host lifetime; unbinding a root does not close the host.

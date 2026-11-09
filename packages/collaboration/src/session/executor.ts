@@ -163,6 +163,14 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       this.busy = false;
     }
   }
+  /** Admit a synchronous transaction without queueing rejected reentrant work. */
+  runSync(call: () => number, after?: (flags: number) => void): void {
+    if (this.closed || this.closing)
+      throw new Error('Session executor is closed or closing');
+    if (this.busy || this.queue.length)
+      throw new Error('Session executor is busy');
+    this.run(call, after);
+  }
   start(): void {
     if (this.started) return;
     this.started = true;
