@@ -1,9 +1,11 @@
 //! Commit-time model processing.
+pub(crate) mod continuation;
 mod gc;
 mod model_caches;
 mod normalize;
 mod transforms;
 use crate::*;
+pub use continuation::{PipelineBudget, PipelineProgress};
 pub use normalize::normalize_range_selection;
 use std::collections::VecDeque;
 
@@ -53,21 +55,25 @@ impl Transaction<'_> {
         self.dirty_since_flush = true;
         Ok(())
     }
+    pub(crate) fn drain_update(&mut self) -> Result<Option<bool>, Error> {
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        let Some((update, options)) = self.nested.pop_front() else {
+            return Ok(None);
+        };
+        for tag in options.tags.iter() {
+            self.add_tag(tag.clone());
+        }
+        update(self)?;
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        Ok(Some(options.skip_transforms))
+    }
+    #[cfg(all(test, feature = "foreign-nodes"))]
     pub(crate) fn drain_updates(&mut self) -> Result<bool, Error> {
         let mut skip_transforms = false;
-        loop {
-            #[cfg(feature = "foreign-nodes")]
-            ForeignReadOperation::check()?;
-            let Some((update, options)) = self.nested.pop_front() else {
-                break;
-            };
-            skip_transforms |= options.skip_transforms;
-            for tag in options.tags.iter() {
-                self.add_tag(tag.clone());
-            }
-            update(self)?;
-            #[cfg(feature = "foreign-nodes")]
-            ForeignReadOperation::check()?;
+        while let Some(skip) = self.drain_update()? {
+            skip_transforms |= skip;
         }
         Ok(skip_transforms)
     }
@@ -90,75 +96,26 @@ impl Transaction<'_> {
         }
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
-        let result = self.flush_inner(mode);
-        #[cfg(feature = "foreign-nodes")]
-        let result = result.and_then(|()| ForeignReadOperation::check());
-        #[cfg(feature = "foreign-nodes")]
-        let result = result.and_then(|()| self.check_pending_foreign_payloads());
+        if self
+            .pipeline_continuation
+            .as_ref()
+            .is_some_and(|state| !state.matches_mode(mode))
+        {
+            return Err(Error::Invariant("cannot change a suspended pipeline mode"));
+        }
+        let suspended = self.pipeline_continuation.is_some();
+        let mut continuation = self.pipeline_continuation.take().map_or_else(
+            || continuation::PipelineContinuation::new(mode),
+            |value| *value,
+        );
+        let result = continuation.run(self, mode, None);
         self.transform_iterations = 0;
         if result.is_ok() {
             self.dirty_since_flush = false;
+        } else if suspended {
+            self.pipeline_continuation = Some(Box::new(continuation));
         }
-        result
-    }
-    fn flush_inner(&mut self, mode: FlushMode) -> Result<(), Error> {
-        let nested_skip_transforms = self.drain_updates()?;
-        let anchor = self
-            .try_range_at(SelectionSlot::Active)
-            .map(|range| range.anchor);
-        let mut anchor_key = None;
-        if let Some(Point::Text { key, .. }) = anchor {
-            self.selection_transform(key)?;
-            anchor_key = Some(key);
-        }
-        // The anchor hook may move the live focus, including to a newly created node.
-        if let Some(Point::Text { key, .. }) = self
-            .try_range_at(SelectionSlot::Active)
-            .map(|range| range.focus)
-            && Some(key) != anchor_key
-        {
-            self.selection_transform(key)?;
-        }
-        if !self.dirty_leaves.is_empty() || !self.dirty_elements.is_empty() {
-            if mode == FlushMode::NormalizeOnly
-                || self.options.skip_transforms
-                || nested_skip_transforms
-            {
-                for key in self.dirty_leaves.clone() {
-                    normalize::normalize_text_node(self, key)?;
-                }
-            } else {
-                transforms::apply(self)?;
-            }
-            self.drain_updates()?;
-            #[cfg(feature = "foreign-nodes")]
-            ForeignReadOperation::check()?;
-            gc::collect(self);
-        }
-        if let Some(Selection::Range(range)) = &self.pending.selection
-            && (!self.pending.nodes.contains_key(&range.anchor.key())
-                || !self.pending.nodes.contains_key(&range.focus.key()))
-        {
-            return Err(Error::SelectionLost);
-        }
-        if matches!(&self.pending.selection, Some(Selection::Node(selection)) if selection.nodes.is_empty())
-        {
-            #[cfg(feature = "foreign-nodes")]
-            self.retire_foreign_selection();
-            self.pending.selection = None;
-        }
-        #[cfg(debug_assertions)]
-        for key in self.dirty_leaves.iter().chain(self.dirty_elements.keys()) {
-            if let Some(node) = self.pending.nodes.get(key)
-                && let Some(flags) = self.pending.registry.registered(node.type_index).flags
-                && self.view().type_flags(*key) != flags
-            {
-                return Err(Error::TypeFlagsMismatch(
-                    self.pending.registry.registered(node.type_index).type_name,
-                ));
-            }
-        }
-        Ok(())
+        result.map(|_| ())
     }
     /// Run one node's virtual selection transform in the current mutable update.
     pub fn selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
@@ -206,6 +163,9 @@ impl Transaction<'_> {
         }
         if self.sealed {
             return Err(Error::WriteAfterSetEditorState);
+        }
+        if self.pipeline_continuation.is_some() {
+            return Err(Error::Invariant("pipeline work is suspended"));
         }
         if self.transform_iterations > 99 {
             return Err(Error::InfiniteTransforms);
