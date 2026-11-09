@@ -106,6 +106,10 @@ export class EditorSession {
      */
     compatAuditSnapshot(): Uint8Array;
     /**
+     * Apply an ordered native operation list and synchronously normalize its pending state.
+     */
+    compatBatch(request: Uint8Array): Uint8Array;
+    /**
      * Open unpublished edits on this session's actual core.
      */
     compatBegin(tags: Uint8Array): void;
@@ -121,6 +125,10 @@ export class EditorSession {
      * Execute one typed operation in the live update or an exact historical read.
      */
     compatCall(request: Uint8Array): Uint8Array;
+    /**
+     * Drain exact retain/release metadata without opening an editor update.
+     */
+    compatCaptureLeases(input: Uint8Array): void;
     /**
      * Admit the staged update through the normal readiness, access and WAL path.
      */
@@ -165,6 +173,10 @@ export class EditorSession {
      * Capture the exact retained publication, including version zero.
      */
     compatSnapshot(version: bigint): Uint8Array;
+    /**
+     * Drain exact external commit receipts; repeated drains return no commits.
+     */
+    compatTakePublications(): Uint8Array;
     /**
      * Full IME primitive input, preserving UTF-16 offsets and composition data.
      */
@@ -437,10 +449,12 @@ export interface InitOutput {
     readonly editorsession_clipboard: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_command: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_compatAuditSnapshot: (a: number) => [number, number, number, number];
+    readonly editorsession_compatBatch: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatBegin: (a: number, b: number, c: number) => [number, number];
     readonly editorsession_compatBeginCompact: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatBindInstance: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCall: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatCaptureLeases: (a: number, b: number, c: number) => [number, number];
     readonly editorsession_compatCommit: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCurrentVersion: (a: number) => [bigint, number, number];
     readonly editorsession_compatDiscard: (a: number) => [number, number];
@@ -452,6 +466,7 @@ export interface InitOutput {
     readonly editorsession_compatRetainSelection: (a: number, b: number, c: number) => [number, number];
     readonly editorsession_compatSetSelection: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatSnapshot: (a: number, b: bigint) => [number, number, number, number];
+    readonly editorsession_compatTakePublications: (a: number) => [number, number, number, number];
     readonly editorsession_composition: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_compositionEnd: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
