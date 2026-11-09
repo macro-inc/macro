@@ -40,23 +40,30 @@ ends the trial and charges Max immediately.
 
 The last step, after the plan is chosen (Continue with Free, a paid checkout
 return, or a licensed team member), is **Put your busywork on autopilot.**
-Leaving the tools step starts the scheduler picking routines from the inbox
-and tools connected so far (`POST /scheduled-actions/suggestions/refresh`,
-with `enable-routine-suggestions` and `enable-routine-code-steps` on).
+It shows with `enable-routine-suggestions` and `enable-routine-code-steps` on.
+As soon as an inbox is connected during onboarding, AI starts suggesting
+routines (`POST /scheduled-actions/suggestions/generate?timezone=<zone>`,
+once per person).
 
-- It lists only catalog routines, grouped by area, each as a Routines page
-  template card (area icon, name, trigger → step line) with a switch in the
-  corner, its sentence with editable knobs, and why AI picked it. Requests the drafter
-  would write wait for the sidebars.
-- Switched on to start: only routines the catalog marks safe by default
-  (code that changes the person's own mail and tasks), most likely kept
-  first, every one AI is confident in and at least two, at most five.
-  Routines that post or change what others see start off, however sure AI
-  is.
+- AI's suggestions show as they arrive (the list is polled every 2 s while
+  its status is `generating`), under **Studying your workspace…** and then
+  **Finding more routines for you…**. After about 30 s, or once AI is done,
+  the list settles on whatever is there, filled with Macro's templates; with
+  none from AI, templates only. With no inbox, templates show at once.
+- Rows are grouped by area: area icon, name, what it does, when it runs, and
+  a byline, **For you · <reason>** for AI's or **Template from Macro**, with a
+  switch. Opening a row lets the person rename it and choose **Show each run
+  in Home** before it is created.
+- Switched on to start: only catalog picks the scheduler marks on by default,
+  at most two. Routines AI drafted always start off.
 - **Turn on N routines** creates the ones left on, each recorded as saved
-  from its suggestion; a tagging routine first provisions the personal tag
-  set. One that fails stays with an error and the button retries only it.
-  **Continue to workspace** (nothing on) or **Skip** leaves without creating
-  any. Back is gone here: the plan is settled.
-- While nothing is picked yet it says **Picking routines from your inbox and
-  tools…**; with no suggestions it says so and Continue leaves.
+  from its suggestion (`suggestion_id`); a tagging routine first provisions
+  the personal tag set. One that fails stays with an error and the button
+  retries only it. **Continue to workspace** (nothing on) or **Skip** leaves
+  without creating any. Back is gone here: the plan is settled.
+- Analytics: `onboarding_v4_routines_shown` when the list settles (time to
+  AI's first suggestion, counts, fallback) and `onboarding_v4_routines` on
+  leaving. The step's wait is traced as the `onboarding.routines` flow.
+- Backend-free check: `bunx playwright test --config
+  src/features/onboarding/browser-test/playwright.config.ts
+  routines.browser.e2e.ts` (from `apps/web`).
