@@ -841,4 +841,76 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'keeps all people accessible through View all and keyboard navigation',
     ],
   },
+  // Cleanup uses an in-memory WAL and supplied removal results. Layout
+  // geometry/observers and margin Thread content are boundary fixtures;
+  // these rows do not prove native geometry or full thread UI.
+  {
+    source: 'apps/web/src/features/block-md/comments/commentMarkCleanup.ts',
+    anchor: 'export function createCommentMarkCleanup(',
+    testFile:
+      'apps/web/src/features/block-md/comments/commentMarkCleanup.test.ts',
+    cases: [
+      'keeps failed removals for a new drain without retrying successful entries',
+      'retains intents when lookup or transport throws',
+      'continues after a rejected lookup without losing its cleanup intent',
+      'drains an intent appended while another removal is pending',
+      'retries a reconnect that arrives during a failed attempt, throws: false',
+      'retries a reconnect that arrives during a failed attempt, throws: true',
+    ],
+  },
+  {
+    source: 'apps/web/src/features/block-md/comments/commentLayout.ts',
+    anchor: 'export function createCommentLayout()',
+    testFile: 'apps/web/src/features/block-md/comments/commentLayout.test.tsx',
+    cases: [
+      'comment layout during document reflow keeps comments beside their text through consecutive margin resize events',
+      'comment layout during document reflow keeps comments beside their text through consecutive editor resize events',
+      'comment layout during document reflow keeps comments beside their text through consecutive internal layout shift events',
+    ],
+  },
+  {
+    source: 'apps/web/src/features/block-md/comments/commentLayout.ts',
+    anchor: 'export function stackMarginThreads<T>(',
+    testFile: 'apps/web/src/features/block-md/comments/commentLayout.test.tsx',
+    cases: [
+      'stacking margin threads keeps each thread beside its mark when they fit',
+      'stacking margin threads pushes the threads below a tall active thread past its end',
+      'stacking margin threads never stacks a thread above the top of a short page',
+      'stacking margin threads moves the active thread up only to end inside the page',
+    ],
+  },
+  {
+    source: 'apps/web/src/features/block-md/comments/CommentMargin.tsx',
+    anchor: '    const onPointerDown = (e: PointerEvent) => {',
+    testFile: 'apps/web/src/features/block-md/comments/CommentMargin.test.tsx',
+    cases: [
+      'CommentMargin closes a thread opened from its card when a press lands outside the comments',
+      'CommentMargin keeps the thread open for presses on the editor, the card, and the layers it opened',
+      'CommentMargin releases a thread highlighted by the caret when a press lands outside',
+      'CommentMargin leaves a draft comment open',
+    ],
+  },
+  // Native IPC/platform responses and file size metadata are supplied;
+  // these cases do not execute native pasteboard staging or uploads.
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/file-paste/desktopPasteboardFiles.ts',
+    anchor: 'export function shouldStageDesktopPasteFiles(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/file-paste/desktopPasteboardFiles.test.ts',
+    cases: [
+      'desktop pasted files stages only when a desktop paste carries a large file',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/file-paste/desktopPasteboardFiles.ts',
+    anchor: 'export async function stageDesktopPasteFiles(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/file-paste/desktopPasteboardFiles.test.ts',
+    cases: [
+      'desktop pasted files tags pasted files matching the staged pasteboard files',
+      'desktop pasted files falls back to browser files when staging fails',
+    ],
+  },
 ] as const;

@@ -79,7 +79,11 @@ publication, flush and layout boundaries are supplied; they do not prove remote
 delivery, visible thread UI or native draft handoff. Private node-map injection
 and scroll-only focus-named tests are excluded. Mention search mappings likewise
 cover supplied query/cache snapshots, ranking, pagination forwarding and stable
-controller allocation, rather than remote search or service-backed menu UI.
+controller allocation, rather than remote search or service-backed menu UI. Cleanup
+queue cases use in-memory WAL/removal results. Margin layout uses supplied
+geometry/observers and outside-press cases mock Thread content. Pasteboard
+cases supply IPC/platform responses and file metadata; they do not execute
+native staging/uploads or establish the exact file-size threshold.
 
 ## Static browser fixture
 
