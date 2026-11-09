@@ -202,7 +202,10 @@ const call = {
   shareScreenAudio: shareAudio,
   setShareScreenAudio: setShareAudio,
   audioInputDevices: () => [],
-  audioOutputDevices: () => [],
+  audioOutputDevices: () =>
+    params.has('output')
+      ? [{ deviceId: 'default', label: 'Default output', kind: 'audiooutput' }]
+      : [],
   videoInputDevices: () => [],
   activeAudioInputDeviceId: () => '',
   activeAudioOutputDeviceId: () => '',

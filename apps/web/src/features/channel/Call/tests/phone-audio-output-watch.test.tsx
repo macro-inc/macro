@@ -13,6 +13,7 @@ vi.mock('../CallContext', () => ({
   useCallContextOptional: () => ({ activeCallId: () => mocks.callId() }),
 }));
 vi.mock('../native-call-platform', () => ({ isNativeCallEnabled: () => true }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/util/platform', async (original) => ({
   ...(await original<object>()),
   isPlatform: (platform: string) => platform === 'ios',

@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { isNativeCallEnabled } from '@channel/Call/native-call-platform';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import Speaker from '@icon/system/regular/speaker-high.svg';
@@ -49,6 +50,14 @@ function watchNativeAudioOutput() {
 
 /** The native session owns its output; browser media uses the CallContext device picker. */
 export function PhoneAudioOutput() {
+  return (
+    <Show when={isMobile()}>
+      <PhoneAudioOutputControl />
+    </Show>
+  );
+}
+
+function PhoneAudioOutputControl() {
   const call = useCallContextOptional();
   const native =
     isNativeCallEnabled() && (isPlatform('ios') || isPlatform('android'));
