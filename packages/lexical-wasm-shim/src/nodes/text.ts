@@ -97,7 +97,7 @@ export class TextNode extends LexicalNode {
     return this.getLatest().__text;
   }
   getFormatFlags(type: TextFormatType, alignWithFormat: number | null): number {
-    return toggleTextFormat(this.getFormat(), type, alignWithFormat);
+    return toggleTextFormat(this.getLatest().__format, type, alignWithFormat);
   }
   hasFormat(type: TextFormatType): boolean {
     return (this.getFormat() & textFormats[type]) !== 0;

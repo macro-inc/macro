@@ -100,7 +100,11 @@ export class ElementNode extends LexicalNode {
     return (this.getTextFormat() & textFormats[type]) !== 0;
   }
   getFormatFlags(type: TextFormatType, alignWithFormat: number | null): number {
-    return toggleTextFormat(this.getTextFormat(), type, alignWithFormat);
+    return toggleTextFormat(
+      this.getLatest().__textFormat,
+      type,
+      alignWithFormat
+    );
   }
   getChildren<T extends LexicalNode>(): T[] {
     const children: T[] = [];
@@ -384,13 +388,15 @@ export class ElementNode extends LexicalNode {
       indent: this.getIndent(),
       ...super.exportJSON(),
     };
+    const textFormat = this.getTextFormat();
+    const textStyle = this.getTextStyle();
     if (
-      (this.getTextFormat() !== 0 || this.getTextStyle() !== '') &&
+      (textFormat !== 0 || textStyle !== '') &&
       !isRootOrShadowRoot(this) &&
       !this.getChildren().some((node) => node instanceof TextNode)
     ) {
-      if (this.getTextFormat() !== 0) json.textFormat = this.getTextFormat();
-      if (this.getTextStyle() !== '') json.textStyle = this.getTextStyle();
+      if (textFormat !== 0) json.textFormat = textFormat;
+      if (textStyle !== '') json.textStyle = textStyle;
     }
     return json;
   }
