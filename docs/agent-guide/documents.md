@@ -3163,8 +3163,9 @@ never reaches the page, the frame never holds a credential and never sends
 code: a run names a program of the build the page shows, and the server
 refuses it with "this page changed" if the saved document has changed since,
 after which the preview fetches the new build. A run lasts at most 30 seconds,
-and its writes stand as the user's own, with no agent attribution. npm imports
-aren't available yet.
+and its writes stand as the user's own, with no agent attribution. Neither
+programs nor the client script can import packages (`npm:` or remote modules):
+write plain TypeScript against the DOM and the SDK.
 
 `on(events, handler, { ids })` delivers the viewer's live entity events (the
 same names as the SDK's `macro.events`, such as `document.created`,

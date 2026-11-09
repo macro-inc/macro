@@ -1,7 +1,7 @@
 # Programs in HTML previews
 
 Status: on `dev/html-code-mode`. The server builds stored HTML documents
-(no npm yet) and runs their programs by id, with live events. Consent, the
+and runs their programs by id, with live events. Consent, the
 strict CSP, a separate execution pool and publishing are not built. The agent
 guide's "Program blocks in HTML previews" describes what ships.
 
@@ -73,17 +73,20 @@ program up and get the outcome back.
   Server programs are `<script type="text/macro" id="…" lang="ts">` blocks
   whose default export takes `(args, { macro })`. Client code is a
   `<script type="module" lang="ts">` that imports its programs, typed, from
-  `macro:programs` and `on` from `macro:client`. Both sides may import
-  `npm:` packages. The backend extracts the blocks into virtual files,
+  `macro:programs` and `on` from `macro:client`. Neither side may import
+  packages: no `npm:`, no remote modules. That keeps the build offline and
+  every page's code in the document, at the cost of libraries and JSX
+  frameworks; pages use TypeScript and the DOM. The backend extracts the blocks into virtual files,
   runs `deno check` against the SDK declarations, and runs `deno bundle` for
   the client and for each program. It hashes each bundled program and records
   the SDK operations it calls. The server computes this manifest, so it is
   trusted, not declared by the author. The build runs in `code_execution`'s
-  Deno sandbox, with npm reached through a cached registry proxy and no
-  install scripts. The stored document stays the source that agents and
+  Deno sandbox with no network. If packages are added later, they come
+  through a caching registry proxy, at exact versions whose integrity hashes
+  join the manifest. The stored document stays the source that agents and
   people edit. The built HTML is derived content keyed by the source's hash,
-  and the preview loads it. React and Preact JSX work; Solid, Svelte,
-  Tailwind and HMR need Vite and are out until required. The archived plugin
+  and the preview loads it. Solid, Svelte, Tailwind and HMR would need Vite
+  and are out. The archived plugin
   compiler (`archive/plugin-platform-2026-08`, `packages/plugin-cli`) has
   the client/server import policy and per-program hashing to port.
 - **Publishing.** Agents call one SDK method that uploads and builds, and
@@ -139,15 +142,14 @@ if the run is cancelled.
 
 ## Left to build
 
-1. npm imports in the build, through a registry proxy.
-2. The record of SDK operations each program calls, for consent and the gate.
-3. The strict CSP on the built page.
-4. Manifest consent: the per-file prompt, the saved approval, and the
+1. The record of SDK operations each program calls, for consent and the gate.
+2. The strict CSP on the built page.
+3. Manifest consent: the per-file prompt, the saved approval, and the
    runtime gate on manifest operations.
-5. The publish SDK method, which returns diagnostics and replaces an existing
+4. The publish SDK method, which returns diagnostics and replaces an existing
    document in place.
-6. A `Limits` profile with a per-viewer queue, instead of the shared public
+5. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-7. Show a failed run in the preview chrome (a failed build already shows).
-8. Optional: `program.live(args, render)`, which re-runs a program when an
+6. Show a failed run in the preview chrome (a failed build already shows).
+7. Optional: `program.live(args, render)`, which re-runs a program when an
    event touches an entity type its operations read.
