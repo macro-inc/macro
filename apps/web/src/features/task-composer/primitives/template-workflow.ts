@@ -4,7 +4,6 @@ import {
 } from '@app/features/task-templates/core/template';
 import { t } from '@app/lib/i18n';
 import type { TaskComposerDraft } from '@block-md/util/taskComposerStorage';
-import { TemplateCreationConflict } from '@block-md/util/taskComposerSubmissions';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyDefinitionDomain } from '@property/types';
@@ -134,7 +133,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
         contents,
       };
       if (request && JSON.stringify(request) !== JSON.stringify(next)) {
-        options.setError(new TemplateCreationConflict().message);
+        options.setError(t('create.taskTemplateCreationConflict'));
         return;
       }
       request = next;

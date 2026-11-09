@@ -373,6 +373,8 @@ export default {
   taskTemplateDeleteBody:
     'This removes the template for everyone who can use it. Existing tasks are unchanged.',
   taskTemplateDelete: 'Delete template',
+  taskTemplateCreationConflict:
+    'Template creation input changed. Restore the original draft or start a new template after checking whether the first save succeeded.',
   taskTemplateSaveError: 'Could not save the template. Try again.',
   taskTemplateDeleteError: 'Could not delete the template. Try again.',
   taskTemplateConflict:
