@@ -66,3 +66,8 @@ fn bytes<'a, T: Record<'a>>(value: &T) -> Result<Vec<u8>, BoundaryError> {
 }
 #[cfg(test)]
 mod test;
+
+/// Generated production compatibility-call envelopes.
+#[rustfmt::skip]
+#[expect(missing_docs, reason = "Bebop owns generated compatibility declarations")]
+pub mod compatibility_generated;

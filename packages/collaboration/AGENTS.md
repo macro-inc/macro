@@ -57,3 +57,4 @@ The browser Close regression loads the normal source-built EditorSession WASM wi
 Direct/durable/chatter and real SessionExecutor/storage/lease. Check revocation both
 before/after/reentrant Start and cancellation without Start, actual MAX request
 reply, disposal, Close idempotency and unchanged DOM. No DOM view is allocated.
+Generate session/compatibility.generated.ts from document_session_wasm/abi/compatibility.bop with generate-compatibility-schema.ts; preserve compiler output verbatim and keep typed rendering separate from the flat Diff ABI.

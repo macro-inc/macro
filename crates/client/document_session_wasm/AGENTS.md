@@ -73,3 +73,5 @@ Preserve keystroke work counters when changing code-generation or post-processin
 Set TMPDIR for cargo. Never edit generated files by hand. Keep package registration,
 preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/justfile.
 Treat 1.6 MB Brotli as a soft ceiling: retain measured speed gains, preload without blocking paint, and gate startup/composer readiness against the upstream engine.
+
+Generate compatibility_generated.rs and collaboration/session/compatibility.generated.ts from abi/compatibility.bop plus the shared foreign-host schemas using generate-compatibility-schema.ts. Compatibility requests use exact captured record references and separate typed render metadata; preserve the session and flat Diff ABIs. These envelopes do not themselves provide a working production initializer.

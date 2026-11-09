@@ -1,0 +1,1 @@
+{"include":["compatibility.bop","foreign-host.bop","foreign-native-fields.bop"],"generators":{"rust":{"outFile":"../src/compatibility_generated.rs"},"ts":{"outFile":"../../../../packages/collaboration/src/session/compatibility.generated.ts"}}}
