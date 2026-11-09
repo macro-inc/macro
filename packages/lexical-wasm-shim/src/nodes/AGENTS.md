@@ -66,3 +66,8 @@ until external engine identity proof is bound.
 Keep buildImportMap as the pinned tag-specific identity API. Its sole runtime
 association calls central widenTagConversionMap (LexicalNode.ts:365–368); keep
 the public map callbacks typed to actual nodes and do not wrap their getters.
+
+Use predicates.ts for pinned actual-class guards. Preserve the generic Decorator
+predicate's exact instanceof body. Extract only canonical symbol keys for inline
+and shadow-root phantoms, mapping their values over actual classes; keep non-never
+key identity controls so a collapsed union cannot pass vacuously.
