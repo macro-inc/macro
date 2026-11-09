@@ -323,3 +323,39 @@ fn empty_current_peer_disables_transforms_and_bulk_ownership_but_empty_id_regene
     })?;
     Ok(())
 }
+
+#[test]
+fn imported_code_keeps_the_canonical_id_key_and_rejects_distinct_same_name_keys() -> Result<()> {
+    static OTHER_OPTION_ID: StateKey<Option<String>> = StateKey::new("id", |value| {
+        value.and_then(serde_json::Value::as_str).map(str::to_owned)
+    });
+    static OTHER_STRING_ID: StateKey<String> = StateKey::new("id", |value| {
+        value
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    });
+    let state = serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[{
+        "type":"custom-code","version":1,"language":"javascript","$":{"id":"persisted-code"},
+        "children":[{"type":"text","version":1,"text":"const persistenceCode = 1;"}]
+    }]}}))?;
+    let editor = export_builder().initial_state(state).build()?;
+    let view = editor.state().view();
+    let code = view.first_child(NodeKey::ROOT).expect("code");
+    assert_eq!(
+        view.get_state(code, &ID_STATE)?,
+        Some("persisted-code".into())
+    );
+    assert!(matches!(
+        view.get_state(code, &OTHER_OPTION_ID),
+        Err(lexical_model::Error::StateKeyCollision { key: "id" })
+    ));
+    assert!(matches!(
+        view.get_state(code, &OTHER_STRING_ID),
+        Err(lexical_model::Error::StateKeyCollision { key: "id" })
+    ));
+    let saved = editor.state().to_json()?;
+    let loaded = export_builder().initial_state(saved.clone()).build()?;
+    assert_eq!(loaded.state().to_json()?, saved);
+    Ok(())
+}

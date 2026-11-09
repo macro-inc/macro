@@ -1,5 +1,5 @@
 //! Application registry composition; clocks and entropy enter through session inputs.
-use crate::{EditorConfig, with_session_plugins};
+use crate::{EditorConfig, with_session_plugins_with_id_state};
 use macro_document_model::{NodeClock, NodeHost, NodeRandom};
 use rand_chacha::{
     ChaCha20Rng,
@@ -57,7 +57,7 @@ pub fn application_editor_config(
                 bytes
             })))
             .extension_state(NodeHost::default());
-        with_session_plugins(builder, peer)
+        with_session_plugins_with_id_state(builder, peer, &macro_document_model::node_ids::ID_STATE)
     });
     config
 }

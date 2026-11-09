@@ -899,3 +899,5 @@ fn application_host_request_keeps_its_typed_payload_in_the_existing_effect_envel
         serde_json::json!({"request":37})
     );
 }
+
+mod code_persistence;

@@ -95,6 +95,63 @@ fn initial_state_rejects_a_different_session_key_named_id() {
     );
 }
 
+#[cfg(feature = "application")]
+#[test]
+fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
+    let now = Now {
+        mono: doc_sync_core::Millis(0),
+        wall: doc_sync_core::UnixMillis(0),
+    };
+    let config = crate::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(std::sync::atomic::AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut writer = EditorSurface::new(config.clone(), 7, now).unwrap();
+    let doc = lexical_loro::new_doc(7).unwrap();
+    writer
+        .init(&doc, now, Access::Edit, &mut Vec::new())
+        .unwrap();
+    let mut state = writer.state().to_json().unwrap();
+    state.root.insert(
+        "children".into(),
+        serde_json::json!([
+            {"type":"custom-code","language":"rust","$":{"id":"application-code"},"children":[
+                {"type":"text","text":"let durable = \"😀\";","$":{"id":"application-leaf"}}
+            ]},
+            {"type":"paragraph","$":{"id":"application-end"},"children":[]}
+        ]),
+    );
+    writer
+        .apply(
+            &doc,
+            Input::SetState {
+                state,
+                tags: TagSet::default(),
+            },
+            now,
+            Access::Edit,
+            &mut Vec::new(),
+        )
+        .unwrap();
+    let expected = writer.state().to_json().unwrap();
+    assert_eq!(expected.root["children"][0]["$"]["id"], "application-code");
+    assert_eq!(
+        expected.root["children"][0]["children"][0]["$"]["id"],
+        "application-leaf"
+    );
+    let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+    drop(writer);
+    drop(doc);
+    let restored = lexical_loro::new_doc(8).unwrap();
+    restored.import(&snapshot).unwrap();
+    let mut reader = EditorSurface::new(config, 8, now).unwrap();
+    reader
+        .init(&restored, now, Access::Edit, &mut Vec::new())
+        .unwrap();
+    assert_eq!(reader.state().to_json().unwrap(), expected);
+}
+
 #[test]
 fn standalone_key_raw_import_keeps_empty_missing_and_nonstring_ids_omitted() {
     for fields in [
