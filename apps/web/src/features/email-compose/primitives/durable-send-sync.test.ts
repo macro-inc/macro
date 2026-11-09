@@ -265,3 +265,75 @@ it.each(['standalone', 'reply'] as const)(
     }
   }
 );
+
+/** An unconfirmed draft with a forwarded file saves through the server path before sending. */
+function mountForwardedDraft(context: EmailComposeContext) {
+  const root = mountEmailComposer(context, undefined, {
+    draft: message('draft', {
+      is_draft: true,
+      attachments_forwarded: [
+        { attachment_id: 'forwarded', filename: 'a.pdf' },
+      ],
+    }),
+    draftPersistence: 'queued',
+  });
+  return {
+    ...root,
+    async send() {
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+    },
+  };
+}
+
+it('refuses a durable send whose local save fails, so Undo keeps the newest text', async () => {
+  const { context } = durableContext();
+  const save = context.drafts.saveLocalDraft!;
+  const root = mountForwardedDraft(context);
+  try {
+    root.edit('Saved on this device');
+    await vi.advanceTimersByTimeAsync(0);
+    context.drafts.saveLocalDraft = vi.fn(async () => {
+      throw new Error('Storage unavailable');
+    });
+    root.edit('Not saved on this device');
+
+    await root.send();
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(refusals(context)).toEqual([
+      ['Failed to send email', { subtext: 'Draft not saved' }],
+    ]);
+
+    context.drafts.saveLocalDraft = save;
+    await root.send();
+    expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    expect(sentBody(context)).toContain('Not saved on this device');
+  } finally {
+    root.dispose();
+  }
+});
+
+it('sends a durable draft whose server save fails after its local save succeeds', async () => {
+  const { context, local } = durableContext();
+  vi.mocked(context.drafts.saveDraft).mockRejectedValue(
+    new Error('Draft save unavailable')
+  );
+  const root = mountForwardedDraft(context);
+  try {
+    root.edit('Saved on this device only');
+    await root.send();
+    expect(refusals(context)).toEqual([]);
+    expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedLocalVersion: {
+          generation: 'generation',
+          revision: local()!.revision,
+        },
+      })
+    );
+    expect(sentBody(context)).toContain('Saved on this device only');
+  } finally {
+    root.dispose();
+  }
+});
