@@ -33,12 +33,11 @@ export type TaskTemplateEditorDraft = {
 };
 
 export function templateSubmitKind(
-  selection: TaskTemplateSelection,
-  title: string
-): 'task' | 'template' | 'task-and-template' {
-  if (selection.kind === 'editing') return 'template';
-  if (selection.kind !== 'new') return 'task';
-  return title.trim() ? 'task-and-template' : 'template';
+  selection: TaskTemplateSelection
+): 'task' | 'template' {
+  return selection.kind === 'new' || selection.kind === 'editing'
+    ? 'template'
+    : 'task';
 }
 
 /** Build from the original task defaults, preserving only current contextual values when supplied. */

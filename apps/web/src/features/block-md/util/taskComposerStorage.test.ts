@@ -2,9 +2,21 @@
  * @vitest-environment jsdom
  */
 
-import { isTemplateStateDirty } from '@app/features/task-composer/core/template-state';
-import { createRoot } from 'solid-js';
-import { beforeEach, describe, expect, it } from 'vitest';
+import type {
+  SavedTaskTemplate,
+  TaskTemplateSelection,
+} from '@app/features/task-composer/core/template-selection';
+import {
+  areTemplateFieldsDirty,
+  isTemplateStateDirty,
+  restoreTemplateFields,
+} from '@app/features/task-composer/core/template-state';
+import type { TaskComposerHost } from '@app/features/task-composer/primitives/task-composer';
+import { createTemplateWorkflow } from '@app/features/task-composer/primitives/template-workflow';
+import type { TaskTemplateContents } from '@app/features/task-templates/core/template';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { createRoot, createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearTaskComposerDraft,
   createTaskComposerSharing,
@@ -284,4 +296,373 @@ it('restores the template baseline independently of edited draft values', () => 
       olderDraft.templateBaseline
     )
   ).toBe(true);
+});
+
+// The injected ports keep workflow tests independent of the app shell and editor UI.
+function createTemplateSession() {
+  return createRoot((dispose) => {
+    const [selection, setSelection] = createSignal<TaskTemplateSelection>({
+      kind: 'none',
+    });
+    const [contents, setContents] = createSignal<TaskTemplateContents>({
+      propertyIds: ['priority'],
+      propertyDefaults: { priority: { valueType: 'STRING', value: 'High' } },
+      descriptionMarkdown: 'Task-specific prose',
+    });
+    const [baseline, setBaseline] = createSignal<TaskTemplateContents>(
+      contents()
+    );
+    const [viewer, setViewer] = createSignal<string | undefined>('viewer');
+    const [active, setActive] = createSignal(true);
+    const create = vi.fn<TaskComposerHost['createTemplate']>(
+      async (_viewer, input, values) => ({
+        id: input.creationId,
+        name: input.name,
+        teamId: input.teamId,
+        revision: 1,
+        contents: values,
+      })
+    );
+    const update = vi.fn<TaskComposerHost['updateTemplate']>(
+      async (_viewer, input, values) => ({
+        ...input.template,
+        revision: input.template.revision + 1,
+        contents: values,
+      })
+    );
+    const restore = vi.fn((draft: Omit<TaskComposerDraft, 'timestamp'>) => {
+      setSelection(draft.templateSelection ?? { kind: 'none' });
+      setContents({
+        propertyIds: draft.visiblePropertyIds ?? [],
+        propertyDefaults: draft.propertyValues,
+        descriptionMarkdown: draft.content,
+      });
+    });
+    const apply = vi.fn((saved: SavedTaskTemplate) => {
+      if (workflow.pending()) return;
+      setSelection({ kind: 'saved', template: saved });
+    });
+    const error = vi.fn();
+    const workflow = createTemplateWorkflow({
+      userId: viewer,
+      draftOwner: 'viewer',
+      canChange: () => !workflow.pending(),
+      sessionActive: active,
+      teamId: () => undefined,
+      definitions: () => [
+        {
+          id: 'priority',
+          displayName: 'Priority',
+          valueType: 'STRING',
+          isMultiSelect: false,
+          isMetadata: false,
+          isSystem: true,
+          owner: { scope: 'system' },
+          createdAt: new Date(0),
+          updatedAt: new Date(0),
+        },
+      ],
+      definitionsReady: () => true,
+      baseline,
+      setBaseline,
+      selection,
+      setSelection,
+      captureTask: () => ({
+        title: 'Keep this task title',
+        content: contents().descriptionMarkdown,
+        visiblePropertyIds: contents().propertyIds,
+        propertyValues: contents().propertyDefaults,
+        templateSelection: selection(),
+        editorState: {
+          root: {
+            type: 'root' as const,
+            version: 1,
+            children: [
+              {
+                type: 'image',
+                version: 1,
+                src: 'sfs://draft-image',
+                width: 240,
+                height: 160,
+              },
+            ],
+            direction: null,
+            format: '' as const,
+            indent: 0,
+          },
+        },
+      }),
+      restoreTask: restore,
+      contents,
+      replaceContents: setContents,
+      stripAttachments: () => {},
+      applyTemplate: apply,
+      persist: () => saveTaskComposerDraft(workflow.snapshot()),
+      setError: error,
+      createTemplate: create,
+      updateTemplate: update,
+    });
+    return {
+      dispose,
+      workflow,
+      contents,
+      setContents,
+      selection,
+      setSelection,
+      baseline,
+      setViewer,
+      setActive,
+      create,
+      update,
+      restore,
+      apply,
+      error,
+    };
+  });
+}
+
+it('keeps the task draft underneath template edits and restores it on cancel', () => {
+  const session = createTemplateSession();
+  const original = session.workflow.snapshot();
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  session.setContents({
+    propertyIds: [],
+    propertyDefaults: {},
+    descriptionMarkdown: 'Template-only edits',
+  });
+  const snapshot = session.workflow.snapshot();
+  expect(snapshot.title).toBe(original.title);
+  expect(snapshot.content).toBe(original.content);
+  expect(snapshot.propertyValues).toEqual(original.propertyValues);
+  expect(snapshot.editorState).toEqual(original.editorState);
+  expect(snapshot.templateEditor?.contents.descriptionMarkdown).toBe(
+    'Template-only edits'
+  );
+  saveTaskComposerDraft(snapshot);
+  expect(
+    loadTaskComposerDraft()?.templateEditor?.contents.descriptionMarkdown
+  ).toBe('Template-only edits');
+  session.workflow.cancelTemplateEdit();
+  expect(session.workflow.snapshot()).toEqual(original);
+  expect(session.create).not.toHaveBeenCalled();
+  session.dispose();
+});
+
+it('saves only the template and restores the task before applying the saved selection', async () => {
+  const session = createTemplateSession();
+  const original = session.workflow.snapshot();
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  await session.workflow.saveTemplate();
+  expect(session.create).toHaveBeenCalledTimes(1);
+  expect(session.restore).toHaveBeenCalledWith(original);
+  expect(session.apply).toHaveBeenCalledWith(
+    expect.objectContaining({ id: '0195dbd0-7b5d-7000-8000-000000000002' }),
+    true
+  );
+  expect(session.workflow.isTemplateMode()).toBe(false);
+  expect(session.selection().kind).toBe('saved');
+  expect(session.workflow.pending()).toBe(false);
+  session.dispose();
+});
+
+it('restores and reuses the admitted creation identity after a lost response', async () => {
+  localStorage.clear();
+  const session = createTemplateSession();
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  session.create.mockRejectedValueOnce(new Error('Response lost'));
+  await session.workflow.saveTemplate();
+  const stored = loadTaskComposerDraft();
+  expect(stored?.templateEditor?.request?.creationId).toBe(
+    '0195dbd0-7b5d-7000-8000-000000000002'
+  );
+  session.dispose();
+  const restored = createTemplateSession();
+  if (!stored?.templateEditor)
+    throw new Error('Template editing session was not stored');
+  restored.workflow.resume(stored.templateEditor);
+  await restored.workflow.saveTemplate();
+  expect(restored.create.mock.calls[0][1].creationId).toBe(
+    '0195dbd0-7b5d-7000-8000-000000000002'
+  );
+  restored.dispose();
+});
+
+it('updates field defaults without copying task-specific description text', async () => {
+  const session = createTemplateSession();
+  session.setSelection({
+    kind: 'saved',
+    template: {
+      id: 'saved',
+      name: 'Reusable',
+      teamId: null,
+      revision: 2,
+      contents: {
+        ...session.contents(),
+        descriptionMarkdown: 'Saved description',
+      },
+    },
+  });
+  session.setContents({
+    ...session.contents(),
+    propertyDefaults: { priority: { valueType: 'STRING', value: 'Low' } },
+  });
+  await session.workflow.updateTemplateFields();
+  expect(session.update.mock.calls[0][2].descriptionMarkdown).toBe(
+    'Saved description'
+  );
+  expect(session.update.mock.calls[0][2].propertyDefaults.priority).toEqual({
+    valueType: 'STRING',
+    value: 'Low',
+  });
+  expect(session.contents().descriptionMarkdown).toBe('Task-specific prose');
+  expect(session.baseline().descriptionMarkdown).toBe('Task-specific prose');
+  session.dispose();
+});
+
+it('does not restore a template save after the acting account changes', async () => {
+  const session = createTemplateSession();
+  const pending = Promise.withResolvers<SavedTaskTemplate>();
+  session.create.mockReturnValueOnce(pending.promise);
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  const saving = session.workflow.saveTemplate();
+  session.setViewer('another-viewer');
+  pending.resolve({
+    id: 'saved',
+    name: 'Reusable',
+    revision: 1,
+    teamId: null,
+    contents: session.contents(),
+  });
+  await saving;
+  expect(session.restore).not.toHaveBeenCalled();
+  expect(session.apply).not.toHaveBeenCalled();
+  session.dispose();
+});
+
+it('marks only changed fields, not task description edits or equivalent blank values', () => {
+  const baseline: TaskTemplateContents = {
+    propertyIds: ['flag', 'empty'],
+    propertyDefaults: { flag: { valueType: 'BOOLEAN', value: false } },
+    descriptionMarkdown: 'Saved description',
+  };
+  expect(
+    areTemplateFieldsDirty(
+      {
+        ...baseline,
+        descriptionMarkdown: 'Task prose',
+        propertyDefaults: {
+          ...baseline.propertyDefaults,
+          empty: { valueType: 'STRING', value: '' },
+        },
+      },
+      baseline
+    )
+  ).toBe(false);
+  expect(
+    areTemplateFieldsDirty(
+      {
+        ...baseline,
+        propertyDefaults: { flag: { valueType: 'BOOLEAN', value: true } },
+      },
+      baseline
+    )
+  ).toBe(true);
+});
+
+it('ignores late saves after logout clears storage before the account signal changes', async () => {
+  localStorage.clear();
+  const session = createTemplateSession();
+  const pending = Promise.withResolvers<SavedTaskTemplate>();
+  session.create.mockReturnValueOnce(pending.promise);
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  const saving = session.workflow.saveTemplate();
+  session.setActive(false);
+  localStorage.clear();
+  pending.resolve({
+    id: 'saved',
+    name: 'Reusable',
+    revision: 1,
+    teamId: null,
+    contents: session.contents(),
+  });
+  await saving;
+  expect(session.restore).not.toHaveBeenCalled();
+  expect(session.apply).not.toHaveBeenCalled();
+  expect(localStorage.length).toBe(0);
+  session.dispose();
+});
+
+it('resets edited defaults while retaining a Source field added after template application', () => {
+  const baseline: TaskTemplateContents = {
+    propertyIds: ['priority'],
+    propertyDefaults: { priority: { valueType: 'STRING', value: 'High' } },
+    descriptionMarkdown: 'Saved description',
+  };
+  const current: TaskTemplateContents = {
+    propertyIds: ['priority', SYSTEM_PROPERTY_IDS.SOURCE],
+    propertyDefaults: {
+      priority: { valueType: 'STRING', value: 'Low' },
+      [SYSTEM_PROPERTY_IDS.SOURCE]: {
+        valueType: 'ENTITY',
+        refs: [
+          {
+            entity_type: 'CHANNEL',
+            entity_id: 'channel',
+            specific_message_id: '0195dbd0-7b5d-7000-8000-000000000003',
+          },
+        ],
+      },
+    },
+    descriptionMarkdown: 'Task-specific prose',
+  };
+  const reset = restoreTemplateFields(current, baseline);
+  expect(reset.propertyIds).toContain(SYSTEM_PROPERTY_IDS.SOURCE);
+  expect(reset.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE]).toEqual(
+    current.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE]
+  );
+  expect(reset.propertyDefaults.priority).toEqual(
+    baseline.propertyDefaults.priority
+  );
+  expect(reset.descriptionMarkdown).toBe('Task-specific prose');
+  expect(areTemplateFieldsDirty(reset, baseline)).toBe(false);
 });

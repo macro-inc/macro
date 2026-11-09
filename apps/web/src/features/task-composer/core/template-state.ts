@@ -1,4 +1,7 @@
-import type { TaskTemplateContents } from '@app/features/task-templates/core/template';
+import {
+  captureTaskTemplate,
+  type TaskTemplateContents,
+} from '@app/features/task-templates/core/template';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskTemplateSelection } from './template-selection';
 import type { ComposeTaskProps } from './types';
@@ -37,6 +40,51 @@ export function isTemplateStateDirty(
       JSON.stringify(current.propertyDefaults[id]) !==
       JSON.stringify(baseline.propertyDefaults[id])
   );
+}
+
+/** Description and title edits never mark reusable field defaults as changed. */
+export function areTemplateFieldsDirty(
+  current: TaskTemplateContents,
+  baseline: TaskTemplateContents | undefined
+): boolean {
+  if (!baseline) return true;
+  const available = new Set([...current.propertyIds, ...baseline.propertyIds]);
+  const excluded = new Set([SYSTEM_PROPERTY_IDS.SOURCE]);
+  return isTemplateStateDirty(
+    {
+      ...captureTaskTemplate(current, available, excluded),
+      propertyIds: current.propertyIds.filter(
+        (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
+      ),
+      descriptionMarkdown: '',
+    },
+    {
+      ...captureTaskTemplate(baseline, available, excluded),
+      propertyIds: baseline.propertyIds.filter(
+        (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
+      ),
+      descriptionMarkdown: '',
+    }
+  );
+}
+/** Reset reusable fields without discarding contextual Source or task prose. */
+export function restoreTemplateFields(
+  current: TaskTemplateContents,
+  baseline: TaskTemplateContents
+): TaskTemplateContents {
+  const propertyDefaults = structuredClone(baseline.propertyDefaults);
+  const source = current.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE];
+  if (source)
+    propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE] = structuredClone(source);
+  else delete propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE];
+  return {
+    ...current,
+    propertyIds: [
+      ...baseline.propertyIds.filter((id) => id !== SYSTEM_PROPERTY_IDS.SOURCE),
+      ...current.propertyIds.filter((id) => id === SYSTEM_PROPERTY_IDS.SOURCE),
+    ],
+    propertyDefaults,
+  };
 }
 
 /** Preserve values supplied by the launch context instead of template defaults. */

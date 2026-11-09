@@ -4,6 +4,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import {
@@ -17,13 +18,13 @@ import {
   type Accessor,
   type ComponentProps,
   createEffect,
+  createMemo,
   createSignal,
   getOwner,
   onCleanup,
   Show,
 } from 'solid-js';
 import type { TaskComposerController } from '../task-composer/primitives/task-composer';
-import { TemplateDetails } from './components/template-details';
 import { TemplateDropdown, TemplatePicker } from './components/template-picker';
 import { taskTemplateContents } from './queries/template-mapping';
 import {
@@ -54,7 +55,10 @@ function dialogLifetime(props: DialogScope) {
 }
 
 function DeleteTemplateDialog(
-  props: DialogScope & { template: TaskTemplate; onDeleted(): void }
+  props: DialogScope & {
+    template: Pick<TaskTemplate, 'id' | 'name' | 'revision'>;
+    onDeleted(): void;
+  }
 ) {
   const lifetime = dialogLifetime(props);
   const mutation = useDeleteTaskTemplate();
@@ -103,29 +107,15 @@ function DeleteTemplateDialog(
   );
 }
 
-function ReplaceDraftDialog(
-  props: DialogScope & { action: 'edit' | 'switch'; onConfirm(): void }
-) {
+function ReplaceDraftDialog(props: DialogScope & { onConfirm(): void }) {
   const lifetime = dialogLifetime(props);
   return (
     <ConfirmDialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title={
-        props.action === 'edit'
-          ? t('create.taskTemplateReplaceDraftTitle')
-          : t('create.taskTemplateSwitchTitle')
-      }
-      body={
-        props.action === 'edit'
-          ? t('create.taskTemplateReplaceDraftBody')
-          : t('create.taskTemplateSwitchBody')
-      }
-      confirmLabel={
-        props.action === 'edit'
-          ? t('create.taskTemplateEdit')
-          : t('create.taskTemplateSwitch')
-      }
+      title={t('create.taskTemplateSwitchTitle')}
+      body={t('create.taskTemplateSwitchBody')}
+      confirmLabel={t('create.taskTemplateSwitch')}
       onConfirm={() => {
         if (!lifetime.current()) return;
         props.onOpenChange(false);
@@ -157,7 +147,10 @@ export function TaskTemplateControls(props: {
   const query = useTaskTemplatesQuery({
     viewerId,
     teamId: () => team()?.id,
-    enabled: () => dropdownOpen() || picker.isOpen(),
+    enabled: () =>
+      dropdownOpen() ||
+      picker.isOpen() ||
+      props.composer.templateSelection().kind !== 'none',
   });
   const canUse = () =>
     viewerId() === props.composer.draftOwner && !props.composer.isCreating();
@@ -173,12 +166,9 @@ export function TaskTemplateControls(props: {
   };
   const selectedLabel = () => {
     const selection = props.composer.templateSelection();
-    if (selection.kind === 'none') return t('create.taskTemplateNone');
+    if (selection.kind === 'none') return t('create.taskTemplateLabel');
     if (selection.kind === 'new') return t('create.taskTemplateNew');
-    if (selection.kind === 'editing')
-      return t('create.taskTemplateEditingNamed', {
-        name: selection.template.name,
-      });
+    if (selection.kind === 'editing') return t('create.taskTemplateEdit');
     return selection.template.name;
   };
   const editableTemplate = (template: TaskTemplate) => ({
@@ -192,38 +182,58 @@ export function TaskTemplateControls(props: {
     ),
   });
   const editTemplate = (template: TaskTemplate) => {
-    if (!isCurrent()) return;
-    const edit = () => {
-      if (isCurrent()) props.composer.editTemplate(editableTemplate(template));
-    };
-    if (props.composer.hasDraftChanges()) {
-      openDialog(
-        ReplaceDraftDialog,
-        { viewerId, isCurrent, action: 'edit', onConfirm: edit },
-        { owner }
-      );
-    } else {
-      edit();
-    }
+    if (!isCurrent() || !template.canManage) return;
+    props.composer.editTemplate(editableTemplate(template));
+  };
+  const deleteTemplate = (
+    template: Pick<TaskTemplate, 'id' | 'name' | 'revision'>
+  ) => {
+    const selection = props.composer.templateSelection();
+    if (
+      !canUse() ||
+      selection.kind !== 'editing' ||
+      selection.template.id !== template.id
+    )
+      return;
+    const current = () =>
+      canUse() && props.composer.templateSelection() === selection;
+    openDialog(
+      DeleteTemplateDialog,
+      {
+        template,
+        viewerId,
+        isCurrent: current,
+        onDeleted: () => {
+          props.composer.cancelTemplateEdit();
+          const restored = props.composer.templateSelection();
+          if (restored.kind === 'saved' && restored.template.id === template.id)
+            props.composer.detachTemplate();
+        },
+      },
+      { owner }
+    );
+  };
+  const selectedCanManage = () => {
+    const key = selectedKey();
+    return (
+      query.isSuccess &&
+      query.data.some((template) => template.id === key && template.canManage)
+    );
   };
   const switchTemplate = (replace: () => void) => {
     if (!isCurrent()) return;
     if (props.composer.isTemplateDirty()) {
       openDialog(
         ReplaceDraftDialog,
-        { viewerId, isCurrent, action: 'switch', onConfirm: replace },
+        { viewerId, isCurrent, onConfirm: replace },
         { owner }
       );
     } else {
       replace();
     }
   };
-  const pickerProps = () => ({
-    loading: query.isPending,
-    error: query.isError,
-    selectedKey: selectedKey(),
-    selectedLabel: selectedLabel(),
-    items: (query.isSuccess ? query.data : []).map((template) => ({
+  const items = createMemo(() =>
+    (query.isSuccess ? query.data : []).map((template) => ({
       key: template.id,
       label: template.name,
       shared: Boolean(template.teamId),
@@ -250,25 +260,24 @@ export function TaskTemplateControls(props: {
         });
       },
       edit: template.canManage ? () => editTemplate(template) : undefined,
-      remove: template.canManage
-        ? () => {
-            if (!isCurrent()) return;
-            openDialog(
-              DeleteTemplateDialog,
-              {
-                template,
-                viewerId,
-                isCurrent,
-                onDeleted: () => {
-                  if (selectedKey() === template.id)
-                    props.composer.detachTemplate();
-                },
-              },
-              { owner }
-            );
-          }
-        : undefined,
-    })),
+    }))
+  );
+  const pickerProps = () => ({
+    loading: query.isPending,
+    error: query.isError,
+    selectedKey: selectedKey(),
+    selectedLabel: selectedLabel(),
+    teamName: team()?.name ?? t('create.taskTemplateTeam'),
+    dirty: props.composer.areTemplateFieldsDirty(),
+    pending: props.composer.isCreating(),
+    onReset: selectedCanManage()
+      ? props.composer.resetTemplateFields
+      : undefined,
+    onUpdate: selectedCanManage()
+      ? () =>
+          fireAndForget(props.composer.updateTemplateFields(), 'task-templates')
+      : undefined,
+    items: items(),
     onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
     onSelectNone: () => {
       if (props.composer.templateSelection().kind === 'none') return;
@@ -277,17 +286,8 @@ export function TaskTemplateControls(props: {
       });
     },
     onNew: () => {
-      const selection = props.composer.templateSelection();
-      if (!isCurrent() || selection.kind === 'new') return;
-      const start = () => {
-        if (isCurrent()) props.composer.startNewTemplate();
-      };
-      if (
-        selection.kind === 'editing' &&
-        selection.name !== selection.template.name
-      )
-        switchTemplate(start);
-      else start();
+      if (!isCurrent()) return;
+      props.composer.startNewTemplate();
     },
   });
   const openPicker = () => {
@@ -303,61 +303,71 @@ export function TaskTemplateControls(props: {
     setDropdownOpen(open);
   };
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <TemplateDropdown
-          {...pickerProps()}
-          open={dropdownOpen()}
-          onOpenChange={changeDropdownOpen}
-          disabled={!canUse() || !props.composer.definitionsReady()}
-        />
-      }
-    >
-      <Button
-        variant="secondary"
-        size={props.compact ? 'icon-sm' : 'sm'}
-        aria-label={t('create.taskTemplateSelected', { name: selectedLabel() })}
-        tooltip={props.compact ? selectedLabel() : undefined}
-        disabled={!canUse() || !props.composer.definitionsReady()}
-        onClick={openPicker}
+    <div class="min-w-0 flex-1 flex items-center justify-between gap-2">
+      <Show
+        when={props.composer.isTemplateMode()}
+        fallback={
+          <Show
+            when={isTouchDevice()}
+            fallback={
+              <TemplateDropdown
+                {...pickerProps()}
+                open={dropdownOpen()}
+                onOpenChange={changeDropdownOpen}
+                disabled={!canUse() || !props.composer.definitionsReady()}
+              />
+            }
+          >
+            <Button
+              variant="secondary"
+              size={props.compact ? 'icon-sm' : 'sm'}
+              aria-label={t('create.taskTemplateSelected', {
+                name: selectedLabel(),
+              })}
+              disabled={!canUse() || !props.composer.definitionsReady()}
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={openPicker}
+            >
+              <CopyIcon class="size-4 shrink-0" />
+              <Show when={!props.compact}>{selectedLabel()}</Show>
+              <Show when={props.composer.areTemplateFieldsDirty()}>
+                <span class="size-1.5 shrink-0 rounded-full bg-accent" />
+              </Show>
+            </Button>
+          </Show>
+        }
       >
-        <CopyIcon class="size-4 shrink-0" />
-        <Show when={!props.compact}>{selectedLabel()}</Show>
-      </Button>
-    </Show>
-  );
-}
-
-/** New and edited templates reuse the task fields rendered directly below. */
-export function TaskTemplateDetails(props: {
-  composer: TaskComposerController;
-}) {
-  const details = () => {
-    const selection = props.composer.templateSelection();
-    if (selection.kind === 'new')
-      return { name: selection.name, teamId: selection.teamId, editing: false };
-    if (selection.kind === 'editing')
-      return {
-        name: selection.name,
-        teamId: selection.template.teamId,
-        editing: true,
-      };
-    return undefined;
-  };
-  return (
-    <Show when={details()}>
-      {(selection) => (
-        <TemplateDetails
-          name={selection().name}
-          teamId={selection().teamId}
-          team={props.composer.team()}
-          editing={selection().editing}
-          pending={props.composer.isCreating()}
-          onNameChange={props.composer.setTemplateName}
-          onTeamIdChange={props.composer.setTemplateTeamId}
-        />
-      )}
-    </Show>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="min-w-0"
+          disabled={props.composer.isSavingTemplate()}
+          onClick={props.composer.cancelTemplateEdit}
+        >
+          <CaretLeftIcon class="size-4 shrink-0" />
+          <span class="truncate">{selectedLabel()}</span>
+        </Button>
+        <Show
+          when={
+            props.composer.templateSelection().kind === 'editing' &&
+            selectedCanManage()
+          }
+        >
+          <Button
+            variant="secondary"
+            size="xs"
+            disabled={props.composer.isSavingTemplate()}
+            onClick={() => {
+              const selection = props.composer.templateSelection();
+              if (selection.kind === 'editing')
+                deleteTemplate(selection.template);
+            }}
+          >
+            {t('create.taskTemplateDelete')}
+          </Button>
+        </Show>
+      </Show>
+    </div>
   );
 }

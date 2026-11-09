@@ -819,13 +819,16 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
-Desktop places the secondary template selector at the left of the header and
-`Continue editing in split` immediately left of Close. The selector starts at
-`No template` and opens an anchored searchable dropdown, not another dialog.
-`No template` and `New template` appear first above a divider, followed by saved
-personal and team templates. The trigger and selection check show the active choice.
-Empty collections and unmatched searches show a short empty state. ArrowDown from
-search enters the menu; Escape dismisses it. On touch, keep the picker sheet.
+Desktop places the secondary Template selector at the left of the header, then
+Clear Draft, expansion, and Close on the right. Without a selection the trigger
+reads Template; selecting one shows its name. The anchored searchable dropdown
+lists No template with a blank-page icon, then templates grouped under Personal
+and the current team name, then New template at the bottom. A check marks the
+selected row. Managers get an edit action on hover or keyboard focus; touch
+keeps it visible. Empty collections and unmatched searches show a brief empty
+state. ArrowDown from search enters the menu; Escape dismisses it. On touch,
+keep the existing picker sheet.
+
 Browse saved templates without edits: each selection replaces the previous
 fields, defaults, and description instead of combining templates. No template
 restores the starting fields and defaults. Task titles, contextual Source values,
@@ -834,32 +837,40 @@ switching asks for confirmation; Cancel preserves the current draft. Existing
 prefilled task text also requires confirmation before a template replaces it;
 No template restores that text. Clearing a field or removing a property also
 counts as an edit. Reopening a saved draft preserves this distinction. The
-Customer / Contact row participates in template defaults and creation-time title
-pins without adding duplicate property pills.
+Customer / Contact row participates in defaults without duplicate property pills.
 
-New template adds one compact row for template name and personal/team ownership.
-Necessary explanations live behind an info icon: hover or focus on desktop, tap
-on touch. Unsaved name or visibility changes also require confirmation before
-switching. Use the existing property picker and description editor. With no
-task title, `Create template` saves the selected fields, even when their values
-are empty, without creating a task. Adding a task title offers `Create task &
-template`. Source links are not copied into reusable defaults. `Create More`
-changes the normal task action to `Create & add another`; the first combined
-save reads `Create task & template, then another`. Each fresh task reapplies the
-selected template's saved fields, defaults, and description, discarding edits
-specific to the task just submitted. After a new template is saved, it becomes
-the selection for subsequent tasks. If task creation fails after the template
-saves, task recovery keeps the saved template identity rather than saving it again.
+New template opens template mode over the preserved task draft, without a
+replacement confirmation. Its whole Back button, including the New template
+label, returns to that unchanged draft. The template icon and name replace the
+task title line. Draft fields and description become initial defaults, without
+the task title or attachments. The footer's Share with team switch controls new
+template ownership. Edit opens the same mode with the saved name and defaults;
+ownership is a fixed label. Both hide Attach and Create More. Save template
+saves only the template, then returns with its fields applied. Existing task
+prose and attachments stay intact; a blank task description takes the saved
+description. Later template switches still confirm before replacing that prose.
+Cancel restores the task draft, including rich text and attachments. Closing
+and reopening must not replace the task draft with template edits. Source links
+are never reusable defaults.
 
-Edit also uses the same composer. Confirm before replacing an unsaved draft,
-show the existing name, fields, defaults, and description, and keep ownership
-fixed. `Save template` updates the template without creating a task. Deleting a
-template requires confirmation and leaves existing tasks and the current draft
-unchanged; deleting the selected template only detaches its selection. Verify
-personal/team creation, template-only creation, combined creation, no-template
-selection, repeated Create More, editing, cancellation, conflicts, and deletion.
-On touch, entering New template or Edit leaves name-field focus to an explicit
-tap. At narrow desktop widths, the dropdown stays within the viewport.
+Changing an applied template's fields adds an accent dot to its button and
+selected picker row. Task title and description changes alone do not add the
+dot. Keep the existing property pills without per-field dots. Managers get Reset
+and Update template at the bottom of the picker, following saved-view actions.
+Reset restores fields without replacing task description text. Update template
+saves fields immediately but keeps the template's saved description. Conflicts
+leave the current task draft available. Delete template appears as a small
+secondary text action beside Close in template mode. Its existing confirmation
+must leave existing tasks and the preserved draft unchanged; deleting the
+selected template only detaches its selection.
+
+Create More uses Create & add another and reapplies the selected saved defaults
+to each fresh task, discarding task-specific edits while retaining launch
+presets. Verify personal/team creation, draft preservation, field-only update
+and reset, no-template selection, repeated Create More, editing, cancellation,
+conflicts, and deletion. Touch retains the tall composer, with Save in its
+reachable header and Cancel in the footer; name focus requires an explicit tap.
+At narrow desktop widths, the dropdown stays within the viewport.
 
 After creation, the `Task created` toast shows primary `Open` and, on desktop,
 secondary `Open split` to its left, with a close icon instead of Dismiss.

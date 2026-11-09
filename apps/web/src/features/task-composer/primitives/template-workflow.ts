@@ -1,0 +1,269 @@
+import {
+  captureTaskTemplate,
+  type TaskTemplateContents,
+} from '@app/features/task-templates/core/template';
+import { t } from '@app/lib/i18n';
+import type { TaskComposerDraft } from '@block-md/util/taskComposerStorage';
+import { TemplateCreationConflict } from '@block-md/util/taskComposerSubmissions';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { PropertyDefinitionDomain } from '@property/types';
+import { type Accessor, batch, createSignal, onCleanup } from 'solid-js';
+import type {
+  SavedTaskTemplate,
+  TaskTemplateEditorDraft,
+  TaskTemplateSelection,
+} from '../core/template-selection';
+import type { TaskComposerHost } from './task-composer';
+
+type TaskDraft = Omit<TaskComposerDraft, 'timestamp'>;
+type EditorSelection = TaskTemplateEditorDraft['selection'];
+
+type TemplateWorkflowOptions = {
+  userId: Accessor<string | undefined>;
+  draftOwner: string;
+  canChange(): boolean;
+  sessionActive(): boolean;
+  teamId(): string | undefined;
+  definitions(): readonly PropertyDefinitionDomain[];
+  definitionsReady(): boolean;
+  baseline: Accessor<TaskTemplateContents | undefined>;
+  setBaseline(contents: TaskTemplateContents): void;
+  selection: Accessor<TaskTemplateSelection>;
+  setSelection(selection: TaskTemplateSelection): void;
+  captureTask(): TaskDraft;
+  restoreTask(draft: TaskDraft): void;
+  contents(): TaskTemplateContents;
+  replaceContents(contents: TaskTemplateContents): void;
+  stripAttachments(): void;
+  applyTemplate(
+    template: SavedTaskTemplate,
+    preserveDescription?: boolean
+  ): void;
+  persist(): boolean;
+  setError(message: string): void;
+  createTemplate: TaskComposerHost['createTemplate'];
+  updateTemplate: TaskComposerHost['updateTemplate'];
+};
+
+/** A separate editing session with an immutable task snapshot beneath it. */
+export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
+  const [taskDraft, setTaskDraft] = createSignal<TaskDraft>();
+  const [pending, setPending] = createSignal(false);
+  let request: TaskTemplateEditorDraft['request'];
+  let alive = true;
+  onCleanup(() => {
+    alive = false;
+  });
+  const isCurrent = () =>
+    alive && options.sessionActive() && options.userId() === options.draftOwner;
+  const isTemplateMode = () => Boolean(taskDraft());
+  const editingSelection = (): EditorSelection | undefined => {
+    const selection = options.selection();
+    return selection.kind === 'new' || selection.kind === 'editing'
+      ? selection
+      : undefined;
+  };
+  const editorDraft = (): TaskTemplateEditorDraft | undefined => {
+    const selection = editingSelection();
+    if (!isTemplateMode() || !selection) return undefined;
+    return {
+      selection: structuredClone(selection),
+      contents: options.contents(),
+      request: request && structuredClone(request),
+    };
+  };
+  const snapshot = (): TaskDraft => {
+    const underlying = taskDraft();
+    if (!underlying) return options.captureTask();
+    return { ...structuredClone(underlying), templateEditor: editorDraft() };
+  };
+  const open = (selection: EditorSelection, contents: TaskTemplateContents) => {
+    if (!options.canChange() || !options.definitionsReady() || isTemplateMode())
+      return;
+    batch(() => {
+      setTaskDraft(structuredClone(options.captureTask()));
+      request = undefined;
+      options.setSelection(structuredClone(selection));
+      options.replaceContents(structuredClone(contents));
+      options.stripAttachments();
+      options.setError('');
+    });
+  };
+  const resume = (draft: TaskTemplateEditorDraft) => {
+    open(draft.selection, draft.contents);
+    if (isTemplateMode())
+      request = draft.request && structuredClone(draft.request);
+  };
+  const cancelTemplateEdit = () => {
+    const underlying = taskDraft();
+    if (!underlying || pending() || !options.canChange()) return;
+    batch(() => {
+      options.restoreTask(structuredClone(underlying));
+      setTaskDraft(undefined);
+      request = undefined;
+      options.setError('');
+    });
+  };
+  const saveTemplate = async () => {
+    const selection = editingSelection();
+    if (
+      !selection ||
+      !isTemplateMode() ||
+      pending() ||
+      !options.canChange() ||
+      !options.definitionsReady()
+    )
+      return;
+    if (!selection.name.trim()) return;
+    if (
+      selection.kind === 'new' &&
+      selection.teamId &&
+      selection.teamId !== options.teamId()
+    )
+      return;
+    const definitions = options.definitions();
+    options.stripAttachments();
+    const contents = captureTaskTemplate(
+      options.contents(),
+      new Set(definitions.map((definition) => definition.id)),
+      new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+    );
+    if (selection.kind === 'new') {
+      const next = {
+        creationId: selection.creationId,
+        name: selection.name.trim(),
+        teamId: selection.teamId,
+        contents,
+      };
+      if (request && JSON.stringify(request) !== JSON.stringify(next)) {
+        options.setError(new TemplateCreationConflict().message);
+        return;
+      }
+      request = next;
+    }
+    // Persist both the untouched task and the admitted creation identity before I/O.
+    if (!options.persist()) {
+      options.setError(t('create.taskTemplateSaveError'));
+      return;
+    }
+    const teamId = options.teamId();
+    setPending(true);
+    options.setError('');
+    try {
+      const saved =
+        selection.kind === 'new'
+          ? await options.createTemplate(
+              options.draftOwner,
+              { ...selection, name: selection.name.trim() },
+              contents,
+              definitions
+            )
+          : await options.updateTemplate(
+              options.draftOwner,
+              { ...selection, name: selection.name.trim() },
+              contents,
+              definitions
+            );
+      if (
+        !isCurrent() ||
+        options.teamId() !== teamId ||
+        options.selection() !== selection
+      )
+        return;
+      const underlying = taskDraft();
+      if (!underlying) return;
+      batch(() => {
+        options.restoreTask(structuredClone(underlying));
+        setTaskDraft(undefined);
+        request = undefined;
+        setPending(false);
+        // Saving defaults must not discard task-specific prose or attachments.
+        options.applyTemplate(saved, true);
+      });
+      options.persist();
+    } catch (error) {
+      if (isCurrent())
+        options.setError(
+          thrownResultErrorHasCode(error, 'CONFLICT') ||
+            (error instanceof Error &&
+              error.message === 'Task template update conflict')
+            ? t('create.taskTemplateConflict')
+            : t('create.taskTemplateSaveError')
+        );
+    } finally {
+      setPending(false);
+    }
+  };
+  const updateTemplateFields = async () => {
+    const selection = options.selection();
+    if (
+      selection.kind !== 'saved' ||
+      pending() ||
+      !options.canChange() ||
+      !options.definitionsReady()
+    )
+      return;
+    const current = options.contents();
+    const baseline = options.baseline();
+    const definitions = options.definitions();
+    const contents = captureTaskTemplate(
+      {
+        ...current,
+        descriptionMarkdown: selection.template.contents.descriptionMarkdown,
+      },
+      new Set(definitions.map((definition) => definition.id)),
+      new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+    );
+    const teamId = options.teamId();
+    const currentRequest = () =>
+      isCurrent() &&
+      options.teamId() === teamId &&
+      options.selection() === selection;
+    setPending(true);
+    options.setError('');
+    try {
+      const saved = await options.updateTemplate(
+        options.draftOwner,
+        {
+          kind: 'editing',
+          template: selection.template,
+          name: selection.template.name,
+        },
+        contents,
+        definitions
+      );
+      if (!currentRequest()) return;
+      batch(() => {
+        options.setSelection({ kind: 'saved', template: saved });
+        options.setBaseline({
+          ...current,
+          descriptionMarkdown:
+            baseline?.descriptionMarkdown ??
+            selection.template.contents.descriptionMarkdown,
+        });
+      });
+    } catch (error) {
+      if (currentRequest())
+        options.setError(
+          thrownResultErrorHasCode(error, 'CONFLICT') ||
+            (error instanceof Error &&
+              error.message === 'Task template update conflict')
+            ? t('create.taskTemplateConflict')
+            : t('create.taskTemplateSaveError')
+        );
+    } finally {
+      setPending(false);
+    }
+  };
+  return {
+    isTemplateMode,
+    pending,
+    snapshot,
+    open,
+    resume,
+    cancelTemplateEdit,
+    saveTemplate,
+    updateTemplateFields,
+  };
+}

@@ -1,7 +1,4 @@
-import {
-  TaskTemplateControls,
-  TaskTemplateDetails,
-} from '@app/features/task-templates/task-template-controls';
+import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
 import { EntityComposer } from '@ui';
 import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
@@ -14,23 +11,20 @@ export function DesktopTaskComposer(props: {
   return (
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
-        <div class="min-w-0 flex-1 flex items-center gap-1">
-          <TaskTemplateControls composer={props.composer} />
-        </div>
+        <TaskTemplateControls composer={props.composer} />
         <TaskComposer.ClearDraft />
         <TaskComposer.ContinueInSplit />
         <TaskComposer.Close />
       </EntityComposer.Header>
       <TaskComposer.Recovery />
       <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
-        <TaskTemplateDetails composer={props.composer} />
-        <Show when={props.composer.templateSelection().kind !== 'editing'}>
-          <TaskComposer.Title />
-        </Show>
+        <TaskComposer.Title />
         <TaskComposer.Body />
-        <div class="shrink-0 flex items-center py-2">
-          <TaskComposer.Attach />
-        </div>
+        <Show when={!props.composer.isTemplateMode()}>
+          <div class="shrink-0 flex items-center py-2">
+            <TaskComposer.Attach />
+          </div>
+        </Show>
         <TaskComposer.Properties />
       </EntityComposer.Main>
       <TaskComposer.ErrorMessage />
@@ -41,10 +35,13 @@ export function DesktopTaskComposer(props: {
         <div class="min-w-0 ml-auto flex flex-wrap items-center justify-end gap-3">
           <TaskComposer.LinkInSourceToggle />
           <TaskComposer.CreateMoreToggle />
+          <TaskComposer.CancelTemplate />
           <TaskComposer.Submit />
         </div>
       </EntityComposer.Footer>
-      <TaskComposer.SimilarTasks />
+      <Show when={!props.composer.isTemplateMode()}>
+        <TaskComposer.SimilarTasks />
+      </Show>
     </TaskComposer.Root>
   );
 }

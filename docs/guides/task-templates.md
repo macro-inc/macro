@@ -4,13 +4,13 @@ Task templates store a name and typed task configuration. Personal templates are
 
 ## Composer
 
-The secondary template selector opens a searchable desktop dropdown or a touch picker sheet. No template is the default; New template follows it above a divider, then saved personal and team templates. The trigger shows the current selection. Switching templates replaces untouched template fields and description directly; edited fields, metadata, and prefilled task text require confirmation. Task titles and launch-context property presets remain intact.
+The secondary Template selector opens a searchable desktop dropdown or the existing touch picker sheet. No template is the default. Search is followed by No template, saved templates grouped under Personal and the team name, and New template at the bottom. The trigger shows the selected template's name; a trailing check marks its row. Managers get a row edit action on hover or keyboard focus, always available on touch.
 
-New template uses the composer's fields, defaults, and description with inline name and ownership metadata. Without a task title, Create template saves only the template, including empty selected fields. With a title, Create task & template saves the template before creating the task. Keep the confirmed template identity if task creation needs recovery, so recovery does not save a second template. Source values remain contextual and are not captured as reusable defaults.
+Selecting a saved template replaces untouched template fields and description. Switching away from edited fields or prefilled task text requires confirmation. Task titles and launch-context property presets remain intact. A changed-field accent dot appears on the trigger and selected row, without modifying the shared property pills. Managers get Reset and Update template at the bottom of the picker. These actions restore or save fields only: Reset leaves task description text intact, and Update template retains the template's saved description.
 
-Create More retains the selection and starts each fresh task from the saved template, not edits specific to the submitted task. Launch-context property presets, including grouped-view values and explicit assignees, remain authoritative. Its normal action reads Create & add another; the first combined save reads Create task & template, then another. After saving a new template, reuse that saved template for subsequent tasks.
+New template and Edit open template mode over a preserved task draft without a replacement confirmation. The shared title editor becomes the template name with a leading template icon. New template starts from draft fields and description, never the task title or attachments. Edit starts from saved defaults and keeps ownership fixed. Attachments and Create More are hidden. New-template team sharing uses the existing footer switch; editing shows fixed ownership instead. Back and Cancel restore the task draft unchanged. Save template saves no task, then returns with the saved fields applied. Existing task prose and attachments remain intact; only a blank task description takes the saved description. Source values remain contextual and are not captured as reusable defaults. Delete template is a small secondary header action that opens the existing confirmation dialog; deletion detaches the selection without resetting the task draft.
 
-Editing loads the template into the same composer, confirms replacement of an unsaved draft, and saves template changes without creating a task. Ownership stays immutable. Deletion always asks for confirmation. Desktop places expansion immediately left of Close.
+Create More retains the selection and starts each fresh task from the saved template, not edits specific to the submitted task. Launch-context property presets, including grouped-view values and explicit assignees, remain authoritative. Its task action reads Create & add another. Desktop places expansion immediately left of Close. Touch keeps the existing tall composer with Save in its reachable header and Cancel in the footer.
 
 ## Markdown initialization
 
@@ -24,7 +24,7 @@ Authorization and task property policy remain in the documents domain service.
 
 ## REST contract
 
-Creation accepts an optional client-generated `id`. Retrying the same creation ID and normalized input returns the existing template without another write. Changed content, ownership, or creator conflicts; team retries still require current membership. Persist the creation ID before sending combined or template-only submissions.
+Creation accepts an optional client-generated `id`. Retrying the same creation ID and normalized input returns the existing template without another write. Changed content, ownership, or creator conflicts; team retries still require current membership. Persist the creation ID before sending template saves.
 
 All routes require account authentication. JSON field names use camelCase. `GET /task_templates?teamId=<uuid>` returns a JSON array of the caller's personal templates and templates from the requested team. Without `teamId`, it returns only personal templates. A nonmember requesting a team gets 403. `GET /task_templates/{id}` reads one currently accessible template and returns 404 for inaccessible records.
 

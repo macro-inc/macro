@@ -1,7 +1,4 @@
-import {
-  TaskTemplateControls,
-  TaskTemplateDetails,
-} from '@app/features/task-templates/task-template-controls';
+import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
@@ -57,10 +54,8 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <div class="flex-1 flex items-center gap-1">
-          <TaskComposer.ContinueInSplit />
-          <TaskTemplateControls composer={props.composer} compact />
-        </div>
+        <TaskTemplateControls composer={props.composer} compact />
+        <TaskComposer.ContinueInSplit />
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
         <div class="flex items-center gap-8">
@@ -78,14 +73,13 @@ export function MobileTaskComposer(props: {
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
-        <TaskTemplateDetails composer={props.composer} />
-        <Show when={props.composer.templateSelection().kind !== 'editing'}>
-          <TaskComposer.Title />
-        </Show>
+        <TaskComposer.Title />
         <TaskComposer.Body />
-        <div class="shrink-0 flex items-center py-2">
-          <TaskComposer.Attach />
-        </div>
+        <Show when={!props.composer.isTemplateMode()}>
+          <div class="shrink-0 flex items-center py-2">
+            <TaskComposer.Attach />
+          </div>
+        </Show>
         <div class="-mx-4 shrink-0 overflow-x-auto overscroll-x-contain scrollbar-hidden">
           <TaskComposer.Properties class="w-max flex-nowrap px-4" />
         </div>
@@ -95,6 +89,7 @@ export function MobileTaskComposer(props: {
       <EntityComposer.Footer class="items-center empty:hidden">
         <TaskComposer.ShareToggle />
         <TaskComposer.LinkInSourceToggle />
+        <TaskComposer.CancelTemplate />
       </EntityComposer.Footer>
     </TaskComposer.Root>
   );

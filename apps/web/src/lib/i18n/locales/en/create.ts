@@ -332,28 +332,19 @@ export default {
   guideForm: 'Collect structured responses through a shareable form.',
   guideInThisFolder: 'Create one in this folder.',
   taskTemplates: 'Templates',
+  taskTemplateLabel: 'Template',
+  taskTemplateReset: 'Reset',
+  taskTemplateUpdate: 'Update template',
   taskTemplateNone: 'No template',
   taskTemplateNew: 'New template',
   taskTemplateSelected: 'Template: {{name}}',
-  taskTemplateEditingNamed: 'Editing {{name}}',
-  taskTemplateComposerHint:
-    'Save these properties and description. A task title also creates a task.',
-  taskTemplateEditComposerHint:
-    'Save changes to this template’s properties and description.',
-  taskTemplateReplaceDraftTitle: 'Edit template in this composer?',
-  taskTemplateReplaceDraftBody:
-    'This replaces the current draft with the template’s properties and description. Unsaved draft changes will be discarded.',
   taskTemplateSwitchTitle: 'Switch template?',
   taskTemplateSwitchBody:
-    'Replace your unsaved template changes? Your task title and launch context will stay.',
+    'Replace the current fields and description? Your task title and launch context will stay.',
   taskTemplateSwitch: 'Switch template',
-  taskTemplateInfo: 'About task templates',
-  taskTemplateVisibility: 'Template visibility',
   taskTemplateEdit: 'Edit template',
   taskCreate: 'Create task',
   taskCreateMore: 'Create & add another',
-  taskTemplateCreateBoth: 'Create task & template',
-  taskTemplateCreateBothMore: 'Create task & template, then another',
   taskTemplatePickerTitle: 'Task templates',
   taskTemplateSearch: 'Search templates',
   taskTemplatePersonal: 'Personal',
@@ -371,9 +362,7 @@ export default {
   taskTemplateDescription: 'Description template',
   taskTemplateMarkdownHint:
     'Supports Markdown, including headings and checklists.',
-  taskTemplateShareWithTeam: 'Share template with {{name}}',
-  taskTemplateTeamPermissions:
-    'Team members can use this template. You and team admins can edit it.',
+  taskTemplateShareWithTeam: 'Share with {{name}}',
   taskTemplateNamePlaceholder: 'Template name',
   taskTemplateSave: 'Save template',
   taskTemplateSaving: 'Saving…',

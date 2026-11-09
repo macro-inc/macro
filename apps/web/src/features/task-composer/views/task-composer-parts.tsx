@@ -5,8 +5,10 @@ import { RecoverTaskDrafts } from '@block-md/component/RecoverTaskDrafts';
 import { TaskComposerPropertyEditor } from '@block-md/component/TaskComposerPropertyEditor';
 import { SimilarTasksSection } from '@block-md/component/TaskDuplicateList';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Property } from '@property';
@@ -83,18 +85,10 @@ function Root(props: {
 function ContinueInSplit() {
   const composer = useTaskComposer();
   return (
-    <Show
-      when={
-        composer.isPopover() && composer.templateSelection().kind !== 'editing'
-      }
-    >
+    <Show when={composer.isPopover() && !composer.isTemplateMode()}>
       <Button
         onMouseDown={composer.continueInSplit}
-        disabled={
-          composer.isCreating() ||
-          (composer.templateSelection().kind === 'new' &&
-            (!composer.canSubmit() || !composer.title().trim()))
-        }
+        disabled={composer.isCreating()}
         tabIndex={-1}
         tooltip="Continue editing in split"
         variant="ghost"
@@ -109,7 +103,7 @@ function ContinueInSplit() {
 function ClearDraft() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.hasDraftChanges()}>
+    <Show when={!composer.isTemplateMode() && composer.hasDraftChanges()}>
       <Button
         onMouseDown={composer.clearDraft}
         disabled={composer.isCreating()}
@@ -128,7 +122,7 @@ function ClearDraft() {
 function Clear() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.hasDraftChanges()}>
+    <Show when={!composer.isTemplateMode() && composer.hasDraftChanges()}>
       <Button
         variant="ghost"
         size="sm"
@@ -186,7 +180,16 @@ function Title() {
   const pickers = useContext(TaskComposerPickersContext);
   return (
     <EntityComposer.Title {...{ [TASK_COMPOSER_TITLE_ATTRIBUTE]: '' }}>
-      <Show when={composer.tagLayoutMode() === 'title'}>
+      <Show when={composer.isTemplateMode()}>
+        <TaskTitleAccessory>
+          <CopyIcon class="size-5 text-ink-muted" />
+        </TaskTitleAccessory>
+      </Show>
+      <Show
+        when={
+          !composer.isTemplateMode() && composer.tagLayoutMode() === 'title'
+        }
+      >
         <TaskTitleAccessory>
           <Dynamic
             component={pickers.tagsPill}
@@ -199,29 +202,63 @@ function Title() {
           />
         </TaskTitleAccessory>
       </Show>
-      <ComposeTaskTitleEditor
-        value={composer.title}
-        onChange={composer.setTitle}
-        disabled={composer.isCreating}
-        bodyEditor={composer.bodyEditor}
-        containerRef={composer.containerRef}
-        onUserInput={() => {
-          if (composer.errorMessage()) {
-            composer.setErrorMessage('');
-          }
-        }}
-        onTagSelected={(tag) => {
-          composer.setTagLayoutMode('title');
-          fireAndForget(
-            composer.composerTags.applyTag(tag.scope, tag.optionId),
-            'compose-task'
-          );
-        }}
-        onDeleteTagsAtStart={composer.deleteTitleTagsAtStart}
-        portalScope={composer.portalScope()}
-        ref={composer.setTitleEditorRoot}
-        autofocus={composer.autofocusTitle}
-      />
+      <Show when={composer.isTemplateMode() ? 'template' : 'task'} keyed>
+        {(mode) => (
+          <ComposeTaskTitleEditor
+            value={() => {
+              const selection = composer.templateSelection();
+              return mode === 'template' &&
+                (selection.kind === 'new' || selection.kind === 'editing')
+                ? selection.name
+                : composer.title();
+            }}
+            onChange={
+              mode === 'template' ? composer.setTemplateName : composer.setTitle
+            }
+            placeholder={
+              mode === 'template'
+                ? t('create.taskTemplateNamePlaceholder')
+                : undefined
+            }
+            label={
+              mode === 'template' ? t('create.taskTemplateName') : undefined
+            }
+            disabled={composer.isCreating}
+            onSubmit={() =>
+              fireAndForget(
+                mode === 'template'
+                  ? composer.saveTemplate()
+                  : composer.createTask(),
+                'compose-task'
+              )
+            }
+            bodyEditor={composer.bodyEditor}
+            containerRef={composer.containerRef}
+            onUserInput={() => {
+              if (composer.errorMessage()) composer.setErrorMessage('');
+            }}
+            onTagSelected={
+              mode === 'task'
+                ? (tag) => {
+                    composer.setTagLayoutMode('title');
+                    fireAndForget(
+                      composer.composerTags.applyTag(tag.scope, tag.optionId),
+                      'compose-task'
+                    );
+                  }
+                : undefined
+            }
+            onDeleteTagsAtStart={
+              mode === 'task' ? composer.deleteTitleTagsAtStart : undefined
+            }
+            portalScope={composer.portalScope()}
+            ref={composer.setTitleEditorRoot}
+            autofocus={
+              mode === 'template' ? !isTouchDevice() : composer.autofocusTitle
+            }
+          />
+        )}
+      </Show>
     </EntityComposer.Title>
   );
 }
@@ -233,6 +270,7 @@ function Body() {
       <Scroll>
         <MarkdownShell
           config={composer.editorConfig}
+          onConnect={composer.onBodyReady}
           initialState={composer.initialState.editorState}
           initialValue={
             composer.initialState.editorState
@@ -367,26 +405,53 @@ function ErrorMessage() {
 
 function ShareToggle() {
   const composer = useTaskComposer();
+  const ownership = () => {
+    const selection = composer.templateSelection();
+    if (selection.kind !== 'editing') return undefined;
+    if (!selection.template.teamId) return t('create.taskTemplatePersonal');
+    const team = composer.team();
+    return selection.template.teamId === team?.id
+      ? team.name
+      : t('create.taskTemplateTeam');
+  };
+  const checked = () => {
+    const selection = composer.templateSelection();
+    return selection.kind === 'new'
+      ? Boolean(selection.teamId)
+      : composer.shareWithTeam();
+  };
   return (
     <Show
-      when={
-        composer.submitKind() !== 'template' &&
-        composer.templateSelection().kind !== 'editing' &&
-        composer.team()
+      when={!ownership()}
+      fallback={
+        <span class="min-w-0 truncate text-xs text-ink-muted">
+          {ownership()}
+        </span>
       }
     >
-      {(team) => (
-        <Tooltip label={composer.sharingHint()} tabIndex={0}>
-          <ToggleSwitch
-            class="shrink-0 ml-0.5"
-            checked={composer.shareWithTeam()}
-            onChange={composer.setShareWithTeam}
-            disabled={composer.isCreating()}
-            label={`Share with ${team().name}`}
-            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-          />
-        </Tooltip>
-      )}
+      <Show when={composer.team()}>
+        {(team) => (
+          <Tooltip
+            label={composer.sharingHint()}
+            disabled={composer.isTemplateMode()}
+          >
+            <ToggleSwitch
+              class="shrink-0 ml-0.5"
+              checked={checked()}
+              onChange={(value) => {
+                if (composer.isTemplateMode())
+                  composer.setTemplateTeamId(value ? team().id : null);
+                else composer.setShareWithTeam(value);
+              }}
+              disabled={composer.isCreating()}
+              label={t('create.taskTemplateShareWithTeam', {
+                name: team().name,
+              })}
+              labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+            />
+          </Tooltip>
+        )}
+      </Show>
     </Show>
   );
 }
@@ -394,13 +459,7 @@ function ShareToggle() {
 function LinkInSourceToggle() {
   const composer = useTaskComposer();
   return (
-    <Show
-      when={
-        composer.submitKind() !== 'template' &&
-        composer.templateSelection().kind !== 'editing' &&
-        composer.props.linkInSource
-      }
-    >
+    <Show when={!composer.isTemplateMode() && composer.props.linkInSource}>
       {(linkInSource) => (
         <ToggleSwitch
           labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
@@ -416,7 +475,7 @@ function LinkInSourceToggle() {
 function CreateMoreToggle() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.templateSelection().kind !== 'editing'}>
+    <Show when={!composer.isTemplateMode()}>
       <ToggleSwitch
         labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
         onChange={composer.setCreateMore}
@@ -431,15 +490,7 @@ function CreateMoreToggle() {
 function Submit() {
   const composer = useTaskComposer();
   const label = () => {
-    if (composer.templateSelection().kind === 'editing')
-      return t('create.taskTemplateSave');
-    const kind = composer.submitKind();
-    if (kind === 'template') return t('create.taskTemplateCreate');
-    if (kind === 'task-and-template') {
-      return composer.createMore()
-        ? t('create.taskTemplateCreateBothMore')
-        : t('create.taskTemplateCreateBoth');
-    }
+    if (composer.isTemplateMode()) return t('create.taskTemplateSave');
     return composer.createMore()
       ? t('create.taskCreateMore')
       : t('create.taskCreate');
@@ -448,7 +499,14 @@ function Submit() {
     <EntityComposer.Submit
       variant="primary"
       size="sm"
-      onClick={composer.createTask}
+      onClick={() =>
+        fireAndForget(
+          composer.isTemplateMode()
+            ? composer.saveTemplate()
+            : composer.createTask(),
+          'compose-task'
+        )
+      }
       disabled={!composer.canSubmit() || composer.isCreating()}
       hasContent={composer.canSubmit()}
     >
@@ -457,6 +515,21 @@ function Submit() {
   );
 }
 
+function CancelTemplate() {
+  const composer = useTaskComposer();
+  return (
+    <Show when={composer.isTemplateMode()}>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={composer.isSavingTemplate()}
+        onClick={composer.cancelTemplateEdit}
+      >
+        {t('create.taskTemplateCancel')}
+      </Button>
+    </Show>
+  );
+}
 function SimilarTasks() {
   const composer = useTaskComposer();
   return (
@@ -488,5 +561,6 @@ export const TaskComposer = {
   LinkInSourceToggle,
   CreateMoreToggle,
   Submit,
+  CancelTemplate,
   SimilarTasks,
 };
