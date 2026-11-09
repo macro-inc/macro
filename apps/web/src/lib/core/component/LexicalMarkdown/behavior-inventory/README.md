@@ -83,7 +83,9 @@ controller allocation, rather than remote search or service-backed menu UI. Clea
 queue cases use in-memory WAL/removal results. Margin layout uses supplied
 geometry/observers and outside-press cases mock Thread content. Pasteboard
 cases supply IPC/platform responses and file metadata; they do not execute
-native staging/uploads or establish the exact file-size threshold.
+native staging/uploads or establish the exact file-size threshold. Closed tag
+and snippet tests pin host loading/lazy reads with supplied queries/components;
+the snippet editor is a stub, so those mappings do not establish insertion.
 
 ## Static browser fixture
 
