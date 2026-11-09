@@ -343,7 +343,7 @@ export default {
   taskTemplateSwitch: 'Switch template',
   taskTemplateEdit: 'Edit template',
   taskCreate: 'Create task',
-  taskCreateMore: 'Create & add another',
+  taskCreateMore: 'Create another',
   taskTemplatePickerTitle: 'Task templates',
   taskTemplateSearch: 'Search templates',
   taskTemplatePersonal: 'Personal',

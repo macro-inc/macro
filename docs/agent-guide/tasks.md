@@ -867,7 +867,7 @@ secondary text action beside Close in template mode. Its existing confirmation
 must leave existing tasks and the preserved draft unchanged; deleting the
 selected template only detaches its selection.
 
-Create More uses Create & add another and reapplies the selected saved defaults
+Create More uses Create another and reapplies the selected saved defaults
 to each fresh task, discarding task-specific edits while retaining launch
 presets. Verify personal/team creation, draft preservation, field-only update
 and reset, no-template selection, repeated Create More, editing, cancellation,
