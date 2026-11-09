@@ -177,6 +177,7 @@
                 --mode no-install \
                 --out-dir "$PWD/${outDir}" ${cargoArgs}
               ${pkgs.lib.optionalString converge ''wasm-opt -Oz --converge "${outDir}/${name}_bg.wasm" -o "${outDir}/${name}_bg.wasm"''}
+              ${lib.optionalString (name == "document_session_wasm") ''${pkgs.bun}/bin/bun apps/web/scripts/native-editor-features.ts --artifact "${outDir}/${name}_bg.wasm"''}
             '';
             installPhaseCommand = ''
               mkdir -p $out
@@ -199,6 +200,7 @@
           crate = "crates/client/document_session_wasm";
           dir = "document-session";
           profile = "document-session-wasm";
+          cargoArgs = "-- --no-default-features --features bebop-owned-all";
           converge = true;
         }
         {

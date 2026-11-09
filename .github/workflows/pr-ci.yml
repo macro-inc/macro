@@ -508,6 +508,7 @@ jobs:
             - 'apps/web/justfile'
             - 'apps/web/vite.base.ts'
             - 'nix/tauri-desktop.nix'
+            - 'apps/web/scripts/native-editor-features*.ts'
             - 'packages/lexical-conformance/coverage/**'
             - 'tooling/xtask/crates/xtask_workflows/**'
             - '.github/workflows/document_session.yml'
