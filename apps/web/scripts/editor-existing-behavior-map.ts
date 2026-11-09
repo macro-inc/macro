@@ -406,4 +406,120 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'arrow keys across a database answer entering the document from above puts the caret at the start of its first line',
     ],
   },
+  {
+    source: 'packages/lexical-core/node-list.ts',
+    anchor: 'replace: ListNode,',
+    testFile: 'packages/lexical-core/tests/list-transformers.test.ts',
+    cases: [
+      'custom ordered-list transformer keeps a non-1 start when replacing ListNode with TaskListNode',
+    ],
+  },
+  {
+    source: 'packages/lexical-core/transformers/customTransformers.ts',
+    anchor: 'const customTransformer =',
+    testFile: 'packages/lexical-core/tests/list-transformers.test.ts',
+    cases: [
+      'custom ordered-list transformer starts a new list at the typed marker',
+      'custom ordered-list transformer uses the incoming marker as the start when inserting before an ordered list',
+    ],
+  },
+  {
+    source: 'packages/lexical-core/transformers/customTransformers.ts',
+    anchor: 'export const ORDERED_LIST_ENTER',
+    testFile: 'packages/lexical-core/tests/list-transformers.test.ts',
+    cases: [
+      'custom ordered-list transformer starts a list at the typed marker on Enter without a trailing space',
+    ],
+  },
+  {
+    source: 'packages/lexical-core/utils/markdown-state.ts',
+    anchor: 'export function serializedEditorStateToMarkdown',
+    testFile: 'packages/lexical-core/tests/list-transformers.test.ts',
+    cases: [
+      'custom ordered-list transformer imports and exports a markdown list that starts after 1',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_DOCUMENT_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.test.ts',
+    cases: [
+      'mentionsPlugin inserts a compact database mention and preserves surrounding text',
+      'mentionsPlugin tracks a WhatsApp group mention as a external_chat reference',
+      'mentionsPlugin keeps database mentions compact in composers',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '  function databaseReferenceRemains',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.test.ts',
+    cases: [
+      'mentionsPlugin keeps the tracked database reference through collapse/expand and untracks only its removal',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      DocumentMentionNode,\n      (mutatedNodes',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.test.ts',
+    cases: [
+      'mentionsPlugin sends an inline form mention as a form reference, and drops it when the mention is removed',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      DocumentCardNode,\n      (mutatedNodes',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.test.ts',
+    cases: [
+      'mentionsPlugin reports a document card put into a composer as a reference, and its removal',
+      'mentionsPlugin keeps a mention referenced when it turns into a card',
+      'mentionsPlugin leaves other cards\u2019 sharing as it was: only form cards are references here',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: 'function findMatchOffsets',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.test.ts',
+    cases: [
+      'findAndReplacePlugin mention chips finds a substring in an inline task chip title',
+      'findAndReplacePlugin mention chips still finds regular paragraph text next to a task chip',
+      'findAndReplacePlugin mention chips finds a user mention display name',
+      'findAndReplacePlugin mention chips finds a group mention alias',
+      'findAndReplacePlugin mention chips finds a contact mention name',
+      'findAndReplacePlugin multi-line blocks finds text inside a code block',
+      'findAndReplacePlugin multi-line blocks finds text after a code block',
+      'findAndReplacePlugin multi-line blocks numbers every match in document order',
+      'findAndReplacePlugin multi-line blocks splits a match across formatted text nodes',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: 'function pairKeysWithNonTextNodes',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.test.ts',
+    cases: [
+      'findAndReplacePlugin mention chips does not delete text beside a mention when replace spans both',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: 'function collectTextSegments',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.test.ts',
+    cases: [
+      'findAndReplacePlugin multi-line blocks does not match across block boundaries',
+      'findAndReplacePlugin nested blocks separates inline text from a block nested after it',
+    ],
+  },
 ] as const;
