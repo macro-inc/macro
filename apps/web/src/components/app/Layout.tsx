@@ -50,6 +50,7 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -287,45 +288,47 @@ export function AppChrome(props: ParentProps) {
       </Show>
       <Suspense>
         <Show when={isAuthenticated()}>
-          <GithubReauthenticationPrompt />
-          <GmailReauthenticationPrompt />
-          <CalendarPermissionPrompt />
-          <ShowFeatureFlag flag={enableWhatsappLinked}>
+          <EditorEngineBoundary>
+            <GithubReauthenticationPrompt />
+            <GmailReauthenticationPrompt />
+            <CalendarPermissionPrompt />
+            <ShowFeatureFlag flag={enableWhatsappLinked}>
+              <Suspense>
+                <WhatsAppHistoryImportPrompt />
+              </Suspense>
+            </ShowFeatureFlag>
+            <GlobalShortcuts />
+            <Show when={!isTouchDevice()}>
+              <GoToHotkeys />
+              <Suspense>
+                <FavoritesCommands />
+                <CommandMenu />
+              </Suspense>
+            </Show>
             <Suspense>
-              <WhatsAppHistoryImportPrompt />
+              <PropertyEditorModal />
             </Suspense>
-          </ShowFeatureFlag>
-          <GlobalShortcuts />
-          <Show when={!isTouchDevice()}>
-            <GoToHotkeys />
-            <Suspense>
-              <FavoritesCommands />
-              <CommandMenu />
-            </Suspense>
-          </Show>
-          <Suspense>
-            <PropertyEditorModal />
-          </Suspense>
-          <GlobalBulkEditEntityModal />
-          <Show when={isDesktopPlatform()}>
-            <LocalRuntimeHost />
-          </Show>
-          <NativeShareSheet />
-          <MacroMcpSetupModal />
-          <CreateChannelModal />
-          <Show when={companyDialogUsed()}>
-            <Suspense>
-              <CreateCompanyModal />
-            </Suspense>
-          </Show>
-          <Show when={contactDialogUsed()}>
-            <Suspense>
-              <CreateContactModal />
-            </Suspense>
-          </Show>
-          <Show when={isAddInboxDialogOpen()}>
-            <AddInboxDialog />
-          </Show>
+            <GlobalBulkEditEntityModal />
+            <Show when={isDesktopPlatform()}>
+              <LocalRuntimeHost />
+            </Show>
+            <NativeShareSheet />
+            <MacroMcpSetupModal />
+            <CreateChannelModal />
+            <Show when={companyDialogUsed()}>
+              <Suspense>
+                <CreateCompanyModal />
+              </Suspense>
+            </Show>
+            <Show when={contactDialogUsed()}>
+              <Suspense>
+                <CreateContactModal />
+              </Suspense>
+            </Show>
+            <Show when={isAddInboxDialogOpen()}>
+              <AddInboxDialog />
+            </Show>
+          </EditorEngineBoundary>
         </Show>
         <Show when={isAuthenticated() === false}>
           <Show when={hasLoginCookie()} fallback={<Banner />}>
@@ -351,7 +354,9 @@ export function AppChrome(props: ParentProps) {
               <PageContent>
                 {/* Route loading must not detach the chrome or mobile
                     navigation; the route draws its own loading state. */}
-                <Suspense>{props.children}</Suspense>
+                <Suspense>
+                  <EditorEngineBoundary>{props.children}</EditorEngineBoundary>
+                </Suspense>
               </PageContent>
             </ViewSwitcherContext.Provider>
           </SidebarPrefsProvider>
@@ -360,11 +365,15 @@ export function AppChrome(props: ParentProps) {
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
         <Suspense>
-          <UserCardDrawer />
+          <EditorEngineBoundary>
+            <UserCardDrawer />
+          </EditorEngineBoundary>
         </Suspense>
         <Show when={isMobile()}>
           <Suspense>
-            <MobileSettings />
+            <EditorEngineBoundary>
+              <MobileSettings />
+            </EditorEngineBoundary>
           </Suspense>
         </Show>
         {/* Search owns its filters at the top; suppress background composers. */}
@@ -380,12 +389,17 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow />
         </FloatRegion>
       </Show>
-      <InitialInteractiveOnboardingModal />
-      <Suspense>
-        <Show when={isAuthenticated()}>
-          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-        </Show>
-      </Suspense>
+      <EditorEngineBoundary>
+        <InitialInteractiveOnboardingModal />
+        <Suspense>
+          <Show when={isAuthenticated()}>
+            <Launcher
+              open={createMenuOpen()}
+              onOpenChange={setCreateMenuOpen}
+            />
+          </Show>
+        </Suspense>
+      </EditorEngineBoundary>
     </SidebarVisibilityContext.Provider>
   );
 }

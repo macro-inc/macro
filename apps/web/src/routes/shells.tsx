@@ -8,6 +8,7 @@ import {
   SplitLayoutProvider,
 } from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
+import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
@@ -29,7 +30,9 @@ export function AuthShell(): JSX.Element {
   return (
     <PageContent>
       <ImperativeDialogHost />
-      <SplitRouter.Outlet />
+      <EditorEngineBoundary>
+        <SplitRouter.Outlet />
+      </EditorEngineBoundary>
     </PageContent>
   );
 }
@@ -39,7 +42,7 @@ function FocusedPage(props: ParentProps) {
   return (
     <div class="min-h-0 flex-1 overflow-y-auto bg-page text-ink">
       <ImperativeDialogHost />
-      {props.children}
+      <EditorEngineBoundary>{props.children}</EditorEngineBoundary>
     </div>
   );
 }
@@ -50,7 +53,9 @@ export function FocusedShell(): JSX.Element {
   return (
     <PublicBookingShell>
       <ImperativeDialogHost />
-      <SplitRouter.Outlet />
+      <EditorEngineBoundary>
+        <SplitRouter.Outlet />
+      </EditorEngineBoundary>
     </PublicBookingShell>
   );
 }
@@ -91,7 +96,9 @@ export function withMeetingShell(Page: () => JSX.Element) {
     return (
       <PageContent>
         <ImperativeDialogHost />
-        <Page />
+        <EditorEngineBoundary>
+          <Page />
+        </EditorEngineBoundary>
       </PageContent>
     );
   };

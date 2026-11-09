@@ -1,8 +1,29 @@
 # Native editor sessions
 
-`loadDocumentSession` initializes the production WASM module lazily and shares
-its initialization promise. Failed loading clears the promise so a later open
-can retry. Keep this off the app boot path.
+`engine-selection.ts` binds `rust-editor-model` once from the environment
+override or cached rollout at boot. Later rollout refreshes take effect on the
+next page load so existing classes, commands and editor transactions stay on
+one model. The resolver in `apps/web/scripts/lexical-engine-switch.ts` forwards
+the existing `lexical` and `@lexical/*` imports to the selected package without
+changing caller imports. `lexical-upstream:<specifier>` bypasses that resolver
+for compatibility algorithms; their own Lexical imports remain switched.
+
+`EditorEngineProvider` owns the app-wide readiness resource under the rollout
+provider. When the cached choice is on, it starts the binary fetch and
+glue import in parallel while the shell paints; initialization compiles the
+binary response with streaming WASM. Flag off makes no native module request.
+Failed loading clears the shared initialization promise so a later open can retry.
+
+Place `EditorEngineBoundary` inside the shell above subtrees that construct
+editors. It observes this same resource, leaving shell chrome outside the gate.
+After readiness, `useEditorEngine().module()` returns the initialized module
+synchronously. Never return a deferred stand-in for an editor handle or add a
+separate readiness resource per editor host.
+
+Compatibility classes and constants must evaluate without an initialized WASM
+instance. Editor construction and updates require the ready module. Resolver
+checks preserve exact upstream object identity when off and reject incomplete
+selected exports instead of quietly returning undefined API values.
 
 `createRustEditorSession` in `create-editor-session.ts` composes a collaborative
 Macro editor from an authorized source identity, native view registry, platform
@@ -20,3 +41,13 @@ Local composers and static views use `mountLocalSessionView` from
 cross-tab chatter and seeds a fresh local document before host imports. Supply
 the correct native node/plugin preset; a title, calendar description and full
 document do not share the same allowed nodes.
+
+Both view mount functions construct and seed synchronously after the module is
+ready. Builders may supply a detached root, then connect that exact root from
+their shared shell. Closing remains asynchronous so terminal native I/O drains.
+
+Checks: `bunx vitest run --project core src/lib/core/document-session/editor-engine-state.test.ts`
+and `bunx playwright test --config src/lib/core/document-session/browser-test/playwright.config.ts`
+from `apps/web`. The browser fixture uses the real production WASM and readiness
+provider with a deterministic flag source. It checks shell visibility during a
+held binary fetch, flag-off network behavior and load failure isolation.
