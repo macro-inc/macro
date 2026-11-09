@@ -7000,6 +7000,25 @@ sealed class FfiCommand {
         companion object
     }
     
+    /**
+     * Route a physical or synthetic key through the shared model key policy.
+     */
+    data class Key(
+        /**
+         * Model key command.
+         */
+        val `command`: com.macro.documentsession.KeyCommand, 
+        /**
+         * Platform modifier and composition facts.
+         */
+        val `event`: com.macro.documentsession.KeyEvent?) : FfiCommand()
+        
+    {
+        
+
+        companion object
+    }
+    
 
     
 
@@ -7051,6 +7070,10 @@ public object FfiConverterTypeFfiCommand : FfiConverterRustBuffer<FfiCommand>{
                 FfiConverterTypeEditDirection.read(buf),
                 FfiConverterTypeModifyTarget.read(buf),
                 FfiConverterTypeModifyTarget.read(buf),
+                )
+            18 -> FfiCommand.Key(
+                FfiConverterTypeKeyCommand.read(buf),
+                FfiConverterOptionalTypeKeyEvent.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -7171,6 +7194,14 @@ public object FfiConverterTypeFfiCommand : FfiConverterRustBuffer<FfiCommand>{
                 + FfiConverterTypeModifyTarget.allocationSize(value.`characterTarget`)
             )
         }
+        is FfiCommand.Key -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeKeyCommand.allocationSize(value.`command`)
+                + FfiConverterOptionalTypeKeyEvent.allocationSize(value.`event`)
+            )
+        }
     }
 
     override fun write(value: FfiCommand, buf: ByteBuffer) {
@@ -7253,6 +7284,12 @@ public object FfiConverterTypeFfiCommand : FfiConverterRustBuffer<FfiCommand>{
                 FfiConverterTypeEditDirection.write(value.`direction`, buf)
                 FfiConverterTypeModifyTarget.write(value.`target`, buf)
                 FfiConverterTypeModifyTarget.write(value.`characterTarget`, buf)
+                Unit
+            }
+            is FfiCommand.Key -> {
+                buf.putInt(18)
+                FfiConverterTypeKeyCommand.write(value.`command`, buf)
+                FfiConverterOptionalTypeKeyEvent.write(value.`event`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -14301,6 +14338,38 @@ public object FfiConverterOptionalTypeJsonValue: FfiConverterRustBuffer<JsonValu
         } else {
             buf.put(1)
             FfiConverterTypeJsonValue.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeKeyEvent: FfiConverterRustBuffer<KeyEvent?> {
+    override fun read(buf: ByteBuffer): KeyEvent? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeKeyEvent.read(buf)
+    }
+
+    override fun allocationSize(value: KeyEvent?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeKeyEvent.allocationSize(value)
+        }
+    }
+
+    override fun write(value: KeyEvent?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeKeyEvent.write(value, buf)
         }
     }
 }

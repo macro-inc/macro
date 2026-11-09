@@ -7105,6 +7105,17 @@ public enum FfiCommand: Equatable, Hashable {
          * Character fallback answer.
          */characterTarget: ModifyTarget
     )
+    /**
+     * Route a physical or synthetic key through the shared model key policy.
+     */
+    case key(
+        /**
+         * Model key command.
+         */command: KeyCommand, 
+        /**
+         * Platform modifier and composition facts.
+         */event: KeyEvent?
+    )
 
 
 
@@ -7165,6 +7176,9 @@ public struct FfiConverterTypeFfiCommand: FfiConverterRustBuffer {
         )
         
         case 17: return .deleteLine(direction: try FfiConverterTypeEditDirection.read(from: &buf), target: try FfiConverterTypeModifyTarget.read(from: &buf), characterTarget: try FfiConverterTypeModifyTarget.read(from: &buf)
+        )
+        
+        case 18: return .key(command: try FfiConverterTypeKeyCommand.read(from: &buf), event: try FfiConverterOptionTypeKeyEvent.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -7253,6 +7267,12 @@ public struct FfiConverterTypeFfiCommand: FfiConverterRustBuffer {
             FfiConverterTypeEditDirection.write(direction, into: &buf)
             FfiConverterTypeModifyTarget.write(target, into: &buf)
             FfiConverterTypeModifyTarget.write(characterTarget, into: &buf)
+            
+        
+        case let .key(command,event):
+            writeInt(&buf, Int32(18))
+            FfiConverterTypeKeyCommand.write(command, into: &buf)
+            FfiConverterOptionTypeKeyEvent.write(event, into: &buf)
             
         }
     }
@@ -13297,6 +13317,30 @@ fileprivate struct FfiConverterOptionTypeJsonValue: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeJsonValue.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKeyEvent: FfiConverterRustBuffer {
+    typealias SwiftType = KeyEvent?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKeyEvent.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKeyEvent.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }

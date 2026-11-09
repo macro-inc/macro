@@ -34,6 +34,7 @@ class NativeEditorView(
     private var ready = false
     private var inputGeneration = 0L
     private var composing = false
+    private var platformEnter = false
     private var editable = initiallyEditable
     private var interactable = initiallyInteractable
     private var editingKeyListener: android.text.method.KeyListener? = null
@@ -88,6 +89,12 @@ class NativeEditorView(
                     )))
                     return
                 }
+                if (inserted == "\n" && !composing && !platformEnter && routeEnter(
+                    FfiKeyEvent("Enter", "Enter", false, false, false, false, false, false), replacedSelection)) {
+                    applying = true
+                    try { render() } finally { applying = false }
+                    return
+                }
                 val command = when (inserted) {
                     "\n" -> FfiCommand.InsertParagraph
                     else -> FfiCommand.InsertText(inserted)
@@ -125,10 +132,14 @@ class NativeEditorView(
         } finally { applying = false }
     }
 
-    fun admit(input: FfiInput) {
+    fun admit(input: FfiInput) { handle(input) }
+
+    private fun handle(input: FfiInput): FfiOutput? {
         check(Looper.myLooper() == Looper.getMainLooper())
-        try {
+        var admitted: FfiOutput? = null
+        return try {
             val output = session.handle(host.now(), input)
+            admitted = output
             try {
                 val rejected = output.view.any { it is FfiViewEffect.Error }
                 val displayedText = if (rejected) null else when (input) {
@@ -143,8 +154,10 @@ class NativeEditorView(
                 }
                 apply(output, displayedText)
             } finally { host.execute(output, ::admit) }
+            output
         } catch (error: Exception) {
             host.failed(error)
+            admitted
         }
     }
 
@@ -267,6 +280,24 @@ class NativeEditorView(
     private fun canEditContent() = editable && interactable
     internal fun acceptsInput() = ready && canEditContent()
 
+    private fun routeEnter(event: FfiKeyEvent, selection: ViewSelection): Boolean {
+        val output = handle(FfiInput.KeyDown(event, FfiCommand.Key(KeyCommand.ENTER, event), false, selection))
+        return output?.view?.any { it is FfiViewEffect.PreventDefault } == true
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (ready && canEditContent() && !composing &&
+            (keyCode == android.view.KeyEvent.KEYCODE_ENTER || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            val facts = FfiKeyEvent("Enter", if (keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) "NumpadEnter" else "Enter",
+                event.isShiftPressed, event.isAltPressed, event.isCtrlPressed, event.isMetaPressed,
+                event.repeatCount > 0, false)
+            if (routeEnter(facts, projectionLayout.selection(selectionStart, selectionEnd))) return true
+            platformEnter = true
+            try { return super.onKeyDown(keyCode, event) } finally { platformEnter = false }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onKeyShortcut(keyCode: Int, event: android.view.KeyEvent): Boolean {
         if (canEditContent() && (event.isCtrlPressed || event.isMetaPressed)) {
             val command = when (keyCode) {
@@ -361,6 +392,15 @@ class NativeEditorView(
             }
             return true
         }
+        fun commit(value: CharSequence?, operation: () -> Boolean): Boolean {
+            val previousEnter = platformEnter
+            if (!platformEnter && value?.toString() == "\n" && !composing) {
+                if (routeEnter(FfiKeyEvent("Enter", "Enter", false, false, false, false, false, false),
+                    projectionLayout.selection(selectionStart, selectionEnd))) return true
+                platformEnter = true
+            }
+            try { return operation() } finally { platformEnter = previousEnter }
+        }
         val guarded = object : InputConnectionWrapper(connection, false) {
             private var batches = 0
             override fun beginBatchEdit(): Boolean {
@@ -417,9 +457,11 @@ class NativeEditorView(
 
             override fun commitText(value: CharSequence?, newCursorPosition: Int): Boolean {
                 if (!current()) return false
-                val committed = super.commitText(value, newCursorPosition)
-                if (committed) finishComposition()
-                return committed
+                return commit(value) {
+                    val committed = super.commitText(value, newCursorPosition)
+                    if (committed) finishComposition()
+                    committed
+                }
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
@@ -453,7 +495,7 @@ class NativeEditorView(
                 return finished
             }
         }
-        return modernInputConnection(guarded, ::current, ::composingText, ::composingRegion, ::finishComposition)
+        return modernInputConnection(guarded, ::current, ::composingText, ::composingRegion, ::finishComposition, ::commit)
     }
 }
 

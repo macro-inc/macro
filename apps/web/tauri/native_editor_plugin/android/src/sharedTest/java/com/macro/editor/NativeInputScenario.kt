@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.ContextThemeWrapper
 import android.view.inputmethod.EditorInfo
 import com.macro.documentsession.*
+import com.macro.editor.bridge.mapper
 import org.junit.Assert.*
 
 internal object NativeInputScenario {
@@ -158,8 +159,103 @@ internal object NativeInputScenario {
             assertEquals("", session.textContent())
             replacement.admit(FfiInput.Redo)
             assertEquals("a**bc**", session.markdown(FfiMarkdownFlavor.APPLICATION))
+            replacement.admit(FfiInput.SetState(BridgeJson.root(
+                """{"root":{"type":"root","children":[{"type":"heading","tag":"h1","children":[{"type":"text","text":"beforeafter"}]}]}}""")))
+            replacement.setSelection(6)
+            val headingInput = requireNotNull(replacement.onCreateInputConnection(EditorInfo()))
+            assertTrue(headingInput.commitText("\n", 1))
+            val splitState = session.query(FfiQuery.State) as FfiQueryReply.State
+            val splitBlocks = mapper.readTree(BridgeJson.state(splitState.root)).get("root").get("children")
+            assertEquals(2, splitBlocks.size())
+            assertEquals("heading", splitBlocks[0].get("type").textValue())
+            assertEquals("paragraph", splitBlocks[1].get("type").textValue())
+            assertEquals("before", splitBlocks[0].get("children")[0].get("text").textValue())
+            assertEquals("after", splitBlocks[1].get("children")[0].get("text").textValue())
+            assertEquals("before\nafter", replacement.text.toString())
+            replacement.admit(FfiInput.SetState(BridgeJson.root(
+                """{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"ab"}]}]}}""")))
+            replacement.setSelection(1)
+            assertTrue(replacement.onKeyDown(android.view.KeyEvent.KEYCODE_ENTER,
+                android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_DOWN,
+                    android.view.KeyEvent.KEYCODE_ENTER, 0, android.view.KeyEvent.META_SHIFT_ON)))
+            val shifted = session.query(FfiQuery.State) as FfiQueryReply.State
+            val shiftedBlocks = mapper.readTree(BridgeJson.state(shifted.root)).get("root").get("children")
+            assertEquals(1, shiftedBlocks.size())
+            assertEquals("linebreak", shiftedBlocks[0].get("children")[1].get("type").textValue())
+            assertEquals("a\nb", replacement.text.toString())
         } finally {
             session.close()
         }
     }
+
+    /** View-port contract: consumed Enter may emit no diff or encounter a host failure. */
+    fun consumedEnter(targetContext: Context) {
+        var tick = 0uL
+        var failEffects = false
+        var failures = 0
+        var keys = 0
+        var prevent = true
+        val host = object : NativeEditorHost {
+            override fun now() = FfiNow(++tick, 1_000_000L + tick.toLong())
+            override fun execute(output: FfiOutput, admit: (FfiInput) -> Unit) {
+                assertTrue(output.io.all { it is FfiIoEffect.Telemetry })
+                if (failEffects) { failEffects = false; throw IllegalStateException("fixture effect failure") }
+            }
+            override fun viewEffect(effect: FfiViewEffect) {
+                if (effect is FfiViewEffect.Error) fail(effect.message)
+            }
+            override fun failed(error: Exception) {
+                if (error.message == "fixture effect failure") failures++ else throw AssertionError(error)
+            }
+        }
+        val session = NativeEditorSession(config(), null, host.now())
+        try {
+            val policy = object : NativeEditorSessionInterface by session {
+                override fun handle(now: FfiNow, input: FfiInput): FfiOutput {
+                    if (input is FfiInput.KeyDown) {
+                        keys++
+                        val output = session.handle(now, input.copy(routed = null))
+                        return if (prevent) output.copy(view = output.view + FfiViewEffect.PreventDefault) else output
+                    }
+                    return session.handle(now, input)
+                }
+            }
+            val context = ContextThemeWrapper(targetContext, androidx.appcompat.R.style.Theme_AppCompat)
+            val view = NativeEditorView(context, policy, host, true, true)
+            view.admit(FfiInput.Start)
+            view.admit(FfiInput.Seed(SeedKind.OPTIMISTIC, byteArrayOf()))
+            view.admit(FfiInput.SetState(BridgeJson.root(
+                """{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"plain"}]}]}}""")))
+            view.setSelection(2)
+            val input = requireNotNull(view.onCreateInputConnection(EditorInfo()))
+            assertTrue(input.commitText("\n", 1))
+            assertEquals("plain", session.textContent())
+            assertEquals("plain", view.text.toString())
+            assertEquals(2, view.selectionStart)
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                assertTrue(input.commitText("\n", 1, android.view.inputmethod.TextAttribute.Builder().build()))
+                assertEquals("plain", view.text.toString())
+                assertEquals(2, view.selectionStart)
+            }
+            view.text?.insert(2, "\n")
+            assertEquals("plain", session.textContent())
+            assertEquals("plain", view.text.toString())
+            val previousKeys = keys
+            failEffects = true
+            assertTrue(input.commitText("\n", 1))
+            assertEquals(previousKeys + 1, keys)
+            assertEquals(1, failures)
+            assertEquals("plain", view.text.toString())
+            prevent = false
+            val beforeDecline = keys
+            assertTrue(input.commitText("\n", 1))
+            assertEquals(beforeDecline + 1, keys)
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                val beforeAttributedDecline = keys
+                assertTrue(input.commitText("\n", 1, android.view.inputmethod.TextAttribute.Builder().build()))
+                assertEquals(beforeAttributedDecline + 1, keys)
+            }
+        } finally { session.close() }
+    }
+
 }

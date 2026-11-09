@@ -9,6 +9,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class NativeEditorViewTest {
+    @Test fun consumedEnterKeepsTextAndPreventionAfterEffectFailure() {
+        NativeInputScenario.consumedEnter(RuntimeEnvironment.getApplication())
+    }
+
     @Test fun realRustSessionReceivesInputConnectionCompositionAndHistory() {
         NativeInputScenario.run(RuntimeEnvironment.getApplication())
     }

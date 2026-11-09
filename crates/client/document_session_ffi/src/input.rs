@@ -135,10 +135,18 @@ pub enum FfiCommand {
         /// Character fallback answer.
         character_target: ModifyTarget,
     },
+    /// Route a physical or synthetic key through the shared model key policy.
+    Key {
+        /// Model key command.
+        command: KeyCommand,
+        /// Platform modifier and composition facts.
+        event: Option<KeyEvent>,
+    },
 }
 impl From<FfiCommand> for Command {
     fn from(v: FfiCommand) -> Self {
         match v {
+            FfiCommand::Key { command, event } => Self::Key { command, event },
             FfiCommand::InsertText { text } => Self::InsertText(text),
             FfiCommand::RemoveText => Self::RemoveText,
             FfiCommand::InsertParagraph => Self::InsertParagraph,
