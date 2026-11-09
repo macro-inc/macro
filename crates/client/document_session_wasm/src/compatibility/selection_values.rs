@@ -28,6 +28,10 @@ pub(super) struct SelectionValue {
     pub reference: compat::ForeignSelectionRef,
 }
 impl SelectionValue {
+    pub(super) fn encoded(&self) -> compat::CompatSelectionData {
+        encode(self)
+    }
+
     fn snapshot(&self) -> Self {
         Self {
             value: raw_copy(&self.value),
