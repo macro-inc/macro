@@ -22,6 +22,8 @@ impl SyncPolicy for MacroSyncPolicy {
             Some("tablecell") => &["width"],
             Some("code" | "custom-code") => &["language", "theme"],
             Some("code-highlight") => &["highlightType"],
+            Some("pr-mention") => &["url"],
+            Some("classed-block") => &["attributes"],
             Some("listitem") => &["checked"],
             _ => &[],
         };
@@ -34,6 +36,9 @@ impl SyncPolicy for MacroSyncPolicy {
 
     fn own_undefined_fields(&self, node_type: &str) -> &[String] {
         crate::policy::own_undefined_fields(node_type)
+    }
+    fn allows_null_text(&self, node_type: &str) -> bool {
+        node_type == "await"
     }
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool {
         view.is::<CompletionNode>(key)

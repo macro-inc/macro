@@ -27,7 +27,7 @@ pub(crate) struct NodeIndex {
 }
 impl NodeIndex {
     pub fn bind(&mut self, key: NodeKey, map: &LoroMap, policy: &dyn SyncPolicy) -> Result<()> {
-        schema::validate_slots(map)?;
+        schema::validate_slots(map, policy)?;
         let children = schema::children(map)?.map(|list| list.id());
         let text = match map.get("text") {
             Some(ValueOrContainer::Container(Container::Text(t))) => Some(t.id()),
@@ -144,7 +144,7 @@ pub(crate) fn projected_children(map: &LoroMap, policy: &dyn SyncPolicy) -> Resu
     if let Some(list) = schema::children(map)? {
         for i in 0..list.len() {
             let child = schema::map_at(list.get(i), "children item")?;
-            let json = schema::own_map(&child)?;
+            let json = schema::own_map(&child, policy)?;
             if policy.is_dropped_json(&json) {
                 continue;
             }
@@ -322,7 +322,7 @@ impl LoroProjection {
                     {
                         return Err(diverged("cached slot identity changed"));
                     }
-                    let mut json = schema::own_map(&map)?;
+                    let mut json = schema::own_map(&map, self.policy)?;
                     mask_local(&mut json, self.policy);
                     let expected_children = synced_children(view, key, self.policy);
                     let maps = projected_children(&map, self.policy)?;

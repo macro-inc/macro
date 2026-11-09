@@ -254,7 +254,7 @@ impl LoroProjection {
             }
             let new = storage_own(next, key, self.policy)?;
             if origin == FIXUP_ORIGIN {
-                let mut current = schema::own_map(&map)?;
+                let mut current = schema::own_map(&map, self.policy)?;
                 mask_local_state(&mut current, self.policy);
                 if schema::owned_equal(
                     &serde_json::Value::Object(current),
@@ -301,7 +301,7 @@ impl LoroProjection {
                 {
                     stats.nodes_visited += 1;
                     let map = self.index.map(doc, key)?;
-                    let mut own = schema::own_map(&map)?;
+                    let mut own = schema::own_map(&map, self.policy)?;
                     mask_local(&mut own, self.policy);
                     schema::diff_map(&map, &own, &own, schema::MapSchema::Node, &mut stats)?;
                     self.index.bind(key, &map, self.policy)?;
@@ -343,7 +343,9 @@ impl LoroProjection {
         let mut normalized = false;
         for i in (0..list.len()).rev() {
             let map = schema::map_at(list.get(i), "children item")?;
-            if self.policy.is_transparent_json(&schema::own_map(&map)?)
+            if self
+                .policy
+                .is_transparent_json(&schema::own_map(&map, self.policy)?)
                 && projected_children(&map, self.policy)?
                     .iter()
                     .any(|child| self.index.owner.contains_key(&child.id()))
