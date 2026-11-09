@@ -13,13 +13,16 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class NativeSessionRecoveryTest {
-    @Test fun realSessionWritesDrainAndRecoverThroughTypedStorageCompletions() {
+    @Test fun realSessionWritesDrainAndRecoverThroughTypedStorageCompletions() = runRecovery(true)
+    @Test fun walOnlyRecoveryLoadsBeforeOfferingTheOptimisticSeed() = runRecovery(false)
+
+    private fun runRecovery(withSnapshot: Boolean) {
         val context = RuntimeEnvironment.getApplication()
         val writerConfig = NativeInputScenario.config()
         writerConfig.sync.doc = "recovery-fixture"
         writerConfig.sync.session = "00000000-0000-0000-0000-000000000021"
         writerConfig.sync.persistence = Persistence.DURABLE
-        writerConfig.sync.snapshotInterval = 100uL
+        writerConfig.sync.snapshotInterval = if (withSnapshot) 100uL else null
         var tick = 0uL
         val clock = { FfiNow(tick++, 1_000_000L) }
         val writer = NativeEditorSession(writerConfig, null, clock())
@@ -49,7 +52,7 @@ class NativeSessionRecoveryTest {
         tick += 2000uL
         host.admit(FfiInput.Tick)
         shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(writerEffects.snapshots > 0)
+        assertEquals(withSnapshot, writerEffects.snapshots > 0)
         host.stop(2u)
         shadowOf(Looper.getMainLooper()).idle()
         assertTrue(writerEffects.closed)
@@ -62,13 +65,21 @@ class NativeSessionRecoveryTest {
         val reader = NativeEditorSession(readerConfig, null, clock())
         val readerEffects = LocalEffects(NativeSessionStorage(context, readerConfig.sync.doc,
             readerConfig.sync.session, readerConfig.sync.user))
+        readerEffects.holdAdoption = !withSnapshot
+        var initialized = 0
         val reopened = NativeSessionHost(reader, readerEffects, {
             if (it is FfiViewEffect.Error) fail(it.message)
+            if (it is FfiViewEffect.Initialize) initialized++
         }, { throw AssertionError(it) }, clock)
         reopened.admit(FfiInput.Start)
         shadowOf(Looper.getMainLooper()).idle()
+        val adoption = if (withSnapshot) null else requireNotNull(readerEffects.finishAdoption)
         reopened.admit(FfiInput.Seed(SeedKind.OPTIMISTIC, byteArrayOf()))
         shadowOf(Looper.getMainLooper()).idle()
+        if (!withSnapshot) assertEquals(0, initialized)
+        adoption?.invoke()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1, initialized)
         assertEquals("durable😀", reader.textContent())
         assertEquals("durable😀", reader.markdown(FfiMarkdownFlavor.APPLICATION))
         reopened.stop(3u)
@@ -80,6 +91,8 @@ class NativeSessionRecoveryTest {
         var appends = 0
         var snapshots = 0
         var closed = false
+        var holdAdoption = false
+        var finishAdoption: (() -> Unit)? = null
         override fun fetchToken(effect: FfiIoEffect.FetchToken, complete: (String?, WriteAccess) -> Unit) = fail("Unexpected token fetch")
         override fun connect(effect: FfiIoEffect.SocketConnect, event: (SocketEvent) -> Unit) = fail("Unexpected socket")
         override fun send(effect: FfiIoEffect.SocketSend) = fail("Unexpected send")
@@ -88,7 +101,9 @@ class NativeSessionRecoveryTest {
         override fun storage(effect: FfiIoEffect.Storage, complete: (FfiStorageResult) -> Unit) {
             if (effect.opBody is StorageOp.WalAppend) appends++
             if (effect.opBody is StorageOp.SnapshotSave) snapshots++
-            complete(store.execute(effect.opBody))
+            val result = store.execute(effect.opBody)
+            if (holdAdoption && effect.opBody is StorageOp.WalAdopt) finishAdoption = { complete(result) }
+            else complete(result)
         }
         override fun telemetry(record: FfiTelemetry) = Unit
         override fun freshPeers() = listOf(207uL, 208uL, 209uL, 210uL)
