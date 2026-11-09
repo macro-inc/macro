@@ -5,6 +5,7 @@ mod checklist;
 mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
+mod decorator_actions;
 mod diff;
 mod keyboard;
 mod links;
@@ -78,7 +79,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = markdown_paste::register(builder, ty);
     let builder = links::register(builder, ty);
     let builder = diff::register(builder);
-    metadata::register(builder)
+    let builder = metadata::register(builder);
+    decorator_actions::register(builder)
 }
 
 #[cfg(test)]
@@ -130,6 +132,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = code::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = decorator_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if name == "group-b.select-all" {
