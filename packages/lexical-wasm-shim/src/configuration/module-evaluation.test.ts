@@ -6,6 +6,7 @@ test.each([
   '../nodes/artificial.ts',
   '../nodes/replacement/normalize.ts',
   './registered-nodes.ts',
+  './html-conversions.ts',
 ])('pure configuration entry %s loads cold without an engine', (path) => {
   const entry = new NodeURL(path, import.meta.url).href;
   const result = spawnSync(
