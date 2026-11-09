@@ -17,5 +17,8 @@ A block for editing code files with syntax highlighting and formatting.
   `frame-helper.ts` is the injected script and message protocol,
   `preview-runner.ts` the host side that runs each `macro.run` on the server
   as the viewer (`queries/document-programs.ts`) and posts only the outcome
-  back. The frame never holds a credential. See the agent guide's
+  back, and `event-host.ts` the host side of `macro.on`: one server event
+  stream per frame (`queries/document-events.ts`) whose filters are the union
+  of the frame's subscriptions, forwarding only each event's name and entity
+  id. The frame never holds a credential. See the agent guide's
   "Program blocks in HTML previews" for the authoring contract.

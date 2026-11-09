@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PROGRAM_BLOCK_TYPE,
   composeProgramDocument,
+  PROGRAM_BLOCK_TYPE,
   readRunRequest,
+  readSubscriptionMessage,
 } from './frame-helper';
 
 const parse = (html: string) =>
@@ -83,5 +84,76 @@ describe('readRunRequest', () => {
     ).toBeUndefined();
     expect(readRunRequest(null, 't')).toBeUndefined();
     expect(readRunRequest('macro:run', 't')).toBeUndefined();
+  });
+});
+
+describe('readSubscriptionMessage', () => {
+  it('reads subscribe messages with optional ids', () => {
+    expect(
+      readSubscriptionMessage(
+        {
+          type: 'macro:subscribe',
+          token: 't',
+          subscription: 2,
+          events: ['document.updated'],
+          ids: ['d1'],
+        },
+        't'
+      )
+    ).toEqual({
+      type: 'macro:subscribe',
+      token: 't',
+      subscription: 2,
+      events: ['document.updated'],
+      ids: ['d1'],
+    });
+    expect(
+      readSubscriptionMessage(
+        {
+          type: 'macro:subscribe',
+          token: 't',
+          subscription: 2,
+          events: ['document.updated'],
+          ids: 'd1',
+        },
+        't'
+      )
+    ).toEqual({
+      type: 'macro:subscribe',
+      token: 't',
+      subscription: 2,
+      events: ['document.updated'],
+    });
+  });
+
+  it('reads unsubscribe messages', () => {
+    expect(
+      readSubscriptionMessage(
+        { type: 'macro:unsubscribe', token: 't', subscription: 4 },
+        't'
+      )
+    ).toEqual({ type: 'macro:unsubscribe', token: 't', subscription: 4 });
+  });
+
+  it('ignores other tokens, types and malformed events', () => {
+    const subscribe = {
+      type: 'macro:subscribe',
+      token: 't',
+      subscription: 1,
+      events: ['document.updated'],
+    };
+    expect(
+      readSubscriptionMessage({ ...subscribe, token: 'x' }, 't')
+    ).toBeUndefined();
+    expect(
+      readSubscriptionMessage({ ...subscribe, type: 'macro:run' }, 't')
+    ).toBeUndefined();
+    expect(
+      readSubscriptionMessage({ ...subscribe, events: [1] }, 't')
+    ).toBeUndefined();
+    expect(
+      readSubscriptionMessage({ ...subscribe, subscription: '1' }, 't')
+    ).toBeUndefined();
+    expect(readSubscriptionMessage(null, 't')).toBeUndefined();
   });
 });

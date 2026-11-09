@@ -22,6 +22,72 @@ export type RunReplyMessage =
   | { type: 'macro:result'; token: string; id: number; result: unknown }
   | { type: 'macro:error'; token: string; id: number; message: string };
 
+/** Frame → host: deliver these events to subscription `subscription`. */
+export type SubscribeMessage = {
+  type: 'macro:subscribe';
+  token: string;
+  subscription: number;
+  events: string[];
+  /** Entity ids to narrow to; absent means every entity. */
+  ids?: string[];
+};
+
+/** Frame → host: stop subscription `subscription`. */
+export type UnsubscribeMessage = {
+  type: 'macro:unsubscribe';
+  token: string;
+  subscription: number;
+};
+
+/**
+ * What a `macro.on` handler receives: the event name and the entity id it is
+ * about, never its data; the page runs a program to read what changed.
+ * `macro.resync` follows a reconnect that may have missed events, and
+ * `macro.error` reports a refused subscription.
+ */
+export type FrameEvent = {
+  type: string;
+  id: string | null;
+  message?: string;
+};
+
+/** Host → frame: one event for one subscription. */
+export type EventMessage = {
+  type: 'macro:event';
+  token: string;
+  subscription: number;
+  event: FrameEvent;
+};
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/** Narrow a frame message to a subscription change carrying the frame's token. */
+export function readSubscriptionMessage(
+  data: unknown,
+  token: string
+): SubscribeMessage | UnsubscribeMessage | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const message = data as Record<string, unknown>;
+  if (message.token !== token || typeof message.subscription !== 'number')
+    return undefined;
+  if (message.type === 'macro:unsubscribe')
+    return {
+      type: 'macro:unsubscribe',
+      token,
+      subscription: message.subscription,
+    };
+  if (message.type !== 'macro:subscribe' || !isStringArray(message.events))
+    return undefined;
+  return {
+    type: 'macro:subscribe',
+    token,
+    subscription: message.subscription,
+    events: message.events,
+    ...(isStringArray(message.ids) ? { ids: message.ids } : {}),
+  };
+}
+
 /** Narrow a frame message to a run request carrying the frame's token. */
 export function readRunRequest(
   data: unknown,
@@ -55,7 +121,8 @@ export function readRunRequest(
  * Script injected at the head's start so it runs before the document's own
  * code. `macro.run(idOrSource, args)` runs the `text/macro` block with that
  * id, or the string itself as a module, and resolves to the value `main`
- * returned.
+ * returned. `macro.on(events, handler, {ids})` calls `handler` with a
+ * {@link FrameEvent} for each matching live event and returns `off`.
  */
 export const frameHelperScript = (token: string) =>
   `(function (host, token) {
@@ -72,16 +139,37 @@ export const frameHelperScript = (token: string) =>
         host.postMessage({ type: 'macro:run', token: token, id: id, source: source, arguments: args && typeof args === 'object' ? args : {} }, '*');
       });
     }
+    var handlers = {};
+    var nextSubscription = 1;
+    function on(events, handler, options) {
+      if (typeof handler !== 'function') throw new TypeError('macro.on needs a handler function');
+      var names = typeof events === 'string' ? [events] : Array.prototype.slice.call(events || []);
+      var ids = options && options.ids ? Array.prototype.slice.call(options.ids) : undefined;
+      var subscription = nextSubscription++;
+      handlers[subscription] = handler;
+      host.postMessage({ type: 'macro:subscribe', token: token, subscription: subscription, events: names, ids: ids }, '*');
+      return function off() {
+        if (!handlers[subscription]) return;
+        delete handlers[subscription];
+        host.postMessage({ type: 'macro:unsubscribe', token: token, subscription: subscription }, '*');
+      };
+    }
     addEventListener('message', function (event) {
       var data = event.data;
       if (event.source !== host || !data || data.token !== token) return;
+      if (data.type === 'macro:event') {
+        var handler = handlers[data.subscription];
+        if (!handler) return;
+        try { handler(data.event); } catch (error) { setTimeout(function () { throw error; }); }
+        return;
+      }
       var waiter = pending[data.id];
       if (!waiter) return;
       delete pending[data.id];
       if (data.type === 'macro:result') waiter.resolve(data.result);
       else if (data.type === 'macro:error') waiter.reject(new Error(String(data.message)));
     });
-    Object.defineProperty(window, 'macro', { value: Object.freeze({ run: run }), writable: false, configurable: false });
+    Object.defineProperty(window, 'macro', { value: Object.freeze({ run: run, on: on }), writable: false, configurable: false });
   })(parent, ${JSON.stringify(token)});`;
 
 /**

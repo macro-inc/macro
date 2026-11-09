@@ -3142,16 +3142,33 @@ types do not show these tabs.
 
 ### Program blocks in HTML previews
 
-With the `enable-html-code-mode` flag on (on by default in dev), the rendered
-frame of an HTML document gets `window.macro`. `macro.run(idOrSource, args)`
-runs a `<script type="text/macro" id="…">` block, or the string itself, as a
-TypeScript module on the server as the viewer, and resolves to what its
-`main` returned; a failed run rejects with the server's error text. The
-program's `main({macro, ...args})` receives the Macro SDK already signed in;
-the frame never sees a credential, and the file never reaches the API
+With the `enable-html-code-mode` flag on (on by default in dev and on every
+local stack), the rendered frame of an HTML document gets `window.macro`.
+`macro.run(idOrSource, args)` runs a `<script type="text/macro" id="…">`
+block, or the string itself, as a TypeScript module on the server as the
+viewer. The program's `main({macro, ...args})` receives the Macro SDK already
+signed in and must return exactly `{ data }` (any JSON); `macro.run` resolves
+to that `{ data }` object, and a failed run rejects with the server's error
+text. The frame never sees a credential, and the file never reaches the API
 directly (its origin is opaque, so CORS refuses it). At most two runs per
 frame wait at once; a run lasts at most 30 seconds. The program's writes stand
 as the user's own, with no agent attribution.
+
+`macro.on(events, handler, { ids })` delivers the viewer's live entity events
+(the same names as the SDK's `macro.events`, such as `document.created`,
+`document.updated` and `message.posted`; tasks are documents) and returns an
+`off` function. The handler gets `{ type, id }`, the event name and the entity
+it is about, never its data: re-run a program to read what changed. Pass
+`ids` to hear about specific entities only. After a dropped connection
+reconnects the handler gets `{ type: 'macro.resync' }`, because events in the
+gap are lost; a refused subscription gets `{ type: 'macro.error', message }`.
+The app keeps one server event stream per open preview, filtered and
+access-checked on the server, and closes it with the preview. A page may hold
+16 subscriptions.
+
+Two limits shape these pages. The frame is sandboxed with scripts only, so a
+`<form>` never submits: use buttons and key handlers. Programs have no
+`setTimeout`, so they cannot sleep or poll; the page's own script can.
 
 ```html
 <script type="text/macro" id="my-tasks">
@@ -3162,21 +3179,28 @@ as the user's own, with no agent attribution.
       if (tasks.length === 5) break;
     }
     const summaries = await macro.tasks.summaries(tasks);
-    return summaries.map((summary) => summary.name);
+    return { data: summaries.map((summary) => summary.name) };
   }
 </script>
 <ul id="out"></ul>
 <script>
-  macro.run('my-tasks', { query: 'launch' }).then((names) => {
+  async function load() {
+    const { data: names } = await macro.run('my-tasks', { query: 'launch' });
     out.replaceChildren(...names.map((name) => Object.assign(document.createElement('li'), { textContent: name })));
-  });
+  }
+  macro.on(['document.created', 'document.updated', 'document.deleted'], load);
+  load();
 </script>
 ```
 
 To check it, upload such a file, open it, and confirm the list fills in Render;
-with the flag off, `macro` is undefined and the preview is a plain sandboxed
-frame. A program whose `main` throws shows nothing: inspect the rejection in
-the frame's own `catch`.
+then rename a matching task in another split and watch the list follow without
+a reload. With the flag off, `macro` is undefined and the preview is a plain
+sandboxed frame. A program whose `main` throws, or returns anything but
+`{ data }`, shows nothing: inspect the rejection in the frame's own `catch`.
+In traces, `block_code.run_document_program` covers each run and
+`block_code.document_events.stream` each stream connection, with the events
+it delivered.
 
 ## Large-document undo checks
 

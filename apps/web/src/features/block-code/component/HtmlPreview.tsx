@@ -1,13 +1,15 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableHtmlCodeMode } from '@core/constant/featureFlags';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { attachEventHost } from '../code-mode/event-host';
 import { composeProgramDocument } from '../code-mode/frame-helper';
 import { attachProgramHost } from '../code-mode/preview-runner';
 
 /**
  * Sandboxed render of an HTML file. With a document id and the rollout on,
- * the frame gets `window.macro`, whose `run` executes the file's `text/macro`
- * blocks on the server as the viewer; the frame itself stays credential-free.
+ * the frame gets `window.macro`: `run` executes the file's `text/macro`
+ * blocks on the server as the viewer, and `on` delivers the viewer's live
+ * entity events (name and id only); the frame itself stays credential-free.
  */
 export function HtmlPreview(props: { text: string; documentId?: string }) {
   const codeMode = useFeatureFlag(enableHtmlCodeMode);
@@ -22,6 +24,7 @@ export function HtmlPreview(props: { text: string; documentId?: string }) {
     const documentId = programs();
     if (!documentId || !frame) return;
     onCleanup(attachProgramHost(frame, { documentId, token }));
+    onCleanup(attachEventHost(frame, { documentId, token }));
   });
 
   return (
