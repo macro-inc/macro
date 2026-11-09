@@ -56,6 +56,16 @@ fn exact_callback_scopes_restore_after_nested_transport_and_expire() -> Result<(
     };
     let request = wire::CompatHostRequest {
         context: outer.context,
+        dirty_leaves: vec![],
+        dirty_elements: vec![],
+        dirty_type: 0,
+        composition: wire::ForeignOptionalKey {
+            present: false,
+            key: wire::ForeignKey {
+                index: 0,
+                generation: 0,
+            },
+        },
         delta: wire::CompatRecordDelta {
             records: vec![],
             removed_keys: vec![],
@@ -140,6 +150,14 @@ fn exact_callback_scopes_restore_after_nested_transport_and_expire() -> Result<(
         "invocation must validate before dispatch"
     ))
     .is_err());
+    let invalid_dirty = wire::CompatHostRequest {
+        dirty_type: 3,
+        ..request.clone()
+    };
+    assert!(invoke_with(&outer, &invalid_dirty, |_, _| panic!(
+        "dirty type validates before dispatch"
+    ))
+    .is_err());
     let failure: Result<wire::CompatHostReply, Error> = invoke_with(&outer, &request, |_, _| {
         Err(Error::Invariant("transport failed"))
     });
@@ -161,6 +179,16 @@ fn acknowledgements_reject_wrong_scope_call_kind_and_state_identity() -> Result<
     };
     let request = wire::CompatHostRequest {
         context,
+        dirty_leaves: vec![],
+        dirty_elements: vec![],
+        dirty_type: 0,
+        composition: wire::ForeignOptionalKey {
+            present: false,
+            key: wire::ForeignKey {
+                index: 0,
+                generation: 0,
+            },
+        },
         delta: wire::CompatRecordDelta {
             records: vec![],
             removed_keys: vec![],
