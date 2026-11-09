@@ -26,7 +26,10 @@ import {
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
 import { ACTIONS } from '../../plugins/actions/actions';
-import { availableActions } from '../../plugins/actions/available-actions';
+import {
+  availableActions,
+  mergeActions,
+} from '../../plugins/actions/available-actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
@@ -170,12 +173,7 @@ export function ActionMenu(props: {
     })
   );
 
-  const merged: Action[] = [...ACTIONS];
-  for (const override of props.additionalActions ?? []) {
-    const idx = merged.findIndex((a) => a.id === override.id);
-    if (idx >= 0) merged[idx] = override;
-    else merged.push(override);
-  }
+  const merged = mergeActions(ACTIONS, props.additionalActions);
   const databasesEnabled = useFeatureFlag(enableDatabases);
   const validActions = () =>
     availableActions(merged, {
