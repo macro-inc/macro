@@ -11,6 +11,7 @@ mod editor;
 pub use editor::*;
 mod session;
 pub use session::*;
+pub use staging::{StagedUpdate, staging_editor_builder};
 #[cfg(feature = "test-faults")]
 mod test_faults;
 #[cfg(feature = "test-faults")]

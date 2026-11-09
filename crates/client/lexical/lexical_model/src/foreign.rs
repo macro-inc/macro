@@ -1,7 +1,7 @@
 //! Runtime node hosting and suspended updates.
 pub(crate) mod native;
 mod pending;
-pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
+pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity};
 mod read;
 pub use read::{ForeignReadContext, ForeignReadLease, ForeignReadSnapshot, ForeignRecordIdentity};
 pub(crate) use read::{ReadOrigin, ReadOriginRef, ReadProjections, RecordIdentityMarker};

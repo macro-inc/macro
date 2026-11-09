@@ -61,8 +61,7 @@ impl Editor {
     }
 }
 impl Transaction<'_> {
-    #[cfg(feature = "foreign-nodes")]
-    pub(crate) fn foreign_extensions_changed(&self) -> bool {
+    pub(crate) fn extensions_changed(&self) -> bool {
         self.extensions.len() != self.editor.extensions.len()
             || self.extensions.iter().any(|(key, entry)| {
                 self.editor

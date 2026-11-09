@@ -1115,7 +1115,7 @@ own: each covers the S1 item named in its `covers:` line (`/// covers: S1:<secti
 | §9.2 `ViewSelection::Table` | `hand::selection_gaps::selection_from_view_table_builds_table_selection` | A-hand + C `SelectionFromView` | lexical_model |
 | §9.2 `Transaction::fix_focus_overselection` | §1.8f row `NormalizeTripleClickSelectionExtension` | A-hand | lexical_model |
 | §12 `MergeTracker::classify(commit, now)` (no `has_current`) | `hand::history::merge_tracker_classifies_without_history` | A-hand | lexical_model |
-| §4.4 `PendingUpdate` staleness | `hand::foreign::resume_after_commit_is_stale_suspended_update` (`Error::StaleSuspendedUpdate`; feature `foreign-nodes`) | A-hand | lexical_model |
+| §4.4 `PendingUpdate` staleness | `hand::foreign::resume_after_commit_is_stale_suspended_update` (`Error::StaleSuspendedUpdate`; common native staging tests run without `foreign-nodes`, existing foreign wrappers remain covered) | A-hand | lexical_model |
 | §14.2 one shared follow-up per round, 99-round guard | `hand::commands::after_commit_plugins_share_one_follow_up_per_round`, `hand::commands::endless_follow_ups_stop_after_99_rounds` | A-hand | lexical_model |
 
 ### 1.9 Enumeration: every unit test file and its tier

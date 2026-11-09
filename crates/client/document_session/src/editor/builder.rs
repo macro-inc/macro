@@ -17,7 +17,7 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
 
 /// Install editing commands without registering nodes or allocating node identities.
 pub fn register_editor_commands(builder: EditorBuilder) -> EditorBuilder {
-    builder.plugin(RichCommands)
+    crate::staging::register_staged_updates(builder).plugin(RichCommands)
 }
 
 /// Install session commands and durable identity tracking over a supplied registry.

@@ -20,7 +20,6 @@ pub enum Error {
         key: std::sync::Arc<str>,
     },
     /// An update belongs to another editor or predates a later publication.
-    #[cfg(feature = "foreign-nodes")]
     #[error("stale suspended update")]
     StaleSuspendedUpdate,
     /// input cannot be batched.
@@ -373,7 +372,6 @@ impl Error {
             Self::ForeignReadFailed(error) => error.kind(),
             #[cfg(feature = "foreign-nodes")]
             Self::ForeignReadOnly => "ForeignReadOnly",
-            #[cfg(feature = "foreign-nodes")]
             Self::StaleSuspendedUpdate => "StaleSuspendedUpdate",
             #[cfg(feature = "foreign-nodes")]
             Self::UnknownForeignState { .. } => "UnknownForeignState",

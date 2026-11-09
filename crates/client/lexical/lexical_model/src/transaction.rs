@@ -25,8 +25,9 @@ pub struct Transaction<'editor> {
     pub(crate) foreign_native_calls: Arc<crate::foreign::native::NativeCalls>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
-    #[cfg(feature = "foreign-nodes")]
-    pub(crate) foreign_defer_publication: bool,
+    pub(crate) defer_publication: bool,
+    #[cfg(not(feature = "foreign-nodes"))]
+    pub(crate) staging_update: std::sync::OnceLock<Arc<()>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
     #[cfg(feature = "foreign-nodes")]
@@ -86,8 +87,9 @@ impl<'editor> Transaction<'editor> {
             foreign_native_calls: Arc::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
-            #[cfg(feature = "foreign-nodes")]
-            foreign_defer_publication: false,
+            defer_publication: false,
+            #[cfg(not(feature = "foreign-nodes"))]
+            staging_update: std::sync::OnceLock::new(),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_sources: None,
             #[cfg(feature = "foreign-nodes")]

@@ -19,7 +19,8 @@ pub struct Editor {
     pub(crate) foreign_runtime: crate::foreign::runtime::ForeignRuntime,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) suspend_owner: Arc<()>,
-    #[cfg(feature = "foreign-nodes")]
+    #[cfg(not(feature = "foreign-nodes"))]
+    pub(crate) suspend_owner: std::sync::OnceLock<Arc<()>>,
     pub(crate) suspend_version: CommitId,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) plugins: Vec<Arc<dyn Plugin>>,
@@ -57,9 +58,10 @@ impl Editor {
             foreign_runtime: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             suspend_owner,
+            #[cfg(not(feature = "foreign-nodes"))]
+            suspend_owner: std::sync::OnceLock::new(),
             #[cfg(feature = "foreign-nodes")]
             foreign_instances,
-            #[cfg(feature = "foreign-nodes")]
             suspend_version: CommitId(0),
             extensions: Default::default(),
             plugins: vec![],

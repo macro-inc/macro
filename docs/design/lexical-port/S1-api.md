@@ -140,11 +140,12 @@ lexical_model/src/
 │   ├── node_type.rs       NodeType, kind markers, KindOf (sealed), ParentOf, NodeView,
 │   │                      common_node_hooks! (crate-private),
 │   │                      element_node_base! / text_node_base! / decorator_node_base! macros
-│   ├── foreign.rs         ForeignNodeType, ForeignHooks, ForeignData, PendingUpdate,
+│   ├── foreign.rs         ForeignNodeType, ForeignHooks, ForeignData,
 │   │                      ForeignListener, ForeignTransform, ForeignStateConfig (feature `foreign-nodes`)
 │   └── builtin.rs         Root, Paragraph, Text, Tab, Artificial
 ├── registry.rs            Registry, RegisteredNode, NodeTypeIndex, NodeVTable (private),
 │                          trait projections (node_trait), TypeFlags, TypeTableRow
+├── staging.rs             PendingUpdate, suspend/resume/adoption (all builds)
 ├── editor.rs              Editor, EditorBuilder, EditorMode
 ├── state.rs               EditorState, StateRef, Read
 ├── read/
@@ -1758,10 +1759,14 @@ them in a newtype with `unsafe impl Send + Sync`, which is sound only on single-
 `wasm32-unknown-unknown`; it asserts `#[cfg(not(target_feature = "atomics"))]`, and that
 `unsafe` lives in the dev-only crate, never in `lexical_model`.
 
-The same feature carries the other run-time hooks the conformance host needs (R2.1, S4 §2.4
-items 5-7, §2.8; S12 §2.4 R5-R7). Upstream tests register listeners, transforms and state
-configs after `createEditor`, and drive one update across several JS calls; none of this
-exists in a shipped build.
+Runtime listener, transform and state-config hooks remain behind `foreign-nodes`
+(R2.1, S4 §2.4 items 5-7, §2.8; S12 §2.4 R5-R7). Common unpublished staging is
+always built: `PendingUpdate`, `Transaction::suspend`/`adopt_staged_update`,
+`Editor::resume` and `EditorCore::suspend_staged_update`/`with_staged_update`.
+Native owner/update markers allocate lazily when staging is first used. Foreign
+read/capture fields remain conditional, and the old foreign/compat names delegate
+to these shared operations. Session readiness/access checks still own admission;
+this extraction supplies no prepared-commit ticket or partial publication.
 
 ```rust
 /// A transaction detached from its `&mut Editor` borrow, so `EditorHandle::begin_update` …
@@ -1769,20 +1774,21 @@ exists in a shipped build.
 /// the pending state, dirty sets, tags, staged extension state, staged events, detached
 /// selection slots and the nested-update queue. Dropping it rolls the update back, as
 /// dropping the `Transaction` does. `Send + Sync` (it holds no editor reference).
-#[cfg(feature = "foreign-nodes")]
 pub struct PendingUpdate { /* the Transaction's owned fields + the CommitId it was opened at */ }
 
-#[cfg(feature = "foreign-nodes")]
 impl Transaction<'_> {
     /// Detaches the open update. No flush, no commit.
     pub fn suspend(self) -> PendingUpdate;
 }
 
-#[cfg(feature = "foreign-nodes")]
 impl Editor {
     /// Re-attaches a suspended update. `Error::StaleSuspendedUpdate` when the editor
     /// committed (or set its state) after the update was opened; the update is dropped.
     pub fn resume(&mut self, update: PendingUpdate) -> Result<Transaction<'_>, Error>;
+}
+
+#[cfg(feature = "foreign-nodes")]
+impl Editor {
     /// `editor.registerCommand(cmd, fn, priority)` after build: inserted into that command's
     /// listener list at `registration.priority` and `placement`, after every listener already
     /// at that level (Before placements in front, as §14.2). Refreshes `listener_table()`.
@@ -5119,7 +5125,7 @@ Rust-only variants (conditions JS types or runtime checks covered upstream):
 | `Json(Arc<serde_json::Error>)` | malformed JSON / struct import (`From<serde_json::Error>` written by hand, since `#[from]` cannot wrap in `Arc`) |
 | `WriteAfterSetEditorState` | a write, dirty mark, `queue_update`, `set_selection` or `dispatch` after `Transaction::set_editor_state` sealed the transaction (R2-02, D-24) |
 | `InvalidJsonField { type_name, field: &'static str, reason: &'static str }` | a base field has the wrong JSON type (e.g. `format: "x"` on text) |
-| `StaleSuspendedUpdate` | feature `foreign-nodes`: `Editor::resume` of a `PendingUpdate` opened before the editor's last commit (R2.1, §4.4) |
+| `StaleSuspendedUpdate` | All builds: `Editor::resume` of a `PendingUpdate` opened before the editor's last commit (R2.1, §4.4) |
 | `UnknownForeignState { key: Arc<str> }` | feature `foreign-nodes`: `set_foreign_state` for a key no `ForeignStateConfig` registered (R2.1) |
 | `Invariant(Cow<'static, str>)` | an `invariant(false, msg, …args)` in a package or Macro node (hooks, transforms and plugins return this crate's `Error`, S3 CR-22). Displays the message verbatim so the shim throws upstream's text. Upstream package invariants have `%s` arguments (`LexicalTableSelection.ts:74`, `LexicalTableSelectionHelpers.ts:851`), so it is a `Cow` (R2-44), built by `lexical_model::invariant!("… %s …", arg, …)`, which substitutes each `%s` in order with the argument's `Display`, as upstream's `formatDevErrorMessage` does, and borrows when there are no arguments. The core raises it only in the debug-build type-table check (§8.5, R2.1) |
 | `Internal(#[from] InternalError)` | port defects (rows marked Internal) |
@@ -6597,7 +6603,7 @@ for `PendingUpdate` and `Registry`.
 | S12 §1.12 | table cell-range selection from the view | `ViewSelection::Table { table, anchor_cell, focus_cell }` (§9.2) |
 | S12 §1.14, §0.2 S7 row | session read methods | `Read::nodes_of_type_index`, `Read::export_json`; `typeTable`/`listenerTable` above; `debugShouldPreventDefault` is the existing `Read::should_prevent_default_and_insert_text`; the Q16 reads become debug cross-checks (§15.1) |
 | S12 §1.14 normalize-triple-click | triple-click flag on `selectionFromView` | `SelectionChangeContext::triple_click`, `Transaction::selection_change_context`, `Transaction::fix_focus_overselection` (§9.2) |
-| S4 §2.8 / S12 §2.4 R5-R7 | JS-driven transactions across calls; JS listeners, transforms and NodeState after build | Feature `foreign-nodes`: `PendingUpdate` (`Transaction::suspend`, `Editor::resume`, `Error::StaleSuspendedUpdate`), `register_foreign_listener`/`unregister_foreign_listener` (refresh the listener table), `register_foreign_transform`, `ForeignStateConfig`/`ForeignStateCodec`, `set_foreign_state`, `Read::foreign_state`, `Error::UnknownForeignState` (§4.4, §5.2, §16) |
+| S4 §2.8 / S12 §2.4 R5-R7 | JS-driven transactions across calls; JS listeners, transforms and NodeState after build | All builds: `PendingUpdate` (`Transaction::suspend`, `Editor::resume`, `Error::StaleSuspendedUpdate`). Feature `foreign-nodes`: `register_foreign_listener`/`unregister_foreign_listener` (refresh the listener table), `register_foreign_transform`, `ForeignStateConfig`/`ForeignStateCodec`, `set_foreign_state`, `Read::foreign_state`, `Error::UnknownForeignState` (§4.4, §5.2, §16) |
 | S4 §2.8 `wire` feature | postcard `Input`/`Output` in the conformance crate | Not added: F18 keeps `lexical_model` free of wire derives. S4 uses S7's bebop codec (listed above) |
 | S4 matrix `blocked:no-rust-owner` | `ClickAfterLastBlockExtension`, `NormalizeTripleClickSelectionExtension` | Both assigned (§14.4): triple click split model (`lexical_model`) / plugin (S3) / view; click-after-last-block split model (S3 `lexical_rich_nodes`) / view (DOM geometry). Neither is js-by-design |
-| Counts | | §16 and §21 updated (`flag_probe`, `FLAGS_PER_INSTANCE`, two feature-gated errors, `NoFlagProbe`) |
+| Counts | | §16 and §21 updated (`flag_probe`, `FLAGS_PER_INSTANCE`, common staging staleness, runtime-only errors, `NoFlagProbe`) |

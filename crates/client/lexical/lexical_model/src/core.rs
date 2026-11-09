@@ -5,6 +5,7 @@ use std::sync::Arc;
 mod input;
 mod output;
 mod remote;
+mod staging;
 mod text;
 pub use input::*;
 pub use output::*;
