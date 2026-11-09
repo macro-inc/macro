@@ -217,26 +217,6 @@
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
-      "test": "LexicalEditor tests > parseEditorState() > node selection > Parses the text content of the editor state",
-      "status": "xfail",
-      "reason": "reconciler-internal",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
-      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
-      "failure": "op 12 read: call 1: unmapped node property __cachedText"
-    },
-    {
-      "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
-      "test": "LexicalEditor tests > parseEditorState() > range selection > Parses the text content of the editor state",
-      "status": "xfail",
-      "reason": "reconciler-internal",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
-      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
-      "failure": "op 12 read: call 1: unmapped node property __cachedText"
-    },
-    {
-      "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
       "test": "LexicalEditor tests > reconciles state without root element",
       "status": "xfail",
       "reason": "not-ported",
@@ -564,16 +544,6 @@
       "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
       "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
-    },
-    {
-      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTextNode.test.tsx",
-      "test": "LexicalTextNode tests > root.getTextContent() > writable nodes",
-      "status": "xfail",
-      "reason": "reconciler-internal",
-      "reviewedBy": "coding-agent",
-      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 \u00a72.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
-      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
-      "failure": "op 13 read: call 1: unmapped node property __cachedText"
     }
   ]
 }
