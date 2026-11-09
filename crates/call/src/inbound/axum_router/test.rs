@@ -7,6 +7,27 @@ use entity_access::domain::models::{AccessLevel, EntityPermission};
 use super::DeclineCallPermission;
 
 #[test]
+fn meeting_join_schema_preserves_optional_sdk_body() {
+    use utoipa::OpenApi;
+
+    #[derive(OpenApi)]
+    #[openapi(paths(super::meetings::join))]
+    struct Api;
+
+    let schema = serde_json::to_value(Api::openapi()).unwrap();
+    assert_eq!(
+        schema["paths"]["/call/meetings/join/{token}"]["post"]["requestBody"],
+        serde_json::json!({
+            "content": {
+                "application/json": {
+                    "schema": { "$ref": "#/components/schemas/JoinCallRequest" }
+                }
+            }
+        })
+    );
+}
+
+#[test]
 fn maps_domain_errors_to_status_codes() {
     let cases = [
         (
