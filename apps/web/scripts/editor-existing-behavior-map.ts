@@ -621,4 +621,224 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'stops active and debounced video resizing on lock while preserving committed size',
     ],
   },
+  // Comment transport, publication and layout observers are boundary stubs.
+  // These rows pin editor/state lifecycle, not remote delivery or thread UI.
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.ts',
+    anchor: '      DELETE_COMMENT_COMMAND,\n      ([markId',
+    testFile:
+      'apps/web/src/features/block-md/comments/commentMarkRemoval.test.ts',
+    cases: [
+      'comment mark removal can clean a server-deleted mark during discovery (already mounted: false)',
+      'comment mark removal can clean a server-deleted mark during discovery (already mounted: true)',
+      'comment mark removal deletes only the requested thread when comments overlap',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.ts',
+    anchor: '    editor.registerMutationListener(\n      CommentNode,',
+    testFile:
+      'apps/web/src/features/block-md/comments/commentMarkRemoval.test.ts',
+    cases: [
+      'comment mark removal reports the last removed range, including a collaborator edit',
+      'comment mark removal reports deletion of all selected marked text',
+      'comment mark removal keeps a thread anchored while another range with its ID exists',
+      'comment mark removal does not mistake node replacement in one update for range deletion',
+      'comment mark removal does not infer deletion from initialization or view unmounting',
+    ],
+  },
+  {
+    source: 'packages/lexical-core/nodes/CommentNode.ts',
+    anchor: 'export function stripDraftCommentMarks',
+    testFile:
+      'apps/web/src/features/block-md/comments/draftCommentMarkSync.test.ts',
+    cases: [
+      'draft comment marks stay out of the shared document leaves the draft out of the synced and saved state but keeps its text',
+      'draft comment marks stay out of the shared document keeps committed comment marks in the synced state',
+      'draft comment marks stay out of the shared document returns the same state object when there is no draft to strip',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.ts',
+    anchor: '      DELETE_COMMENT_COMMAND,\n      ([markId',
+    testFile:
+      'apps/web/src/features/block-md/comments/draftCommentMarkSync.test.ts',
+    cases: [
+      'draft comment marks stay out of the shared document preserves a saved range when an overlapping draft is cancel',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.ts',
+    anchor: '      COMMIT_COMMENT_MARK_COMMAND,\n      ({ markId',
+    testFile:
+      'apps/web/src/features/block-md/comments/draftCommentMarkSync.test.ts',
+    cases: [
+      'draft comment marks stay out of the shared document preserves a saved range when an overlapping draft is commit',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/collaboration/reconcile.ts',
+    anchor: 'export function $reconcileLexicalState',
+    testFile:
+      'apps/web/src/features/block-md/comments/draftCommentMarkSync.test.ts',
+    cases: [
+      'draft comment marks stay out of the shared document preserves a saved range when an overlapping draft is remote',
+      'draft comment marks stay out of the shared document keeps the local draft mark node through a remote edit elsewhere',
+      'draft comment marks stay out of the shared document keeps the draft over its text when a peer edits that text',
+      'draft comment marks stay out of the shared document drops the draft when a peer deletes all of its text',
+      'draft comment marks stay out of the shared document strips drafts that a previous session left in the shared state',
+    ],
+  },
+  {
+    source: 'apps/web/src/lib/core/component/LexicalMarkdown/utils.ts',
+    anchor: 'export function initializeEditorWithState(',
+    testFile:
+      'apps/web/src/features/block-md/comments/draftCommentMarkSync.test.ts',
+    cases: [
+      'draft comment marks stay out of the shared document does not load drafts saved in a document',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/features/block-md/comments/messageCommentOperations.ts',
+    anchor: 'export function useCreateMessageComment',
+    testFile:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.test.tsx',
+    cases: [
+      'inline comment link navigation keeps the draft and posts no message when its anchor is not acknowledged',
+      'inline comment link navigation does not post or clear a newer draft when an abandoned publication finishes',
+      'inline comment link navigation opens another comment after posting, metadata first: false',
+      'inline comment link navigation opens another comment after posting, metadata first: true',
+    ],
+  },
+  {
+    source: 'apps/web/src/features/block-md/comments/LocalCommentDraft.tsx',
+    anchor: '        post: async (send) => {',
+    testFile:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.test.tsx',
+    cases: [
+      'inline comment link navigation handles cancellation after message failure, outcome uncertain: false',
+      'inline comment link navigation handles cancellation after message failure, outcome uncertain: true',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.tsx',
+    anchor: '  const localDraft = createLocalCommentDraft({',
+    testFile:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.test.tsx',
+    cases: [
+      'inline comment link navigation opens a new draft inside an existing comment and preserves that comment on cancellation',
+      'inline comment link navigation opens and cancels a draft (editor published after mounting: false)',
+      'inline comment link navigation opens and cancels a draft (editor published after mounting: true)',
+    ],
+  },
+  {
+    source: 'apps/web/src/features/block-md/comments/LocalCommentDraft.tsx',
+    anchor: '    create: (id: string, selection: RangeSelection) => {',
+    testFile:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.test.tsx',
+    cases: [
+      'inline comment link navigation keeps a draft spanning paragraphs outside the document tree',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.tsx',
+    anchor: '    const rawComment = props.activeComment?.() ?? undefined;',
+    testFile:
+      'apps/web/src/features/block-md/comments/MessageCommentsProvider.test.tsx',
+    cases: [
+      'inline comment link navigation waits for editor initialization even when comments and marks arrive first',
+      'inline comment link navigation waits for comment data when the editor loads first',
+      'inline comment link navigation keeps the navigation pending while the editor is detached',
+    ],
+  },
+  // Search data is supplied at the query/cache boundary; these do not
+  // establish service-backed menu UI or remote search delivery.
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.ts',
+    anchor: 'export function useUsersMention(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.test.ts',
+    cases: [
+      'ranks shared people identically in body and discussion mention searches',
+      'keeps custom participant scope and display data when workspace data refreshes',
+      'uses supplied interaction history for people absent from the workspace list',
+      'preserves explicitly empty participant lists',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.ts',
+    anchor: '  const groups = (): GroupMentionItem[] => {',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useUsersMention.test.ts',
+    cases: [
+      'offers @here to channel composers without a block context',
+      'keeps @here out of composers that do not post to a channel',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEntityMention.ts',
+    anchor: 'export function useEntityMention(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEntityMention.test.ts',
+    cases: [
+      'exposes pagination from search projections, not just legacy record selection',
+      'ranks local projects together with cached hits and reranks new pages',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useCalendarEventMention.ts',
+    anchor: 'export function calendarEventMentionItems(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useCalendarEventMention.test.ts',
+    cases: [
+      'offers each event once, pinned to its occurrence only when it repeats',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useCalendarEventMention.ts',
+    anchor: '  const events = createLazyMemo',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useCalendarEventMention.test.ts',
+    cases: [
+      'keeps the found events when a later search fails, and waits for the first one',
+      'lists events shared with your channels after your own, in their order',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController.ts',
+    anchor: '  bins = createLazyMemo',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController.test.ts',
+    cases: [
+      'keeps the same people visible and selected as delayed categories arrive',
+      'keeps document preview slots stable when only total match counts change',
+      'allocates unused people slots to other categories and excludes ignored people',
+      'retains the full combined mobile list and entity-only allocation',
+      'keeps every category reachable when stable People rows exceed the preview target',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController.ts',
+    anchor: '  viewAll(bucketId: string): void {',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController.test.ts',
+    cases: [
+      'keeps all people accessible through View all and keyboard navigation',
+    ],
+  },
 ] as const;
