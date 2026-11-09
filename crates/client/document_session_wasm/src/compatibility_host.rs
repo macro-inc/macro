@@ -70,6 +70,9 @@ pub fn invoke_with(
 }
 
 fn validate_invocation(request: &wire::CompatHostRequest) -> Result<(), Error> {
+    if request.dirty_type > 2 {
+        return Err(Error::Invariant("invalid compatibility dirty type"));
+    }
     use wire::{CompatHostAccess as Access, CompatHostCall as Call};
     let access = request.context.access;
     let valid = match &request.call {
