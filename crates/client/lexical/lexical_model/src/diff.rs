@@ -316,201 +316,221 @@ impl Commit {
     pub(crate) fn visit_diff(
         &self,
         options: &DiffOptions,
-        mut emit: impl FnMut(DiffOp),
+        emit: impl FnMut(DiffOp),
     ) -> Result<(), Error> {
         let first = self.chain().next().unwrap_or(self);
         let last = self.chain().last().unwrap_or(self);
         let prev = first.prev.view();
         let next = last.next.view();
         let full = self.chain().any(|c| c.full_reconcile);
-        let mut changed = IndexSet::default();
         if full {
-            // Compare every map entry; a shared ancestor does not imply shared descendants.
-            let mut keys = first
-                .prev
-                .nodes
-                .keys()
-                .chain(last.next.nodes.keys())
-                .copied()
-                .collect::<Vec<_>>();
-            keys.sort();
-            keys.dedup();
-            for key in keys {
-                if match (first.prev.nodes.get(&key), last.next.nodes.get(&key)) {
-                    (Some(a), Some(b)) => !Arc::ptr_eq(a, b),
-                    _ => true,
-                } {
-                    changed.insert(key);
-                }
-            }
+            visit_transition_diff(prev, next, true, std::iter::empty(), options, emit)
         } else {
-            for commit in self.chain() {
-                changed.extend(
+            visit_transition_diff(
+                prev,
+                next,
+                false,
+                self.chain().flat_map(|commit| {
                     commit
                         .changes
                         .dirty_leaves
                         .iter()
                         .chain(commit.changes.dirty_elements.keys())
-                        .copied(),
-                );
-            }
+                        .copied()
+                }),
+                options,
+                emit,
+            )
         }
-        // Dirty detached subtree roots are enough for GC; descendants stay clean.
-        // A view must still forget every removed descendant, without changing the
-        // upstream mutation-listener dirty-set contract.
-        for key in changed.iter().copied().collect::<Vec<_>>() {
-            if prev.is_element(key) && !next.contains(key) {
-                changed.extend(prev.descendants(key).map(|(key, _)| key));
-            }
-        }
-        let removed: IndexSet<_> = changed
-            .iter()
-            .copied()
-            .filter(|key| prev.contains(*key) && !next.contains(*key))
-            .collect();
-        for key in preorder_sort(prev, removed.iter().copied()) {
-            emit(DiffOp::Remove {
-                key,
-                subtree_root: prev
-                    .parent(key)
-                    .is_none_or(|parent| !removed.contains(&parent)),
-            });
-        }
-        let created = preorder_sort(
-            next,
-            changed
-                .iter()
-                .copied()
-                .filter(|key| !prev.contains(*key) && next.contains(*key)),
-        );
-        for key in &created {
-            let key = *key;
-            let type_index = next.type_index(key).ok_or(Error::NodeNotFound(key))?;
-            let props = own_props(next, key)?;
-            emit(match next.kind(key).ok_or(Error::NodeNotFound(key))? {
-                NodeKind::Element => DiffOp::CreateElement {
-                    key,
-                    type_index,
-                    base: element_props(next, key)?,
-                    props,
-                },
-                NodeKind::Text => DiffOp::CreateText {
-                    key,
-                    type_index,
-                    text: next.text_data(key)?.text.as_str().to_owned(),
-                    base: next.text_data(key)?.into(),
-                    props,
-                },
-                NodeKind::Decorator => DiffOp::CreateDecorator {
-                    key,
-                    type_index,
-                    props,
-                },
-                NodeKind::LineBreak => DiffOp::CreateLineBreak { key, type_index },
-            });
-        }
-        let mut parents = IndexSet::default();
-        for key in &changed {
-            // Element property writes and ancestor dirty marks do not change
-            // child order. Moved/reordered children below add both parents even
-            // when first/last/size happen to remain equal.
-            let a = prev.slot(*key);
-            let b = next.slot(*key);
-            if next.is_element(*key)
-                && match (a.map(|s| &s.base), b.map(|s| &s.base)) {
-                    (Some(BaseData::Element(a)), Some(BaseData::Element(b))) => {
-                        a.first != b.first || a.last != b.last || a.size != b.size
-                    }
-                    _ => true,
-                }
-            {
-                parents.insert(*key);
-            }
-            let links_changed = match (a, b) {
-                (Some(a), Some(b)) => {
-                    a.links.parent != b.links.parent
-                        || a.links.prev != b.links.prev
-                        || a.links.next != b.links.next
-                }
-                _ => true,
-            };
-            if !links_changed {
-                continue;
-            }
-            if let Some(parent) = prev.parent(*key)
-                && next.is_element(parent)
-            {
-                parents.insert(parent);
-            }
-            if let Some(parent) = next.parent(*key) {
-                parents.insert(parent);
-            }
-        }
-        for parent in preorder_sort(next, parents) {
-            let children = next.children_keys(parent)?;
-            if !prev.contains(parent) || prev.children_keys(parent)? != children {
-                emit(DiffOp::Children { parent, children });
-            }
-        }
-        for key in changed {
-            let (Some(a), Some(b)) = (prev.slot(key), next.slot(key)) else {
-                continue;
-            };
-            if Arc::ptr_eq(&a.data, &b.data) && std::ptr::eq(a, b) {
-                continue;
-            }
-            if let (BaseData::Text(a), BaseData::Text(b)) = (&a.base, &b.base) {
-                if a.text != b.text {
-                    emit(DiffOp::Text {
-                        key,
-                        text: b.text.as_str().to_owned(),
-                    });
-                }
-                if TextProps::from(a) != TextProps::from(b) {
-                    emit(DiffOp::TextProps {
-                        key,
-                        props: b.into(),
-                    });
-                }
-            }
-            if matches!(
-                (&a.base, &b.base),
-                (BaseData::Element(_), BaseData::Element(_))
-            ) {
-                let props = element_props(next, key)?;
-                if element_props(prev, key)? != props {
-                    emit(DiffOp::ElementProps { key, props });
-                }
-            }
-            if !a.data.dyn_eq(b.data.as_ref()) {
-                emit(DiffOp::NodeProps {
-                    key,
-                    props: own_props(next, key)?,
-                });
-            }
-            #[cfg(feature = "foreign-nodes")]
-            let include_state = options.include_state && !next.state.foreign_instances.has_hooks();
-            #[cfg(not(feature = "foreign-nodes"))]
-            let include_state = options.include_state;
-            if include_state && !NodeState::equivalent(a.state.as_deref(), b.state.as_deref()) {
-                emit(DiffOp::State {
-                    key,
-                    state: state_props(next, key)?,
-                });
-            }
-        }
-        if options.include_state {
-            for key in created {
-                if let Some(state) = state_props(next, key)? {
-                    emit(DiffOp::State {
-                        key,
-                        state: Some(state),
-                    });
-                }
-            }
-        }
-        Ok(())
     }
 }
+
+pub(crate) fn visit_transition_diff(
+    prev: StateRef<'_>,
+    next: StateRef<'_>,
+    full: bool,
+    dirty: impl Iterator<Item = NodeKey>,
+    options: &DiffOptions,
+    mut emit: impl FnMut(DiffOp),
+) -> Result<(), Error> {
+    let mut changed = IndexSet::default();
+    if full {
+        let mut keys = prev
+            .state
+            .nodes
+            .keys()
+            .chain(next.state.nodes.keys())
+            .copied()
+            .collect::<Vec<_>>();
+        keys.sort();
+        keys.dedup();
+        for key in keys {
+            if match (prev.state.nodes.get(&key), next.state.nodes.get(&key)) {
+                (Some(a), Some(b)) => !Arc::ptr_eq(a, b),
+                _ => true,
+            } {
+                changed.insert(key);
+            }
+        }
+    } else {
+        changed.extend(dirty);
+    }
+    // Dirty detached subtree roots are enough for GC; descendants stay clean.
+    // A view must still forget every removed descendant, without changing the
+    // upstream mutation-listener dirty-set contract.
+    for key in changed.iter().copied().collect::<Vec<_>>() {
+        if prev.is_element(key) && !next.contains(key) {
+            changed.extend(prev.descendants(key).map(|(key, _)| key));
+        }
+    }
+    let removed: IndexSet<_> = changed
+        .iter()
+        .copied()
+        .filter(|key| prev.contains(*key) && !next.contains(*key))
+        .collect();
+    for key in preorder_sort(prev, removed.iter().copied()) {
+        emit(DiffOp::Remove {
+            key,
+            subtree_root: prev
+                .parent(key)
+                .is_none_or(|parent| !removed.contains(&parent)),
+        });
+    }
+    let created = preorder_sort(
+        next,
+        changed
+            .iter()
+            .copied()
+            .filter(|key| !prev.contains(*key) && next.contains(*key)),
+    );
+    for key in &created {
+        let key = *key;
+        let type_index = next.type_index(key).ok_or(Error::NodeNotFound(key))?;
+        let props = own_props(next, key)?;
+        emit(match next.kind(key).ok_or(Error::NodeNotFound(key))? {
+            NodeKind::Element => DiffOp::CreateElement {
+                key,
+                type_index,
+                base: element_props(next, key)?,
+                props,
+            },
+            NodeKind::Text => DiffOp::CreateText {
+                key,
+                type_index,
+                text: next.text_data(key)?.text.as_str().to_owned(),
+                base: next.text_data(key)?.into(),
+                props,
+            },
+            NodeKind::Decorator => DiffOp::CreateDecorator {
+                key,
+                type_index,
+                props,
+            },
+            NodeKind::LineBreak => DiffOp::CreateLineBreak { key, type_index },
+        });
+    }
+    let mut parents = IndexSet::default();
+    for key in &changed {
+        // Element property writes and ancestor dirty marks do not change
+        // child order. Moved/reordered children below add both parents even
+        // when first/last/size happen to remain equal.
+        let a = prev.slot(*key);
+        let b = next.slot(*key);
+        if next.is_element(*key)
+            && match (a.map(|s| &s.base), b.map(|s| &s.base)) {
+                (Some(BaseData::Element(a)), Some(BaseData::Element(b))) => {
+                    a.first != b.first || a.last != b.last || a.size != b.size
+                }
+                _ => true,
+            }
+        {
+            parents.insert(*key);
+        }
+        let links_changed = match (a, b) {
+            (Some(a), Some(b)) => {
+                a.links.parent != b.links.parent
+                    || a.links.prev != b.links.prev
+                    || a.links.next != b.links.next
+            }
+            _ => true,
+        };
+        if !links_changed {
+            continue;
+        }
+        if let Some(parent) = prev.parent(*key)
+            && next.is_element(parent)
+        {
+            parents.insert(parent);
+        }
+        if let Some(parent) = next.parent(*key) {
+            parents.insert(parent);
+        }
+    }
+    for parent in preorder_sort(next, parents) {
+        let children = next.children_keys(parent)?;
+        if !prev.contains(parent) || prev.children_keys(parent)? != children {
+            emit(DiffOp::Children { parent, children });
+        }
+    }
+    for key in changed {
+        let (Some(a), Some(b)) = (prev.slot(key), next.slot(key)) else {
+            continue;
+        };
+        if Arc::ptr_eq(&a.data, &b.data) && std::ptr::eq(a, b) {
+            continue;
+        }
+        if let (BaseData::Text(a), BaseData::Text(b)) = (&a.base, &b.base) {
+            if a.text != b.text {
+                emit(DiffOp::Text {
+                    key,
+                    text: b.text.as_str().to_owned(),
+                });
+            }
+            if TextProps::from(a) != TextProps::from(b) {
+                emit(DiffOp::TextProps {
+                    key,
+                    props: b.into(),
+                });
+            }
+        }
+        if matches!(
+            (&a.base, &b.base),
+            (BaseData::Element(_), BaseData::Element(_))
+        ) {
+            let props = element_props(next, key)?;
+            if element_props(prev, key)? != props {
+                emit(DiffOp::ElementProps { key, props });
+            }
+        }
+        if !a.data.dyn_eq(b.data.as_ref()) {
+            emit(DiffOp::NodeProps {
+                key,
+                props: own_props(next, key)?,
+            });
+        }
+        #[cfg(feature = "foreign-nodes")]
+        let include_state = options.include_state && !next.state.foreign_instances.has_hooks();
+        #[cfg(not(feature = "foreign-nodes"))]
+        let include_state = options.include_state;
+        if include_state && !NodeState::equivalent(a.state.as_deref(), b.state.as_deref()) {
+            emit(DiffOp::State {
+                key,
+                state: state_props(next, key)?,
+            });
+        }
+    }
+    if options.include_state {
+        for key in created {
+            if let Some(state) = state_props(next, key)? {
+                emit(DiffOp::State {
+                    key,
+                    state: Some(state),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test;

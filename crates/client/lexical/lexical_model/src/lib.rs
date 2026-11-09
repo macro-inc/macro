@@ -14,10 +14,12 @@ pub use style::*;
 mod editor;
 mod node;
 mod node_state;
+mod prepared;
 mod read;
 mod registry;
 mod selection;
 mod staging;
+pub use prepared::{PreparationFailure, PreparedReceipt, PreparedRefusal, PreparedUpdate};
 mod state;
 pub use staging::PendingUpdate;
 mod transaction;
@@ -41,6 +43,8 @@ pub use raw_text::*;
 const _: () = {
     const fn assert_send_sync<Value: Send + Sync>() {}
     assert_send_sync::<Editor>();
+    assert_send_sync::<PreparedUpdate>();
+    assert_send_sync::<PreparedReceipt>();
     assert_send_sync::<EditorState>();
     assert_send_sync::<Registry>();
     assert_send_sync::<Commit>();
