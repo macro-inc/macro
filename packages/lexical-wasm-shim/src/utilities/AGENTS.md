@@ -21,3 +21,5 @@ These helpers do not bind an editor, clone authority or the native oracle.
 Use tree.ts for pinned actual-node traversal and raw detach source algorithms.
 Raw detach currently rejects missing __first write authority; keep that native
 gate open without substituting Node.remove or a fabricated writable stage.
+Use dom-config.ts for exact indent/direction source calls. Format-from-DOM remains
+open because inherited table keys such as constructor are not ElementFormatType.
