@@ -113,18 +113,7 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
                 });
             }
             output.push_str(",\"format\":");
-            string(
-                match data.format {
-                    ElementFormat::Unset => "",
-                    ElementFormat::Left => "left",
-                    ElementFormat::Start => "start",
-                    ElementFormat::Center => "center",
-                    ElementFormat::Right => "right",
-                    ElementFormat::End => "end",
-                    ElementFormat::Justify => "justify",
-                },
-                output,
-            );
+            string(data.format.as_str(), output);
             if !data.absent.contains(AbsentKeys::INDENT) {
                 output.push_str(",\"indent\":");
                 number(data.indent, output);
