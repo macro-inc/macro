@@ -27,7 +27,7 @@ function pollWhileGenerating(query: Query<RoutineSuggestions>) {
   return query.state.data?.status === 'generating' ? GENERATING_POLL_MS : false;
 }
 
-export function routineSuggestionsQueryOptions(enabled: boolean) {
+function routineSuggestionsQueryOptions(enabled: boolean) {
   return queryOptions({
     queryKey: routineSuggestionKeys.all.queryKey,
     queryFn: () => throwOnErr(() => scheduledActionClient.routineSuggestions()),

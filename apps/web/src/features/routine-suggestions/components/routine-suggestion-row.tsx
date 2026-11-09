@@ -224,7 +224,7 @@ export function SuggestionReviewButton(props: {
   );
 }
 
-/** On or off, for lists where the host creates the chosen routines later. */
+/** On or off, for lists where the host creates the chosen routines later (onboarding, #9958). */
 export function SuggestionToggle(props: {
   name: string;
   on: boolean;

@@ -21,8 +21,7 @@ import { describeTrigger } from '../../routines/core/routine-triggers';
 import { draftFromSchedule } from '../../routines/queries/routine-draft';
 import type { RoutineSurface } from './surfaces';
 
-export type CatalogPick = Extract<RoutineSuggestion, { kind: 'catalog' }>;
-export type DraftedPick = Extract<RoutineSuggestion, { kind: 'routine' }>;
+type CatalogPick = Extract<RoutineSuggestion, { kind: 'catalog' }>;
 
 /** A suggestion as its row shows it, with the routine it saves. */
 export type SuggestionItem = {
