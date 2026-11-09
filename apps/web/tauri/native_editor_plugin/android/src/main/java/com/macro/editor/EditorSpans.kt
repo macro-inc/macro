@@ -28,6 +28,12 @@ internal class EditorSpans {
             if (format and 32u != 0u) span(SubscriptSpan(), range)
             if (format and 64u != 0u) span(SuperscriptSpan(), range)
         }
+        for (range in layout.decorators) {
+            val node = requireNotNull(projection.nodes[range.key])
+            val facts = node.decorator ?: continue
+            if (facts.isInline && projection.typeName(node)?.endsWith("-mention") == true && facts.text.isNotEmpty())
+                span(NativeDecoratorSpan(facts.text), range)
+        }
         for (range in layout.elements) {
             val node = requireNotNull(projection.nodes[range.key])
             val type = projection.typeName(node)

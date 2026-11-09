@@ -28,6 +28,10 @@ class NativeEditorViewTest {
         NativeHistoryScenario.restoredCodeIdentity(RuntimeEnvironment.getApplication(), true)
     }
 
+    @Test fun nativeMentionLabelsKeepAtomicUtf16PositionsAndReuseModelFacts() {
+        NativeDecoratorScenario.run(RuntimeEnvironment.getApplication())
+    }
+
     @Test fun consumedEnterKeepsTextAndPreventionAfterEffectFailure() {
         NativeInputScenario.consumedEnter(RuntimeEnvironment.getApplication())
     }

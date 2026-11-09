@@ -34,6 +34,11 @@ class NativeEditorInputTest {
         }
     }
 
+    @Test fun nativeMentionLabelsKeepAtomicUtf16Positions() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeDecoratorScenario.run(instrumentation.targetContext) }
+    }
+
     @Test fun nativeMenusSelectTypedMentionsAndPreserveLiteralOnDismiss() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeMenuScenario.run(instrumentation.targetContext) }

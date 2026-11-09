@@ -19,6 +19,13 @@ text edit may elide its entire Rust text diff: update the view cache from that e
 before applying model corrections. Read type names from the session type table,
 not node properties, because the structural diff removes base metadata.
 
+Read decorator text and instance facts through the shared bulk query when keyed
+decorator data changes. Cache those facts across text-only edits and repaint
+mention labels with replacement spans over the existing atomic character; do not
+insert display labels into the editable text. API 30+ span descriptions expose
+those labels to accessibility. Device TalkBack, earlier accessibility behavior,
+application display lookups and decorator actions remain admission requirements.
+
 Use the shared insertion-policy query before choosing a text splice: changed
 typing marks and token boundaries require an insertion command. Reattach a
 running session with `attachRunningSession` to restore text and selection while
