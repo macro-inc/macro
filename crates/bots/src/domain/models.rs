@@ -516,6 +516,10 @@ pub struct PatchAgentRequest {
     /// Replacement coding choice.
     #[serde(default)]
     pub is_coding: Option<bool>,
+    /// Replacement privacy choice: mentions start private threads (`true`)
+    /// or shared ones (`false`).
+    #[serde(default)]
+    pub is_ephemeral: Option<bool>,
 }
 
 impl PatchAgentRequest {
@@ -534,7 +538,7 @@ impl PatchAgentRequest {
             None => (current.channel_scope, current.channel_ids.clone()),
         };
         UpdateAgentRequest {
-            is_ephemeral: Some(current.is_ephemeral),
+            is_ephemeral: Some(self.is_ephemeral.unwrap_or(current.is_ephemeral)),
             team_id: match &current.bot.owner {
                 Some(BotOwner::Team { team_id }) => Some(*team_id),
                 Some(BotOwner::User { .. }) | None => None,

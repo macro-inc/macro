@@ -6,7 +6,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test('agent privacy uses the wire flag and omission preserves older update callers', async () => {
+test('agent privacy uses the wire flag and omission keeps the saved setting', async () => {
   const bodies: Record<string, unknown>[] = [];
   globalThis.fetch = (async (input) => {
     const request = input instanceof Request ? input : new Request(input);
@@ -27,10 +27,14 @@ test('agent privacy uses the wire flag and omission preserves older update calle
     isCoding: false,
   };
   const agent = macro.agents.byId('agent-1');
-  await agent.update({ ...options, isEphemeral: true });
-  await agent.update(options);
-  await agent.update({ ...options, isEphemeral: false });
+  await agent.update({ isEphemeral: true });
+  await agent.update({ instructions: 'Help research' });
+  await agent.update({ isEphemeral: false });
+  await agent.replace({ ...options, isEphemeral: true });
+  await agent.replace(options);
   expect(bodies[0].is_ephemeral).toBe(true);
   expect(bodies[1]).not.toHaveProperty('is_ephemeral');
   expect(bodies[2].is_ephemeral).toBe(false);
+  expect(bodies[3].is_ephemeral).toBe(true);
+  expect(bodies[4]).not.toHaveProperty('is_ephemeral');
 });

@@ -127,3 +127,17 @@ fn patching_an_ephemeral_agent_preserves_its_privacy_setting() {
     .apply_to(&current);
     assert_eq!(update.is_ephemeral, Some(true));
 }
+
+#[test]
+fn patching_privacy_replaces_the_saved_setting() {
+    let current = agent(BotOwner::User {
+        user_id: "macro|owner@example.com".into(),
+    });
+    let update = PatchAgentRequest {
+        is_ephemeral: Some(true),
+        ..Default::default()
+    }
+    .apply_to(&current);
+    assert_eq!(update.is_ephemeral, Some(true));
+    assert_eq!(update.instructions, current.instructions);
+}

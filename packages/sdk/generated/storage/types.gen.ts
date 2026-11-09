@@ -15094,6 +15094,11 @@ export type PatchAgentRequest = {
      * Replacement coding choice.
      */
     is_coding?: boolean | null;
+    /**
+     * Replacement privacy choice: mentions start private threads (`true`)
+     * or shared ones (`false`).
+     */
+    is_ephemeral?: boolean | null;
     mcp?: null | AgentMcpServers;
 };
 

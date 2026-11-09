@@ -2140,6 +2140,7 @@ export * from './patchAgentRequestDefaultModel';
 export * from './patchAgentRequestHarness';
 export * from './patchAgentRequestInstructions';
 export * from './patchAgentRequestIsCoding';
+export * from './patchAgentRequestIsEphemeral';
 export * from './patchAgentRequestMcp';
 export * from './patchBotRequest';
 export * from './patchBotRequestAvatarUrl';

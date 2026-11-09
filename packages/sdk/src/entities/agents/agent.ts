@@ -35,6 +35,8 @@ export type AgentPatch = {
   autoAcceptPermissions?: boolean;
   /** A coding agent (`true`) or a chat agent (`false`). */
   isCoding?: boolean;
+  /** Mentions start a private thread (`true`) or a shared one (`false`). */
+  isEphemeral?: boolean;
 };
 
 /** Agent creation and replacement settings. */
@@ -245,6 +247,7 @@ function agentPatchBody(patch: AgentPatch): PatchAgentRequest {
     body.auto_accept_permissions = patch.autoAcceptPermissions;
   }
   if (patch.isCoding !== undefined) body.is_coding = patch.isCoding;
+  if (patch.isEphemeral !== undefined) body.is_ephemeral = patch.isEphemeral;
   return body;
 }
 

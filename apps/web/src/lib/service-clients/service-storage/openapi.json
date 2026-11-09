@@ -48656,6 +48656,10 @@
             "type": ["boolean", "null"],
             "description": "Replacement coding choice."
           },
+          "is_ephemeral": {
+            "type": ["boolean", "null"],
+            "description": "Replacement privacy choice: mentions start private threads (`true`)\nor shared ones (`false`)."
+          },
           "mcp": {
             "oneOf": [
               {
