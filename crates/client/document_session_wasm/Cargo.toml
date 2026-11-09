@@ -8,7 +8,9 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["bebop-owned-all", "compatibility"]
+default = ["bebop-owned-all"]
+# Only the explicit Lexical compatibility web artifact hosts JS classes.
+compat-web = ["bebop-owned-all", "compatibility"]
 bebop-owned-all = []
 compatibility = ["document_session/compatibility", "dep:scoped-tls-hkt"]
 
