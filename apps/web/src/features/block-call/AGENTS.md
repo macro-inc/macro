@@ -24,7 +24,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
 - Show the summary AI icon before its tab/heading label and put attribution in a shared hover/focus tooltip, not a separate line.
 - Let CallRecordingBody own the floating details SidePanel.Layout below the full-width header; keep the details toggle in that header.
-- Put the existing available Call again action in the desktop header before Ask Macro; keep active-call Join call below the title.
+- Put Call again before Ask Macro through HeaderActionButton so both collapse at the shared 600px header threshold; keep active-call Join call below the title.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.
 - Keep metadata and entity sections on SidePanel's standard floating detail rows and dividers; keep the team-sharing card always visible below metadata, outside collapsible sections.
 - Show read-only team visibility and the starter's resolved display name when sharing is not editable; use the generic starter reason instead of an email fallback, and reserve a disabled switch for pending writes.

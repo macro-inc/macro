@@ -5,6 +5,7 @@ import { beginInteraction, usePending } from '@app/observability/flow';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { guestDisplayName } from '@channel/Call/call-identity';
 import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -15,7 +16,7 @@ import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, ButtonGroup, Layer, Tabs } from '@ui';
+import { Button, Layer, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -265,10 +266,13 @@ export function CallRecordingBody(props: {
                           !isMobile() && !record().isActive && canCallAgain()
                         }
                       >
-                        <ButtonGroup.Button onClick={callAgain}>
-                          <PhoneCallIcon class="size-4" />
-                          {t('calls.detailCallAgain')}
-                        </ButtonGroup.Button>
+                        <HeaderActionButton
+                          grouped
+                          onClick={callAgain}
+                          label={t('calls.detailCallAgain')}
+                          tooltip={t('calls.detailCallAgain')}
+                          icon={<PhoneCallIcon class="size-4" />}
+                        />
                       </Show>
                       <AskMacroButton
                         grouped

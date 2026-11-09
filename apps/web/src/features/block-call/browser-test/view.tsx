@@ -105,7 +105,7 @@ render(
               <p>Recording references</p>
             </div>
           </SidePanel.Section>
-          <header class="flex shrink-0 items-center gap-2 p-4">
+          <header class="flex shrink-0 items-center gap-2 p-4 @container/split-header">
             <span class="mr-auto">Recording fixture</span>
             <SidePanel.HeaderActionsOutlet />
             <Button size="sm">Share</Button>
