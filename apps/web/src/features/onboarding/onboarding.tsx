@@ -10,8 +10,12 @@ import { createAppOnboardingContext } from './create-app-onboarding-context';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
 import { SignupJourneyView } from './views/signup-journey-view';
 
-/** The signed-in onboarding flow, wired to the app's services and router. */
-export function Onboarding() {
+/**
+ * The signed-in onboarding flow, wired to the app's services and router.
+ * `next` overrides the page's own `?next`, for hosts (sign-in) whose deep
+ * link arrives under another name.
+ */
+export function Onboarding(props: { next?: string }) {
   const context = createAppOnboardingContext();
   const navigate = useNavigate();
   const userInfoQuery = useUserInfoQuery();
@@ -30,7 +34,10 @@ export function Onboarding() {
   return (
     <OnboardingProvider value={context}>
       <OnboardingFlowView
-        next={typeof params.next === 'string' ? params.next : undefined}
+        next={
+          props.next ??
+          (typeof params.next === 'string' ? params.next : undefined)
+        }
         step={requestedStep}
         checkoutReturn={parseCheckoutReturn(params)}
         onNavigate={(target) => navigate(target, { replace: true })}

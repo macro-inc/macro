@@ -40,8 +40,8 @@ use super::models::{
     RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
-    BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
-    ShaCounterPort,
+    BulkUploadRequestPort, FiledItemsUnfiler, ProjectRepo, ProjectSearchIndexer, ProjectService,
+    ProjectUploadUrlPort, ShaCounterPort,
 };
 use super::upload::{build_destination_map, build_root_folder};
 
@@ -63,7 +63,7 @@ fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static
 }
 
 /// Concrete project service backed by repository and external-system ports.
-pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+pub struct ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -71,6 +71,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     /// Project repository.
@@ -85,13 +86,15 @@ where
     pub entity_access_management_service: Eam,
     /// Document search and deletion queue publisher.
     pub search_indexer: Idx,
+    /// Returns a trashed folder's databases and forms to the root.
+    pub filed_items_unfiler: Unf,
     /// Project lifecycle event broker.
     pub macro_event_broker: B,
     /// Optional deterministic upload request ID used by local development.
     pub fixed_upload_request_id: Option<Uuid>,
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -99,6 +102,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     /// Create a project service from its repository and external-system ports.
@@ -110,6 +114,7 @@ where
         sha_counter: Sha,
         entity_access_management_service: Eam,
         search_indexer: Idx,
+        filed_items_unfiler: Unf,
         fixed_upload_request_id: Option<Uuid>,
         macro_event_broker: B,
     ) -> Self {
@@ -120,6 +125,7 @@ where
             sha_counter,
             entity_access_management_service,
             search_indexer,
+            filed_items_unfiler,
             macro_event_broker,
             fixed_upload_request_id,
         }
@@ -250,7 +256,8 @@ where
     }
 }
 
-impl<R, U, D, Sha, Eam, Idx, B> ProjectService for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
+impl<R, U, D, Sha, Eam, Idx, Unf, B> ProjectService
+    for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, Unf, B>
 where
     R: ProjectRepo,
     U: ProjectUploadUrlPort,
@@ -258,6 +265,7 @@ where
     Sha: ShaCounterPort,
     Eam: EntityAccessManagementService,
     Idx: ProjectSearchIndexer,
+    Unf: FiledItemsUnfiler,
     B: MacroEventBroker,
 {
     async fn list_projects(
@@ -598,6 +606,19 @@ where
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
+        // Databases and forms are not trashed with their folder; like a purge,
+        // trashing it files them at the root.
+        let _ = self
+            .filed_items_unfiler
+            .unfile_from_projects(deleted.project_ids.clone())
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    project_ids = ?deleted.project_ids,
+                    "unable to return a trashed folder's databases and forms to the root"
+                );
+            });
 
         let project_id = receipt.entity().entity_id.clone();
         self.publish_project_event(&ProjectMacroEvent::deleted(

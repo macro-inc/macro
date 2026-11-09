@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -222,8 +223,8 @@ export function EmailList(props: EmailListProps) {
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
-  const listStartMargin = () =>
-    isTouchDevice() ? (topSpacerSize.height ?? 0) : 0;
+  // The top spacer holds the touch inset and the pinned tutorial row.
+  const listStartMargin = () => topSpacerSize.height ?? 0;
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   // Coming back from a thread, or toggling the reading pane, remounts the
@@ -775,7 +776,19 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
-                  <EmailEmptyState />
+                  {/* New inboxes start empty, which is when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'important'}
+                    fallback={<EmailEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <TutorialRow tutorial="mail" />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <EmailEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
@@ -788,11 +801,15 @@ export function EmailList(props: EmailListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'important'}>
+                      <TutorialRow tutorial="mail" />
+                    </Show>
+                  </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
@@ -863,13 +880,11 @@ export function EmailList(props: EmailListProps) {
                                       metaEnd={
                                         <EmailFocusScore
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       previewLeading={
                                         <EmailFocusPreviewLeading
                                           entity={entityRow().entity}
-                                          sort={state.focusSort}
                                         />
                                       }
                                       scheduleStatus={

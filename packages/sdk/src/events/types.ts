@@ -5,6 +5,7 @@
 
 import type { WebhookEvent } from '../../generated/storage/types.gen';
 import type { hydrateAgentSessionEvent } from './hydrate/agentSession';
+import type { hydrateCallEvent } from './hydrate/call';
 import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
 import type { hydrateMessageEvent } from './hydrate/message';
@@ -31,6 +32,7 @@ export type EventPayload<E extends EventName> = Extract<
 type HydratedEvent =
   | ReturnType<typeof hydrateAgentSessionEvent>
   | ReturnType<typeof hydrateChannelEvent>
+  | ReturnType<typeof hydrateCallEvent>
   | ReturnType<typeof hydrateDocumentEvent>
   | ReturnType<typeof hydrateMessageEvent>;
 

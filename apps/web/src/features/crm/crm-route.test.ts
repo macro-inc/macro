@@ -16,10 +16,14 @@ import {
   crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
   crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   legacyContentRoute,
   notFoundRoute,
   taskDetailRoute,
@@ -64,12 +68,16 @@ const routes = createRoutesManifest({
                 crmPipelineRecordRoute,
                 crmPipelineRecordItemRoute,
                 crmPipelineRecordFileItemRoute,
+                crmPipelineRetiredDatabaseRoute,
+                crmPipelineRetiredRecordDatabasesRoute,
               ],
             },
             crmItemRoute,
             crmRecordRoute,
             crmRecordItemRoute,
             crmRecordFileItemRoute,
+            crmRetiredDatabaseRoute,
+            crmRetiredRecordDatabasesRoute,
           ],
         },
         legacyContentRoute,
@@ -193,7 +201,6 @@ describe('CRM item URLs', () => {
     ['tasks', 'document', 'md', 'task', 'task'],
     ['emails', 'email', undefined, undefined, 'email'],
     ['calls', 'call', undefined, undefined, 'call'],
-    ['databases', 'database', undefined, undefined, 'database'],
   ])(
     'decodes a %s record item and references the item, not the record',
     (section, itemType, itemFileType, itemSubType, block) => {
@@ -329,7 +336,6 @@ describe('CRM item URLs', () => {
     `companies/company/${companyId}/tasks/document/${itemId}/md/task`,
     `companies/contact/${contactId}/emails/email/${itemId}`,
     `companies/company/${companyId}/calls/call/${itemId}`,
-    `companies/contact/${contactId}/databases/database/${itemId}`,
     `companies/pipeline/${pipelineId}/contact/${contactId}/tasks/document/${itemId}/md/task`,
     `companies/pipeline/${pipelineId}/company/${companyId}/emails/email/${itemId}`,
   ])('rejects obsolete typed record item URLs: %s', (path) => {
@@ -582,5 +588,71 @@ describe('legacy CRM URLs', () => {
     const url = new URL(result.to, window.location.origin);
     expect(url.pathname).toBe(path);
     expect(url.searchParams.get('s0.crm-record.commentId')).toBe('message');
+  });
+});
+
+describe('retired Databases links', () => {
+  const itemId = '01a1212c-74e5-79bd-8767-0d4943d55b18';
+  const redirectOf = (path: string) => {
+    const route = decodePane(routes, path.split('/').filter(Boolean));
+    if (!route) throw new Error(`${path} does not decode`);
+    const to: Entry = { id: 'entry', location: { route } };
+    for (const handler of createAppSplitRouterMiddleware({
+      isTouchDevice: () => true,
+    })) {
+      const result = handler({
+        routes,
+        from: undefined,
+        to,
+        path,
+        cause: 'initial',
+        signal: new AbortController().signal,
+        redirect: (destination) => ({ type: 'redirect', to: destination }),
+        cancel: () => ({ type: 'cancel' }),
+      });
+      if (result) return result;
+    }
+    return undefined;
+  };
+
+  it.each([
+    [
+      `/companies/company/${companyId}/databases`,
+      `/companies/company/${companyId}`,
+    ],
+    [
+      `/companies/contact/${contactId}/databases`,
+      `/companies/contact/${contactId}`,
+    ],
+    [
+      `/companies/pipeline/${pipelineId}/company/${companyId}/databases`,
+      `/companies/pipeline/${pipelineId}/company/${companyId}`,
+    ],
+    [
+      `/companies/contact/${contactId}/databases/${itemId}`,
+      `/database/${itemId}`,
+    ],
+    [
+      `/companies/pipeline/${pipelineId}/contact/${contactId}/databases/${itemId}`,
+      `/database/${itemId}`,
+    ],
+    [`/companies/database/${itemId}`, `/database/${itemId}`],
+    [
+      `/companies/pipeline/${pipelineId}/database/${itemId}`,
+      `/database/${itemId}`,
+    ],
+  ])('sends %s to %s', (path, destination) => {
+    expect(redirectOf(path)).toEqual({ type: 'redirect', to: destination });
+  });
+
+  it('keeps pasted links as mentions of what they open', () => {
+    expect(
+      resolveMention(appUrl(`/companies/company/${companyId}/databases`))
+    ).toEqual({ id: companyId, block: 'company', params: {} });
+    expect(resolveMention(appUrl(`/companies/database/${itemId}`))).toEqual({
+      id: itemId,
+      block: 'database',
+      params: {},
+    });
   });
 });

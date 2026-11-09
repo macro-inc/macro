@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+import type { CompletionThinking } from './completionThinking';
 import type { DynamicSchema } from './dynamicSchema';
 import type { StructuredCompletionRequestAdditionalInstructions } from './structuredCompletionRequestAdditionalInstructions';
 import type { ToolSet } from './toolSet';
@@ -14,5 +15,8 @@ export interface StructuredCompletionRequest {
   model: string;
   output_schema: DynamicSchema;
   prompt: string;
+  /** How much the model may think first; `low` answers faster. Applies to
+completions without tools. */
+  thinking?: CompletionThinking;
   toolset?: ToolSet;
 }

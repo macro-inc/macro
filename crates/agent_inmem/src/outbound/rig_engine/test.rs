@@ -84,16 +84,15 @@ fn reduced_definitions_keep_user_input_and_user_tool_review() {
         for name in ["SendEmail", "CreateCalendarEvent"] {
             assert!(selected.user_tools.contains_key(name));
         }
-        for name in ["ContentSearch", "NameSearch", "ListEntities"] {
-            assert!(selected.tools.contains_key(name));
+        // macro.search, macro.workspace and macro.chats replace these.
+        for name in ["ContentSearch", "NameSearch", "ListEntities", "ReadChat"] {
+            assert!(!selected.tools.contains_key(name));
         }
-        assert!(!selected.tools.contains_key("ReadChat"));
     }
-    for name in ["ContentSearch", "NameSearch", "ListEntities"] {
-        assert!(tools.tool_names.contains(name));
+    for name in ["ContentSearch", "NameSearch", "ListEntities", "ReadChat"] {
+        assert!(!tools.tool_names.contains(name));
         assert!(!tools.deferred.iter().any(|tool| tool.name == name));
     }
-    assert!(!tools.tool_names.contains("ReadChat"));
 }
 
 #[derive(Deserialize, JsonSchema)]

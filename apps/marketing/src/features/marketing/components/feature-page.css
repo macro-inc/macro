@@ -12,8 +12,6 @@
 .feature-page-eyebrow { color: var(--color-ink-subtle); font-size: 12px; line-height: 1.6; }
 .feature-page-hero h1 { margin: 18px 0 24px; font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; text-wrap: balance; }
 .feature-page-hero > p:not(.feature-page-eyebrow) { max-width: 460px; color: var(--color-ink-muted); font-size: 16px; line-height: 1.8; text-wrap: balance; }
-.feature-page .feature-page-cta { color: #1d1c1a; }
-.feature-page-hero .feature-page-cta { margin-top: 32px; }
 .feature-page-hero > small { display: block; margin-top: 18px; color: var(--color-ink-subtle); font-size: 11px; }
 .feature-page-jump-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 28px 0 32px; border-block: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); }
 .feature-page-jump-links a { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; color: var(--color-ink-muted); font-size: 12px; text-decoration: none; }

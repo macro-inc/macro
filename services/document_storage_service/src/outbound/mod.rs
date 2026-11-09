@@ -3,5 +3,7 @@
 pub mod access_requests;
 pub mod agent_dm_authorizer;
 pub mod calendar_refresh;
+pub mod canvas_images;
 pub mod docx_export;
 pub mod entity_mutation;
+pub mod filed_items;

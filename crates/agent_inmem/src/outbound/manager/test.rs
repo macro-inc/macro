@@ -183,6 +183,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
 
 fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
+        billing: Default::default(),
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         id,
         owner: Owner::User(owner()),
@@ -254,6 +255,8 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -400,6 +403,8 @@ async fn manager_admission_rejects_turns_without_wedging_the_session() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -500,6 +505,8 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -657,6 +664,8 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -733,6 +742,8 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -797,6 +808,8 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -964,4 +977,106 @@ impl crate::domain::mcp::McpToolConnector for RecordingRelease {
     fn release(&self, token: &str) {
         self.released.lock().expect("lock").push(token.to_owned());
     }
+}
+
+/// Run one prompt through a session attached with `billing`, and return
+/// what its turn was admitted as and what its engine was asked to meter.
+async fn turn_features(
+    billing: agent_session::domain::model::SessionBilling,
+) -> (Vec<(String, ai_usage::AiFeature)>, Vec<ai_usage::AiFeature>) {
+    let repo = InMemoryAgentSessionRepo::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            billing,
+            origin: trigger_context::TriggerOrigin::Unknown,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .unwrap();
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "done".to_owned(),
+    )]));
+    let admission = Arc::new(TestAdmission::new(Ok(())));
+    let manager = manager(&repo, engine.clone()).with_admission(admission.clone());
+    // What the harness reads off the session row at attach.
+    let facts = SessionFacts {
+        billing: sessions.session_billing(id).await.unwrap(),
+        ..facts(id)
+    };
+    let transport = manager.attach(facts, None).await.unwrap();
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .unwrap();
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("hello"),
+            AgentActionId::mint(),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while engine.requests().is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the prompt must reach the engine");
+    let admitted = admission.calls.lock().unwrap().clone();
+    let metered = engine
+        .requests()
+        .iter()
+        .map(|request| request.feature)
+        .collect();
+    (admitted, metered)
+}
+
+#[tokio::test]
+async fn a_non_billable_session_admits_and_meters_its_turns_as_non_billable() {
+    let (admitted, metered) =
+        turn_features(agent_session::domain::model::SessionBilling::NonBillable).await;
+    assert_eq!(
+        admitted,
+        vec![(
+            owner().to_string(),
+            ai_usage::AiFeature::NonBillableAgentSession
+        )]
+    );
+    assert_eq!(metered, vec![ai_usage::AiFeature::NonBillableAgentSession]);
+}
+
+#[tokio::test]
+async fn a_default_session_still_admits_and_meters_its_turns_as_agent_session() {
+    let (admitted, metered) = turn_features(Default::default()).await;
+    assert_eq!(
+        admitted,
+        vec![(owner().to_string(), ai_usage::AiFeature::AgentSession)]
+    );
+    assert_eq!(metered, vec![ai_usage::AiFeature::AgentSession]);
 }
