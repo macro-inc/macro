@@ -13,13 +13,19 @@ import {
 } from "../../../../packages/collaboration/src/session/abi.generated.ts";
 import {
 	COMPATIBILITY_SCHEMA_HASH,
+	CompatBatchArgument,
+	CompatBatchReply,
+	CompatBatchRequest,
+	CompatBatchScope,
 	CompatBegin,
 	CompatHostedConfig,
 	CompatHostReply,
 	CompatHostRequest,
 	CompatHostResult,
 	CompatInstanceBind,
+	CompatInstanceSeed,
 	CompatNativePrototype,
+	CompatNodeOperand,
 	CompatOperation,
 	CompatReply,
 	CompatRequest,
@@ -217,10 +223,164 @@ try {
 	const old = CompatSnapshot.decode(session.compatSnapshot(0n));
 	assert.equal(old.batch.records[0].record.node.instanceId, 1);
 	session.compatDiscard();
+	const opened = CompatBatchReply.decode(
+		session.compatBatch(
+			CompatBatchRequest.encode({
+				scope: CompatBatchScope.fromCompatBatchBegin({
+					expectedVersion: 0n,
+					begin: { tags: [], reserveKeys: 2, classMaskPatches: [] },
+				}),
+				leases: { editorId: 1, retain: [], release: [] },
+				operations: [],
+				finalize: false,
+				now: 1,
+				wall: 1,
+			}).slice(),
+		),
+	);
+	const reservation = opened.reservations[0];
+	assert.equal(reservation.keys.length, 2);
+	const paragraphKey = reservation.keys[0];
+	const textKey = reservation.keys[1];
+	// These are real pinned constructors with real issued keys, not a second model.
+	// Pinned dev constructors inspect the active registry even with explicit
+	// keys. An upstream read scope supplies that registry without JS graph writes.
+	const constructorEditor = lexical.createEditor();
+	const { paragraph, textNode } = constructorEditor.getEditorState().read(
+		() => ({
+			paragraph: new lexical.ParagraphNode(String(paragraphKey.index)),
+			textNode: new lexical.TextNode(
+				"native constructor",
+				String(textKey.index),
+			),
+		}),
+		{ editor: constructorEditor },
+	);
+	assert.equal(constructorEditor.getEditorState()._nodeMap.size, 1);
+	const paragraphInstance = nextInstance++;
+	const textInstance = nextInstance++;
+	instances.set(paragraphInstance, paragraph);
+	instances.set(textInstance, textNode);
+	function seed(node, classId, instanceId) {
+		const base =
+			node instanceof lexical.TextNode
+				? {
+						text: {
+							text: Array.from({ length: node.__text.length }, (_, index) =>
+								node.__text.charCodeAt(index),
+							),
+							format: node.__format,
+							detail: node.__detail,
+							mode: node.__mode,
+							style: node.__style,
+						},
+					}
+				: {
+						element: {
+							format: node.__format,
+							indent: node.__indent,
+							direction: node.__dir === null ? 0 : node.__dir === "ltr" ? 1 : 2,
+							textFormat: node.__textFormat,
+							textStyle: node.__textStyle,
+							style: node.__style,
+						},
+					};
+		return CompatInstanceSeed.fromCompatCreatedInstance({
+			instanceOwnerId: 1,
+			classId,
+			instanceId,
+			base,
+			nativeProjection: {
+				nativeType: node.constructor.getType(),
+				complete: true,
+				fields: [],
+			},
+			ownFields: ForeignOpaqueValue.fromForeignMissing({}),
+		});
+	}
+	const reserved = (key) =>
+		CompatNodeOperand.fromCompatReservedNode({
+			reservationId: reservation.reservationId,
+			key,
+		});
+	const noSeed = CompatInstanceSeed.fromCompatNoInstanceSeed({});
+	const applied = CompatBatchReply.decode(
+		session.compatBatch(
+			CompatBatchRequest.encode({
+				scope: CompatBatchScope.fromCompatBatchContinue({
+					updateId: opened.updateId,
+					expectedEpoch: opened.mutationEpoch,
+				}),
+				leases: { editorId: 1, retain: [], release: [] },
+				finalize: false,
+				now: 2,
+				wall: 2,
+				operations: [
+					{
+						operation: CompatOperation.CreateRegisteredNode,
+						receiver: reserved(paragraphKey),
+						args: [],
+						initialInstance: seed(paragraph, 3, paragraphInstance),
+					},
+					{
+						operation: CompatOperation.CreateRegisteredNode,
+						receiver: reserved(textKey),
+						args: [],
+						initialInstance: seed(textNode, 2, textInstance),
+					},
+					{
+						operation: CompatOperation.Append,
+						receiver: reserved(paragraphKey),
+						args: [
+							CompatBatchArgument.fromCompatNodeArrayArgument({
+								values: [reserved(textKey)],
+							}),
+						],
+						initialInstance: noSeed,
+					},
+					{
+						operation: CompatOperation.Append,
+						receiver: CompatNodeOperand.fromCompatCapturedNode({
+							record: root.record,
+						}),
+						args: [
+							CompatBatchArgument.fromCompatNodeArrayArgument({
+								values: [reserved(paragraphKey)],
+							}),
+						],
+						initialInstance: noSeed,
+					},
+				],
+			}).slice(),
+		),
+	);
+	assert.equal(applied.outcome.discriminator, 1);
+	assert.equal(applied.results.length, 4);
+	const createdText = applied.delta.records.find(
+		(record) => record.record.node.key.index === textKey.index,
+	);
+	const createdParagraph = applied.delta.records.find(
+		(record) => record.record.node.key.index === paragraphKey.index,
+	);
+	assert.equal(createdText.record.node.instanceId, textInstance);
+	assert.equal(createdParagraph.record.node.instanceId, paragraphInstance);
+	assert.equal(
+		String.fromCharCode(...createdText.base.text.text),
+		textNode.__text,
+	);
+	assert.equal(instances.get(textInstance), textNode);
+	assert.equal(instances.get(paragraphInstance), paragraph);
+	assert.equal(
+		clones,
+		2,
+		"only the two root COW operations invoke static clone",
+	);
+	session.compatDiscard();
 	console.log(
 		JSON.stringify({
 			upstream: upstream.version,
 			clones,
+			constructedInstances: 2,
 			sourceRetained: true,
 			rootCache: null,
 		}),

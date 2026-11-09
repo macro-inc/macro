@@ -48,6 +48,8 @@ impl Host {
         })
     }
     pub(super) fn discard_reservations(&mut self) {
+        self.constructed
+            .retain(|_, record| record.update_id != self.update);
         self.reservations
             .retain(|_, (update, _)| *update != self.update);
     }
