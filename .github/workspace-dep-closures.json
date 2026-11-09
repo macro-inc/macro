@@ -14173,10 +14173,6 @@
       "crates/stream",
       "crates/workspace-hack"
     ],
-    "stripe_price_id": [
-      "crates/stripe_price_id",
-      "crates/workspace-hack"
-    ],
     "sync_router": [
       "crates/sync_router",
       "crates/workspace-hack",

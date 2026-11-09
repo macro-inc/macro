@@ -99,7 +99,6 @@ members = [
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
-  "crates/stripe_price_id",
   "crates/incus_client",
   "crates/import",
   "crates/import_notion",
