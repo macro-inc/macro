@@ -20,6 +20,135 @@ use ::std::io::Write as _;
 use ::core::convert::TryInto as _;
 use ::bebop::FixedSized as _;
 
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ForeignNativeField {
+    Unknown = 0,
+    AutoLinkNodeIsUnlinked = 1,
+    CodeHighlightNodeHighlightType = 2,
+    CodeNodeIsSyntaxHighlightSupported = 3,
+    CodeNodeLanguage = 4,
+    CodeNodeTheme = 5,
+    HeadingNodeTag = 6,
+    LinkNodeRel = 7,
+    LinkNodeTarget = 8,
+    LinkNodeTitle = 9,
+    LinkNodeUrl = 10,
+    ListItemNodeChecked = 11,
+    ListItemNodeValue = 12,
+    ListNodeListType = 13,
+    ListNodeStart = 14,
+    ListNodeTag = 15,
+    MarkNodeIds = 16,
+    TableCellNodeBackgroundColor = 17,
+    TableCellNodeColSpan = 18,
+    TableCellNodeHeaderState = 19,
+    TableCellNodeRowSpan = 20,
+    TableCellNodeVerticalAlign = 21,
+    TableCellNodeWidth = 22,
+    TableNodeColWidths = 23,
+    TableNodeFrozenColumnCount = 24,
+    TableNodeFrozenRowCount = 25,
+    TableNodeRowStriping = 26,
+    TableRowNodeHeight = 27,
+}
+
+impl ::core::convert::TryFrom<u32> for ForeignNativeField {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u32) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(ForeignNativeField::Unknown),
+            1 => Ok(ForeignNativeField::AutoLinkNodeIsUnlinked),
+            2 => Ok(ForeignNativeField::CodeHighlightNodeHighlightType),
+            3 => Ok(ForeignNativeField::CodeNodeIsSyntaxHighlightSupported),
+            4 => Ok(ForeignNativeField::CodeNodeLanguage),
+            5 => Ok(ForeignNativeField::CodeNodeTheme),
+            6 => Ok(ForeignNativeField::HeadingNodeTag),
+            7 => Ok(ForeignNativeField::LinkNodeRel),
+            8 => Ok(ForeignNativeField::LinkNodeTarget),
+            9 => Ok(ForeignNativeField::LinkNodeTitle),
+            10 => Ok(ForeignNativeField::LinkNodeUrl),
+            11 => Ok(ForeignNativeField::ListItemNodeChecked),
+            12 => Ok(ForeignNativeField::ListItemNodeValue),
+            13 => Ok(ForeignNativeField::ListNodeListType),
+            14 => Ok(ForeignNativeField::ListNodeStart),
+            15 => Ok(ForeignNativeField::ListNodeTag),
+            16 => Ok(ForeignNativeField::MarkNodeIds),
+            17 => Ok(ForeignNativeField::TableCellNodeBackgroundColor),
+            18 => Ok(ForeignNativeField::TableCellNodeColSpan),
+            19 => Ok(ForeignNativeField::TableCellNodeHeaderState),
+            20 => Ok(ForeignNativeField::TableCellNodeRowSpan),
+            21 => Ok(ForeignNativeField::TableCellNodeVerticalAlign),
+            22 => Ok(ForeignNativeField::TableCellNodeWidth),
+            23 => Ok(ForeignNativeField::TableNodeColWidths),
+            24 => Ok(ForeignNativeField::TableNodeFrozenColumnCount),
+            25 => Ok(ForeignNativeField::TableNodeFrozenRowCount),
+            26 => Ok(ForeignNativeField::TableNodeRowStriping),
+            27 => Ok(ForeignNativeField::TableRowNodeHeight),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<ForeignNativeField> for u32 {
+    fn from(value: ForeignNativeField) -> Self {
+        match value {
+            ForeignNativeField::Unknown => 0,
+            ForeignNativeField::AutoLinkNodeIsUnlinked => 1,
+            ForeignNativeField::CodeHighlightNodeHighlightType => 2,
+            ForeignNativeField::CodeNodeIsSyntaxHighlightSupported => 3,
+            ForeignNativeField::CodeNodeLanguage => 4,
+            ForeignNativeField::CodeNodeTheme => 5,
+            ForeignNativeField::HeadingNodeTag => 6,
+            ForeignNativeField::LinkNodeRel => 7,
+            ForeignNativeField::LinkNodeTarget => 8,
+            ForeignNativeField::LinkNodeTitle => 9,
+            ForeignNativeField::LinkNodeUrl => 10,
+            ForeignNativeField::ListItemNodeChecked => 11,
+            ForeignNativeField::ListItemNodeValue => 12,
+            ForeignNativeField::ListNodeListType => 13,
+            ForeignNativeField::ListNodeStart => 14,
+            ForeignNativeField::ListNodeTag => 15,
+            ForeignNativeField::MarkNodeIds => 16,
+            ForeignNativeField::TableCellNodeBackgroundColor => 17,
+            ForeignNativeField::TableCellNodeColSpan => 18,
+            ForeignNativeField::TableCellNodeHeaderState => 19,
+            ForeignNativeField::TableCellNodeRowSpan => 20,
+            ForeignNativeField::TableCellNodeVerticalAlign => 21,
+            ForeignNativeField::TableCellNodeWidth => 22,
+            ForeignNativeField::TableNodeColWidths => 23,
+            ForeignNativeField::TableNodeFrozenColumnCount => 24,
+            ForeignNativeField::TableNodeFrozenRowCount => 25,
+            ForeignNativeField::TableNodeRowStriping => 26,
+            ForeignNativeField::TableRowNodeHeight => 27,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for ForeignNativeField {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u32>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u32>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u32::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u32::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for ForeignNativeField {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u32>();
+}
+
+
 pub const FOREIGN_HOST_PROTOCOL_MAJOR: u32 = 1;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1218,6 +1347,7 @@ pub struct ForeignCloneStage<'raw> {
     pub ctor_key: ForeignKey,
     pub destination: ForeignNodeRef,
     pub base: ForeignBasePatch<'raw>,
+    pub native_projection: ForeignNativeProjection<'raw>,
     pub own_fields: ForeignOpaqueValue,
     pub required_links: ForeignTreeLinks,
 }
@@ -1232,6 +1362,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
         <ForeignKey>::MIN_SERIALIZED_SIZE +
         <ForeignNodeRef>::MIN_SERIALIZED_SIZE +
         <ForeignBasePatch<'raw>>::MIN_SERIALIZED_SIZE +
+        <ForeignNativeProjection<'raw>>::MIN_SERIALIZED_SIZE +
         <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE +
         <ForeignTreeLinks>::MIN_SERIALIZED_SIZE;
 
@@ -1245,6 +1376,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
         self.ctor_key.serialized_size() +
         self.destination.serialized_size() +
         self.base.serialized_size() +
+        self.native_projection.serialized_size() +
         self.own_fields.serialized_size() +
         self.required_links.serialized_size()
     }
@@ -1259,6 +1391,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
             zelf.ctor_key._serialize_chained(dest)? +
             zelf.destination._serialize_chained(dest)? +
             zelf.base._serialize_chained(dest)? +
+            zelf.native_projection._serialize_chained(dest)? +
             zelf.own_fields._serialize_chained(dest)? +
             zelf.required_links._serialize_chained(dest)?
         )
@@ -1291,6 +1424,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
         i += read;
         let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v10) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             stage_id: v0,
@@ -1301,8 +1436,9 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
             ctor_key: v5,
             destination: v6,
             base: v7,
-            own_fields: v8,
-            required_links: v9,
+            native_projection: v8,
+            own_fields: v9,
+            required_links: v10,
         }))
     }
 }
@@ -1317,6 +1453,7 @@ pub struct ForeignCloneAck<'raw> {
     pub ctor_key: ForeignKey,
     pub destination_key: ForeignKey,
     pub base_patch: ForeignBasePatch<'raw>,
+    pub native_projection: ForeignNativeProjection<'raw>,
     pub own_fields: ForeignOpaqueValue,
     pub observed_links: ForeignTreeLinks,
 }
@@ -1329,6 +1466,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
         <ForeignKey>::MIN_SERIALIZED_SIZE +
         <ForeignKey>::MIN_SERIALIZED_SIZE +
         <ForeignBasePatch<'raw>>::MIN_SERIALIZED_SIZE +
+        <ForeignNativeProjection<'raw>>::MIN_SERIALIZED_SIZE +
         <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE +
         <ForeignTreeLinks>::MIN_SERIALIZED_SIZE;
 
@@ -1340,6 +1478,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
         self.ctor_key.serialized_size() +
         self.destination_key.serialized_size() +
         self.base_patch.serialized_size() +
+        self.native_projection.serialized_size() +
         self.own_fields.serialized_size() +
         self.observed_links.serialized_size()
     }
@@ -1352,6 +1491,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
             zelf.ctor_key._serialize_chained(dest)? +
             zelf.destination_key._serialize_chained(dest)? +
             zelf.base_patch._serialize_chained(dest)? +
+            zelf.native_projection._serialize_chained(dest)? +
             zelf.own_fields._serialize_chained(dest)? +
             zelf.observed_links._serialize_chained(dest)?
         )
@@ -1380,6 +1520,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
         i += read;
         let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             stage_id: v0,
@@ -1388,8 +1530,9 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
             ctor_key: v3,
             destination_key: v4,
             base_patch: v5,
-            own_fields: v6,
-            observed_links: v7,
+            native_projection: v6,
+            own_fields: v7,
+            observed_links: v8,
         }))
     }
 }
@@ -1717,6 +1860,31 @@ pub enum ForeignCallbackValue<'raw> {
     ForeignNodeArrayArgument {
         values: ::bebop::SliceWrapper<'raw, ForeignNodeRef>,
     },
+
+    /// Discriminator 8
+    ForeignBooleanArgument {
+        value: bool,
+    },
+
+    /// Discriminator 9
+    ForeignNumberArgument {
+        value: f64,
+    },
+
+    /// Discriminator 10
+    ForeignStringArgument {
+        value: ::bebop::SliceWrapper<'raw, u16>,
+    },
+
+    /// Discriminator 11
+    ForeignNumberArrayArgument {
+        values: ::bebop::SliceWrapper<'raw, f64>,
+    },
+
+    /// Discriminator 12
+    ForeignStringArrayArgument {
+        values: ::std::vec::Vec<ForeignUtf16String<'raw>>,
+    },
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for ForeignCallbackValue<'raw> {
@@ -1765,6 +1933,36 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCallbackValue<'raw> {
                 _value.serialized_size()
             }
             Self::ForeignNodeArrayArgument {
+                values: ref _values,
+            }
+            => {
+                _values.serialized_size()
+            }
+            Self::ForeignBooleanArgument {
+                value: ref _value,
+            }
+            => {
+                _value.serialized_size()
+            }
+            Self::ForeignNumberArgument {
+                value: ref _value,
+            }
+            => {
+                _value.serialized_size()
+            }
+            Self::ForeignStringArgument {
+                value: ref _value,
+            }
+            => {
+                _value.serialized_size()
+            }
+            Self::ForeignNumberArrayArgument {
+                values: ref _values,
+            }
+            => {
+                _values.serialized_size()
+            }
+            Self::ForeignStringArrayArgument {
                 values: ref _values,
             }
             => {
@@ -1829,6 +2027,41 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCallbackValue<'raw> {
                 7u8._serialize_chained(dest)?;
                 _values._serialize_chained(dest)?;
             }
+            Self::ForeignBooleanArgument {
+                value: ref _value,
+            }
+            => {
+                8u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+            }
+            Self::ForeignNumberArgument {
+                value: ref _value,
+            }
+            => {
+                9u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+            }
+            Self::ForeignStringArgument {
+                value: ref _value,
+            }
+            => {
+                10u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+            }
+            Self::ForeignNumberArrayArgument {
+                values: ref _values,
+            }
+            => {
+                11u8._serialize_chained(dest)?;
+                _values._serialize_chained(dest)?;
+            }
+            Self::ForeignStringArrayArgument {
+                values: ref _values,
+            }
+            => {
+                12u8._serialize_chained(dest)?;
+                _values._serialize_chained(dest)?;
+            }
         }
         Ok(size)
     });
@@ -1890,6 +2123,46 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCallbackValue<'raw> {
                 i += read;
 
                 ForeignCallbackValue::ForeignNodeArrayArgument {
+                    values: v0,
+                }
+            }
+            8 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ForeignCallbackValue::ForeignBooleanArgument {
+                    value: v0,
+                }
+            }
+            9 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ForeignCallbackValue::ForeignNumberArgument {
+                    value: v0,
+                }
+            }
+            10 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ForeignCallbackValue::ForeignStringArgument {
+                    value: v0,
+                }
+            }
+            11 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ForeignCallbackValue::ForeignNumberArrayArgument {
+                    values: v0,
+                }
+            }
+            12 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ForeignCallbackValue::ForeignStringArrayArgument {
                     values: v0,
                 }
             }
@@ -2097,6 +2370,193 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignHookResult<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for ForeignHookResult<'raw> {}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignUtf16String<'raw> {
+    pub value: ::bebop::SliceWrapper<'raw, u16>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignUtf16String<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::bebop::SliceWrapper<'raw, u16>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.value.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.value._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            value: v0,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignUtf16String<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignNativeFieldValue<'raw> {
+    pub field: ForeignNativeField,
+    pub value: ForeignCallbackValue<'raw>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignNativeFieldValue<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <ForeignNativeField>::MIN_SERIALIZED_SIZE +
+        <ForeignCallbackValue<'raw>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.field.serialized_size() +
+        self.value.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.field._serialize_chained(dest)? +
+            zelf.value._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            field: v0,
+            value: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignNativeFieldValue<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignNativeProjection<'raw> {
+    pub native_type: &'raw str,
+    pub complete: bool,
+    pub fields: ::std::vec::Vec<ForeignNativeFieldValue<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignNativeProjection<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <bool>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<ForeignNativeFieldValue<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.native_type.serialized_size() +
+        self.complete.serialized_size() +
+        self.fields.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.native_type._serialize_chained(dest)? +
+            zelf.complete._serialize_chained(dest)? +
+            zelf.fields._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            native_type: v0,
+            complete: v1,
+            fields: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignNativeProjection<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignRecordPatch<'raw> {
+    pub record: ForeignRecordRef,
+    pub base_patch: ForeignBasePatch<'raw>,
+    pub native_projection: ForeignNativeProjection<'raw>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignRecordPatch<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <ForeignBasePatch<'raw>>::MIN_SERIALIZED_SIZE +
+        <ForeignNativeProjection<'raw>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.record.serialized_size() +
+        self.base_patch.serialized_size() +
+        self.native_projection.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.record._serialize_chained(dest)? +
+            zelf.base_patch._serialize_chained(dest)? +
+            zelf.native_projection._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            record: v0,
+            base_patch: v1,
+            native_projection: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignRecordPatch<'raw> {}
+
 #[cfg(feature = "bebop-owned-all")]
 pub mod owned {
     #![allow(warnings)]
@@ -2104,6 +2564,8 @@ pub mod owned {
     use ::std::io::Write as _;
     use ::core::convert::TryInto as _;
     use ::bebop::FixedSized as _;
+
+    pub use super::ForeignNativeField;
 
     pub use super::FOREIGN_HOST_PROTOCOL_MAJOR;
 
@@ -2717,6 +3179,7 @@ pub mod owned {
         pub ctor_key: ForeignKey,
         pub destination: ForeignNodeRef,
         pub base: ForeignBasePatch,
+        pub native_projection: ForeignNativeProjection,
         pub own_fields: ForeignOpaqueValue,
         pub required_links: ForeignTreeLinks,
     }
@@ -2732,6 +3195,7 @@ pub mod owned {
                 ctor_key: value.ctor_key,
                 destination: value.destination,
                 base: value.base.into(),
+                native_projection: value.native_projection.into(),
                 own_fields: value.own_fields,
                 required_links: value.required_links,
             }
@@ -2748,6 +3212,7 @@ pub mod owned {
             <ForeignKey>::MIN_SERIALIZED_SIZE +
             <ForeignNodeRef>::MIN_SERIALIZED_SIZE +
             <ForeignBasePatch>::MIN_SERIALIZED_SIZE +
+            <ForeignNativeProjection>::MIN_SERIALIZED_SIZE +
             <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE +
             <ForeignTreeLinks>::MIN_SERIALIZED_SIZE;
 
@@ -2761,6 +3226,7 @@ pub mod owned {
             self.ctor_key.serialized_size() +
             self.destination.serialized_size() +
             self.base.serialized_size() +
+            self.native_projection.serialized_size() +
             self.own_fields.serialized_size() +
             self.required_links.serialized_size()
         }
@@ -2775,6 +3241,7 @@ pub mod owned {
                 zelf.ctor_key._serialize_chained(dest)? +
                 zelf.destination._serialize_chained(dest)? +
                 zelf.base._serialize_chained(dest)? +
+                zelf.native_projection._serialize_chained(dest)? +
                 zelf.own_fields._serialize_chained(dest)? +
                 zelf.required_links._serialize_chained(dest)?
             )
@@ -2807,6 +3274,8 @@ pub mod owned {
             i += read;
             let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v10) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 stage_id: v0,
@@ -2817,8 +3286,9 @@ pub mod owned {
                 ctor_key: v5,
                 destination: v6,
                 base: v7,
-                own_fields: v8,
-                required_links: v9,
+                native_projection: v8,
+                own_fields: v9,
+                required_links: v10,
             }))
         }
     }
@@ -2833,6 +3303,7 @@ pub mod owned {
         pub ctor_key: ForeignKey,
         pub destination_key: ForeignKey,
         pub base_patch: ForeignBasePatch,
+        pub native_projection: ForeignNativeProjection,
         pub own_fields: ForeignOpaqueValue,
         pub observed_links: ForeignTreeLinks,
     }
@@ -2846,6 +3317,7 @@ pub mod owned {
                 ctor_key: value.ctor_key,
                 destination_key: value.destination_key,
                 base_patch: value.base_patch.into(),
+                native_projection: value.native_projection.into(),
                 own_fields: value.own_fields,
                 observed_links: value.observed_links,
             }
@@ -2860,6 +3332,7 @@ pub mod owned {
             <ForeignKey>::MIN_SERIALIZED_SIZE +
             <ForeignKey>::MIN_SERIALIZED_SIZE +
             <ForeignBasePatch>::MIN_SERIALIZED_SIZE +
+            <ForeignNativeProjection>::MIN_SERIALIZED_SIZE +
             <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE +
             <ForeignTreeLinks>::MIN_SERIALIZED_SIZE;
 
@@ -2871,6 +3344,7 @@ pub mod owned {
             self.ctor_key.serialized_size() +
             self.destination_key.serialized_size() +
             self.base_patch.serialized_size() +
+            self.native_projection.serialized_size() +
             self.own_fields.serialized_size() +
             self.observed_links.serialized_size()
         }
@@ -2883,6 +3357,7 @@ pub mod owned {
                 zelf.ctor_key._serialize_chained(dest)? +
                 zelf.destination_key._serialize_chained(dest)? +
                 zelf.base_patch._serialize_chained(dest)? +
+                zelf.native_projection._serialize_chained(dest)? +
                 zelf.own_fields._serialize_chained(dest)? +
                 zelf.observed_links._serialize_chained(dest)?
             )
@@ -2911,6 +3386,8 @@ pub mod owned {
             i += read;
             let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 stage_id: v0,
@@ -2919,8 +3396,9 @@ pub mod owned {
                 ctor_key: v3,
                 destination_key: v4,
                 base_patch: v5,
-                own_fields: v6,
-                observed_links: v7,
+                native_projection: v6,
+                own_fields: v7,
+                observed_links: v8,
             }))
         }
     }
@@ -3164,6 +3642,31 @@ pub mod owned {
         ForeignNodeArrayArgument {
             values: ::std::vec::Vec<ForeignNodeRef>,
         },
+
+        /// Discriminator 8
+        ForeignBooleanArgument {
+            value: bool,
+        },
+
+        /// Discriminator 9
+        ForeignNumberArgument {
+            value: f64,
+        },
+
+        /// Discriminator 10
+        ForeignStringArgument {
+            value: ::std::vec::Vec<u16>,
+        },
+
+        /// Discriminator 11
+        ForeignNumberArrayArgument {
+            values: ::std::vec::Vec<f64>,
+        },
+
+        /// Discriminator 12
+        ForeignStringArrayArgument {
+            values: ::std::vec::Vec<ForeignUtf16String>,
+        },
     }
 
     impl<'raw> ::core::convert::From<super::ForeignCallbackValue<'raw>> for ForeignCallbackValue {
@@ -3228,6 +3731,46 @@ pub mod owned {
                         values: _values.iter().map(|value| value).collect(),
                     }
                 }
+                super::ForeignCallbackValue::ForeignBooleanArgument {
+                    value: _value,
+                }
+                => {
+                    Self::ForeignBooleanArgument {
+                        value: _value,
+                    }
+                }
+                super::ForeignCallbackValue::ForeignNumberArgument {
+                    value: _value,
+                }
+                => {
+                    Self::ForeignNumberArgument {
+                        value: _value,
+                    }
+                }
+                super::ForeignCallbackValue::ForeignStringArgument {
+                    value: _value,
+                }
+                => {
+                    Self::ForeignStringArgument {
+                        value: _value.iter().map(|value| value).collect(),
+                    }
+                }
+                super::ForeignCallbackValue::ForeignNumberArrayArgument {
+                    values: _values,
+                }
+                => {
+                    Self::ForeignNumberArrayArgument {
+                        values: _values.iter().map(|value| value).collect(),
+                    }
+                }
+                super::ForeignCallbackValue::ForeignStringArrayArgument {
+                    values: _values,
+                }
+                => {
+                    Self::ForeignStringArrayArgument {
+                        values: _values.into_iter().map(|value| value.into()).collect(),
+                    }
+                }
             }
         }
 
@@ -3278,6 +3821,36 @@ pub mod owned {
                     _value.serialized_size()
                 }
                 Self::ForeignNodeArrayArgument {
+                    values: ref _values,
+                }
+                => {
+                    _values.serialized_size()
+                }
+                Self::ForeignBooleanArgument {
+                    value: ref _value,
+                }
+                => {
+                    _value.serialized_size()
+                }
+                Self::ForeignNumberArgument {
+                    value: ref _value,
+                }
+                => {
+                    _value.serialized_size()
+                }
+                Self::ForeignStringArgument {
+                    value: ref _value,
+                }
+                => {
+                    _value.serialized_size()
+                }
+                Self::ForeignNumberArrayArgument {
+                    values: ref _values,
+                }
+                => {
+                    _values.serialized_size()
+                }
+                Self::ForeignStringArrayArgument {
                     values: ref _values,
                 }
                 => {
@@ -3342,6 +3915,41 @@ pub mod owned {
                     7u8._serialize_chained(dest)?;
                     _values._serialize_chained(dest)?;
                 }
+                Self::ForeignBooleanArgument {
+                    value: ref _value,
+                }
+                => {
+                    8u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                }
+                Self::ForeignNumberArgument {
+                    value: ref _value,
+                }
+                => {
+                    9u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                }
+                Self::ForeignStringArgument {
+                    value: ref _value,
+                }
+                => {
+                    10u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                }
+                Self::ForeignNumberArrayArgument {
+                    values: ref _values,
+                }
+                => {
+                    11u8._serialize_chained(dest)?;
+                    _values._serialize_chained(dest)?;
+                }
+                Self::ForeignStringArrayArgument {
+                    values: ref _values,
+                }
+                => {
+                    12u8._serialize_chained(dest)?;
+                    _values._serialize_chained(dest)?;
+                }
             }
             Ok(size)
         });
@@ -3403,6 +4011,46 @@ pub mod owned {
                     i += read;
 
                     ForeignCallbackValue::ForeignNodeArrayArgument {
+                        values: v0,
+                    }
+                }
+                8 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ForeignCallbackValue::ForeignBooleanArgument {
+                        value: v0,
+                    }
+                }
+                9 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ForeignCallbackValue::ForeignNumberArgument {
+                        value: v0,
+                    }
+                }
+                10 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ForeignCallbackValue::ForeignStringArgument {
+                        value: v0,
+                    }
+                }
+                11 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ForeignCallbackValue::ForeignNumberArrayArgument {
+                        values: v0,
+                    }
+                }
+                12 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ForeignCallbackValue::ForeignStringArrayArgument {
                         values: v0,
                     }
                 }
@@ -3652,4 +4300,228 @@ pub mod owned {
 
     }
 
-    impl<'raw> ::bebop::Record<'raw> for ForeignHookResult {}}
+    impl<'raw> ::bebop::Record<'raw> for ForeignHookResult {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignUtf16String {
+        pub value: ::std::vec::Vec<u16>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignUtf16String<'raw>> for ForeignUtf16String {
+        fn from(value: super::ForeignUtf16String) -> Self {
+            Self {
+                value: value.value.iter().map(|value| value).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignUtf16String {
+        const MIN_SERIALIZED_SIZE: usize =
+            <::std::vec::Vec<u16>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.value.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.value._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                value: v0,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignUtf16String {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignNativeFieldValue {
+        pub field: ForeignNativeField,
+        pub value: ForeignCallbackValue,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignNativeFieldValue<'raw>> for ForeignNativeFieldValue {
+        fn from(value: super::ForeignNativeFieldValue) -> Self {
+            Self {
+                field: value.field,
+                value: value.value.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignNativeFieldValue {
+        const MIN_SERIALIZED_SIZE: usize =
+            <ForeignNativeField>::MIN_SERIALIZED_SIZE +
+            <ForeignCallbackValue>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.field.serialized_size() +
+            self.value.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.field._serialize_chained(dest)? +
+                zelf.value._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                field: v0,
+                value: v1,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignNativeFieldValue {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignNativeProjection {
+        pub native_type: String,
+        pub complete: bool,
+        pub fields: ::std::vec::Vec<ForeignNativeFieldValue>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignNativeProjection<'raw>> for ForeignNativeProjection {
+        fn from(value: super::ForeignNativeProjection) -> Self {
+            Self {
+                native_type: value.native_type.into(),
+                complete: value.complete,
+                fields: value.fields.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignNativeProjection {
+        const MIN_SERIALIZED_SIZE: usize =
+            <String>::MIN_SERIALIZED_SIZE +
+            <bool>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignNativeFieldValue>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.native_type.serialized_size() +
+            self.complete.serialized_size() +
+            self.fields.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.native_type._serialize_chained(dest)? +
+                zelf.complete._serialize_chained(dest)? +
+                zelf.fields._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                native_type: v0,
+                complete: v1,
+                fields: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignNativeProjection {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignRecordPatch {
+        pub record: ForeignRecordRef,
+        pub base_patch: ForeignBasePatch,
+        pub native_projection: ForeignNativeProjection,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignRecordPatch<'raw>> for ForeignRecordPatch {
+        fn from(value: super::ForeignRecordPatch) -> Self {
+            Self {
+                record: value.record,
+                base_patch: value.base_patch.into(),
+                native_projection: value.native_projection.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignRecordPatch {
+        const MIN_SERIALIZED_SIZE: usize =
+            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <ForeignBasePatch>::MIN_SERIALIZED_SIZE +
+            <ForeignNativeProjection>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.record.serialized_size() +
+            self.base_patch.serialized_size() +
+            self.native_projection.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.record._serialize_chained(dest)? +
+                zelf.base_patch._serialize_chained(dest)? +
+                zelf.native_projection._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                record: v0,
+                base_patch: v1,
+                native_projection: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignRecordPatch {}}
