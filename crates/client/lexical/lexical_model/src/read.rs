@@ -13,7 +13,14 @@ pub use structural::CommonAncestor;
 #[derive(Clone, Copy)]
 pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selection_argument: Option<&'state ForeignSelectionCapture>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_native_calls:
+        Option<&'state std::sync::Arc<crate::foreign::native::NativeCalls>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_projections: Option<&'state crate::foreign::ReadProjections<'state>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) source_records: Option<&'state crate::state::NodeMap>,
     #[cfg(feature = "foreign-nodes")]
@@ -22,6 +29,11 @@ pub struct StateRef<'state> {
     pub(crate) foreign_origin: Option<crate::foreign::ReadOriginRef<'state>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) detached_selections: &'state [Option<Selection>],
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selection_identities:
+        Option<&'state crate::foreign::selections::SelectionIdentities>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_previous_selection_identity: Option<&'state ForeignSelectionIdentity>,
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -72,6 +84,24 @@ impl<'state> StateRef<'state> {
     /// Borrow the immutable snapshot behind this view, including pending node data.
     pub fn snapshot(self) -> &'state EditorState {
         self.state
+    }
+    pub(crate) fn cached_root_text_content(self) -> std::sync::Arc<str> {
+        #[cfg(feature = "foreign-nodes")]
+        {
+            if let Some(text) = self.state.root_text.get() {
+                return text.clone();
+            }
+            let text = std::sync::Arc::from(self.text_content(NodeKey::ROOT).as_ref());
+            if ForeignReadOperation::check().is_err() {
+                return text;
+            }
+            self.state.root_text.get_or_init(|| text).clone()
+        }
+        #[cfg(not(feature = "foreign-nodes"))]
+        self.state
+            .root_text
+            .get_or_init(|| std::sync::Arc::from(self.text_content(NodeKey::ROOT).as_ref()))
+            .clone()
     }
 
     pub(crate) fn slot(self, key: NodeKey) -> Option<&'state NodeSlot> {
@@ -300,17 +330,20 @@ impl<'state> StateRef<'state> {
         }
         Some(key)
     }
-    /// Descendant by index.
+    /// First descendant of the indexed child, or the last descendant past the end.
     pub fn descendant_by_index(
         self,
         key: impl Into<NodeKey>,
         index: ChildIndex,
     ) -> Option<NodeKey> {
         let key = key.into();
-        let child = self
-            .child_at_index(key, index)
-            .or_else(|| self.last_child(key))?;
-        self.first_descendant(child).or(Some(child))
+        if index.0 >= self.children_size(key) {
+            let child = self.last_child(key)?;
+            self.last_descendant(child).or(Some(child))
+        } else {
+            let child = self.child_at_index(key, index)?;
+            self.first_descendant(child).or(Some(child))
+        }
     }
     /// Post-order within shared ancestry: descendants precede their ancestors.
     pub fn is_before(self, a: impl Into<NodeKey>, b: impl Into<NodeKey>) -> Result<bool, Error> {
@@ -785,7 +818,10 @@ impl<'state> StateRef<'state> {
         if let Some(json) = crate::opaque::export(slot, &json) {
             return Ok(json);
         }
-        if slot.base.kind() != NodeKind::LineBreak {
+        let own_fields = slot.base.kind() != NodeKind::LineBreak;
+        #[cfg(feature = "foreign-nodes")]
+        let own_fields = own_fields || self.foreign_data(key).is_some();
+        if own_fields {
             json.extend(slot.data.to_json()?);
         }
         (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
@@ -868,9 +904,19 @@ impl<'state> StateRef<'state> {
         let snapshot = self.with_text_slice(key, text)?;
         StateRef {
             #[cfg(feature = "foreign-nodes")]
+            foreign_selection_argument: self.foreign_selection_argument,
+            #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection,
             #[cfg(feature = "foreign-nodes")]
+            foreign_projections: self.foreign_projections,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_native_calls: self.foreign_native_calls,
+            #[cfg(feature = "foreign-nodes")]
             detached_selections: self.detached_selections,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identities: self.foreign_selection_identities,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: self.foreign_previous_selection_identity,
             #[cfg(feature = "foreign-nodes")]
             source_records: self.source_records,
             #[cfg(feature = "foreign-nodes")]
@@ -886,6 +932,11 @@ impl<'state> StateRef<'state> {
     /// Copy one text record for export, invoking its clone hook before replacing text.
     /// The resulting snapshot retains node identities and cannot mutate this view.
     pub fn with_text_slice(self, key: NodeKey, text: &str) -> Result<EditorState, Error> {
+        #[cfg(feature = "foreign-nodes")]
+        let mut record = self
+            .node_or_err(key)?
+            .to_owned_with_source(self.snapshot_for_foreign_read()?);
+        #[cfg(not(feature = "foreign-nodes"))]
         let mut record = self.node_or_err(key)?.to_owned();
         let BaseData::Text(data) = &mut record.slot.base else {
             return Err(Error::NodeTypeMismatch(key));

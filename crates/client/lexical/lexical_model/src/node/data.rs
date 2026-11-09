@@ -132,6 +132,8 @@ pub(crate) struct Links {
 }
 #[derive(Clone)]
 pub(crate) struct NodeSlot {
+    #[cfg(feature = "foreign-nodes")]
+    pub foreign_identity: crate::foreign::RecordIdentityMarker,
     pub key: NodeKey,
     pub type_index: NodeTypeIndex,
     pub links: Links,

@@ -516,3 +516,330 @@ fn weak_callback_context_checks_scope_editor_and_does_not_retain_snapshots() -> 
     ));
     Ok(())
 }
+
+#[test]
+fn callback_native_super_uses_the_shared_index_and_keeps_nested_virtual_hooks() -> Result<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Hooks {
+        callback: CallbackContext,
+        append: Arc<AtomicUsize>,
+        splice: Arc<AtomicUsize>,
+        append_id: u32,
+    }
+    impl ForeignHooks for Hooks {
+        fn append(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            nodes: &[NodeKey],
+        ) -> Override<std::result::Result<(), Error>> {
+            self.append.fetch_add(1, Ordering::SeqCst);
+            let operation = (|| -> Result<()> {
+                let receiver = self.callback.node(tx, key)?;
+                let args = nodes
+                    .iter()
+                    .map(|key| self.callback.node(tx, *key))
+                    .collect::<Result<Vec<_>>>()?;
+                self.callback
+                    .call_native(tx, self.append_id, json!(args), receiver)?;
+                Ok(())
+            })();
+            Override::Value(operation.map_err(|error| Error::invariant(error.to_string())))
+        }
+        fn splice(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+            _: ChildIndex,
+            _: u32,
+            _: &[NodeKey],
+        ) -> Override<std::result::Result<(), Error>> {
+            self.splice.fetch_add(1, Ordering::SeqCst);
+            Override::Inherit
+        }
+    }
+    let append = Arc::new(AtomicUsize::new(0));
+    let splice = Arc::new(AtomicUsize::new(0));
+    let mut context = Context::default();
+    let append_id = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    let latest_id = super::super::index()
+        .binary_search(&"LexicalNode.getLatest")
+        .expect("latest") as u32;
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "native-callback".into(),
+            class_name: "NativeCallback".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                callback: context.callbacks(),
+                append: append.clone(),
+                splice: splice.clone(),
+                append_id,
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let block = tx.create_foreign("native-callback", SerializedNode::new())?;
+    let text = tx.create_text("native callback")?.key();
+    let raw = context.replay.node(tx.view(), block)?;
+    let receiver = context.encode(raw)?;
+    let raw = context.replay.node(tx.view(), text)?;
+    let text_arg = context.encode(raw)?;
+    append.store(0, Ordering::SeqCst);
+    splice.store(0, Ordering::SeqCst);
+    context.call(
+        &mut tx,
+        append_id,
+        json!([text_arg]),
+        Some(receiver.clone()),
+    )?;
+    assert_eq!(append.load(Ordering::SeqCst), 1);
+    assert_eq!(splice.load(Ordering::SeqCst), 1);
+    assert_eq!(tx.text_content(block), "native callback");
+    assert!(
+        context
+            .call_native(&mut tx, latest_id, json!([]), receiver.clone())
+            .is_err()
+    );
+    context.call_native(&mut tx, append_id, json!([]), receiver)?;
+    assert_eq!(append.load(Ordering::SeqCst), 1);
+    assert_eq!(splice.load(Ordering::SeqCst), 2);
+    Ok(())
+}
+
+#[test]
+fn projected_read_captures_keep_the_source_record_handle_and_owner_version() -> Result<()> {
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct NativeProbe {}
+    impl NodeType for NativeProbe {
+        const TYPE: &'static str = "identity-probe";
+        type Kind = ElementKind;
+        impl_default_node!();
+    }
+    impl ElementNode for NativeProbe {
+        element_node_base!();
+        fn set_indent(
+            tx: &mut Transaction<'_>,
+            _: Id<Self>,
+            _: u32,
+        ) -> std::result::Result<(), Error> {
+            let capture = tx.view().snapshot_for_foreign_read()?;
+            let captures = tx
+                .extension::<Arc<std::sync::Mutex<Vec<ForeignReadSnapshot>>>>()?
+                .clone();
+            captures.lock().expect("captures").push(capture);
+            Ok(())
+        }
+    }
+    struct Hooks;
+    impl ForeignHooks for Hooks {}
+    let captures = Arc::new(std::sync::Mutex::new(Vec::<ForeignReadSnapshot>::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<NativeProbe>()
+        .extension_state(captures.clone())
+        .foreign_node(ForeignNodeType {
+            type_name: "projected-probe".into(),
+            class_name: "ProjectedProbe".into(),
+            kind: NodeKind::Element,
+            extends: Some("identity-probe"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks),
+        })
+        .build()
+        .expect("editor");
+    let (key, _) = editor.update(|tx| {
+        let key = tx.create_foreign("projected-probe", SerializedNode::new())?;
+        tx.append(NodeKey::ROOT, &[key])?;
+        Ok(key)
+    })?;
+    let mut context = Context::default();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let source = context.replay.node(tx.view(), key)?;
+    let handle = context.encode(source.clone())?;
+    assert_eq!(handle["ver"], 0);
+    tx.set_indent(key, 0)?;
+    let capture = captures
+        .lock()
+        .expect("capture")
+        .pop()
+        .expect("native capture");
+    let projected = context.replay.node(capture.view(), key)?;
+    assert_eq!(projected, source);
+    assert_eq!(context.encode(projected)?["$h"], handle["$h"]);
+    capture.with_read_transaction(tx.committed_state(), |peer| -> Result<()> {
+        let value = context.replay.node(peer.view(), key)?;
+        assert_eq!(value, source);
+        assert_eq!(context.encode(value)?["$h"], handle["$h"]);
+        Ok(())
+    })??;
+    Ok(())
+}
+
+#[test]
+fn original_hook_arguments_are_consumed_once_and_restore_after_nested_calls_and_errors()
+-> Result<()> {
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Hooks {
+        context: CallbackContext,
+        calls: Arc<AtomicUsize>,
+        observed: Arc<Mutex<Vec<Option<Vec<Value>>>>>,
+    }
+    impl ForeignHooks for Hooks {
+        fn coerce_format(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            value: TextFormat,
+        ) -> Override<std::result::Result<(), Error>> {
+            let result = (|| -> Result<()> {
+                self.observed
+                    .lock()
+                    .expect("observed")
+                    .push(
+                        self.context
+                            .original_arguments(tx, key, ForeignHook::CoerceFormat)?,
+                    );
+                assert!(
+                    self.context
+                        .original_arguments(tx, key, ForeignHook::CoerceFormat)?
+                        .is_none()
+                );
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    let receiver = self.context.node(tx, key)?;
+                    let id = crate::api::index()
+                        .binary_search(&"LexicalNode.setFormat")
+                        .expect("format") as u32;
+                    self.context.call(tx, id, json!([2]), Some(receiver))?;
+                }
+                tx.with_foreign_native(key, ForeignHook::CoerceFormat, |tx| {
+                    tx.text(key)?.set_format(value)?;
+                    Ok::<_, Error>(())
+                })?;
+                Ok(())
+            })();
+            Override::Value(result.map_err(|error| Error::invariant(error.to_string())))
+        }
+    }
+    let mut context = Context::default();
+    let callback = context.callbacks();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "original-arguments".into(),
+            class_name: "OriginalArguments".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                context: callback.clone(),
+                calls: calls.clone(),
+                observed: observed.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let key = tx.create_foreign("original-arguments", SerializedNode::new())?;
+    let raw = context.replay.node(tx.view(), key)?;
+    let receiver = context.encode(raw)?;
+    let id = crate::api::index()
+        .binary_search(&"LexicalNode.setFormat")
+        .expect("format") as u32;
+    assert!(
+        context
+            .call(
+                &mut tx,
+                id,
+                json!(["invalid-format"]),
+                Some(receiver.clone())
+            )
+            .is_err()
+    );
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)?
+            .is_none()
+    );
+    context.call(&mut tx, id, json!(["bold"]), Some(receiver))?;
+    assert_eq!(
+        *observed.lock().expect("observed"),
+        [Some(vec![json!("bold")]), Some(vec![json!(2)])]
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(tx.view().text_data(key)?.format, TextFormat::BOLD);
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)?
+            .is_none()
+    );
+    drop(tx);
+    context.discard_update()?;
+    let tx = editor.transaction();
+    assert!(
+        callback
+            .original_arguments(&tx, key, ForeignHook::CoerceFormat)
+            .is_err()
+    );
+    Ok(())
+}
+#[test]
+fn first_previous_selection_and_point_captures_survive_rollback_of_a_later_update() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut context = Context::default();
+    let index = crate::api::index();
+    let previous = index
+        .binary_search(&"lexical.$getPreviousSelection")
+        .expect("previous") as u32;
+    let current = index
+        .binary_search(&"lexical.$getSelection")
+        .expect("current") as u32;
+    let anchor = index.binary_search(&"get:anchor").expect("anchor") as u32;
+    let offset = index.binary_search(&"get:offset").expect("offset") as u32;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(2)))?;
+    tx.flush()?;
+    context.finish_update(&tx)?;
+    context.publish(tx.commit()?.next)?;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let capture = tx.view().snapshot_for_foreign_read()?;
+    let old = context
+        .callbacks()
+        .with_read_scope(&capture, |scope| scope.call(previous, json!([]), None))?;
+    let point = context.call(&mut tx, anchor, json!([]), Some(old.clone()))?;
+    let new = context.call(&mut tx, current, json!([]), None)?;
+    assert_ne!(old["$sel"], new["$sel"]);
+    drop(tx);
+    context.discard_update()?;
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    assert_eq!(
+        context.call(&mut tx, previous, json!([]), None)?["$sel"],
+        old["$sel"]
+    );
+    assert_eq!(context.call(&mut tx, offset, json!([]), Some(point))?, 1);
+    assert!(context.call(&mut tx, anchor, json!([]), Some(new)).is_err());
+    drop(tx);
+    context.discard_update()?;
+    Ok(())
+}

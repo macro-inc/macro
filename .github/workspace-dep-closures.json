@@ -10774,6 +10774,7 @@
     ],
     "lexical_conformance_wasm": [
       "crates/bot_id",
+      "crates/client/lexical/lexical_conformance",
       "crates/client/lexical/lexical_conformance_wasm",
       "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_loro",

@@ -13,6 +13,10 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
 - `corpus/dev/README.md`: bounded dev collection, encrypted frozen sample, count-only scans and local source-versus-WASM replay.
+- `diff/listeners.test.ts`: real JS command priority snapshots, identity, truthiness, live registration and caught opaque exceptions.
+- `diff/host.test.ts`: real indexed EditorHandle lifecycle, native fields, packet decoding and JS transforms with current-hook reentry, identity and rollback.
+- `diff/host-packet.generated.ts`: Specta declaration; regenerate with the conformance_wasm export_host_types example.
+- `diff/debug.test.ts`: actual optimized export crossings, allocator/free traps and editor-facade lifetimes.
 - `diff/compat.test.ts`: real Node/web WASM compatibility constants and per-instance key stream checks.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
@@ -63,3 +67,11 @@ Run it from root with `bunx vitest run --config packages/lexical-conformance/dif
 type-check it with `bunx tsc --noEmit -p packages/lexical-conformance/diff/collab/tsconfig.json`.
 It uses current app Loro 1.17.1 and isolated DOM documents per TS peer; it does not
 change the recorder pin or normalize comparator fields.
+
+The debug suite validates model-derived host hook aliases against pinned upstream base classes and checks their boundary bytes; full callsite derivation and per-hook hosting remain separate gates.
+
+The WASM builder marks generated inline-JS snippets as ESM independently of the Node entry point's CommonJS boundary. Keep the snippets directory with the generated bindings when copying an artifact; the Node loader uses require(esm).
+
+Set CARGO_BUILD_JOBS to limit the shared optimized WASM builder and its instrumenter; both honor that value (default 4). Use a lower limit on loaded hosts without changing optimization or instrumentation.
+
+The indexed host accepts known native package types without kind metadata; unknown names reject as unknown native types. Foreign registrations carry kind and retain JS behavior.

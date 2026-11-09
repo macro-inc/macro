@@ -244,17 +244,22 @@ fn runtime_static_transform_participates_in_the_model_fixpoint() -> Result<(), E
 }
 
 #[test]
-fn runtime_text_coercion_runs_before_the_framework_text_write() -> Result<(), Error> {
+fn runtime_text_override_owns_the_native_framework_write() -> Result<(), Error> {
     struct Hooks(Arc<AtomicU32>);
     impl ForeignHooks for Hooks {
         fn coerce_text_content(
             &self,
-            _node: NodeView<'_>,
-            _data: &ForeignData,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
             requested: &str,
-        ) -> Override<Result<String, Error>> {
+        ) -> Override<Result<(), Error>> {
             self.0.fetch_add(1, Ordering::SeqCst);
-            Override::Value(Ok(requested.to_uppercase()))
+            Override::Value(
+                tx.with_foreign_native(key, ForeignHook::CoerceTextContent, |tx| {
+                    tx.text(key)?.set_text_content(&requested.to_uppercase())?;
+                    Ok(())
+                }),
+            )
         }
     }
     let calls = Arc::new(AtomicU32::new(0));
@@ -620,5 +625,65 @@ fn runtime_nested_native_scopes_refresh_a_reentered_parent() -> Result<(), Error
     assert_eq!(tx.foreign_data(b).expect("runtime").fields["level"], 5);
     assert!(tx.get::<NativeParent>(a).is_none());
     assert_eq!(tx.foreign_data(a).expect("runtime").fields["extra"], "a");
+    Ok(())
+}
+
+#[test]
+fn runtime_text_splice_does_not_dispatch_the_set_text_content_override() -> Result<(), Error> {
+    struct Hooks {
+        setter: Arc<AtomicU32>,
+        splice: Arc<AtomicU32>,
+    }
+    impl ForeignHooks for Hooks {
+        fn coerce_text_content(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            requested: &str,
+        ) -> Override<Result<(), Error>> {
+            self.setter.fetch_add(1, Ordering::SeqCst);
+            Override::Value(
+                tx.with_foreign_native(key, ForeignHook::CoerceTextContent, |tx| {
+                    tx.text(key)?.set_text_content(&requested.to_uppercase())?;
+                    Ok(())
+                }),
+            )
+        }
+        fn check_splice_text(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+            _: std::ops::Range<Utf16Offset>,
+            _: &str,
+            _: bool,
+        ) -> Override<Result<(), Error>> {
+            self.splice.fetch_add(1, Ordering::SeqCst);
+            Override::Inherit
+        }
+    }
+    let setter = Arc::new(AtomicU32::new(0));
+    let splice = Arc::new(AtomicU32::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "splice-text".into(),
+            class_name: "SpliceText".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                setter: setter.clone(),
+                splice: splice.clone(),
+            }),
+        })
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let text = tx.create_foreign("splice-text", SerializedNode::new())?;
+    tx.text(text)?.set_text_content("ab")?;
+    tx.text(text)?
+        .splice_text(Utf16Offset(1)..Utf16Offset(2), "z", false)?;
+    assert_eq!(setter.load(Ordering::SeqCst), 1);
+    assert_eq!(splice.load(Ordering::SeqCst), 1);
+    assert_eq!(tx.text_content(text), "Az");
     Ok(())
 }

@@ -22,6 +22,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_update: Arc<()>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_native_calls: Arc<crate::foreign::native::NativeCalls>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
@@ -31,6 +33,8 @@ pub struct Transaction<'editor> {
     pub(crate) foreign_retired_records: crate::state::NodeMap,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_previous_selection_identity: Option<ForeignSelectionIdentity>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
     pub(crate) extensions: crate::extension::Extensions,
@@ -55,6 +59,8 @@ pub struct Transaction<'editor> {
     pub(crate) work: WorkCounters,
     pub(crate) detached: Vec<Option<Selection>>,
     pub(crate) selection_replacements: u64,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selections: crate::foreign::selections::SelectionIdentities,
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
@@ -71,6 +77,8 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             foreign_update: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
+            foreign_native_calls: Arc::default(),
+            #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
             #[cfg(feature = "foreign-nodes")]
             foreign_read_sources: None,
@@ -80,6 +88,8 @@ impl<'editor> Transaction<'editor> {
             foreign_retired_records: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: None,
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             extensions: editor.extensions.clone(),
@@ -104,6 +114,8 @@ impl<'editor> Transaction<'editor> {
             work: WorkCounters::default(),
             detached: vec![],
             selection_replacements: 0,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selections: Default::default(),
         }
     }
     /// Number of active-selection object replacements within this transaction.
@@ -122,9 +134,23 @@ impl<'editor> Transaction<'editor> {
         };
         StateRef {
             #[cfg(feature = "foreign-nodes")]
+            foreign_selection_argument: None,
+            #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
             #[cfg(feature = "foreign-nodes")]
+            foreign_projections: None,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_native_calls: Some(&self.foreign_native_calls),
+            #[cfg(feature = "foreign-nodes")]
             detached_selections: &self.detached,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identities: Some(&self.foreign_selections),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection_identity: if self.foreign_read_only {
+                self.foreign_previous_selection_identity.as_ref()
+            } else {
+                Some(&self.editor.state.foreign_selection_identity)
+            },
             #[cfg(feature = "foreign-nodes")]
             source_records: self.foreign_read_sources.as_ref(),
             #[cfg(feature = "foreign-nodes")]
@@ -138,6 +164,7 @@ impl<'editor> Transaction<'editor> {
                 Some(crate::foreign::ReadOriginRef {
                     editor: &self.editor.suspend_owner,
                     update: &self.foreign_update,
+                    lease: None,
                 })
             },
             state: &self.pending,
@@ -156,8 +183,32 @@ impl<'editor> Transaction<'editor> {
         }
         self.pending.remove_record(key);
     }
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn foreign_clone_source(
+        &mut self,
+        key: NodeKey,
+    ) -> Result<Option<ForeignReadSnapshot>, Error> {
+        let record = self
+            .pending
+            .nodes
+            .get_mut(&key)
+            .ok_or(Error::NodeNotFound(key))?;
+        if Arc::strong_count(record) > 1
+            && self
+                .pending
+                .registry
+                .registered(record.type_index)
+                .foreign
+                .is_some()
+        {
+            return self.view().snapshot_for_foreign_read().map(Some);
+        }
+        Ok(None)
+    }
     pub(crate) fn writable(&mut self, key: NodeKey) -> Result<&mut NodeSlot, Error> {
         self.mark_dirty(key)?;
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = self.foreign_clone_source(key)?;
         let slot = self
             .pending
             .nodes
@@ -171,7 +222,10 @@ impl<'editor> Transaction<'editor> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let state = if let Some(state) = &slot.state {
@@ -216,6 +270,8 @@ impl<'editor> Transaction<'editor> {
                 .insert(key, DirtyIntent::AncestorOfDirty);
             ancestor = self.parent(key);
         }
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = self.foreign_clone_source(key)?;
         let slot = self
             .pending
             .nodes
@@ -234,7 +290,10 @@ impl<'editor> Transaction<'editor> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let normalized = slot.data.after_clone();
             let state = if let Some(state) = &slot.state {
@@ -420,6 +479,8 @@ impl<'editor> Transaction<'editor> {
         self.pending.nodes.insert(
             key,
             Arc::new(NodeSlot {
+                #[cfg(feature = "foreign-nodes")]
+                foreign_identity: Default::default(),
                 key,
                 type_index: index,
                 links: Links::default(),
@@ -483,6 +544,12 @@ impl<'editor> Transaction<'editor> {
             .is_some();
         #[cfg(not(feature = "foreign-nodes"))]
         let foreign = false;
+        #[cfg(feature = "foreign-nodes")]
+        let clone_source = if foreign {
+            Some(self.view().snapshot_for_foreign_read()?)
+        } else {
+            None
+        };
         let data = if foreign {
             original.data.clone()
         } else {
@@ -506,6 +573,7 @@ impl<'editor> Transaction<'editor> {
                 copy,
                 key,
                 &original.data,
+                clone_source,
             )
         {
             self.writable(copy)?.data = data;
@@ -817,6 +885,8 @@ impl<'editor> Transaction<'editor> {
     /// Install a new selection object and expose its identity replacement.
     pub fn replace_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.selection_replacements += 1;
         self.set_selection(selection)
     }
@@ -848,6 +918,8 @@ impl<'editor> Transaction<'editor> {
     pub fn detach_selection(&mut self, selection: Selection) -> SelectionSlot {
         let id = DetachedSelectionId(self.detached.len());
         self.detached.push(Some(selection));
+        #[cfg(feature = "foreign-nodes")]
+        self.foreign_selections.detached.push(Default::default());
         SelectionSlot::Detached(id)
     }
 }
