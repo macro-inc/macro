@@ -3,11 +3,14 @@
 #[cfg(test)]
 mod test;
 
+pub mod activity;
 pub mod appearance;
 pub mod create;
 pub mod delete;
+pub mod description;
 pub mod get;
 pub mod list;
+pub mod page;
 pub mod update;
 
 use std::str::FromStr;
@@ -28,8 +31,16 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    create::create_initiative_handler, delete::delete_initiative_handler,
-    get::get_initiative_handler, list::list_initiatives_handler, update::update_initiative_handler,
+    activity::{
+        InitiativeActivityRouterState, get_initiative_activity_handler, initiative_activity_router,
+    },
+    create::create_initiative_handler,
+    delete::delete_initiative_handler,
+    description::get_initiative_description_handler,
+    get::get_initiative_handler,
+    list::list_initiatives_handler,
+    page::page_initiatives_handler,
+    update::update_initiative_handler,
 };
 use crate::domain::{
     models::{InitiativeBasic, InitiativeError, InitiativeId},
@@ -120,6 +131,10 @@ where
             "/{initiative_id}/appearance",
             routing::put(appearance::set_initiative_appearance::<S, Eas, Auth>),
         )
+        .route(
+            "/{initiative_id}/description",
+            routing::get(get_initiative_description_handler::<S, Eas, Auth>),
+        )
         .layer(middleware::from_fn_with_state(
             state.clone(),
             ensure_initiative_exists::<S, Eas, Auth>,
@@ -131,6 +146,10 @@ where
             "/",
             routing::get(list_initiatives_handler::<S, Eas, Auth>)
                 .post(create_initiative_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/page",
+            routing::get(page_initiatives_handler::<S, Eas, Auth>),
         )
         .with_state(state)
 }

@@ -302,7 +302,17 @@ export const CalculateSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
           })
           .strict()
@@ -10145,7 +10155,17 @@ export const EditSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
             type: z.literal('set_cells'),
           })

@@ -590,7 +590,7 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasRequest,
         _: bool,
-    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
         panic!("unexpected canvas call")
     }
 
@@ -625,6 +625,24 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::word_document::WordDocumentRequest,
     ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
         panic!("unexpected word document call")
+    }
+
+    async fn read_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        panic!("unexpected read_markdown call")
+    }
+
+    async fn write_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _expected_revision: &str,
+        _markdown: &str,
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
+        panic!("unexpected write_markdown call")
     }
 
     async fn add_comment_mark(

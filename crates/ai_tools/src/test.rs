@@ -193,6 +193,30 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
     );
 }
 
+/// Code mode hides direct tools whose work the SDK does, while other
+/// hosts keep them.
+#[test]
+fn code_mode_hides_tools_the_sdk_covers() {
+    let code_mode = tools_for_agent_code_mode();
+    let direct = tools_for(AiHost::AgentSession);
+    for name in [
+        "ListTags",
+        "CreateTag",
+        "EditTag",
+        "DeleteTag",
+        "OpenDirectMessage",
+        "MuteNotifications",
+        "GetTeamAvailability",
+    ] {
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !code_mode.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+}
+
 #[test]
 fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
     let tools = tools_for_agent_code_mode();
@@ -777,6 +801,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadCanvas",
+        "EditCanvas",
+        "ApplyCanvasEdits",
         "ReadSpreadsheet",
         "CalculateSpreadsheet",
         "EditSpreadsheet",
@@ -791,10 +818,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ReadCanvas",
         "RenderCanvas",
-        "ApplyCanvasEdits",
-        "EditCanvas",
         "Subagent",
         "SearchTools",
         "LoadTools",
@@ -985,5 +1009,22 @@ fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the
         );
         assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
         assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
+    }
+}
+
+#[test]
+fn code_mode_reads_memory_and_activity_through_the_sdk() {
+    let names = [
+        "ReadMemory",
+        "UpdateMemory",
+        "GetUserActivity",
+        "ReadActivity",
+        "ReadInitiativeActivity",
+    ];
+    let code_mode = tools_for_agent_code_mode();
+    let direct = tools_for(AiHost::AgentSession);
+    for name in names {
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
     }
 }

@@ -19,6 +19,9 @@ distribution.
 - Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; appearance broker events must not insert duplicate history.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
+- `src/inbound/toolset/` (`ai_tools`) and `src/inbound/axum_router.rs`
+  (`axum`, mounted by cognition): `ReadActivity` and `GET /activity`, the
+  acting user's own activity through `ReadActivityResponse::read`.
 
 ## Scope
 

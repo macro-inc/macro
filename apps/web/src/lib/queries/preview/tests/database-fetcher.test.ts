@@ -10,7 +10,14 @@ vi.mock('@service-cognition/client', () => ({ cognitionApiServiceClient: {} }));
 vi.mock('@service-email/client', () => ({ emailClient: {} }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: {} }));
 vi.mock('../../email/thread', () => ({ threadQueryOptions: vi.fn() }));
-vi.mock('../../client', () => ({ queryClient: {} }));
+vi.mock('../../client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    queryClient: new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    }),
+  };
+});
 vi.mock('../../agent-session/mention-fetchers', () => ({
   fetchAgentSessionMentionPreviews: vi.fn(),
 }));

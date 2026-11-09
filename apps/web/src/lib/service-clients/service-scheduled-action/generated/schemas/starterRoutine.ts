@@ -5,7 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { StarterRoutineStepsItem } from './starterRoutineStepsItem';
+import type { RoutineStep } from './routineStep';
 
 /**
  * A starter routine whose step is code: offered when a routine is created,
@@ -17,5 +17,5 @@ export interface StarterRoutine {
   /** What someone asks for, with when it runs. */
   request: string;
   /** Its steps, in the shape a routine's task holds them. */
-  steps: StarterRoutineStepsItem[];
+  steps: RoutineStep[];
 }

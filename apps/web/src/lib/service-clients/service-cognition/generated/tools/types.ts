@@ -49,6 +49,10 @@ export type ToolPropertyTargetEntityType =
   | 'company'
   | 'chat';
 /**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
+/**
  * Structured output from a deterministic workbook operation.
  */
 export type SpreadsheetResponse =
@@ -3758,7 +3762,9 @@ export type ImportKind =
   | 'jira_epic'
   | 'channel';
 /**
- * A kind of action or inactivity the user should see.
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+ * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+ * activity for over 20 minutes.
  */
 export type AgentUpdateKind =
   | 'permission'
@@ -5622,15 +5628,7 @@ export interface SpreadsheetCellInput {
    * A1 address, from A1 through XFD100000.
    */
   address: string;
-  /**
-   * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-   * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-   * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-   * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-   * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-   * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
-   */
-  value: string;
+  value: SpreadsheetCellValue;
 }
 /**
  * Compact metadata for a sheet.
@@ -11003,6 +11001,9 @@ export interface GetUserActivity {
    */
   end: string;
 }
+/**
+ * Activity reports for one user, ordered by period.
+ */
 export interface ActivityReports {
   reports: Activity[];
 }
@@ -11535,21 +11536,51 @@ export type ListAgentUpdates = {};
  * Bounded results; truncation means older qualifying sessions were not folded.
  */
 export interface AgentUpdates {
+  /**
+   * One entry per pending request or stalled session, newest session activity first.
+   */
   items: AgentUpdate[];
+  /**
+   * Whether qualifying sessions beyond the 25 most recent were left out.
+   */
   truncated: boolean;
+  /**
+   * Says what was left out, when truncated.
+   */
   truncationNotice?: string | null;
 }
 /**
  * One pending interaction, or one stalled session.
  */
 export interface AgentUpdate {
+  /**
+   * The session.
+   */
   sessionId: string;
+  /**
+   * The session's name.
+   */
   sessionName: string;
+  /**
+   * The runtime the session runs on.
+   */
   harness: string;
+  /**
+   * The session's pull request, if it has one.
+   */
   pullRequestUrl?: string | null;
   kind: AgentUpdateKind;
+  /**
+   * What is asked, or why the session looks stalled, in at most 240 characters.
+   */
   summary: string;
+  /**
+   * When the request was made, or the session's last activity.
+   */
   since: string;
+  /**
+   * The choices a permission request offers; empty for other kinds.
+   */
   options: string[];
 }
 /**
@@ -16616,13 +16647,13 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
- * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
+ * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
  * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
@@ -16643,7 +16674,7 @@ export interface ExecuteCode {
    */
   turn_id: string;
   /**
-   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token.
+   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token.
    */
   source: string;
   /**

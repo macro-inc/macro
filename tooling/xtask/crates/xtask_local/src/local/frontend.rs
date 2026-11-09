@@ -2,26 +2,146 @@
 //! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
-use std::io::Read;
+use std::fs::{File, TryLockError};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+mod bundle_cache;
+
+use super::content_key;
+
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
+
+/// How long Vite gets to serve. Cold starts may rebuild optimized Wasm packages
+/// before it launches.
+pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Vite's output, kept across the whole dev server's life for `run_local logs`.
+pub fn log_path(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("run/frontend.log")
+}
+
+fn pid_path(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("run/frontend.pid")
+}
+
+/// Preloaded into Vite's node: turns stdin EOF, which comes when the process
+/// holding the pipe dies, into SIGTERM, which Vite handles by closing its server.
+/// Vite listens for stdin `end` itself but never resumes the paused stream, so
+/// on a pipe that event never fires.
+const EXIT_ON_STDIN_EOF: &str = "data:text/javascript,\
+    process.stdin.on('end',()=>process.kill(process.pid,'SIGTERM'));\
+    process.stdin.resume();";
+
+fn vite_bin() -> PathBuf {
+    repo_root().join("node_modules/vite/bin/vite.js")
+}
+
+/// Stops a Vite left behind by a supervisor that died before the pipe could
+/// stop it (one started before Vite had [`EXIT_ON_STDIN_EOF`]). The recorded
+/// pid is only signalled while it still runs this repository's Vite, so a pid
+/// reused by an unrelated process is left alone.
+pub fn stop_recorded(instance: &Instance) {
+    let Some(pid) = read_pid(instance).and_then(|pid| pid.trim().parse::<i32>().ok()) else {
+        return;
+    };
+    let runs_vite = || {
+        std::fs::read(format!("/proc/{pid}/cmdline")).is_ok_and(|cmdline| {
+            cmdline
+                .split(|byte| *byte == 0)
+                .any(|arg| Path::new(std::ffi::OsStr::from_bytes(arg)) == vite_bin())
+        })
+    };
+    if !runs_vite() {
+        return;
+    }
+    // SAFETY: plain kill(2) on the group Vite leads (it is spawned with
+    // process_group(0)); ESRCH is harmless when it already exited.
+    unsafe {
+        libc::kill(-pid, libc::SIGTERM);
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while runs_vite() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if runs_vite() {
+        // SAFETY: as above.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
+
+/// The pid of the latest Vite, recorded once it is serving.
+pub fn read_pid(instance: &Instance) -> Option<String> {
+    std::fs::read_to_string(pid_path(instance)).ok()
+}
+const BUILD_LOCK_FILE: &str = ".frontend-build.lock";
 
 /// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
 
+/// Serialize frontend builds within one checkout. Every instance there shares
+/// the generated wasm packages and `apps/web/dist`, and their builds check and
+/// then write without coordinating, so two instances building at once read
+/// each other's half-written files (wasm-opt fails with "error parsing wasm").
+/// The lock releases when the returned file drops.
+fn lock_checkout_build(stage: &Stage) -> Result<Option<File>> {
+    if stage.is_dry_run() {
+        return Ok(None);
+    }
+    lock_build_in(&repo_root().join("infra/local/generated"), || {
+        stage.note("another instance in this checkout is building the frontend; waiting for it");
+    })
+    .map(Some)
+}
+
+fn lock_build_in(dir: &Path, on_wait: impl FnOnce()) -> Result<File> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = dir.join(BUILD_LOCK_FILE);
+    let file = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => return Ok(file),
+        Err(TryLockError::WouldBlock) => on_wait(),
+        Err(TryLockError::Error(error)) => {
+            return Err(error).with_context(|| format!("locking {}", path.display()));
+        }
+    }
+    file.lock()
+        .with_context(|| format!("locking {}", path.display()))?;
+    Ok(file)
+}
+
+/// Build or restore the generated wasm packages the app imports. Builds share
+/// a machine-wide cache keyed by each package's sources (see
+/// `apps/web/scripts/cached-wasm-build.sh`), so a new checkout or instance
+/// copies packages another one already built instead of compiling them.
 fn prepare_dependencies(stage: &Stage) -> Result<()> {
     let mut prepare = Command::new("bun");
     prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    if macro_env_var::maybe_read_env("WASM_PKG_CACHE_DIR").is_none() {
+        let home = macro_env_var::maybe_read_env("HOME").context("HOME is not set")?;
+        prepare.env(
+            "WASM_PKG_CACHE_DIR",
+            Path::new(&home).join(".cache/macro-local/wasm-pkgs"),
+        );
+    }
     stage.run("Preparing frontend dependencies", &mut prepare)
+}
+
+/// Prepare the dev server's dependencies. `bring_up` runs this alongside the
+/// service build, before [`start`].
+pub fn prepare(stage: &Stage) -> Result<()> {
+    let _build_lock = lock_checkout_build(stage)?;
+    prepare_dependencies(stage)
 }
 
 /// Host-facing frontend URL.
@@ -73,32 +193,69 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// `VITE_LOCAL_ONLY` makes the bundle count as local, as the dev server does
 /// through `import.meta.hot`, so local-only flags, routes and tools match
 /// `just run_local`.
+///
+/// Bundles are cached machine-wide by everything the build reads (see
+/// [`bundle_cache`]), so an unchanged frontend is staged without rebuilding.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    // Held through staging: `dist/` is shared until it's copied out.
+    let _build_lock = lock_checkout_build(stage)?;
     prepare_dependencies(stage)?;
-    let dist = {
-        let mut cmd = Command::new("bun");
-        cmd.current_dir(app_dir())
-            .args(["run", "--bun", "build"])
-            .env("MODE", "development")
-            .env("NODE_ENV", "production")
-            .env("VITE_LOCAL_SERVERS", "ALL")
-            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
-            .env("VITE_LOCAL_ONLY", "true");
-        if mode.spec().runs_local_infra {
-            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-        }
-        stage.run("Building frontend bundle", &mut cmd)?;
-        app_dir().join("dist")
-    };
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(app_dir())
+        .args(["run", "--bun", "build"])
+        .env("MODE", "development")
+        .env("NODE_ENV", "production")
+        .env("VITE_LOCAL_SERVERS", "ALL")
+        .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+        .env("VITE_LOCAL_ONLY", "true");
+    if mode.spec().runs_local_infra {
+        cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+    }
     if stage.is_dry_run() {
-        return Ok(());
+        return stage.run("Building frontend bundle", &mut cmd);
     }
-    if !dist.join("index.html").exists() {
-        anyhow::bail!(
-            "no index.html in {} — frontend build did not produce a bundle",
-            dist.display()
-        );
-    }
+
+    let key = bundle_cache::key(&repo_root(), &cmd)?;
+    // Held until the bundle is staged, so pruning can't remove it first.
+    let (bundle, _reading) = match bundle_cache::lookup(&key)? {
+        Some((cached, reading)) => {
+            stage.note(&format!(
+                "frontend unchanged: reusing bundle {}",
+                &key[..12]
+            ));
+            (cached, reading)
+        }
+        None => {
+            stage.run("Building frontend bundle", &mut cmd)?;
+            let dist = app_dir().join("dist");
+            if !dist.join("index.html").exists() {
+                anyhow::bail!(
+                    "no index.html in {} — frontend build did not produce a bundle",
+                    dist.display()
+                );
+            }
+            // The read lock is taken after the store's install lock is released.
+            // Another checkout would have to store a cache's worth of newer
+            // bundles in that gap for this one to be pruned, but if it is gone,
+            // store it again from `dist/`, which this checkout's lock still holds.
+            let mut stored = None;
+            for _ in 0..2 {
+                let mut cached = None;
+                stage.run_step("Caching frontend bundle", || {
+                    cached = Some(bundle_cache::store(&key, &dist)?);
+                    Ok(())
+                })?;
+                let cached = cached.context("frontend bundle was not cached")?;
+                let reading = content_key::read_lock(&cached)
+                    .with_context(|| format!("locking {}", cached.display()))?;
+                if cached.join("index.html").exists() {
+                    stored = Some((cached, reading));
+                    break;
+                }
+            }
+            stored.context("the cached frontend bundle was pruned before it could be staged")?
+        }
+    };
     stage.run_step("Staging frontend bundle", || {
         let staged = static_dir(instance);
         if staged.exists() {
@@ -106,14 +263,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                 .with_context(|| format!("clearing {}", staged.display()))?;
         }
         instance.ensure_artifact_dir()?;
-        let status = Command::new("cp")
-            .arg("-a")
-            .arg(&dist)
-            .arg(&staged)
-            .status()
-            .context("running cp -a")?;
-        anyhow::ensure!(status.success(), "cp -a exited with {status}");
-        Ok(())
+        bundle_cache::copy_tree(&bundle, &staged)
     })
 }
 
@@ -227,19 +377,19 @@ fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
         })
 }
 
-/// A running frontend dev server plus its captured output, so an unexpected
-/// exit can be explained (the output is otherwise suppressed).
+/// A running frontend dev server. Its output goes to a log file, so an
+/// unexpected exit can be explained and `run_local logs` can read it.
 pub struct Frontend {
     pub process: FrontendProcess,
     command: Command,
     port: u16,
+    log: PathBuf,
+    pid_file: PathBuf,
 }
 
-/// One dev-server process and its captured output, replaced on restart.
+/// One dev-server process, replaced on restart.
 pub struct FrontendProcess {
     pub child: Child,
-    captured: Arc<Mutex<Vec<u8>>>,
-    drains: Vec<JoinHandle<()>>,
 }
 
 impl Frontend {
@@ -247,7 +397,8 @@ impl Frontend {
     /// Killing the old process group also recovers a stuck in-process reload.
     pub fn restart(&mut self, stage: &Stage) -> Result<()> {
         self.shutdown();
-        self.process = spawn(stage, &mut self.command, self.port)?;
+        self.process = spawn(stage, &mut self.command, self.port, &self.log)?;
+        record_pid(&self.pid_file, &self.process);
         Ok(())
     }
 
@@ -258,16 +409,25 @@ impl Frontend {
 
     /// Return the last output from an exited dev server.
     pub fn tail_output(&mut self, lines: usize) -> String {
-        self.process.tail_output(lines)
+        tail_of_log(&self.log, lines)
     }
+}
+
+/// Best effort: only a later `restart-frontend` reads it, to see the restart land.
+fn record_pid(path: &Path, process: &FrontendProcess) {
+    let _ = std::fs::write(path, process.child.id().to_string());
+}
+
+fn tail_of_log(log: &Path, lines: usize) -> String {
+    let output = std::fs::read(log).unwrap_or_default();
+    tail_str(&String::from_utf8_lossy(&output), lines)
 }
 
 impl FrontendProcess {
     /// Stop the dev server and all its children. We put Vite and its children
     /// in their own process group at spawn — so signal the
     /// GROUP (negative pid). SIGKILL is enough: the kernel releases the port the
-    /// moment the processes die. Then reap Vite and join the drain threads (their
-    /// pipes close, so they exit).
+    /// moment the processes die. Then reap Vite.
     pub fn shutdown(&mut self) {
         if matches!(self.child.try_wait(), Ok(None)) {
             let pgid = self.child.id() as i32;
@@ -278,19 +438,6 @@ impl FrontendProcess {
             }
         }
         let _ = self.child.wait();
-        for h in self.drains.drain(..) {
-            let _ = h.join();
-        }
-    }
-
-    /// Join the drain threads and return the last `lines` lines of the dev
-    /// server's captured output (for diagnosing why it exited).
-    pub fn tail_output(&mut self, lines: usize) -> String {
-        for h in self.drains.drain(..) {
-            let _ = h.join();
-        }
-        let buf = self.captured.lock().unwrap_or_else(|e| e.into_inner());
-        tail_str(&String::from_utf8_lossy(&buf), lines)
     }
 }
 
@@ -307,8 +454,9 @@ fn tail_str(s: &str, n: usize) -> String {
 }
 
 /// Start the frontend dev server and wait until *our* child is serving. Output
-/// is captured (suppressed — the vite banner would duplicate the summary's URL)
-/// but retained so an unexpected exit can be diagnosed. Returns `None` in
+/// goes to [`log_path`] (the vite banner would duplicate the summary's URL), so
+/// an unexpected exit can be diagnosed. Callers have already waited for the
+/// backend and run [`prepare`] (`bring_up` does both). Returns `None` in
 /// dry-run mode.
 pub fn start(
     stage: &Stage,
@@ -316,9 +464,6 @@ pub fn start(
     mode: Mode,
     traces_enabled: bool,
 ) -> Result<Option<Frontend>> {
-    if mode.spec().wait_backend_before_frontend {
-        wait_backend_ready(stage, instance)?;
-    }
     if stage.is_dry_run() {
         stage.note(&format!(
             "Dry run: would start frontend at {}",
@@ -328,77 +473,69 @@ pub fn start(
     }
     let port = instance.port(Port::Frontend);
     // A successful connect means something is already listening — almost
-    // certainly a stale dev server from a previous run. (A bind probe is
-    // unreliable: std's TcpListener sets SO_REUSEADDR, so it binds right
-    // alongside the squatter.) Bail clearly rather than spawn a bun that can't
+    // certainly a stale dev server from a previous run. (A bind probe can miss
+    // it; see `accepting`.) Bail clearly rather than spawn a bun that can't
     // bind and dies with a confusing late "exited (status 1)".
-    if std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(300),
-    )
-    .is_ok()
-    {
+    if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
         anyhow::bail!(
             "frontend port {port} is already in use — likely a stale dev server from a \
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
     // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
     // and builds: https://github.com/oven-sh/bun/issues/10441.
     let mut cmd = Command::new("node");
     cmd.current_dir(app_dir())
-        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["--import", EXIT_ON_STDIN_EOF])
+        .arg(vite_bin())
         .args(["-c", "vite.config.ts"])
         // Run Vite directly in its OWN process group. Avoiding the `bun run`
         // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight
-        // with our hotkey loop), but it never reaches EOF — Stdio::null is EOF
-        // immediately, which makes vite shut itself down right after boot.
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        // with our hotkey loop). When this process dies, however it dies, the
+        // pipe closes and EXIT_ON_STDIN_EOF stops Vite instead of leaving it
+        // holding the port.
+        .stdin(Stdio::piped());
     for (k, v) in dev_env(instance, mode, traces_enabled)? {
         cmd.env(k, v);
     }
-    let process = spawn(stage, &mut cmd, port)?;
+    instance.ensure_artifact_dir()?;
+    let log = log_path(instance);
+    let pid_file = pid_path(instance);
+    if let Some(dir) = log.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let process = spawn(stage, &mut cmd, port, &log)?;
+    record_pid(&pid_file, &process);
     wait_frontend_proxy_ready(stage, instance)?;
     Ok(Some(Frontend {
         process,
         command: cmd,
         port,
+        log,
+        pid_file,
     }))
 }
 
-fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess> {
-    let mut child = cmd.spawn().context("launching the Vite dev server")?;
+fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<FrontendProcess> {
+    let output =
+        std::fs::File::create(log).with_context(|| format!("creating {}", log.display()))?;
+    cmd.stdout(output.try_clone()?).stderr(output);
 
-    // Drain stdout+stderr into a buffer on their own threads (a full pipe would
-    // otherwise block Vite); the output stays hidden unless the server exits.
-    // stdin is intentionally NOT taken — its write end stays open so Vite never
-    // sees stdin EOF.
-    let captured = Arc::new(Mutex::new(Vec::new()));
-    let mut drains = Vec::new();
-    if let Some(mut out) = child.stdout.take() {
-        let buf = Arc::clone(&captured);
-        drains.push(std::thread::spawn(move || drain_into(&mut out, &buf)));
-    }
-    if let Some(mut err) = child.stderr.take() {
-        let buf = Arc::clone(&captured);
-        drains.push(std::thread::spawn(move || drain_into(&mut err, &buf)));
-    }
+    // stdin is intentionally NOT taken — its write end stays open in `Child` so
+    // Vite never sees stdin EOF while we live.
+    let mut child = cmd.spawn().context("launching the Vite dev server")?;
 
     // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
-    let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
-        // Cold starts may rebuild optimized Wasm packages before Vite launches.
-        for _ in 0..600 {
+        let deadline = std::time::Instant::now() + STARTUP_TIMEOUT;
+        while std::time::Instant::now() < deadline {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
             // genuinely bound the port — rather than us connecting to a stale
@@ -410,13 +547,14 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess>
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
-            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300))
-                .is_ok()
-            {
+            if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
                 return Ok(());
             }
         }
-        anyhow::bail!("frontend dev server did not become ready after 180 seconds")
+        anyhow::bail!(
+            "frontend dev server did not become ready after {} seconds",
+            STARTUP_TIMEOUT.as_secs()
+        )
     });
 
     if let Err(error) = startup {
@@ -427,31 +565,11 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess>
             libc::kill(-pgid, libc::SIGKILL);
         }
         let _ = child.wait();
-        for handle in drains.drain(..) {
-            let _ = handle.join();
-        }
-        let out = tail_str(&String::from_utf8_lossy(&captured.lock().unwrap()), 30);
+        let out = tail_of_log(log, 30);
         anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
     }
 
-    Ok(FrontendProcess {
-        child,
-        captured,
-        drains,
-    })
-}
-
-/// Copy a child pipe into the shared capture buffer until EOF.
-fn drain_into(reader: &mut impl Read, buf: &Mutex<Vec<u8>>) {
-    let mut chunk = [0u8; 4096];
-    while let Ok(n) = reader.read(&mut chunk) {
-        if n == 0 {
-            break;
-        }
-        if let Ok(mut b) = buf.lock() {
-            b.extend_from_slice(&chunk[..n]);
-        }
-    }
+    Ok(FrontendProcess { child })
 }
 
 #[cfg(test)]

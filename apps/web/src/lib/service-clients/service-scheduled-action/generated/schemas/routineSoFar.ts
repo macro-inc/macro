@@ -5,15 +5,16 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { RoutineSoFarStepsItem } from './routineSoFarStepsItem';
+
 import type { RoutineSoFarTrigger } from './routineSoFarTrigger';
+import type { RoutineStep } from './routineStep';
 
 /**
  * The routine a step is added to or changed in.
  */
 export interface RoutineSoFar {
   /** Its steps, in the shape a routine's task holds them. */
-  steps: RoutineSoFarStepsItem[];
+  steps: RoutineStep[];
   /** Its trigger as it would be saved, for AI to read; absent while it has none. */
   trigger?: RoutineSoFarTrigger;
 }

@@ -49,7 +49,7 @@ Every direct edit tool has the same two layers:
 
 The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
-to the hosts in `sdk_hosts()` (DSS, auth, cognition, email and others). Neither
+to the hosts in `sdk_endpoints()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle
 (`sdk.mjs`, 375 KB) has no WASM.
 
@@ -183,7 +183,7 @@ the new revision, or the new document for `saveAs`, and `webUrl`):
 | Type | Method | Server pipeline | Abort |
 | --- | --- | --- | --- |
 | Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | Yes, op by op; no rollback (above) |
-| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | Yes; one commit, so all or nothing |
+| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | Yes; each acknowledged step stays |
 | Spreadsheet | `sheet.edit` | New: one writer model | Yes until the commit; one commit |
 | Word | `wordDoc.edit` | New: one writer model | Yes until the commit; one commit |
 | PowerPoint | `deck.edit` (with `saveAs` for a new deck) | New: one writer model | Yes until the save; one version |
@@ -271,12 +271,16 @@ until they move.
 ## How vendoring works
 
 The vendored library is only the structured layer's builders; instruction
-edits need nothing in the sandbox. In this stack that is two builders:
+edits need nothing in the sandbox. In this stack that is one builder:
 
 | Builder | Why instructions don't cover it |
 | --- | --- |
 | `DocumentEditor` and `DocumentOp` | Deterministic markdown edits and database blocks (above) |
-| `CanvasEditor` and `CanvasOp` | Exact geometry and batches against a revision |
+
+Canvas needs no vendored builder: `canvas.apply(code, { expectedRevision })`
+sends CanvasEditor code that the worker runs in its QuickJS sandbox, exactly as
+`ApplyCanvasEdits` does. The one engine validates, measures and commits it, so
+the SDK and the tool can't drift and no op vocabulary needs versioning.
 
 Spreadsheet, Word and PowerPoint types are deferred with their structured
 layer (later option, above).
@@ -284,8 +288,7 @@ layer (later option, above).
 - **The builder lives in a package, not the worker.** The documents PR moves
   `editor/ops.ts`, `document-editor.ts` and `errors.ts` from the worker into
   `packages/editor-ops/src/document/`. The worker, its QuickJS sandbox bundle
-  (`scripts/generate-sandbox.ts`) and the SDK import it from there. Canvas's
-  builder moves to `packages/editor-ops/src/canvas/` in its PR.
+  (`scripts/generate-sandbox.ts`) and the SDK import it from there.
 - **The SDK copies the files in at build time.** `packages/sdk` is a standalone
   package with its own lockfile, its esbuild bundle inlines everything except
   `node:*`, and `tsc` declaration emit is rooted at the package. `bun run
@@ -363,7 +366,10 @@ generated at build time), and adds the direct tool it replaces to
    `readDesign()`, `readPhotoshop()` and `readIllustrator()`, and hides the
    seven matching tools. An instructions `edit()` with a writer model can
    follow.
-5. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
-   `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
-   ops with `expectedRevision`) and render. Hides `EditCanvas` and
-   `ApplyCanvasEdits`.
+5. **Canvases** (MACRO-4584). `document.canvas()` with `scene()` over
+   `ReadCanvas`, `apply(code, { expectedRevision })` over `ApplyCanvasEdits`
+   (409 conflict and 422 rejection when nothing committed), `edit(instructions,
+   { signal })` over `EditCanvas`, and `render()` returning a stored
+   `StaticImage`. Hides `ReadCanvas`, `EditCanvas` and `ApplyCanvasEdits`.
+   `RenderCanvas` stays direct: an `ExecuteCode` result can't carry an image
+   to the model.

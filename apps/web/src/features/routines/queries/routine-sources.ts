@@ -12,7 +12,7 @@ import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
-import { stepsFromTask } from '../core/routine-steps';
+import { programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -156,7 +156,7 @@ export function createRoutineDetailSource(
     async approveCodeUpdate() {
       const proposal = codeReview()?.proposal;
       const current = raw();
-      const steps = proposal && stepsFromTask(proposal.task);
+      const steps = proposal && programSteps(proposal.task);
       const draft = current && toRoutine(current).draft;
       if (!steps || !draft || approving()) return;
       setApproving(true);

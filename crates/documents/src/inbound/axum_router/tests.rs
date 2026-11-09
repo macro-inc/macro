@@ -1075,6 +1075,21 @@ fn test_router_with(
     )
 }
 
+#[cfg(feature = "ai_tools")]
+fn canvas_routes(worker_url: &str) -> super::CanvasRouteDeps {
+    super::CanvasRouteDeps {
+        worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                worker_url.to_string(),
+            ),
+        ),
+        admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+        recorder: Arc::new(ai_usage::NoOpUsageRecorder),
+        artifacts: Arc::new(|_| Box::pin(async { false })),
+        images: Arc::new(FakeCanvasImages::default()),
+    }
+}
+
 type TestState =
     DocumentRouterState<FakeDocumentService, FakeEntityAccessService, FakeAuthorizationService>;
 
@@ -1137,6 +1152,13 @@ fn test_state(
             Arc::new(ai_usage::NoOpUsageRecorder),
         )),
         #[cfg(feature = "ai_tools")]
+        editing_worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                "http://localhost/unused-editing-worker".to_string(),
+            ),
+        ),
+        #[cfg(feature = "ai_tools")]
+        messages: Arc::new(messages::domain::api::MockMessageServiceApi::new()),
         spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             document_service.clone(),
             Arc::new(
@@ -1146,6 +1168,8 @@ fn test_state(
             ),
             "unused-jwt-secret".to_string(),
         )),
+        #[cfg(feature = "ai_tools")]
+        canvas: canvas_routes("http://localhost/unused-editing-worker"),
         #[cfg(feature = "ai_tools")]
         spreadsheet_ai_edit: Arc::new(crate::domain::spreadsheet::SpreadsheetAiEditService::new(
             document_service.clone(),
@@ -1964,4 +1988,303 @@ async fn a_skill_without_a_use_when_description_is_rejected_before_it_is_created
         );
         assert!(document_service.create_calls().is_empty());
     }
+}
+
+#[cfg(feature = "ai_tools")]
+#[derive(Default)]
+struct FakeCanvasImages(Mutex<Vec<(String, String, Vec<u8>)>>);
+
+#[cfg(feature = "ai_tools")]
+#[async_trait]
+impl crate::domain::canvas::CanvasImageStore for FakeCanvasImages {
+    async fn save_png(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        name: &str,
+        png: Vec<u8>,
+    ) -> anyhow::Result<crate::domain::canvas::StoredCanvasImage> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((owner.to_string(), name.to_owned(), png));
+        Ok(crate::domain::canvas::StoredCanvasImage {
+            file_id: "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+            url: "https://static.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+        })
+    }
+}
+
+/// An editing worker on a local port that answers each `/canvas` call with the
+/// next canned `(status, body)` and records the requests it got.
+#[cfg(feature = "ai_tools")]
+async fn stub_canvas_worker(answers: Vec<(u16, Value)>) -> (String, Arc<Mutex<Vec<Value>>>) {
+    let requests: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let answers = Arc::new(Mutex::new(answers.into_iter()));
+    let seen = requests.clone();
+    let app = Router::new().route(
+        "/canvas",
+        axum::routing::post(move |axum::Json(body): axum::Json<Value>| {
+            let seen = seen.clone();
+            let answers = answers.clone();
+            async move {
+                seen.lock().unwrap().push(body);
+                let (status, body) = answers.lock().unwrap().next().unwrap();
+                (StatusCode::from_u16(status).unwrap(), axum::Json(body))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{address}"), requests)
+}
+
+#[cfg(feature = "ai_tools")]
+fn canvas_request(path: &str, body: Value) -> Request<Body> {
+    Request::post(format!("/{RESOLVED_DOCUMENT_ID}/canvas/{path}"))
+        .header("authorization", format!("Bearer {JWT_TOKEN}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+#[cfg(feature = "ai_tools")]
+fn canvas_router(worker_url: &str) -> (Router, Arc<FakeDocumentService>) {
+    let (mut state, documents, _, _) = test_state(NonUserOwners::Disabled);
+    state.canvas = canvas_routes(worker_url);
+    *documents.file_type.lock().unwrap() = Some(FileType::Canvas);
+    (router_for(state), documents)
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_scene_reads_the_live_scene_for_the_caller_without_a_bot() {
+    let (worker, requests) = stub_canvas_worker(vec![(
+        200,
+        json!({
+            "canvas": "{\"rootId\":\"root\",\"items\":[{\"id\":\"box\"}],\"revision\":\"r1\"}",
+            "operationsApplied": 0,
+            "summary": "Read the current canvas.",
+        }),
+    )])
+    .await;
+    let (router, _) = canvas_router(&worker);
+
+    let (status, body) = send(
+        &router,
+        canvas_request("scene", json!({ "itemIds": ["box"], "format": "scene" })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "revision": "r1",
+            "scene": { "rootId": "root", "items": [{ "id": "box" }], "revision": "r1" },
+        })
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests[0]["request"],
+        json!({ "action": "read", "itemIds": ["box"], "format": "scene" })
+    );
+    let token = requests[0]["documentToken"].as_str().unwrap();
+    let claims: Value = macro_sync_service_jwt::decode(token, "unused-jwt-secret").unwrap();
+    assert_eq!(claims["access_level"], "view");
+    assert_eq!(claims["user_id"], JWT_USER_ID);
+    assert!(claims.get("actor").is_none_or(Value::is_null));
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_routes_refuse_other_document_types_before_the_worker() {
+    let (worker, requests) = stub_canvas_worker(vec![]).await;
+    let (router, documents) = canvas_router(&worker);
+    *documents.file_type.lock().unwrap() = Some(FileType::Md);
+
+    let (status, body) = send(&router, canvas_request("scene", json!({}))).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "invalid_request");
+    assert!(requests.lock().unwrap().is_empty());
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_edits_say_whether_a_failed_batch_committed_anything() {
+    let (worker, requests) = stub_canvas_worker(vec![
+        (
+            200,
+            json!({
+                "canvas": "{\"items\":[],\"revision\":\"r2\",\"textLayout\":[]}",
+                "operationsApplied": 1,
+                "summary": "Applied 1 acknowledged Canvas operations.",
+            }),
+        ),
+        (
+            409,
+            json!({ "error": "Canvas revision changed.", "outcome": "conflict" }),
+        ),
+        (
+            422,
+            json!({ "error": "Item box no longer exists.", "outcome": "rejected" }),
+        ),
+        (
+            502,
+            json!({ "error": "Canvas write acknowledgement was lost." }),
+        ),
+    ])
+    .await;
+    let (router, _) = canvas_router(&worker);
+    let batch = json!({
+        "expectedRevision": "a".repeat(64),
+        "code": "editor.move(['box'],0,20)",
+        "snippets": { "label": "Ready" },
+    });
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["operationsApplied"], 1);
+    assert_eq!(body["revision"], "r2");
+    assert_eq!(body["scene"]["textLayout"], json!([]));
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        body,
+        json!({ "error": "revision_conflict", "message": "Canvas revision changed." })
+    );
+
+    let (status, body) = send(&router, canvas_request("edits", batch.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        body,
+        json!({ "error": "edit_rejected", "message": "Item box no longer exists." })
+    );
+
+    let (status, body) = send(&router, canvas_request("edits", batch)).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert_eq!(body["error"], "edit_failed");
+
+    let requests = requests.lock().unwrap();
+    assert_eq!(
+        requests[0]["request"],
+        json!({
+            "action": "apply",
+            "expectedRevision": "a".repeat(64),
+            "code": "editor.move(['box'],0,20)",
+            "snippets": { "label": "Ready" },
+        })
+    );
+    let token = requests[0]["documentToken"].as_str().unwrap();
+    let claims: Value = macro_sync_service_jwt::decode(token, "unused-jwt-secret").unwrap();
+    assert_eq!(claims["access_level"], "edit");
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_render_keeps_the_png_as_the_callers_static_file() {
+    let (worker, _) = stub_canvas_worker(vec![(
+        200,
+        json!({
+            "render": {
+                "revision": "r1",
+                "clock": {},
+                "crop": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 80.0 },
+                "width": 200,
+                "height": 160,
+                "objects": [{ "id": "box", "bounds": { "x": 0.0, "y": 0.0, "width": 10.0, "height": 10.0 } }],
+                "unavailable": [],
+                "textLayout": [],
+                "modelMedia": [{ "type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo=" }],
+            },
+            "canvas": null,
+            "operationsApplied": 0,
+            "summary": "Rendered an immutable Canvas snapshot.",
+        }),
+    )])
+    .await;
+    let images = Arc::new(FakeCanvasImages::default());
+    let mut canvas = canvas_routes(&worker);
+    canvas.images = images.clone();
+    let (mut state, documents, _, _) = test_state(NonUserOwners::Disabled);
+    state.canvas = canvas;
+    *documents.file_type.lock().unwrap() = Some(FileType::Canvas);
+    let router = router_for(state);
+
+    let (status, body) = send(
+        &router,
+        canvas_request("render", json!({ "itemIds": ["box"] })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "fileId": "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e",
+            "url": "https://static.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e",
+            "revision": "r1",
+            "crop": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 80.0 },
+            "width": 200,
+            "height": 160,
+            "objects": [{ "id": "box", "bounds": { "x": 0.0, "y": 0.0, "width": 10.0, "height": 10.0 } }],
+            "unavailable": [],
+            "textLayout": [],
+        })
+    );
+    let saved = images.0.lock().unwrap();
+    assert_eq!(saved[0].0, JWT_USER_ID);
+    assert_eq!(saved[0].2, b"\x89PNG\r\n\x1a\n");
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn canvas_ai_edit_refuses_when_the_editor_applied_nothing_and_asked_back() {
+    let (worker, requests) = stub_canvas_worker(vec![
+        (
+            200,
+            json!({
+                "operationsApplied": 0,
+                "summary": "Need more detail.",
+                "clarification": "Which of the two boxes?",
+                "usage": [],
+            }),
+        ),
+        (
+            200,
+            json!({
+                "operationsApplied": 2,
+                "summary": "Moved one box.",
+                "clarification": "Which colour for the other?",
+                "usage": [],
+            }),
+        ),
+    ])
+    .await;
+    let (router, _) = canvas_router(&worker);
+    let instructions = json!({ "instructions": "Line the boxes up." });
+
+    let (status, body) = send(&router, canvas_request("ai-edit", instructions.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        body,
+        json!({ "error": "edit_refused", "message": "Which of the two boxes?" })
+    );
+
+    let (status, body) = send(&router, canvas_request("ai-edit", instructions)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({
+            "operationsApplied": 2,
+            "summary": "Moved one box.",
+            "clarification": "Which colour for the other?",
+        })
+    );
+    assert_eq!(
+        requests.lock().unwrap()[0]["request"],
+        json!({ "action": "edit", "instructions": "Line the boxes up." })
+    );
 }

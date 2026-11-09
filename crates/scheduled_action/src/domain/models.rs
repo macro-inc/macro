@@ -165,13 +165,13 @@ pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 
 /// Client configuration, the create body. Ownership and execution state are
 /// server-owned.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub enabled: bool,
     /// Omitted by clients that predate the setting; runs then start unlisted.
@@ -180,6 +180,47 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+}
+
+/// What saving a routine would find wrong, without saving it: the answer to
+/// `POST /scheduled-actions/check`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    /// Whether saving it would succeed: no problems and no failing steps.
+    pub ok: bool,
+    /// Why saving it would fail, other than its code, for its author.
+    pub problems: Vec<String>,
+    /// Code steps that don't type-check against Macro's SDK.
+    pub steps: Vec<CheckedStepProblems>,
+    /// The routine as saving would store it: code steps named and the SDK
+    /// their code checks against stamped.
+    pub routine: ActionConfiguration,
+}
+
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
+}
+
+/// A code step that doesn't type-check.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedStepProblems {
+    /// Its place among the routine's steps, from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// What the type checker reports, first problems first.
+    pub problems: Vec<String>,
 }
 
 /// Configuration replacement, the update body. Activation has its own endpoint, so
@@ -191,7 +232,7 @@ pub struct ActionConfigurationUpdate {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     /// Still sent by clients deployed before the activation endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -318,7 +359,7 @@ pub struct ScheduledAction {
     pub configuration_revision: ConfigurationRevision,
     /// Event publication boundary; absent for cron actions.
     pub event_activated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
     /// Next cron firing, absent for event-triggered actions.

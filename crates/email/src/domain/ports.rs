@@ -559,8 +559,10 @@ pub trait EmailRepo: Send + Sync + 'static {
 }
 
 /// Read-only capability for fetching email thread previews. The composition
-/// root supplies the replica-backed service for ordinary REST/GraphQL Soup.
-/// Mutation replies reload through the primary-backed email writer instead.
+/// root supplies the replica-backed service for ordinary REST/GraphQL Soup,
+/// but CRM-scoped eligibility must read the primary so replica lag cannot
+/// retain withdrawn or excluded contributions. Mutation replies also reload
+/// through the primary-backed email writer.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,

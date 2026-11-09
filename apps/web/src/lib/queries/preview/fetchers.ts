@@ -27,6 +27,7 @@ import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
+import { fetchCachedDatabaseDetail } from '../storage/databases';
 import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
@@ -425,13 +426,14 @@ async function fetchCalendarEventPreviews(
 
 /**
  * A database previews as the viewer's own read of it: an owner or anyone it
- * is shared with gets its name; one deleted or trashed is gone.
+ * is shared with gets its name; one deleted or trashed is gone. The read is
+ * the cached schema an open of the database shares.
  */
 async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
   return Promise.all(
     ids.map(async (id): Promise<PreviewItem> => {
       const base = { id, type: 'database', loading: false } as const;
-      const detail = await storageServiceClient.databases.get({ id });
+      const detail = await fetchCachedDatabaseDetail(id);
       if (detail.isErr())
         return { ...base, access: failedReadAccess(detail.error) };
       const { database } = detail.value;
