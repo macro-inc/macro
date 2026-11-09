@@ -2330,6 +2330,7 @@ pub struct CompatBatchReply<'raw> {
     pub mutation_epoch: u64,
     pub composition: ForeignOptionalKey,
     pub selection: CompatSelectionData<'raw>,
+    pub selections: ::std::vec::Vec<CompatSelectionData<'raw>>,
     pub tags: ::std::vec::Vec<&'raw str>,
     pub dirty_leaves: ::bebop::SliceWrapper<'raw, ForeignKey>,
     pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
@@ -2349,6 +2350,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         <u64>::MIN_SERIALIZED_SIZE +
         <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
         <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<CompatSelectionData<'raw>>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
@@ -2367,6 +2369,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         self.mutation_epoch.serialized_size() +
         self.composition.serialized_size() +
         self.selection.serialized_size() +
+        self.selections.serialized_size() +
         self.tags.serialized_size() +
         self.dirty_leaves.serialized_size() +
         self.dirty_elements.serialized_size() +
@@ -2386,6 +2389,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             zelf.mutation_epoch._serialize_chained(dest)? +
             zelf.composition._serialize_chained(dest)? +
             zelf.selection._serialize_chained(dest)? +
+            zelf.selections._serialize_chained(dest)? +
             zelf.tags._serialize_chained(dest)? +
             zelf.dirty_leaves._serialize_chained(dest)? +
             zelf.dirty_elements._serialize_chained(dest)? +
@@ -2433,6 +2437,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         i += read;
         let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v15) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             flags: v0,
@@ -2443,13 +2449,14 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             mutation_epoch: v5,
             composition: v6,
             selection: v7,
-            tags: v8,
-            dirty_leaves: v9,
-            dirty_elements: v10,
-            dirty_type: v11,
-            delta: v12,
-            results: v13,
-            outcome: v14,
+            selections: v8,
+            tags: v9,
+            dirty_leaves: v10,
+            dirty_elements: v11,
+            dirty_type: v12,
+            delta: v13,
+            results: v14,
+            outcome: v15,
         }))
     }
 }
@@ -2980,6 +2987,8 @@ pub struct CompatHostRequest<'raw> {
     pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
     pub dirty_type: u8,
     pub composition: ForeignOptionalKey,
+    pub selection: CompatSelectionData<'raw>,
+    pub selections: ::std::vec::Vec<CompatSelectionData<'raw>>,
     pub call: CompatHostCall<'raw>,
 }
 
@@ -2991,6 +3000,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
         <u8>::MIN_SERIALIZED_SIZE +
         <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+        <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<CompatSelectionData<'raw>>>::MIN_SERIALIZED_SIZE +
         <CompatHostCall<'raw>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
@@ -3001,6 +3012,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         self.dirty_elements.serialized_size() +
         self.dirty_type.serialized_size() +
         self.composition.serialized_size() +
+        self.selection.serialized_size() +
+        self.selections.serialized_size() +
         self.call.serialized_size()
     }
 
@@ -3012,6 +3025,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
             zelf.dirty_elements._serialize_chained(dest)? +
             zelf.dirty_type._serialize_chained(dest)? +
             zelf.composition._serialize_chained(dest)? +
+            zelf.selection._serialize_chained(dest)? +
+            zelf.selections._serialize_chained(dest)? +
             zelf.call._serialize_chained(dest)?
         )
     });
@@ -3037,6 +3052,10 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         i += read;
         let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             context: v0,
@@ -3045,7 +3064,9 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
             dirty_elements: v3,
             dirty_type: v4,
             composition: v5,
-            call: v6,
+            selection: v6,
+            selections: v7,
+            call: v8,
         }))
     }
 }
@@ -9033,6 +9054,7 @@ pub mod owned {
         pub mutation_epoch: u64,
         pub composition: ForeignOptionalKey,
         pub selection: CompatSelectionData,
+        pub selections: ::std::vec::Vec<CompatSelectionData>,
         pub tags: ::std::vec::Vec<String>,
         pub dirty_leaves: ::std::vec::Vec<ForeignKey>,
         pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
@@ -9053,6 +9075,7 @@ pub mod owned {
                 mutation_epoch: value.mutation_epoch,
                 composition: value.composition,
                 selection: value.selection.into(),
+                selections: value.selections.into_iter().map(|value| value.into()).collect(),
                 tags: value.tags.into_iter().map(|value| value.into()).collect(),
                 dirty_leaves: value.dirty_leaves.iter().map(|value| value).collect(),
                 dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
@@ -9074,6 +9097,7 @@ pub mod owned {
             <u64>::MIN_SERIALIZED_SIZE +
             <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
             <CompatSelectionData>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatSelectionData>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
@@ -9092,6 +9116,7 @@ pub mod owned {
             self.mutation_epoch.serialized_size() +
             self.composition.serialized_size() +
             self.selection.serialized_size() +
+            self.selections.serialized_size() +
             self.tags.serialized_size() +
             self.dirty_leaves.serialized_size() +
             self.dirty_elements.serialized_size() +
@@ -9111,6 +9136,7 @@ pub mod owned {
                 zelf.mutation_epoch._serialize_chained(dest)? +
                 zelf.composition._serialize_chained(dest)? +
                 zelf.selection._serialize_chained(dest)? +
+                zelf.selections._serialize_chained(dest)? +
                 zelf.tags._serialize_chained(dest)? +
                 zelf.dirty_leaves._serialize_chained(dest)? +
                 zelf.dirty_elements._serialize_chained(dest)? +
@@ -9158,6 +9184,8 @@ pub mod owned {
             i += read;
             let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v15) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 flags: v0,
@@ -9168,13 +9196,14 @@ pub mod owned {
                 mutation_epoch: v5,
                 composition: v6,
                 selection: v7,
-                tags: v8,
-                dirty_leaves: v9,
-                dirty_elements: v10,
-                dirty_type: v11,
-                delta: v12,
-                results: v13,
-                outcome: v14,
+                selections: v8,
+                tags: v9,
+                dirty_leaves: v10,
+                dirty_elements: v11,
+                dirty_type: v12,
+                delta: v13,
+                results: v14,
+                outcome: v15,
             }))
         }
     }
@@ -9612,6 +9641,8 @@ pub mod owned {
         pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
         pub dirty_type: u8,
         pub composition: ForeignOptionalKey,
+        pub selection: CompatSelectionData,
+        pub selections: ::std::vec::Vec<CompatSelectionData>,
         pub call: CompatHostCall,
     }
 
@@ -9624,6 +9655,8 @@ pub mod owned {
                 dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
                 dirty_type: value.dirty_type,
                 composition: value.composition,
+                selection: value.selection.into(),
+                selections: value.selections.into_iter().map(|value| value.into()).collect(),
                 call: value.call.into(),
             }
         }
@@ -9637,6 +9670,8 @@ pub mod owned {
             <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
             <u8>::MIN_SERIALIZED_SIZE +
             <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+            <CompatSelectionData>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatSelectionData>>::MIN_SERIALIZED_SIZE +
             <CompatHostCall>::MIN_SERIALIZED_SIZE;
 
         #[inline]
@@ -9647,6 +9682,8 @@ pub mod owned {
             self.dirty_elements.serialized_size() +
             self.dirty_type.serialized_size() +
             self.composition.serialized_size() +
+            self.selection.serialized_size() +
+            self.selections.serialized_size() +
             self.call.serialized_size()
         }
 
@@ -9658,6 +9695,8 @@ pub mod owned {
                 zelf.dirty_elements._serialize_chained(dest)? +
                 zelf.dirty_type._serialize_chained(dest)? +
                 zelf.composition._serialize_chained(dest)? +
+                zelf.selection._serialize_chained(dest)? +
+                zelf.selections._serialize_chained(dest)? +
                 zelf.call._serialize_chained(dest)?
             )
         });
@@ -9683,6 +9722,10 @@ pub mod owned {
             i += read;
             let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 context: v0,
@@ -9691,7 +9734,9 @@ pub mod owned {
                 dirty_elements: v3,
                 dirty_type: v4,
                 composition: v5,
-                call: v6,
+                selection: v6,
+                selections: v7,
+                call: v8,
             }))
         }
     }
@@ -13205,4 +13250,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "5f316f2121a2d04941202ee924d6c70f974fdb19dbec490a2cb898d9eb4962bb";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "2b50fa92778c62e50c0a67cf891fd9405c51c34dc0efbcae6ee3da161cd079b2";

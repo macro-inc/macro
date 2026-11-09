@@ -166,11 +166,12 @@ union CompatBatchOutcome {
 // failure follows all operation results. Failure always has published=false and
 // prevents admission for that request. The final delta includes partial failing-operation effects
 // needed by captures/selection (or explicit discard), not just successful results.
+// Changed detached selections also survive a failing operation with no result.
 // Noop and composition are part of this single final crossing.
 struct CompatBatchReply {
   uint32 flags; bool published; bool changed; bool noop;
   uint64 version; uint64 mutationEpoch; ForeignOptionalKey composition;
-  CompatSelectionData selection; string[] tags;
+  CompatSelectionData selection; CompatSelectionData[] selections; string[] tags;
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements; byte dirtyType;
   CompatRecordDelta delta; CompatBatchResult[] results;
   CompatBatchOutcome outcome;
@@ -216,7 +217,10 @@ struct CompatHostRequest {
   // Pinned dirtyType: 0=no dirty nodes, 1=has dirty nodes, 2=full reconcile.
   // Intentional flags and composition are native facts, not inferred from delta.
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
-  byte dirtyType; ForeignOptionalKey composition; CompatHostCall call;
+  byte dirtyType; ForeignOptionalKey composition;
+  // Active identity and changed detached values precede JS callback execution.
+  CompatSelectionData selection; CompatSelectionData[] selections;
+  CompatHostCall call;
 }
 struct CompatHookAck {
   uint32 callId; ForeignHookResult result;
