@@ -248,6 +248,7 @@ async fn create_and_recreate_enrollment_private_files_pass_the_real_brain_config
             name: computer.name.clone(),
             service_url_overrides: Default::default(),
             persona: Some(persona.clone()),
+            traceparent: None,
             persona_enrollment: material,
         };
         // Exercise the real transport decoder before the real worker renderer.

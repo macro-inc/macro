@@ -566,13 +566,9 @@ impl<
                     span.record("otel.status_code", "ERROR");
                 })
                 .map_err(internal)?;
-            super::telemetry::attach(
-                &span,
-                computer
-                    .as_ref()
-                    .and_then(|record| record.healthy())
-                    .and_then(|computer| computer.state.provision_traceparent.as_deref()),
-            );
+            if let Some(computer) = computer.as_ref().and_then(|record| record.healthy()) {
+                super::telemetry::adopt(&span, &computer.state);
+            }
             async {
             let confirming_payment = matches!(pending.effect, Effect::ConfirmPayment { .. });
             let outcome = match pending.effect {

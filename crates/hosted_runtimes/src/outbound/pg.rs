@@ -163,7 +163,7 @@ impl PgComputerRepo {
             Some(host) => Self::host_has_room(tx, host, &computer).await?,
             None => false,
         };
-        let (state, effects) = transition(
+        let (mut state, effects) = transition(
             &computer.state,
             event,
             Context {
@@ -225,6 +225,14 @@ impl PgComputerRepo {
             .await?;
         }
 
+        let waiting_for_capacity = state.waiting_for_capacity();
+        let (phase, connected) = (state.phase.clone(), state.macrod_connected);
+        let finished_setup = state
+            .setup
+            .as_mut()
+            .map(|setup| setup.advance(&phase, connected, waiting_for_capacity, now))
+            .unwrap_or_default();
+
         let destroyed = state.phase == Phase::Destroyed;
         if destroyed {
             sqlx::query!(
@@ -281,6 +289,26 @@ impl PgComputerRepo {
             tracing::info!(computer_id = %computer_id, host_id = ?state.host(),
                 backoff_step = wait.backoff_step, retry_at = %wait.retry_at,
                 room_unavailable = wait.room_unavailable, "computer waiting for host capacity");
+        }
+        if let Some(setup) = &state.setup {
+            crate::domain::telemetry::record_setup_waits(
+                state.provision_traceparent.as_deref(),
+                setup,
+                &finished_setup,
+                &crate::domain::telemetry::SetupAttributes {
+                    computer_id: computer_id.to_string(),
+                    team_id: computer.team_id.to_string(),
+                    size: computer.size.as_ref().to_owned(),
+                    host_id: state.host().map(|host| host.to_string()),
+                    generation: i64::from(computer.enrollment_generation.get()),
+                    billing_kind: if state.comp_reason.is_some() {
+                        "comped"
+                    } else {
+                        "stripe"
+                    },
+                    persona: computer.persona.is_some(),
+                },
+            );
         }
         computer.state = state;
         Ok(Some(computer))

@@ -347,10 +347,30 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Observability
 
-Persist the purchase W3C parent in `ComputerState.provision_traceparent` and
-attach it to new worker spans before entering them; already-entered callbacks
-link to it. Fleet work and billing work emit one span per claimed effect, with
-errors marked even when retry scheduling succeeds. Enrollment passes the parent
-and opaque team/computer IDs to the persona. Metrics are
-`computer.provisioning.duration` (reservation to first macrod connection, seconds),
-`computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).
+One computer's first setup is one trace, rooted at the purchase (team-agent
+invite or Buy computer). See the [setup trace runbook](../../docs/runbooks/computer-setup-traces.md).
+
+- `ComputerState.provision_traceparent` holds the purchase W3C parent and
+  `ComputerState.setup` (`domain::setup::SetupTimeline`) the setup milestones,
+  both in the state JSON (no column). Older rows have no timeline.
+- Start new worker spans with `telemetry::adopt` before entering them
+  (`computer.fleet.work`, `computer.billing.effect`, `computer.timer`,
+  `computer.reconcile.drift`, `computer.macrod.connected`): parented under the
+  purchase while setup runs, linked to it afterwards, so later power changes
+  never grow the setup trace. Already-entered callbacks use `resume` (link).
+- `apply_locked` advances the timeline after each transition and exports the
+  waits that ended, with their recorded start and end, through the global
+  tracer: `computer.setup.payment` (reservation → paid/comped),
+  `computer.setup.create` (→ guest booting, including outbox and capacity
+  waits), `computer.setup.boot` (→ first macrod connection) and the total
+  `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,
+  `generation`, `billing_kind`, `persona` and `capacity_waited`. A rolled-back
+  transaction can export a wait that a retry exports again.
+- `Enrollment.traceparent` carries the setup context to macrod (and
+  `BRAIN_PROVISION_TRACEPARENT` to the brain); see `crates/coding_agent_worker/AGENTS.md`.
+- Fleet work and billing work emit one span per claimed effect, with errors
+  marked even when retry scheduling succeeds.
+- Metrics: `computer.setup.phase.duration` (seconds, by `phase`, `persona`),
+  `computer.setup.duration` (reservation → first macrod connection, by
+  `persona`), `computer.provisioning.duration` (the same total, unlabelled),
+  `computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).

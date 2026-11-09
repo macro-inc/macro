@@ -58,6 +58,7 @@ impl FleetEnrollment for TestEnrollment {
             name: ComputerName::try_new("Fixture computer").unwrap(),
             service_url_overrides: Default::default(),
             persona: None,
+            traceparent: None,
             persona_enrollment: PersonaEnrollment {
                 secrets: PersonaCredentials::new(std::collections::BTreeMap::from([(
                     crate::domain::enrollment::PersonaConfigKey::parse("MACRO_API_KEY").unwrap(),

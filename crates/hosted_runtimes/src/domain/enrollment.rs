@@ -38,6 +38,10 @@ pub struct Enrollment {
     pub service_url_overrides: BTreeMap<String, String>,
     /// The agent persona this computer is bought for, if any.
     pub persona: Option<Persona>,
+    /// W3C context of the setup trace, so macrod's enrollment, claim and first
+    /// reports join it. Opaque ids only; absent from older control planes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
     /// The only transient transport copy of issued persona material. Deleted
     /// from the fleet after macrod connects; never put in state or the outbox.
     #[serde(serialize_with = "crate::domain::persona_credentials::serialize_enrollment")]

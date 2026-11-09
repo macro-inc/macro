@@ -1991,6 +1991,7 @@ async fn a_real_invite_persona_passes_hosted_runtime_validation_without_bootstra
         name: ComputerName::try_new("Agent Example").unwrap(),
         service_url_overrides: Default::default(),
         persona: Some(persona),
+        traceparent: None,
         persona_enrollment: material,
     };
     let delivered = serde_json::to_value(enrollment).unwrap();

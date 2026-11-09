@@ -30,6 +30,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         comp_reason: None,
         macrod_connected: false,
         provision_traceparent: None,
+        setup: None,
         macrod_misses: 0,
         recent_crashes: vec![],
         wake_requested: false,
@@ -50,6 +51,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         next,
         ComputerState {
             provision_traceparent: None,
+            setup: None,
             phase: Phase::Booting { host: HOST },
             power: Power::On,
             billing: Billing::Active,
@@ -893,6 +895,7 @@ fn transitions() {
         };
         let state = ComputerState {
             provision_traceparent: None,
+            setup: None,
             payment,
             comp_reason: None,
             phase: case.phase,

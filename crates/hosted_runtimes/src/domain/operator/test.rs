@@ -455,6 +455,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                     "http://10.210.0.1:8080".to_owned(),
                 )]),
                 persona: None,
+                traceparent: None,
                 persona_enrollment: Default::default(),
             },
             true,

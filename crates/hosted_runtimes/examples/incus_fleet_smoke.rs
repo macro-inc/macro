@@ -153,6 +153,7 @@ async fn main() -> Result<(), rootcause::Report> {
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),
         persona: None,
+        traceparent: None,
         persona_enrollment: Default::default(),
     };
     let id = computer.id;

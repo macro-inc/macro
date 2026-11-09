@@ -201,10 +201,7 @@ where
                     use tracing::Instrument;
                     let computer = self.computer(pending.computer_id).await?;
                     let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = %computer.team_id, size = computer.size.as_ref());
-                    super::telemetry::attach(
-                        &span,
-                        computer.state.provision_traceparent.as_deref(),
-                    );
+                    super::telemetry::adopt(&span, &computer.state);
                     self.run_one(pending).instrument(span).await
                 };
                 let mut running = std::pin::pin!(tokio::time::timeout_at(deadline, work));
@@ -459,8 +456,22 @@ where
             } else {
                 None
             };
+            use tracing::Instrument;
+            let span = tracing::info_span!("computer.timer", computer_id = %computer_id, kind = timer.kind.as_ref());
+            if let Some(computer) = self
+                .repo
+                .get(computer_id)
+                .await
+                .ok()
+                .flatten()
+                .as_ref()
+                .and_then(ComputerRecord::healthy)
+            {
+                super::telemetry::adopt(&span, &computer.state);
+            }
             self.repo
                 .fire_timer(timer, instance_status, now)
+                .instrument(span)
                 .await
                 .inspect_err(|error| tracing::warn!(computer_id = %computer_id, error = ?error, "timer failed"))
                 .ok();
@@ -518,19 +529,26 @@ where
                     Phase::Failed { .. } | Phase::Stopped { .. } | Phase::Suspended { .. }
                 );
             if crashed || lost {
-                tracing::warn!(computer_id = %computer.id, observed = ?observed, "computer instance drifted");
-                self.repo
-                    .apply(
-                        computer.id,
-                        if lost {
-                            Event::InstanceLost
-                        } else {
-                            Event::VmCrashed
-                        },
-                        self.clock.now(),
-                    )
-                    .await
-                    .map_err(internal)?;
+                use tracing::Instrument;
+                let span = tracing::info_span!("computer.reconcile.drift", computer_id = %computer.id, lost);
+                super::telemetry::adopt(&span, &computer.state);
+                async {
+                    tracing::warn!(computer_id = %computer.id, observed = ?observed, "computer instance drifted");
+                    self.repo
+                        .apply(
+                            computer.id,
+                            if lost {
+                                Event::InstanceLost
+                            } else {
+                                Event::VmCrashed
+                            },
+                            self.clock.now(),
+                        )
+                        .await
+                        .map_err(internal)
+                }
+                .instrument(span)
+                .await?;
             }
         }
 
@@ -608,7 +626,19 @@ where
             return Ok(false);
         };
         let computer = self.computer(computer_id).await?;
-        super::telemetry::resume(computer.state.provision_traceparent.as_deref());
+        use tracing::Instrument;
+        let span = tracing::info_span!("computer.macrod.connected", computer_id = %computer.id, team_id = %computer.team_id, first = computer.enrolled_at.is_none());
+        super::telemetry::adopt(&span, &computer.state);
+        self.record_macrod_connected(harness_id, computer)
+            .instrument(span)
+            .await
+    }
+
+    async fn record_macrod_connected(
+        &self,
+        harness_id: HarnessId,
+        computer: Computer,
+    ) -> Result<bool, ComputerError> {
         let now = self.clock.now();
         self.repo
             .set_harness(computer.id, harness_id)
@@ -748,15 +778,16 @@ impl<Registry: Harnesses, Credentials: PersonaCredentialSource> FleetEnrollment
             .credentials
             .issue(self.computer.id, self.generation)
             .await?;
+        let traceparent = super::telemetry::traceparent();
         let persona = self
             .computer
             .persona
             .clone()
             .map(|mut persona| {
-                if let Some(parent) = super::telemetry::traceparent() {
+                if let Some(parent) = &traceparent {
                     persona.config.insert(
                         PersonaConfigKey::parse("BRAIN_PROVISION_TRACEPARENT")?,
-                        parent,
+                        parent.clone(),
                     );
                 }
                 persona.config.insert(
@@ -778,6 +809,7 @@ impl<Registry: Harnesses, Credentials: PersonaCredentialSource> FleetEnrollment
             name: self.computer.name.clone(),
             service_url_overrides: self.defaults.service_url_overrides.clone(),
             persona,
+            traceparent,
             persona_enrollment,
         })
     }

@@ -13,6 +13,7 @@ pub mod persona_credentials;
 pub mod ports;
 pub mod rollout;
 pub mod service;
+pub mod setup;
 pub mod size;
 
 /// Trace propagation and lifecycle measurements.
