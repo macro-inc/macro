@@ -110,9 +110,14 @@ fn typescript() -> Job {
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 9] = [
+const TYPECHECKS: [(&str, &str, &str); 10] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
+    (
+        "Check Lexical Assertion Boundary",
+        "apps/web",
+        "bun run check:lexical-exceptions",
+    ),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
     // error and needs type information to run at all.
     (

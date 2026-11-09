@@ -15,7 +15,7 @@ import { verifyExceptions } from './exceptions-check';
 function fixture(body: (root: string, manifest: unknown) => void) {
   const root = mkdtempSync(join(tmpdir(), 'compat-exception-guard-'));
   const central =
-    'export function assumeNodeType<T>(node:unknown):T{return node as T;}\nexport function nodeConfigRecord<T>(record:unknown):T{return record as T;}\nexport function createPointWithUpstreamType<T>(point:unknown):T{return point as T;}\nexport function applyValueOrUpdater<T>(value:unknown):T{return value as T;}\nexport function nodeStateToJSON<T>(value:unknown):T{return value as T;}\nexport function commandBucket<T>(value:unknown):T{return value as T;}\nexport function invokeDOMConversionWithNode<R>(conversion:(node:HTMLElement)=>R,node:Node):R{return conversion(node as HTMLElement); }\nexport function isInstanceOfKlass<T extends abstract new (...args:never[])=>unknown>(value:unknown,klass:T):value is InstanceType<T>{return value instanceof klass;}\n';
+    'export function assumeNodeType<T>(node:unknown):T{return node as T;}\nexport function nodeConfigRecord<T>(record:unknown):T{return record as T;}\nexport function createPointWithUpstreamType<T>(point:unknown):T{return point as T;}\nexport function applyValueOrUpdater<T>(value:unknown):T{return value as T;}\nexport function nodeStateToJSON<T>(value:unknown):T{return value as T;}\nexport function commandBucket<T>(value:unknown):T{return value as T;}\nexport function invokeDOMConversionWithNode<R>(conversion:(node:HTMLElement)=>R,node:Node):R{return conversion(node as HTMLElement); }\nexport function compareNumberWithUpstreamType(a:number,b:number):-1|0|1{return Math.sign(a-b) as -1|0|1;}\nexport function isInstanceOfKlass<T extends abstract new (...args:never[])=>unknown>(value:unknown,klass:T):value is InstanceType<T>{return value instanceof klass;}\n';
   const manifest = JSON.parse(
     readFileSync(new URL('./exceptions.json', import.meta.url), 'utf8')
   );
@@ -31,6 +31,7 @@ function fixture(body: (root: string, manifest: unknown) => void) {
     'command/registry.ts': `import {commandBucket} from '../compatibility-exceptions';function lookup(){return commandBucket(1);}`,
     'nodes/replacement/helpers.ts': `import {assumeNodeType} from '../../compatibility-exceptions';export function $applyNodeReplacement(){return assumeNodeType(1);}export function $create(){return assumeNodeType(1);}`,
     'configuration/html-conversions.ts': `import {invokeDOMConversionWithNode} from '../compatibility-exceptions';export function getDOMNodeConversionFunction(domNode:Node){const convert=(node:HTMLElement)=>(node:HTMLElement)=>1;const conversion=invokeDOMConversionWithNode(convert,domNode);return (node:Node)=>invokeDOMConversionWithNode(conversion,node);}`,
+    'caret/ancestry.ts': `import {compareNumberWithUpstreamType} from '../compatibility-exceptions';export function $comparePointCaretNext(a:number,b:number){return compareNumberWithUpstreamType(a,b);}`,
     'nodes/replacement/bind.ts': `import {isInstanceOfKlass} from '../../compatibility-exceptions';export function bindReplacement(){return (value:unknown,klass:abstract new (...args:never[])=>unknown)=>isInstanceOfKlass(value,klass);}`,
   };
   for (const [path, source] of Object.entries(files)) {
@@ -45,15 +46,18 @@ function fixture(body: (root: string, manifest: unknown) => void) {
   }
 }
 
-test('central hash, seven assertions, exact witness and aliased/namespace callsites match', () =>
+test('central hash, eight assertions, exact witness and aliased/namespace callsites match', () =>
   fixture((root, manifest) => {
     const result = verifyExceptions(root, manifest);
     assert.equal(
       Object.values(result.assertions).reduce((a, b) => a + b, 0),
-      7
+      8
     );
     assert.equal(result.calls.assumeNodeType.length, 8);
     assert.equal(result.calls.commandBucket.length, 1);
+    assert.deepEqual(result.calls.compareNumberWithUpstreamType, [
+      'caret/ancestry.ts:$comparePointCaretNext',
+    ]);
     assert.equal(result.calls.invokeDOMConversionWithNode.length, 2);
     assert.deepEqual(result.domInvocationCallForms, [
       'returned-arrow-body',
@@ -68,7 +72,7 @@ test('central hash, seven assertions, exact witness and aliased/namespace callsi
     ]);
   }));
 
-test('changed helper bytes or an inline eighth assertion fail closed', () => {
+test('changed helper bytes or an inline ninth assertion fail closed', () => {
   fixture((root, manifest) => {
     const path = join(root, 'src/compatibility-exceptions.ts');
     writeFileSync(path, readFileSync(path, 'utf8') + '\n');
@@ -83,7 +87,7 @@ test('changed helper bytes or an inline eighth assertion fail closed', () => {
   });
 });
 
-test('the seven-assertion list and one sound witness cannot be omitted or expanded', () =>
+test('the eight-assertion list and one sound witness cannot be omitted or expanded', () =>
   fixture((root, manifest) => {
     if (manifest === null || typeof manifest !== 'object')
       throw new Error('Invalid fixture manifest');
@@ -92,17 +96,18 @@ test('the seven-assertion list and one sound witness cannot be omitted or expand
     );
     assert.throws(
       () => verifyExceptions(root, { ...manifest, exceptions: [] }),
-      /Exactly the seven/
+      /Exactly the eight/
     );
     const helpers = [
       'applyValueOrUpdater',
       'assumeNodeType',
       'commandBucket',
+      'compareNumberWithUpstreamType',
       'createPointWithUpstreamType',
       'invokeDOMConversionWithNode',
       'nodeConfigRecord',
       'nodeStateToJSON',
-      'eighth',
+      'ninth',
     ];
     assert.throws(
       () =>
@@ -110,7 +115,7 @@ test('the seven-assertion list and one sound witness cannot be omitted or expand
           ...manifest,
           exceptions: helpers.map((helper) => ({ helper, calls: [] })),
         }),
-      /Exactly the seven/
+      /Exactly the eight/
     );
   }));
 
@@ -254,6 +259,29 @@ test('both DOM invocation sites are mandatory and cannot be replaced by an indir
       assert.throws(
         () => verifyExceptions(root, manifest),
         /callsites differ|only be directly invoked|call forms differ/
+      );
+    });
+});
+
+test('the caret comparison has exactly its approved direct consumer and no reexports', () => {
+  for (const change of ['removed', 'extra', 'indirect', 'reexport'])
+    fixture((root, manifest) => {
+      const path = join(root, 'src/caret/ancestry.ts');
+      let source = readFileSync(path, 'utf8');
+      if (change === 'removed')
+        source = source.replace('compareNumberWithUpstreamType(a,b)', 'a-b');
+      if (change === 'extra')
+        source +=
+          'export function extra(){return compareNumberWithUpstreamType(1,2);}';
+      if (change === 'indirect')
+        source += 'export const escaped=compareNumberWithUpstreamType;';
+      if (change === 'reexport')
+        source +=
+          "export {compareNumberWithUpstreamType} from '../compatibility-exceptions';";
+      writeFileSync(path, source);
+      assert.throws(
+        () => verifyExceptions(root, manifest),
+        /callsites differ|only be directly invoked|reexports differ/
       );
     });
 });

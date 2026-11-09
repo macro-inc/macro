@@ -1,7 +1,8 @@
 {
   "source": "src/compatibility-exceptions.ts",
-  "implementationCommit": "970270d05ebcd93b72d175deebd00d21543647a9",
-  "implementationSha256": "f71fec4377d92ab3d43c533f38db92565d0f2e8a0289d4d4f71301cdc26a60f7",
+  "implementationCommit": "e31d238d61dc1529ec6ce6c80e5547b1fbb75bac",
+  "implementationSha256": "a6dd8fa7d53fb03684646ca9ac33ecac6b9a8160670d8a9612f428ce0adb920f",
+  "compilerControlCommit": "aa19bd3d2df10e58f2b9c200f0b51351f5e060ad",
   "pointDelegationCommit": "0b84f77036",
   "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
   "exceptions": [
@@ -107,9 +108,24 @@
       "upstreamSource": "packages/lexical-html/src/index.ts:getConversionFunction and $createNodesFromDOM",
       "evidenceSha256": "2fa4d95e782f1d24e7fff548eaf410a64762c5bea6dbc084fe399a93465244d5",
       "callForms": ["variable-initializer", "returned-arrow-body"]
+    },
+    {
+      "helper": "compareNumberWithUpstreamType",
+      "contract": "Upstream declares a -1 | 0 | 1 caret ordering while Math.sign propagates NaN offsets unchanged.",
+      "guards": [
+        "original Math.sign(a - b) runtime result",
+        "no offset coercion or NaN replacement"
+      ],
+      "calls": ["caret/ancestry.ts:$comparePointCaretNext"],
+      "sourceLocations": ["caret/ancestry.ts:53"],
+      "upstreamSource": "packages/lexical/src/caret/LexicalCaret.ts:1207",
+      "upstreamSourceSha256": "a52bdcf014f191a7d07a4ec76ce6477e04bf4d61d298cc5b4f37e95136687a49",
+      "evidenceUpstreamCommit": "ead730cf50f4d3e3f93b7c1d23a443a6d14f50d1",
+      "evidenceSha256": "84bc6ca0f2379fca035e8d521e79e0ead26c549226fd40eb198b36b35db4847e",
+      "evidenceScriptSha256": "0ccc99e38cbf7a1c59135245283778c45006afd4475b5ba365d7c6df24a3e399"
     }
   ],
-  "scope": "Exactly seven named assertions in one central module, plus one separately AST-verified sound runtime-witness guard. No eighth assertion, full namespace or native runtime replacement acceptance is granted.",
+  "scope": "Exactly eight named assertions in one central module, plus one separately AST-verified sound runtime-witness guard. No ninth assertion, full namespace or native runtime replacement acceptance is granted.",
   "commandConsumerCommit": "741092a441",
   "runtimeGuards": [
     {

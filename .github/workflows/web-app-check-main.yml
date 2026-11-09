@@ -369,6 +369,7 @@ jobs:
           pids+=("$!")
         }
         check 'Check Types' 'apps/web' 'bun run type-check'
+        check 'Check Lexical Assertion Boundary' 'apps/web' 'bun run check:lexical-exceptions'
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
         check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check && bun scripts/generate-session-schema.ts --check'
