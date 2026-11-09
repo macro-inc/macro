@@ -32,3 +32,9 @@ mod records;
 
 pub(crate) mod selections;
 pub use selections::{ForeignSelectionCapture, ForeignSelectionIdentity};
+
+pub(crate) mod instances;
+pub use instances::{
+    ForeignCloneLinks, ForeignCloneMode, ForeignInstance, ForeignInstanceClone,
+    ForeignInstanceCloneRequest, ForeignInstanceHooks, ForeignPayloadPatch,
+};

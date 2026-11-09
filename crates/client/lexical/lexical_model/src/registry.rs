@@ -514,6 +514,12 @@ impl EditorBuilder {
                     Arc::new(crate::node::NodeSlot {
                         #[cfg(feature = "foreign-nodes")]
                         foreign_identity: Default::default(),
+                        #[cfg(feature = "foreign-nodes")]
+                        foreign_instance: Default::default(),
+                        #[cfg(feature = "foreign-nodes")]
+                        foreign_instance_write: None,
+                        #[cfg(feature = "foreign-nodes")]
+                        foreign_root_cache: None,
                         key,
                         type_index: node.index,
                         links: Default::default(),

@@ -15,6 +15,8 @@ pub(crate) type NodeMap = imbl::GenericHashMap<
 /// An immutable snapshot; cloning shares the persistent node map and node records.
 /// s2: UPD-02
 pub struct EditorState {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_instances: Arc<crate::foreign::instances::ForeignInstances>,
     pub(crate) shared_state_configs: Arc<crate::node_state::SharedStateConfigs>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_selection_identity: ForeignSelectionIdentity,
@@ -30,6 +32,8 @@ pub struct EditorState {
 impl Clone for EditorState {
     fn clone(&self) -> Self {
         Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instances: self.foreign_instances.clone(),
             shared_state_configs: self.shared_state_configs.clone(),
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_identity: self.foreign_selection_identity.clone(),
@@ -59,6 +63,12 @@ impl EditorState {
             Arc::new(NodeSlot {
                 #[cfg(feature = "foreign-nodes")]
                 foreign_identity: Default::default(),
+                #[cfg(feature = "foreign-nodes")]
+                foreign_instance: Default::default(),
+                #[cfg(feature = "foreign-nodes")]
+                foreign_instance_write: None,
+                #[cfg(feature = "foreign-nodes")]
+                foreign_root_cache: None,
                 key: NodeKey::ROOT,
                 type_index: index,
                 links: Default::default(),
@@ -68,6 +78,10 @@ impl EditorState {
             }),
         );
         Ok(Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instances: Arc::new(crate::foreign::instances::ForeignInstances::for_owner(
+                Arc::new(()),
+            )),
             shared_state_configs: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_identity: Default::default(),
