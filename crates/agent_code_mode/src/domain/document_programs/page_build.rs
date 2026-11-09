@@ -35,7 +35,8 @@ declare global {\n\
   interface ProgramContext { macro: Macro }\n\
 }\n";
 /// The client's check adds the browser's types.
-const DOM_REFERENCE: &str = "/// <reference lib=\"dom\" />\n/// <reference lib=\"dom.iterable\" />\n";
+const DOM_REFERENCE: &str =
+    "/// <reference lib=\"dom\" />\n/// <reference lib=\"dom.iterable\" />\n";
 
 /// A program's id: its block's `id`, and the name the client imports.
 #[nutype::nutype(
@@ -130,7 +131,11 @@ pub async fn build(
         Ok(extracted) => extracted,
         Err(diagnostics) => return Ok(BuildOutcome::Failed(diagnostics)),
     };
-    let ids: Vec<ProgramId> = extracted.programs.iter().map(|(id, _)| id.clone()).collect();
+    let ids: Vec<ProgramId> = extracted
+        .programs
+        .iter()
+        .map(|(id, _)| id.clone())
+        .collect();
     let rename = |diagnostics: Vec<Diagnostic>| BuildOutcome::Failed(named(diagnostics, &ids));
     let program_files: Vec<SourceFile> = extracted
         .programs
@@ -194,7 +199,11 @@ pub async fn build(
 
     let mut client_bundle = None;
     if !client_files.is_empty() {
-        match bundle_verdict(bundler.bundle(&client_files, CLIENT_FILE, BundleTarget::Browser).await)? {
+        match bundle_verdict(
+            bundler
+                .bundle(&client_files, CLIENT_FILE, BundleTarget::Browser)
+                .await,
+        )? {
             Bundle::Code(code) => client_bundle = Some(code),
             Bundle::Rejected(problems) => return Ok(rename(problems)),
         }
@@ -276,7 +285,9 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
         },
     );
     if let Err(error) = collected {
-        return Err(vec![problem(&format!("The page could not be read: {error}"))]);
+        return Err(vec![problem(&format!(
+            "The page could not be read: {error}"
+        ))]);
     }
 
     let blocks = blocks.into_inner();
@@ -297,7 +308,9 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
     let mut programs: Vec<(ProgramId, String)> = Vec::new();
     for (id, source) in blocks {
         let Some(id) = id else {
-            problems.push(problem("Every `<script type=\"text/macro\">` needs an `id`."));
+            problems.push(problem(
+                "Every `<script type=\"text/macro\">` needs an `id`.",
+            ));
             continue;
         };
         let Ok(program) = ProgramId::try_new(id.clone()) else {

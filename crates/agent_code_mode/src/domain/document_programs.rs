@@ -1,14 +1,16 @@
 //! Programs in a stored HTML document, built on the server and run for the
 //! person viewing it.
 //!
-//! The document's source is built once per content hash ([`build`]): the
+//! The document's source is built once per content hash ([`page_build`]): the
 //! preview renders the built page, and a run names a program of that build
 //! by id. The server never runs source the page sends, and the credential
 //! never reaches the page.
 use super::{CodeModeError, UserCodeMode, UserExecutionReceipt};
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{CheckError, ExecuteRequest, ProgramBundler, ProgramChecker, Unattended};
+use code_execution::domain::{
+    CheckError, ExecuteRequest, ProgramBundler, ProgramChecker, Unattended,
+};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{
@@ -17,9 +19,9 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
-pub mod build;
+pub mod page_build;
 
-pub use build::{BuildOutcome, ProgramId, SourceHash};
+pub use page_build::{BuildOutcome, ProgramId, SourceHash};
 
 /// The per-user rollout flag, shared with the web app's `defineFlag` key.
 pub const DOCUMENT_PROGRAMS_FLAG: &str = "enable-html-code-mode";
@@ -167,14 +169,15 @@ impl DocumentPrograms {
         let outcome = match cached {
             Some(outcome) => outcome,
             None => {
-                let outcome = build::build(&html, self.checker.as_ref(), self.bundler.as_ref())
-                    .await
-                    .map_err(|error| match error {
-                        CheckError::Busy => DocumentProgramError::Busy,
-                        CheckError::InvalidSource | CheckError::Internal => {
-                            DocumentProgramError::Toolchain
-                        }
-                    })?;
+                let outcome =
+                    page_build::build(&html, self.checker.as_ref(), self.bundler.as_ref())
+                        .await
+                        .map_err(|error| match error {
+                            CheckError::Busy => DocumentProgramError::Busy,
+                            CheckError::InvalidSource | CheckError::Internal => {
+                                DocumentProgramError::Toolchain
+                            }
+                        })?;
                 let outcome = Arc::new(outcome);
                 self.builds
                     .lock()

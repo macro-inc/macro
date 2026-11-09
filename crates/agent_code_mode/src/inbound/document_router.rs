@@ -1,8 +1,7 @@
 //! Build a stored HTML document and run its programs as the signed-in user.
 use crate::domain::{
     BuildOutcome, CodeModeError, DocumentBuild, DocumentProgramError, DocumentProgramGate,
-    DocumentPrograms, DocumentSourceError, ProgramId, RunProgram, SourceHash,
-    UserExecutionReceipt,
+    DocumentPrograms, DocumentSourceError, ProgramId, RunProgram, SourceHash, UserExecutionReceipt,
 };
 use crate::inbound::axum_router::CodeExecutionApiError;
 use axum::{
@@ -204,7 +203,10 @@ impl IntoResponse for DocumentProgramApiError {
             DocumentProgramError::Source(DocumentSourceError::Internal(_))
             | DocumentProgramError::Toolchain => {
                 tracing::error!(error = ?self.0, "document program failed");
-                return (StatusCode::INTERNAL_SERVER_ERROR, "could not build the document")
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "could not build the document",
+                )
                     .into_response();
             }
         };

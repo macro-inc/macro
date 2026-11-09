@@ -38,7 +38,7 @@ stacks. Process isolation belongs to
   inputs contract and a plain user token (no agent). `DocumentSources` reads
   the stored file (harness adapter `code_mode/document_sources.rs`); builds
   are cached by source hash in memory, so a miss only rebuilds.
-- `src/domain/document_programs/build.rs`: the build. `text/macro` blocks are
+- `src/domain/document_programs/page_build.rs`: the build. `text/macro` blocks are
   programs (`export default (args, { macro }: ProgramContext)`, plain JSON
   out); the one `<script type="module" lang="ts">` imports them typed from
   `macro:programs` and `on` from `macro:client` (`macro_client.ts`). Programs

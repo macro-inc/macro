@@ -214,7 +214,10 @@ async fn refuses_an_unknown_program_and_a_document_that_does_not_build() {
     else {
         panic!("the run must be refused");
     };
-    assert!(matches!(unknown, DocumentProgramError::UnknownProgram), "{unknown:?}");
+    assert!(
+        matches!(unknown, DocumentProgramError::UnknownProgram),
+        "{unknown:?}"
+    );
 
     let broken = PAGE.replace("=> 1", "=> broken");
     let fixture = self::fixture(&broken);
@@ -230,6 +233,9 @@ async fn refuses_an_unknown_program_and_a_document_that_does_not_build() {
     else {
         panic!("the run must be refused");
     };
-    assert!(matches!(failed, DocumentProgramError::BuildFailed), "{failed:?}");
+    assert!(
+        matches!(failed, DocumentProgramError::BuildFailed),
+        "{failed:?}"
+    );
     assert!(fixture.runs.0.lock().unwrap().is_empty());
 }

@@ -754,26 +754,26 @@ async fn run() -> anyhow::Result<()> {
         .transpose()?;
     // User-scoped runs, shared by public MCP's ExecuteCode and the programs
     // embedded in HTML documents the app previews.
-    let user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>> =
-        match &code_runner {
-            Some((_, public, _, _)) => Some(Arc::new(
-                agent_code_mode::domain::UserCodeModeService::new(
-                    Arc::new(public.clone()),
-                    Arc::new(code_mode::UserRunCredentials {
-                        correlations: agent_correlation::outbound::PgCorrelationRepository(
-                            pool.clone(),
-                        ),
-                        signer: MacroApiTokenSigner::new(
-                            pool.clone(),
-                            config.macro_api_token_issuer.as_ref(),
-                            config.macro_api_token_private_secret_key.as_ref(),
-                        ),
-                        endpoints: code_mode::sdk_endpoints()?,
-                    }),
-                ),
-            )),
-            None => None,
-        };
+    let user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>> = match &code_runner
+    {
+        Some((_, public, _, _)) => {
+            Some(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+                Arc::new(public.clone()),
+                Arc::new(code_mode::UserRunCredentials {
+                    correlations: agent_correlation::outbound::PgCorrelationRepository(
+                        pool.clone(),
+                    ),
+                    signer: MacroApiTokenSigner::new(
+                        pool.clone(),
+                        config.macro_api_token_issuer.as_ref(),
+                        config.macro_api_token_private_secret_key.as_ref(),
+                    ),
+                    endpoints: code_mode::sdk_endpoints()?,
+                }),
+            )))
+        }
+        None => None,
+    };
     let public_code_mode = user_code_mode
         .clone()
         .map(|service| public_mcp::PublicCodeMode { service });

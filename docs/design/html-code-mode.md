@@ -126,7 +126,7 @@ if the run is cancelled.
 
 - `code_execution`: `ProgramBundler` (`deno bundle`) on the checker's confined
   workspace; the import map resolves `macro:programs` and `macro:client`.
-- `agent_code_mode`: `document_programs/build.rs` (extract, check programs
+- `agent_code_mode`: `document_programs/page_build.rs` (extract, check programs
   alone and with the client, bundle each, assemble the page; diagnostics by
   block), `DocumentPrograms` (source-hash cache, run by id, `Changed` on a
   stale hash), and the two routes in `inbound/document_router.rs`, which mint
