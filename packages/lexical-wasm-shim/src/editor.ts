@@ -97,6 +97,15 @@ export class LexicalEditor {
   readonly _parentEditor: LexicalEditor | null;
   readonly _keyToDOMMap = new Map<string, HTMLElement>();
   readonly runtime: NodeRuntime;
+  get _dirtyLeaves(): Set<string> {
+    return this.runtime.backend.getUpdateMetadata().dirtyLeaves;
+  }
+  get _dirtyElements(): Map<string, boolean> {
+    return this.runtime.backend.getUpdateMetadata().dirtyElements;
+  }
+  get _dirtyType(): number {
+    return this.runtime.backend.getUpdateMetadata().dirtyType;
+  }
   private readonly updates: UpdateController;
   private state: EditorState;
 

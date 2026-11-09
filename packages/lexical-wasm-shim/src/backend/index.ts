@@ -5,9 +5,16 @@ import type {
 
 export type CommitPacket = HostCommitPacket;
 
+export interface UpdateMetadata {
+  readonly dirtyLeaves: Set<string>;
+  readonly dirtyElements: Map<string, boolean>;
+  readonly dirtyType: number;
+}
+
 /** Engine boundary. Scheduling and JS object handles live above it. */
 export interface ShimBackend {
   readonly initialVersion: number;
+  getUpdateMetadata(): UpdateMetadata;
   installForeign(
     type: string,
     dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown
