@@ -46,7 +46,7 @@ use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnReques
 use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
+use crate::domain::tool_mode::ToolMode;
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -84,7 +84,6 @@ pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
     code_mode_tools: Arc<NativeTools>,
-    tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
     skill_routing: Arc<dyn SkillRoutingPolicy>,
     session_skills: Arc<SessionSkills>,
@@ -109,7 +108,6 @@ impl RigTurnEngine {
                 ai_tools::tools_for_agent_code_mode,
                 true,
             )),
-            tool_mode: Arc::new(StandardTools),
             auto_model: match &tool_context.cognition_tool_context.service {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
@@ -126,13 +124,6 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
         self.gate = gate;
-        self
-    }
-
-    /// Select the owner's tool presentation once per conversational turn.
-    #[must_use]
-    pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
-        self.tool_mode = selector;
         self
     }
 
@@ -358,7 +349,6 @@ impl TurnEngine for RigTurnEngine {
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
-        let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
         let skill_routing = Arc::clone(&self.skill_routing);
         let session_skills = Arc::clone(&self.session_skills);
@@ -373,14 +363,11 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let (selected, routes, entities_routed) = tokio::join!(
-                    select_tool_mode(tool_mode.as_ref(), &request),
+                let (routes, entities_routed) = tokio::join!(
                     routes_skills(skill_routing.as_ref(), &request),
                     routes_entities(entity_routing.as_ref(), &request),
                 );
-                let Some(selected) = selected else {
-                    return;
-                };
+                let selected = tool_mode(&request);
                 let native_tools = match selected {
                     ToolMode::Standard => native_tools,
                     ToolMode::Code => code_mode_tools,
@@ -501,29 +488,25 @@ fn select_skills<'a>(
     ))
 }
 
-// A failed/missing code-mode MCP connection must never leave a turn with only the
-// small direct set. Summaries neither evaluate flags nor advertise tools.
-async fn select_tool_mode(
-    selector: &dyn ToolModeSelector,
-    request: &TurnRequest,
-) -> Option<ToolMode> {
+// Every conversation turn of a user's session runs code mode. A failed or
+// missing code-mode MCP connection must never leave a turn with only the small
+// direct set, and summaries advertise no tools.
+fn tool_mode(request: &TurnRequest) -> ToolMode {
     if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Some(ToolMode::Standard);
+        return ToolMode::Standard;
     }
-    let (Owner::User(owner), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return Some(ToolMode::Standard);
+    let (Owner::User(_), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
+        return ToolMode::Standard;
     };
     let catalog = mcp.searchable_catalog();
-    if !CODE_MODE_MCP_TOOLS
+    if CODE_MODE_MCP_TOOLS
         .iter()
         .all(|name| catalog.iter().any(|tool| tool.name == *name))
     {
-        return Some(ToolMode::Standard);
-    }
-    tokio::select! {
-        biased;
-        _ = request.cancel.cancelled() => None,
-        mode = selector.select(owner) => Some(mode),
+        ToolMode::Code
+    } else {
+        tracing::warn!("code-mode tools unavailable; running the turn with direct tools");
+        ToolMode::Standard
     }
 }
 
@@ -542,6 +525,7 @@ async fn drive_turn(
         session_id,
         awaiting,
         owner,
+        feature,
         model,
         reasoning_effort,
         speed,
@@ -589,7 +573,7 @@ async fn drive_turn(
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone());
     let agent = identity.as_ref().map_or_else(
         || "Macro".to_owned(),
         |identity| format!("{} (@{})", identity.name, identity.handle),

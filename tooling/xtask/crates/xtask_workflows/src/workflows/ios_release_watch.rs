@@ -6,7 +6,8 @@
 //! that started the [`super::ios_app_store_release`] run), asks App Store
 //! Connect whether Apple approved the version + build committed at the PR
 //! head (built from the native tree of the PR's merge result, like the gate
-//! checks), and when it did, re-runs the PR's failed `iOS Native Check` job so
+//! checks), and when it did, re-runs failed `iOS Native Check` jobs from PR CI
+//! and the earlier standalone web workflow on that head so
 //! the gate turns green on its own. Re-running an existing job is how this
 //! stays within GitHub's rule that events created with the workflow token
 //! never start workflows.
@@ -25,6 +26,9 @@ use gh_workflow::{
 };
 
 use crate::workflows::{runners, steps, vars};
+
+#[cfg(test)]
+mod test;
 
 /// `true` when the first step found at least one PR to look at.
 const HAS_PRS: &str = "steps.prs.outputs.count != '0'";

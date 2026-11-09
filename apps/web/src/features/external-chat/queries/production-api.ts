@@ -240,10 +240,8 @@ export const externalChatApi: ExternalChatApi = {
       unreadCount: view.unreadCount,
       members: (view.members?.participants ?? []).map((person) => ({
         id: person.jid,
-        name:
-          person.displayName ??
-          phoneFromJid(person.jid) ??
-          'WhatsApp participant',
+        // The server names everyone (provider name, else phone number).
+        name: person.name,
         admin: person.admin,
       })),
       backfill: view.backfill
@@ -289,7 +287,7 @@ export const externalChatApi: ExternalChatApi = {
         replyTo: message.replyTo ?? undefined,
         reactions: message.reactions.map((reaction) => ({
           emoji: reaction.emoji,
-          count: reaction.count,
+          reactors: reaction.reactors.map(person),
           mine: reaction.mine,
         })),
         attachments: message.attachments.map((attachment) => ({

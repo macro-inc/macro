@@ -23,7 +23,7 @@ type InboxDateHeaderItem = {
 /**
  * A row's place in the list, one object per row id. The virtual list keys items
  * by object and a live change replaces a row's data, so the place stays and the
- * card reads the row's latest data by id: nothing remounts as rows change.
+ * row reads the row's latest data by id: nothing remounts as rows change.
  */
 type InboxRowItem = { type: 'row'; id: string };
 
@@ -53,6 +53,21 @@ export const isInboxStackItem = (
 /** Whether an item stands for a notification rather than dividing the list. */
 export const isInboxNotification = (item: InboxListItem) =>
   item.type !== 'date_header';
+
+/**
+ * The ids of the rows and unfolded notifications that end a date section, just
+ * above the next divider or at the end of the list, which draw no separator.
+ */
+export const inboxSectionEnds = (items: readonly InboxListItem[]) => {
+  const ends = new Set<string>();
+  items.forEach((item, index) => {
+    const next = items[index + 1];
+    if (isInboxNotification(item) && (!next || !isInboxNotification(next))) {
+      ends.add(item.id);
+    }
+  });
+  return ends;
+};
 
 export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
   match(header.bucket.key)

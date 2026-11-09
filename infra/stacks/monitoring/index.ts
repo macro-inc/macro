@@ -28,6 +28,7 @@ import './monitors/outlook-sync';
 import './monitors/queues';
 import './monitors/redis';
 import './monitors/regressions';
+import './monitors/routine-suggestions';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';
 import { webPerformanceDashboard } from './dashboards/web-performance';

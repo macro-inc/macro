@@ -21,6 +21,10 @@ opens the recipient picker directly. `Start an instant call` opens `/app/meet/ne
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.
+Verify signed-in joins for both instant and scheduled links with
+`enable-programmatic-calls` on and off: the app's empty POST must work even
+with its `Content-Type: application/json` header. Guest joins send a JSON body
+through the separate public endpoint.
 The channel/contact option opens the recipient picker. Starting a channel call
 connects the creator without waiting for recording, transcription, or recipient
 notification delivery. Verify that a second participant still receives the ring
@@ -466,13 +470,36 @@ remains usable; Answer opens the call screen directly for microphone permission
 and retry errors. Verify allowed/denied full-screen access, missing microphone
 permission, cancellation/expiry and stale notification actions after a replacement
 call arrives. While Android 14+ blocks full-screen notifications, a toast
-offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
+offers **Allow** (system setting) or **Not now**; returning to Macro with access
+granted removes it. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
 
 Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
 [notification fallback](media/calls/android-call-notification.png), and
 [microphone permission after Answer](media/calls/android-call-microphone-permission.png).
+
+### Microphone permission in the mobile apps
+
+Calls ask for the microphone when the user starts, joins or answers one, before
+the join request: Android through `prepare_join` and the call screen's Answer,
+iOS through `request_microphone_permission`. iOS shows its prompt once and
+Android stops showing it after repeated denials, so a denial points to Settings:
+
+- Android native calls can't connect without the microphone. A denied join
+  says so instead of blaming the connection and shows a **Microphone access is
+  off** toast with **Open Settings**; the call screen shows **Open settings**
+  after a denied Answer or camera request.
+- iOS native calls join muted. Whenever the call tries to unmute (on connect,
+  from the drawer, or from CallKit), the native session shows a **Microphone
+  access is off** alert with **Open Settings**.
+- Calls in the browser engine (meeting links, and builds without native calls)
+  join muted; the join and each failed unmute show the same toast, with **Open
+  Settings** only in the iOS and Android apps.
+
+Verify by denying the prompt, then joining again after access is off in
+Settings. `call.microphone_permission.request` and
+`call.microphone_access.open_settings` spans record the outcomes.
 
 Native Android call spans use service `android-calls` and the opaque `call.id`.
 The existing telemetry gate also controls cold calls. W3C context connects the

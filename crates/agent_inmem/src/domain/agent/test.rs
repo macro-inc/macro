@@ -177,6 +177,7 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1874,6 +1875,7 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -1932,6 +1934,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -2023,6 +2026,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
@@ -2129,6 +2133,7 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
