@@ -653,6 +653,7 @@ export const enableInboxNotifiedSort = defineFlag({
 export const enableGraphqlSoup = defineFlag({
   key: 'enable-graphql-soup',
   env: 'ENABLE_GRAPHQL_SOUP',
+  default: onInDev,
 });
 
 /** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
