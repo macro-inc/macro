@@ -194,3 +194,5 @@ Restore owned selection metadata through with_foreign_value_metadata; synchroniz
 Consume ForeignReservedKey capabilities for externally constructed native records; keys come from the exact allocator and are never reallocated or rolled back.
 
 Opt out of class static transforms with without_static_transforms only when an external runtime owns them; explicit transforms and core text normalization remain enabled.
+
+Supply foreign_instance_hooks on the builder when hydration or initial document callbacks need the runtime; install it before initial-state parsing/publication, without running JS constructors during registration.
