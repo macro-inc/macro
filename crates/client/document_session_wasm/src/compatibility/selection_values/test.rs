@@ -347,3 +347,111 @@ fn patch_reply_pin_survives_release_until_decoder_acknowledges() -> Result<(), B
     assert!(ledger.get(reference).is_err());
     Ok(())
 }
+
+#[test]
+fn active_capture_invalidates_node_cache_only_after_semantic_change() -> Result<(), BoundaryError> {
+    let mut ledger = SelectionValues::new(7);
+    let identity = ForeignSelectionIdentity::default();
+    let value = Selection::Range(RangeSelection::at_root());
+    let initial = ledger.capture(&value, identity.clone(), 1, Origin::Active { update: 1 })?;
+    let (_, _, reference) = decode(initial)?;
+    let cached = compat::ForeignNodeRef {
+        editor_id: 7,
+        version: 1,
+        key: key(NodeKey::ROOT),
+        instance_owner_id: 7,
+        class_id: 4,
+        instance_id: 91,
+    };
+    let mut patch = encode(&ledger.get(reference)?);
+    if let compat::CompatSelectionData::CompatRangeSelection {
+        has_cached_nodes,
+        cached_nodes,
+        ..
+    } = &mut patch
+    {
+        *has_cached_nodes = true;
+        *cached_nodes = vec![cached];
+    }
+    ledger.patch(
+        reference,
+        patch,
+        Scope {
+            historical: false,
+            state_version: 1,
+            update: 1,
+            activate: false,
+        },
+    )?;
+    let metadata_only = raw_copy(&value).with_foreign_value_metadata(true, Some(true));
+    ledger.capture(
+        &metadata_only,
+        identity.clone(),
+        1,
+        Origin::Active { update: 1 },
+    )?;
+    let retained = ledger.get(reference)?;
+    assert_eq!(retained.cached_nodes, Some(vec![cached]));
+    assert!(retained.value.is_dirty());
+    assert_eq!(
+        retained.value.as_range().unwrap().cached_is_backward(),
+        Some(true)
+    );
+    let moved = Selection::Range(RangeSelection::collapsed(Point::element(
+        NodeKey::ROOT,
+        lexical_model::ChildIndex(1),
+    )));
+    ledger.capture(&moved, identity, 1, Origin::Active { update: 1 })?;
+    assert_eq!(ledger.get(reference)?.cached_nodes, None);
+
+    let identity = ForeignSelectionIdentity::default();
+    let key_a = NodeKey::from_parts(KeyParts {
+        index: 4,
+        generation: 1,
+    });
+    let key_b = NodeKey::from_parts(KeyParts {
+        index: 5,
+        generation: 1,
+    });
+    let mut nodes = NodeSelection::new();
+    nodes.add(key_a);
+    nodes.add(key_b);
+    let initial = ledger.capture(
+        &Selection::Node(nodes),
+        identity.clone(),
+        1,
+        Origin::Active { update: 1 },
+    )?;
+    let (_, _, reference) = decode(initial)?;
+    let mut patch = encode(&ledger.get(reference)?);
+    if let compat::CompatSelectionData::CompatNodeSelection {
+        has_cached_nodes,
+        cached_nodes,
+        ..
+    } = &mut patch
+    {
+        *has_cached_nodes = true;
+        *cached_nodes = vec![cached];
+    }
+    ledger.patch(
+        reference,
+        patch,
+        Scope {
+            historical: false,
+            state_version: 1,
+            update: 1,
+            activate: false,
+        },
+    )?;
+    let mut reordered = NodeSelection::new();
+    reordered.add(key_b);
+    reordered.add(key_a);
+    ledger.capture(
+        &Selection::Node(reordered),
+        identity,
+        1,
+        Origin::Active { update: 1 },
+    )?;
+    assert_eq!(ledger.get(reference)?.cached_nodes, None);
+    Ok(())
+}
