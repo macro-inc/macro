@@ -43,6 +43,18 @@ program up and get the outcome back.
   today; the server still shares the public MCP executor.
 - **Rollout.** `enable-html-code-mode`, the same key on web and the harness.
   On in local dev. Off leaves the preview a plain sandboxed frame.
+- **Build.** Deno for everything, no Vite. An artifact is a TypeScript
+  project: client code plus server programs in `src/server/`, with npm
+  dependencies. `deno check` type-checks both sides against the SDK
+  declarations. `deno bundle` bundles the client into the HTML and each
+  server program on its own. The client imports `#server/<name>`, which
+  `deno.json` maps to generated stubs that call `macro.run(<hash>, args)`.
+  React and Preact JSX work. Solid, Svelte, Tailwind and HMR need Vite and
+  are out until required. The build runs in `code_execution`'s Deno sandbox,
+  with npm reached through a registry proxy. Coding agents run the same
+  commands in their own sandbox. The archived plugin compiler
+  (`archive/plugin-platform-2026-08`, `packages/plugin-cli`) has the
+  client/server import policy and per-entry hashing to port.
 
 ## Flow
 
@@ -90,3 +102,5 @@ if the run is cancelled.
    the shared public MCP slots.
 3. Show a failed run in the preview chrome. Today the frame's promise rejects
    and the page has to catch it.
+4. The Deno build: bundle, generate stubs, and write a manifest of program
+   hashes. The run route then takes a program hash instead of source.
