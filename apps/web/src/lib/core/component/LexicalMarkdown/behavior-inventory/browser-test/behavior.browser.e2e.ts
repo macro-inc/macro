@@ -492,3 +492,171 @@ test('emoji first Space dismisses the bare trigger without inserting a space', a
   await expect(page.locator('.menu-surface')).toHaveCount(0);
   await expect(body).toHaveText(':');
 });
+
+async function liveImageScale(page: Page) {
+  const state = JSON.parse(
+    (await page.locator('#live-state').textContent()) ?? '{}'
+  );
+  return state.root?.children?.find(
+    (node: { type: string }) => node.type === 'image'
+  )?.scale;
+}
+async function loadImageDecorator(page: Page) {
+  await page.getByRole('button', { name: 'Load image', exact: true }).click();
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  const image = body.locator('img');
+  await expect(image).toHaveCount(1);
+  await expect
+    .poll(() =>
+      image.evaluate(
+        (element: HTMLImageElement) =>
+          element.complete && element.naturalWidth === 200
+      )
+    )
+    .toBe(true);
+  await expect(body.locator('.cursor-col-resize')).toHaveCount(2);
+  await expect.poll(() => liveImageScale(page)).toBe(1);
+  return { body, image };
+}
+async function dragImageHandle(
+  page: Page,
+  handle: Locator,
+  delta: number,
+  hasTouch: boolean
+) {
+  await handle.scrollIntoViewIfNeeded();
+  const point = await handle.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - (visualViewport?.offsetLeft ?? 0),
+      y: rect.top + rect.height / 2 - (visualViewport?.offsetTop ?? 0),
+    };
+  });
+  if (hasTouch) {
+    const session = await page.context().newCDPSession(page);
+    try {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x: point.x, y: point.y, id: 1 }],
+      });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: point.x + delta, y: point.y, id: 1 }],
+      });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchEnd',
+        touchPoints: [],
+      });
+    } finally {
+      await session.detach();
+    }
+  } else {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x + delta, point.y);
+    await page.mouse.up();
+  }
+}
+for (const side of ['left', 'right'] as const) {
+  test(`image decorator ${side} pointer resize persists through save and reopen`, async ({
+    page,
+    hasTouch,
+  }) => {
+    const { body, image } = await loadImageDecorator(page);
+    const handles = body.locator('.cursor-col-resize');
+    await dragImageHandle(
+      page,
+      side === 'left' ? handles.first() : handles.last(),
+      40,
+      hasTouch
+    );
+    const scale = side === 'left' ? 0.6 : 1.4;
+    await expect.poll(() => liveImageScale(page)).toBeCloseTo(scale, 5);
+    await page.getByRole('button', { name: 'Save state', exact: true }).click();
+    // Replace the resized node with a fresh scale-1 fixture before reopening.
+    // Selection/deletion and undo are exercised separately below.
+    await loadImageDecorator(page);
+    await expect.poll(() => liveImageScale(page)).toBe(1);
+    await page
+      .getByRole('button', { name: 'Reopen saved state', exact: true })
+      .click();
+    await expect(image).toHaveCount(1);
+    await expect
+      .poll(() =>
+        image.evaluate(
+          (element: HTMLImageElement) =>
+            element.complete && element.naturalWidth === 200
+        )
+      )
+      .toBe(true);
+    await expect.poll(() => liveImageScale(page)).toBeCloseTo(scale, 5);
+  });
+}
+test('image decorator resize clamps at its minimum height', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body } = await loadImageDecorator(page);
+  await dragImageHandle(
+    page,
+    body.locator('.cursor-col-resize').last(),
+    -100,
+    hasTouch
+  );
+  await expect.poll(() => liveImageScale(page)).toBe(0.5);
+});
+test('image decorator read-only removes resize controls and preserves saved data', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, image } = await loadImageDecorator(page);
+  const before = await page.locator('#live-state').textContent();
+  await page.getByRole('button', { name: 'Read only', exact: true }).click();
+  await expect(body.locator('.cursor-col-resize')).toHaveCount(0);
+  if (hasTouch) await image.tap();
+  else await image.click();
+  expect(await page.locator('#live-state').textContent()).toBe(before);
+  await page.getByRole('button', { name: 'Editable', exact: true }).click();
+  await expect(body.locator('.cursor-col-resize')).toHaveCount(2);
+  await expect.poll(() => liveImageScale(page)).toBe(1);
+});
+test('image decorator selection deletes only the image and undo restores its renderer', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, image } = await loadImageDecorator(page);
+  if (hasTouch) await image.tap();
+  else await image.click();
+  await page.keyboard.press('Backspace');
+  await expect(image).toHaveCount(0);
+  await expect(body).toHaveText('after');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(image).toHaveCount(1);
+  await expect
+    .poll(() =>
+      image.evaluate(
+        (element: HTMLImageElement) =>
+          element.complete && element.naturalWidth === 200
+      )
+    )
+    .toBe(true);
+});
+test('image decorator controls open and close the real full-screen viewer', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, image } = await loadImageDecorator(page);
+  if (hasTouch) await image.tap();
+  else await image.click();
+  // The first MediaButtons action opens the viewer. Its icon-only control
+  // currently has no accessible name; this does not establish toolbar AX.
+  const viewAction = body.locator('button').first();
+  await expect(viewAction).toBeVisible();
+  if (hasTouch) await viewAction.tap();
+  else await viewAction.click();
+  const dialog = page.getByRole('dialog', { name: 'Lightbox image viewer' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(image).toHaveCount(1);
+});

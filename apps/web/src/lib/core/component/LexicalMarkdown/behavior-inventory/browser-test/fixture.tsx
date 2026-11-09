@@ -10,17 +10,31 @@ import {
   ORDERED_LIST_ENTER,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
+import { setDecorator } from '@macro-inc/lexical-core/decoratorRegistry';
+import {
+  $createImageNode,
+  ImageNode,
+} from '@macro-inc/lexical-core/nodes/ImageNode';
 import { HR } from '@macro-inc/lexical-core/transformers/transformers';
 import {
   $createParagraphNode,
+  $createTextNode,
   $getRoot,
   createEditor,
+  HISTORY_PUSH_TAG,
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import { DecoratorRenderer } from '../../component/core/DecoratorRenderer';
+import { MarkdownImage } from '../../component/decorator/MarkdownImage';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
+import {
+  type LexicalWrapperBase,
+  LexicalWrapperContext,
+} from '../../context/LexicalWrapperContext';
 import { actionsPlugin } from '../../plugins/actions/actionsPlugin';
 import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
@@ -35,7 +49,10 @@ import {
 } from '../../plugins/keyboard-shortcuts/keyboardShortcutsPlugin';
 import { markdownPastePlugin } from '../../plugins/markdown-paste/markdownPastePlugin';
 import { markdownShortcutsPlugin } from '../../plugins/markdown-shortcuts/markdownShortcutsPlugin';
+import { mediaPlugin } from '../../plugins/media/mediaPlugin';
 import { nodeTransformPlugin } from '../../plugins/node-transform/nodeTransformPlugin';
+import { createPluginManager } from '../../plugins/pluginManager';
+import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
 import { singleLinePlugin } from '../../plugins/single-line/singleLinePlugin';
 import { tabIndentationPlugin } from '../../plugins/tab-indentation/tabIndentationPlugin';
 import { createMenuOperations } from '../../shared/inlineMenu';
@@ -77,6 +94,22 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const TITLE = mount('title');
 singleLinePlugin()(TITLE);
 const BODY = mount('body');
+const [bodyEditable, setBodyEditable] = createSignal(BODY.isEditable());
+BODY.registerEditableListener(setBodyEditable);
+const BODY_WRAPPER: LexicalWrapperBase = {
+  type: 'markdown',
+  owner: null,
+  editor: BODY,
+  isInteractable: bodyEditable,
+  plugins: createPluginManager(BODY, 'markdown'),
+  cleanup: () => BODY_WRAPPER.plugins.cleanup(),
+};
+BODY_WRAPPER.plugins.use(selectionDataPlugin(BODY_WRAPPER));
+setDecorator(ImageNode, MarkdownImage);
+mediaPlugin()(BODY);
+BODY.registerUpdateListener(({ editorState }) => {
+  element('live-state').textContent = JSON.stringify(editorState.toJSON());
+});
 registerList(BODY);
 nodeTransformPlugin()(BODY);
 markdownShortcutsPlugin({
@@ -117,27 +150,30 @@ render(
   () => (
     <AnalyticsContextProvider>
       <PosthogProvider>
-        <ActionMenu
-          editor={BODY}
-          menu={ACTION_MENU}
-          anchor={element('body')}
-          portalScope="global"
-          ignoreActionIds={[
-            'task',
-            'document',
-            'image',
-            'gif',
-            'video',
-            'link',
-            'latex',
-            'table',
-            'hr',
-            'database-query',
-            'database',
-            'code',
-          ]}
-        />
-        <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
+        <LexicalWrapperContext.Provider value={BODY_WRAPPER}>
+          <ActionMenu
+            editor={BODY}
+            menu={ACTION_MENU}
+            anchor={element('body')}
+            portalScope="global"
+            ignoreActionIds={[
+              'task',
+              'document',
+              'image',
+              'gif',
+              'video',
+              'link',
+              'latex',
+              'table',
+              'hr',
+              'database-query',
+              'database',
+              'code',
+            ]}
+          />
+          <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
+          <DecoratorRenderer editor={BODY} />
+        </LexicalWrapperContext.Provider>
       </PosthogProvider>
     </AnalyticsContextProvider>
   ),
@@ -151,6 +187,29 @@ element('readonly').addEventListener('click', () =>
   toggleEditable(BODY, false)
 );
 element('editable').addEventListener('click', () => toggleEditable(BODY, true));
+element('load-image').addEventListener('click', () => {
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#4882b8"/></svg>';
+  BODY.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append(
+          $createImageNode({
+            srcType: 'url',
+            id: 'fixture-image',
+            url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+            alt: 'Fixture image',
+            width: 200,
+            height: 100,
+            scale: 1,
+          }),
+          $createParagraphNode().append($createTextNode('after'))
+        );
+    },
+    { discrete: true, tag: HISTORY_PUSH_TAG }
+  );
+});
 let saved: SerializedEditorState | undefined;
 element('save').addEventListener('click', () => {
   saved = BODY.getEditorState().toJSON();

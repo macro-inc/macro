@@ -91,6 +91,12 @@ empty results, Space dismissal and pointer/touch insertion use the real catalog.
 uses the real analytics/flag providers, editor theme and Macro stylesheet, with service-backed
 actions excluded from this isolated fixture. Its filtering, wrapping keyboard
 navigation, insertion, dismissal and pointer/touch focus behavior are exercised.
+Image cases mount the actual MarkdownImage through DecoratorRenderer and its
+editor context. Native mouse/touch drags exercise both resize handles, minimum
+size, saved scale restoration, read-only controls, selection/deletion/undo and
+the full-screen viewer. Images use a local data URL; this does not test uploads,
+remote fetches or production toolbar accessibility. Save/reopen deliberately
+replaces the resized node with a fresh scale-1 fixture before restoration.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing
