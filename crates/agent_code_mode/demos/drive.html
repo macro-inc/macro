@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  input, button { font: inherit; color: inherit; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  input { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); flex: 1 1 240px; min-width: 0; max-width: 360px; }
+  button { padding: 8px 12px; border: 0; border-radius: 10px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; font-weight: 500; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  .name { display: flex; align-items: center; gap: 10px; font-weight: 520; word-break: break-word; }
+  .badge { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    background: var(--chip); color: var(--muted); border-radius: 6px; padding: 3px 6px;
+    min-width: 40px; text-align: center; }
+  .when, .snippet { color: var(--muted); }
+  .snippet { font-size: 12px; font-weight: 400; margin-top: 2px; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); }
+  @media (max-width: 560px) { .when-col { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Drive</h1>
+    <input id="query" type="search" placeholder="Search documents" aria-label="Search documents">
+    <button id="new">New note</button>
+  </header>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="recent" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const page = await macro.workspace.page({ includeTypes: ['document'], limit: 40 });
+    return page.items.flatMap((item) =>
+      item.type === 'document'
+        ? [{
+            id: item.id,
+            name: item.name,
+            kind: item.subType === 'task' ? 'task' : (item.fileType ?? 'md'),
+            updatedAt: item.snapshot.data.updatedAt,
+            snippet: null as string | null,
+          }]
+        : [],
+    );
+  }
+</script>
+
+<script type="text/macro" id="search" lang="ts">
+  export default async function ({ query }: { query: string }, { macro }: ProgramContext) {
+    const page = await macro.search.page(query, { types: ['document'], pageSize: 25 });
+    return page.results.flatMap((result) => {
+      if (result.type !== 'document') return [];
+      const hit = result.hit;
+      // Highlights mark matches with tags; the page shows plain text.
+      const passage = hit.document_search_results[0]?.highlight.content?.[0] ?? null;
+      return [{
+        id: result.entity.id,
+        name: hit.document_name,
+        kind: hit.sub_type === 'task' ? 'task' : (hit.file_type ?? 'md'),
+        updatedAt: hit.metadata?.updated_at ?? new Date().toISOString(),
+        snippet: passage ? passage.replace(/<[^>]*>/g, '') : null,
+      }];
+    });
+  }
+</script>
+
+<script type="text/macro" id="createNote" lang="ts">
+  export default async function ({ name }: { name: string }, { macro }: ProgramContext) {
+    const document = await macro.documents.create({
+      name,
+      markdown: `# ${name}\n\nCreated from the Drive demo.`,
+    });
+    return { id: document.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { createNote, recent, search } from 'macro:programs';
+
+  type Row = Awaited<ReturnType<typeof recent>>[number];
+
+  const list = document.getElementById('list')!;
+  const queryInput = document.getElementById('query') as HTMLInputElement;
+  const newButton = document.getElementById('new') as HTMLButtonElement;
+  let latest = 0;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function render(rows: Row[], query: string) {
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', query ? `Nothing matches “${query}”.` : 'No documents yet.'));
+      return;
+    }
+    const table = el('table');
+    const head = el('tr');
+    head.append(el('th', '', 'Name'), el('th', 'when-col', query ? 'Updated' : 'Last updated'));
+    table.append(head);
+    for (const row of rows) {
+      const tr = el('tr');
+      const name = el('td');
+      const label = el('div', 'name');
+      const text = el('div', '', row.name);
+      if (row.snippet) text.append(el('div', 'snippet', row.snippet));
+      label.append(el('span', 'badge', row.kind), text);
+      name.append(label);
+      const when = new Date(row.updatedAt).toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+      });
+      tr.append(name, el('td', 'when when-col', when));
+      table.append(tr);
+    }
+    list.replaceChildren(table);
+  }
+
+  async function load() {
+    const ticket = ++latest;
+    const query = queryInput.value.trim();
+    const rows = query ? await search({ query }) : await recent();
+    if (ticket === latest) render(rows, query);
+  }
+
+  let debounce: ReturnType<typeof setTimeout> | undefined;
+  queryInput.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(load, 250);
+  });
+  newButton.addEventListener('click', async () => {
+    newButton.disabled = true;
+    const stamp = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    await createNote({ name: `Note ${stamp}` });
+    queryInput.value = '';
+    newButton.disabled = false;
+    await load();
+  });
+  on(['document.created', 'document.updated', 'document.deleted'], load);
+  await load();
+</script>
+</body>
+</html>
