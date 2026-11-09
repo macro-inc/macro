@@ -457,7 +457,8 @@ phones, safe-area insets, and rotation.
 
 In wide desktop panes, the sidebar fills the call content height alongside the
 video and controls, with an opaque `surface-2` fill and rounded corners, without
-a border or drop shadow. The inset card in a narrow desktop pane uses the same
+a border. A soft shadow separates the docked card in light mode; dark mode
+stays shadowless. The inset card in a narrow desktop pane uses the same
 fill with a drop shadow; the phone sheet keeps its own surface. Tabs, message
 hover, composer and empty-state styles remain shared. Drag its divider, or focus
 the divider and use the arrow keys, to resize it between 280px and 480px while
