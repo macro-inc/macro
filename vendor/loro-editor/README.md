@@ -33,3 +33,7 @@ container ids, preserving remote group conflicts without constructing duplicate
 document diffs. Pending event queues, paused/excluded edits, fixups, imports and
 undo/redo retain ordinary event delivery. Suppression is opt-in and recording
 resumes at the committed frontiers even on native unwinding.
+
+Local undo patch (`src/undo.rs`): skip the group-disjoint container scan when
+the remote diff map is empty; retain the same merge and remote-conflict rules.
+Upstream rationale: an empty remote row cannot conflict, so local undo pushes need no scan of the group.
