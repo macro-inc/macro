@@ -83,6 +83,9 @@ a failed background refresh must not restore the revoked document. The denied
 view shows **Loading access requests…** until its own request-state read lands,
 never a request row or **Could not load access requests** left over from before
 the change, and a document deleted while it is open shows the not-found view.
+For the native text editor, verify cleanup also completes when access is revoked
+before or during startup. Cancelling startup before a view is attached must
+finish without mounting a document or leaving a pending close.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer

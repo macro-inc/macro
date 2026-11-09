@@ -284,3 +284,9 @@ observed spans and every actual LocalCommit; never invent per-character Type fac
 The shipping headless AI workspace lacks the browser shortcut plugin: native AI
 skips this capability explicitly and the TS peer rejects it. Bare triple backticks
 remain literal as in the source probe; do not claim every corpus entry converts.
+
+Record native Close requests before execution and actual Stopped replies separately
+by session/request. every_close_terminates requires ordered reply and host teardown
+before the host deadline in every access state, including revoked and mid-start.
+Created/terminal AI cancellation has no flush preflight; Close joins its WAL barrier.
+Step::Create constructs without Start, so Init cancellation uses the same real core.

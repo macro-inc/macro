@@ -7,6 +7,7 @@ impl Sim {
     pub(super) fn step(&mut self, step: Step) -> Result<(), Failure> {
         match step {
             Step::Open(spec) => self.open(spec)?,
+            Step::Create(spec) => self.create(spec, false)?,
             Step::Run(duration) => self.advance(duration.0),
             Step::Settle => {
                 let start = self.clock.now;
@@ -329,6 +330,9 @@ impl Sim {
         Ok(())
     }
     pub(super) fn open(&mut self, spec: OpenSpec) -> Result<(), Failure> {
+        self.create(spec, true)
+    }
+    fn create(&mut self, spec: OpenSpec, start: bool) -> Result<(), Failure> {
         if self
             .clients
             .get(&spec.client)
@@ -431,6 +435,9 @@ impl Sim {
             access: spec.access,
             kind: spec.kind,
         });
+        if !start {
+            return Ok(());
+        }
         self.input(&name, session, SyncInput::Start)?;
         if let Some((snapshot, after)) = cached_s3 {
             self.schedule(
@@ -548,6 +555,7 @@ impl Sim {
         }
         self.emit(Fact::Closed {
             client: name.clone(),
+            session,
         });
         Ok(())
     }
@@ -559,7 +567,16 @@ impl Sim {
             return Ok(());
         }
         let session = client.session;
-        let ai = client.spec.kind == ClientKind::AiWorker;
+        let flush_request = if client.spec.kind == ClientKind::AiWorker
+            && !matches!(
+                client.core.phase(),
+                doc_sync_core::Phase::Created | doc_sync_core::Phase::Stopped
+            ) {
+            Some(client.request())
+        } else {
+            None
+        };
+        let stop_request = client.request();
         let opened = self.events.iter().rposition(|event| matches!(&event.fact, Fact::Opened { client, session: owner, .. } if client == name && *owner == session)).unwrap_or(self.events.len());
         let session_events = &self.events[opened..];
         let in_window = session_events.iter().rev().find_map(|event| match &event.fact {
@@ -570,8 +587,22 @@ impl Sim {
         if in_window {
             self.stats.close_in_window += 1;
         }
-        if ai {
-            let request = client.request();
+        self.emit(Fact::CloseRequested {
+            client: name.clone(),
+            session,
+            request: stop_request.0,
+            deadline: self.clock.now.saturating_add(if flush_request.is_some() {
+                self.config
+                    .budgets
+                    .settle
+                    .0
+                    .saturating_mul(2)
+                    .saturating_add(700)
+            } else {
+                self.config.budgets.settle.0
+            }),
+        });
+        if let Some(request) = flush_request {
             self.input(name, session, SyncInput::Flush(request))?;
             let deadline = self.clock.now.saturating_add(self.config.budgets.settle.0);
             while self.clock.now < deadline && !self.events.iter().rev().any(|event| matches!(&event.fact, Fact::Reply { client, request: id, .. } if client == name && *id == request.0)) { self.advance_next(deadline); }
@@ -595,8 +626,7 @@ impl Sim {
         }
         if let Some(client) = self.clients.get_mut(name) {
             client.close_requested = true;
-            let request = client.request();
-            self.input(name, session, SyncInput::Stop(request))?;
+            self.input(name, session, SyncInput::Stop(stop_request))?;
         }
         let deadline = self.clock.now.saturating_add(self.config.budgets.settle.0);
         while self.clock.now < deadline && self.clients.get(name).is_some_and(|client| client.alive)

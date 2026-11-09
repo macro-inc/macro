@@ -2,6 +2,7 @@ import { openDB } from 'idb';
 import { type IStorageOpMsg, LocalStateMsg } from '../abi.generated';
 import { SessionLease } from '../lease';
 import { StorageAdapter } from '../storage';
+import { revokedClose } from './close';
 
 const sessions = new Map<
   string,
@@ -124,8 +125,10 @@ const fixture = {
 declare global {
   interface Window {
     storageFixture: typeof fixture;
+    closeFixture: typeof revokedClose;
   }
 }
 window.storageFixture = fixture;
+window.closeFixture = revokedClose;
 const output = document.querySelector('output');
 if (output) output.textContent = 'ready';

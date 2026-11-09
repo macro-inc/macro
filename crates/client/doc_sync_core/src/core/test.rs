@@ -7,6 +7,7 @@ mod comments;
 mod lifecycle;
 mod presence;
 mod recovery;
+mod stop;
 mod wal;
 
 fn now(ms: u64) -> Now {

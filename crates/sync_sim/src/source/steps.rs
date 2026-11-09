@@ -16,6 +16,14 @@ pub(super) fn source(step: &Step) -> String {
             spec.access,
             spec.kind
         ),
+        Step::Create(spec) => format!(
+            "Step::Create(OpenSpec {{ client: {}, profile: {}, doc: DocIx({}), access: Access::{:?}, kind: ClientKind::{:?} }})",
+            client(&spec.client),
+            profile(&spec.profile),
+            spec.doc.0,
+            spec.access,
+            spec.kind
+        ),
         Step::Edit {
             client: name,
             op: AbstractOp::Editor(op),

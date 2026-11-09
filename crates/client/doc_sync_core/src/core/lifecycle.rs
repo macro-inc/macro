@@ -174,7 +174,11 @@ impl SyncCore {
             .extend(self.storage.iter().filter_map(|(id, p)| {
                 matches!(p.completion, StorageCompletion::Append { .. }).then_some(*id)
             }));
-        self.stop_request = request;
+        if let Some(request) = request
+            && !self.stop_requests.contains(&request)
+        {
+            self.stop_requests.push(request);
+        }
         self.disconnected(now, out);
         if self.config.transport == TransportKind::Routed {
             out.io.push(IoEffect::RouteDetach {
@@ -192,14 +196,13 @@ impl SyncCore {
     }
 
     pub(super) fn finish_stop(&mut self, out: &mut SyncOutput) {
-        if self.phase == Phase::Stopped
-            && self.stop_barrier.is_empty()
-            && let Some(request) = self.stop_request.take()
-        {
-            out.events.push(SyncEvent::Reply {
-                request,
-                reply: Reply::Stopped,
-            });
+        if self.phase == Phase::Stopped && self.stop_barrier.is_empty() {
+            for request in self.stop_requests.drain(..) {
+                out.events.push(SyncEvent::Reply {
+                    request,
+                    reply: Reply::Stopped,
+                });
+            }
         }
     }
 

@@ -25,7 +25,7 @@ pub enum Phase {
     Running,
     /// Preserving old edits and fetching a fresh server base.
     Resetting,
-    /// Terminal; only outstanding persistence completions may still arrive.
+    /// Terminal; persistence completes and late Stop requests join its barrier.
     Stopped,
 }
 
@@ -178,7 +178,7 @@ pub struct SyncCore {
     rebase_rerun: bool,
     last_rebase: Option<Millis>,
     flushes: Vec<(RequestId, Millis)>,
-    stop_request: Option<RequestId>,
+    stop_requests: Vec<RequestId>,
     stop_barrier: BTreeSet<StorageOpId>,
     pending_import: bool,
     not_acked: u16,
@@ -296,7 +296,7 @@ impl SyncCore {
             rebase_rerun: false,
             last_rebase: None,
             flushes: Vec::new(),
-            stop_request: None,
+            stop_requests: Vec::new(),
             stop_barrier: BTreeSet::new(),
             pending_import: false,
             not_acked: 0,
@@ -445,6 +445,11 @@ impl SyncCore {
         out.wake_at = None;
         if self.phase == Phase::Stopped {
             match input {
+                SyncInput::Stop(request) => {
+                    if !self.stop_requests.contains(&request) {
+                        self.stop_requests.push(request);
+                    }
+                }
                 SyncInput::Storage(event) => self.storage_event(event, now, doc, out),
                 SyncInput::Tick => self.expire_storage(now, doc, out),
                 _ => {}

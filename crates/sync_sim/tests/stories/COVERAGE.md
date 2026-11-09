@@ -200,3 +200,11 @@ partial-import divergences. Every ledger row binds the original oracle hash,
 native error, source verdict and source parse-error messages. Source-error
 observation is a separate generated sidecar; original oracle rows stay byte-identical.
 Comment command producers remain a separate pending item.
+
+`close_termination` covers native Close for Generic/editor, tab/AI, all access
+levels, Loading/Running and automatic account revocation. Missing actual replies,
+wrong request correlation and absent teardown fail every_close_terminates.
+
+`close_before_start` uses Step::Create with both real surfaces, both client kinds
+and all access levels; actual reply/teardown must occur without a token or WAL append.
+

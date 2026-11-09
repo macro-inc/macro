@@ -349,6 +349,11 @@ impl Sim {
                 SyncEvent::Reply { request, reply } => {
                     let text = match reply {
                         doc_sync_core::Reply::Stopped => {
+                            self.emit(Fact::CloseAcknowledged {
+                                client: name.clone(),
+                                session,
+                                request: request.0,
+                            });
                             if let Some(client) = self.clients.get_mut(name) {
                                 client.stopped = true;
                             }
