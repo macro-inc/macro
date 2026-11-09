@@ -3187,3 +3187,8 @@ Drive's existing New controls open a wide menu with icons and short descriptions
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
+
+Editor engine parity uses the paired browser harness in
+`apps/web/src/features/block-md/browser-test/parity/README.md`. Use synthetic
+documents and an independent browser profile; saved-state and compatibility
+evidence must be present before treating matching screenshots as acceptance.
