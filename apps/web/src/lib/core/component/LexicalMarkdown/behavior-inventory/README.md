@@ -45,6 +45,14 @@ suppression, dismissal events, root replacement and listener disposal. The
 pointing-device boundary is supplied; tooltip rendering and remote attribution
 data remain unverified.
 
+Selection-popup cases use real model/native selections, table nodes and the
+production Markdown parser. Geometry and touch capability are supplied. They
+pin eligibility, host acceptance, full-block Markdown context/replacement,
+delete yielding, highlights and disposal. Geometry assertions compare explicit
+coordinates: after native selection clears, recomputation falls back to the
+original cached rectangle. These do not establish rendered popup UI, AI
+requests or a native table action bar.
+
 From this worktree's `apps/web`, with its own dependencies:
 
 ```sh
