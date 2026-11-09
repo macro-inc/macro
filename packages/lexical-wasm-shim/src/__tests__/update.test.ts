@@ -10,6 +10,7 @@ test('empty update tags do not leak into later work while pending work survives 
   });
   const packets: CommitPacket[] = [];
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: (packet) => packets.push(packet),
@@ -48,6 +49,7 @@ test('two updates and nested work publish once before listeners and deferred cal
   const events: string[] = [];
   const packets: CommitPacket[] = [];
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: (packet) => {
@@ -127,6 +129,7 @@ test('composition changes and discrete updates publish synchronously and cancel 
   const backend = new ConformanceBackend({ namespace: 'sync', nodes: [] });
   const packets: CommitPacket[] = [];
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: (packet) => packets.push(packet),
@@ -188,6 +191,7 @@ test('an error rolls back the tick and recovery queued by onError starts a fresh
   let deferred = 0;
   const thrown = { failure: true };
   const controller: UpdateController = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: (packet) => packets.push(packet),
@@ -251,6 +255,7 @@ test('listener updates run after all listeners and deferred callbacks, with thei
   let text: unknown;
   let once = false;
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: () => events.push('apply'),
@@ -315,6 +320,7 @@ test('disposal inside an update cancels queued bodies and frees after the curren
   let queued = 0;
   let applied = 0;
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: () => {
@@ -348,6 +354,7 @@ test('one thousand listener-enqueued no-op rounds reset the cascade guard', asyn
   let listeners = 0;
   let text: unknown;
   const controller = new UpdateController({
+    notificationScope: (body) => body(),
     backend,
     scope: (body) => body(),
     apply: () => {},

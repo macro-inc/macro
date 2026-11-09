@@ -191,3 +191,77 @@ test('dispatch from an update listener completes synchronously before returning'
     editor.dispose();
   }
 });
+
+test('an updating ancestor defers command propagation throughout listener notification', () => {
+  const parent = createEditor();
+  const child = createEditor({ parentEditor: parent });
+  const command = createCommand();
+  const trace: string[] = [];
+  try {
+    parent.registerCommand(
+      command,
+      () => {
+        trace.push('parent command');
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR
+    );
+    parent.registerUpdateListener(() => {
+      trace.push('listener start');
+      expect(parent._updating).toBe(true);
+      trace.push(`returned:${child.dispatchCommand(command, undefined)}`);
+      trace.push('listener end');
+    });
+    parent.update(
+      () => {
+        $getRoot().append($createParagraphNode().append($createTextNode('x')));
+      },
+      { discrete: true }
+    );
+    expect(trace).toEqual([
+      'listener start',
+      'returned:false',
+      'listener end',
+      'parent command',
+    ]);
+    expect(parent._updating).toBe(false);
+  } finally {
+    child.dispose();
+    parent.dispose();
+  }
+});
+
+test('onUpdate callbacks retain the updating phase through ancestor deferral', () => {
+  const parent = createEditor();
+  const child = createEditor({ parentEditor: parent });
+  const command = createCommand();
+  const trace: string[] = [];
+  try {
+    parent.registerCommand(
+      command,
+      () => {
+        trace.push('parent command');
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR
+    );
+    parent.update(
+      () => {
+        $getRoot().append($createParagraphNode().append($createTextNode('x')));
+      },
+      {
+        discrete: true,
+        onUpdate: () => {
+          expect(parent._updating).toBe(true);
+          trace.push(`returned:${child.dispatchCommand(command, undefined)}`);
+          trace.push('callback end');
+        },
+      }
+    );
+    expect(trace).toEqual(['returned:false', 'callback end', 'parent command']);
+    expect(parent._updating).toBe(false);
+  } finally {
+    child.dispose();
+    parent.dispose();
+  }
+});
