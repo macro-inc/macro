@@ -5,6 +5,7 @@ compatibility protocol. Keep model operations in the native adapter and DOM
 selection movement in the injected view callbacks.
 
 - Keep constructors pure JS and allocate native references lazily.
+- Read selection nodes, text and direction from the acknowledged JS graph with injected caret algorithms; never allocate references or invoke native queries from getters.
 - Inject the unchanged table package's context-free factory and guard; never import its runtime into the core.
 - Keep captured selection identity separate for every editor, version and native selection id.
 - Keep frozen published selections immutable; synchronize detached read-scope clones without granting model write authority.
@@ -17,7 +18,7 @@ selection movement in the injected view callbacks.
 ## Checks
 
 Run the package TypeScript check and unchanged upstream selection unit oracle.
-Constructor tests exercise real JS selection instances without a replacement model.
+Constructor tests exercise real JS selection instances without a replacement model. Read tests compare the owned classes against real upstream nodes across point pairs and frozen read scopes; every native boundary function throws if called.
 Native acceptance requires the actual injected bridge; source-model evidence is separate.
 
 Run the unchanged 65-case oracle with `LEXICAL_SELECTION_UPSTREAM_ROOT=/path/to/pinned/source bun src/selection/tests/run-oracle.ts` from the package. It preserves the original unit configuration, pins all four spec hashes and requires exactly 65 passing assertions. Results default to the temporary directory under lexical-selection-oracle.

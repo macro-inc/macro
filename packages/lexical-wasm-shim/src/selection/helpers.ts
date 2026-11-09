@@ -4,12 +4,15 @@
  */
 import type {
   BaseSelection,
+  CaretRange,
   EditorState,
   ElementNode,
   LexicalEditor,
   LexicalNode,
   LineBreakNode,
+  NodeCaret,
   NodeKey,
+  PointCaret,
   PointType,
   TextFormatType,
   TextNode,
@@ -482,4 +485,101 @@ export function adjustPointOffsetForMergedSibling(
   } else if (point.offset > target.getIndexWithinParent()) {
     point.set(point.key, point.offset - 1, 'element');
   }
+}
+
+export function $getNodesFromCaretRangeCompat(
+  // getNodes returned nodes in document order
+  range: CaretRange<'next'>
+): LexicalNode[] {
+  const { caret, isElementNode: $isElementNode } = getSelectionRuntime();
+  const {
+    $isChildCaret,
+    $isSiblingCaret,
+    $getChildCaret,
+    $getAdjacentChildCaret,
+    $normalizeCaret,
+    $isTextPointCaret,
+  } = caret;
+  const nodes: LexicalNode[] = [];
+  const [beforeSlice, afterSlice] = range.getTextSlices();
+  if (beforeSlice) {
+    nodes.push(beforeSlice.caret.origin);
+  }
+  const seenAncestors = new Set<ElementNode>();
+  const seenElements = new Set<ElementNode>();
+  for (const caret of range) {
+    if ($isChildCaret(caret)) {
+      // Emulate the leading under-selection behavior of getNodes by
+      // ignoring the 'enter' of any ElementNode until we've seen a
+      // SiblingCaret
+      const { origin } = caret;
+      if (nodes.length === 0) {
+        seenAncestors.add(origin);
+      } else {
+        seenElements.add(origin);
+        nodes.push(origin);
+      }
+    } else {
+      const { origin } = caret;
+      if (!$isElementNode(origin) || !seenElements.has(origin)) {
+        nodes.push(origin);
+      }
+    }
+  }
+  if (afterSlice) {
+    nodes.push(afterSlice.caret.origin);
+  }
+  // Emulate the trailing underselection behavior when the last offset of
+  // an element is selected
+  if (
+    $isSiblingCaret(range.focus) &&
+    $isElementNode(range.focus.origin) &&
+    range.focus.getNodeAtCaret() === null
+  ) {
+    for (
+      let reverseCaret: null | NodeCaret<'previous'> = $getChildCaret(
+        range.focus.origin,
+        'previous'
+      );
+      $isChildCaret(reverseCaret) &&
+      seenAncestors.has(reverseCaret.origin) &&
+      !reverseCaret.origin.isEmpty() &&
+      reverseCaret.origin.is(nodes[nodes.length - 1]);
+      reverseCaret = $getAdjacentChildCaret(reverseCaret)
+    ) {
+      seenAncestors.delete(reverseCaret.origin);
+      nodes.pop();
+    }
+  }
+  while (nodes.length > 1) {
+    const lastIncludedNode = nodes[nodes.length - 1];
+    if ($isElementNode(lastIncludedNode)) {
+      if (
+        seenElements.has(lastIncludedNode) ||
+        lastIncludedNode.isEmpty() ||
+        seenAncestors.has(lastIncludedNode)
+      ) {
+        // fall through to break
+      } else {
+        nodes.pop();
+        continue;
+      }
+    }
+    break;
+  }
+  if (nodes.length === 0 && range.isCollapsed()) {
+    // Emulate the collapsed behavior of getNodes by returning the descendant
+    const normCaret = $normalizeCaret(range.anchor);
+    const flippedNormCaret = $normalizeCaret(range.anchor.getFlipped());
+    const $getCandidate = (caret: PointCaret): LexicalNode | null =>
+      $isTextPointCaret(caret) ? caret.origin : caret.getNodeAtCaret();
+    const node =
+      $getCandidate(normCaret) ||
+      $getCandidate(flippedNormCaret) ||
+      (range.anchor.getNodeAtCaret()
+        ? normCaret.origin
+        : flippedNormCaret.origin);
+    nodes.push(node);
+  }
+  return nodes;
 }
