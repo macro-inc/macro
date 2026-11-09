@@ -488,7 +488,10 @@ export const createAppViteConfig = (
         ...localDevServer(process.env),
         cors: true,
         watch: {
-          ignored: /(^|[\\/])target([\\/]|$)/,
+          ignored: [
+            /(^|[\\/])target([\\/]|$)/,
+            /[\\/]tauri[\\/](?:.*[\\/])?(?:build|\.gradle|\.tauri)(?:[\\/]|$)/,
+          ],
         },
         fs: {
           allow: [
