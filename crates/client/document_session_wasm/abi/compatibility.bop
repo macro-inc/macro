@@ -210,6 +210,7 @@ union CompatHostCall {
   4 -> struct CompatHostPublicExport { ForeignHookCall call; }
   5 -> struct CompatHostSerializedExport { ForeignHookCall call; }
   6 -> struct CompatHostCreation { CompatCreationStage stage; }
+  7 -> struct CompatHostReconcile { CompatReconcileStage stage; }
 }
 // Apply the sparse acknowledged delta before reading nodes or dispatching JS.
 struct CompatHostRequest {
@@ -243,6 +244,18 @@ union CompatHostResult {
   5 -> struct CompatHostSerializedExportAck { ForeignSerializedExportAck ack; }
   6 -> struct CompatHostCreationAck { CompatCreationAck ack; }
   7 -> struct CompatHostThrown { ForeignOpaqueValue error; }
+  8 -> struct CompatHostReconcileAck { CompatReconcileAck ack; }
+}
+// Reconcile the real pending JS state before native admission/freeze. A native
+// committed receipt is too late to authorize derived cache writes.
+struct CompatReconcileStage {
+  uint32 stageId; uint64 previousVersion; uint64 nextVersion;
+}
+// Root strings remain JS-instance-owned opaque data; never encode them as UTF-16
+// in per-key acknowledgements. Native operations carry bounded derived fields.
+struct CompatReconcileAck {
+  uint32 stageId; CompatCaptureLeases leases; CompatBatchOperation[] operations;
+  ForeignOpaqueValuePatch[] valuePatches;
 }
 struct CompatHostReply { uint32 hostSlot; uint64 scopeId; CompatHostResult result; }
 
