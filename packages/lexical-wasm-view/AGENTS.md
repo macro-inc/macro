@@ -29,6 +29,9 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Preserve the production lexical/@lexical compatibility API over Rust; native optimizations must retain existing JS node hooks and plugins.
 - Retarget copied DOM code from Lexical 0.45.0; preserve its MIT notice and pin.
 - Keep HTML import and code highlighting off the startup path.
+- Publish dirty code block ranges into retained native Highlight sets; do not rebuild other blocks' ranges on an edit.
+- Use CommitInfo sparse mutations for native geometry and grid invalidation; measure dirty comment blocks and ResizeObserver-moved anchors, and rebuild table rows only while rowspan carries change.
+- Read maintained Mirror.isEmpty through EditorView.isEmpty for blank paragraph/watermark status; do not scan root children on commits.
 - Use mountLocalSessionView for local composers and read-only views; keep transport, durability and chatter disabled and seed before importing content.
 - Construct native helper views synchronously after the shared engine resource is ready and keep close asynchronous; the compat adapter binds the actual setRootElement root on the same core/session.
 - Manage terminal placeholder line breaks only on block elements; inline links and marks keep their original children.
@@ -45,6 +48,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 ## Checks
 
 - `bun run check`, `bun run test`, `bun run test:browser`
+- `commit-work.browser.e2e.ts` counts real mark measurements and native Highlight range mutations with 8/128 comment/table/code groups, and checks downstream anchors after a block resizes; table observer tests cover merged rows and 8/256-row edit work.
 - `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing, Enter, and successive DOM-first characters against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
 - Compare paste against the app plugin configuration, including trailingParagraphPlugin, and the external Markdown export; keep raw model and DOM evidence even when text matches.

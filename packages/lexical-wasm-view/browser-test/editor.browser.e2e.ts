@@ -17,6 +17,25 @@ declare global {
       };
     };
     fixture: {
+      commitWork(size: number): Promise<{
+        replacementLast: number | undefined;
+        replacementActual: number;
+        rebound: boolean;
+        reboundTop: number | undefined;
+        reboundActual: number;
+        size: number;
+        commentReads: number;
+        commentTop: number | undefined;
+        actualTop: number;
+        tableWrites: number;
+        selectionIntact: boolean;
+        codeRangeInputs: number;
+        retained: boolean;
+        shiftedReads: number;
+        movedLast: number | undefined;
+        actualLast: number;
+        empty: boolean | null;
+      }>;
       render: {
         expandingDecorator(expanded: boolean): void;
         createImage(): void;

@@ -116,6 +116,27 @@ export function createCommentLayout() {
     const commentMargin = md.commentMargin;
     if (!commentMargin) return;
 
+    if (!md.editor && md.nativeRuntime) {
+      const geometry = md.nativeRuntime.view.observeMarkGeometry<MarkId>(
+        commentMargin,
+        (id, top) => setMarkLocationTops(id, top)
+      );
+      createEffect(() => {
+        const marks = new Map<MarkId, HTMLElement[]>();
+        for (const id in commentState.marks) {
+          const mark = commentState.marks[id];
+          if (mark)
+            marks.set(
+              mark.id,
+              Object.values(mark.markNodes).filter((el) => !!el)
+            );
+        }
+        untrack(() => geometry.setMarks(marks));
+      });
+      onCleanup(() => geometry.dispose());
+      return;
+    }
+
     // Measure marks against the margin itself: it scrolls with the document,
     // so the offsets hold at any scroll position without tracking scrollTop.
     const updateMarkPositions = () => {
@@ -161,12 +182,6 @@ export function createCommentLayout() {
         registerInternalLayoutShiftListener(md.editor, updateMarkPositions),
         registerEditorWidthObserver(md.editor, updateMarkPositions)
       );
-    } else if (md.nativeRuntime) {
-      const view = md.nativeRuntime.view;
-      onCleanup(view.onCommit(throttledUpdate));
-      // Native commits move anchors; embeds and column changes also resize
-      // the body between commits. Measure both without querying model state.
-      marginResizeObserver.observe(view.root);
     }
   });
 
