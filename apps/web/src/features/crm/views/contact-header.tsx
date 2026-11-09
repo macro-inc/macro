@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isMobile } from '@core/mobile/isMobile';
 import { readablePhone } from '@core/util/phone';
@@ -55,7 +56,7 @@ function PhonePill(props: { phone: string }) {
       fallback={
         <a
           href={href()}
-          aria-label={`Call ${number()}`}
+          aria-label={t('contactPhones.callPhone', { phone: number() })}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           <PhoneIcon class="size-3" />
@@ -70,10 +71,10 @@ function PhonePill(props: { phone: string }) {
         </Badge>
         <a
           href={href()}
-          aria-label={`Call ${number()}`}
+          aria-label={t('contactPhones.callPhone', { phone: number() })}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
-          Call
+          {t('contactPhones.call')}
         </a>
       </span>
     </Show>
@@ -96,7 +97,9 @@ function ContactPhones(props: { contactId: string }) {
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           <PhoneIcon class="size-3" />
-          {numbers().length ? 'Edit phones' : 'Add phone'}
+          {numbers().length
+            ? t('contactPhones.editPhones')
+            : t('contactPhones.addPhone')}
         </button>
       </Show>
       <Show when={editing()}>
