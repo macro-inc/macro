@@ -13,7 +13,6 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
         table::register_table(builder, &table::TableConfig::default()),
         peer,
     )
-
 }
 
 /// Install editing commands without registering nodes or allocating node identities.
@@ -37,7 +36,13 @@ pub fn with_session_plugins_with_id_state(
 }
 
 pub(super) static ID: StateKey<Option<String>> = StateKey::new("id", |value| {
-    value.and_then(serde_json::Value::as_str).map(str::to_owned)
+    // Keep the standalone String key's empty/missing serialization contract.
+    Some(
+        value
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+    )
 });
 #[derive(Clone, Default)]
 struct NodeIdIndex {
