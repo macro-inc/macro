@@ -72,11 +72,12 @@ impl Transaction<'_> {
             return self.insert_text_at(slot, &text);
         }
         let first_block_writable = self.is_writable(first_block);
-        let (block, index) = self.split_selection_boundary(slot)?;
+        let block = first_block;
         let blocks = nodes
             .iter()
             .any(|key| (self.is_element(*key) || self.is_decorator(*key)) && !self.is_inline(*key));
         if self.has_language_field(block) || !blocks {
+            let (_, index) = self.split_selection_boundary(slot)?;
             self.splice(block, index, 0, nodes)?;
             let last = *nodes
                 .last()
