@@ -88,3 +88,5 @@ Set `EDITOR_INPUT_PARITY_DIST` and `EDITOR_INPUT_PARITY_REPORT` for isolated out
 Admit the current DOM range before native copy/cut export when selectionchange has not arrived; update the submitted-selection cache, preserve explicit node/table selections and never export from a stale collapsed model range.
 
 Use the configured HTML importer for foreign namespaces, malformed JSON or non-array clipboard nodes; preserve matching-namespace JSON priority.
+
+Pair submitted DOM selections with their acknowledged model selection when deduplicating events; a programmatic model move must not suppress a returning DOM caret.
