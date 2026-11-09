@@ -90,7 +90,9 @@ Outlook (Microsoft Graph) outbound adapters.
   through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
-  through `request`/`conditional_request` rather than the raw client. Use
+  through `request`/`conditional_request` rather than the raw client. A GET
+  whose 404 means "there is none" (a contact without a photo) uses
+  `optional_request`, so the 404 is not a span error. Use
   `graph_request` only when a caller must branch on the Graph status, error
   code, or request id; the others drop them.
 - `outlook.graph_request` is the Graph telemetry contract the Outlook sync
