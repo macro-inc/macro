@@ -14,7 +14,7 @@ import type {
   TextFormatType,
   TextNode,
 } from 'lexical';
-import { writeSelection } from './codec';
+import { validateSelectionClass, writeSelection } from './codec';
 import { NodeSelection } from './node';
 import { $createPoint } from './point';
 import { RangeSelection } from './range';
@@ -83,6 +83,7 @@ export function $setSelection(selection: BaseSelection | null): void {
     throw new Error('Cannot use method in read-only mode.');
   }
   if (selection !== null) {
+    validateSelectionClass(selection);
     if (process.env.NODE_ENV !== 'production' && Object.isFrozen(selection)) {
       throw new Error(
         '$setSelection called on frozen selection object. Ensure selection is cloned before passing in.'

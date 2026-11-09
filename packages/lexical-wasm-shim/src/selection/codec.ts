@@ -1,3 +1,4 @@
+import type { TableSelection } from '@lexical/table';
 import {
   CompatOperation,
   CompatPointKind,
@@ -39,6 +40,7 @@ export function bindSelectionReference(
   if (reference.selectionId === 0) {
     throw new Error('Native selection references must have a nonzero identity');
   }
+  validateSelectionClass(selection);
   const runtime = getSelectionRuntime();
   let cache = captures.get(runtime);
   if (cache === undefined) {
@@ -120,12 +122,30 @@ function decodePoint(point: ICompatPoint): PointType {
   );
 }
 
+function updatePoint(target: PointType, source: ICompatPoint): void {
+  const decoded = decodePoint(source);
+  target.key = decoded.key;
+  target.offset = decoded.offset;
+  target.type = decoded.type;
+}
+
+export function validateSelectionClass(selection: BaseSelection): void {
+  if (
+    !(selection instanceof RangeSelection) &&
+    !(selection instanceof NodeSelection) &&
+    !getSelectionRuntime().isTableSelection(selection)
+  ) {
+    throw new Error('Unsupported selection class');
+  }
+}
+
 export function selectionToSnapshot(
   selection: BaseSelection | null
 ): CompatSelectionData {
   if (selection === null) {
     return CompatSelectionData.fromCompatNoSelection({});
   }
+  validateSelectionClass(selection);
   const runtime = getSelectionRuntime();
   const reference = runtime.selectionRef(selection);
   if (reference === undefined) {
@@ -156,6 +176,14 @@ export function selectionToSnapshot(
       keys: Array.from(selection._nodes, (key) => runtime.nativeKey(key)),
     });
   }
+  if (runtime.isTableSelection(selection)) {
+    return CompatSelectionData.fromCompatTableSelection({
+      ...common,
+      tableKey: runtime.nativeKey(selection.tableKey),
+      anchor: encodePoint(selection.anchor),
+      focus: encodePoint(selection.focus),
+    });
+  }
   throw new Error('Unsupported selection class');
 }
 
@@ -173,9 +201,18 @@ export function selectionFromSnapshot(
     ?.get(identity(record.reference))
     ?.deref();
   if (existing !== undefined && Object.isFrozen(existing)) {
+    if (
+      (data.discriminator === 2 && !(existing instanceof RangeSelection)) ||
+      (data.discriminator === 3 && !(existing instanceof NodeSelection)) ||
+      (data.discriminator === 4 && !runtime.isTableSelection(existing))
+    ) {
+      throw new Error(
+        'Native selection changed class for an existing reference'
+      );
+    }
     return existing;
   }
-  let selection: RangeSelection | NodeSelection;
+  let selection: RangeSelection | NodeSelection | TableSelection;
   if (data.discriminator === 2) {
     const range = data.value;
     if (existing !== undefined && !(existing instanceof RangeSelection)) {
@@ -191,21 +228,14 @@ export function selectionFromSnapshot(
         range.format,
         fromUtf16(range.style)
       );
-    for (const [target, source] of [
-      [selection.anchor, range.anchor],
-      [selection.focus, range.focus],
-    ] satisfies [PointType, ICompatPoint][]) {
-      const decoded = decodePoint(source);
-      target.key = decoded.key;
-      target.offset = decoded.offset;
-      target.type = decoded.type;
-    }
+    updatePoint(selection.anchor, range.anchor);
+    updatePoint(selection.focus, range.focus);
     selection.format = range.format;
     selection.style = fromUtf16(range.style);
     selection._cachedIsBackward = range.hasCachedBackward
       ? range.cachedBackward
       : null;
-  } else {
+  } else if (data.discriminator === 3) {
     if (existing !== undefined && !(existing instanceof NodeSelection)) {
       throw new Error(
         'Native selection changed class for an existing reference'
@@ -215,6 +245,16 @@ export function selectionFromSnapshot(
     selection._nodes = new Set(
       data.value.keys.map((key) => runtime.publicKey(key))
     );
+  } else {
+    if (existing !== undefined && !runtime.isTableSelection(existing)) {
+      throw new Error(
+        'Native selection changed class for an existing reference'
+      );
+    }
+    selection = existing ?? runtime.createTableSelection();
+    selection.tableKey = runtime.publicKey(data.value.tableKey);
+    updatePoint(selection.anchor, data.value.anchor);
+    updatePoint(selection.focus, data.value.focus);
   }
   selection.dirty = record.dirty;
   selection._cachedNodes = record.hasCachedNodes
@@ -234,14 +274,19 @@ export function ensureSelectionReference(
   selection: BaseSelection
 ): IForeignSelectionRef {
   const runtime = getSelectionRuntime();
+  validateSelectionClass(selection);
   const existing = runtime.selectionRef(selection);
   if (existing !== undefined) {
     return existing;
   }
-  const operation =
-    selection instanceof RangeSelection
-      ? CompatOperation.CreateRangeSelection
-      : CompatOperation.CreateNodeSelection;
+  let operation: CompatOperation;
+  if (selection instanceof RangeSelection) {
+    operation = CompatOperation.CreateRangeSelection;
+  } else if (selection instanceof NodeSelection) {
+    operation = CompatOperation.CreateNodeSelection;
+  } else {
+    operation = CompatOperation.CreateTableSelection;
+  }
   const reply = runtime.invoke(operation, []);
   const data = reply.value.data;
   if (data.discriminator !== 3) {
