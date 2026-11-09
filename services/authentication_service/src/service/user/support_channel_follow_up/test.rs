@@ -173,15 +173,24 @@ fn sends_the_first_message_that_fits() {
                 mail_provider: MailProvider::Google,
                 ..no_inbox.clone()
             },
-            Some(Path::GoogleWorkInbox("acme.com")),
+            Some(Path::GoogleInbox(Some("acme.com"))),
         ),
         (
             Signals {
                 mail_provider: MailProvider::Google,
                 work_domain: false,
+                ..no_inbox.clone()
+            },
+            Some(Path::GoogleInbox(None)),
+        ),
+        // Someone who started connecting Gmail is asked about that instead.
+        (
+            Signals {
+                mail_provider: MailProvider::Google,
+                gmail_attempted: true,
                 ..no_inbox
             },
-            Some(Path::Personal),
+            Some(Path::GmailTrouble),
         ),
         // Finished, with an inbox.
         (

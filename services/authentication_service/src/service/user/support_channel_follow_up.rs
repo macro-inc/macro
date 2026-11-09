@@ -681,7 +681,9 @@ enum Path<'a> {
     Paid,
     GmailTrouble,
     Outlook,
-    GoogleWorkInbox(&'a str),
+    /// Google hosts their mail and no inbox is connected; the domain when it
+    /// is a work address, `None` for Gmail.
+    GoogleInbox(Option<&'a str>),
     Pricing,
     Phone,
     Team(&'a str),
@@ -713,8 +715,10 @@ fn choose(s: &Signals) -> Option<Path<'_>> {
     if s.finished_setup && !s.inbox_connected {
         match s.mail_provider {
             MailProvider::Microsoft if s.outlook_offered => return Some(Path::Outlook),
-            MailProvider::Google if s.work_domain => return Some(Path::GoogleWorkInbox(&s.domain)),
-            MailProvider::Microsoft | MailProvider::Google | MailProvider::Other => {}
+            MailProvider::Google => {
+                return Some(Path::GoogleInbox(s.work_domain.then_some(&s.domain)));
+            }
+            MailProvider::Microsoft | MailProvider::Other => {}
         }
     }
     if s.opened_checkout {
@@ -779,10 +783,17 @@ fn message(user: &str, path: &Path<'_>) -> String {
         Path::Outlook => "Macro works with Outlook, it's just not in setup yet. You can add it \
              from Settings → Email → Connect an Outlook account."
             .to_owned(),
-        Path::GoogleWorkInbox(domain) => format!(
-            "Your {domain} email isn't in Macro yet. You can add it from Settings → Email → \
-             Connect a Google Workspace account."
-        ),
+        Path::GoogleInbox(domain) => {
+            let mailbox = match domain {
+                Some(domain) => format!("{domain} email"),
+                None => "Gmail".to_owned(),
+            };
+            format!(
+                "Your {mailbox} isn't in Macro yet. Was that on purpose, or did the permissions \
+                 screen put you off? I can tell you what Macro does with your email, and you \
+                 can add it any time from Settings → Email."
+            )
+        }
         Path::Pricing => "Still deciding on a plan? Want me to set you up with a free month of \
              Pro to try it properly?"
             .to_owned(),

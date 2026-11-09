@@ -108,12 +108,17 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   the solo ones.
 - Connected tools are the Pipedream and Connect rows; Notion, Linear and Slack
   share one message when several are connected, and Slack's connector is saved
-  as `slack_v2`. Apps connected through a native MCP server are not seen.
+  as `slack_v2`. Apps connected through a native MCP server are not seen:
+  that store decrypts credentials, and this service holds no key for it.
 - Native phone signups never complete `user_onboarding`, so they always count
   as still in setup and can only get the setup messages. iOS registers a push
   device at sign-in; Android 13 and later does not until notifications are
-  allowed, so those signups get nothing. A Google sign-up that leaves the
-  Gmail box unticked never calls `/link/gmail`, so it is not a Gmail attempt.
+  allowed, so those signups get nothing.
+- Three messages cover a missing inbox, and only one can fit: Gmail trouble
+  for someone who started `/link/gmail` and never finished, the Google inbox
+  message for Google-hosted mail (Gmail or a work address) nobody tried to
+  connect, and Outlook. A Google sign-up that leaves the Gmail box unticked
+  never calls `/link/gmail`, so it gets the Google inbox message.
 - The post reuses the row's message id through `post_from_event`, so a retry
   never posts twice. Events: `support_follow_up_sent` (`path`,
   `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).
