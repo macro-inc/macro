@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automation ops</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --ok: #2f9e44; --fail: #e03131; --run: #1c7ed6; --wait: #e67700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27;
+      --ok: #69db7c; --fail: #ff8787; --run: #74c0fc; --wait: #ffc078; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  button { font: inherit; padding: 5px 10px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; white-space: nowrap; font-size: 13px; }
+  button.quiet { background: var(--chip); color: var(--text); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 0 16px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  .kpi b { display: block; font-size: 24px; font-weight: 600; }
+  .kpi span { color: var(--muted); font-size: 12px; }
+  .kpi.bad b { color: var(--fail); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; padding: 16px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .panel.attention { grid-column: 1 / -1; border-color: var(--fail); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .name { font-weight: 550; word-break: break-word; }
+  .meta { color: var(--muted); font-size: 12px; word-break: break-word; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+  .dot.ok, .run.ok { background: var(--ok); }
+  .dot.fail, .run.fail { background: var(--fail); }
+  .dot.running { background: var(--run); }
+  .dot.waiting { background: var(--wait); }
+  .runs { display: flex; gap: 3px; margin-top: 4px; }
+  .run { width: 8px; height: 14px; border-radius: 2px; background: var(--line); }
+  .buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Automation ops</h1>
+</header>
+<p class="status" id="status">Loading…</p>
+<section class="kpis" id="kpis"></section>
+<main class="grid">
+  <section class="panel attention" id="attention-panel" hidden><h2>Needs attention</h2><ul id="attention"></ul></section>
+  <section class="panel"><h2>Routines</h2><ul id="routines"></ul></section>
+  <section class="panel"><h2>Agent sessions</h2><ul id="sessions"></ul></section>
+</main>
+
+<script type="text/macro" id="ops" lang="ts">
+  const WEEK = 7 * 86_400_000;
+
+  /** A short reason from a run's result, when it carries one. */
+  function reason(result: { [key: string]: unknown }): string | null {
+    for (const key of ['error', 'message', 'reason']) {
+      const value = result[key];
+      if (typeof value === 'string' && value.trim()) return value.slice(0, 160);
+    }
+    return null;
+  }
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const [routines, page] = await Promise.all([
+      macro.routines.list({ includeEvents: true }),
+      macro.workspace.page({ includeTypes: ['agent_session'], limit: 60 }),
+    ]);
+
+    const sessions = page.items.flatMap((item) => {
+      if (item.type !== 'agent_session') return [];
+      const data = item.snapshot.data;
+      if (data.archivedAt) return [];
+      return [{
+        id: item.id,
+        name: data.name || 'Untitled session',
+        state: data.turnState ?? data.status,
+        source: data.source ?? 'user',
+        harness: data.harness,
+        updatedAt: data.updatedAt,
+      }];
+    });
+    const sessionNames = new Map(sessions.map((session) => [session.id, session.name]));
+
+    const since = Date.now() - WEEK;
+    const rows = await Promise.all(routines.map(async (routine) => {
+      const history = await routine.history();
+      const runs = history
+        .map((run) => ({
+          at: run.record.end_time,
+          ok: run.record.is_success,
+          reason: reason(run.record.result),
+          // A run that started an agent session names it as its resource.
+          session: run.record.resource_id ? (sessionNames.get(run.record.resource_id) ?? null) : null,
+        }))
+        .sort((a, b) => b.at.localeCompare(a.at));
+      const week = runs.filter((run) => new Date(run.at).getTime() >= since);
+      return {
+        id: routine.id,
+        name: await routine.name(),
+        enabled: await routine.enabled(),
+        nextRunAt: (await routine.nextRunAt()) ?? null,
+        recent: runs.slice(0, 14).reverse().map((run) => run.ok),
+        last: runs[0] ?? null,
+        weekRuns: week.length,
+        weekFailures: week.filter((run) => !run.ok).length,
+      };
+    }));
+
+    return { routines: rows, sessions };
+  }
+</script>
+
+<script type="text/macro" id="routineAction" lang="ts">
+  export default async function (
+    { id, action }: { id: string; action: 'run' | 'pause' | 'resume' },
+    { macro }: ProgramContext,
+  ) {
+    const routine = macro.routines.byId(id);
+    if (action === 'run') await routine.execute();
+    else await routine.setEnabled(action === 'resume');
+    return { id, action };
+  }
+</script>
+
+<script type="text/macro" id="archiveSession" lang="ts">
+  export default async function ({ id }: { id: string }, { macro }: ProgramContext) {
+    await macro.agentSessions.byId(id).archive();
+    return { id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { archiveSession, ops, routineAction } from 'macro:programs';
+
+  type Ops = Awaited<ReturnType<typeof ops>>;
+  type Routine = Ops['routines'][number];
+  type Session = Ops['sessions'][number];
+
+  const status = document.getElementById('status')!;
+  const troubled = ['failed', 'blocked', 'disconnected'];
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function when(at: string) {
+    return new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function sessionDot(state: string) {
+    if (troubled.includes(state)) return 'dot fail';
+    if (state === 'running' || state === 'starting') return 'dot running';
+    if (state === 'waiting' || state === 'stopping') return 'dot waiting';
+    return 'dot ok';
+  }
+
+  function button(label: string, quiet: boolean, act: () => Promise<unknown>) {
+    const node = el('button', quiet ? 'quiet' : '', label);
+    node.addEventListener('click', async () => {
+      node.disabled = true;
+      try {
+        await act();
+      } catch (error) {
+        status.textContent = `${label} failed: ${String(error)}`;
+      }
+      await reload();
+    });
+    return node;
+  }
+
+  function routineRow(routine: Routine, showReason: boolean) {
+    const li = el('li');
+    const dot = el('span', routine.last ? (routine.last.ok ? 'dot ok' : 'dot fail') : 'dot');
+    const body = el('div', 'grow');
+    body.append(el('div', 'name', routine.name));
+    const next = routine.enabled
+      ? (routine.nextRunAt ? `next ${when(routine.nextRunAt)}` : 'runs on events')
+      : 'paused';
+    const parts = [next, `${routine.weekRuns} runs this week`];
+    if (routine.last?.session) parts.push(`last started “${routine.last.session}”`);
+    body.append(el('div', 'meta', parts.join(' · ')));
+    if (showReason && routine.last && !routine.last.ok) {
+      body.append(el('div', 'meta', `Failed ${when(routine.last.at)}${routine.last.reason ? `: ${routine.last.reason}` : ''}`));
+    }
+    const runs = el('div', 'runs');
+    for (const ok of routine.recent) runs.append(el('span', ok ? 'run ok' : 'run fail'));
+    if (routine.recent.length) body.append(runs);
+    const buttons = el('div', 'buttons');
+    buttons.append(
+      button('Run now', false, () => routineAction({ id: routine.id, action: 'run' })),
+      button(routine.enabled ? 'Pause' : 'Resume', true, () =>
+        routineAction({ id: routine.id, action: routine.enabled ? 'pause' : 'resume' })),
+    );
+    li.append(dot, body, buttons);
+    return li;
+  }
+
+  function sessionRow(session: Session) {
+    const li = el('li');
+    const body = el('div', 'grow');
+    body.append(el('div', 'name', session.name));
+    const origin = session.source === 'routine' ? 'from a routine' : session.source === 'agent' ? 'from an agent' : '';
+    body.append(el('div', 'meta', [session.state, session.harness, origin, when(session.updatedAt)].filter(Boolean).join(' · ')));
+    li.append(el('span', sessionDot(session.state)), body,
+      button('Archive', true, () => archiveSession({ id: session.id })));
+    return li;
+  }
+
+  function fill(id: string, rows: HTMLElement[], empty: string) {
+    document.getElementById(id)!.replaceChildren(...(rows.length ? rows : [el('li', 'empty', empty)]));
+  }
+
+  function render(data: Ops) {
+    const runs = data.routines.reduce((sum, routine) => sum + routine.weekRuns, 0);
+    const failures = data.routines.reduce((sum, routine) => sum + routine.weekFailures, 0);
+    const active = data.sessions.filter((session) => session.state === 'running' || session.state === 'starting').length;
+    const stuck = data.sessions.filter((session) => troubled.includes(session.state));
+    const failing = data.routines.filter((routine) => routine.last && !routine.last.ok);
+    const kpis: [string, string, boolean][] = [
+      [String(runs), 'routine runs this week', false],
+      [runs ? `${Math.round(((runs - failures) / runs) * 100)}%` : '—', 'succeeded', failures > 0],
+      [String(active), 'sessions working now', false],
+      [String(stuck.length + failing.length), 'need attention', stuck.length + failing.length > 0],
+    ];
+    document.getElementById('kpis')!.replaceChildren(...kpis.map(([value, label, bad]) => {
+      const box = el('div', bad ? 'kpi bad' : 'kpi');
+      box.append(el('b', '', value), el('span', '', label));
+      return box;
+    }));
+
+    const attention = [...failing.map((routine) => routineRow(routine, true)), ...stuck.map(sessionRow)];
+    document.getElementById('attention-panel')!.hidden = attention.length === 0;
+    fill('attention', attention, '');
+    fill('routines', data.routines.map((routine) => routineRow(routine, false)), 'No routines yet.');
+    fill('sessions', data.sessions.slice(0, 15).map(sessionRow), 'No open agent sessions.');
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      const data = await ops();
+      render(data);
+      status.textContent = `${data.routines.length} routines · ${data.sessions.length} open sessions`;
+    } catch (error) {
+      status.textContent = `Couldn't load automation: ${String(error)}`;
+    }
+  }
+
+  // Routines emit no live events; sessions do, and a routine run starts one.
+  on([
+    'agent_session.opened', 'agent_session.renamed', 'agent_session.turn_started',
+    'agent_session.turn_ended', 'agent_session.settled', 'agent_session.deleted',
+  ], reload);
+  await reload();
+</script>
+</body>
+</html>
