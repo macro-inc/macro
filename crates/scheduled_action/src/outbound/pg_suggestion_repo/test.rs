@@ -43,8 +43,23 @@ async fn a_generation_starts_once_and_records_how_it_ended(pool: PgPool) {
     let repo = PgSuggestionRepo::new(pool);
     let a = user(USER_A);
     assert_eq!(repo.generation(&a).await.unwrap(), None);
-    assert!(repo.begin(&a, Utc::now()).await.unwrap());
-    assert!(!repo.begin(&a, Utc::now()).await.unwrap());
+    let stale = |now: DateTime<Utc>| now - chrono::TimeDelta::minutes(10);
+    let now = Utc::now();
+    assert!(repo.begin(&a, now, stale(now)).await.unwrap());
+    // Running, and not stale yet.
+    assert!(!repo.begin(&a, now, stale(now)).await.unwrap());
+    // Still running twenty minutes later: its process stopped, so it starts again.
+    let later = now + chrono::TimeDelta::minutes(20);
+    assert!(repo.begin(&a, later, stale(later)).await.unwrap());
+    assert_eq!(
+        repo.generation(&a)
+            .await
+            .unwrap()
+            .unwrap()
+            .started_at
+            .timestamp(),
+        later.timestamp()
+    );
     assert_eq!(
         repo.generation(&a).await.unwrap().unwrap().status,
         GenerationStatus::Generating
@@ -53,8 +68,9 @@ async fn a_generation_starts_once_and_records_how_it_ended(pool: PgPool) {
     let stored = repo.generation(&a).await.unwrap().unwrap();
     assert_eq!(stored.status, GenerationStatus::Failed);
     assert!(stored.finished_at.is_some());
-    // Generation still runs only once.
-    assert!(!repo.begin(&a, Utc::now()).await.unwrap());
+    // A finished generation never runs again, however long ago.
+    let much_later = later + chrono::TimeDelta::days(30);
+    assert!(!repo.begin(&a, much_later, stale(much_later)).await.unwrap());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
