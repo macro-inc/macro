@@ -12,7 +12,9 @@ its tests exercise actual selection/parsing, parallel completion, batched node
 replacement, partial failures and deleted targets, not remote task creation
 or host authorization. TaskList DOM cases use the mounted jsdom host to check
 unmanaged toolbar identity through committed child edits, HTML export and
-removal. Their toolbar sentinel is host-owned test content, not the real
+removal, list-kind DOM replacement and ordered-start updates that preserve
+managed item identity. These exercise the inherited ListNode DOM hooks in the
+mounted TaskList subclass. Their toolbar sentinel is host-owned test content, not the real
 controls UI. Legacy list cases explicitly dirty an imported node and run the
 production controls transform; bare JSON parsing does not apply factory
 replacements. Native/custom-class hosting remains unverified. HEIC conversion and transport are boundary stubs in media unit cases;
