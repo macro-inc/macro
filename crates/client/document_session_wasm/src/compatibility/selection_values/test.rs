@@ -507,3 +507,73 @@ fn detached_snapshot_reemits_raw_metadata_and_full_cached_references() -> Result
     assert_eq!(ledger.get(reference)?.encoded(), data);
     Ok(())
 }
+
+#[test]
+fn write_barrier_clears_only_matching_active_cache_without_changing_points(
+) -> Result<(), BoundaryError> {
+    let mut ledger = SelectionValues::new(7);
+    let value = Selection::Range(RangeSelection::at_root());
+    let cached = compat::ForeignNodeRef {
+        editor_id: 7,
+        version: 1,
+        key: key(NodeKey::ROOT),
+        instance_owner_id: 7,
+        class_id: 4,
+        instance_id: 91,
+    };
+    let active = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Active { update: 4 },
+    )?;
+    let other_update = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Active { update: 5 },
+    )?;
+    let frozen = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Active { update: 6 },
+    )?;
+    let detached = ledger.allocate(raw_copy(&value), 1, 4)?;
+    let (_, _, active) = decode(active)?;
+    let (_, _, other_update) = decode(other_update)?;
+    let (_, _, frozen) = decode(frozen)?;
+    for (reference, update) in [(active, 4), (other_update, 5), (frozen, 6), (detached, 4)] {
+        let mut data = ledger.get(reference)?.encoded();
+        if let compat::CompatSelectionData::CompatRangeSelection {
+            has_cached_nodes,
+            cached_nodes,
+            ..
+        } = &mut data
+        {
+            *has_cached_nodes = true;
+            *cached_nodes = vec![cached];
+        }
+        ledger.patch(
+            reference,
+            data,
+            Scope {
+                historical: false,
+                state_version: 1,
+                update,
+                activate: false,
+            },
+        )?;
+    }
+    ledger.finish_update(6, true);
+    ledger.invalidate_active_cache(4);
+    assert_eq!(ledger.get(active)?.cached_nodes, None);
+    assert_eq!(ledger.get(active)?.value, value);
+    assert_eq!(ledger.get(active)?.value.is_dirty(), value.is_dirty());
+    assert_eq!(ledger.get(other_update)?.cached_nodes, Some(vec![cached]));
+    assert_eq!(ledger.get(frozen)?.cached_nodes, Some(vec![cached]));
+    assert_eq!(ledger.get(detached)?.cached_nodes, Some(vec![cached]));
+    assert_eq!(ledger.get(frozen)?.origin, Origin::Frozen);
+    assert_eq!(ledger.get(detached)?.origin, Origin::Detached { update: 4 });
+    Ok(())
+}
