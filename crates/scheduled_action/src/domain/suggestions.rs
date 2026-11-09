@@ -4,8 +4,8 @@
 //! Generation runs once per person, when their inbox connects
 //! ([`RoutineSuggestionApi::generate`]): hidden background agent sessions of
 //! the in-process Macro agent, as the person, following the Draft pattern
-//! (`drafts.rs`), except that their turns are admitted and metered as the
-//! non-billable `RoutineSuggestions`, not billed as agent session usage.
+//! (`drafts.rs`), except that their sessions are opened non-billable
+//! (`SessionBilling::NonBillable`), so their usage is recorded, never billed.
 //! Each session suggests for some of the surfaces ([`SuggestionLayout`]),
 //! reading the person's newest mail and connected
 //! apps as untrusted data, and hands back each suggestion as it has it
@@ -32,7 +32,7 @@ use std::time::Duration;
 
 use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::model::{
-    AgentSessionId, SessionMetering, SessionSource, SessionVisibility,
+    AgentSessionId, SessionBilling, SessionSource, SessionVisibility,
 };
 use agent_session::domain::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineSessionAction,
@@ -835,7 +835,7 @@ where
                     by: action.owner.clone(),
                 },
                 // Unlike a draft's, its turns are metered but never billed.
-                metering: SessionMetering::RoutineSuggestions,
+                billing: SessionBilling::NonBillable,
             })
             .await?;
         self.sessions

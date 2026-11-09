@@ -318,10 +318,9 @@ pub enum SessionVisibility {
     Hidden,
 }
 
-/// What an in-process session's turns are admitted and metered as. Stored as
-/// `agent_session.metering`, set by whoever opens the session and fixed for
-/// its life. A closed set rather than any `AiFeature`, so a caller can only
-/// pick what a session may be metered as.
+/// Whether an in-process session's turns are billed to its owner. Stored as
+/// `agent_session.billing`, set by whoever opens the session and fixed for
+/// its life. Either way the turns are admitted and their usage recorded.
 #[derive(
     Debug,
     Clone,
@@ -336,20 +335,21 @@ pub enum SessionVisibility {
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum SessionMetering {
-    /// The owner's billable agent session usage: every session but the ones
-    /// below, including a routine draft's.
+pub enum SessionBilling {
+    /// Billed as the owner's agent session usage: every session unless its
+    /// opener chose otherwise.
     #[default]
-    AgentSession,
-    /// A routine suggestion session's: metered, never billed.
-    RoutineSuggestions,
+    Billable,
+    /// Recorded but never billed: background work the owner didn't ask for
+    /// turn by turn.
+    NonBillable,
 }
 
-impl SessionMetering {
-    /// Whether this is the default, the owner's billable agent session usage.
+impl SessionBilling {
+    /// Whether this is the default, billed to the owner.
     #[must_use]
-    pub fn is_agent_session(&self) -> bool {
-        *self == Self::AgentSession
+    pub fn is_billable(&self) -> bool {
+        *self == Self::Billable
     }
 }
 
@@ -400,8 +400,8 @@ pub struct CreateAgentSessionParams {
     /// What opened the session, written with the session's row. `Unknown`
     /// writes nothing: an unclaimed warm session has no cause yet.
     pub origin: trigger_context::TriggerOrigin,
-    /// What the session's in-process turns are admitted and metered as.
-    pub metering: SessionMetering,
+    /// Whether the session's in-process turns are billed to its owner.
+    pub billing: SessionBilling,
 }
 
 /// Who or what archived a session.

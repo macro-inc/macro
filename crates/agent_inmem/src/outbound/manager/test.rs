@@ -183,7 +183,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
 
 fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
-        metering: Default::default(),
+        billing: Default::default(),
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         id,
         owner: Owner::User(owner()),
@@ -255,7 +255,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -403,7 +403,7 @@ async fn manager_admission_rejects_turns_without_wedging_the_session() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -505,7 +505,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -664,7 +664,7 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -742,7 +742,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -808,7 +808,7 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -979,10 +979,10 @@ impl crate::domain::mcp::McpToolConnector for RecordingRelease {
     }
 }
 
-/// Run one prompt through a session attached with `metering`, and return
+/// Run one prompt through a session attached with `billing`, and return
 /// what its turn was admitted as and what its engine was asked to meter.
 async fn turn_features(
-    metering: agent_session::domain::model::SessionMetering,
+    billing: agent_session::domain::model::SessionBilling,
 ) -> (Vec<(String, ai_usage::AiFeature)>, Vec<ai_usage::AiFeature>) {
     let repo = InMemoryAgentSessionRepo::new();
     let sessions = AgentSessionServiceImpl::new(
@@ -997,7 +997,7 @@ async fn turn_features(
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
-            metering,
+            billing,
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
@@ -1024,7 +1024,7 @@ async fn turn_features(
     let manager = manager(&repo, engine.clone()).with_admission(admission.clone());
     // What the harness reads off the session row at attach.
     let facts = SessionFacts {
-        metering: sessions.session_metering(id).await.unwrap(),
+        billing: sessions.session_billing(id).await.unwrap(),
         ..facts(id)
     };
     let transport = manager.attach(facts, None).await.unwrap();
@@ -1036,7 +1036,7 @@ async fn turn_features(
         .send_action(
             id,
             Some(owner()),
-            AgentAction::prompt("suggest"),
+            AgentAction::prompt("hello"),
             AgentActionId::mint(),
         )
         .await
@@ -1058,14 +1058,17 @@ async fn turn_features(
 }
 
 #[tokio::test]
-async fn a_suggestion_session_admits_and_meters_its_turns_as_routine_suggestions() {
+async fn a_non_billable_session_admits_and_meters_its_turns_as_non_billable() {
     let (admitted, metered) =
-        turn_features(agent_session::domain::model::SessionMetering::RoutineSuggestions).await;
+        turn_features(agent_session::domain::model::SessionBilling::NonBillable).await;
     assert_eq!(
         admitted,
-        vec![(owner().to_string(), ai_usage::AiFeature::RoutineSuggestions)]
+        vec![(
+            owner().to_string(),
+            ai_usage::AiFeature::NonBillableAgentSession
+        )]
     );
-    assert_eq!(metered, vec![ai_usage::AiFeature::RoutineSuggestions]);
+    assert_eq!(metered, vec![ai_usage::AiFeature::NonBillableAgentSession]);
 }
 
 #[tokio::test]

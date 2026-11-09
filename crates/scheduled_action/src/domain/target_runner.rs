@@ -57,7 +57,7 @@ impl<Sessions: RoutineSessions> RoutineAgents for TargetRunner<Sessions> {
         let prepared = self
             .sessions
             .prepare(PrepareRoutineSession {
-                metering: Default::default(),
+                billing: Default::default(),
                 selection: ValidateRoutineSession {
                     owner: identity.owner.clone(),
                     bot_id,

@@ -30,5 +30,5 @@ export const AiFeature = {
   image_generation: 'image_generation',
   email_focus: 'email_focus',
   web_search: 'web_search',
-  routine_suggestions: 'routine_suggestions',
+  non_billable_agent_session: 'non_billable_agent_session',
 } as const;

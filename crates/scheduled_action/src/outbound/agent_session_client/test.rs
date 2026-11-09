@@ -145,7 +145,7 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
             ..selection()
         };
         let prepare = PrepareRoutineSession {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             selection: selection.clone(),
             session_id: identity.session_id,
@@ -254,7 +254,7 @@ async fn typed_sanitized_domain_errors_are_preserved() {
         let client = AgentSessionClient::new(&server.url, KEY).unwrap();
         let error = client
             .prepare(PrepareRoutineSession {
-                metering: Default::default(),
+                billing: Default::default(),
                 origin: trigger_context::TriggerOrigin::Unknown,
                 selection: selection(),
                 session_id: identity().session_id,
@@ -407,24 +407,24 @@ fn configuration_is_validated_and_secret_header_is_sensitive() {
 }
 
 #[test]
-fn prepare_carries_a_suggestion_sessions_metering_and_older_bodies_default_it() {
-    use agent_session::domain::model::SessionMetering;
+fn prepare_carries_a_non_billable_sessions_billing_and_older_bodies_default_it() {
+    use agent_session::domain::model::SessionBilling;
 
     let identity = identity();
-    let prepare = |metering| PrepareRoutineSession {
-        metering,
+    let prepare = |billing| PrepareRoutineSession {
+        billing,
         origin: trigger_context::TriggerOrigin::Unknown,
         selection: selection(),
         session_id: identity.session_id,
         source: SessionSource::User,
         visibility: SessionVisibility::Hidden,
     };
-    let suggestion = serde_json::to_value(prepare(SessionMetering::RoutineSuggestions)).unwrap();
-    assert_eq!(suggestion["metering"], "routine_suggestions");
+    let suggestion = serde_json::to_value(prepare(SessionBilling::NonBillable)).unwrap();
+    assert_eq!(suggestion["billing"], "non_billable");
     // The default stays off the wire, so a draft's body is what it was.
-    let mut older = serde_json::to_value(prepare(SessionMetering::AgentSession)).unwrap();
-    assert!(older.get("metering").is_none());
-    older.as_object_mut().unwrap().remove("metering");
+    let mut older = serde_json::to_value(prepare(SessionBilling::Billable)).unwrap();
+    assert!(older.get("billing").is_none());
+    older.as_object_mut().unwrap().remove("billing");
     let decoded: PrepareRoutineSession = serde_json::from_value(older).unwrap();
-    assert_eq!(decoded.metering, SessionMetering::AgentSession);
+    assert_eq!(decoded.billing, SessionBilling::Billable);
 }

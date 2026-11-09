@@ -232,7 +232,7 @@ async fn background_sessions_are_never_named_or_retitled() {
     assert!(session.is_background());
     assert!(
         generator
-            .generate_name(&session, "suggest routines")
+            .generate_name(&session, "draft a routine")
             .await
             .unwrap()
             .is_none()

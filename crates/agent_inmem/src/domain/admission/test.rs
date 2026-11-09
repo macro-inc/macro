@@ -35,7 +35,7 @@ async fn unsupported_owners_are_not_substituted_with_system_identity() {
         Owner::Team(macro_uuid::generate_uuid_v7()),
     ] {
         assert_eq!(
-            admit_turn(&admission, &owner, AiFeature::RoutineSuggestions).await,
+            admit_turn(&admission, &owner, AiFeature::NonBillableAgentSession).await,
             Err(AiAdmissionError::Unavailable)
         );
     }
@@ -46,17 +46,17 @@ async fn unsupported_owners_are_not_substituted_with_system_identity() {
 async fn turns_admit_as_the_feature_the_session_was_opened_with() {
     let owner = Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap());
     let admission = TestAdmission::new(Ok(()));
-    let feature = session_feature(SessionMetering::RoutineSuggestions);
+    let feature = session_feature(SessionBilling::NonBillable);
     assert_eq!(admit_turn(&admission, &owner, feature).await, Ok(()));
     assert_eq!(
         *admission.calls.lock().unwrap(),
         vec![(
             "macro|owner@macro.com".to_owned(),
-            AiFeature::RoutineSuggestions
+            AiFeature::NonBillableAgentSession
         )]
     );
     assert_eq!(
-        session_feature(SessionMetering::default()),
+        session_feature(SessionBilling::default()),
         AiFeature::AgentSession
     );
 }
