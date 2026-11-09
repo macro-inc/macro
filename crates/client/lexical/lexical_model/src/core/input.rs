@@ -27,6 +27,8 @@ pub enum Composition {
 /// One model input or an explicitly batched set of inputs.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Input {
+    /// Host changed displayed text relative to its last applied model baseline.
+    TextDeltaFromView(ViewTextDelta),
     /// Host already changed the displayed text.
     TextFromView {
         /// Text origin.
@@ -208,6 +210,7 @@ pub struct InsertTextFacts {
 impl Input {
     pub(super) fn selection(&self) -> Option<&ViewSelection> {
         match self {
+            Self::TextDeltaFromView(delta) => Some(&delta.selection),
             Self::TextFromView { selection, .. }
             | Self::Command { selection, .. }
             | Self::KeyDown { selection, .. }

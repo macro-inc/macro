@@ -372,6 +372,7 @@ impl EditorSurface {
                     self.focused = true
                 }
                 Input::TextFromView { .. }
+                | Input::TextDeltaFromView(_)
                 | Input::InsertTextEvent { .. }
                 | Input::Composition { .. } => self.focused = true,
                 _ => {}

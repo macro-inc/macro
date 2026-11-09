@@ -86,3 +86,6 @@ mod foreign;
 #[cfg(feature = "foreign-nodes")]
 pub use foreign::*;
 mod opaque;
+
+mod view_text_delta;
+pub use view_text_delta::ViewTextDelta;
