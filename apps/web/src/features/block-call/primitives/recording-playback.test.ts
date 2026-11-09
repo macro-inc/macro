@@ -87,4 +87,49 @@ describe('recording playback', () => {
     second.dispatchEvent(new Event('timeupdate'));
     expect(playback.time()).toBe(24);
   });
+  it('tracks owned fullscreen events and exits when the owner is disposed', async () => {
+    const video = document.createElement('video');
+    const workspace = document.createElement('div');
+    workspace.append(video);
+    let fullscreen: Element | null = null;
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreen,
+    });
+    const enter = vi.fn(async () => {
+      fullscreen = workspace;
+      document.dispatchEvent(new Event('fullscreenchange'));
+    });
+    const exit = vi.fn(async () => {
+      fullscreen = null;
+      document.dispatchEvent(new Event('fullscreenchange'));
+    });
+    workspace.requestFullscreen = enter;
+    document.exitFullscreen = exit;
+    let dispose!: () => void;
+    const playback = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createRecordingPlayback(
+        () => video,
+        () => workspace
+      );
+    });
+    try {
+      playback.fullscreen();
+      await Promise.resolve();
+      expect(enter).toHaveBeenCalledOnce();
+      expect(playback.isFullscreen()).toBe(true);
+      playback.fullscreen();
+      await Promise.resolve();
+      expect(playback.isFullscreen()).toBe(false);
+      playback.fullscreen();
+      await Promise.resolve();
+      dispose();
+      expect(exit).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+      Reflect.deleteProperty(document, 'fullscreenElement');
+      Reflect.deleteProperty(document, 'exitFullscreen');
+    }
+  });
 });

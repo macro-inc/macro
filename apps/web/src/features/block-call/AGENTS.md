@@ -19,6 +19,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 
 - Read records through `useCallRecordQuery`; keep storage and SDK contracts unchanged.
 - Read discussion through `CallDiscussionHistory`'s source slot; preserve channel authorization and canonical call-chat roots.
+- Fullscreen the recording workspace to retain its video and transcript; scope the panel toggle to that fullscreen session, and keep native iOS fullscreen video-only.
 - Keep one media element across summary, transcript, chat and pinned controls; preserve idle-control visibility, menu focus and native volume state.
 - Animate each control surface by its own height with 240ms transform/opacity transitions; keep controls mounted and reduce motion to the fade only.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.

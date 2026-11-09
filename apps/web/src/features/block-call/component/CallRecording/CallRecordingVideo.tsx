@@ -11,6 +11,7 @@ export function CallRecordingVideo(props: {
   url: string;
   posterUrl?: string;
   playback?: RecordingPlayback;
+  transcriptControls?: { visible: boolean; onToggle: () => void };
   onTimeUpdate?: (
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
@@ -111,7 +112,7 @@ export function CallRecordingVideo(props: {
 
   return (
     <div
-      class="portal-scope relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel"
+      class="recording-video portal-scope relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel"
       classList={{ 'cursor-none': !!props.playback && !controls.visible() }}
       role="group"
       aria-label={t('calls.detailPlayback')}
@@ -193,7 +194,11 @@ export function CallRecordingVideo(props: {
       />
       <Show when={!playbackError() && props.playback}>
         {(playback) => (
-          <CallRecordingControls playback={playback()} visibility={controls} />
+          <CallRecordingControls
+            playback={playback()}
+            visibility={controls}
+            transcript={props.transcriptControls}
+          />
         )}
       </Show>
       <Show when={playbackError()}>

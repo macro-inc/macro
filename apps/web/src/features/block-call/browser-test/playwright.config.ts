@@ -11,6 +11,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     launchOptions: {
+      // Fullscreen wheel hit testing uses the native window, not the emulated viewport.
+      args: ['--window-size=1920,1080'],
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     },
   },

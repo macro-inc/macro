@@ -10,6 +10,7 @@ import PauseIcon from '@icon/system/regular/pause.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
 import VolumeIcon from '@icon/system/regular/speaker-high.svg';
 import MutedVolumeIcon from '@icon/system/regular/speaker-slash.svg';
+import TranscriptIcon from '@icon/system/regular/text-align-left.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button, Dropdown, Slider } from '@ui';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
@@ -22,9 +23,12 @@ import {
 const CONTROL_MOTION =
   'transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none';
 
+type TranscriptControl = { visible: boolean; onToggle: () => void };
+
 function DesktopRecordingControls(props: {
   playback: RecordingPlayback;
   visibility: RecordingControlsVisibility;
+  transcript?: TranscriptControl;
 }) {
   const state = () => props.playback;
   let controlsRef!: HTMLDivElement;
@@ -136,6 +140,20 @@ function DesktopRecordingControls(props: {
             </Dropdown.Group>
           </Dropdown.Content>
         </Dropdown>
+        <Show when={props.transcript}>
+          {(control) => (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('calls.detailTranscript')}
+              aria-pressed={control().visible}
+              tooltip={t('calls.detailTranscript')}
+              onClick={() => control().onToggle()}
+            >
+              <TranscriptIcon class="size-4" />
+            </Button>
+          )}
+        </Show>
         <RecordingVolume
           playback={props.playback}
           mount={menuMount()}
@@ -319,6 +337,7 @@ function RecordingScrubber(props: { playback: RecordingPlayback }) {
 function MobileRecordingControls(props: {
   playback: RecordingPlayback;
   visibility: RecordingControlsVisibility;
+  transcript?: TranscriptControl;
 }) {
   return (
     <>
@@ -368,6 +387,20 @@ function MobileRecordingControls(props: {
           <span class="text-ink-muted">
             {formatVideoTimestamp(props.playback.duration())}
           </span>
+          <Show when={props.transcript}>
+            {(control) => (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('calls.detailTranscript')}
+                aria-pressed={control().visible}
+                tooltip={t('calls.detailTranscript')}
+                onClick={() => control().onToggle()}
+              >
+                <TranscriptIcon class="size-4" />
+              </Button>
+            )}
+          </Show>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -386,6 +419,7 @@ function MobileRecordingControls(props: {
 export function CallRecordingControls(props: {
   playback: RecordingPlayback;
   visibility: RecordingControlsVisibility;
+  transcript?: TranscriptControl;
 }) {
   return (
     <div
@@ -399,12 +433,14 @@ export function CallRecordingControls(props: {
           <DesktopRecordingControls
             playback={props.playback}
             visibility={props.visibility}
+            transcript={props.transcript}
           />
         }
       >
         <MobileRecordingControls
           playback={props.playback}
           visibility={props.visibility}
+          transcript={props.transcript}
         />
       </Show>
     </div>

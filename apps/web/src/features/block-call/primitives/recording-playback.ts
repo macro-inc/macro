@@ -5,7 +5,8 @@ export const RECORDING_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2] as const;
 
 /** One native media element remains the owner of playback across all controls. */
 export function createRecordingPlayback(
-  video: Accessor<HTMLVideoElement | undefined>
+  video: Accessor<HTMLVideoElement | undefined>,
+  fullscreenTarget?: Accessor<HTMLElement | undefined>
 ) {
   const [time, setTime] = createSignal(0);
   const [duration, setDuration] = createSignal(0);
@@ -13,6 +14,20 @@ export function createRecordingPlayback(
   const [muted, setMuted] = createSignal(false);
   const [rate, setRate] = createSignal(1);
   const [volume, setVolumeLevel] = createSignal(1);
+  const [isFullscreen, setIsFullscreen] = createSignal(false);
+  const target = () => fullscreenTarget?.() ?? video()?.parentElement;
+  createEffect(() => {
+    const element = target();
+    const update = () =>
+      setIsFullscreen(!!element && document.fullscreenElement === element);
+    update();
+    document.addEventListener('fullscreenchange', update);
+    onCleanup(() => {
+      document.removeEventListener('fullscreenchange', update);
+      if (element && document.fullscreenElement === element)
+        fireAndForget(document.exitFullscreen(), 'call-recording');
+    });
+  });
   let audibleVolume = 1;
   createEffect(() => {
     const element = video();
@@ -58,6 +73,7 @@ export function createRecordingPlayback(
     muted,
     rate,
     volume,
+    isFullscreen,
     seek,
     toggle: () => {
       const element = video();
@@ -100,11 +116,8 @@ export function createRecordingPlayback(
       if (!element) return;
       if (document.fullscreenElement) {
         fireAndForget(document.exitFullscreen(), 'call-recording');
-      } else if (element.parentElement?.requestFullscreen) {
-        fireAndForget(
-          element.parentElement.requestFullscreen(),
-          'call-recording'
-        );
+      } else if (target()?.requestFullscreen) {
+        fireAndForget(target()!.requestFullscreen(), 'call-recording');
       } else if (
         'webkitEnterFullscreen' in element &&
         typeof element.webkitEnterFullscreen === 'function'

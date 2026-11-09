@@ -64,6 +64,11 @@ a light-theme inset edge and shadow (dark stays unchanged), and an inset Sync su
 the card without changing its scroll position or follow state. There is no separate
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
+Fullscreen opens the recording workspace with the same video and transcript.
+The player's Transcript toggle hides or shows the right panel until fullscreen
+exits; narrow HTML fullscreen uses a right overlay. Native iOS video fullscreen
+remains video-only. Playback, seeking, manual follow and Sync retain their state.
+
 Transcript rows show a flush-right recording time, with the active waveform to its left; long speaker names truncate and reveal the full name in a
 tooltip on hover or row focus. Click or press Enter on a row to seek.
 The active line reuses the live-call waveform and its bar timing on desktop,

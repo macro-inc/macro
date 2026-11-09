@@ -76,12 +76,27 @@ export function CallRecordingBody(props: {
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
-  const playback = createRecordingPlayback(videoRef);
+  const playback = createRecordingPlayback(videoRef, columnRef);
+  const [fullscreenTranscript, setFullscreenTranscript] = createSignal(true);
+  const transcriptPanel = () => playback.isFullscreen() || wideTranscript();
+  createEffect(
+    on(playback.isFullscreen, (active) => {
+      if (!active) setFullscreenTranscript(true);
+    })
+  );
+  const toggleFullscreenTranscript = () => {
+    const interaction = beginInteraction('call.recording.transcript');
+    try {
+      setFullscreenTranscript((visible) => !visible);
+    } finally {
+      interaction.end();
+    }
+  };
   const recordingDuration = () => playback.duration() || undefined;
   const [pageScrollRef, setPageScrollRef] = createSignal<HTMLDivElement>();
   const [leftScrollRef, setLeftScrollRef] = createSignal<HTMLDivElement>();
   const scrollRef = () =>
-    wideTranscript() ? leftScrollRef() : pageScrollRef();
+    transcriptPanel() ? leftScrollRef() : pageScrollRef();
   const [scrollingDown, setScrollingDown] = createSignal(false);
   const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
   const [syncTarget, setSyncTarget] = createSignal<HTMLDivElement>();
@@ -257,7 +272,8 @@ export function CallRecordingBody(props: {
               >
                 <div
                   ref={setColumnRef}
-                  class="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden @container/call-column"
+                  class="recording-workspace relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden @container/call-column"
+                  data-fullscreen-transcript={fullscreenTranscript()}
                 >
                   <SidePanel.HeaderActions>
                     <HeaderActionGroup label={t('calls.detailActions')}>
@@ -289,12 +305,12 @@ export function CallRecordingBody(props: {
                     data-channel-scroll
                     {...scrollIntent.handlers}
                     onScroll={() => scrollIntent.observeScroll()}
-                    class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden @[1108px]/call-column:overflow-hidden"
+                    class="recording-page-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden @[1108px]/call-column:overflow-hidden"
                     ref={setPageScrollRef}
                   >
-                    <div class="mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[1108px]/call-column:h-full @[1108px]/call-column:max-w-[1308px] @[1108px]/call-column:pb-4">
-                      <div class="flex flex-col gap-7 @[1108px]/call-column:grid @[1108px]/call-column:h-full @[1108px]/call-column:min-h-0 @[1108px]/call-column:grid-cols-[minmax(0,1fr)_480px] @[1108px]/call-column:grid-rows-[auto_minmax(0,1fr)]">
-                        <div class="flex flex-col gap-7 mobile:order-2 @[1108px]/call-column:col-span-2">
+                    <div class="recording-content mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom) @[1108px]/call-column:h-full @[1108px]/call-column:max-w-[1308px] @[1108px]/call-column:pb-4">
+                      <div class="recording-columns flex flex-col gap-7 @[1108px]/call-column:grid @[1108px]/call-column:h-full @[1108px]/call-column:min-h-0 @[1108px]/call-column:grid-cols-[minmax(0,1fr)_480px] @[1108px]/call-column:grid-rows-[auto_minmax(0,1fr)]">
+                        <div class="recording-identity flex flex-col gap-7 mobile:order-2 @[1108px]/call-column:col-span-2">
                           <CallRecordingTitle record={record()} />
                           <Show when={canJoin()}>
                             <Button
@@ -314,7 +330,7 @@ export function CallRecordingBody(props: {
                             data-recording-scroll="content"
                             {...scrollIntent.handlers}
                             onScroll={() => scrollIntent.observeScroll()}
-                            class="contents @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:flex-1 @[1108px]/call-column:flex-col @[1108px]/call-column:gap-7 @[1108px]/call-column:overflow-y-auto @[1108px]/call-column:overscroll-contain @[1108px]/call-column:scrollbar-hidden @[1108px]/call-column:pb-24"
+                            class="recording-left-scroll contents @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:flex-1 @[1108px]/call-column:flex-col @[1108px]/call-column:gap-7 @[1108px]/call-column:overflow-y-auto @[1108px]/call-column:overscroll-contain @[1108px]/call-column:scrollbar-hidden @[1108px]/call-column:pb-24"
                           >
                             <Show when={record().recordingUrl}>
                               {(url) => (
@@ -332,13 +348,22 @@ export function CallRecordingBody(props: {
                                       }
                                       onTimeUpdate={handleTimeUpdate}
                                       setVideoRef={setVideoRef}
+                                      transcriptControls={
+                                        playback.isFullscreen()
+                                          ? {
+                                              visible: fullscreenTranscript(),
+                                              onToggle:
+                                                toggleFullscreenTranscript,
+                                            }
+                                          : undefined
+                                      }
                                     />
                                   </div>
                                 </section>
                               )}
                             </Show>
 
-                            <div class="flex min-w-0 shrink-0 flex-col gap-1 mobile:order-3">
+                            <div class="recording-reading flex min-w-0 shrink-0 flex-col gap-1 mobile:order-3">
                               <div class="@[1108px]/call-column:hidden">
                                 <Tabs
                                   aria-label={t('calls.detailContent')}
@@ -440,7 +465,7 @@ export function CallRecordingBody(props: {
                             }}
                           />
                           <Show when={!isMobile()}>
-                            <div class="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10 @[1108px]/call-column:px-0">
+                            <div class="recording-docks pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10 @[1108px]/call-column:px-0">
                               <div
                                 ref={registerSyncTarget}
                                 class="mb-3 empty:hidden"
@@ -460,13 +485,16 @@ export function CallRecordingBody(props: {
                             </div>
                           </Show>
                         </div>
-                        <Layer offset={wideTranscript() ? 1 : 0}>
+                        <Layer offset={transcriptPanel() ? 1 : 0}>
                           <aside
                             aria-label={t('calls.detailTranscript')}
                             class="recording-transcript-card min-w-0 -mt-6 mobile:order-3 @[1108px]/call-column:sticky @[1108px]/call-column:top-0 @[1108px]/call-column:mt-0 @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:flex-col @[1108px]/call-column:overflow-hidden @[1108px]/call-column:rounded-2xl @[1108px]/call-column:bg-surface @[1108px]/call-column:light-mode:ring-1 @[1108px]/call-column:light-mode:ring-inset @[1108px]/call-column:light-mode:ring-edge-frame @[1108px]/call-column:light-mode:shadow-md"
+                            inert={
+                              playback.isFullscreen() && !fullscreenTranscript()
+                            }
                             classList={{
                               hidden:
-                                !wideTranscript() &&
+                                !transcriptPanel() &&
                                 selectedTab() !== 'transcript',
                             }}
                           >
@@ -482,23 +510,25 @@ export function CallRecordingBody(props: {
                               onSeekToSeconds={seekToSeconds}
                               messages={messages()}
                               active={
-                                wideTranscript() ||
-                                selectedTab() === 'transcript'
+                                playback.isFullscreen()
+                                  ? fullscreenTranscript()
+                                  : wideTranscript() ||
+                                    selectedTab() === 'transcript'
                               }
                               scrollElement={
-                                wideTranscript() ? undefined : scrollRef()
+                                transcriptPanel() ? undefined : scrollRef()
                               }
                               manualScrollGeneration={
-                                wideTranscript()
+                                transcriptPanel()
                                   ? undefined
                                   : manualScrollGeneration()
                               }
                               syncTarget={
-                                wideTranscript() ? undefined : syncTarget()
+                                transcriptPanel() ? undefined : syncTarget()
                               }
-                              hideHeader={!wideTranscript()}
+                              hideHeader={!transcriptPanel()}
                               syncSurface={
-                                wideTranscript() ? 'inset' : 'surface'
+                                transcriptPanel() ? 'inset' : 'surface'
                               }
                             />
                           </aside>
