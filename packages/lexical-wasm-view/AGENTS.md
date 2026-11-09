@@ -55,3 +55,5 @@ and the generated ABI; packages/lexical-core for retained source node behavior.
 Pass the application loading span through ViewOptions.parentSpan; mount and the
 first native Initialize reconciliation stay under that span without ending it.
 Dispose DOM listeners before awaiting session close; continue terminal native I/O.
+
+The ./compat export exposes the injected upstream-compatible DOM adapter; see src/compat/AGENTS.md. Its upstream-model harness is independent of actual Rust compatibility acceptance.
