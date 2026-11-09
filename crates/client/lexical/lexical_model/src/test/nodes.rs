@@ -355,3 +355,35 @@ fn selection_hooks_read_focus_after_anchor_moves_it() -> Result<(), Error> {
     LOG.with(|log| assert_eq!(*log.borrow(), vec!["anchor", "focus"]));
     Ok(())
 }
+
+#[test]
+fn external_static_transform_ownership_keeps_explicit_transforms_and_normalization()
+-> Result<(), Error> {
+    for native_static in [true, false] {
+        LOG.with(|log| log.borrow_mut().clear());
+        let builder = Editor::builder(EditorMode::Headless)
+            .node::<CustomText>()
+            .transform::<CustomText>(log_custom);
+        let builder = if native_static {
+            builder
+        } else {
+            builder.without_static_transforms()
+        };
+        let mut editor = builder.build().unwrap();
+        let (p, _) = editor.update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let custom = tx.create(CustomText::default())?;
+            let a = tx.create_text("a")?;
+            let b = tx.create_text("b")?;
+            tx.append(p, &[custom.key(), a.key(), b.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            Ok(p.key())
+        })?;
+        let log = LOG.with(|log| log.borrow().clone());
+        assert_eq!(log.contains(&"static"), native_static);
+        assert_eq!(log.iter().filter(|value| **value == "custom").count(), 1);
+        assert_eq!(editor.state().view().children_keys(p)?.len(), 2);
+        assert_eq!(editor.state().view().text_content(p), "ab");
+    }
+    Ok(())
+}
