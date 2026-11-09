@@ -89,6 +89,11 @@ const cases = [
   '<table><tr style="height: 32px"><td style="width: 80px; background-color: red; vertical-align: middle; color: blue; font-weight: bold">cell</td></tr></table>',
   '<p dir="rtl" style="text-align: right">עברית</p>',
   '<a>no href</a>',
+  '<a id="chapter"></a>',
+  '<a href=""></a>',
+  '<a href="https://example.com"></a>',
+  '<a id="chapter"> \n<!-- anchor --> </a>',
+  '<a id="chapter"><span></span></a>',
   '<code>multi\nline</code>',
 ];
 for (const html of cases)
