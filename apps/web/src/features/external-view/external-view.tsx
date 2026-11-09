@@ -1,4 +1,5 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { SplitRouter, useNavigate, useParams } from '@app/lib/split-router';
 import { externalChatRoute, externalRoute } from '@app/routes/routes';
 import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
@@ -110,6 +111,12 @@ export function ExternalView() {
         <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
           WhatsApp
         </h1>
+        {/* Above the chats, so people who haven't linked WhatsApp see it too.
+            Its rows are sidebar-style items, so the entry is one, inset to
+            line up with the rows below it (In Macro on touch, chats on desktop). */}
+        <div class="px-2 pt-2 empty:hidden not-touch:px-4">
+          <TutorialSidebarItem tutorial="whatsapp" />
+        </div>
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
         <Show when={isTouchDevice()}>
           <section aria-labelledby="external-chats" class="px-2">

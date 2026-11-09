@@ -11,6 +11,11 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import { Bot } from '../bots/bot';
+import { CallRecord } from '../calls/call-record';
+import { CallConnection, type JoinOptions } from '../calls/connection';
+import { callAdmissionError } from '../calls/errors';
+import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
 import type { StaticImage } from '../images/image';
 import {
@@ -18,7 +23,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { ChannelAccessRequest } from './access-request';
@@ -41,6 +46,33 @@ export type ChannelAttachment =
  * A channel.
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
+  /** Start or join this channel's call, ringing members if a new call starts. */
+  async startCall(opts: JoinOptions = {}): Promise<CallConnection> {
+    try {
+      const response = unwrap(
+        await this.client.storage.startCall({
+          path: { channel_id: this.id },
+          body: opts,
+        }),
+      );
+      return new CallConnection(this.client, response);
+    } catch (error) {
+      return callAdmissionError(error);
+    }
+  }
+
+  /** Check the current call without creating one; undefined means no call. */
+  async activeCall(): Promise<CallRecord | undefined> {
+    const result = await this.client.storage.checkActiveCall({
+      path: { channel_id: this.id },
+    });
+    if (result.response?.status === 204) return undefined;
+
+    const response = unwrap(result);
+    if (!response) return undefined;
+    return CallRecord.byId(this.client, response.callId);
+  }
+
   /** Record a view or interaction in this channel. */
   async recordActivity(type: ActivityType): Promise<ChannelActivity> {
     return new ChannelActivity(
@@ -121,7 +153,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return new Channel(client, channel_id);
   }
 
-  /** Open (creating if needed) the private group channel with a set of users. */
+  /** Open (creating if needed) the group direct message with exactly these people, excluding the caller. */
   static async private(
     client: MacroClient,
     recipients: User[],
@@ -168,21 +200,32 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Post a message. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
-   * `macro.images.generate()`, below the text.
+   * `macro.images.generate()`, below the text; `documents` attaches Macro
+   * documents as file chips, such as a file from `macro.documents.upload()`.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
-   * The webhook endpoint takes no images.
+   * The webhook endpoint takes no attachments.
+   *
+   * @example Share a generated CSV.
+   * ```js
+   * const file = await macro.documents.upload({ name: 'q3.csv', content: csv });
+   * await channel.send('Q3 numbers attached.', { documents: [file] });
+   * ```
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread; images?: StaticImage[] },
+    opts?: {
+      thread?: Thread;
+      images?: StaticImage[];
+      documents?: Document[];
+    },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
-      opts?.images,
+      opts,
     );
     return Message.byId(this.client, this.id, id);
   }
@@ -324,6 +367,15 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
         path: { channel_id: this.id },
       }),
     );
+  }
+
+  /** Bots that can post to the channel. */
+  async bots(): Promise<Bot[]> {
+    return unwrap(
+      await this.client.storage.listChannelBots({
+        path: { channel_id: this.id },
+      }),
+    ).map((record) => Bot.from(this.client, record));
   }
 
   /** Add users to the channel. */

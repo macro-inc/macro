@@ -65,6 +65,13 @@ pub trait WordDocumentFiles: Send + Sync + 'static {
     async fn original(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>>;
 }
 
+/// A Word document request the caller can fix: the wrong file type, a bad
+/// batch, an upload still being extracted, or operations the editor refused.
+/// Nothing changed.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct WordDocumentRejected(pub String);
+
 /// Used where no file store is wired: seeding fails with a clear message.
 pub struct NoWordDocumentFiles;
 
@@ -113,7 +120,7 @@ where
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         user: &MacroUserIdStr<'_>,
-        actor: &str,
+        actor: Option<&str>,
         start: Option<u32>,
         count: Option<u32>,
     ) -> anyhow::Result<WordDocumentResponse> {
@@ -134,20 +141,24 @@ where
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         user: &MacroUserIdStr<'_>,
-        actor: &str,
+        actor: Option<&str>,
         operations: Vec<WordDocumentOperation>,
         options: WordEditOptions,
     ) -> anyhow::Result<WordDocumentResponse> {
-        anyhow::ensure!(
-            !operations.is_empty() && operations.len() <= MAX_OPERATIONS,
-            "Send between 1 and {MAX_OPERATIONS} operations."
-        );
+        if operations.is_empty() || operations.len() > MAX_OPERATIONS {
+            return Err(WordDocumentRejected(format!(
+                "Send between 1 and {MAX_OPERATIONS} operations."
+            ))
+            .into());
+        }
         let author = match options.author.as_deref().map(str::trim) {
             Some(name) if !name.is_empty() => {
-                anyhow::ensure!(
-                    name.chars().count() <= MAX_AUTHOR_LENGTH && !name.contains(['\n', '\r']),
-                    "author must be one line of at most {MAX_AUTHOR_LENGTH} characters."
-                );
+                if name.chars().count() > MAX_AUTHOR_LENGTH || name.contains(['\n', '\r']) {
+                    return Err(WordDocumentRejected(format!(
+                        "author must be one line of at most {MAX_AUTHOR_LENGTH} characters."
+                    ))
+                    .into());
+                }
                 name.to_owned()
             }
             _ => self.user_name(user).await,
@@ -183,21 +194,23 @@ where
         &self,
         document_id: &str,
         user: &MacroUserIdStr<'_>,
-        actor: &str,
+        actor: Option<&str>,
         access: AccessLevel,
         request: WordDocumentRequest,
     ) -> anyhow::Result<WordDocumentResponse> {
         let file_type = self.documents.file_type(document_id).await?;
-        anyhow::ensure!(
-            file_type.as_deref() == Some("docx"),
-            "This tool works on uploaded Word (.docx) documents only. Use EditDocument for Macro markdown documents and ReadContent for other files."
-        );
+        if file_type.as_deref() != Some("docx") {
+            return Err(WordDocumentRejected(
+                "This works on uploaded Word (.docx) documents only. Use EditDocument for Macro markdown documents and ReadContent for other files.".to_owned(),
+            )
+            .into());
+        }
         let token = encode_permission_token(
             Some(user.to_string()),
             document_id.to_owned(),
             access,
             &self.token_secret,
-            Some(actor.to_owned()),
+            actor.map(str::to_owned),
         )?;
         self.ensure_live_copy(document_id).await?;
         self.worker
@@ -219,9 +232,10 @@ where
             return Ok(());
         }
         let Some(original) = self.files.original(document_id).await? else {
-            anyhow::bail!(
-                "This Word document is still being processed after upload. Try again in a few seconds."
-            );
+            return Err(WordDocumentRejected(
+                "This Word document is still being processed after upload. Try again in a few seconds.".to_owned(),
+            )
+            .into());
         };
         tracing::Span::current().record("docx_bytes", original.len());
         let snapshot = tokio::task::spawn_blocking(move || seed_snapshot(original))

@@ -129,7 +129,7 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session.
     pub has_agent: bool,
 }
 
@@ -429,22 +429,28 @@ mod test;
 /// The runtime an agent runs on: a harness slug and, for `macrod`, the
 /// registered harness serving it. Travel together because one without the
 /// other is never a valid choice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct AgentHarnessSelection {
     /// Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness to run on. Required when `harness` is `macrod`,
     /// forbidden otherwise.
+    #[serde(default)]
     pub harness_id: Option<HarnessId>,
 }
 
 /// Where an agent can be mentioned: everywhere its owner can use it, or
 /// exactly the listed channels.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct AgentChannelSelection {
     /// Whether the agent is global or channel-specific.
     pub channel_scope: AgentChannelScope,
     /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
     pub channel_ids: Vec<Uuid>,
 }
 
@@ -453,24 +459,34 @@ pub struct AgentChannelSelection {
 /// Every field is optional; an absent field keeps the agent's current value.
 /// Ownership and the bot profile (name, handle, description, avatar) are not
 /// patchable here: the profile has [`PatchBotRequest`], and ownership changes
-/// go through [`UpdateAgentRequest`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// go through [`UpdateAgentRequest`]. Unknown fields are refused, so a
+/// misspelled or flattened setting is never silently ignored.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct PatchAgentRequest {
     /// Replacement instructions, whole.
+    #[serde(default)]
     pub instructions: Option<String>,
     /// Replacement runtime.
+    #[serde(default)]
     pub harness: Option<AgentHarnessSelection>,
     /// Replacement model.
+    #[serde(default)]
     pub default_model: Option<String>,
     /// Replacement channel availability.
+    #[serde(default)]
     pub channels: Option<AgentChannelSelection>,
     /// Replacement MCP server selection.
+    #[serde(default)]
     pub mcp: Option<AgentMcpServers>,
     /// Replacement permission choice: approve without asking (`true`) or
     /// prompt (`false`). A patch cannot clear the choice back to unset; an
     /// explicit `false` prompts exactly as unset does.
+    #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
     /// Replacement coding choice.
+    #[serde(default)]
     pub is_coding: Option<bool>,
 }
 
@@ -596,7 +612,7 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 
@@ -612,7 +628,7 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
     pub has_agent: Option<bool>,
 }
 
@@ -652,7 +668,7 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 

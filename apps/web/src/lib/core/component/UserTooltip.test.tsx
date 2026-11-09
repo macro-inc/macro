@@ -65,7 +65,7 @@ vi.mock('@core/user', () => ({
 }));
 
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: vi.fn() }),
+  existingDirectMessage: vi.fn(),
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
@@ -239,14 +239,14 @@ describe('UserTooltip CRM contact action', () => {
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 
-  it('hides the contact action when CRM is disabled for the team', () => {
+  it('shows the contact action without legacy team email enrollment', () => {
     mocks.teamCrmEnabled = false;
 
     render(() => (
       <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open contact' })).toBeTruthy();
   });
 
   it('hides the contact action when the user has no team', () => {

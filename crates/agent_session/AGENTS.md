@@ -19,8 +19,16 @@ consumer talks to.
   same fold run server-side for the SDK and agents.
 - `src/domain/read.rs` and `src/inbound/toolset/read_agent_session.rs`: bounded,
   view-authorized conversation reads using the shared transcript fold.
+- `src/domain/coding_agents.rs` + `src/inbound/coding_agents.rs`: coding persona
+  discovery and dispatch; `GET /coding-agents` serves the signed-in user's
+  listing to the SDK, the `/internal/coding-agents` commands serve tools.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
-  capped to 25 sessions before folding their logs.
+  capped to 25 sessions before folding their logs. Served to the caller by
+  `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`.
+- `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
+  `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
+  share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
@@ -39,7 +47,8 @@ consumer talks to.
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
-  toolset), `complete_graph`, `webhook`, `search_service`, `soup_realtime`,
+  toolset), `complete_graph`, `graphql_registered_work`, `webhook`,
+  `search_service`, `soup_realtime`,
   and the cloud-agent crates (`cursor_cloud_agents`, `codex_cloud_agents`).
 
 ## Recipes
@@ -95,6 +104,19 @@ restore, so a session auto-archives at most once. A session archives for pull
 requests once every linked pull request is closed and at least one merged;
 links with no `github_pull_request` row count as open.
 
+Registered work (`domain/work_registration.rs`, `outbound/postgres/work_registration.rs`,
+`inbound/axum_router/work_registration.rs`, `inbound/work_registration_sweep.rs`): any account
+registers a session it can edit as its work; registering shares nothing, and readers see only
+sessions they can view. Rows in `work_registration` end, never delete, and a later turn does
+not bring one back. Finished pull requests end them from the pull request consumer regardless
+of auto-archive preferences; every archive path ends them in its own transaction, so a new
+archive path must call `end_work_registrations_on_archive`; the sweep ends idle and blocked
+sessions and catches up on the rest, in one guarded statement that is safe across replicas.
+`WorkRegistrationRealtime` wraps a session service's realtime so turn, rename, and archive
+changes reach viewers of registered sessions as Soup patches
+(`soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal`); wrap any new
+publisher of list-field changes. GraphQL is `graphql_registered_work`.
+
 Followers: a session started from a thread (`SessionPurpose::visibility`, any
 agent) is `hidden`. The harness calls `add_follower` beside `set_turn_prompter`
 for a prompt typed into the session itself (`QueuedEntry::direct_prompter`: a
@@ -116,6 +138,27 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened for its owner, a routine's run (source
+  `routine`) or a draft's background session, and refuses any other;
+  `activity` returns content-free counts (tool calls, turns).
+- A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
+  is work the owner asked for that runs out of sight: source `user`, origin
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no
+  notifications about it, and it is never named or retitled
+  (`AdmittedAgentSessionNameGenerator`).
+
+- What opened a session is an `agent_session_source` row, referenced by
+  `agent_session.source_id` and written in the transaction that writes the session
+  (`outbound/postgres/source.rs`). It holds references only, as
+  `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
+  an unclaimed warm session, or an older runtime. It describes a session; `source`
+  and `visibility` decide what happens to it (only `is_background` also reads the
+  origin), and a runtime's claim never sets them.
+  Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
+  `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,
   `unlisted`, `hidden`), set at creation and changed later only by warm
   claims and the DM-context backfill (`list_visibility.rs`).
@@ -125,6 +168,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
+- Whether an in-process session's turns are billed is
+  `agent_session.billing` (`SessionBilling`: `billable`, the default, or
+  `non_billable`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_billing`). A
+  non-billable session never claims a warm row, which is billable.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.
@@ -139,3 +187,5 @@ through `set_name` clears it, so a name a person chose is never replaced.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.

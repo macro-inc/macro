@@ -121,7 +121,7 @@ impl ScheduledActionRepo for FakeRepository {
     async fn last_runs(
         &self,
         _: &[Uuid],
-    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         Ok(std::collections::HashMap::new())
     }
 
@@ -200,6 +200,8 @@ fn due_action() -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
+        description: String::new(),
     }
 }
 

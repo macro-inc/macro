@@ -1,3 +1,4 @@
+import { TutorialPill } from '@app/features/video-tutorials';
 import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
@@ -14,11 +15,12 @@ import {
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
+  usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
 import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
@@ -61,6 +63,8 @@ export function Harness(
     setPairingDialog(undefined);
   };
   const [removingHarness, setRemovingHarness] =
+    createSignal<RegisteredHarness>();
+  const [renamingHarness, setRenamingHarness] =
     createSignal<RegisteredHarness>();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -127,6 +131,7 @@ export function Harness(
         <SettingsPage
           title="Runtimes"
           description="Providers and machines your agents can run on."
+          signpost={<TutorialPill tutorial="macrod" class="mt-1 self-start" />}
           onBack={props.onBack}
           backLabel={props.backLabel ?? 'Agents'}
           actions={
@@ -143,6 +148,7 @@ export function Harness(
           <ConnectedRuntimesSection
             harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
             error={harnessesQuery.isError}
+            onRename={setRenamingHarness}
             onRemove={setRemovingHarness}
             canRemoveShared={isTeamOwner()}
           />
@@ -300,6 +306,14 @@ export function Harness(
           />
         )}
       </Show>
+      <Show when={renamingHarness()} keyed>
+        {(harness) => (
+          <HarnessRenameDialog
+            harness={harness}
+            onClose={() => setRenamingHarness(undefined)}
+          />
+        )}
+      </Show>
       <Show when={removingHarness()} keyed>
         {(harness) => (
           <HarnessRemoveDialog
@@ -311,6 +325,90 @@ export function Harness(
         )}
       </Show>
     </>
+  );
+}
+
+function HarnessRenameDialog(props: {
+  harness: RegisteredHarness;
+  onClose: () => void;
+}) {
+  const patchHarness = usePatchHarnessMutation();
+  const [name, setName] = createSignal(props.harness.name);
+  const canSave = () =>
+    !patchHarness.isPending &&
+    name().trim().length > 0 &&
+    name().trim() !== props.harness.name;
+
+  const save = async () => {
+    if (!canSave()) return;
+    try {
+      await patchHarness.mutateAsync({
+        harnessId: props.harness.id,
+        name: name().trim(),
+      });
+      props.onClose();
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to rename runtime'));
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) =>
+        !open && !patchHarness.isPending && props.onClose()
+      }
+      position="center"
+      visibleScrim
+      class="w-[min(480px,calc(100vw-16px))]"
+    >
+      <Panel depth={2} class="rounded-xl text-ink">
+        <Panel.Header class="px-5 py-3">
+          <Dialog.Title class="text-sm font-semibold">
+            Rename runtime
+          </Dialog.Title>
+        </Panel.Header>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            fireAndForget(save(), 'harness-settings');
+          }}
+        >
+          <Panel.Body class="flex flex-col gap-1.5 p-5">
+            <label for="harness-rename" class="text-xs font-medium text-ink">
+              Name
+            </label>
+            <Input
+              id="harness-rename"
+              size="sm"
+              autofocus
+              maxLength={100}
+              value={name()}
+              onInput={(event) => setName(event.currentTarget.value)}
+            />
+          </Panel.Body>
+          <Panel.Footer class="justify-end gap-2 px-5 py-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={patchHarness.isPending}
+              onClick={props.onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={!canSave()}
+            >
+              {patchHarness.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </Panel.Footer>
+        </form>
+      </Panel>
+    </Dialog>
   );
 }
 

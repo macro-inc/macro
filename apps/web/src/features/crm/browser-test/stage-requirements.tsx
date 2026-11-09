@@ -16,8 +16,8 @@ const unused = (): never => {
   throw new Error('Unused fixture capability');
 };
 const context: CrmContext = {
+  createEmailPrivacy: unused,
   createPipelines: unused,
-  createDatabases: unused,
   openCreateItem: unused,
   openEmailComposer: unused,
   PipelineEditor: unused,
@@ -71,6 +71,8 @@ const context: CrmContext = {
   createBlockedDomains: unused,
   renameCompany: unused,
   renameContact: unused,
+  editContactEmail: unused,
+  editContactCompany: unused,
   hideCompany: unused,
   hideContact: unused,
   setEmailSync: unused,

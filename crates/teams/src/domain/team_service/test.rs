@@ -150,6 +150,9 @@ struct MockTeamRepository {
     invite_link_team: Option<TeamInviteLinkTeam>,
     /// What `claim_due_invite_reminders` hands out, once.
     due_invite_reminders: Arc<Mutex<Vec<DueInviteReminder>>>,
+    /// What `get_user_display_name` returns for every user.
+    user_display_name: Option<String>,
+    fail_user_display_name: bool,
 }
 
 impl MockTeamRepository {
@@ -236,6 +239,8 @@ impl MockTeamRepository {
             invite_link_creator: Arc::new(Mutex::new(None)),
             invite_link_team: None,
             due_invite_reminders: Arc::new(Mutex::new(Vec::new())),
+            user_display_name: Some("Olivia Owner".to_string()),
+            fail_user_display_name: false,
         }
     }
 
@@ -734,6 +739,20 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<String, TeamError>> + Send {
         let name = self.team_name.clone();
         async move { Ok(name) }
+    }
+
+    fn get_user_display_name(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send {
+        let result = if self.fail_user_display_name {
+            Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                "name lookup failed"
+            )))
+        } else {
+            Ok(self.user_display_name.clone())
+        };
+        async move { result }
     }
 
     fn patch_team(
@@ -3376,6 +3395,84 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     }
 }
 
+/// The inviter name each sent invite email carried, in send order.
+fn inviter_names_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
+    notification_ingress
+        .recorded_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request["req"]["notification"]["content"]["inviterName"].clone())
+        .collect()
+}
+
+/// Invites one member and returns the inviter names the invite emails carried.
+async fn inviter_names_for_invite(team_repo: MockTeamRepository) -> Vec<serde_json::Value> {
+    let team_id = uuid::Uuid::from_u128(7200);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invites = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
+    service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &owner_id),
+            invites,
+            false,
+        )
+        .await
+        .unwrap();
+
+    inviter_names_sent(&notification_ingress)
+}
+
+fn invite_name_team_repo() -> MockTeamRepository {
+    let team_id = uuid::Uuid::from_u128(7200);
+    MockTeamRepository::new(
+        vec![make_invite(
+            "member@example.com",
+            uuid::Uuid::from_u128(7201),
+            team_id,
+        )],
+        "Acme",
+        Arc::new(Mutex::new(Vec::new())),
+    )
+}
+
+#[tokio::test]
+async fn invite_email_names_the_inviter() {
+    let names = inviter_names_for_invite(invite_name_team_repo()).await;
+    assert_eq!(names, ["Olivia Owner"]);
+}
+
+/// The email falls back to the inviter's address, so neither a missing name
+/// nor a failed lookup stops the invite.
+#[tokio::test]
+async fn invite_email_is_sent_without_the_inviters_name() {
+    let mut unnamed = invite_name_team_repo();
+    unnamed.user_display_name = None;
+    let mut failed = invite_name_team_repo();
+    failed.fail_user_display_name = true;
+
+    for team_repo in [unnamed, failed] {
+        let names = inviter_names_for_invite(team_repo).await;
+        assert_eq!(names, [serde_json::Value::Null]);
+    }
+}
+
 /// The plan each sent invite email promised, in send order.
 fn invitee_plans_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
     notification_ingress
@@ -4187,55 +4284,40 @@ fn build_crm_enable_service(
     (service, populated)
 }
 
-/// Enabling with backfill enqueues a populate per team member.
+/// A legacy team toggle can no longer authorize other members' mailboxes.
 #[tokio::test]
-async fn test_enable_crm_with_backfill_enqueues_members() {
+async fn legacy_enable_never_enqueues_mailbox_backfill() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let (service, populated) = build_crm_enable_service(
         team_id,
         &["macro|owner@example.com", "macro|member@example.com"],
     );
-
-    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, true)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 2);
-    assert_eq!(response.backfill_failed, 0);
-    assert_eq!(
-        *populated.lock().unwrap(),
-        vec![
-            "macro|owner@example.com".to_string(),
-            "macro|member@example.com".to_string()
-        ]
-    );
+    for backfill in [true, false] {
+        let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+        let response = service
+            .set_team_crm_enabled(receipt, true, backfill)
+            .await
+            .unwrap();
+        assert!(response.enabled);
+        assert!(!response.changed);
+        assert_eq!(response.backfill_enqueued, 0);
+        assert_eq!(response.backfill_failed, 0);
+    }
+    assert!(populated.lock().unwrap().is_empty());
 }
 
-/// Enabling without backfill flips the flag but enqueues nothing.
+/// Old clients cannot invoke the destructive team-wide disable/purge flow.
 #[tokio::test]
-async fn test_enable_crm_without_backfill_skips_enqueue() {
+async fn legacy_disable_is_rejected_without_purging_crm() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let (service, populated) = build_crm_enable_service(
-        team_id,
-        &["macro|owner@example.com", "macro|member@example.com"],
-    );
-
+    let (service, populated) = build_crm_enable_service(team_id, &["macro|owner@example.com"]);
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, false)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 0);
-    assert_eq!(response.backfill_failed, 0);
+    assert!(matches!(
+        service.set_team_crm_enabled(receipt, false, false).await,
+        Err(TeamError::BadRequest(_))
+    ));
     assert!(populated.lock().unwrap().is_empty());
 }
 
@@ -8880,6 +8962,7 @@ async fn invite_reminders_email_each_claimed_invite() {
         let content = &request["req"]["notification"]["content"];
         assert_eq!(content["reminder"], true);
         assert_eq!(content["teamName"], "Acme");
+        assert_eq!(content["inviterName"], "Olivia Owner");
         assert_eq!(
             content["teamInviteId"],
             uuid::Uuid::from_u128(invite).to_string()

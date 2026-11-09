@@ -172,7 +172,6 @@ export const cognitionExcluded = [
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
-  'getChatPermissions',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
@@ -258,11 +257,9 @@ export const notificationExcluded = [
   'getUnsubscribes',
   'healthHandler',
   'removeUnsubscribeAll',
-  'removeUnsubscribeItem',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
-  'unsubscribeItem',
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
@@ -270,7 +267,6 @@ export const notificationBacklog =
   [] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
-  'ensureTagSet',
   'mergeTag',
   'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
@@ -279,6 +275,12 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
+  'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCatalog', // The new-routine flow's templates.
+  'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
+  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -322,13 +324,10 @@ export const storageExcluded = [
   'registerSlackImportUploads',
   'bulkWakeupSyncServiceDocuments',
   'callWebhook',
-  'checkActiveCall',
   'createChannelScopedBot',
   'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
-  // Declining a ringing call is a live-device session flow, like leaving.
-  'declineCall',
   'declineRing',
   'deleteCollabSurface',
   'ensureCollabSurface',
@@ -344,14 +343,11 @@ export const storageExcluded = [
   'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
-  'getBatchCallRecordPreview',
   'getBatchChannelPreview',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'getDatabaseQuery',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
   'getDatabaseTableChanges',
   'getDocumentListHandler',
@@ -362,6 +358,7 @@ export const storageExcluded = [
   'getInstructionsHandler',
   'getItemsSoup',
   'getLocationHandler',
+  // Legacy GET can start and ring a call; SDK starts use POST.
   'getOrCreateCall',
   'getPendingProjectsHandler',
   'getProjectsHandler',
@@ -378,23 +375,19 @@ export const storageExcluded = [
   'installSync',
   'jobProcessingResultHandler',
   'joinChannelByCode',
+  // Legacy channel-scoped leave could leave a newer call; SDK leaves by call id.
   'leaveOrEndCall',
-  // Live meeting admission and participant previews are app session flows.
-  'meetingGuestJoin',
+  // Live participant previews and browser session cleanup remain app flows.
   // Browser setup reserves an empty RTC room before creating a meeting.
   'meetingPrepare',
   'meetingCancelPreparation',
   'meetingGuestParticipants',
-  'meetingJoin',
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  'removeBotFromChannelByBot',
-  // Storage for the web app's saved questions, not a user-facing surface.
-  'saveDatabaseQuery',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
@@ -419,8 +412,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

@@ -99,41 +99,9 @@ pub struct Harness {
     pub last_connected_at: Option<DateTime<Utc>>,
 }
 
-/// The ownership scope a daemon's config asks for.
-///
-/// Advisory, not binding: the approving user confirms it in the dialog, which
-/// arrives preselected to this. Approval is what actually sets ownership.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum RequestedHarnessScope {
-    /// Usable by the approving user alone, until they share it.
-    Private,
-    /// Usable by the approving user's whole team.
-    Team,
-}
-
-impl RequestedHarnessScope {
-    /// Storage representation.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Private => "private",
-            Self::Team => "team",
-        }
-    }
-}
-
-impl std::str::FromStr for RequestedHarnessScope {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "private" => Ok(Self::Private),
-            "team" => Ok(Self::Team),
-            other => Err(format!("unknown requested harness scope: {other}")),
-        }
-    }
-}
+/// Sent by a daemon reading its own harness while it holds a runtime connection,
+/// so the service can log when its own answer disagrees.
+pub const RUNTIME_CONNECTED_HEADER: &str = "x-macro-harness-runtime-connected";
 
 /// Request to open a pairing: the daemon asks for a code the user approves.
 ///
@@ -141,17 +109,10 @@ impl std::str::FromStr for RequestedHarnessScope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreatePairingRequest {
-    /// Daemon operator consent ceiling. Omitted by older clients; web approval decides.
-    #[serde(default)]
-    pub allow_permission_bypass: Option<bool>,
     /// Requested harness display name (typically the machine's hostname).
     pub name: String,
     /// Display-only description of the machine, e.g. `eric@macbook / darwin`.
     pub host: Option<String>,
-    /// The scope the daemon's config asks for; the approval dialog arrives
-    /// preselected to it.
-    #[serde(default)]
-    pub scope: Option<RequestedHarnessScope>,
 }
 
 /// A pairing the daemon created, including its claim credential.
@@ -177,17 +138,12 @@ pub struct CreatedPairing {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct PairingDetails {
-    /// Daemon operator consent ceiling; false forbids bypass at approval.
-    #[serde(default)]
-    pub requested_allow_permission_bypass: Option<bool>,
     /// The pairing code, normalized to `XXXX-XXXX`.
     pub code: String,
     /// Harness display name the daemon asked for.
     pub requested_name: String,
     /// Display-only description of the machine.
     pub host: Option<String>,
-    /// The scope the daemon's config asked for, when it named one.
-    pub requested_scope: Option<RequestedHarnessScope>,
     /// When the pairing was created.
     pub created_at: DateTime<Utc>,
     /// When the pairing expires.
@@ -205,6 +161,19 @@ pub struct ApprovePairingRequest {
     pub name: Option<String>,
     /// Team to open the harness to. Omit to keep it to the approving user.
     pub team_id: Option<Uuid>,
+}
+
+/// Request to change a registered harness. Omitted fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchHarnessRequest {
+    /// New display name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether agents may bypass ACP permission requests on this harness.
+    /// Live sessions pick the change up at their next turn.
+    #[serde(default)]
+    pub allow_permission_bypass: Option<bool>,
 }
 
 /// Request to claim an approved pairing's credential.

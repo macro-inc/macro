@@ -1069,6 +1069,12 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -2328,6 +2334,50 @@ export const listTypedNotificationsResponse = zod
   .describe('The strongly typed response for listing user notifications.');
 
 /**
+ * @summary Soft-delete multiple user notifications.
+ */
+export const bulkDeleteUserNotificationsV2Body = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as done.
+ */
+export const bulkMarkNotificationsDoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export const bulkMarkNotificationsSeenBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export const bulkMarkNotificationsUndoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
  * Rows that fail to deserialize are dropped with a warning log.
  * @summary Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,
 then converts each row to [`UserNotificationRow<NotifEvent>`].
@@ -3163,6 +3213,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -5251,6 +5307,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
                           isAgent: zod
                             .boolean()
                             .optional()
@@ -7278,6 +7340,12 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
                   isAgent: zod
                     .boolean()
                     .optional()
@@ -8426,50 +8494,6 @@ export const getTypedNotificationByIdResponse = zod
         .describe('When the notification was viewed\/seen.'),
     })
   );
-
-/**
- * @summary Soft-delete multiple user notifications.
- */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as done.
- */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as seen.
- */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as not done.
- */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
 
 /**
  * @summary Soft-delete a single user notification.

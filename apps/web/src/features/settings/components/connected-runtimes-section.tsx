@@ -1,11 +1,19 @@
 import { useShareRequests } from '@app/features/access-requests/access-requests';
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
+import { usePatchHarnessMutation } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import { Button } from '@ui';
+import { Button, confirmDialog, ToggleSwitch } from '@ui';
 import { createSignal, For, lazy, Show, Suspense } from 'solid-js';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
+
+function failureMessage(error: unknown, fallback: string): string {
+  return (error instanceof ThrownResultError && error.message) || fallback;
+}
 
 const RuntimeShareDialog = lazy(async () => ({
   default: (
@@ -70,6 +78,7 @@ export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
+  onRename: (harness: RegisteredHarness) => void;
   onRemove: (harness: RegisteredHarness) => void;
   /** A team's owner can also take a machine the team runs on out of service. */
   canRemoveShared: boolean;
@@ -92,45 +101,12 @@ export function ConnectedRuntimesSection(props: {
         <SettingsCard>
           <For each={ordered()}>
             {(harness) => (
-              <div class="flex items-center justify-between gap-4 px-4 py-3">
-                <div class="min-w-0 flex-1">
-                  <div class="flex min-w-0 items-center gap-2">
-                    <p class="min-w-0 flex-1 truncate text-sm text-ink">
-                      {harness.name}
-                    </p>
-                    <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-                      {harness.shared_team_ids.length > 0
-                        ? 'Team machine'
-                        : 'Private'}
-                    </span>
-                    <StatusDot
-                      state={harness.connected ? 'connected' : 'disconnected'}
-                      label={harness.connected ? 'Connected' : 'Offline'}
-                    />
-                  </div>
-                  <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                    {lastConnectedText(harness)}
-                  </p>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <Show when={harness.access === 'owner'}>
-                    <ShareRuntime harness={harness} />
-                  </Show>
-                  <Show
-                    when={
-                      harness.access === 'owner' ||
-                      (props.canRemoveShared &&
-                        harness.shared_team_ids.length > 0)
-                    }
-                  >
-                    <ConnectAction
-                      label="Remove"
-                      variant="danger"
-                      onClick={() => props.onRemove(harness)}
-                    />
-                  </Show>
-                </div>
-              </div>
+              <PairedRuntimeRow
+                harness={harness}
+                canRemoveShared={props.canRemoveShared}
+                onRename={() => props.onRename(harness)}
+                onRemove={() => props.onRemove(harness)}
+              />
             )}
           </For>
           <Show when={props.error}>
@@ -141,5 +117,105 @@ export function ConnectedRuntimesSection(props: {
         </SettingsCard>
       </div>
     </Show>
+  );
+}
+
+/**
+ * One paired macrod runtime. Its name, owner and permission bypass live here
+ * on the web; macrod.toml on the machine holds only machine-local config.
+ */
+function PairedRuntimeRow(props: {
+  harness: RegisteredHarness;
+  canRemoveShared: boolean;
+  onRename: () => void;
+  onRemove: () => void;
+}) {
+  const patchHarness = usePatchHarnessMutation();
+
+  const setBypass = async (allowed: boolean) => {
+    if (allowed) {
+      const confirmed = await confirmDialog({
+        title: 'Allow bypassing permission requests?',
+        body: 'Agents set to bypass can run commands and edit files on this machine without approval. Only enable this if you trust everyone who can create agents on this runtime.',
+        confirmLabel: 'Allow',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
+    try {
+      await patchHarness.mutateAsync({
+        harnessId: props.harness.id,
+        allowPermissionBypass: allowed,
+      });
+    } catch (error) {
+      toast.failure(
+        failureMessage(error, 'Failed to change permission requests')
+      );
+    }
+  };
+
+  return (
+    <div class="flex flex-col gap-3 px-4 py-3">
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 items-center gap-2">
+            <p class="min-w-0 flex-1 truncate text-sm text-ink">
+              {props.harness.name}
+            </p>
+            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
+              {props.harness.shared_team_ids.length > 0
+                ? 'Team machine'
+                : 'Private'}
+            </span>
+            <StatusDot
+              state={props.harness.connected ? 'connected' : 'disconnected'}
+              label={props.harness.connected ? 'Connected' : 'Offline'}
+            />
+          </div>
+          <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
+            {lastConnectedText(props.harness)}
+          </p>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <Show when={props.harness.access === 'owner'}>
+            <ShareRuntime harness={props.harness} />
+            <ConnectAction
+              label="Rename"
+              variant="neutral"
+              onClick={props.onRename}
+            />
+          </Show>
+          <Show
+            when={
+              props.harness.access === 'owner' ||
+              (props.canRemoveShared && props.harness.shared_team_ids.length > 0)
+            }
+          >
+            <ConnectAction
+              label="Remove"
+              variant="danger"
+              onClick={props.onRemove}
+            />
+          </Show>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <ToggleSwitch
+          size="md"
+          label="Allow bypassing permission requests"
+          labelClass="text-xs text-ink"
+          checked={props.harness.allow_permission_bypass}
+          disabled={props.harness.access !== 'owner' || patchHarness.isPending}
+          onChange={(allowed) =>
+            fireAndForget(setBypass(allowed), 'harness-settings')
+          }
+        />
+        <p class="text-xs text-ink-extra-muted">
+          {props.harness.allow_permission_bypass
+            ? 'Agents set to Always bypass approve tool calls without asking, from their next turn.'
+            : 'Every agent on this runtime must ask for permission.'}
+        </p>
+      </div>
+    </div>
   );
 }

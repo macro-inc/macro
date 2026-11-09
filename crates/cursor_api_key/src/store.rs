@@ -23,6 +23,10 @@ pub struct StoredCursorConfig {
     /// The Cursor model id this user's sessions start on, when they have
     /// chosen one. `None` means "use the deployment's built-in default".
     pub default_model_id: Option<String>,
+    /// The reasoning effort those sessions start on, as the value of
+    /// [`Self::default_model_id`]'s effort parameter (e.g. `high`). `None`
+    /// means the model's own default variant. Never set without a model.
+    pub default_effort: Option<String>,
     /// When the key was first registered.
     pub created_at: DateTime<Utc>,
     /// When it was last replaced.
@@ -34,8 +38,8 @@ pub struct StoredCursorConfig {
 /// Replacing rather than erroring on a second write is the behaviour the
 /// settings surface wants: a user pasting a new key after rotating it at Cursor
 /// is updating, not conflicting. `created_at` survives the replacement so the
-/// row still records when the user first connected, and `default_model_id` is
-/// deliberately left untouched — rotating a key must not silently reset the
+/// row still records when the user first connected, and the default model and
+/// effort are deliberately left untouched — rotating a key must not silently reset the
 /// model the user chose.
 ///
 /// # Errors
@@ -66,6 +70,7 @@ pub async fn upsert_cursor_api_key(
             encryption_version,
             kms_key_id,
             default_model_id,
+            default_effort,
             created_at,
             updated_at
         "#,
@@ -85,6 +90,7 @@ pub async fn upsert_cursor_api_key(
             kms_key_id: row.kms_key_id,
         },
         default_model_id: row.default_model_id,
+        default_effort: row.default_effort,
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
@@ -110,6 +116,7 @@ pub async fn get_cursor_api_key(
             encryption_version,
             kms_key_id,
             default_model_id,
+            default_effort,
             created_at,
             updated_at
         FROM cursor_configs
@@ -128,12 +135,19 @@ pub async fn get_cursor_api_key(
             kms_key_id: row.kms_key_id,
         },
         default_model_id: row.default_model_id,
+        default_effort: row.default_effort,
         created_at: row.created_at,
         updated_at: row.updated_at,
     }))
 }
 
-/// Set (or clear, with `None`) the user's default model.
+/// Set (or clear, with `None`) the user's default model and its effort.
+///
+/// The two are written together because the effort belongs to the model:
+/// Cursor offers different effort values per model, so choosing a model
+/// without an effort clears the old one rather than carrying it to a model
+/// that may not offer it. An effort with no model is not representable and is
+/// dropped.
 ///
 /// Returns whether a row was updated. `false` means the user has no
 /// configuration row yet — i.e. has not connected Cursor — which the settings
@@ -143,20 +157,24 @@ pub async fn get_cursor_api_key(
 ///
 /// # Errors
 /// If the row cannot be updated.
-pub async fn set_default_model_id(
+pub async fn set_default_model(
     executor: impl sqlx::PgExecutor<'_>,
     user_id: &str,
     default_model_id: Option<&str>,
+    default_effort: Option<&str>,
 ) -> anyhow::Result<bool> {
+    let default_effort = default_model_id.and(default_effort);
     let result = sqlx::query!(
         r#"
         UPDATE cursor_configs
         SET default_model_id = $2,
+            default_effort   = $3,
             updated_at       = NOW()
         WHERE user_id = $1
         "#,
         user_id,
         default_model_id,
+        default_effort,
     )
     .execute(executor)
     .await?;

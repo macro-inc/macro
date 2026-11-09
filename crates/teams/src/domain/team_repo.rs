@@ -241,6 +241,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<String, TeamError>> + Send;
 
+    /// Gets a user's display name (first and last name). `None` when they have not set one.
+    fn get_user_display_name(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send;
+
     /// Updates a team
     fn patch_team(
         &self,
@@ -582,14 +588,9 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
 
-    /// Enables or disables CRM for a team. On a `false → true`
-    /// transition with `backfill`, fans out a `PopulateCrmForUser`
-    /// enqueue per current team member (best-effort, log-and-swallow);
-    /// without `backfill` the flag flips and the CRM starts empty. On
-    /// any disable call, flips the flag and purges the team's
-    /// `crm_companies` rows in a single transaction — the FK cascade
-    /// clears the rest of the CRM tables. Idempotent in both
-    /// directions.
+    /// Legacy compatibility command. Enabling is a no-op and disabling
+    /// is rejected. Records remain available; email contribution and
+    /// backfill require each member's explicit CRM consent.
     fn set_team_crm_enabled(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
