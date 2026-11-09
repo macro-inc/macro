@@ -5,6 +5,7 @@
 import type { SerializedLexicalNode } from 'lexical';
 import type { DOMConversionMap } from './dom-types';
 import type { LexicalNode } from './index';
+import type { RequiredNodeStateConfig } from './state/types';
 
 export type { StaticNodeConfigRecord } from 'lexical';
 
@@ -16,10 +17,7 @@ export interface StaticNodeConfigValue<
   readonly $transform?: (node: T) => void;
   readonly $importJSON?: (serializedNode: SerializedLexicalNode) => T;
   readonly importDOM?: DOMConversionMap;
-  readonly stateConfigs?: import('lexical').StaticNodeConfigValue<
-    import('lexical').LexicalNode,
-    string
-  >['stateConfigs'];
+  readonly stateConfigs?: readonly RequiredNodeStateConfig[];
   readonly extends?: LexicalNode['constructor'];
 }
 
