@@ -14,11 +14,13 @@ typing marks and token boundaries require an insertion command. Reattach a
 running session with `attachRunningSession` to restore text and selection while
 retaining its existing history and synchronization lifecycle.
 
-`NativeEditorHost.execute` receives ordered typed effects after the Rust call
-returns. A host executor must return correlated storage completions only after
-real transactions commit, preserve transport generations, schedule the session's
-single timer, and forward telemetry. The view itself does not execute storage or
-network requests. `EditorMount` handles viewport placement and clipping; its owner
+`NativeSessionHost` owns session lifetime beyond a mounted view, queues callback
+admissions on the main thread, maintains one deadline timer, and releases the
+session after the core confirms Stop. It dispatches typed `NativeSessionEffects`
+to application adapters. These must return storage completions only after
+real transactions commit, preserve transport generations and forward telemetry.
+The view itself does not execute storage or
+network requests. Render failures cannot discard I/O effects. `EditorMount` handles viewport placement and clipping; its owner
 must drain Stop before destroying the session.
 
 Application adoption requires native menu/search adapters, complete decorators

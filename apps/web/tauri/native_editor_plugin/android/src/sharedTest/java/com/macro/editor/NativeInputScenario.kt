@@ -7,8 +7,7 @@ import com.macro.documentsession.*
 import org.junit.Assert.*
 
 internal object NativeInputScenario {
-    fun run(targetContext: Context) {
-        val config = FfiSessionConfig(
+    fun config() = FfiSessionConfig(
             SyncConfig(
                 "native-input-fixture", "00000000-0000-0000-0000-000000000001", "fixture-user",
                 TransportKind.NONE, Persistence.MEMORY, Access.EDIT, null, null,
@@ -21,6 +20,9 @@ internal object NativeInputScenario {
             listOf(7uL, 8uL, 9uL, 10uL), PeerRange.USER, ViewOs.ANDROID, false,
             FfiApplicationConfig(FfiEditorType.MARKDOWN_SYNC, "app.example.com"), emptyList(),
         )
+
+    fun run(targetContext: Context) {
+        val config = config()
         var tick = 0uL
         val host = object : NativeEditorHost {
             override fun now(): FfiNow {

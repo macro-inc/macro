@@ -10,6 +10,7 @@ acceptance requirement before changing the feature-flag admission.
 
 - `android/src/main/java/com/macro/editor/EditorProjection.kt`: keyed diff and UTF-16 mapping.
 - `android/src/main/java/com/macro/editor/NativeEditorView.kt`: Android input and session effects.
+- `android/src/main/java/com/macro/editor/NativeSessionHost.kt`: serialized callbacks, timers and graceful lifetime.
 - `crates/client/document_session_ffi`: generated native API and binding regeneration.
 
 ## Boundaries
