@@ -1,0 +1,10 @@
+{
+  "upstreamVersion": "0.45.0",
+  "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "sourceSha256": "7f426e2959154bb662eb96b407ce11ec8d320dc7fc9dd62eede1598dbf58a327",
+  "declaration": "PointType._selection: BaseSelection",
+  "observedExpression": "$createPoint('root', 0, 'element')._selection",
+  "observedValue": null,
+  "namedAdapter": "$createPoint in selection/point.ts",
+  "exception": "Owner-less state and node-kind-dependent getNode are declared more narrowly by upstream than their actual runtime values. One adapter preserves that existing public contract."
+}
