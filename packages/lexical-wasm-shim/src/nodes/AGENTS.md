@@ -5,6 +5,12 @@
 Port the public and DOM methods of the pinned Lexical v0.45.0 built-in classes.
 Keep construction, cloning, bindings and model context in `runtime.ts`.
 
+`base.ts`, `element.ts`, `text.ts`, `tab.ts` and `builtins.ts` implement the
+classes; `index.ts` exports them and hydrates built-ins. Import superclass values
+from their defining module so class evaluation does not depend on barrel order.
+`dom-import.ts` and `text-dom.ts` implement the node DOM methods.
+`config.ts` and `dom-types.ts` carry the actual core's recursive types.
+
 ## Boundaries
 
 - Read captured own fields through `nodeField`; resolve current values through the active graph before reading.
@@ -19,3 +25,8 @@ Keep construction, cloning, bindings and model context in `runtime.ts`.
 Run the package's strict TypeScript check and real WASM tests, the pinned node oracle,
 and node identity and crossing-count regressions. Report source-model oracle runs
 separately from actual native acceptance.
+
+Run `tests/run-oracle.ts` with `LEXICAL_NODES_UPSTREAM_ROOT` pointing to the
+unaltered v0.45.0 source and `LEXICAL_NODES_NATIVE_CONFIG` pointing to the native
+facade unit-test configuration. The runner checks original suite hashes before
+and after execution and requires every listed suite to execute.
