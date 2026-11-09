@@ -30,13 +30,14 @@ import {
   ParagraphNode,
   TextNode,
 } from './index';
-import { booleanResult, isRootOrShadowRoot } from './results';
+import { isRootOrShadowRoot } from './results';
 import {
   assumeNodeType,
   constructNode,
   nodeByKey,
   nodeCall,
   nodeConfigRecord,
+  nodeIsDirty,
   nodeLatest,
   nodeSelect,
   nodeWritable,
@@ -56,7 +57,14 @@ export class LexicalNode {
     defineNodeFields(this);
   }
   static getType(): string {
-    throw new Error('abstract node class');
+    let ownNodeType: string | undefined;
+    for (const [type] of Object.entries(this.prototype.$config()))
+      ownNodeType = type;
+    if (ownNodeType === undefined)
+      throw new Error(
+        `LexicalNode: Node ${this.name} does not implement .getType().`
+      );
+    return ownNodeType;
   }
   static clone(_data: unknown): LexicalNode {
     throw new Error('LexicalNode.clone: must be implemented');
@@ -143,7 +151,7 @@ export class LexicalNode {
     return selected;
   }
   isDirty(): boolean {
-    return booleanResult(nodeCall(this, 'isDirty', []));
+    return nodeIsDirty(this);
   }
   is(other: LexicalNode | null | undefined): boolean {
     return other != null && this.__key === other.__key;

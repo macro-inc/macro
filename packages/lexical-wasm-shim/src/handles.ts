@@ -79,6 +79,10 @@ export class NodeHandles<Node extends object> {
     this.own(record, node);
   }
 
+  hasIdentity(handle: number, node: Node): boolean {
+    return this.records.get(handle)?.node?.deref() === node;
+  }
+
   private own(record: RecordHandle<Node>, node: Node): void {
     if (owners.has(node)) throw new Error('node factory reused an instance');
     owners.set(node, { cache: this, version: this.pinVersion(record.version) });

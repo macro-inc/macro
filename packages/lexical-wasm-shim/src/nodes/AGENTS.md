@@ -10,6 +10,11 @@ classes; `index.ts` exports them and hydrates built-ins. Import superclass value
 from their defining module so class evaluation does not depend on barrel order.
 `dom-import.ts` and `text-dom.ts` implement the node DOM methods.
 `config.ts` and `dom-types.ts` carry the actual core's recursive types.
+`runtime-primitives.ts` resolves nodes, writable captures and native-backed field
+writes through `runtime.ts`. `../compatibility-exceptions.ts` centralizes the
+three approved upstream assertions; keep their call sites in the type-contract
+manifest. The production backend must supply acknowledged local reads and batched
+writes; the legacy conformance backend still makes diagnostic native calls.
 
 ## Boundaries
 

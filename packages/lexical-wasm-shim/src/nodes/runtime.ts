@@ -3,7 +3,7 @@ import { NodeHandles } from '../handles';
 import { foreignHooks } from '../hooks.generated';
 import type { LexicalNode } from './index';
 
-interface Binding {
+export interface Binding {
   readonly runtime: NodeRuntime;
   readonly handle: number;
 }
@@ -11,6 +11,44 @@ const bindings = new WeakMap<object, Binding>();
 
 let activeRuntime: NodeRuntime | undefined;
 let hydratingNative = false;
+
+export function getNodeRuntime(): NodeRuntime {
+  if (activeRuntime === undefined)
+    throw new Error('Unable to find an active editor state.');
+  return activeRuntime;
+}
+
+export function nodeBinding(node: object): Binding {
+  const binding = bindings.get(node);
+  if (binding === undefined) throw new Error('node has no model record');
+  return binding;
+}
+
+export function isNativeHydration(): boolean {
+  return hydratingNative;
+}
+
+export function assertNodeIdentity(node: LexicalNode): void {
+  const { runtime, handle } = nodeBinding(node);
+  if (!runtime.handles.hasIdentity(handle, node))
+    throw new Error('node has no stable model identity');
+  const key = nodeField(node, '__key');
+  if (typeof key !== 'string') throw new Error('node has an invalid model key');
+  const current = getNodeRuntime().call('lexical.$getNodeByKey', [key]);
+  if (current !== node)
+    throw new Error('node is not the exact active model capture');
+}
+
+export { assumeNodeType, nodeConfigRecord } from '../compatibility-exceptions';
+export {
+  nodeByKey,
+  nodeIsComposing,
+  nodeIsDirty,
+  nodeLatest,
+  nodeSelect,
+  nodeWritable,
+  nodeWriteField,
+} from './runtime-primitives';
 
 /** Only builtin hydration uses this scope; no native record is allocated. */
 export function withNativeHydration<T>(body: () => T): T {
