@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
 import { beforeAll, expect, test } from 'vitest';
 import {
   initializeNativeSurfaceTests,
@@ -436,6 +437,82 @@ test('a caret returning to its pre-copy point is admitted after copy captures a 
       ...caret,
       dirty: false,
     });
+  } finally {
+    fixture.close();
+  }
+});
+
+test('a caret returning after an authoritative selection change is admitted', () => {
+  const fixture = nativeSurface();
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [
+                {
+                  type: 'text',
+                  version: 1,
+                  text: 'copy range',
+                  format: 0,
+                  detail: 0,
+                  mode: 'normal',
+                  style: '',
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    const node = [...fixture.view.mirror.values()].find(
+      (node) => node.kind === 'text'
+    );
+    if (!node) throw new Error('Missing text');
+    const element = fixture.view.getElementByKey(node.key);
+    if (!element) throw new Error('Missing text DOM');
+    const leaf = document
+      .createTreeWalker(element, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    if (!leaf) throw new Error('Missing text leaf');
+    fixture.root.tabIndex = 0;
+    fixture.root.focus();
+    expect(document.activeElement).toBe(fixture.root);
+    const selection = document.getSelection();
+    if (!selection) throw new Error('Missing DOM selection');
+    const caret = {
+      kind: 'range' as const,
+      anchor: { key: node.key, offset: 10, type: 'text' as const },
+      focus: { key: node.key, offset: 10, type: 'text' as const },
+    };
+    selection.setBaseAndExtent(leaf, 10, leaf, 10);
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(fixture.view.selection().selection).toEqual(caret);
+    expect(fixture.port.command(CommandCode.SelectAll)).toBe(true);
+    selection.setBaseAndExtent(leaf, 0, leaf, 10);
+    const clipboard = transfer('');
+    const event = new Event('copy', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: clipboard });
+    fixture.root.dispatchEvent(event);
+    expect(clipboard.getData('text/plain')).toBe('copy range');
+    expect(fixture.view.selection().selection).toEqual({
+      ...caret,
+      anchor: { ...caret.anchor, offset: 0 },
+    });
+    selection.setBaseAndExtent(leaf, 10, leaf, 10);
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(fixture.view.selection().selection).toEqual({
+      ...caret,
+      dirty: false,
+    });
+    const admitted = fixture.counters.admissions;
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(fixture.counters.admissions).toBe(admitted);
   } finally {
     fixture.close();
   }

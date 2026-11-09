@@ -209,6 +209,18 @@ export function registerEvents(view: EditorView): {
   let composingKey: number | null = null;
   let pendingEnd: { key: number; data: string } | null = null;
   let lastSubmittedSelection: ViewSelection = { kind: 'none' };
+  let lastSubmittedModelSelection: ViewSelection = { kind: 'none' };
+  function rememberSelection(): void {
+    lastSubmittedSelection = readSelection(view);
+    lastSubmittedModelSelection = view.selection().selection;
+  }
+  function isLastSubmittedSelection(selection: ViewSelection): boolean {
+    return (
+      sameSelection(selection, lastSubmittedSelection) &&
+      sameSelection(view.selection().selection, lastSubmittedModelSelection)
+    );
+  }
+
   const rustListeners = view.port.listeners();
   function listen<K extends keyof HTMLElementEventMap>(
     name: K,
@@ -272,7 +284,7 @@ export function registerEvents(view: EditorView): {
         selection.kind === 'range' ? selection.focus.offset : 0,
         pending.data
       );
-      lastSubmittedSelection = readSelection(view);
+      rememberSelection();
       if (event.key === 'Backspace') event.preventDefault();
       return;
     }
@@ -439,7 +451,7 @@ export function registerEvents(view: EditorView): {
       !rustListeners.has('KeyDown') &&
       (!keyCommand || !rustListeners.has(keyCommand)) &&
       (sameSelection(selection, view.selection().selection) ||
-        sameSelection(selection, lastSubmittedSelection))
+        isLastSubmittedSelection(selection))
     )
       return;
     const mods =
@@ -618,7 +630,7 @@ export function registerEvents(view: EditorView): {
     } else view.submitText(selection.anchor.key);
     // This selection was admitted with TextFromView even when unrelated
     // effects made its result nonzero and SetViewSelection was elided.
-    lastSubmittedSelection = readSelection(view);
+    rememberSelection();
   });
   listen('compositionstart', (event) => {
     const selection = readSelection(view);
@@ -705,13 +717,13 @@ export function registerEvents(view: EditorView): {
       context.domRangeSameNode ||
       (selection.kind === 'range' && selection.dirty) ||
       (!sameSelection(selection, view.selection().selection) &&
-        !sameSelection(selection, lastSubmittedSelection))
+        !isLastSubmittedSelection(selection))
     ) {
       view.port.selectionFromView(
         selection,
         marked || saved || context.domRangeSameNode ? context : undefined
       );
-      lastSubmittedSelection = readSelection(view);
+      rememberSelection();
     }
   };
   listeners.push(registerSelectionChange(root, selectionChange));
@@ -727,7 +739,7 @@ export function registerEvents(view: EditorView): {
         !sameSelection(selected, current)
       ) {
         view.port.selectionFromView(selected);
-        lastSubmittedSelection = readSelection(view);
+        rememberSelection();
       }
       const data = view.clipboard.formats(name === 'cut' ? 1 : 0);
       event.clipboardData.setData('text/html', data.html);
