@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { installBrowserHooks } from './browser-hooks';
 
 async function toggleChecklistMarker(
   page: Page,
@@ -34,40 +35,7 @@ async function toggleChecklistMarker(
   else await page.mouse.click(x, y);
 }
 
-const PAGE_ERRORS = new WeakMap<Page, string[]>();
-
-test.beforeEach(async ({ page }) => {
-  const errors: string[] = [];
-  PAGE_ERRORS.set(page, errors);
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.routeWebSocket(
-    (url) => url.hostname !== '127.0.0.1',
-    (socket) => socket.close()
-  );
-  await page.route('**/*', (route) => {
-    const url = new URL(route.request().url());
-    return url.hostname === '127.0.0.1' ? route.continue() : route.abort();
-  });
-  await page.goto('/');
-  await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
-});
-
-test.afterEach(async ({ page }, info) => {
-  await info.attach('accessibility', {
-    body: await page.locator('body').ariaSnapshot(),
-    contentType: 'text/plain',
-  });
-  await info.attach('pixels', {
-    body: await page.screenshot(),
-    contentType: 'image/png',
-  });
-  await page.getByRole('button', { name: 'Save state', exact: true }).click();
-  await info.attach('serialized-and-markdown', {
-    body: await page.locator('#saved').innerText(),
-    contentType: 'application/json',
-  });
-  expect(PAGE_ERRORS.get(page)).toEqual([]);
-});
+installBrowserHooks();
 
 test('single-line title drops multiline paste while retaining the first line', async ({
   page,
@@ -199,7 +167,7 @@ test('slash menu filters and Enter inserts the selected heading', async ({
   await expect(body).toHaveText('Heading content');
 });
 
-test('slash menu Tab and ShiftTab navigate and ArrowUp wraps through Table to checklist', async ({
+test('slash menu Tab and ShiftTab navigate and ArrowUp wraps through Table and Link to checklist', async ({
   page,
 }) => {
   const body = page.getByRole('textbox', { name: 'Body', exact: true });
@@ -214,6 +182,8 @@ test('slash menu Tab and ShiftTab navigate and ArrowUp wraps through Table to ch
   await expect(selected).toContainText('Normal Text');
   await page.keyboard.press('ArrowUp');
   await expect(selected).toContainText('Table');
+  await page.keyboard.press('ArrowUp');
+  await expect(selected).toContainText('Link');
   await page.keyboard.press('ArrowUp');
   await expect(selected).toContainText('Checklist');
   await page.keyboard.press('Enter');

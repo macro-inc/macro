@@ -129,6 +129,14 @@ Escape/typing/outside dismissal. The fixture owns an explicit scroll area so
 large tables leave its operator buttons reachable under the app stylesheet's
 clipped document root. The isolated floating group does not establish menu
 coordination, grid accessibility, native virtual keyboards or table resize UI.
+Link cases mount FloatingLinkMenu and its real link plugin. They check slash
+creation, URL/label editing, explicit unlink, Escape, clipboard replacement,
+read-only reset and pointer hover. Markdown export asserts Macro's m-link form;
+reopening restores JSON, not Markdown. Keyboard activation of Read only avoids
+outside-pointer dismissal masking the editability reset. Remote unfurl traffic
+is blocked, so hover uses the real fallback card rather than service metadata.
+Icon-action order does not establish toolbar accessibility. Shared hooks retain
+network isolation, page-error checks and diagnostic captures for both files.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing

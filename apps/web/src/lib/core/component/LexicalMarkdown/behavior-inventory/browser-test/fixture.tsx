@@ -33,6 +33,7 @@ import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRendere
 import { MarkdownImage } from '../../component/decorator/MarkdownImage';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
+import { FloatingLinkMenu } from '../../component/menu/FloatingLinkMenu';
 import { FloatingTableMenu } from '../../component/menu/FloatingTableMenu';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
 import {
@@ -177,7 +178,6 @@ render(
               'image',
               'gif',
               'video',
-              'link',
               'latex',
               'hr',
               'database-query',
@@ -189,6 +189,7 @@ render(
           <DecoratorRenderer editor={BODY} />
           <NodeAccessoryRenderer editor={BODY} store={ACCESSORIES} />
           <FloatingMenuGroup>
+            <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
             <FloatingTableMenu canEdit={bodyEditable} />
           </FloatingMenuGroup>
         </LexicalWrapperContext.Provider>
