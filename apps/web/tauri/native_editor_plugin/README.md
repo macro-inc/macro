@@ -117,3 +117,16 @@ dependencies and regenerate or check freshness from the repository root:
 bun install --cwd apps/web/tauri/native_editor_plugin --frozen-lockfile --ignore-scripts
 nix develop --command bun apps/web/tauri/native_editor_plugin/scripts/generate-bridge.ts --check
 ```
+
+The instrumentation APK also contains a standalone real-session test window.
+After building with `-PnativeSessionTarget` and installing that test APK, open it:
+
+```sh
+adb shell am start -n com.macro.editor.test/com.macro.editor.NativeEditorTestActivity
+```
+
+It uses a memory session without an account, network or durable data.
+`NativeEditorWindowTest` drives the real window through accessibility text input
+and physical Undo/Redo, checking both displayed text and the Rust history state.
+Compile-only checks do not establish these device interactions or IME acceptance.
+This activity exists only in the test APK and does not select app editing surfaces.
