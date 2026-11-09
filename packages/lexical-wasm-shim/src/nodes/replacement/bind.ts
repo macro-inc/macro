@@ -2,6 +2,7 @@ import { isInstanceOfKlass } from '../../compatibility-exceptions';
 import { LexicalNode } from '../base';
 import type {
   BoundNodeReplacement,
+  ClassLike,
   LexicalNodeReplacement,
   NodeClass,
 } from './types';
@@ -9,7 +10,7 @@ import type {
 type PublicNodeClass = LexicalNodeReplacement['replace'];
 type PublicReplacementResult = ReturnType<LexicalNodeReplacement['with']>;
 
-function actualNodeClass(klass: NodeClass | PublicNodeClass): NodeClass {
+export function actualNodeClass(klass: ClassLike): NodeClass {
   if (Object.is(klass, LexicalNode)) return LexicalNode;
   const prototype: unknown = klass.prototype;
   if (!(prototype instanceof LexicalNode))

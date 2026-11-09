@@ -5,6 +5,8 @@ import type { SharedState } from '../state/shared';
 
 export type { LexicalNodeReplacement } from 'lexical';
 
+export type ClassLike = Function & { readonly prototype: object };
+
 export type NodeClass = LexicalNode['constructor'];
 type GenericConstructor<T> = new (
   ...args: ConstructorParameters<LexicalNode['constructor']>
@@ -36,6 +38,10 @@ export type BoundNodeReplacement = {
   withKlass?: NodeClass;
 };
 export type InternalNodeConfig = NodeClass | BoundNodeReplacement;
+export type NodeConfigInput =
+  | ClassLike
+  | import('lexical').LexicalNodeReplacement
+  | BoundNodeReplacement;
 
 export interface ReplacementRuntime {
   readonly getActiveEditor: () => LexicalEditor;

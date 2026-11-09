@@ -4,12 +4,15 @@ import { TextNode } from '../text';
 import { bindReplacement } from './bind';
 import { $applyNodeReplacement, $create } from './helpers';
 import type { Klass, LexicalNodeReplacement, RegisteredNode } from './index';
+import { normalizeNodeConfig, normalizeNodeConfigs } from './normalize';
 
 declare const publicReplacement: LexicalNodeReplacement;
 declare const upstreamReplacement: UpstreamReplacement;
 export const publicToUpstream: UpstreamReplacement = publicReplacement;
 export const upstreamToPublic: LexicalNodeReplacement = upstreamReplacement;
 export const publicInvoker = bindReplacement(publicReplacement);
+export const normalizedPublic = normalizeNodeConfig(publicReplacement);
+export const normalizedPublicList = normalizeNodeConfigs([publicReplacement]);
 
 class CustomText extends TextNode {
   customField = true;
