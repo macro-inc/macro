@@ -1,0 +1,14 @@
+{
+  "small": {
+    "bytes": 2225,
+    "mdBlocks": 41
+  },
+  "medium": {
+    "bytes": 50072,
+    "mdBlocks": 921
+  },
+  "large": {
+    "bytes": 500192,
+    "mdBlocks": 8960
+  }
+}

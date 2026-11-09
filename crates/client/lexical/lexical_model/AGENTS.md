@@ -27,7 +27,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.
 - `benches/node_map.rs` measures isolated writes and full keystrokes at three document sizes; read `benches/README.md` before interpreting timings.
 - Keep learned NodeState configs scoped to each editor and exact registered type; import learned fields in incoming JSON order.
-- `src/json.rs` preserves export order and JavaScript number serialization.
+- `src/json.rs` preserves export order and JavaScript number serialization; `json/parse` borrows typed node envelopes and `json/write` streams `EditorState::to_json_string` into one shared buffer.
+- Keep JSON fast paths restricted to exact builtin types without replacements, foreign hooks or flat state layouts; custom imports/exports retain their complete ordered payloads and virtual dispatch.
 - Reuse `json::js_string` and `json::js_to_number` for JSON boundary coercions; JSON.stringify is a different operation.
 - `src/style/css.rs` is the shared ordered JavaScript CSS parser for selections and HTML export.
 

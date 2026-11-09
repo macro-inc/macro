@@ -22,6 +22,8 @@ rootcause.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
+lexical_markdown.workspace = true
 macro_document_model.workspace = true
 uuid_value.workspace = true
 sync_protocol.workspace = true
@@ -39,3 +41,7 @@ test-faults = []
 [[example]]
 name = "collab"
 required-features = ["conformance"]
+
+[[bench]]
+name = "bulk"
+harness = false

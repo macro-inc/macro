@@ -58,6 +58,7 @@ successful binding. Validate complete generic batches before changing the live d
 - `src/comments.rs`: fresh-peer mark staging and idempotent publication retries.
 - `src/observation.rs`: conformance-only text/node identities around real undo/redo.
 - `examples/collab.rs`: development-only native bridge for the four-peer differential.
+- `benches/bulk.rs`: load-guarded native JSON and Markdown measurements on the synthetic S/M/L seeds; see `benches/README.md` for scope and comparison commands.
 
 The `conformance` feature only enables read-only inspection and the development
 example. It is not an application API or a wire/session ABI.

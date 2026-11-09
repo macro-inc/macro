@@ -11,6 +11,7 @@ bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]
 
 [dependencies]
+memchr = "2.8.0"
 smallvec = { workspace = true }
 imbl = { workspace = true }
 rustc-hash = { workspace = true }
