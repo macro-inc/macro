@@ -2,6 +2,11 @@
 use super::*;
 use lexical_model::{ForeignReadContext, ForeignReadLease};
 
+pub(crate) struct PreparedStateRead {
+    source: ForeignReadContext,
+    active: ActiveUpdate,
+}
+
 struct StateRead<'scope> {
     frames: &'scope Frames,
     active: Option<ActiveUpdate>,
@@ -25,7 +30,17 @@ impl Context {
         version: u64,
         read: impl FnOnce(&mut CallbackRead<'_, '_>) -> Result<T>,
     ) -> Result<T> {
-        self.frames.bind_owner(&tx)?;
+        let prepared = self.prepare_state_read(&tx, version)?;
+        drop(tx);
+        self.read_prepared_state(prepared, version, read)
+    }
+
+    pub(crate) fn prepare_state_read(
+        &mut self,
+        tx: &Transaction<'_>,
+        version: u64,
+    ) -> Result<PreparedStateRead> {
+        self.frames.bind_owner(tx)?;
         let committed_version = self.replay.committed_version;
         if self.replay.bindings.state(&committed_version)?.is_none() {
             self.replay
@@ -39,9 +54,20 @@ impl Context {
             version,
             committed_version,
         };
-        let source = tx.view().context_for_foreign_read()?;
-        drop(tx);
-        self.frames.with_state_read(source, active, version, read)
+        Ok(PreparedStateRead {
+            source: tx.view().context_for_foreign_read()?,
+            active,
+        })
+    }
+
+    pub(crate) fn read_prepared_state<T>(
+        &mut self,
+        prepared: PreparedStateRead,
+        version: u64,
+        read: impl FnOnce(&mut CallbackRead<'_, '_>) -> Result<T>,
+    ) -> Result<T> {
+        self.frames
+            .with_state_read(prepared.source, prepared.active, version, read)
     }
 }
 

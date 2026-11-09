@@ -94,6 +94,15 @@ impl Session {
         self.editor.state()
     }
 
+    /// Exact live update facts, without normalizing or changing the graph.
+    pub fn update_facts(&mut self) -> Result<std::sync::Arc<lexical_model::ForeignUpdateFacts>> {
+        if self.pending.is_some() {
+            self.with_update(|_, tx| Ok(tx.view().foreign_update_facts()))
+        } else {
+            Ok(self.editor.state().view().foreign_update_facts())
+        }
+    }
+
     /// Open an update; model writes remain unpublished until `commit`.
     pub fn begin_update(&mut self, tags: TagSet) -> Result<()> {
         if self.pending.is_some() {
@@ -229,8 +238,16 @@ impl Session {
         version: u64,
         read: impl FnOnce(&mut super::CallbackRead<'_, '_>) -> Result<T>,
     ) -> Result<T> {
-        self.context
-            .read_state(self.editor.transaction(), version, read)
+        if self.pending.is_some() {
+            // Own the live facts, then suspend before invoking JS. The read
+            // peer must never keep a mutable ancestor transaction borrowed.
+            let prepared =
+                self.with_update(|context, tx| context.prepare_state_read(tx, version))?;
+            self.context.read_prepared_state(prepared, version, read)
+        } else {
+            self.context
+                .read_state(self.editor.transaction(), version, read)
+        }
     }
 
     /// Read a captured node field during an update or from a published snapshot.
