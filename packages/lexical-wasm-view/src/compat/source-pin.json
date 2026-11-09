@@ -1,0 +1,16 @@
+{
+  "package": "lexical",
+  "version": "0.45.0",
+  "license": "MIT",
+  "sha256": {
+    "LexicalReconciler.ts": "a58617a8d55ee7e57547802c721e4f6be86a7c58e9f714eb6e8e4fadd699cbb0",
+    "LexicalEvents.ts": "bb83618aef7ebf6b4fc6a05e06918dcf9f8e839161f381868efd7b66bb87ab3b",
+    "LexicalMutations.ts": "f0472490bab5d7cb02d9638821dcba19de121ad70c7d9fe759af2755a7d39a4c",
+    "LexicalSelection.ts": "7f426e2959154bb662eb96b407ce11ec8d320dc7fc9dd62eede1598dbf58a327",
+    "LexicalDOMSlot.ts": "d5a3fad7758df6476f4ea112e9cfc9c80d8b086f62a311a75459a8a240635b3d",
+    "LexicalUtils.ts": "44cb5d1c46f1629f95569f97739ee4dd54b2d3f823d9b1ba1a102429fbf649e6",
+    "LexicalConstants.ts": "04219b234063d6a8211e84118986df488c2d6ed2ca32866421eed4259dbae478",
+    "environment.ts": "1a42bd9d3b8523ad41cdc1b7a3c56f9aae654dc8b944b3b8ae589f5ac651946a",
+    "LexicalGenMap.ts": "b001dd377dade1ef7a72297314155c63bf7249f89e3baa28f24c85b428101558"
+  }
+}
