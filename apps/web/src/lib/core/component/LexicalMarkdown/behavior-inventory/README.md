@@ -116,6 +116,13 @@ saved language restoration, native clipboard replacement, deletion/focus/undo,
 and controls mounted initially read-only. Clipboard cases seed a distinct value
 before copying. This does not establish virtual-keyboard, live permission
 transition or production icon-button accessibility behavior.
+Table picker cases use the actual slash action, floating picker and table
+plugin. They cover deferred confirmation, default filled-table restoration,
+keyboard size limits/grid growth, native pointer/touch dimensions and
+Escape/typing/outside dismissal. The fixture owns an explicit scroll area so
+large tables leave its operator buttons reachable under the app stylesheet's
+clipped document root. The isolated floating group does not establish menu
+coordination, grid accessibility, native virtual keyboards or table resize UI.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing

@@ -199,7 +199,7 @@ test('slash menu filters and Enter inserts the selected heading', async ({
   await expect(body).toHaveText('Heading content');
 });
 
-test('slash menu Tab and ShiftTab navigate and ArrowUp wraps to checklist', async ({
+test('slash menu Tab and ShiftTab navigate and ArrowUp wraps through Table to checklist', async ({
   page,
 }) => {
   const body = page.getByRole('textbox', { name: 'Body', exact: true });
@@ -210,7 +210,12 @@ test('slash menu Tab and ShiftTab navigate and ArrowUp wraps to checklist', asyn
   await page.keyboard.press('Tab');
   await expect(body).toBeFocused();
   await page.keyboard.press('Shift+Tab');
+  const selected = menu.locator('[class~="bg-ink/5"]');
+  await expect(selected).toContainText('Normal Text');
   await page.keyboard.press('ArrowUp');
+  await expect(selected).toContainText('Table');
+  await page.keyboard.press('ArrowUp');
+  await expect(selected).toContainText('Checklist');
   await page.keyboard.press('Enter');
   await expect(menu).toHaveCount(0);
   await page.keyboard.type('Checklist content');
@@ -804,4 +809,110 @@ test('code accessory mounted read-only shows a static language and copy only', a
     .toBe('const value = 7;');
   expect(await page.locator('#live-state').textContent()).toBe(before);
   await expect(body).toHaveAttribute('aria-readonly', 'true');
+});
+
+async function openTablePicker(page: Page) {
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type('/table');
+  const slash = page.locator('.menu-surface');
+  await expect(slash.getByText('Table', { exact: true })).toBeVisible();
+  await expect(slash.getByText('Normal Text', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  const picker = page.locator('.menu-surface');
+  await expect(picker.locator('p')).toHaveText('3 × 3');
+  await expect(body.locator('table')).toHaveCount(0);
+  await expect(body).toBeFocused();
+  return { body, picker };
+}
+test('table picker defers confirmation and restores a filled default table from saved state', async ({
+  page,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveCount(0);
+  await expect(body.locator('table')).toHaveCount(1);
+  await expect(body.locator('td')).toHaveCount(9);
+  await expect(body.locator('th')).toHaveCount(0);
+  await page.keyboard.type('cell');
+  await expect(body.locator('td').first()).toHaveText('cell');
+  await page.getByRole('button', { name: 'Save state', exact: true }).click();
+  await loadImageDecorator(page);
+  await expect(body.locator('table')).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Reopen saved state', exact: true })
+    .click();
+  await expect(body.locator('td')).toHaveCount(9);
+  await expect(body.locator('td').first()).toHaveText('cell');
+});
+test('table picker keyboard size clamps at one and twelve and grows its grid', async ({
+  page,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  for (let index = 0; index < 15; index++) {
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowLeft');
+  }
+  await expect(picker.locator('p')).toHaveText('1 × 1');
+  await expect(picker.locator('.grid > div')).toHaveCount(36);
+  for (let index = 0; index < 15; index++) {
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowRight');
+  }
+  await expect(picker.locator('p')).toHaveText('12 × 12');
+  await expect(picker.locator('.grid > div')).toHaveCount(144);
+  await page.keyboard.press('Enter');
+  await expect(body.locator('tr')).toHaveCount(12);
+  await expect(body.locator('td')).toHaveCount(144);
+});
+test('table picker native pointer or touch chooses the requested row and column', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  // The production picker grid uses unlabeled divs; this is a geometry/input
+  // contract, not grid accessibility acceptance. Initial grid is six columns.
+  const cell = picker.locator('.grid > div').nth(9);
+  if (hasTouch) await cell.tap();
+  else {
+    await cell.hover();
+    await expect(picker.locator('p')).toHaveText('2 × 4');
+    await cell.click();
+  }
+  await expect(picker).toHaveCount(0);
+  await expect(body.locator('tr')).toHaveCount(2);
+  await expect(body.locator('td')).toHaveCount(8);
+  await expect(body).toBeFocused();
+  await page.keyboard.type('chosen');
+  await expect(body.locator('td').first()).toHaveText('chosen');
+});
+test('table picker Escape closes without a table and restores body typing', async ({
+  page,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
+  await expect(body.locator('table')).toHaveCount(0);
+  await expect(body).toBeFocused();
+  await page.keyboard.type('after');
+  await expect(body).toHaveText('after');
+});
+test('table picker printable input dismisses and passes text to the editor', async ({
+  page,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  await page.keyboard.type('x');
+  await expect(picker).toHaveCount(0);
+  await expect(body.locator('table')).toHaveCount(0);
+  await expect(body).toHaveText('x');
+});
+test('table picker outside press dismisses without inserting', async ({
+  page,
+}) => {
+  const { body, picker } = await openTablePicker(page);
+  const title = page.getByRole('textbox', { name: 'Title', exact: true });
+  await title.click();
+  await expect(picker).toHaveCount(0);
+  await expect(body.locator('table')).toHaveCount(0);
+  await expect(title).toBeFocused();
 });

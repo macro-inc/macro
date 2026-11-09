@@ -33,6 +33,8 @@ import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRendere
 import { MarkdownImage } from '../../component/decorator/MarkdownImage';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
+import { FloatingTableMenu } from '../../component/menu/FloatingTableMenu';
+import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
 import {
   type LexicalWrapperBase,
   LexicalWrapperContext,
@@ -59,6 +61,7 @@ import { createPluginManager } from '../../plugins/pluginManager';
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
 import { singleLinePlugin } from '../../plugins/single-line/singleLinePlugin';
 import { tabIndentationPlugin } from '../../plugins/tab-indentation/tabIndentationPlugin';
+import { tablePlugin } from '../../plugins/tables/tablePlugin';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import { theme } from '../../theme';
 
@@ -113,6 +116,12 @@ setDecorator(ImageNode, MarkdownImage);
 mediaPlugin()(BODY);
 const [ACCESSORIES, setAccessories] = createAccessoryStore();
 codePlugin({ accessories: ACCESSORIES, setAccessories })(BODY);
+tablePlugin({
+  hasCellMerge: true,
+  hasCellBackgroundColor: true,
+  hasTabHandler: true,
+  hasHorizontalScroll: true,
+})(BODY);
 BODY.registerUpdateListener(({ editorState }) => {
   element('live-state').textContent = JSON.stringify(editorState.toJSON());
 });
@@ -170,7 +179,6 @@ render(
               'video',
               'link',
               'latex',
-              'table',
               'hr',
               'database-query',
               'database',
@@ -180,6 +188,9 @@ render(
           <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
           <DecoratorRenderer editor={BODY} />
           <NodeAccessoryRenderer editor={BODY} store={ACCESSORIES} />
+          <FloatingMenuGroup>
+            <FloatingTableMenu canEdit={bodyEditable} />
+          </FloatingMenuGroup>
         </LexicalWrapperContext.Provider>
       </PosthogProvider>
     </AnalyticsContextProvider>
