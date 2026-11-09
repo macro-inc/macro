@@ -2,7 +2,7 @@
 
 ## Current checkpoint: held ABI3 validation
 
-The main native-source checkpoint is `5fa2c3b2a0` and remains ABI2. The live preview remains on
+The main application-source checkpoint is `2e335cdcc5` and remains ABI2. The live preview remains on
 `9c21b03842`; no dependency directories, live artifacts or stack processes
 were changed during this validation. Integration3 and full compatibility
 acceptance remain unchecked.
@@ -20,7 +20,18 @@ that source. Independent native conformance verification passes **29/29**
 on the combined staging source (`abi3-production-core-conformance-tests.log`);
 no independent optimized 105-case rerun is claimed yet.
 
-The immutable combined build at the preceding `08ade11a39` checkpoint is raw
+The latest combined application/ABI3 build at `4f0eb3d6bf` is raw
+**8,937,649 bytes**, Brotli **2,012,635 bytes**, SHA256
+`9f368fb4cbf10dc93cae654326350050bbb55594d616bf3383adaa73150a549b`.
+It is frozen separately in
+`wasm-attribution/candidate-abi3-application-manifest.json` under the acceptance
+directory. Generated declarations are unchanged. Matched session **91/91**,
+view **255/255**, and collaboration type checking pass on this artifact.
+This build is 8,799 raw / 1,485 Brotli bytes smaller than the preceding
+candidate; no single-change size or performance attribution is claimed.
+It remains held with the same unresolved type/readiness/performance gates.
+
+The preceding immutable build at `08ade11a39` is raw
 **8,946,448 bytes**, Brotli **2,014,120 bytes**, SHA256
 `4941015d3468997787e9d89919782b662806ace78bb788207f8d8636f27f74ad`.
 Compared with live this adds 647,642 raw / 128,305 Brotli bytes. Its source
@@ -53,9 +64,18 @@ and reads host-target output, leaving the override sentinel unused. This
 closes the earlier RequireView and inherited-target audit findings.
 Evidence: `compat-selection-ffi-correction-tests.log` and
 `ffi-correction-host-target-freshness.log`. Application-config extraction
-and Android-host changes remain separate, unconsumed work. Application
-extraction `18b19b53c5` and generated bindings `8e876692a7` are explicitly
-held pending the final owner audit/freshness note.
+received final owner audit approval and is integrated separately as
+`fa777fc8d3`, with generated bindings `8e876692a7` integrated as `2e335cdcc5`.
+Combined session **48 plus one telemetry**, FFI **5**, WASM **47**, strict
+all-target scoped clippy, scoped `just check` and dependency checks pass.
+The normal wasm32 client dependency graph excludes server/composer crates.
+Independent integrated binding freshness passes against explicit host output. Android
+foundation `cc7c6dbb9d` is separate and unconsumed; app admission is unchanged.
+The held validation branch includes the application pair and mechanical
+formatting at `4f0eb3d6bf`; its combined build and matched package tests pass. The immutable
+`08ade11a39` artifact remains evidence only for its earlier source.
+Logs: `application-profile-integrated-{tests,clippy,check,deps,bindings}.log`
+and `application-profile-wasm-normal-deps.log`.
 
 Selection operations and validated class-mask admission are now integrated;
 hosted callbacks, complete compact-batch execution, remote-hold/rebase and
@@ -72,10 +92,12 @@ acceptance or a paired ON comparison. Raw SHA256:
 full method and bounds are in the external `editor-boot-baseline.md` report.
 
 A current root check found three inherited test-format/import-order errors;
-mechanical corrections are committed as `a16cce48ca`. Formatter and diff checks
-pass; the full root `just check` rerun passes (existing warnings retained).
-Scoped held-source conformance clippy is still compiling dependencies; no
-completed clippy result for that follow-up is claimed yet. Delegated incremental audit could not run
+mechanical corrections are committed as `a16cce48ca`. The formatting-only
+diff was reviewed; the full root `just check` rerun passes (existing warnings
+retained). UniFFI output is preserved verbatim; `git diff --check` over the
+generated binding commit reports generator whitespace, not source edits.
+Scoped held-source conformance clippy also passes with `-D warnings`
+(`abi3-production-core-clippy.log`). Delegated incremental audit could not run
 because its service authentication was invalidated. A limited direct audit is
 recorded in `audit-current-held-abi3.md`; no independent sign-off is claimed.
 Hexagonal boundaries were checked: replay delegates to existing core input
