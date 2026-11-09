@@ -73,6 +73,9 @@ link fails TLS. Tell the user, once:
   `infra/local/certs/README.md`).
 - The viewer must resolve the hostname and reach the port (same network or
   tailnet).
+- Each stack has its own session on that hostname, whatever its port, so
+  previews of two stacks can stay signed in side by side. Web-app previews
+  against hosted services do share one session.
 - Sign in with an email code on that hostname. On the web-app preview it is a
   real email to a dev account; on the stack the code lands in Mailpit: use
   `mailpit_url` from `just run_local status --json`.

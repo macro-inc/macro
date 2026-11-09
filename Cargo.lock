@@ -23325,6 +23325,7 @@ dependencies = [
  "macro_event_topics",
  "macro_queues",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
