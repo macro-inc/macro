@@ -94,14 +94,31 @@ export async function historyFixture() {
   host.addEventListener('keydown', (event) => {
     let code = 0;
     if (event.key === 'Enter') code = 3;
-    else if (event.ctrlKey && event.key === 'z') code = 13;
+    else if (event.ctrlKey && event.key.toLowerCase() === 'z')
+      code = event.shiftKey ? 14 : 13;
     else if (event.ctrlKey && event.key === 'y') code = 14;
+    else if (!event.ctrlKey && !event.metaKey && event.key.length === 1) {
+      event.preventDefault();
+      session.command(1, 0, 0, event.key, ++tick);
+      drain();
+      return;
+    }
     if (!code) return;
     event.preventDefault();
-    session.command(code, 0, 0, undefined, ++tick);
+    session.keyDown(
+      0,
+      (event.shiftKey ? 1 : 0) | (event.ctrlKey ? 4 : 0),
+      code,
+      event.key,
+      ++tick
+    );
     drain();
   });
   return {
+    clearHistory() {
+      session.command(12, 0, 0, undefined, ++tick);
+      drain();
+    },
     snapshot() {
       if (!selection || selection.kind !== 2)
         throw new Error('missing native range selection');

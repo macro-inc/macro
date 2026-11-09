@@ -387,103 +387,23 @@ impl EditorSurface {
                 _ => {}
             }
         }
-        if matches!(
-            input,
+        let history = match &input {
             Input::Undo
-                | Input::Redo
-                | Input::Command {
-                    command: Command::Undo | Command::Redo,
-                    ..
-                }
-        ) {
-            let redo = matches!(
-                input,
-                Input::Redo
-                    | Input::Command {
-                        command: Command::Redo,
-                        ..
-                    }
-            );
-            self.handled = Handled::Yes;
-            let undo = self.undo.as_mut().ok_or(SessionError::NotReady)?;
-            undo.group_end();
-            self.group_active = false;
-            self.item_started = None;
-            let meta = if redo {
-                undo.top_redo_meta()
-            } else {
-                undo.top_undo_meta()
-            };
-            self.history_selection.begin(doc, meta.as_ref());
-            let end = doc.oplog_vv().get(&doc.peer_id()).copied().unwrap_or(0);
-            let ops = meta
-                .and_then(|meta| {
-                    history::start(&meta).map(|start| i64::from(end).saturating_sub(start))
-                })
-                .unwrap_or(0);
-            let span = if redo || ops > 100 {
-                Some(if redo {
-                    tracing::info_span!(
-                        "editor.redo",
-                        ops,
-                        history.applied = tracing::field::Empty,
-                        outcome = tracing::field::Empty
-                    )
-                } else {
-                    tracing::info_span!(
-                        "editor.undo",
-                        ops,
-                        history.applied = tracing::field::Empty,
-                        outcome = tracing::field::Empty
-                    )
-                })
-            } else {
-                None
-            };
-            let _guard = span.as_ref().map(tracing::Span::enter);
-            #[cfg(feature = "conformance")]
-            let before_undo = crate::observation::visible_ids(doc);
-            let changed = {
-                let phase = span
-                    .as_ref()
-                    .map(|_| tracing::info_span!("editor.history.loro"));
-                let _phase = phase.as_ref().map(tracing::Span::enter);
-                let result = if redo { undo.redo() } else { undo.undo() };
-                if result.is_err() {
-                    self.history_selection.applied();
-                }
-                let changed = result?;
-                self.history_selection.finish(undo, redo);
-                changed
-            };
-            if let Some(span) = &span {
-                span.record("history.applied", changed);
-            }
-            if changed {
-                #[cfg(feature = "conformance")]
-                {
-                    let removed = match (before_undo, crate::observation::visible_ids(doc)) {
-                        (Ok(before), Ok(after)) => Ok(before.difference(&after).copied().collect()),
-                        (Err(error), _) | (_, Err(error)) => Err(error.to_string()),
-                    };
-                    self.undo_applied
-                        .push(crate::UndoObservation { redo, removed });
-                }
-                let phase = span
-                    .as_ref()
-                    .map(|_| tracing::info_span!("editor.history.apply"));
-                let _phase = phase.as_ref().map(tracing::Span::enter);
-                self.remote_pending(doc, now, access, view, true)?;
-            }
-            if !changed {
-                self.history_selection.applied();
-            }
-            if let Some(span) = &span {
-                span.record("outcome", "ok");
-            }
-            self.history_changed(view);
-            return Ok(changed);
+            | Input::Command {
+                command: Command::Undo,
+                ..
+            } => Some(false),
+            Input::Redo
+            | Input::Command {
+                command: Command::Redo,
+                ..
+            } => Some(true),
+            _ => None,
+        };
+        if let Some(redo) = history {
+            return self.navigate_history(doc, redo, now, access, view);
         }
+
         let clear = matches!(
             input,
             Input::Command {
@@ -509,8 +429,27 @@ impl EditorSurface {
             self.history_changed(view);
             return Ok(false);
         }
+        let routed_history = match &input {
+            Input::KeyDown {
+                routed: Some(Command::Undo),
+                ..
+            } => Some(false),
+            Input::KeyDown {
+                routed: Some(Command::Redo),
+                ..
+            } => Some(true),
+            _ => None,
+        };
         self.history_selection.prepare(self.selection_cursors());
         let result = self.core.apply(input, HistoryTime(now.mono.0));
+        // Run KeyDown and routed command listeners through the model first. Its
+        // snapshot history is disabled here; only an unhandled successful route
+        // falls through to collaborative history, after its commits are projected.
+        let routed_history = routed_history.filter(|_| {
+            result
+                .as_ref()
+                .is_ok_and(|output| output.handled == Handled::No)
+        });
         let commits: &[Commit] = match &result {
             Ok(out) => &out.commits,
             Err(error) => &error.committed,
@@ -598,6 +537,97 @@ impl EditorSurface {
         if let Some(span) = &cold_span {
             span.record("outcome", if failed { "error" } else { "ok" });
         }
+        if let Some(redo) = routed_history {
+            return Ok(self.navigate_history(doc, redo, now, access, view)? || changed);
+        }
+        Ok(changed)
+    }
+    #[cold]
+    fn navigate_history(
+        &mut self,
+        doc: &LoroDoc,
+        redo: bool,
+        now: Now,
+        access: Access,
+        view: &mut Vec<ViewEffect>,
+    ) -> Result<bool, SessionError> {
+        let undo = self.undo.as_mut().ok_or(SessionError::NotReady)?;
+        undo.group_end();
+        self.group_active = false;
+        self.item_started = None;
+        let meta = if redo {
+            undo.top_redo_meta()
+        } else {
+            undo.top_undo_meta()
+        };
+        self.history_selection.begin(doc, meta.as_ref());
+        let end = doc.oplog_vv().get(&doc.peer_id()).copied().unwrap_or(0);
+        let ops = meta
+            .and_then(|meta| {
+                history::start(&meta).map(|start| i64::from(end).saturating_sub(start))
+            })
+            .unwrap_or(0);
+        let span = if redo || ops > 100 {
+            Some(if redo {
+                tracing::info_span!(
+                    "editor.redo",
+                    ops,
+                    history.applied = tracing::field::Empty,
+                    outcome = tracing::field::Empty
+                )
+            } else {
+                tracing::info_span!(
+                    "editor.undo",
+                    ops,
+                    history.applied = tracing::field::Empty,
+                    outcome = tracing::field::Empty
+                )
+            })
+        } else {
+            None
+        };
+        let _guard = span.as_ref().map(tracing::Span::enter);
+        #[cfg(feature = "conformance")]
+        let before_undo = crate::observation::visible_ids(doc);
+        let changed = {
+            let phase = span
+                .as_ref()
+                .map(|_| tracing::info_span!("editor.history.loro"));
+            let _phase = phase.as_ref().map(tracing::Span::enter);
+            let result = if redo { undo.redo() } else { undo.undo() };
+            if result.is_err() {
+                self.history_selection.applied();
+            }
+            let changed = result?;
+            self.history_selection.finish(undo, redo);
+            changed
+        };
+        if let Some(span) = &span {
+            span.record("history.applied", changed);
+        }
+        if changed {
+            #[cfg(feature = "conformance")]
+            {
+                let removed = match (before_undo, crate::observation::visible_ids(doc)) {
+                    (Ok(before), Ok(after)) => Ok(before.difference(&after).copied().collect()),
+                    (Err(error), _) | (_, Err(error)) => Err(error.to_string()),
+                };
+                self.undo_applied
+                    .push(crate::UndoObservation { redo, removed });
+            }
+            let phase = span
+                .as_ref()
+                .map(|_| tracing::info_span!("editor.history.apply"));
+            let _phase = phase.as_ref().map(tracing::Span::enter);
+            self.remote_pending(doc, now, access, view, true)?;
+        }
+        if !changed {
+            self.history_selection.applied();
+        }
+        if let Some(span) = &span {
+            span.record("outcome", "ok");
+        }
+        self.history_changed(view);
         Ok(changed)
     }
     fn refresh_cursor(&mut self, doc: &LoroDoc) {
@@ -799,3 +829,6 @@ impl EditorSurface {
 
 #[cfg(test)]
 mod selection_test;
+
+#[cfg(test)]
+mod routed_history_test;
