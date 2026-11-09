@@ -34,21 +34,11 @@ export type RegisteredNodes = Map<
   string,
   {
     klass: CompatNodeClass;
-    transforms: Set<(node: CompatNode) => void>;
-    replace: ((node: CompatNode) => CompatNode) | null;
-    replaceWithKlass: CompatNodeClass | null;
   }
 >;
-export type MutationListeners = Map<
-  (
-    nodes: Map<NodeKey, NodeMutation>,
-    payload: {
-      updateTags: Set<string>;
-      dirtyLeaves: Set<string>;
-      prevEditorState: CompatEditorState;
-    }
-  ) => void,
-  Set<CompatNodeClass>
+export type MutationListeners = ReadonlyMap<
+  unknown,
+  ReadonlySet<CompatNodeClass>
 >;
 export type MutatedNodes = Map<CompatNodeClass, Map<NodeKey, NodeMutation>>;
 /** Private DOM data, independent of the editor class declaration. */
@@ -62,7 +52,7 @@ export interface CompatEditorState {
   _nodeMap: Map<NodeKey, CompatNode>;
   _selection: BaseSelection | null;
   _readOnly: boolean;
-  read<V>(callback: () => V, options?: { editor?: CompatEditor | null }): V;
+  read<V>(callback: () => V): V;
 }
 
 export interface CompatEditor {
@@ -109,7 +99,6 @@ export interface CompatEditor {
 }
 
 export interface CompatEditorConfig {
-  dom?: CompatDOMRenderConfig;
   disableEvents?: boolean;
   namespace: string;
   theme: import('lexical').EditorThemeClasses;
@@ -119,46 +108,22 @@ export type CompatDOMSlotForNode<N extends CompatNode> =
     ? ElementDOMSlot<HTMLElement>
     : DOMSlot<HTMLElement>;
 export interface CompatDOMRenderConfig {
-  $createDOM: <T extends CompatNode>(
-    node: T,
-    editor: CompatEditor
-  ) => HTMLElement;
-  $getDOMSlot: <N extends CompatNode>(
-    node: N,
+  $createDOM: (node: CompatNode, editor: CompatEditor) => HTMLElement;
+  $getDOMSlot: (
+    node: CompatNode,
     dom: HTMLElement,
     editor: CompatEditor
-  ) => CompatDOMSlotForNode<N>;
-  $exportDOM: <T extends CompatNode>(
-    node: T,
-    editor: CompatEditor
-  ) => import('lexical').DOMExportOutput;
-  $extractWithChild: <T extends CompatNode>(
-    node: T,
-    childNode: CompatNode,
-    selection: BaseSelection | null,
-    destination: 'clone' | 'html',
-    editor: CompatEditor
-  ) => boolean;
-  $decorateDOM: <T extends CompatNode>(
-    node: T,
-    prevNode: T | null,
+  ) => DOMSlot<HTMLElement>;
+  $decorateDOM: (
+    node: CompatNode,
+    prevNode: CompatNode | null,
     dom: HTMLElement,
     editor: CompatEditor
   ) => void;
-  $updateDOM: <T extends CompatNode>(
-    nextNode: T,
-    prevNode: T,
+  $updateDOM: (
+    nextNode: CompatNode,
+    prevNode: CompatNode,
     dom: HTMLElement,
-    editor: CompatEditor
-  ) => boolean;
-  $shouldInclude: <T extends CompatNode>(
-    node: T,
-    selection: BaseSelection | null,
-    editor: CompatEditor
-  ) => boolean;
-  $shouldExclude: <T extends CompatNode>(
-    node: T,
-    selection: BaseSelection | null,
     editor: CompatEditor
   ) => boolean;
 }

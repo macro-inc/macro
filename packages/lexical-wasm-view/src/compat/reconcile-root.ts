@@ -24,7 +24,7 @@ import { reconcilerState, resetReconcilerState } from './reconciler-state';
 import {
   $isElementNode,
   $isTextNode,
-  DEFAULT_EDITOR_DOM_CONFIG,
+  getEditorDOMRenderConfig,
 } from './runtime';
 import { cloneMap, invariant } from './support';
 import type {
@@ -168,7 +168,7 @@ export function $reconcileRoot(
     reconcilerState.activeEditor = editor;
     reconcilerState.activeEditorConfig = editor._config;
     reconcilerState.activeEditorDOMRenderConfig =
-      editor._config.dom || DEFAULT_EDITOR_DOM_CONFIG;
+      getEditorDOMRenderConfig(editor);
     reconcilerState.activeEditorNodes = editor._nodes;
     reconcilerState.activeMutationListeners =
       reconcilerState.activeEditor._listeners.mutation;

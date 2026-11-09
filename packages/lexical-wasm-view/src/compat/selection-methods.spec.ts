@@ -1,7 +1,6 @@
 import * as Lexical from 'lexical';
 import { expect, test } from 'vitest';
-import { createSelectionDOMMethods } from './selection-methods';
-import { getUpstreamRuntime } from './test-setup';
+import { createUpstreamSelectionDOMMethods } from './upstream-selection-runtime';
 
 test('applyDOMRange matches the original class over real source nodes and DOM', () => {
   const editor = Lexical.createEditor({
@@ -24,10 +23,7 @@ test('applyDOMRange matches the original class over real source nodes and DOM', 
       },
       { discrete: true }
     );
-    const methods = createSelectionDOMMethods({
-      ...getUpstreamRuntime(),
-      ...Lexical,
-    });
+    const methods = createUpstreamSelectionDOMMethods(Lexical);
     const text = root.querySelector('[data-lexical-text]')?.firstChild;
     if (!text) {
       throw new Error('Real reconciler did not produce a text DOM node');
@@ -62,10 +58,7 @@ test('character movement collapses both range directions like the original class
       throw error;
     },
   });
-  const methods = createSelectionDOMMethods({
-    ...getUpstreamRuntime(),
-    ...Lexical,
-  });
+  const methods = createUpstreamSelectionDOMMethods(Lexical);
   editor.update(
     () => {
       const text = Lexical.$createTextNode('hello');

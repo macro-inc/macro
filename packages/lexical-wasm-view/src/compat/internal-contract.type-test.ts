@@ -26,7 +26,7 @@ export type DOMInternalCallSubset = {
   node: CompatNode;
   element: CompatElementNode;
   text: CompatTextNode;
-  decorator: CompatDecoratorNode<unknown>;
+  decorator: CompatDecoratorNode;
   root: CompatRootNode;
   lineBreak: CompatLineBreakNode;
   tab: CompatTabNode;

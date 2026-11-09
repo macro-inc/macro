@@ -23,7 +23,7 @@ import {
   $isRangeSelection,
   $isTextNode,
   COLLABORATION_TAG,
-  RangeSelection,
+  createRangeSelection,
   SKIP_SCROLL_INTO_VIEW_TAG,
   SKIP_SELECTION_FOCUS_TAG,
 } from './runtime';
@@ -32,6 +32,7 @@ import type {
   CompatElementNode as ElementNode,
   CompatEditor as LexicalEditor,
   CompatNode as LexicalNode,
+  CompatRangeSelection as RangeSelection,
   CompatTextNode as TextNode,
 } from './types';
 import {
@@ -569,7 +570,7 @@ export function $internalCreateRangeSelection(
       }
     }
   }
-  const newSelection = new RangeSelection(
+  const newSelection = createRangeSelection(
     resolvedAnchorPoint,
     resolvedFocusPoint,
     format,

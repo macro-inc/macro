@@ -35,6 +35,8 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Keep the core's Point/RangeSelection/NodeSelection instances and command object identities.
 - Keep application types bound to upstream declarations; compare DOMObservableExpected/DOMObservableActual only through the test-only whole-graph declaration oracle after strict implementation declaration emission.
 - Use view-owned editor/state/node call subsets in product signatures; keep internal traversal non-generic and public core generics unchanged; never import the declaration oracle, strip private members in product types, or introduce a view-to-core package cycle.
+- Resolve configured DOM hooks through injected getEditorDOMRenderConfig; the internal config consumes only createDOM/getDOMSlot/updateDOM/decorateDOM, while the public core config retains its full generic API.
+- Invoke node identity/replacement, observed-mutation/decorator hooks, and mutation listeners through guarded producer callbacks when they require the full core graph; keep callbacks function-valued and preserve real node/point/caret identities.
 - Keep JS node classes unchanged; getDOMSlot must return these exported DOMSlot/ElementDOMSlot classes.
 - Keep the upstream MIT notice and preserve DOM structures, command payloads and platform quirks when retargeting source.
 - Distinguish ported DOM over the upstream model from the actual Rust compat engine in every test report.

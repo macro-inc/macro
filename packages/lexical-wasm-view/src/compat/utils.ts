@@ -35,6 +35,7 @@ import {
   getActiveEditor,
   isLexicalEditor,
   type RangeSelection,
+  replaceNode,
 } from './runtime';
 import type { BaseSelection } from './selection';
 import type {
@@ -414,7 +415,7 @@ export function $updateTextNodeFromDOMContent(
       if (node.isSegmented()) {
         const originalTextContent = node.getTextContent();
         const replacement = $createTextNode(originalTextContent);
-        node.replace(replacement);
+        replaceNode(node, replacement);
         node = replacement;
       }
       $setTextContentWithSelection(node, normalizedTextContent, selection);

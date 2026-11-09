@@ -1,10 +1,6 @@
 /** DOM-consumed graph and hooks; public facade completeness is checked separately. */
 import type { NodeKey } from 'lexical';
-import type {
-  CompatEditor,
-  CompatEditorConfig,
-  CompatRangeSelection,
-} from './types';
+import type { CompatRangeSelection } from './types';
 
 export interface CompatNode {
   __key: string;
@@ -23,13 +19,10 @@ export interface CompatNode {
   getTextContentSize(): number;
   getType(): string;
   getWritable(): this;
-  is(object: CompatNode | null | undefined): boolean;
   isAttached(): boolean;
   isDirty(): boolean;
   markDirty(): void;
-  reconcileObservedMutation(dom: HTMLElement, editor: CompatEditor): void;
   remove(preserveEmptyParent?: boolean): void;
-  replace(replaceWith: CompatNode, includeChildren?: boolean): CompatNode;
   selectEnd(): CompatRangeSelection;
 }
 
@@ -82,8 +75,7 @@ export interface CompatTextNode extends CompatNode {
   setTextContent(text: string): this;
 }
 
-export interface CompatDecoratorNode<T> extends CompatNode {
-  decorate(editor: CompatEditor, config: CompatEditorConfig): null | T;
+export interface CompatDecoratorNode extends CompatNode {
   isInline(): boolean;
   isIsolated(): boolean;
   isKeyboardSelectable(): boolean;

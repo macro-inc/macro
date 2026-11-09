@@ -39,6 +39,7 @@ import {
   $isElementNode,
   $isRootNode,
   $isTextNode,
+  decorateNode,
 } from './runtime';
 import { invariant } from './support';
 import type {
@@ -577,10 +578,7 @@ export function $reconcileNode(
     const text = nextNode.getTextContent();
 
     if ($isDecoratorNode(nextNode)) {
-      const decorator = nextNode.decorate(
-        reconcilerState.activeEditor,
-        reconcilerState.activeEditorConfig
-      );
+      const decorator = decorateNode(nextNode, reconcilerState.activeEditor);
 
       if (decorator !== null) {
         reconcileDecorator(key, decorator);

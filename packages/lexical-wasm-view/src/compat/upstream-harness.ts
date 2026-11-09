@@ -49,13 +49,14 @@ export function compatSourcePlugin(
         const imports = `
 import * as oracleModel from '${source}/index.ts';
 import {installUpstreamRuntime as installOracle} from '${compat}test-setup.ts';
-import {RangeSelection as OracleRangeSelection} from '${source}/LexicalSelection.ts';
+import {LexicalNode as OracleLexicalNode} from '${source}/LexicalNode.ts';
+import {RangeSelection as OracleRangeSelection,$isRangeSelection as oracleIsRange,$isNodeSelection as oracleIsNode} from '${source}/LexicalSelection.ts';
 import {getActiveEditor as oracleEditor,getActiveEditorState as oracleState,isCurrentlyReadOnlyMode as oracleReadOnly,updateEditorSync as oracleSync} from '${source}/LexicalUpdates.ts';
 import {$getCompositionKey as oracleComposition} from '${source}/LexicalUtils.ts';
-import {createEmptyEditorState as oracleEmpty} from '${source}/LexicalEditorState.ts';
+import {EditorState as OracleEditorState,createEmptyEditorState as oracleEmpty} from '${source}/LexicalEditorState.ts';
 `;
         const position = declaration.body.getStart(ast) + 1;
-        const initialize = `installOracle(oracleModel,{RangeSelection:OracleRangeSelection,getActiveEditor:oracleEditor,getActiveEditorState:oracleState,isCurrentlyReadOnlyMode:oracleReadOnly,updateEditorSync:oracleSync,$getCompositionKey:oracleComposition,createEmptyEditorState:oracleEmpty});`;
+        const initialize = `installOracle(oracleModel,{isNode:(value)=>value instanceof OracleLexicalNode,isState:(value)=>value instanceof OracleEditorState,isSelection:(value)=>oracleIsRange(value)||oracleIsNode(value),RangeSelection:OracleRangeSelection,getActiveEditor:oracleEditor,getActiveEditorState:oracleState,isCurrentlyReadOnlyMode:oracleReadOnly,updateEditorSync:oracleSync,$getCompositionKey:oracleComposition,createEmptyEditorState:oracleEmpty});`;
         return (
           code.slice(0, position) + initialize + code.slice(position) + imports
         );

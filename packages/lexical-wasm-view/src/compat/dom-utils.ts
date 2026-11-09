@@ -11,7 +11,7 @@ import {
   $getNodeByKey,
   $isElementNode,
   $isRootNode,
-  DEFAULT_EDITOR_DOM_CONFIG,
+  getEditorDOMRenderConfig,
 } from './runtime';
 import type { PointType } from './selection';
 import { invariant } from './support';
@@ -431,7 +431,7 @@ export function isDocumentFragment(x: unknown): x is DocumentFragment {
 export function $getEditorDOMRenderConfig(
   editor: LexicalEditor = $getEditor()
 ): EditorDOMRenderConfig {
-  return editor._config.dom || DEFAULT_EDITOR_DOM_CONFIG;
+  return getEditorDOMRenderConfig(editor);
 }
 
 /**
@@ -448,8 +448,13 @@ export function $getEditorDOMRenderConfig(
 export function $getDOMSlot<N extends LexicalNode>(
   node: N,
   dom: HTMLElement,
+  editor?: LexicalEditor
+): DOMSlotForNode<N>;
+export function $getDOMSlot(
+  node: LexicalNode,
+  dom: HTMLElement,
   editor: LexicalEditor = $getEditor()
-): DOMSlotForNode<N> {
+): DOMSlot<HTMLElement> {
   const slot = $getEditorDOMRenderConfig(editor).$getDOMSlot(node, dom, editor);
   if ($isElementNode(node)) {
     invariant(

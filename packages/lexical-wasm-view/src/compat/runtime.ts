@@ -18,6 +18,7 @@ import type {
   CompatTextNode,
   CompatEditorState as EditorState,
   CompatEditor as LexicalEditor,
+  MutatedNodes,
 } from './types';
 export type CompatRuntime = Pick<
   typeof Lexical,
@@ -80,9 +81,9 @@ export type CompatRuntime = Pick<
   $isLineBreakNode: (
     node: CompatNode | null | undefined
   ) => node is CompatLineBreakNode;
-  $isDecoratorNode: <T>(
+  $isDecoratorNode: (
     node: CompatNode | null | undefined
-  ) => node is CompatDecoratorNode<T>;
+  ) => node is CompatDecoratorNode;
   $getSelection: () => BaseSelection | null;
   $getPreviousSelection: () => BaseSelection | null;
   $isRangeSelection: (value: unknown) => value is CompatRangeSelection;
@@ -104,23 +105,40 @@ export type CompatRuntime = Pick<
     node: CompatNode | null | undefined
   ) => node is CompatElementNode;
   $createTextNode: (text?: string) => CompatTextNode;
-  DEFAULT_EDITOR_DOM_CONFIG: CompatDOMRenderConfig;
 
+  publishMutationListeners: (
+    editor: LexicalEditor,
+    mutations: MutatedNodes,
+    payload: {
+      dirtyLeaves: Set<string>;
+      prevEditorState: EditorState;
+      updateTags: Set<string>;
+    }
+  ) => void;
+  isSameNode: (
+    node: CompatNode,
+    other: CompatNode | null | undefined
+  ) => boolean;
+  replaceNode: (node: CompatNode, replacement: CompatNode) => void;
+  reconcileObservedMutation: (
+    node: CompatNode,
+    dom: HTMLElement,
+    editor: LexicalEditor
+  ) => void;
+  decorateNode: (node: CompatDecoratorNode, editor: LexicalEditor) => unknown;
+  getEditorDOMRenderConfig: (editor: LexicalEditor) => CompatDOMRenderConfig;
   $getEditor: () => LexicalEditor;
   isLexicalEditor: (value: unknown) => value is LexicalEditor;
-  $getNodeByKey: <T extends CompatNode>(
-    key: string,
-    state?: EditorState
-  ) => T | null;
+  $getNodeByKey: (key: string, state?: EditorState) => CompatNode | null;
   createEmptyEditorState: () => EditorState;
   withReconciliation: <T>(
     editor: LexicalEditor,
     state: EditorState,
     body: () => T
   ) => T;
-  RangeSelection: new (
-    anchor: PointType,
-    focus: PointType,
+  createRangeSelection: (
+    anchor: Pick<PointType, 'key' | 'offset' | 'type'>,
+    focus: Pick<PointType, 'key' | 'offset' | 'type'>,
     format: number,
     style: string
   ) => CompatRangeSelection;
@@ -138,8 +156,14 @@ export let $isElementNode: CompatRuntime['$isElementNode'];
 export let $isTextNode: CompatRuntime['$isTextNode'];
 export let $getNodeByKey: CompatRuntime['$getNodeByKey'];
 export let $isRootNode: CompatRuntime['$isRootNode'];
+export let withReconciliation: CompatRuntime['withReconciliation'];
+export let publishMutationListeners: CompatRuntime['publishMutationListeners'];
+export let isSameNode: CompatRuntime['isSameNode'];
+export let replaceNode: CompatRuntime['replaceNode'];
+export let reconcileObservedMutation: CompatRuntime['reconcileObservedMutation'];
+export let decorateNode: CompatRuntime['decorateNode'];
+export let getEditorDOMRenderConfig: CompatRuntime['getEditorDOMRenderConfig'];
 export let $getEditor: CompatRuntime['$getEditor'];
-export let DEFAULT_EDITOR_DOM_CONFIG: CompatRuntime['DEFAULT_EDITOR_DOM_CONFIG'];
 export let $isLineBreakNode: CompatRuntime['$isLineBreakNode'];
 export let $isDecoratorNode: CompatRuntime['$isDecoratorNode'];
 export let KEY_DOWN_COMMAND: CompatRuntime['KEY_DOWN_COMMAND'];
@@ -152,7 +176,7 @@ export let $getSelection: CompatRuntime['$getSelection'];
 export let $getPreviousSelection: CompatRuntime['$getPreviousSelection'];
 export let $isRangeSelection: CompatRuntime['$isRangeSelection'];
 export let $getRoot: CompatRuntime['$getRoot'];
-export let RangeSelection: CompatRuntime['RangeSelection'];
+export let createRangeSelection: CompatRuntime['createRangeSelection'];
 export let isLexicalEditor: CompatRuntime['isLexicalEditor'];
 export let $getTextNodeOffset: CompatRuntime['$getTextNodeOffset'];
 export let $createPoint: CompatRuntime['$createPoint'];
@@ -222,7 +246,13 @@ export function installCompatRuntime(runtime: CompatRuntime): void {
     $getNodeByKey,
     $isRootNode,
     $getEditor,
-    DEFAULT_EDITOR_DOM_CONFIG,
+    getEditorDOMRenderConfig,
+    isSameNode,
+    withReconciliation,
+    publishMutationListeners,
+    replaceNode,
+    reconcileObservedMutation,
+    decorateNode,
     $isLineBreakNode,
     $isDecoratorNode,
     KEY_DOWN_COMMAND,
@@ -235,7 +265,7 @@ export function installCompatRuntime(runtime: CompatRuntime): void {
     $getPreviousSelection,
     $isRangeSelection,
     $getRoot,
-    RangeSelection,
+    createRangeSelection,
     isLexicalEditor,
     $getTextNodeOffset,
     $createPoint,
