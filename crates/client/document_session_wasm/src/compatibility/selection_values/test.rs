@@ -31,8 +31,8 @@ fn capture_preserves_raw_metadata_and_stable_reference_across_graphs() -> Result
 }
 
 #[test]
-fn historical_detached_patch_uses_scope_graph_and_preserves_full_node_cache()
--> Result<(), BoundaryError> {
+fn historical_detached_patch_uses_scope_graph_and_preserves_full_node_cache(
+) -> Result<(), BoundaryError> {
     let mut ledger = SelectionValues::new(7);
     let reference = ledger.allocate(Selection::Range(RangeSelection::at_root()), 3, 1)?;
     ledger.retain(reference)?;
@@ -82,20 +82,18 @@ fn historical_detached_patch_uses_scope_graph_and_preserves_full_node_cache()
         patched.value.as_range().unwrap().cached_is_backward(),
         Some(true)
     );
-    assert!(
-        ledger
-            .patch(
-                reference,
-                data,
-                Scope {
-                    historical: true,
-                    state_version: 20,
-                    update: 2,
-                    activate: true
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            reference,
+            data,
+            Scope {
+                historical: true,
+                state_version: 20,
+                update: 2,
+                activate: true
+            }
+        )
+        .is_err());
     ledger.release(reference)?;
     ledger.release_graph(3);
     assert!(ledger.get(reference).is_ok());
@@ -115,20 +113,18 @@ fn failed_patch_is_atomic_and_exact_references_are_required() -> Result<(), Boun
         *style = vec![0xd800];
         *dirty = true;
     }
-    assert!(
-        ledger
-            .patch(
-                reference,
-                data,
-                Scope {
-                    historical: false,
-                    state_version: 3,
-                    update: 1,
-                    activate: false
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            reference,
+            data,
+            Scope {
+                historical: false,
+                state_version: 3,
+                update: 1,
+                activate: false
+            }
+        )
+        .is_err());
     assert_eq!(encode(&ledger.get(reference)?), original);
     let mut wrong = reference;
     wrong.version = 3;
@@ -141,20 +137,18 @@ fn failed_patch_is_atomic_and_exact_references_are_required() -> Result<(), Boun
     wrong = reference;
     wrong.selection_id = 0;
     assert!(ledger.get(wrong).is_err());
-    assert!(
-        ledger
-            .patch(
-                reference,
-                compat::CompatSelectionData::Unknown,
-                Scope {
-                    historical: false,
-                    state_version: 3,
-                    update: 1,
-                    activate: false
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            reference,
+            compat::CompatSelectionData::Unknown,
+            Scope {
+                historical: false,
+                state_version: 3,
+                update: 1,
+                activate: false
+            }
+        )
+        .is_err());
     assert_eq!(encode(&ledger.get(reference)?), original);
     ledger.release(reference)?;
     ledger.release_graph(1);
@@ -180,35 +174,31 @@ fn active_values_freeze_on_publish_and_survive_discard_as_detached() -> Result<(
         Origin::Active { update: 5 },
     )?;
     let (_, _, discarded_ref) = decode(discarded.clone())?;
-    assert!(
-        ledger
-            .patch(
-                frozen_ref,
-                frozen.clone(),
-                Scope {
-                    historical: false,
-                    state_version: 1,
-                    update: 3,
-                    activate: false
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            frozen_ref,
+            frozen.clone(),
+            Scope {
+                historical: false,
+                state_version: 1,
+                update: 3,
+                activate: false
+            }
+        )
+        .is_err());
     ledger.finish_update(4, true);
-    assert!(
-        ledger
-            .patch(
-                frozen_ref,
-                frozen,
-                Scope {
-                    historical: false,
-                    state_version: 1,
-                    update: 4,
-                    activate: false
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            frozen_ref,
+            frozen,
+            Scope {
+                historical: false,
+                state_version: 1,
+                update: 4,
+                activate: false
+            }
+        )
+        .is_err());
     ledger.retain(discarded_ref)?;
     ledger.finish_update(5, false);
     ledger.release_graph(2);
@@ -292,20 +282,18 @@ fn table_and_node_values_roundtrip_without_graph_queries() -> Result<(), Boundar
         has_cached_nodes: false,
         cached_nodes: vec![],
     };
-    assert!(
-        ledger
-            .patch(
-                reference,
-                range,
-                Scope {
-                    historical: false,
-                    state_version: 7,
-                    update: 2,
-                    activate: false
-                }
-            )
-            .is_err()
-    );
+    assert!(ledger
+        .patch(
+            reference,
+            range,
+            Scope {
+                historical: false,
+                state_version: 7,
+                update: 2,
+                activate: false
+            }
+        )
+        .is_err());
     Ok(())
 }
 
@@ -397,6 +385,22 @@ fn active_capture_invalidates_node_cache_only_after_semantic_change() -> Result<
         retained.value.as_range().unwrap().cached_is_backward(),
         Some(true)
     );
+    let mut styled = RangeSelection::at_root();
+    styled.format = TextFormat::BOLD;
+    styled.style = "color: red".into();
+    ledger.capture(
+        &Selection::Range(styled),
+        identity.clone(),
+        1,
+        Origin::Active { update: 1 },
+    )?;
+    let styled_value = ledger.get(reference)?;
+    assert_eq!(styled_value.cached_nodes, Some(vec![cached]));
+    assert_eq!(
+        styled_value.value.as_range().unwrap().format,
+        TextFormat::BOLD
+    );
+    assert_eq!(&*styled_value.value.as_range().unwrap().style, "color: red");
     let moved = Selection::Range(RangeSelection::collapsed(Point::element(
         NodeKey::ROOT,
         lexical_model::ChildIndex(1),
