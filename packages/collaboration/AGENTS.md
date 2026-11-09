@@ -24,7 +24,7 @@ checking covers and moving WAL rows; reject changed selections without mutation.
 Prune only delivered rows covered by the current matching-owner snapshot, under
 that lock; TTL cleanup also holds the source lease so reopened owners remain live.
 Derive native field metadata from the checksum-pinned class declarations before generating the foreign host schema; keep typed UTF-16/scalar arguments separate from arbitrary opaque JS slots.
-Generate session/foreign-host.generated.ts from document_session_wasm/abi/foreign-host.bop; keep compiler output excluded from Biome like abi.generated.ts, and format AST-derived descriptors in their generator. Preserve public export objects in opaque slots until an explicit serialization request; record references retain their instance owner namespace.
+Generate session/foreign-host.generated.ts from document_session_wasm/abi/foreign-host.bop; keep compiler output excluded from Biome like abi.generated.ts, mirror that exclusion in tooling/just/check.just, and format AST-derived descriptors in their generator. Preserve public export objects in opaque slots until an explicit serialization request; record references retain their instance owner namespace.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
 Keep wasm.generated.d.ts synchronized with wasm-pack; the build recipe copies it
 so clean checkouts can type-check before compiling the binary.
