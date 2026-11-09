@@ -81,6 +81,9 @@ impl SelectionValues {
             // The same JS object retains its raw caches and allocation reference.
             // A frozen object can never become writable through recapture.
             if entry.value.origin != Origin::Frozen {
+                if !same_value(&entry.value.value, value) {
+                    entry.value.cached_nodes = None;
+                }
                 entry.value.value = raw_copy(value);
                 entry.value.origin = origin;
             }
@@ -291,6 +294,13 @@ fn raw_copy(value: &Selection) -> Selection {
 }
 fn same_kind(a: &Selection, b: &Selection) -> bool {
     std::mem::discriminant(a) == std::mem::discriminant(b)
+}
+fn same_value(a: &Selection, b: &Selection) -> bool {
+    match (a, b) {
+        // NodeSelection equality intentionally ignores insertion order.
+        (Selection::Node(a), Selection::Node(b)) => a.keys().eq(b.keys()),
+        _ => a == b,
+    }
 }
 fn key(key: NodeKey) -> compat::ForeignKey {
     compat::ForeignKey {
