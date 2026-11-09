@@ -10,7 +10,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
-- Compose application plugins, command decoders and bulk-query handlers in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations.
+- Compose application plugins, command decoders and bulk-query handlers in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations. Register Macro shortcuts through isolated post-insertion updates and the source Enter listener, preserving first-paragraph-child matching even for interior/expanded selections.
 
 - Own unknown HTML node names in exporter errors; opaque type names borrow their snapshot.
 
