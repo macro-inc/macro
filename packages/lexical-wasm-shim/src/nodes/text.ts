@@ -20,6 +20,7 @@ import type {
   CompatEditorConfig,
 } from '../../../lexical-wasm-view/src/compat/types';
 import type { BaseSelection } from '../selection';
+import { $getSelection, $isRangeSelection } from '../selection/helpers';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
 import { type DOMConversionMap, textImportDOM } from './dom-import';
@@ -201,11 +202,24 @@ export class TextNode extends LexicalNode {
     text: string,
     moveSelection?: boolean
   ): TextNode {
-    const result = nodeResult(
-      nodeCall(this, 'spliceText', [offset, delCount, text, moveSelection])
-    );
-    if (!(result instanceof TextNode)) throw new Error('expected text');
-    return result;
+    const writable = this.getWritable();
+    const previous = writable.__text;
+    const textLength = text.length;
+    let index = offset;
+    if (index < 0) {
+      index = textLength + index;
+      if (index < 0) index = 0;
+    }
+    if (moveSelection) {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const nextOffset = offset + textLength;
+        selection.setTextNodeRange(writable, nextOffset, writable, nextOffset);
+      }
+    }
+    writable.__text =
+      previous.slice(0, index) + text + previous.slice(index + delCount);
+    return writable;
   }
   splitText(...offsets: number[]): TextNode[] {
     return nodesResult(nodeCall(this, 'splitText', offsets)).map((node) => {
