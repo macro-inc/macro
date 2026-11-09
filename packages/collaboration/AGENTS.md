@@ -47,7 +47,9 @@ with CHECK_SESSION_TRACES=1 rather than refreshing expected callbacks during tes
 
 The paired session ABI is major 2: type rows include predicate flags, editor
 Initialize is an explicit view marker, and command results use `FLAG_HANDLED`.
-`SessionExecutor.run` completion callbacks run after output application. DOM text
+`SessionExecutor.run` completion callbacks run after output application.
+Use `runSync` for synchronous compatibility transactions; it rejects busy,
+queued, closing or closed executors before admitting or invoking the call. DOM text
 rejection returns authoritative repair/error output, including malformed UTF-16.
 
 `ExecutorOptions.onStatus` observes native connection/save status for application

@@ -113,6 +113,101 @@ function isTrace(value: unknown): value is Trace {
   );
 }
 const directory = new URL('../../tests/executor-traces/', import.meta.url);
+test('synchronous admission rejects reentrant and terminal calls without publishing queued work', async () => {
+  const { SessionConfigMsg, SessionInputMsg, Transport } = await import(
+    './abi.generated'
+  );
+  const { emptyInput } = await import('./input');
+  const parsed: unknown = JSON.parse(
+    readFileSync(new URL('01.json', directory), 'utf8')
+  );
+  if (!isTrace(parsed)) throw new Error('Invalid native trace');
+  const config = {
+    ...SessionConfigMsg.decode(new Uint8Array(parsed.config)),
+    doc: 'sync-admission-fixture',
+    transport: Transport.None,
+    durable: false,
+    chatter: false,
+  };
+  const events: string[] = [];
+  const rejected = vi.fn(() => 0);
+  const rejectedAfter = vi.fn();
+  let observe = false;
+  let executor: SessionExecutor<DocSession>;
+  executor = new SessionExecutor({
+    doc: config.doc,
+    owner: config.session,
+    user: config.user,
+    create: (now, wall) =>
+      DocSession.create(ABI_MAJOR, SessionConfigMsg.encode(config), now, wall),
+    auth: {
+      token: async () => ({ token: '', access: config.access }),
+      subscribe: () => () => {},
+    },
+    socketUrl: () => {
+      throw new Error('Local fixture cannot connect');
+    },
+    telemetry: new SessionTelemetry(NOOP_SPAN),
+    view: {
+      apply() {
+        if (!observe) return;
+        events.push('apply');
+        expect(() => executor.runSync(rejected, rejectedAfter)).toThrow('busy');
+        executor.run(() => {
+          events.push('queued');
+          return 0;
+        });
+      },
+    },
+  });
+  try {
+    executor.start();
+    observe = true;
+    executor.runSync(
+      () => {
+        events.push('call');
+        return executor.session.input(
+          SessionInputMsg.encode({ ...emptyInput(5), request: 7 }),
+          executor.now(),
+          Date.now()
+        );
+      },
+      () => {
+        events.push('after');
+        expect(events).toContain('apply');
+        expect(() => executor.runSync(rejected, rejectedAfter)).toThrow('busy');
+      }
+    );
+    observe = false;
+    expect(events).toEqual(['call', 'apply', 'after', 'queued']);
+    expect(rejected).not.toHaveBeenCalled();
+    expect(rejectedAfter).not.toHaveBeenCalled();
+    const pending = vi.fn(() => 0);
+    expect(() =>
+      executor.run(() => {
+        executor.run(pending);
+        throw new Error('transaction failed');
+      })
+    ).toThrow('transaction failed');
+    expect(() => executor.runSync(rejected, rejectedAfter)).toThrow('busy');
+    expect(pending).not.toHaveBeenCalled();
+    executor.run(() => 0);
+    expect(pending).toHaveBeenCalledOnce();
+    const closing = executor.close();
+    expect(() => executor.runSync(rejected, rejectedAfter)).toThrow(
+      'closed or closing'
+    );
+    await closing;
+    expect(() => executor.runSync(rejected, rejectedAfter)).toThrow(
+      'closed or closing'
+    );
+    expect(rejected).not.toHaveBeenCalled();
+    expect(rejectedAfter).not.toHaveBeenCalled();
+  } finally {
+    observe = false;
+    await executor.close();
+  }
+});
 test('an early browser wake keeps an unchanged native deadline armed', async () => {
   const { SessionConfigMsg, SessionInputMsg, Transport, Access } = await import(
     './abi.generated'
