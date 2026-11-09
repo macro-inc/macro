@@ -1,5 +1,7 @@
 //! Harness ports.
 
+use computer_id::ComputerId;
+use pairing_id::PairingId;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
@@ -9,9 +11,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
-    Harness, HarnessAccess, HarnessAgent, HarnessOwner, HarnessResident, HarnessSession,
-    PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
+    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaudeMode, CreateHostedPairing,
+    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent,
+    HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
+    HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
     SetHarnessTeamAccessRequest,
 };
 
@@ -19,7 +22,7 @@ use super::models::{
 #[derive(Debug, Clone)]
 pub struct NewPairing {
     /// Pairing id.
-    pub id: Uuid,
+    pub id: PairingId,
     /// Normalized pairing code, `XXXX-XXXX`.
     pub code: String,
     /// SHA-256 of the device secret.
@@ -44,7 +47,7 @@ pub struct HarnessChanges {
 /// A harness row to create at approval.
 #[derive(Debug, Clone)]
 pub struct NewHarness {
-    /// Whether personas may bypass ACP permission requests on this harness.
+    /// Whether agents may bypass ACP permission requests on this harness.
     pub allow_permission_bypass: bool,
     /// Harness id.
     pub id: HarnessId,
@@ -56,6 +59,8 @@ pub struct NewHarness {
     pub team_grant: Option<Uuid>,
     /// The approving user.
     pub created_by: MacroUserIdStr<'static>,
+    /// The Macro computer this harness runs on, for hosted harnesses.
+    pub computer_id: Option<ComputerId>,
 }
 
 /// A pairing row as the lookup and approval paths see it.
@@ -65,6 +70,20 @@ pub struct PairingRow {
     pub details: PairingDetails,
     /// Current status.
     pub status: PairingStatus,
+}
+
+/// What [`HarnessRepo::upsert_hosted_pairing`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostedPairingUpsert {
+    /// Created the harness and its pairing with the given ids.
+    Created,
+    /// The computer already had an unclaimed pairing; its secret was rotated.
+    Rotated {
+        /// The existing pairing's id.
+        pairing_id: PairingId,
+    },
+    /// Revoked the claimed harness's credentials and created a fresh approved pairing.
+    Rekeyed,
 }
 
 /// Open (pending, unexpired) pairing counts used to throttle creation.
@@ -113,10 +132,52 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness: NewHarness,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
 
+    /// Create a computer's harness with an already-approved pairing, or
+    /// rotate the device secret of the one that exists, atomically.
+    ///
+    /// Keyed by `harness.computer_id`. The pairing is never pending, so no
+    /// user sees or approves its code. An existing pairing keeps its id and
+    /// takes `pairing.device_secret_hash`; a claimed harness keeps its id, revokes
+    /// its tokens and receives a fresh approved pairing.
+    fn upsert_hosted_pairing(
+        &self,
+        pairing: NewPairing,
+        harness: NewHarness,
+    ) -> impl Future<Output = Result<HostedPairingUpsert, Self::Err>> + Send;
+
+    /// The live harness running on a computer.
+    fn computer_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+
+    /// The computer a live harness runs on; `None` for unknown harnesses and
+    /// machines users paired themselves.
+    fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
+
+    /// Replace an active harness's reported capabilities. Returns `false`
+    /// when the harness is unknown or deleted.
+    fn set_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Record how Claude Code on an active harness is paid for. Returns
+    /// `false` when the harness is unknown or deleted.
+    fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
     ) -> impl Future<Output = Result<Option<PairingClaimFacts>, Self::Err>> + Send;
 
     /// Release an approved pairing's credential atomically.
@@ -126,7 +187,8 @@ pub trait HarnessRepo: Send + Sync + 'static {
     /// expired, or already claimed).
     fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
+        device_secret_hash: [u8; 32],
         token_id: Uuid,
         token: HashedHarnessToken,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
@@ -238,7 +300,7 @@ pub trait HarnessService: Send + Sync + 'static {
     /// Poll an approved pairing's credential with the device secret.
     fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         req: ClaimPairingRequest,
     ) -> impl Future<Output = Result<ClaimOutcome, HarnessError>> + Send;
 
@@ -248,6 +310,13 @@ pub trait HarnessService: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Harness>, HarnessError>> + Send;
 
+    /// Change a harness the caller may manage.
+    fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
     /// List every harness of the caller's teammates, marking what the caller
     /// may do with each.
     fn list_directory(
@@ -269,13 +338,6 @@ pub trait HarnessService: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessResident>, HarnessError>> + Send;
-    /// Change a harness the caller may manage.
-    fn patch_harness(
-        &self,
-        caller: MacroUserIdStr<'static>,
-        harness_id: HarnessId,
-        req: PatchHarnessRequest,
-    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
     /// Revoke a harness the caller may manage.
     fn delete_harness(
@@ -310,6 +372,68 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
+
+    /// Record what the authenticated harness's machine can do.
+    fn report_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// Register a Macro computer's team harness, already approved, and return
+    /// the claim material its macrod enrolls with.
+    ///
+    /// Trusted in-process callers only (the hosted runtime control plane,
+    /// after it authorized the team admin): this takes no caller to check and
+    /// skips the open-pairing throttle. Idempotent per computer: a retry
+    /// before the claim rotates the secret and returns the same pairing id;
+    /// after the claim it revokes the old tokens and creates a fresh approved
+    /// pairing for the same harness id.
+    fn create_hosted_pairing(
+        &self,
+        req: CreateHostedPairing,
+    ) -> impl Future<Output = Result<HostedPairing, HarnessError>> + Send;
+
+    /// Trusted control-plane lookup of the exact hosted pairing claim. Presence
+    /// is insufficient: a claim may commit before the daemon connects.
+    fn hosted_pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> impl Future<Output = Result<bool, HarnessError>> + Send;
+
+    /// Soft-delete a computer's harness and revoke its tokens. Succeeds when
+    /// the computer has no live harness.
+    ///
+    /// Trusted in-process callers only, like [`Self::create_hosted_pairing`].
+    fn revoke_hosted_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// The computer a live harness runs on, if it is a Macro computer's.
+    fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<ComputerId>, HarnessError>> + Send;
+
+    /// The harness, when `caller` may access it as asked.
+    ///
+    /// View is its owner or any member of its team; manage is the delete
+    /// rule (the owner, or a team harness's registrant or team owner).
+    fn authorize_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        access: HarnessPermission,
+    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
+
+    /// Record how Claude Code on a harness is paid for, once its runtime
+    /// confirmed the switch. Trusted in-process callers only.
+    fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 }
 
 /// Harness service error.

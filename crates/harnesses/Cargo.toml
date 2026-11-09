@@ -19,6 +19,8 @@ ports = ["dep:tokio"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+computer_id = { workspace = true, features = ["schema", "sqlx"] }
+pairing_id = { workspace = true, features = ["schema", "sqlx"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
@@ -34,13 +36,15 @@ mockall = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_permissions = { path = "../models_permissions", optional = true }
 rand = { workspace = true }
+rootcause = { workspace = true }
 serde = { workspace = true }
-sqlx = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, features = ["json"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

@@ -2,11 +2,25 @@
 
 ## What it is
 
-Belongs to agent sessions: registration for user-run agent harnesses
-(macrod), called runtimes in the product. Owns device-code pairing (create,
-approve, claim), the usable list and teammate directory the UI renders, team
-access, residents, revocation, and the bound-agent listing the daemon reconciles
-its webhook feed from.
+Belongs to agent sessions: registration for macrod, called runtimes in the
+product. Owns device-code pairing, the usable list and teammate directory,
+team access, residents, revocation, and the daemon's bound-agent feed.
+Hosted computers register through trusted `create_hosted_pairing`: it creates
+an approved pairing with the buying administrator as human owner and a User
+(`edit`) grant for the computer's team. Retries before
+claim rotate the secret; retries after claim revoke old tokens and re-key the
+same harness. Both preserve owner, grants, agent bindings, and computer identity.
+Claim and re-key serialize on the harness row. `revoke_hosted_harness` and
+`harness_computer` are the other trusted control-plane entry points.
+`hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
+fleet generation gate, including the interval before macrod connects. Hosted
+claims take the same `hosted-enrollment:<computer UUID>` advisory guard as
+fleet Create before the harness lock, then recheck the presented device-secret
+hash while claiming. A claim waiting through rotation cannot use its old secret.
+Expiry cleanup retains claimed pairing rows for live hosted harnesses; a missing
+pairing fails closed rather than treating the guest as unclaimed.
+These trusted entry points take no caller: they are for trusted in-process callers that
+already authorized the team admin, never for an HTTP route.
 
 ## Start here
 
@@ -23,7 +37,9 @@ its webhook feed from.
 - Every harness has one person as owner. Everyone else has a role: No Access
   (sees it exists), Read (`view`, cannot run agents), User (`edit`, can run
   agents), or their agent is a Resident. A team machine is a team grant in
-  `entity_access` that makes every member a User.
+  `entity_access` that makes every member a User; Macro computers are team
+  machines from birth, and the teammate directory lists them to every member
+  of the computer's team.
 - The SQL function `harness_access_level` is the one rule for a person's level,
   and `harness_can_run` for running agents on it; check the latter wherever
   something runs. A direct grant counts only while its holder shares a team with
@@ -42,6 +58,19 @@ its webhook feed from.
 - Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`,
   `entity_access_db_utils`, `models_permissions`.
 - Used by: `coding_agent_worker`.
+
+- `authorize_harness(caller, harness_id, HarnessPermission::{View, Use, Manage})` is
+  the access boundary for other services' routes: View requires effective
+  access; Use requires Owner or User; Manage is the owner, or an owner of a
+  team the runtime is shared with (take it out of service). `set_claude_mode`
+  (trusted) records `claude_mode` (`macro_credits` | `own_account`) once macrod
+  confirmed it.
+- `patch_harness` lets managers change the name and permission bypass while
+  preserving computer identity, capabilities, and Claude billing mode.
+- Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
+  `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
+  and `computer_id` (set only for Macro computers; unique among live rows).
+  The authenticated harness may replace only its own report.
 
 ## Recipes
 
@@ -71,3 +100,11 @@ its webhook feed from.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+- `HostedPairing.device_secret` redacts formatting and zeroizes on drop; use `expose()` only at enrollment boundaries.
+
+- Pairing and computer ports use the leaf `pairing_id::PairingId` and `computer_id::ComputerId`; unwrap UUIDs only at adapter boundaries.
+
+- New hosted-registration and metadata persistence failures use typed adapter errors with rootcause reports; existing repository callers retain their error contract.
+
+- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and Claude mode.
