@@ -17409,6 +17409,16 @@ export type SimpleMention = {
 };
 
 /**
+ * Multipart body of `simple_save`.
+ */
+export type SimpleSaveRequest = {
+    /**
+     * The file's new content, saved as the document's next version.
+     */
+    file: Blob | File;
+};
+
+/**
  * A skill's routing description.
  */
 export type SkillDescriptionBody = {
@@ -29335,7 +29345,7 @@ export type GetDocumentShortIdResponses = {
 export type GetDocumentShortIdResponse = GetDocumentShortIdResponses[keyof GetDocumentShortIdResponses];
 
 export type SimpleSaveData = {
-    body?: never;
+    body: SimpleSaveRequest;
     path: {
         /**
          * Document ID
