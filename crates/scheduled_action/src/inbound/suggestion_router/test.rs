@@ -6,33 +6,36 @@ use axum::http::StatusCode;
 use macro_authorization::MacroAuthorizationState;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::CreationPrincipal;
 use routine_program::Surface;
 use serde_json::{Value, json};
 
 use super::{RoutineSuggestionRouterState, routine_suggestion_router};
 use crate::domain::models::ActionPolicyError;
 use crate::domain::suggestions::model::{
-    GenerationStatus, RoutineSuggestion, RoutineSuggestions, SuggestionPick,
+    GenerationStatus, RoutineSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest,
+    SuggestedPick, SuggestionFrom,
 };
 use crate::domain::suggestions::ports::RoutineSuggestionApi;
 use crate::inbound::axum_router::test::{FakeAuth, request};
 
 const KNOWN: Uuid = Uuid::from_u128(7);
 
-/// One suggestion for anyone signed in; dismisses only `KNOWN`.
+/// One suggestion for anyone signed in; dismisses only `KNOWN`; no
+/// request is a suggestion session's.
 struct Suggestions;
 
 fn one(status: GenerationStatus) -> RoutineSuggestions {
     RoutineSuggestions {
         status,
-        generated_at: None,
         suggestions: vec![RoutineSuggestion {
             id: KNOWN,
-            surface: Surface::Email,
-            reason: "You file a lot of mail.".to_owned(),
-            keep_probability: 0.8,
-            safe_default: true,
-            pick: SuggestionPick::Starter {
+            from: SuggestionFrom::ForYou,
+            surfaces: vec![Surface::Email, Surface::Tasks],
+            reason: Some("You file a lot of mail.".to_owned()),
+            keep_probability: Some(0.75),
+            on_by_default: true,
+            pick: SuggestedPick::Catalog {
                 key: "inbox".to_owned(),
                 knobs: Default::default(),
             },
@@ -41,11 +44,21 @@ fn one(status: GenerationStatus) -> RoutineSuggestions {
 }
 
 impl RoutineSuggestionApi for Suggestions {
-    async fn suggestions(&self, _: &MacroUserIdStr<'static>) -> Result<RoutineSuggestions> {
+    async fn suggestions(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        surface: Option<Surface>,
+    ) -> Result<RoutineSuggestions> {
+        assert_eq!(surface, Some(Surface::Email));
         Ok(one(GenerationStatus::Ready))
     }
 
-    async fn refresh(&self, _: &MacroUserIdStr<'static>) -> Result<RoutineSuggestions> {
+    async fn generate(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> Result<RoutineSuggestions> {
+        assert_eq!(timezone, chrono_tz::Europe::Paris);
         Ok(one(GenerationStatus::Generating))
     }
 
@@ -54,6 +67,16 @@ impl RoutineSuggestionApi for Suggestions {
             bail!(ActionPolicyError::NotFound);
         }
         Ok(())
+    }
+
+    async fn suggest(
+        &self,
+        _: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        _: SuggestRequest,
+    ) -> Result<SuggestOutcome> {
+        assert_eq!(correlation, None);
+        bail!(ActionPolicyError::NotSuggesting)
     }
 }
 
@@ -70,7 +93,7 @@ async fn serves_suggestions_in_the_wire_shape_clients_read() {
     let (status, body) = request(
         &app,
         "GET",
-        "/scheduled-actions/suggestions",
+        "/scheduled-actions/suggestions?surface=email",
         "owner",
         Value::Null,
     )
@@ -80,14 +103,14 @@ async fn serves_suggestions_in_the_wire_shape_clients_read() {
         body,
         json!({
             "status": "ready",
-            "generatedAt": null,
             "suggestions": [{
                 "id": KNOWN.to_string(),
-                "surface": "email",
+                "from": "for_you",
+                "surfaces": ["email", "tasks"],
                 "reason": "You file a lot of mail.",
-                "keepProbability": 0.8,
-                "safeDefault": true,
-                "kind": "starter",
+                "keepProbability": 0.75,
+                "onByDefault": true,
+                "kind": "catalog",
                 "key": "inbox",
                 "knobs": {},
             }],
@@ -96,7 +119,7 @@ async fn serves_suggestions_in_the_wire_shape_clients_read() {
     let (status, body) = request(
         &app,
         "POST",
-        "/scheduled-actions/suggestions/refresh",
+        "/scheduled-actions/suggestions/generate?timezone=Europe/Paris",
         "owner",
         Value::Null,
     )
@@ -127,16 +150,23 @@ async fn dismissing_answers_no_content_or_not_found() {
         .0,
         StatusCode::NOT_FOUND
     );
-    assert_eq!(
-        request(
-            &app,
-            "GET",
-            "/scheduled-actions/suggestions",
-            "",
-            Value::Null
-        )
-        .await
-        .0,
-        StatusCode::UNAUTHORIZED
-    );
+}
+
+#[tokio::test]
+async fn suggesting_outside_a_suggestion_session_is_forbidden() {
+    let (status, _) = request(
+        &router(),
+        "POST",
+        "/scheduled-actions/suggestions",
+        "owner",
+        json!({
+            "kind": "catalog",
+            "key": "inbox",
+            "reason": "fits",
+            "surfaces": ["email"],
+            "keepProbability": 0.5,
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }

@@ -164,7 +164,10 @@ const ALL_SURFACES: [Surface; 9] = [
 /// The id of catalog routine `key` as Macro's template for `user`: the
 /// same on every read, so it can be dismissed and saved from.
 pub fn template_id(user: &MacroUserIdStr<'_>, key: &str) -> Uuid {
-    Uuid::new_v5(&TEMPLATE_NAMESPACE, format!("{}\n{key}", user.as_ref()).as_bytes())
+    Uuid::new_v5(
+        &TEMPLATE_NAMESPACE,
+        format!("{}\n{key}", user.as_ref()).as_bytes(),
+    )
 }
 
 /// Suggests routines in hidden sessions and serves them.
@@ -333,8 +336,7 @@ where
             let run = Run {
                 user: user.clone(),
                 timezone,
-                code: self.inner.code.sdk().is_some()
-                    && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG),
+                code: self.inner.code.sdk().is_some() && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG),
             };
             // A child of the request's span, so the start and the
             // generation stay one trace.
@@ -366,16 +368,38 @@ where
         let span = tracing::Span::current();
         if self.inner.repo.dismiss(user, id).await? {
             span.record("routine.suggestion.from", SuggestionFrom::ForYou.as_ref());
-            tracing::info!(event = "routine_suggestions.dismissed", from = "for_you");
+            let stored = self.inner.repo.suggestions(user).await.unwrap_or_default();
+            let dismissed = stored.iter().find(|suggestion| suggestion.id == id);
+            tracing::info!(
+                event = "routine_suggestions.dismissed",
+                from = "for_you",
+                kind = dismissed.map_or("unknown", |s| match s.pick {
+                    StoredPick::Catalog { .. } => "catalog",
+                    StoredPick::Routine { .. } => "routine",
+                }),
+                surface = dismissed
+                    .and_then(|s| s.surfaces.first())
+                    .map(|surface| surface_name(*surface)),
+            );
             return Ok(());
         }
-        let Some(routine) = CATALOG.iter().find(|routine| template_id(user, routine.key) == id)
+        let Some(routine) = CATALOG
+            .iter()
+            .find(|routine| template_id(user, routine.key) == id)
         else {
             bail!(ActionPolicyError::NotFound);
         };
         self.inner.repo.dismiss_template(user, routine.key).await?;
         span.record("routine.suggestion.from", SuggestionFrom::Macro.as_ref());
-        tracing::info!(event = "routine_suggestions.dismissed", from = "macro");
+        tracing::info!(
+            event = "routine_suggestions.dismissed",
+            from = "macro",
+            kind = "catalog",
+            surface = routine
+                .surfaces
+                .first()
+                .map(|surface| surface_name(*surface)),
+        );
         Ok(())
     }
 
@@ -411,7 +435,15 @@ where
         };
         span.record("agent.session.id", session.session.to_string());
         let kind = request.kind_name();
-        let outcome = self.inner.suggest(principal, &user, &session, request).await?;
+        let surface = match &request {
+            SuggestRequest::Catalog { surfaces, .. } | SuggestRequest::Routine { surfaces, .. } => {
+                surfaces.first().map(|surface| surface_name(*surface))
+            }
+        };
+        let outcome = self
+            .inner
+            .suggest(principal, &user, &session, request)
+            .await?;
         span.record("routine.suggestion.ok", outcome.ok);
         span.record("routine.suggestion.problems", outcome.problems.len());
         if let Some(id) = outcome.id {
@@ -420,6 +452,7 @@ where
         tracing::info!(
             event = "routine_suggestions.suggested",
             kind,
+            surface,
             ok = outcome.ok,
             problems = outcome.problems.len(),
         );
@@ -450,13 +483,7 @@ where
         let status = generation.map_or(GenerationStatus::None, |generation| generation.status);
         Ok(RoutineSuggestions {
             status,
-            suggestions: fill(
-                user,
-                &stored,
-                &dismissed_templates,
-                &saved_from,
-                surface,
-            ),
+            suggestions: fill(user, &stored, &dismissed_templates, &saved_from, surface),
         })
     }
 
@@ -611,9 +638,17 @@ where
         span.record("routine.suggestions.kept", total);
         span.record("routine.suggestions.retries", retries);
         span.record("routine.suggestions.outcome", outcome.as_ref());
-        if let Ok(Some(first)) = self.first_kept_ms(&user, started).await {
+        let first_ms = self.first_kept_ms(&user, started).await.ok().flatten();
+        if let Some(first) = first_ms {
             span.record("routine.suggestions.first_ms", first);
         }
+        // Surfaces AI filled with at least one suggestion; Macro's templates
+        // fill the rest.
+        let stored = self.repo.suggestions(&user).await.unwrap_or_default();
+        let filled = ALL_SURFACES
+            .iter()
+            .filter(|surface| stored.iter().any(|s| s.surfaces.contains(surface)))
+            .count();
         tracing::info!(
             event = "routine_suggestions.generated",
             outcome = outcome.as_ref(),
@@ -621,6 +656,8 @@ where
             kept = total,
             retries,
             inbox_messages = inbox.len(),
+            surfaces_filled = filled,
+            first_ms,
             duration_ms = started.elapsed().as_millis() as u64,
         );
     }
@@ -649,12 +686,12 @@ where
             self.repo.dismissed_templates(user),
         );
         let mut names = templates.unwrap_or_default();
-        names.extend(stored.unwrap_or_default().into_iter().map(|suggestion| {
-            match suggestion.pick {
+        names.extend(stored.unwrap_or_default().into_iter().map(
+            |suggestion| match suggestion.pick {
                 StoredPick::Catalog { key, .. } => key,
                 StoredPick::Routine { routine } => routine.name,
-            }
-        }));
+            },
+        ));
         names
     }
 
@@ -667,7 +704,9 @@ where
         brief: String,
         shutdown: &CancellationToken,
     ) -> (u32, bool) {
-        let kept = self.session(user, surfaces, brief.clone(), 1, shutdown).await;
+        let kept = self
+            .session(user, surfaces, brief.clone(), 1, shutdown)
+            .await;
         if kept > 0 || shutdown.is_cancelled() {
             return (kept, false);
         }
@@ -822,6 +861,21 @@ where
         if let Err(error) = self.repo.close_session(action.session_id.as_uuid()).await {
             tracing::warn!(error = ?error, "could not close a routine suggestion session");
         }
+    }
+}
+
+/// A surface's wire name, for log fields.
+fn surface_name(surface: Surface) -> &'static str {
+    match surface {
+        Surface::Email => "email",
+        Surface::Calendar => "calendar",
+        Surface::Tasks => "tasks",
+        Surface::Files => "files",
+        Surface::Crm => "crm",
+        Surface::Chat => "chat",
+        Surface::Calls => "calls",
+        Surface::Reviews => "reviews",
+        Surface::Agents => "agents",
     }
 }
 

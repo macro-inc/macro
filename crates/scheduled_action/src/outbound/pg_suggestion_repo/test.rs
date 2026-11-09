@@ -1,9 +1,9 @@
-use chrono::TimeDelta;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use serde_json::json;
+use serde_json::{Map, json};
 
 use super::*;
 use crate::domain::ports::ScheduledActionRepo;
+use crate::domain::service::test::configuration;
 use crate::outbound::pg_scheduled_action_repo::test::{
     USER_A, USER_B, insert_user, sample_action, test_repo, user_owner,
 };
@@ -12,225 +12,144 @@ fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
 }
 
-fn starter(key: &str) -> CheckedSuggestion {
+fn catalog(key: &str) -> CheckedSuggestion {
+    let mut knobs = Map::new();
+    knobs.insert("fyiTag".to_owned(), json!("Suppliers"));
     CheckedSuggestion {
-        surface: Surface::Email,
-        reason: "You get a lot of mail.".to_owned(),
+        surfaces: vec![Surface::Email, Surface::Tasks],
+        reason: "You get a lot of supplier mail.".to_owned(),
         keep_probability: 0.7,
-        pick: SuggestionPick::Starter {
+        pick: StoredPick::Catalog {
             key: key.to_owned(),
-            knobs: serde_json::from_value(json!({ "fyiTag": "Info" })).unwrap(),
+            knobs,
         },
     }
 }
 
-fn request(title: &str) -> CheckedSuggestion {
+fn drafted() -> CheckedSuggestion {
     CheckedSuggestion {
-        surface: Surface::Crm,
-        reason: "Suppliers write every week.".to_owned(),
+        surfaces: vec![Surface::Calendar],
+        reason: "Your week fills up fast.".to_owned(),
         keep_probability: 0.3,
-        pick: SuggestionPick::Request {
-            title: title.to_owned(),
-            request: "Every Friday, list the deliveries suppliers confirmed.".to_owned(),
+        pick: StoredPick::Routine {
+            routine: configuration(false),
         },
     }
-}
-
-fn picks(suggestions: &[RoutineSuggestion]) -> Vec<SuggestionPick> {
-    suggestions
-        .iter()
-        .map(|suggestion| suggestion.pick.clone())
-        .collect()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn one_generation_runs_at_a_time_and_a_dead_one_is_taken_over(pool: PgPool) {
+async fn a_generation_starts_once_and_records_how_it_ended(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = PgSuggestionRepo::new(pool);
-    let owner = user(USER_A);
-    let now = Utc::now();
-    let (first, second, third) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
-
-    assert!(
-        repo.claim(&owner, first, now, now - TimeDelta::minutes(5))
-            .await
-            .unwrap()
-    );
-    assert!(
-        !repo
-            .claim(&owner, second, now, now - TimeDelta::minutes(5))
-            .await
-            .unwrap()
-    );
-    // Five minutes on, the first is presumed dead.
-    let later = now + TimeDelta::minutes(6);
-    assert!(
-        repo.claim(&owner, third, later, later - TimeDelta::minutes(5))
-            .await
-            .unwrap()
-    );
-
-    // The first's late result is dropped; the third's lands.
-    assert!(
-        !repo
-            .complete(&owner, first, "a", &[starter("inbox")], later)
-            .await
-            .unwrap()
-    );
-    assert!(repo.open(&owner).await.unwrap().is_empty());
-    assert!(
-        repo.complete(&owner, third, "b", &[starter("inbox")], later)
-            .await
-            .unwrap()
-    );
-    let stored = repo.generation(&owner).await.unwrap().unwrap();
-    assert_eq!(stored.status, GenerationStatus::Ready);
-    assert_eq!(stored.inputs.as_deref(), Some("b"));
+    let a = user(USER_A);
+    assert_eq!(repo.generation(&a).await.unwrap(), None);
+    assert!(repo.begin(&a, Utc::now()).await.unwrap());
+    assert!(!repo.begin(&a, Utc::now()).await.unwrap());
     assert_eq!(
-        picks(&repo.open(&owner).await.unwrap()),
-        picks_of(&[starter("inbox")])
+        repo.generation(&a).await.unwrap().unwrap().status,
+        GenerationStatus::Generating
     );
-
-    // A ready generation can be claimed again, and failing it keeps the
-    // suggestions shown.
-    let fourth = Uuid::now_v7();
-    assert!(
-        repo.claim(&owner, fourth, later, later - TimeDelta::minutes(5))
-            .await
-            .unwrap()
-    );
-    repo.fail(&owner, fourth).await.unwrap();
-    assert_eq!(
-        repo.generation(&owner).await.unwrap().unwrap().status,
-        GenerationStatus::Failed
-    );
-    assert_eq!(repo.open(&owner).await.unwrap().len(), 1);
-}
-
-fn picks_of(suggestions: &[CheckedSuggestion]) -> Vec<SuggestionPick> {
-    suggestions
-        .iter()
-        .map(|suggestion| suggestion.pick.clone())
-        .collect()
+    repo.finish(&a, false, Utc::now()).await.unwrap();
+    let stored = repo.generation(&a).await.unwrap().unwrap();
+    assert_eq!(stored.status, GenerationStatus::Failed);
+    assert!(stored.finished_at.is_some());
+    // Generation still runs only once.
+    assert!(!repo.begin(&a, Utc::now()).await.unwrap());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_new_generation_replaces_open_suggestions_but_keeps_dismissed_and_accepted(pool: PgPool) {
+async fn a_session_suggests_while_open_and_counts_what_it_kept(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    insert_user(&pool, USER_B).await;
-    let repo = PgSuggestionRepo::new(pool.clone());
-    let actions = test_repo(pool);
-    let owner = user(USER_A);
-    let now = Utc::now();
-    let first = Uuid::now_v7();
-    repo.claim(&owner, first, now, now).await.unwrap();
-    repo.complete(
-        &owner,
-        first,
-        "a",
-        &[starter("inbox"), starter("triage"), request("Digest")],
-        now,
+    let repo = PgSuggestionRepo::new(pool);
+    let a = user(USER_A);
+    let session = Uuid::now_v7();
+    let opened = Utc::now() - chrono::TimeDelta::minutes(20);
+    repo.open_session(
+        session,
+        &a,
+        bot_id::MACRO_NEW_BOT_ID,
+        &[Surface::Email, Surface::Tasks],
+        opened,
     )
     .await
     .unwrap();
-    let open = repo.open(&owner).await.unwrap();
-    assert_eq!(open.len(), 3);
-    assert_eq!(open[0].surface, Surface::Email);
+    let found = repo.session(session).await.unwrap().unwrap();
+    assert_eq!(found.owner, a);
+    assert_eq!(found.agent, bot_id::MACRO_NEW_BOT_ID);
+    assert_eq!(found.surfaces, [Surface::Email, Surface::Tasks]);
+    assert_eq!(found.kept, 0);
 
-    // Not interested in the first; the second is saved as a routine.
-    assert!(repo.dismiss(&owner, open[0].id).await.unwrap());
-    let mut saved = sample_action(user_owner(USER_A), "Triage new tasks");
-    saved.suggestion_id = Some(open[1].id);
-    let saved = actions.create_action(saved).await.unwrap();
-    assert_eq!(saved.suggestion_id, Some(open[1].id));
-    // Another person can't dismiss it, and pointing their routine at it
-    // doesn't take it.
-    assert!(!repo.dismiss(&user(USER_B), open[2].id).await.unwrap());
-    let mut theirs = sample_action(user_owner(USER_B), "Digest");
-    theirs.suggestion_id = Some(open[2].id);
-    actions.create_action(theirs).await.unwrap();
-    assert_eq!(
-        picks(&repo.open(&owner).await.unwrap()),
-        picks_of(&[request("Digest")])
-    );
-    assert_eq!(
-        repo.dismissed(&owner).await.unwrap(),
-        picks_of(&[starter("inbox")])
-    );
-
-    let second = Uuid::now_v7();
-    repo.claim(&owner, second, now, now).await.unwrap();
-    repo.complete(&owner, second, "b", &[starter("email_tags")], now)
+    repo.add(&a, session, &catalog("email_tags"), Utc::now())
         .await
         .unwrap();
+    repo.add(&a, session, &drafted(), Utc::now()).await.unwrap();
+    assert_eq!(repo.session(session).await.unwrap().unwrap().kept, 2);
+
+    let stale = repo.stale_sessions(Utc::now(), 10).await.unwrap();
     assert_eq!(
-        picks(&repo.open(&owner).await.unwrap()),
-        picks_of(&[starter("email_tags")])
+        stale.iter().map(|s| s.session).collect::<Vec<_>>(),
+        [session]
     );
-    // The dismissal and the saved routine's suggestion survive.
-    assert_eq!(
-        repo.dismissed(&owner).await.unwrap(),
-        picks_of(&[starter("inbox")])
+    repo.close_session(session).await.unwrap();
+    assert_eq!(repo.session(session).await.unwrap(), None);
+    assert!(
+        repo.stale_sessions(Utc::now(), 10)
+            .await
+            .unwrap()
+            .is_empty()
     );
-    let reread = actions
-        .get_action(&saved.id.unwrap())
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(reread.suggestion_id, Some(open[1].id));
+    assert_eq!(repo.session(Uuid::now_v7()).await.unwrap(), None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sweeps_take_people_who_read_recently_each_once_per_interval(pool: PgPool) {
+async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
-    let repo = PgSuggestionRepo::new(pool);
+    let repo = PgSuggestionRepo::new(pool.clone());
     let (a, b) = (user(USER_A), user(USER_B));
-    let now = Utc::now();
-    let active_since = now - TimeDelta::days(14);
-    let checked_before = now - TimeDelta::hours(1);
+    let session = Uuid::now_v7();
+    repo.open_session(
+        session,
+        &a,
+        bot_id::MACRO_NEW_BOT_ID,
+        &[Surface::Email],
+        Utc::now(),
+    )
+    .await
+    .unwrap();
+    let picked = repo
+        .add(&a, session, &catalog("email_tags"), Utc::now())
+        .await
+        .unwrap();
+    let written = repo.add(&a, session, &drafted(), Utc::now()).await.unwrap();
 
-    // Nobody read their suggestions: nobody to look at.
-    assert!(
-        repo.take_checks(active_since, checked_before, now, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    // A first read leaves a pending generation, and reading again keeps it.
-    repo.seen(&a, now).await.unwrap();
-    repo.seen(&a, now).await.unwrap();
-    let pending = repo.generation(&a).await.unwrap().unwrap();
-    assert_eq!(pending.status, GenerationStatus::Pending);
-    // B read a month ago.
-    repo.seen(&b, now - TimeDelta::days(30)).await.unwrap();
+    let stored = repo.suggestions(&a).await.unwrap();
+    assert_eq!(stored.len(), 2);
+    assert_eq!(stored[0].id, picked);
+    assert_eq!(stored[0].surfaces, [Surface::Email, Surface::Tasks]);
+    assert_eq!(stored[0].pick, catalog("email_tags").pick);
+    assert_eq!(stored[1].pick, drafted().pick);
+    assert!(repo.suggestions(&b).await.unwrap().is_empty());
 
-    // Two sweeps at once take different people: A goes to one of them.
-    let (first, second) = tokio::join!(
-        repo.take_checks(active_since, checked_before, now, 10),
-        repo.take_checks(active_since, checked_before, now, 10),
-    );
-    let mut taken = [first.unwrap(), second.unwrap()].concat();
-    taken.sort_by(|x, y| x.as_ref().cmp(y.as_ref()));
-    assert_eq!(taken, std::slice::from_ref(&a));
-    // Looked at, so not again within the interval.
-    assert!(
-        repo.take_checks(active_since, checked_before, now, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    let later = now + TimeDelta::hours(2);
-    assert_eq!(
-        repo.take_checks(active_since, later - TimeDelta::hours(1), later, 10)
-            .await
-            .unwrap(),
-        std::slice::from_ref(&a)
-    );
-    // A pending generation can be claimed.
-    assert!(
-        repo.claim(&a, Uuid::now_v7(), now, now - TimeDelta::minutes(5))
-            .await
-            .unwrap()
-    );
+    // Someone else can't dismiss it.
+    assert!(!repo.dismiss(&b, picked).await.unwrap());
+    assert!(repo.dismiss(&a, picked).await.unwrap());
+    assert!(repo.dismiss(&a, picked).await.unwrap());
+    let stored = repo.suggestions(&a).await.unwrap();
+    assert!(stored[0].dismissed && !stored[1].dismissed);
+
+    repo.dismiss_template(&a, "brief").await.unwrap();
+    repo.dismiss_template(&a, "brief").await.unwrap();
+    assert_eq!(repo.dismissed_templates(&a).await.unwrap(), ["brief"]);
+    assert!(repo.dismissed_templates(&b).await.unwrap().is_empty());
+
+    // A routine saved from a suggestion counts for its owner only.
+    let actions = test_repo(pool);
+    let mut saved = sample_action(user_owner(USER_A), "Weekly planning");
+    saved.suggestion_id = Some(written);
+    actions.create_action(saved).await.unwrap();
+    let mut theirs = sample_action(user_owner(USER_B), "Digest");
+    theirs.suggestion_id = Some(picked);
+    actions.create_action(theirs).await.unwrap();
+    assert_eq!(repo.saved_from(&a).await.unwrap(), [written]);
 }

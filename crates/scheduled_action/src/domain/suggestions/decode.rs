@@ -137,7 +137,9 @@ fn common(
     if !keep_probability.is_finite() || !(0.0..=1.0).contains(&keep_probability) {
         problems.push("`keepProbability` is between 0 and 1".to_owned());
     }
-    reason.filter(|_| problems.is_empty()).map(|reason| (reason, surfaces, keep_probability))
+    reason
+        .filter(|_| problems.is_empty())
+        .map(|reason| (reason, surfaces, keep_probability))
 }
 
 fn names(surfaces: &[Surface]) -> String {

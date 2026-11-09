@@ -129,9 +129,8 @@ fn catalog_entry(routine: &CatalogRoutine) -> Value {
 
 /// A message as the session reads it: trimmed, bounded fields.
 fn message(message: &InboxMessage) -> Value {
-    let bounded = |text: &Option<String>, max: usize| {
-        text.as_deref().map(|text| truncate(text, max))
-    };
+    let bounded =
+        |text: &Option<String>, max: usize| text.as_deref().map(|text| truncate(text, max));
     let list = |items: &[String]| -> Vec<String> {
         items
             .iter()
