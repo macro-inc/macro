@@ -261,8 +261,7 @@ export class TextNode extends LexicalNode {
       ['underline', 'u'],
     ];
     for (const [format, tag] of wrappers) {
-      const flag = textFormats[format];
-      if ((this.getFormat() & flag) !== 0) {
+      if (this.hasFormat(format)) {
         const wrapper = document.createElement(tag);
         wrapper.appendChild(element);
         element = wrapper;

@@ -32,6 +32,7 @@ writes; the legacy conformance backend still makes diagnostic native calls.
 - Preserve upstream generic constraints and self returns; use the centralized runtime adapter only for upstream caller-asserted generic APIs.
 - Preserve upstream field reads and getter evaluation counts; formatting flags read latest raw fields and Element JSON samples each text-format/style getter once.
 - Refresh both paragraph legacy JSON text fields together when either Element JSON field is absent.
+- Route TextNode spellcheck and HTML export format decisions through its public hasFormat predicate while keeping tag structure on captured format bits.
 - Keep upstream MIT notices on ported implementation code.
 
 ## Checks
