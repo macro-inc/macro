@@ -1,6 +1,71 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: routed keyboard history and combined source build
+## Current checkpoint: stable subtree identities and Android prerequisites
+
+Stable-ID fix `67611c311e` is integrated as `4d18067f62`: default session and
+application identity plugins now treat only attached competing owners as
+duplicates. Conflict resolution retained the current session builder, input,
+handled-command and initialization behavior; no absent-parent imported-ID policy
+was added. The real session regressions preserve full raw JSON and caret through
+two code-subtree redo cycles while still repairing attached duplicates.
+
+The exact 21-commit Android prerequisite chain is integrated, including the
+`ddb3b1345e` watcher fix, followed by Raw FFI correction `c70f842b8d` and renderless
+provider follow-ups `1e963eb27d` / `1d5ed26a55`. Main source tip is `ac3ea6804a`;
+`ad8b6ed445` adds the strict code-subtree keyboard regression and package guidance.
+No application surface mounting was enabled. Android registration is platform
+scoped; the client retains the cached feature gate. Shared generated Swift/Kotlin
+bindings remain paired; no iOS app, release, signing or store files changed.
+The duplicate size-policy and core foundation ports were skipped.
+
+Independent build source `d1e4c25c6c` has identical native inputs to main
+`ac3ea6804a`. The normal six-hot-crate opt3 profile, `wasm-opt -Oz --converge`,
+Cargo `-j2` and `/home/wolf/tmp` produced 9,224,118 raw / 2,080,952 Brotli bytes.
+WASM SHA256:
+`868826f5f50448b9fc8e07cec507191de8226bbc31a23ecf86b43662896014a5`.
+The aggregate increase is 15,615 Brotli bytes over the preceding installed build;
+this is not a per-change ablation. It exceeds the advisory ceiling by 480,952
+bytes. No new startup or latency acceptance is inferred.
+
+Validation passed:
+
+- Three-engine keyboard suite: 18/18, including six native code-subtree cases
+  with both redo shortcuts, two cycles, exact raw JSON/durable IDs and model/DOM
+  caret at offset 22. No ID normalization or exclusions.
+- Combined session suite: 56 tests plus one telemetry test; view TypeScript,
+  all-target/all-feature strict session/model Clippy and combined scoped checks. Matching generated WASM declarations are unchanged.
+- Android disposable validation: 93 frontend tests in 17 files, another eight
+  provider lifetime tests, app TypeScript, final web production build, six FFI
+  tests, actual JNI JVM 24/24 with zero skips, instrumentation compilation,
+  Android-target strict plugin Clippy, binding/bridge freshness, scoped checks
+  and focused OFF mentions Chromium browser regression. The web build used a
+  12 GB Node heap after the default heap exhausted memory; optimization settings
+  were unchanged. Instrumentation device execution is not claimed.
+- Installed live code spot: trusted typing then Ctrl-Z/Ctrl-Shift-Z and
+  Ctrl-Z/Ctrl-Y restores exact raw state, durable IDs and model/DOM caret.
+  The isolated browser verified the served WASM hash above; no page errors.
+  Initial background API 401 responses, optional integration 404 responses
+  and aborted background requests remain in the raw network evidence. No dependency-cache writes or stack restart occurred.
+
+Evidence is under `/home/wolf/tmp/integration3-acceptance/`:
+`stable-id-three-engine.json`, `stable-id-combined-session-suite.log`,
+`stable-id-artifact-manifest.json`, `stable-id-preview-install.json`,
+`preview-stable-id-installed-results.json`, `preview-stable-id-snapshots.json`
+and `preview-stable-id-installed-code.png`. The source and Android audits are
+`stable-id-integration-audit.md` and `android-prerequisite-integration-audit.md`.
+
+The previous live raw-ID redo failure is closed. The table picker and comment
+button remain earlier OPEN acceptance gaps; they were not relabeled as passes.
+Production compatibility/selector admission, Android app surface admission,
+device/APK acceptance, full parity and Integration 3 remain unchecked.
+
+Current calibrated compatibility timing does not pass the 5% gate: S ratio
+1.04672 [1.02331, 1.07067] is inconclusive; M 1.07568 [1.05361, 1.09821] and
+L 1.08915 [1.05958, 1.11954] exceed the limit. Retain `eda` as an audited partial
+improvement. TLS follow-up `7502076f01` is queued separately and requires a fresh
+matched measurement; it is not included in this frozen preview artifact.
+
+## Prior checkpoint: routed keyboard history and combined source build
 
 Keyboard history fix 87163f3a57 is integrated as ae9b506f1f. The existing
 integration handled-command metadata is retained in the shared history method
