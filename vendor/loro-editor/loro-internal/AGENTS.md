@@ -10,6 +10,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Preserve upstream source, release pin and MIT notices.
 - Keep this dependency outside workspace membership.
 - Retain input order, every range check and overlapping/empty update behavior.
+- Move owned event buffers through Cow::into_owned; clone borrowed events so their source lifetime cannot escape.
 - Never refresh encoder or corpus bytes to accommodate a runtime change.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
 

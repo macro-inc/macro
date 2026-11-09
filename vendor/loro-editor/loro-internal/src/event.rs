@@ -176,8 +176,8 @@ impl InternalDocDiff<'_> {
         InternalDocDiff {
             origin: self.origin,
             by: self.by,
-            diff: Cow::Owned((*self.diff).to_owned()),
-            new_version: Cow::Owned((*self.new_version).to_owned()),
+            diff: Cow::Owned(self.diff.into_owned()),
+            new_version: Cow::Owned(self.new_version.into_owned()),
         }
     }
 
@@ -553,6 +553,55 @@ mod test {
     use loro_common::LoroValue;
 
     use crate::{cursor::PosType, ApplyDiff, LoroDoc};
+
+    #[test]
+    fn owned_internal_diff_keeps_its_allocation() {
+        use super::*;
+        let diff = vec![InternalContainerDiff {
+            idx: ContainerIdx::from_index_and_type(0, loro_common::ContainerType::Map),
+            bring_back: false,
+            diff: DiffVariant::Internal(InternalDiff::Map(MapDelta::default())),
+            diff_mode: DiffMode::Linear,
+            kept: None,
+        }];
+        let allocation = diff.as_ptr();
+        let owned = InternalDocDiff {
+            origin: "local".into(),
+            by: EventTriggerKind::Local,
+            diff: Cow::Owned(diff),
+            new_version: Cow::Owned(Frontiers::default()),
+        }
+        .into_owned();
+        assert_eq!(owned.diff.as_ptr(), allocation);
+        assert_eq!(owned.diff.len(), 1);
+        assert_eq!(owned.origin.as_str(), "local");
+    }
+
+    #[test]
+    fn borrowed_internal_diff_owns_its_data_after_conversion() {
+        use super::*;
+        let owned = {
+            let diff = vec![InternalContainerDiff {
+                idx: ContainerIdx::from_index_and_type(0, loro_common::ContainerType::Map),
+                bring_back: false,
+                diff: DiffVariant::Internal(InternalDiff::Map(MapDelta::default())),
+                diff_mode: DiffMode::Linear,
+                kept: None,
+            }];
+            let frontiers = Frontiers::default();
+            let owned = InternalDocDiff {
+                origin: "import".into(),
+                by: EventTriggerKind::Import,
+                diff: Cow::Borrowed(&diff),
+                new_version: Cow::Borrowed(&frontiers),
+            }
+            .into_owned();
+            assert_ne!(owned.diff.as_ptr(), diff.as_ptr());
+            owned
+        };
+        assert_eq!(owned.diff.len(), 1);
+        assert_eq!(owned.origin.as_str(), "import");
+    }
 
     #[test]
     fn test_text_event() {
