@@ -35,7 +35,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Build reader-oriented XML through xml.rs without importing or normalizing stored node payloads.
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.
 - Preserve the Export registry without code/list replacements; Headless applies both.
-- Inject NodeClock, NodeRandom and NodeHost through editor extension state; perform no I/O.
+- Inject NodeClock, NodeRandom and NodeHost through editor extension state; share these continuing services with registry-only Markdown parsers and perform no I/O.
 - Supply DocumentContext to headless helpers and assign durable ids in depth-first document order.
 - Emit preventDefault when native Enter policy consumes a key, including primitive key routing without a view adapter.
 - Stage NodeId/PeerId plugin entropy, mappings and owner state transactionally; reconcile mutations through after_commit, and count only attached owners as duplicate IDs when a subtree is recreated.

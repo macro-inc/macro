@@ -1,4 +1,5 @@
 //! Package conversion entry points retain typed callback errors.
+pub(crate) mod parser;
 use crate::Result;
 use lexical_markdown::{MarkdownOptions, Transformers};
 use lexical_model::{NodeKey, Read, Transaction};
