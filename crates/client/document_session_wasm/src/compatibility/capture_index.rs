@@ -62,7 +62,15 @@ impl CaptureIndex {
     }
 }
 impl Host {
-    pub(super) fn prune_capture_index(&mut self) {
+    pub(super) fn prune_capture_index(&mut self) -> Result<(), BoundaryError> {
+        let next = self
+            .retirement_epoch
+            .checked_add(1)
+            .ok_or(BoundaryError::Invalid("capture retirement epoch exhausted"))?;
         self.capture_index.retain(&self.captures);
+        // A completed valid no-op prune is an acknowledgement too. Observing
+        // counts or requesting JS GC never calls this processing boundary.
+        self.retirement_epoch = next;
+        Ok(())
     }
 }

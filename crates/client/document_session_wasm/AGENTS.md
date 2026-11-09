@@ -116,3 +116,12 @@ Emit sparse compatibility commit batches from actual dirty/mutation receipts;
 include every destroyed descendant from the previous subtree, filter against
 final membership, and reserve full batches for explicit snapshots or actual
 full reconciliation. Omit root text strings from hot replies and commit deltas.
+
+Advance the cold audit retirement epoch only after completed native capture-index
+pruning, including valid repeated historical releases with no removable captures;
+never advance it for observation, a GC request, or discard without a pending
+update. Pair the acknowledgement with the current version; it does not prove JS GC.
+
+Reject cold audit snapshots until normal publication acknowledgement catches up
+to the actual session state; never refresh receipts inside the getter or pair a
+stale compatibility version with live-node counts from a newer graph.

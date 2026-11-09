@@ -114,7 +114,7 @@ impl EditorSession {
             }
             host.captures
                 .retain(|_, capture| capture.reference.update_id != host.update);
-            host.prune_capture_index();
+            host.prune_capture_index()?;
             Ok(true)
         }
     }
@@ -171,7 +171,7 @@ impl EditorSession {
             }
             host.captures
                 .retain(|_, capture| capture.reference.update_id != update);
-            host.prune_capture_index();
+            host.prune_capture_index()?;
         }
         result
     }
@@ -298,6 +298,9 @@ impl EditorSession {
     #[wasm_bindgen(js_name=compatDiscard)]
     pub fn compat_discard(&mut self) -> Result<(), JsError> {
         let (host, _) = self.compat_parts().map_err(js)?;
+        if host.pending.is_none() {
+            return Ok(());
+        }
         host.pending = None;
         let dropped_version = host.pending_version.take();
         host.discard_reservations();
@@ -307,7 +310,7 @@ impl EditorSession {
         }
         host.captures
             .retain(|_, capture| capture.reference.update_id != host.update);
-        host.prune_capture_index();
+        host.prune_capture_index().map_err(js)?;
         Ok(())
     }
     /// Close a flushed no-op without publishing a replacement state or listeners.
@@ -340,7 +343,7 @@ impl EditorSession {
         host.selection_values.release_graph(version);
         host.captures
             .retain(|_, capture| capture.reference.node.version != version);
-        host.prune_capture_index();
+        host.prune_capture_index().map_err(js)?;
         Ok(())
     }
 }

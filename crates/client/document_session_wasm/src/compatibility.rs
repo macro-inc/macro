@@ -6,6 +6,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
+mod audit_snapshot;
 mod calls;
 mod capture_index;
 mod class_masks;
@@ -28,6 +29,7 @@ pub(crate) struct Host {
     pending_version: Option<u64>,
     update: u32,
     next_capture: u64,
+    retirement_epoch: u64,
     capture_index: capture_index::CaptureIndex,
     pending: Option<PendingUpdate>,
     states: BTreeMap<u64, EditorState>,
@@ -101,6 +103,7 @@ impl EditorSession {
             pending_version: None,
             update: 0,
             next_capture: 1,
+            retirement_epoch: 0,
             capture_index: Default::default(),
             pending: None,
             states: [(0, state)].into(),
