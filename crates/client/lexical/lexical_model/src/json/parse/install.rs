@@ -75,7 +75,13 @@ impl ParsedNode<'_> {
         }
         let shared = tx.pending.shared_state_configs.for_type(index)?;
         let previous = tx.view().slot(key).and_then(|slot| slot.state.clone());
-        let state = NodeState::import(&state_json, &layout, previous.as_deref(), Some(&shared), false);
+        let state = NodeState::import(
+            &state_json,
+            &layout,
+            previous.as_deref(),
+            Some(&shared),
+            false,
+        );
         tx.writable(key)?.state = state.map(Arc::new);
         if text {
             let format_type = self.string("format");
