@@ -34,6 +34,16 @@ export interface PipelineImportResponse {
   ignoredColumns: string[];
   /** Rows refused for a value their field cannot hold. */
   invalid: SkippedImportRecord[];
+  /**
+   * Phone values that were not numbers with a country code.
+   * @minimum 0
+   */
+  invalidPhones: number;
+  /**
+   * Phone numbers from a contact CSV newly saved to contacts.
+   * @minimum 0
+   */
+  phonesSaved: number;
   /** The pipeline filled. */
   pipelineId: string;
   /** Its name. */

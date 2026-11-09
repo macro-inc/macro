@@ -15611,6 +15611,14 @@ export type PipelineImportResponse = {
      */
     invalid: Array<SkippedImportRecord>;
     /**
+     * Phone values that were not numbers with a country code.
+     */
+    invalidPhones: number;
+    /**
+     * Phone numbers from a contact CSV newly saved to contacts.
+     */
+    phonesSaved: number;
+    /**
      * The pipeline filled.
      */
     pipelineId: string;

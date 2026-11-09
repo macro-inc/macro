@@ -6039,6 +6039,10 @@ export const importCrmCompaniesCsvResponsePipelineAlreadyPresentMin = 0;
 
 export const importCrmCompaniesCsvResponsePipelineCreatedRecordsMin = 0;
 
+export const importCrmCompaniesCsvResponsePipelineInvalidPhonesMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelinePhonesSavedMin = 0;
+
 export const importCrmCompaniesCsvResponsePipelineSkippedRowsMin = 0;
 
 export const importCrmCompaniesCsvResponseSkippedRowsMin = 0;
@@ -6112,6 +6116,18 @@ export const importCrmCompaniesCsvResponse = zod
                   .describe('A record an import could not add, and why.')
               )
               .describe('Rows refused for a value their field cannot hold.'),
+            invalidPhones: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineInvalidPhonesMin)
+              .describe(
+                'Phone values that were not numbers with a country code.'
+              ),
+            phonesSaved: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelinePhonesSavedMin)
+              .describe(
+                'Phone numbers from a contact CSV newly saved to contacts.'
+              ),
             pipelineId: zod.uuid().describe('The pipeline filled.'),
             pipelineName: zod.string().describe('Its name.'),
             skippedRows: zod
@@ -8904,6 +8920,10 @@ export const importCrmPipelineCsvResponseAlreadyPresentMin = 0;
 
 export const importCrmPipelineCsvResponseCreatedRecordsMin = 0;
 
+export const importCrmPipelineCsvResponseInvalidPhonesMin = 0;
+
+export const importCrmPipelineCsvResponsePhonesSavedMin = 0;
+
 export const importCrmPipelineCsvResponseSkippedRowsMin = 0;
 
 export const importCrmPipelineCsvResponse = zod
@@ -8948,6 +8968,14 @@ export const importCrmPipelineCsvResponse = zod
           .describe('A record an import could not add, and why.')
       )
       .describe('Rows refused for a value their field cannot hold.'),
+    invalidPhones: zod
+      .number()
+      .min(importCrmPipelineCsvResponseInvalidPhonesMin)
+      .describe('Phone values that were not numbers with a country code.'),
+    phonesSaved: zod
+      .number()
+      .min(importCrmPipelineCsvResponsePhonesSavedMin)
+      .describe('Phone numbers from a contact CSV newly saved to contacts.'),
     pipelineId: zod.uuid().describe('The pipeline filled.'),
     pipelineName: zod.string().describe('Its name.'),
     skippedRows: zod

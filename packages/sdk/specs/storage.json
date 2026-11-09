@@ -49774,7 +49774,9 @@
           "skippedRows",
           "filledFields",
           "ignoredColumns",
-          "addedOptions"
+          "addedOptions",
+          "phonesSaved",
+          "invalidPhones"
         ],
         "properties": {
           "added": {
@@ -49819,6 +49821,17 @@
               "$ref": "#/components/schemas/SkippedImportRecord"
             },
             "description": "Rows refused for a value their field cannot hold."
+          },
+          "invalidPhones": {
+            "type": "integer",
+            "description": "Phone values that were not numbers with a country code.",
+            "minimum": 0
+          },
+          "phonesSaved": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Phone numbers from a contact CSV newly saved to contacts.",
+            "minimum": 0
           },
           "pipelineId": {
             "type": "string",

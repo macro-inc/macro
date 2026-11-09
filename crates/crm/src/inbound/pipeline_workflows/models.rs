@@ -746,6 +746,10 @@ pub struct PipelineImportResponse {
     pub ignored_columns: Vec<String>,
     /// Labels added to select fields so the CSV's values fit.
     pub added_options: Vec<FieldOptions>,
+    /// Phone numbers from a contact CSV newly saved to contacts.
+    pub phones_saved: u64,
+    /// Phone values that were not numbers with a country code.
+    pub invalid_phones: usize,
 }
 
 impl From<&PipelineImportOutcome> for PipelineImportResponse {
@@ -769,6 +773,8 @@ impl From<&PipelineImportOutcome> for PipelineImportResponse {
                     labels: labels.clone(),
                 })
                 .collect(),
+            phones_saved: outcome.phones_saved,
+            invalid_phones: outcome.invalid_phones,
         }
     }
 }
