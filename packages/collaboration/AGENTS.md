@@ -66,3 +66,5 @@ Compatibility generation concatenates the three schemas in explicit source order
 Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero owner/class/instance identifiers natively without changing graph state or invoking public serialization.
 
 Deliver external native commits through CompatPublications with their actual dirty sets and tags; current-version queries must not discard undelivered publication metadata.
+
+Compact compatibility replies carry mutation epochs and sparse record deltas; retain/release exact capture leases in batches and distinguish native key reservations from captured records.

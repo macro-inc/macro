@@ -90,3 +90,30 @@ struct CompatSelectionPatch {
   bool historical; uint64 stateVersion;
   bool activate; CompatSelectionData selection;
 }
+
+// Compact transaction construction uses only keys issued by the native allocator.
+// Reservations are scoped to the editor/update, single use, and burned on discard.
+struct CompatKeyReservation {
+  uint32 editorId; uint64 reservationId; ForeignKey[] keys;
+}
+struct CompatBeginRequest { string[] tags; uint32 reserveKeys; }
+struct CompatBeginReply {
+  uint64 version; uint32 updateId; uint64 mutationEpoch;
+  ForeignOptionalKey composition; CompatKeyReservation reservation;
+}
+union CompatNodeOperand {
+  1 -> struct CompatNoNode { }
+  2 -> struct CompatCapturedNode { ForeignRecordRef record; }
+  3 -> struct CompatReservedNode { uint64 reservationId; ForeignKey key; }
+}
+// Apply retains before releases atomically; only issued capture IDs are valid.
+// Frozen records remain live while leased, independently of the active graph.
+struct CompatCaptureLeases {
+  uint32 editorId; uint64[] retain; uint64[] release;
+}
+// Incremental replies never materialize the root's whole-document text cache.
+// An explicit initial snapshot may carry it; later changes invalidate the cache.
+struct CompatRecordDelta {
+  ForeignRenderRecord[] records; ForeignKey[] removedKeys;
+  bool invalidateRootText;
+}
