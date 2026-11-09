@@ -145,8 +145,10 @@ through `set_name` clears it, so a name a person chose is never replaced.
   `activity` returns content-free counts (tool calls, turns).
 - A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
   is work the owner asked for that runs out of sight: source `user`, origin
-  `requested` by the owner, `hidden`, opened from no message. A routine
-  draft's session is one. The harness sends no notifications about it.
+  `requested` by the owner, `hidden`, opened from no message. Routine draft
+  and routine suggestion sessions are such sessions. The harness sends no
+  notifications about it, and it is never named or retitled
+  (`AdmittedAgentSessionNameGenerator`).
 
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session

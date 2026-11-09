@@ -26,6 +26,30 @@ fn a_reason_is_one_plain_line_that_names_no_address() {
     assert!(!reason_problems("  ").is_empty());
     // An @ that isn't an address is fine.
     assert!(reason_problems("You get @mentions all day").is_empty());
+    // Other personal details, by their shape.
+    // Synthetic details, built so the source holds none.
+    for leaked in [
+        format!("Your supplier at {} Baker Street writes daily", 221),
+        format!("Deliveries go to {} Rue Saint Honore Ave", 4),
+        format!("Call ({}) {}-{} about late orders", 415, 555, "0134"),
+        format!("Ring +{} {} {} {} for invoices", 44, 20, 7946, "0958"),
+    ] {
+        let problems = reason_problems(&leaked);
+        assert!(
+            problems
+                .iter()
+                .any(|problem| problem.contains("without anyone's details")),
+            "{leaked}: {problems:?}"
+        );
+    }
+    // Numbers and dates that aren't details stay.
+    for fine in [
+        "You get about 40 supplier emails a week",
+        "Invoices arrive on the 1st and 15th, due in 30 days",
+        "Your 3 weekly reports land on 2026-11-09",
+    ] {
+        assert!(reason_problems(fine).is_empty(), "{fine}");
+    }
 }
 
 #[test]

@@ -75,8 +75,11 @@ each run.
   suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
   (onboarding calls it once the inbox connects) starts the person's one
   generation ever: hidden background sessions of the in-process Macro agent,
-  as the person, at most three at once, each for some surfaces
-  (`SuggestionLayout`). Each brief (`suggestions/prompt.rs`) holds the
+  as the person, three at once by surface group (`SuggestionLayout`: email,
+  calendar, tasks; crm, calls, chat; files, reviews, agents), each capped at
+  `SESSION_TIMEOUT` (240 s), handing back catalog picks first, then drafts.
+  A prompt whose delivery is unknown ends the session like a failure, so it
+  gets the one retry. Each brief (`suggestions/prompt.rs`) holds the
   routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags (angle
   brackets in the data are swapped so it can't close them). A session hands
@@ -87,14 +90,17 @@ each run.
   `NotSuggesting`). `suggestions/decode.rs` is the trust boundary: a catalog
   key with knob values that fit their knob, or a drafted routine that passes
   saving's checks, kept switched off and never acting as the user; a one-line
-  reason naming no address; the session's surfaces. A session that keeps
+  reason; no email address, phone number or street address in the reason or
+  the drafted routine's words (`personal_detail`, by shape); the session's
+  surfaces. A session that keeps
   nothing is retried once; then Macro's templates fill in. `GET
   /scheduled-actions/suggestions?surface=` never generates: per surface,
-  AI's suggestions best first, then catalog routines marked `suggest` as
+  drafted routines, then catalog picks (each best first, a second with the
+  same catalog title or name left out), then catalog routines marked `suggest` as
   Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
   dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
   (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
-  catalog picks AI rated likely kept. Unlike a draft's, a suggestion session
+  catalog picks AI rated likely kept, never one that affects others. Unlike a draft's, a suggestion session
   is prepared with `SessionMetering::RoutineSuggestions`, so its turns are
   metered as the non-billable `RoutineSuggestions`, never billed as agent
   session usage. The sweep deletes sessions a stopped
