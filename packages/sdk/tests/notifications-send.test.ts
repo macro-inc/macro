@@ -83,3 +83,31 @@ test('a recipient who cannot see the link is refused', async () => {
 
   await expect(sending).rejects.toBeInstanceOf(MacroApiError);
 });
+
+test('a link to an entity notifications cannot open is rejected before sending', async () => {
+  const requests = serve(() => new Response(null, { status: 204 }));
+  const sdk = macro();
+
+  const sending = sdk.notifications.send({
+    title: 'Look at this',
+    link: sdk.users.byId('macro|teammate@example.com') as never,
+  });
+
+  await expect(sending).rejects.toBeInstanceOf(TypeError);
+  expect(requests).toHaveLength(0);
+});
+
+test('a form link names its entity type', async () => {
+  const requests = serve(() => new Response(null, { status: 204 }));
+  const sdk = macro();
+
+  await sdk.notifications.send({
+    title: 'New response',
+    link: sdk.forms.byId('form-1'),
+  });
+
+  expect(await requests[0].json()).toEqual({
+    title: 'New response',
+    link: { entityType: 'form', entityId: 'form-1' },
+  });
+});

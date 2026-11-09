@@ -11,7 +11,7 @@ import { Chat } from '../chats/chat';
 import { Database } from '../databases/database';
 import { Document } from '../documents/document';
 import { EmailThread } from '../email/thread';
-import type { Form } from '../forms/form';
+import { Form } from '../forms/form';
 import { Project } from '../projects/project';
 import { Routine } from '../routines/routine';
 import type { User } from '../users/user';
@@ -62,7 +62,8 @@ function linkEntityType(
   if (link instanceof AgentSession) return 'agent_session';
   if (link instanceof Routine) return 'scheduled_action';
   if (link instanceof Database) return 'database';
-  return 'form';
+  if (link instanceof Form) return 'form';
+  throw new TypeError('notifications.send: unsupported link entity');
 }
 
 /**
