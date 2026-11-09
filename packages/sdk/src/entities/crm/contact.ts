@@ -7,17 +7,17 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { FavoritableEntity } from '../entity';
 import {
+  DiscussionComment,
+  type DiscussionParent,
+  type DiscussionThread,
+  listDiscussionThreads,
+  postDiscussionComment,
+} from '../messages/discussion';
+import {
   MessageThread,
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import {
-  CrmComment,
-  type CrmCommentParent,
-  type CrmCommentThread,
-  listCrmCommentThreads,
-  postCrmComment,
-} from './comment';
 import { Company } from './company';
 
 type ContactDetail = GetContactResponses[200];
@@ -34,12 +34,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /** A mixed message and activity timeline page. */
-  timelinePage(selection?: TimelineOptions<CrmComment>) {
+  timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
       { type: 'crm_contact', entity: this },
       (record) =>
-        CrmComment.from(
+        DiscussionComment.from(
           this.client,
           { type: 'crm_contact', id: this.id },
           record,
@@ -124,6 +124,26 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
+  /** Add an email when absent. Existing addresses cannot be replaced or cleared. */
+  async setEmail(email: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactEmail({
+        path: { contact_id: this.id },
+        body: { email },
+      }),
+    );
+  }
+
+  /** Link or switch a personal-provider contact's company. Unlinking is not supported. */
+  async setCompany(company: Company): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setCrmContactCompany({
+        path: { contact_id: this.id },
+        body: { companyId: company.id },
+      }),
+    );
+  }
+
   /** The contact's phone numbers (E.164), oldest first, with where each came from. */
   async phones(): Promise<ContactPhone[]> {
     const { phones } = unwrap(
@@ -149,13 +169,13 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /** The CRM record this contact's discussions hang off. */
-  private get commentParent(): CrmCommentParent {
+  private get commentParent(): DiscussionParent {
     return { type: 'crm_contact', id: this.id };
   }
 
   /** The comment threads on this contact, newest thread first. */
-  async comments(): Promise<CrmCommentThread[]> {
-    return listCrmCommentThreads(this.client, this.commentParent);
+  async comments(): Promise<DiscussionThread[]> {
+    return listDiscussionThreads(this.client, this.commentParent);
   }
 
   /**
@@ -167,12 +187,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   async comment(
     body: string | RichMessage,
     opts?: { threadId?: string },
-  ): Promise<CrmComment> {
-    return postCrmComment(this.client, this.commentParent, body, opts);
+  ): Promise<DiscussionComment> {
+    return postDiscussionComment(this.client, this.commentParent, body, opts);
   }
 
   /** A handle to one of this contact's comments by id. */
-  commentById(id: string): CrmComment {
-    return CrmComment.byId(this.client, this.commentParent, id);
+  commentById(id: string): DiscussionComment {
+    return DiscussionComment.byId(this.client, this.commentParent, id);
   }
 }

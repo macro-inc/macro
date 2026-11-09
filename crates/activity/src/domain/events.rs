@@ -24,7 +24,11 @@ use super::models::{Activity, ActivityRecord, Actor, RecordedAction};
 /// One activity row on the wire — the realtime projection of an inserted
 /// `activity_events` row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ActivityWireRow {
+    /// Originating code-mode invocation, absent on older events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<Uuid>,
     /// The stored activity id.
     pub id: Uuid,
     /// Who mechanically acted, as a principal string (`macro|…` / `bot|…`).
@@ -49,6 +53,7 @@ impl ActivityWireRow {
         let (action, action_payload) = activity.action.to_columns();
         Self {
             id: activity.id,
+            agent_correlation_id: activity.agent_correlation_id,
             actor_id: activity.actor.as_ref().to_owned(),
             subject_id: activity.subject_id.clone(),
             entity_type: activity.entity_type,
@@ -68,6 +73,7 @@ impl ActivityWireRow {
             RecordedAction::from_columns(self.action, self.action_payload);
         Some(ActivityRecord {
             id: self.id,
+            agent_correlation_id: self.agent_correlation_id,
             actor,
             subject_id: self.subject_id,
             entity_type: self.entity_type,
@@ -140,5 +146,28 @@ impl MacroEvent for ActivityMacroEvent {
 
     fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
         Self { key, event }
+    }
+}
+
+impl From<ActivityRecord> for ActivityWireRow {
+    fn from(record: ActivityRecord) -> Self {
+        let (action, action_payload) = match record.action {
+            RecordedAction::Known(action) => {
+                let (tag, payload) = action.to_columns();
+                (tag.to_owned(), payload)
+            }
+            RecordedAction::Unknown { tag, payload } => (tag, payload),
+        };
+        Self {
+            id: record.id,
+            agent_correlation_id: record.agent_correlation_id,
+            actor_id: record.actor.as_ref().to_owned(),
+            subject_id: record.subject_id,
+            entity_type: record.entity_type,
+            entity_id: record.entity_id,
+            action,
+            action_payload,
+            occurred_at: record.occurred_at,
+        }
     }
 }

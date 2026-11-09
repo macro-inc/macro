@@ -270,7 +270,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
                   onSelect={selectRoutedTab}
-                  footer={<TeamSidebarAction />}
+                  action={<TeamSidebarAction />}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>

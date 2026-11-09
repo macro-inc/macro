@@ -1,6 +1,10 @@
 /// Domain models for CRM records
 pub mod model;
 
+/// Individual mailbox consent and domain exclusions for CRM contributions.
+#[cfg(feature = "ports")]
+pub mod email_privacy;
+
 /// Static list of generic/personal email-provider domains to exclude
 /// from CRM populate
 #[cfg(feature = "ports")]
@@ -55,3 +59,7 @@ pub mod pipeline_workflows;
 /// CRM pipelines and their lifecycle.
 #[cfg(feature = "ports")]
 pub mod pipelines;
+
+/// Explicit contact field edits.
+#[cfg(feature = "ports")]
+pub mod contact_update;

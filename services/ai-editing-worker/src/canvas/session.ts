@@ -51,6 +51,8 @@ export type CanvasSource = LiveSyncSource & {
 /** A committed update may already have reached peers; never replay its intent. */
 export class CanvasWriteError extends Error {}
 export class CanvasConflictError extends Error {}
+/** A batch that failed validation or planning before anything was committed. */
+export class CanvasRejectedError extends Error {}
 export type CanvasApplyOptions = {
   baseline?: GraphicsDocument;
   present?: (value: CanvasPresentation | undefined) => void;
@@ -229,6 +231,143 @@ export async function withCanvasSession<T>(
             !peer.selection.name.endsWith('(AI)') &&
             !peer.selection.reducedMotion
         );
+    const applyBatch = async (
+      ops: CanvasOp[],
+      options: CanvasApplyOptions,
+      stage: { committed: boolean }
+    ) => {
+      check();
+      if (!artifacts && ops.some(isArtifactOp))
+        throw new Error(
+          'Artifact operations are not available for this user. Nothing was committed.'
+        );
+      const baseline = options.baseline ?? backend.getDocument();
+      let planned = await Telemetry.span('canvas.ai.validate', async (span) => {
+        span.setAttr('edit.ops_total', ops.length);
+        return prepareCanvasEdit(baseline, ops);
+      });
+      const requests = textFitRequests(baseline, planned, ops);
+      let measured: TextFitResult | undefined;
+      if (options.measure && requests.length) {
+        measured = await options.measure(
+          {
+            documentId: source.documentId,
+            document: planned,
+            clock: { ...backend.getClock() },
+          },
+          requests,
+          signal
+        );
+        planned = measured.document;
+      }
+      const deps = dependencies(baseline, planned, ops);
+      const expected = dependencyState(baseline, deps);
+      const validate = () => {
+        check();
+        if (dependencyState(backend.getDocument(), deps) !== expected)
+          throw new CanvasConflictError(
+            'Canvas targets or reserved space changed. ReadCanvas and replan this batch; nothing from this batch was committed.'
+          );
+      };
+      const queued = performance.now();
+      return scheduler.run(deps, async () => {
+        await Telemetry.span('canvas.ai.schedule', async (span) => {
+          span.setAttr('canvas.schedule.wait_ms', performance.now() - queued);
+          span.setAttr('canvas.schedule.targets', deps.writes.size);
+        });
+        validate();
+        const show = options.present ?? present;
+        try {
+          if (options.animate ?? watching())
+            await Telemetry.span('canvas.ai.animate', async () =>
+              runCanvasAnimation(
+                canvasAnimation(baseline, planned, deps),
+                show,
+                signal,
+                validate,
+                options.sleep
+              )
+            );
+          const commit = async () => {
+            check();
+            // A peer's ACK can precede delivery on this socket. Pull a server
+            // barrier after presentation so already-accepted human changes are
+            // included in final dependency validation, even if live delivery lags.
+            await Telemetry.span('canvas.ai.revalidate', async () => {
+              const updates = await source.requestUpdatesSince(manager.version);
+              check();
+              if (
+                updates.isErr() ||
+                manager.importUpdate(updates.value).isErr()
+              )
+                throw new CanvasConflictError(
+                  'Canvas could not refresh current targets. ReadCanvas and replan; nothing from this batch was committed.'
+                );
+            });
+            validate();
+            // Rebuild against fresh canonical state; unrelated human/AI changes survive.
+            const fresh = prepareCanvasEdit(backend.getDocument(), ops);
+            const next = measured
+              ? applyTextMeasurements(fresh, measured)
+              : fresh;
+            check();
+            const selectedIds = [
+              ...new Set(
+                ops.flatMap((op) => {
+                  if ('ids' in op) return op.ids;
+                  return 'id' in op ? [op.id] : [];
+                })
+              ),
+            ]
+              .filter((id) => next.items[id])
+              .slice(0, 100);
+            const first = selectedIds[0];
+            const bounds = first ? worldBounds(next, first) : undefined;
+            show({
+              cursor: bounds ? { x: bounds.x, y: bounds.y } : null,
+              selectedIds,
+              preview: null,
+            });
+            await Telemetry.span('canvas.ai.apply', async (span) => {
+              span.setAttr('edit.ops_total', ops.length);
+              span.setAttr(
+                'edit.user_mentions',
+                ops.filter((op) => op.kind === 'mentionUser').length
+              );
+              span.setAttr(
+                'edit.artifact_ops',
+                ops.filter(isArtifactOp).length
+              );
+              stage.committed = true;
+              backend.commit(next, artifactLibraryEdits(ops));
+              try {
+                await lastAppend;
+                await wal.flush();
+                if ((await wal.summary()).dirty)
+                  throw new Error('Canvas write acknowledgement was lost.');
+              } catch {
+                throw new CanvasWriteError(
+                  'Canvas write acknowledgement was lost. Read the canvas before retrying; the edit may have applied.'
+                );
+              }
+            });
+            return {
+              operationsApplied: ops.length,
+              canvas: read(),
+              textLayout: measured?.effects ?? [],
+            };
+          };
+          const result = pendingCommit.then(commit);
+          pendingCommit = result.then(
+            () => {},
+            () => {}
+          );
+          return await result;
+        } finally {
+          show(undefined);
+        }
+      });
+    };
     const result = await run({
       read,
       present,
@@ -246,141 +385,22 @@ export async function withCanvasSession<T>(
         };
       },
       async apply(ops, options = {}) {
-        check();
-        if (!artifacts && ops.some(isArtifactOp))
-          throw new Error(
-            'Artifact operations are not available for this user. Nothing was committed.'
+        // Anything that fails before the commit left the scene untouched.
+        const stage = { committed: false };
+        try {
+          return await applyBatch(ops, options, stage);
+        } catch (error) {
+          if (
+            stage.committed ||
+            signal.aborted ||
+            error instanceof CanvasConflictError
+          )
+            throw error;
+          throw new CanvasRejectedError(
+            error instanceof Error ? error.message : String(error),
+            { cause: error }
           );
-        const baseline = options.baseline ?? backend.getDocument();
-        let planned = await Telemetry.span(
-          'canvas.ai.validate',
-          async (span) => {
-            span.setAttr('edit.ops_total', ops.length);
-            return prepareCanvasEdit(baseline, ops);
-          }
-        );
-        const requests = textFitRequests(baseline, planned, ops);
-        let measured: TextFitResult | undefined;
-        if (options.measure && requests.length) {
-          measured = await options.measure(
-            {
-              documentId: source.documentId,
-              document: planned,
-              clock: { ...backend.getClock() },
-            },
-            requests,
-            signal
-          );
-          planned = measured.document;
         }
-        const deps = dependencies(baseline, planned, ops);
-        const expected = dependencyState(baseline, deps);
-        const validate = () => {
-          check();
-          if (dependencyState(backend.getDocument(), deps) !== expected)
-            throw new CanvasConflictError(
-              'Canvas targets or reserved space changed. ReadCanvas and replan this batch; nothing from this batch was committed.'
-            );
-        };
-        const queued = performance.now();
-        return scheduler.run(deps, async () => {
-          await Telemetry.span('canvas.ai.schedule', async (span) => {
-            span.setAttr('canvas.schedule.wait_ms', performance.now() - queued);
-            span.setAttr('canvas.schedule.targets', deps.writes.size);
-          });
-          validate();
-          const show = options.present ?? present;
-          try {
-            if (options.animate ?? watching())
-              await Telemetry.span('canvas.ai.animate', async () =>
-                runCanvasAnimation(
-                  canvasAnimation(baseline, planned, deps),
-                  show,
-                  signal,
-                  validate,
-                  options.sleep
-                )
-              );
-            const commit = async () => {
-              check();
-              // A peer's ACK can precede delivery on this socket. Pull a server
-              // barrier after presentation so already-accepted human changes are
-              // included in final dependency validation, even if live delivery lags.
-              await Telemetry.span('canvas.ai.revalidate', async () => {
-                const updates = await source.requestUpdatesSince(
-                  manager.version
-                );
-                check();
-                if (
-                  updates.isErr() ||
-                  manager.importUpdate(updates.value).isErr()
-                )
-                  throw new CanvasConflictError(
-                    'Canvas could not refresh current targets. ReadCanvas and replan; nothing from this batch was committed.'
-                  );
-              });
-              validate();
-              // Rebuild against fresh canonical state; unrelated human/AI changes survive.
-              const fresh = prepareCanvasEdit(backend.getDocument(), ops);
-              const next = measured
-                ? applyTextMeasurements(fresh, measured)
-                : fresh;
-              check();
-              const selectedIds = [
-                ...new Set(
-                  ops.flatMap((op) => {
-                    if ('ids' in op) return op.ids;
-                    return 'id' in op ? [op.id] : [];
-                  })
-                ),
-              ]
-                .filter((id) => next.items[id])
-                .slice(0, 100);
-              const first = selectedIds[0];
-              const bounds = first ? worldBounds(next, first) : undefined;
-              show({
-                cursor: bounds ? { x: bounds.x, y: bounds.y } : null,
-                selectedIds,
-                preview: null,
-              });
-              await Telemetry.span('canvas.ai.apply', async (span) => {
-                span.setAttr('edit.ops_total', ops.length);
-                span.setAttr(
-                  'edit.user_mentions',
-                  ops.filter((op) => op.kind === 'mentionUser').length
-                );
-                span.setAttr(
-                  'edit.artifact_ops',
-                  ops.filter(isArtifactOp).length
-                );
-                backend.commit(next, artifactLibraryEdits(ops));
-                try {
-                  await lastAppend;
-                  await wal.flush();
-                  if ((await wal.summary()).dirty)
-                    throw new Error('Canvas write acknowledgement was lost.');
-                } catch {
-                  throw new CanvasWriteError(
-                    'Canvas write acknowledgement was lost. Read the canvas before retrying; the edit may have applied.'
-                  );
-                }
-              });
-              return {
-                operationsApplied: ops.length,
-                canvas: read(),
-                textLayout: measured?.effects ?? [],
-              };
-            };
-            const result = pendingCommit.then(commit);
-            pendingCommit = result.then(
-              () => {},
-              () => {}
-            );
-            return await result;
-          } finally {
-            show(undefined);
-          }
-        });
       },
     });
     await Telemetry.span('canvas.ai.flush', async () => {

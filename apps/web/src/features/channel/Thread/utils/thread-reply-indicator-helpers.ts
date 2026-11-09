@@ -33,9 +33,12 @@ export function getCollapsedRepliesCount(
 }
 
 export function getThreadReplyCountLabel(
-  collapsedRepliesCount: number
+  collapsedRepliesCount: number,
+  /** Whether replies are previewed above the count, so these are the rest. */
+  previewed = true
 ): string {
-  return `${collapsedRepliesCount} more repl${
+  const more = previewed ? ' more' : '';
+  return `${collapsedRepliesCount}${more} repl${
     collapsedRepliesCount === 1 ? 'y' : 'ies'
   }`;
 }

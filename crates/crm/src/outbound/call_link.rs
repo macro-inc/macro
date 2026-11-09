@@ -51,9 +51,9 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
     /// the CRMs of the teams of the Macro accounts on the call. Each guest is
     /// matched by email first (company by domain, contact by address), then,
     /// only when no contact matched, by phone number. A team's own members
-    /// never match its CRM, and hidden records and teams with the CRM
-    /// disabled are skipped. A caller known only by a number nobody has
-    /// creates nothing.
+    /// never match its CRM, and hidden records are skipped. Email
+    /// contribution consent is independent. A caller known only by a number
+    /// nobody has creates nothing.
     async fn matching_records(&self, people: &CallPeople) -> Result<Matches, sqlx::Error> {
         // Account ids and emails compare case-insensitively, like the other
         // CRM lookups.
@@ -80,7 +80,6 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             WITH teams AS (
                 SELECT DISTINCT tu.team_id
                 FROM team_user tu
-                JOIN team_crm_settings s ON s.team_id = tu.team_id AND s.crm_enabled
                 WHERE LOWER(tu.user_id) = ANY($1)
             ),
             guests AS (

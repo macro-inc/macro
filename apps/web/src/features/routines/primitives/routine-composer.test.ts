@@ -1,3 +1,4 @@
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineDraftStorage } from '../context/routine-sources';
@@ -120,5 +121,33 @@ describe('routine creation state without app providers', () => {
     expect(composer.formError()).toBeNull();
     await composer.create();
     expect(source.create).toHaveBeenCalledOnce();
+  });
+
+  it('never writes its draft back after logging out cleared it', () => {
+    const { composer, storage } = setup(async () => 'created');
+    composer.change((current) => ({ ...current, name: 'Half done' }));
+    window.dispatchEvent(new Event(COMPOSER_STORAGE_CLEARED));
+    composer.change((current) => ({ ...current, name: 'Typed after' }));
+    dispose();
+    expect(storage.save).not.toHaveBeenCalled();
+  });
+
+  it('starts a new routine with no trigger and no steps', () => {
+    const storage: RoutineDraftStorage = {
+      load: () => null,
+      save: vi.fn(),
+      clear: vi.fn(),
+    };
+    const composer = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createRoutineComposer(
+        { pending: () => false, create: vi.fn() },
+        storage,
+        'default-model',
+        vi.fn(),
+        () => new Set()
+      );
+    });
+    expect(composer.draft()).toMatchObject({ triggers: [], steps: [] });
   });
 });

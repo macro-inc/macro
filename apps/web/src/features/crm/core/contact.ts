@@ -12,6 +12,8 @@ export type CrmContact = {
   name?: string | null;
   /** Absent for a contact added by name alone. */
   email?: string | null;
+  /** Server classification; absent until the contact detail is loaded. */
+  personalEmail?: boolean;
   hidden: boolean;
   firstInteraction: string;
   lastInteraction: string;

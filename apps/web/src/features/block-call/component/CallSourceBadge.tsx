@@ -1,3 +1,4 @@
+import { webLink } from '@app/features/external-chat/core/rich';
 import { t } from '@app/lib/i18n';
 import { importedCallProviderName } from '@entity/components/Badges';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
@@ -12,7 +13,7 @@ export function CallSourceBadge(props: { source: CallRecordSource }) {
     <Show when={name()}>
       {(name) => (
         <Show
-          when={props.source.externalUrl}
+          when={webLink(props.source.externalUrl)}
           fallback={
             <Badge variant="outline" size="sm">
               {name()}

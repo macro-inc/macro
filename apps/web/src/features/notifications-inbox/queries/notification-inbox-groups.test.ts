@@ -16,7 +16,6 @@ const row = (id: string, latestAt: number): NotificationInboxRow => ({
   content: {
     entity: {} as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -78,5 +77,21 @@ describe('orderInboxRows', () => {
       'document:b#task',
       'document:a#task',
     ]);
+  });
+
+  it('lists a group caught on two refetched pages once, as its newer copy', () => {
+    const fresh = row('foreign_entity:p#pull_request', 60);
+    const stale = row('foreign_entity:p#pull_request', 20);
+    const groups = [
+      group('foreign_entity:p', 60, [fresh]),
+      group('document:b', 40, [row('document:b#task', 40)]),
+      group('foreign_entity:p', 20, [stale]),
+    ];
+    const rows = orderInboxRows(groups, true);
+    expect(ids(rows)).toEqual([
+      'foreign_entity:p#pull_request',
+      'document:b#task',
+    ]);
+    expect(rows[0]).toBe(fresh);
   });
 });

@@ -39,7 +39,7 @@ gateway `/calendar` prefix.
 ## Checks
 
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
-- `curl http://localhost:8088/health` after `just run_local` or `just stack up`.
+- `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
 
@@ -56,3 +56,5 @@ gateway `/calendar` prefix.
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service` ·
   Docs: `docs/guides/new-service.md` (uses this service as the model)
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

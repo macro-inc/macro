@@ -243,6 +243,7 @@ pub(super) async fn read_imported_call_record(
         call_id: call.id,
         user_access_level: None,
         channel_id: None,
+        discussion: crate::domain::models::CallDiscussion::CallChat { call_id: call.id },
         room_name: None,
         created_by: call.user_id,
         started_at,

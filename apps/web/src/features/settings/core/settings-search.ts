@@ -338,6 +338,11 @@ const SETTINGS: Setting[] = [
     keywords: 'token secret developer authentication',
   },
   {
+    tab: 'Account Managers',
+    title: 'See and revoke the agents managing your account',
+    keywords: 'agent manager token access revoke',
+  },
+  {
     tab: 'Desktop App',
     title: 'Desktop app version and download',
     keywords: 'download mac macos linux version latest release updated',

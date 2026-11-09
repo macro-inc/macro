@@ -25,12 +25,14 @@ pub struct PhoneNumber(String);
 impl PhoneNumber {
     /// Normalize a number written with its country code.
     ///
-    /// Accepts a leading `+` or the international `00` prefix, and ignores
-    /// spaces, dots, dashes and parentheses. Anything else (letters,
-    /// extensions, a national number without its country code) is `None`.
+    /// Accepts a leading `+` or the international `00` prefix, drops a `(0)`
+    /// trunk prefix (`+44 (0)20 …`), and ignores spaces, dots, dashes and
+    /// parentheses. Anything else (letters, extensions, a national number
+    /// without its country code) is `None`.
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.trim();
         let rest = text.strip_prefix('+').or_else(|| text.strip_prefix("00"))?;
+        let rest = rest.replace("(0)", "");
         let mut digits = String::with_capacity(rest.len());
         for character in rest.chars() {
             match character {

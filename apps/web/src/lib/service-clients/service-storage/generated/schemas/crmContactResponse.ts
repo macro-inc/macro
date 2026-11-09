@@ -33,6 +33,9 @@ hidden contacts so they can render the right toggle state. */
   lastInteraction: string;
   /** Display name observed for the contact, if any. */
   name?: CrmContactResponseName;
+  /** Whether the address uses a known personal provider and permits company edits.
+Older servers omit this classification; clients must then keep it read-only. */
+  personalEmail?: boolean;
   /** When the contact record was last updated. */
   updatedAt: string;
 }

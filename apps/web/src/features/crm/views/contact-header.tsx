@@ -1,22 +1,20 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { propertyPillClasses } from '@app/features/property/extractors/property-pill-classes';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isMobile } from '@core/mobile/isMobile';
 import { readablePhone } from '@core/util/phone';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { ContactPhonesDialog } from '../components/contact-phones-dialog';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
+import { ContactCompanyField, ContactEmailField } from './contact-properties';
 import { ContactVisibilityButton } from './contact-visibility-button';
 import {
-  useCompanyQuery,
   useContactPhonesQuery,
   useSetContactNameMutation,
   useSetContactPhonesMutation,
@@ -45,35 +43,6 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
   );
 }
 
-function CompanyPill(props: {
-  companyId: string;
-  onOpenCompany?: (companyId: string) => boolean;
-}) {
-  const { openWithSplit } = useCrmContext().createNavigation();
-  const { company } = useCompanyQuery(() => props.companyId);
-  const openCompany = (event: MouseEvent) => {
-    const companyId = props.companyId;
-    if (!event.shiftKey && props.onOpenCompany?.(companyId)) return;
-    openWithSplit(
-      { type: 'company', id: companyId },
-      { activate: true, preferNewSplit: event.shiftKey }
-    );
-  };
-  return (
-    <button
-      type="button"
-      onClick={openCompany}
-      class={propertyPillClasses({
-        class:
-          "touch:min-h-6 touch:min-w-11 touch:my-2.5 touch:before:absolute touch:before:-inset-x-px touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']",
-      })}
-    >
-      <EntityIcon targetType="crm_company" size="fill" class="size-3" />
-      {company()?.name ?? 'Open company'}
-    </button>
-  );
-}
-
 /**
  * A number calls through the device's own dialer. On a phone the whole pill
  * dials; on a larger screen the number sits beside a Call link.
@@ -87,7 +56,7 @@ function PhonePill(props: { phone: string }) {
       fallback={
         <a
           href={href()}
-          aria-label={`Call ${number()}`}
+          aria-label={t('contactPhones.callPhone', { phone: number() })}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           <PhoneIcon class="size-3" />
@@ -102,10 +71,10 @@ function PhonePill(props: { phone: string }) {
         </Badge>
         <a
           href={href()}
-          aria-label={`Call ${number()}`}
+          aria-label={t('contactPhones.callPhone', { phone: number() })}
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
-          Call
+          {t('contactPhones.call')}
         </a>
       </span>
     </Show>
@@ -128,7 +97,9 @@ function ContactPhones(props: { contactId: string }) {
           class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
         >
           <PhoneIcon class="size-3" />
-          {numbers().length ? 'Edit phones' : 'Add phone'}
+          {numbers().length
+            ? t('contactPhones.editPhones')
+            : t('contactPhones.addPhone')}
         </button>
       </Show>
       <Show when={editing()}>
@@ -206,23 +177,12 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <Show when={contact().email}>
-              {(email) => (
-                <Badge variant="ghost" size="sm">
-                  <EnvelopeIcon class="size-3" />
-                  {email()}
-                </Badge>
-              )}
-            </Show>
+            <ContactEmailField contact={contact()} />
             <ContactPhones contactId={contact().id} />
-            <Show when={contact().companyId}>
-              {(companyId) => (
-                <CompanyPill
-                  companyId={companyId()}
-                  onOpenCompany={props.onOpenCompany}
-                />
-              )}
-            </Show>
+            <ContactCompanyField
+              contact={contact()}
+              onOpenCompany={props.onOpenCompany}
+            />
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
               <Badge variant="ghost" size="sm">
                 <ClockIcon class="size-3" />

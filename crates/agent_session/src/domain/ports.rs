@@ -133,6 +133,8 @@ pub struct RequestedExternalSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session, told to the runtime on the event.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -297,6 +299,9 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
     pub instructions: Option<String>,
+    /// What opened the session, as the runtime was told on the trigger event.
+    /// A description only: it never decides visibility or notifications.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -333,6 +338,12 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    /// Only an in-process session reads it; a non-billable session never
+    /// claims a warm session, whose row is billable.
+    pub billing: crate::domain::model::SessionBilling,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -434,6 +445,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner.
+    fn billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
 
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)

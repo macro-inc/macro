@@ -8,4 +8,8 @@ export default {
   saveFailed:
     'Could not save. Write each number with its country code, starting with +.',
   save: 'Save',
+  addPhone: 'Add phone',
+  editPhones: 'Edit phones',
+  call: 'Call',
+  callPhone: 'Call {{phone}}',
 };
