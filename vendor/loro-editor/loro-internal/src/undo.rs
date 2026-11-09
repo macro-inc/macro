@@ -20,6 +20,13 @@ use crate::{
 
 #[cfg(test)]
 mod atomicity_tests;
+#[cfg(test)]
+mod performance_tests;
+
+#[cfg(test)]
+thread_local! {
+    static GROUP_SCAN_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 pub(crate) mod movable_list;
 
 /// A batch of diffs.
@@ -447,19 +454,19 @@ impl Stack {
         let last = self.stack.back_mut().unwrap();
         let last_remote_diff = last.1.lock();
 
-        // Check if the remote diff is disjoint with the current undo group
-        let is_disjoint_group = group.is_some_and(|g| {
-            g.affected_cids.iter().all(|cid| {
-                last_remote_diff
-                    .cid_to_events
-                    .get(cid)
-                    .is_none_or(|diff| diff.is_empty())
-            })
-        });
-
         // Can't merge if remote diffs exist and it's not disjoint with the current undo group
-        let should_create_new_entry =
-            !last_remote_diff.cid_to_events.is_empty() && !is_disjoint_group;
+        // An empty remote row cannot conflict, regardless of the group's size.
+        let should_create_new_entry = !last_remote_diff.cid_to_events.is_empty()
+            && !group.is_some_and(|g| {
+                g.affected_cids.iter().all(|cid| {
+                    #[cfg(test)]
+                    GROUP_SCAN_VISITS.with(|visits| visits.set(visits.get() + 1));
+                    last_remote_diff
+                        .cid_to_events
+                        .get(cid)
+                        .is_none_or(|diff| diff.is_empty())
+                })
+            });
 
         if should_create_new_entry {
             // Create a new entry in the stack
