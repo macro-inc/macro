@@ -47,6 +47,8 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
 - Run browser/performance coverage in owned Chromium, Firefox and WebKit instances; never connect to a person's browser or shared CDP. No existing-server reuse.
 - Match upstream layout; do not add content-visibility or intrinsic containment without three-browser pixel/scroll parity and a measured speed benefit.
+- Assert saved table column widths on the declared col styles and rendered cell geometry; WebKit exposes no layout box for col elements.
+
 - Isolate Vite and Playwright in a private user/network namespace with loopback
   enabled when host route churn causes ERR_NETWORK_CHANGED; keep checks strict.
 - Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2.
