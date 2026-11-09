@@ -7,19 +7,21 @@ import {
   splitPanePaths,
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
+import { PaneContext } from '@app/lib/split-router/solid/context';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import {
   type AppLinkOpener,
   AppLinkOpenerContext,
 } from '@core/component/LexicalMarkdown/component/core/app-link-opener';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { createCallback } from '@solid-primitives/rootless';
-import type { ParentProps } from 'solid-js';
-import { useSplitLayout } from '../layout';
-import { splitContentFromLocation, upgradeLegacyPath } from './legacy-route';
+import { type ParentProps, useContext } from 'solid-js';
+import { upgradeLegacyPath } from './legacy-route';
 import { createMacroMentionLinkResolver } from './mention-links';
 
 /**
@@ -55,16 +57,16 @@ function appLinkLocation(
 
 /**
  * Opens a Macro app link from an agent's reply in a new split, as the reply's
- * mention chips do (in place on touch). Entity links take the mention path, so
- * an open entity is reused and its location applied; any other app route opens
- * by its location.
+ * mention chips do (in place on touch, a new pane when panes stack). Entity
+ * links take the mention path, so an open entity is reused and its location
+ * applied; any other app route opens at its full location.
  */
 function useAgentReplyLinkOpener(): AppLinkOpener | undefined {
   const router = useOptionalSplitRouter();
   if (!router) return;
 
   const resolveMention = createMacroMentionLinkResolver(router.routes);
-  const { openWithSplit } = useSplitLayout();
+  const pane = useContext(PaneContext);
 
   return createCallback((url: string) => {
     const newSplit = openInNewSplitForMention(false, true);
@@ -78,12 +80,13 @@ function useAgentReplyLinkOpener(): AppLinkOpener | undefined {
     const location = appLinkLocation(router.routes, url);
     if (!location) return false;
 
-    // A view already open is reused, as for entities; a copied layout's own
-    // search state goes through the router with it.
-    openWithSplit(splitContentFromLocation(location), {
-      preferNewSplit: newSplit,
-      ...(location.search && { search: location.search }),
-    });
+    const target = { location };
+    const source = pane?.pane();
+    const opening =
+      newSplit || isNativeMobilePlatform() || !source
+        ? router.open(target, { newPane: true, source })
+        : router.navigatePane(source, target);
+    fireAndForget(opening, 'agent-reply-links');
     return true;
   });
 }

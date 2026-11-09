@@ -21,6 +21,7 @@ import {
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
+  settingsRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
@@ -89,6 +90,7 @@ const routes: SplitRoutes = {
       children: [
         homeSplitRoute,
         tasksSplitRoute,
+        settingsRoute,
         legacyContentRoute,
         notFoundRoute,
       ],
@@ -180,7 +182,11 @@ function renderSplits(content: () => JSX.Element) {
     manager
       .splits()
       .map((split) => ({ type: split.content.type, id: split.content.id }));
-  return { view, contents };
+  const lastRoute = () => {
+    const pane = router.panes().at(-1);
+    return pane && router.entry(pane)?.location.route.matches.at(-1);
+  };
+  return { view, contents, lastRoute };
 }
 
 let windowOpen: ReturnType<typeof vi.spyOn<Window, 'open'>>;
@@ -224,16 +230,22 @@ describe('links in an agent reply', () => {
     expect(windowOpen).not.toHaveBeenCalled();
   });
 
-  it('opens a retired Macro path where it now lives', async () => {
-    const { view, contents } = renderSplits(() =>
-      agentReply('Start [here](https://dev.macro.com/app/getting-started).')
+  it('opens a nested Macro route at its full location', async () => {
+    const { view, lastRoute } = renderSplits(() =>
+      agentReply(
+        'Change it in [appearance settings](https://dev.macro.com/app/settings/appearance).'
+      )
     );
 
-    fireEvent.click(view.getByText('here'));
+    fireEvent.click(view.getByText('appearance settings'));
 
-    // The path now leads Home, which is already open, so its split is reused.
-    await vi.waitFor(() => expect(windowOpen).not.toHaveBeenCalled());
-    expect(contents()).toEqual([HOME]);
+    await vi.waitFor(() =>
+      expect(lastRoute()).toEqual({
+        id: 'settings',
+        params: { tab: 'appearance' },
+      })
+    );
+    expect(windowOpen).not.toHaveBeenCalled();
   });
 
   it('opens other sites in a browser tab', () => {
