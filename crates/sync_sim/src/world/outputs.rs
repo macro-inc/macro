@@ -35,6 +35,13 @@ impl Sim {
                             foreign: record.foreign,
                         });
                     }
+                    if matches!(&op, StorageOp::WalAdopt { expected, .. } if !expected.is_empty()) {
+                        self.emit(Fact::WalAdoptionIssued {
+                            client: name.clone(),
+                            session,
+                            id: id.0,
+                        });
+                    }
                     let now = self.clock.now;
                     if let Some(store) = self.profiles.get_mut(&profile) {
                         if !store

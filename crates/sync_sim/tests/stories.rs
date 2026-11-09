@@ -104,3 +104,6 @@ mod editor_readonly;
 
 #[path = "stories/close_termination.rs"]
 mod close_termination;
+
+#[path = "stories/editor_replay_fixup.rs"]
+mod editor_replay_fixup;

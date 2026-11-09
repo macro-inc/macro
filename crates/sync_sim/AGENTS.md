@@ -290,3 +290,5 @@ by session/request. every_close_terminates requires ordered reply and host teard
 before the host deadline in every access state, including revoked and mid-start.
 Created/terminal AI cancellation has no flush preflight; Close joins its WAL barrier.
 Step::Create constructs without Start, so Init cancellation uses the same real core.
+
+Observe adoption issue and callback consumption by exact client/session/storage ID; enforce no_seed_over_unadopted_wal in ordinary and hostile runs. Keep the randomized startup ordering control (all seed sources, multiple owners, callback orders and timeouts) strict.

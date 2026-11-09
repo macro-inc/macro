@@ -370,3 +370,48 @@ fn queued_non_periodic_input_is_reported_when_the_settlement_budget_expires() {
             .any(|event| matches!(event.fact, Fact::Settled))
     );
 }
+
+#[test]
+fn seed_in_the_same_output_as_adoption_is_rejected_by_the_invariant() {
+    let mut sim = Sim::new(SimConfig::calm(823));
+    let name = ClientName("a".into());
+    sim.step(Step::Create(OpenSpec::form("a", "one"))).unwrap();
+    let client = &sim.clients[&name];
+    let session = client.session;
+    let doc = client.core_doc_id();
+    sim.outputs(
+        &name,
+        session,
+        SyncOutput {
+            io: vec![IoEffect::Storage {
+                id: doc_sync_core::StorageOpId(999),
+                op: doc_sync_core::StorageOp::WalAdopt {
+                    doc,
+                    from: doc_sync_core::WalOwner::Legacy,
+                    to: session,
+                    first_seq: doc_sync_core::WalSeq(1),
+                    covers: doc_sync_core::WalSeq(0),
+                    expected: vec![doc_sync_core::StoredWalRecord {
+                        delivered: false,
+                        record: doc_sync_core::WalRecord {
+                            seq: doc_sync_core::WalSeq(1),
+                            created_at: doc_sync_core::UnixMillis(0),
+                            user: doc_sync_core::UserKey("user-0".into()),
+                            foreign: false,
+                            quarantined: false,
+                            bytes: vec![1],
+                        },
+                    }],
+                },
+            }],
+            events: vec![doc_sync_core::SyncEvent::Seeded {
+                kind: doc_sync_core::SeedKind::Optimistic,
+                replayed_wal: 0,
+            }],
+            ..SyncOutput::default()
+        },
+    )
+    .unwrap();
+    let outcome = sim.run(&[]);
+    assert!(invariants::no_seed_over_unadopted_wal(&outcome).is_err());
+}

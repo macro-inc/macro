@@ -52,3 +52,5 @@ fn verify(config: SimConfig, script: &[Step]) -> Outcome {
     first.compare_replay(&second).unwrap();
     first
 }
+
+mod startup_adoption;

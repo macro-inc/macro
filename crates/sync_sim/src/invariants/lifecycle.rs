@@ -33,3 +33,41 @@ pub fn every_close_terminates(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
+
+/// No surface initializes before its durable adoption callbacks are consumed.
+pub fn no_seed_over_unadopted_wal(outcome: &Outcome) -> Result<(), Failure> {
+    let mut pending = std::collections::BTreeSet::new();
+    for event in &outcome.events {
+        match &event.fact {
+            Fact::WalAdoptionIssued {
+                client,
+                session,
+                id,
+            } => {
+                pending.insert((client, session, id));
+            }
+            Fact::WalAdoptionCompleted {
+                client,
+                session,
+                id,
+            } => {
+                pending.remove(&(client, session, id));
+            }
+            Fact::Seeded {
+                client, session, ..
+            } if pending
+                .iter()
+                .any(|(c, s, _)| c == &client && s == &session) =>
+            {
+                return Err(Failure::new(
+                    "no_seed_over_unadopted_wal",
+                    format!(
+                        "{client:?}/{session:?}: initialized before durable WAL adoption completed"
+                    ),
+                ));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
