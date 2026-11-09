@@ -2,6 +2,7 @@
 use super::*;
 mod actions;
 mod controls;
+pub mod input;
 mod keys;
 pub(super) use keys::decode as decode_key;
 mod resize;
@@ -141,43 +142,16 @@ impl Plugin for Tables {
     }
 }
 fn tab(tx: &mut Transaction<'_>, table: Id<TableNode>, shift: bool) -> Result<Handled, Error> {
-    let Some(range) = tx
+    let Some(_) = tx
         .selection()
         .and_then(Selection::as_range)
         .filter(|r| r.is_collapsed())
-        .cloned()
     else {
         return Ok(Handled::No);
     };
-    let Some(cell) = find_cell_node(tx.view(), range.anchor.key()) else {
-        return Ok(Handled::No);
-    };
-    // Lists claim Tab before table navigation only while an indentation change is possible.
-    if let Some(item) = tx.find_matching_parent(range.anchor.key(), |state, key| {
-        state.is::<ListItemNode>(key)
-    }) {
-        let depth = tx.indent(item);
-        let previous = tx
-            .prev_sibling(item)
-            .filter(|key| tx.is_element(*key))
-            .map_or(0, |key| tx.indent(key));
-        if (shift && depth > 0) || (!shift && depth < previous.saturating_add(1)) {
-            return tx.dispatch(if shift {
-                &Command::OutdentContent
-            } else {
-                &Command::IndentContent
-            });
-        }
-    }
-    let row = tx
-        .parent(cell)
-        .ok_or(Error::Invariant("table cell parent"))?;
-    if !shift && tx.next_sibling(cell).is_none() && tx.next_sibling(row).is_none() {
-        if let Some(row) = insert_table_row_at_selection(tx, true)?
-            && let Some(first) = tx.first_child(row)
-        {
-            tx.select_start(first)?;
-        }
+    if input::handle_list_tab(tx, shift)? == Handled::Yes
+        || input::handle_insert_row_tab(tx, shift)? == Handled::Yes
+    {
         return Ok(Handled::Yes);
     }
     Ok(if tab_in_table(tx, table, shift)? {

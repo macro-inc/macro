@@ -15,7 +15,7 @@ mod metadata;
 mod movement;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
-mod table;
+pub mod table;
 mod text_paste;
 mod theme;
 pub use theme::parse_pasted_theme;
