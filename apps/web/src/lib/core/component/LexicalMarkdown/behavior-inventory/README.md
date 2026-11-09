@@ -11,7 +11,9 @@ guards and checkbox-to-task conversion. Task creation is a service boundary stub
 its tests exercise actual selection/parsing, parallel completion, batched node
 replacement, partial failures and deleted targets, not remote task creation
 or host authorization. Checklist collector/planner mappings
-cover actual node metadata and supplied task facts. The current planner dims
+cover actual node metadata and supplied task facts. Real-node collection cases
+pin root checklist boundaries, nested wrapper ownership, assignee deduplication,
+first-date/task precedence and metadata removal after committed edits. The current planner dims
 filtered rows and counts progress; row grouping/collapse is not implemented.
 Its legacy hideFiltered setting is ignored rather than hiding rows. Planning
 cases pin calendar-day due boundaries, marker priority, task-data precedence,

@@ -6,6 +6,20 @@ export const EDITOR_CHECKLIST_BEHAVIOR_MAP = [
       'apps/web/src/lib/core/component/LexicalMarkdown/plugins/checklist-controls/collect.ts',
     anchor: 'export function $collectChecklistMeta()',
     testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/checklist-collection.test.ts',
+    cases: [
+      'checklist node collection collects only root checklists and excludes nested rows from progress',
+      'checklist node collection deduplicates assignees by id in document order and keeps the first display name',
+      'checklist node collection takes the first date and task mention while ignoring other document kinds',
+      'checklist node collection assigns leading and trailing nested wrappers to the adjacent ordinary row',
+      'checklist node collection recomputes trimmed text priority and clears removed inline metadata after committed edits',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/checklist-controls/collect.ts',
+    anchor: 'export function $collectChecklistMeta()',
+    testFile:
       'apps/web/src/lib/core/component/LexicalMarkdown/plugins/checklist-controls/collect.test.ts',
     cases: [
       'task-list controls collects every checklist, but only task mentions make items tasks',
