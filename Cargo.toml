@@ -9,6 +9,7 @@ members = [
   "crates/client/lexical/macro_document_model",
   "crates/client/document_session",
   "crates/client/document_session_wasm",
+  "crates/client/document_session_ffi",
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
@@ -238,6 +239,7 @@ members = [
 ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
+uniffi = { version = "=0.32.2", default-features = false }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
 lexical_loro = { path = "crates/client/lexical/lexical_loro" }

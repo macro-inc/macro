@@ -79,3 +79,5 @@ The compatibility feature exposes same-core unpublished host scopes and a single
 Forward late Stop even when the session is already terminal. Its real Stopped reply
 acknowledges host Close only after the original terminal WAL barrier completes.
 
+
+Portable HTML and Markdown exports are available through the typed native FFI.
