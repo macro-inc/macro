@@ -3,6 +3,8 @@ import type { LexicalEditor } from '../../editor';
 import type { LexicalNode } from '../base';
 import type { SharedState } from '../state/shared';
 
+export type { LexicalNodeReplacement } from 'lexical';
+
 export type NodeClass = LexicalNode['constructor'];
 type GenericConstructor<T> = new (
   ...args: ConstructorParameters<LexicalNode['constructor']>

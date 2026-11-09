@@ -184,3 +184,45 @@ test('configured transform accessors are sampled once before following extends',
   expect(reads).toBe(1);
   expect(observations).toEqual(['transform', 'extends']);
 });
+
+test('replacement binder keeps actual class identity and rejects invalid callback results', () => {
+  const options = { replace: TextNode, with: (node: TextNode) => node };
+  Reflect.set(options, 'with', () => null);
+  const bound = bindReplacement(options);
+  expect(bound.replace).toBe(TextNode);
+  const editor = createEditor({
+    namespace: 'replacement public boundary',
+    onError: (error) => {
+      throw error;
+    },
+  });
+  try {
+    editor.update(
+      () => {
+        const source = new TextNode('source');
+        expect(() => bound.with(source)).toThrow(
+          'must return a node from this core'
+        );
+      },
+      { discrete: true }
+    );
+  } finally {
+    editor.dispose();
+  }
+});
+
+test('replacement class normalization returns the same constructor it validated', () => {
+  class Expected extends TextNode {}
+  class Different extends TextNode {}
+  let reads = 0;
+  Object.defineProperty(Expected.prototype, 'constructor', {
+    configurable: true,
+    get: () => (++reads === 1 ? Expected : Different),
+  });
+  const bound = bindReplacement({
+    replace: Expected,
+    with: (node: Expected) => node,
+  });
+  expect(reads).toBe(1);
+  expect(bound.replace).toBe(Expected);
+});
