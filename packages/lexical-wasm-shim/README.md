@@ -1,6 +1,7 @@
-# Lexical development shim
+# Lexical compatibility core
 
-Private compatibility work over the Rust conformance host. The backend and update
+Private compatibility work toward the production Rust EditorSession. The current
+test backend uses the Rust conformance host. The backend and update
 controller run real model transactions, JavaScript transforms and application
 commands. The drop-in `lexical` facade and foreign-class adapters are still being
 implemented; this package is not a production dependency.
@@ -9,7 +10,7 @@ Run from this directory:
 
 ```sh
 bun install --frozen-lockfile
-TMPDIR=/home/wolf/tmp CARGO_BUILD_JOBS=4 bun run test
+TMPDIR=/home/wolf/tmp CARGO_BUILD_JOBS=2 bun run test
 bun run check
 ```
 
@@ -65,3 +66,9 @@ The backend also hosts `exportJSON` with scoped reentrant reads, native-super, o
 All no-argument boolean predicates share the hosted pure-predicate adapter. Their owned read peers preserve native-super calls and original arguments, reject writes, and use JS truthiness without inspecting returned objects. Scoped failure barriers preserve opaque exceptions and stop later callbacks, model writes and cache publication. Text and line-break inline flags remain fixed non-hooks. Node-argument predicates preserve node identity for indexed and internal native calls. getIndent and decorator getTextContent use typed primitive results; excludeFromCopy preserves optional destinations. afterCloneFrom uses a separate staging descriptor and an owned read of its original; the class bridge returns initialized own fields before installation. extractWithChild preserves selection provenance through native export traversal. All derived hooks now have backend adapters; full constructor/opaque-field staging and facade acceptance remain unfinished.
 
 The native facade foundation now exposes editor update/read/state and native node handles with constructors, captured core-field getters and historical serialization. The complete class registry, writable-field and selection protocols, production session attachment and Tier B facade remain unfinished.
+
+Root exports and subclass declarations evaluate without initializing WASM. Editor
+creation requires an initialized backend, bound explicitly by the engine
+initializer. The development initializeConformance binding is only for tests.
+The production initializeLexicalCompat entry point and actual-session bridge are
+not ready; production consumers must wait for those implementations.

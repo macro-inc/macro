@@ -1,14 +1,16 @@
-# Lexical WASM development shim
+# Lexical WASM compatibility core
 
 ## What it is
 
-Development-only Lexical compatibility facade over the Rust conformance host.
-The package is being assembled; the full lexical export surface is not ready.
+Lexical compatibility core being promoted to the production EditorSession.
+The full export surface and production initializer are not ready; existing tests
+use the real development conformance host.
 
 ## Start here
 
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
-- `src/backend/conformance.ts`: the only backend and the only runtime WASM import.
+- `src/backend/factory.ts`: engine binding selected after initialization; root module evaluation never loads WASM.
+- `src/backend/conformance.ts`: development backend and its runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
 - `src/handles.ts`: per-editor weak captured-node identity and collected-version ownership.
@@ -18,7 +20,9 @@ The package is being assembled; the full lexical export surface is not ready.
 
 ## Boundaries
 
-- Never import this private package from production apps, packages or Rust crates.
+- Keep the development conformance backend out of production imports; production must bind the actual EditorSession without a second core.
+- Keep classes, constants and root exports safe to evaluate before WASM initialization; require initialization only when constructing an editor or calling the engine.
+- Run upstream @lexical packages unchanged over this core; JS node registration and handlers are authoritative, without parallel native behavior plugins.
 - Use the shared production lexical-wasm-view package for DOM work; do not copy it.
 - Keep JS command identity in a WeakMap; diagnostic names are not identities.
 - Keep node/selection identity caches per version, never in a global Map.
