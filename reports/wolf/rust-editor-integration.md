@@ -45,8 +45,27 @@ Preliminary parser/Twiggy attribution reports +636,436 code bytes, +8,899
 data bytes and 633 additional functions. Legacy text input and explicit
 resync share one WASM function body, so those exports are not duplicated
 implementations. Eighteen compatibility exports are newly present compared
-with the live build. A matched-feature ablation is pending; the full size
-difference cannot be assigned to the ABI3 delta adapter alone.
+with the live build. The size owner completed an exact-source `08ade11a39`
+ablation using `--no-default-features --features bebop-owned-all`, retaining
+the six opt3 caller crates, toolchain/profile and optimization passes:
+
+| Source / feature group | Raw bytes | Brotli bytes |
+| --- | ---: | ---: |
+| Live `9c21b03842` | 8,298,806 | 1,885,815 |
+| `08ade11a39`, compatibility enabled | 8,946,448 | 2,014,120 |
+| `08ade11a39`, compatibility disabled | 8,319,259 | 1,887,011 |
+
+The reported compatibility-disabled SHA256 is
+`3a52b8d396a0d13dffc770cffccd70d3f36e93ffa4b05c26b523e519fe1f288c`.
+The feature group accounts for **127,109 Brotli bytes** on this exact source;
+compatibility-disabled is **1,196 Brotli bytes** above live, including every
+other source difference. Neither remainder nor total growth isolates the
+ABI3 delta adapter. This is owner-reported attribution, not a shipping variant,
+export-removal decision or performance acceptance. The newer `4f0eb3d6bf`
+application artifact stays separate. Exact full-string aliases share function
+8879. A named optimized sibling is pending code-section equivalence checks;
+its names are not yet attribution evidence. Public export changes remain
+coordinated with the native and JS compatibility owners.
 
 Matched ABI3 session tests **91/91**, view tests **255/255** and collaboration
 type checking pass. Full view-package type checking **fails** on structural
