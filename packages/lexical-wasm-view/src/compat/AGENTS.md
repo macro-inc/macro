@@ -18,6 +18,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - `utils.ts`, `dom-utils.ts`, `block-cursor.ts`: ported DOM/keyboard helpers.
 - `*-state.ts`: shared upstream pass/event state after splitting the source modules.
 - `upstream-harness.ts`: test-only source swapping; this retains the real upstream model.
+- `upstream-contract.type-test.ts`: type-only checks against upstream public DOM declarations and runtime inputs.
 
 ## Boundaries
 
@@ -29,6 +30,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Clear core composition on every root change and keep its native composition field synchronized.
 - Pass a caller-owned parentSpan to root binding or reconciliation when available; the view ends only its own child span.
 - Keep the core's Point/RangeSelection/NodeSelection instances and command object identities.
+- Keep application types bound to upstream declarations; import the exported DOM contracts with import type in the application CI contract.
 - Keep JS node classes unchanged; getDOMSlot must return these exported DOMSlot/ElementDOMSlot classes.
 - Keep the upstream MIT notice and preserve DOM structures, command payloads and platform quirks when retargeting source.
 - Distinguish ported DOM over the upstream model from the actual Rust compat engine in every test report.
