@@ -96,3 +96,15 @@ Synchronous compatibility transactions use the returned executor’s `runSync`
 method. It rejects reentrant, queued or closing work before admission; accepted
 calls apply native output and invoke completion before returning. Session-only
 factory bindings borrow host lifetime; unbinding a root does not close the host.
+
+
+`native-android.ts` is the typed Tauri client for Android accounts and surfaces.
+It requires the frozen Rust engine choice and Android runtime, serializes account
+creation, and invalidates callbacks as soon as an account is replaced or closed.
+Register the event sink before creating a surface; readiness events carry the
+actual native model generation used by actions and queries. Closing waits for
+in-flight creation and the native Stopped acknowledgement. Authorization uses the
+same `SessionAuthorization` source and `session-socket-url.ts` route as WASM;
+editor editability and content interaction remain independent permissions.
+This client does not change application surface admission. Native menus,
+decorators, draft handoff and fixture/device acceptance remain prerequisites.

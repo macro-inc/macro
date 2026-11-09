@@ -40,6 +40,8 @@ class NativeEditorPlugin(private val activity: Activity) : Plugin(activity) {
         val channel = invoke.parseArgs(BeginAccountArgs::class.java).channel
         val reply = controller().beginAccount(request<AccountRequest>(invoke))
         channels[reply.accountGeneration] = channel
+        channels.keys.toList().filter { it != reply.accountGeneration && !controller().hasAccount(it) }
+            .forEach(channels::remove)
         invoke.resolveObject(reply)
     }
 
