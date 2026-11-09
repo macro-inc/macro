@@ -5,6 +5,10 @@
 Production browser rendering and input over document_session_wasm. The dev shim
 shares this view through EditorPort; it does not supply production model code.
 
+The `./compat` export provides the lazy exact-root DOM adapter; read
+[src/compat/AGENTS.md](src/compat/AGENTS.md) before changing it. Its upstream-model
+tests are separate from Rust-backed production compatibility acceptance.
+
 ## Boundaries
 
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
