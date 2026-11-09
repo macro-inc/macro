@@ -528,36 +528,35 @@ pub(crate) fn owned_equal(current: &Value, before: Option<&Value>, after: &Value
         current == after
     }
 }
-pub(crate) fn has_plain_composites(map: &LoroMap, policy: &dyn SyncPolicy) -> bool {
-    let mut result = false;
-    map.for_each(|key, value| {
-        if key == "$" {
-            match &value {
-                ValueOrContainer::Container(Container::Map(state)) => {
-                    state.for_each(|name, value| {
-                        if !policy.local_state_keys().contains(&name)
-                            && matches!(
-                                value,
-                                ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
-                            )
-                        {
-                            result = true;
-                        }
-                    })
-                }
-                ValueOrContainer::Value(LoroValue::Map(state)) => {
-                    result |= state
-                        .keys()
-                        .any(|key| !policy.local_state_keys().contains(&key.as_str()));
-                }
-                _ => {}
-            }
-        } else if matches!(
+pub(crate) fn field_has_plain_composites(
+    key: &str,
+    value: &ValueOrContainer,
+    policy: &dyn SyncPolicy,
+) -> bool {
+    if key != "$" {
+        return matches!(
             value,
             ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
-        ) {
-            result = true;
+        );
+    }
+    match value {
+        ValueOrContainer::Container(Container::Map(state)) => {
+            let mut result = false;
+            state.for_each(|name, value| {
+                if !policy.local_state_keys().contains(&name)
+                    && matches!(
+                        value,
+                        ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
+                    )
+                {
+                    result = true;
+                }
+            });
+            result
         }
-    });
-    result
+        ValueOrContainer::Value(LoroValue::Map(state)) => state
+            .keys()
+            .any(|key| !policy.local_state_keys().contains(&key.as_str())),
+        _ => false,
+    }
 }

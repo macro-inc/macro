@@ -43,7 +43,9 @@ impl NodeIndex {
         self.unbind(key);
         self.owner.insert(map.id(), (key, Slot::Node));
         self.owned.insert(key, vec![map.id()]);
+        let mut plain_composite = false;
         map.for_each(|field, value| {
+            plain_composite |= schema::field_has_plain_composites(field, &value, policy);
             if let ValueOrContainer::Container(container) = value {
                 let slot = match field {
                     "$" => Slot::State,
@@ -66,7 +68,7 @@ impl NodeIndex {
                 ids: schema::slot_id(map, "ids"),
                 text,
                 children,
-                plain_composite: schema::has_plain_composites(map, policy),
+                plain_composite,
                 id,
             },
         );

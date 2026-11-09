@@ -29,6 +29,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - Never enable loro-internal's wasm feature; native Loro positions are Unicode scalars.
 - WASM builds of Loro itself require a JavaScript host for its internal clock.
 - Preserve inference/container kinds, foreign children and unexported fields.
+- Compute composite flags during ownership indexing and count newly handled descendants in that same walk; do not reread each map or traverse a new subtree just for metrics.
 - Keep client crate excluded from workspace-hack.
 
 ## Checks
