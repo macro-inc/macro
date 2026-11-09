@@ -618,11 +618,13 @@ export const enableSoupGroupBy = defineFlag({
   default: onInDev,
 });
 
-// Persist soup filters, predicates and tabs across reloads. PostHog controls
-// production rollout; VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
+// Persist soup filters, predicates and tabs across reloads. On in development
+// builds; PostHog controls the production rollout, and
+// VITE_ENABLE_SOUP_FILTER_PERSISTENCE overrides locally.
 export const enableSoupFilterPersistence = defineFlag({
   key: 'enable-soup-filter-persistence',
   env: 'ENABLE_SOUP_FILTER_PERSISTENCE',
+  default: onInDev,
 });
 
 export const enableTaskDuplicates = defineFlag({
