@@ -139,6 +139,27 @@ where
             .map(|entry| Arc::clone(&entry.connection))?;
         Some(connection.probe_models().await)
     }
+
+    /// Send a Macro computer command to a harness's live runtime.
+    ///
+    /// Returns `None` when no live connection exists here. The caller owns
+    /// the request deadline.
+    pub async fn computer_control(
+        &self,
+        harness: HarnessId,
+        command: agent_runtime_protocol::domain::schema::v0::ComputerCommand,
+    ) -> Option<
+        Result<
+            agent_runtime_protocol::domain::schema::v0::ComputerControlResult,
+            agent_session::domain::connection::ComputerControlError,
+        >,
+    > {
+        let connection = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry.connection))?;
+        Some(connection.computer_control(command).await)
+    }
 }
 
 impl<Sender> RuntimeRegistry<Sender>

@@ -69,6 +69,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
 Prompts to an external runtime pass `authorize_runtime` per turn:
 `RuntimeAccessFacts::may_run` requires a coding agent's prompter to have access
 and a resident's (a bound non-coding agent's) owner to have access, so removing
@@ -99,6 +102,10 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
 
 Harness presence is per connection, because a runtime's redial can land on a
 different replica than the socket it replaced, and a stalled replica can notice

@@ -30,7 +30,8 @@ use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ComputerCommand, ComputerControlResult, ModelProbeResult, SystemEvent,
+    ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
@@ -63,6 +64,8 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// The answer to a computer control command.
+    Computer,
     /// The answer to a request the connection itself sent.
     Answer,
     /// Nothing owns it. Kept as its own answer rather than folded into
@@ -110,6 +113,9 @@ impl Routes {
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
         if matches!(message, ToServerMessage::ModelProbeResponse { .. }) {
             return Routed::Probe;
+        }
+        if matches!(message, ToServerMessage::ComputerControlResponse { .. }) {
+            return Routed::Computer;
         }
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
             return Routed::Connection;
@@ -284,6 +290,8 @@ pub struct RuntimeConnection<Sender> {
     /// Waiters for answers to requests the connection itself sent: its
     /// `initialize` and `session/list`.
     answers: DashMap<RequestId, oneshot::Sender<RawJsonRpcMessage>>,
+    /// Waiters for answers to computer control commands, by request id.
+    computer_answers: DashMap<String, oneshot::Sender<ComputerControlResult>>,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -317,6 +325,7 @@ where
             bound: DashMap::new(),
             probe_answers: watch::channel(None).0,
             answers: DashMap::new(),
+            computer_answers: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -330,6 +339,7 @@ where
     pub fn evict(&self) {
         self.bound.clear();
         self.answers.clear();
+        self.computer_answers.clear();
         // Nothing will answer a probe on a connection that is no longer served.
         let _ = self.probe_answers.send(None);
         if let Some(router) = self.router.get() {
@@ -382,6 +392,44 @@ where
             Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
             None => Err(ModelProbeError::Closed),
         }
+    }
+
+    /// Send a Macro computer command and await its one answer. The caller
+    /// owns the deadline.
+    pub async fn computer_control(
+        &self,
+        command: ComputerCommand,
+    ) -> Result<ComputerControlResult, ComputerControlError> {
+        let request_id = uuid::Uuid::now_v7().to_string();
+        let (answer, answered) = oneshot::channel();
+        self.computer_answers.insert(request_id.clone(), answer);
+        let _pending = PendingComputerAnswer {
+            answers: &self.computer_answers,
+            request_id: request_id.clone(),
+        };
+        let mut meta = serde_json::Map::new();
+        genai_telemetry::propagation::inject(&tracing::Span::current(), &mut meta);
+        let sent = self
+            .outbound
+            .send(ToRuntimeMessage::ComputerControl {
+                request_id: request_id.clone(),
+                command,
+                meta,
+            })
+            .await;
+        if let Err(error) = sent {
+            self.computer_answers.remove(&request_id);
+            return Err(ComputerControlError::Transport(error));
+        }
+        // A terminal result already delivered by the runtime must survive its
+        // transport closing in the same scheduling turn.
+        let answer = tokio::select! {
+            biased;
+            answer = answered => answer.map_err(|_| ComputerControlError::Closed),
+            () = self.closed.cancelled() => Err(ComputerControlError::Closed),
+        };
+        self.computer_answers.remove(&request_id);
+        answer
     }
 
     /// Initialize the connection and list the ACP sessions its agent serves.
@@ -656,6 +704,7 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Computer => self.answer_computer(message),
                 Routed::Answer => self.answer(message),
                 Routed::Orphan => {
                     tracing::warn!(
@@ -667,7 +716,22 @@ where
         }
         self.bound.clear();
         self.answers.clear();
+        self.computer_answers.clear();
         self.closed.cancel();
+    }
+
+    /// Hand a computer control answer to the command waiting for it.
+    fn answer_computer(&self, message: ToServerMessage) {
+        let ToServerMessage::ComputerControlResponse { request_id, result } = message else {
+            tracing::error!("dropping a computer answer that is not a computer control response");
+            return;
+        };
+        match self.computer_answers.remove(&request_id) {
+            Some((_, waiter)) => {
+                let _ = waiter.send(result);
+            }
+            None => tracing::warn!(%request_id, "dropping an unexpected computer control answer"),
+        }
     }
 
     /// Hand an answer to the connection request waiting for it.
@@ -828,6 +892,28 @@ pub enum ModelProbeError {
     /// The runtime safely reported a probe failure.
     #[error("runtime model probe failed: {0}")]
     Runtime(String),
+}
+
+struct PendingComputerAnswer<'connection> {
+    answers: &'connection DashMap<String, oneshot::Sender<ComputerControlResult>>,
+    request_id: String,
+}
+
+impl Drop for PendingComputerAnswer<'_> {
+    fn drop(&mut self) {
+        self.answers.remove(&self.request_id);
+    }
+}
+
+/// Why a computer control command got no answer.
+#[derive(Debug, thiserror::Error)]
+pub enum ComputerControlError {
+    /// Sending the command over the runtime transport failed.
+    #[error("could not send computer control command: {0}")]
+    Transport(#[source] TransportError),
+    /// The runtime connection closed before answering.
+    #[error("runtime connection closed before answering the computer command")]
+    Closed,
 }
 
 /// A bound session's queue. Only called just after inserting it.

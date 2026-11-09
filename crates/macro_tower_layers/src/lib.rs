@@ -96,6 +96,7 @@ const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
 
 /// Creates INFO-level HTTP server spans with safe OpenTelemetry attributes.
 ///
+/// Paths use the matched route template: dynamic segments may contain personal data.
 /// Request and response headers are intentionally excluded. Add
 /// `macro_http_request=info` to `RUST_LOG` when log events should include these span fields.
 #[derive(Clone, Copy, Debug, Default)]
@@ -114,7 +115,7 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             otel.kind = "server",
             "http.request.method" = %request.method(),
             "http.route" = tracing::field::Empty,
-            "url.path" = request.uri().path(),
+            "url.path" = request.extensions().get::<MatchedPath>().map(MatchedPath::as_str).unwrap_or("unmatched"),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,

@@ -404,7 +404,10 @@ async fn preflight_routes_by_kind_before_any_session_exists() {
             .unwrap(),
         None
     );
-    assert!(router.preflight(AgentKind::External, &owner).await.is_err());
+    assert_eq!(
+        router.preflight(AgentKind::External, &owner).await.unwrap(),
+        None
+    );
     assert_eq!(cursor.calls(), ["cursor:preflight"]);
     assert_eq!(sandbox.calls(), ["sandbox:preflight"]);
     assert_eq!(codex.calls(), ["codex:preflight"]);
