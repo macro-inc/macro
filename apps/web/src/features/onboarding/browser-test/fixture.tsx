@@ -102,6 +102,8 @@ declare global {
       events: typeof events;
       calls: typeof fake.calls;
       notifications: typeof fake.notifications;
+      /** Changes the fake backend in place, e.g. to stream suggestions in. */
+      update: (patch: Partial<FakeOnboardingWorld>) => void;
     };
   }
 }
@@ -110,6 +112,10 @@ window.onboardingFixture = {
   events,
   calls: fake.calls,
   notifications: fake.notifications,
+  update: (patch) =>
+    fake.update((draft) => {
+      Object.assign(draft, patch);
+    }),
 };
 
 function Fixture() {
