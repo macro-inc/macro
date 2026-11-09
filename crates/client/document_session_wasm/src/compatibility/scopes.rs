@@ -270,3 +270,17 @@ pub(super) fn clone_instance(
     let reply = (runtime.transport)(&CloneScope(request.context), &request)?;
     crate::compatibility_host::error::returned(reply)
 }
+
+/// Keep metadata available to clone callbacks while the outer batch normalizes.
+pub(super) fn flush(host: &mut Host, tx: &mut Transaction<'_>) -> Result<(), BoundaryError> {
+    let version = host
+        .pending_version
+        .ok_or(BoundaryError::Invalid("pending publication version"))?;
+    let update = host.update;
+    let frame = Frame {
+        host: RefCell::new(host),
+        version,
+        update,
+    };
+    CURRENT.set(&frame, || tx.flush().map_err(BoundaryError::Model))
+}

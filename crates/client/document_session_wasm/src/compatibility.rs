@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 mod audit_snapshot;
+mod batch;
 mod bindings;
 mod calls;
 mod capture_index;
