@@ -32,7 +32,9 @@ export function paneElement(pane: PaneId): HTMLElement | undefined {
 }
 
 function reducedMotion(): boolean {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true;
+  return (
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true
+  );
 }
 
 /**

@@ -29,6 +29,7 @@ export function createMessageReadVisibility(options: {
   const [foreground, setForeground] = createSignal(!document.hidden);
   // A pane an agent opened reads like a background tab until it is touched.
   const heldByAgent = useReadsHeldByAgentArrival();
+  const reading = () => foreground() && !heldByAgent();
   const onVisibilityChange = () => setForeground(!document.hidden);
   document.addEventListener('visibilitychange', onVisibilityChange);
   onCleanup(() =>
@@ -43,13 +44,11 @@ export function createMessageReadVisibility(options: {
         options.root,
         () => options.insets().start,
         () => options.insets().end,
-        foreground,
-        heldByAgent,
+        reading,
       ],
-      ([root, start, end, visible, held]) => {
+      ([root, start, end, visible]) => {
         if (
           !visible ||
-          held ||
           root === undefined ||
           typeof IntersectionObserver === 'undefined'
         )
