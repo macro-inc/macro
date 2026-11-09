@@ -55,13 +55,21 @@ the six opt3 caller crates, toolchain/profile and optimization passes:
 | `08ade11a39`, compatibility enabled | 8,946,448 | 2,014,120 |
 | `08ade11a39`, compatibility disabled | 8,319,259 | 1,887,011 |
 
-The reported compatibility-disabled SHA256 is
+The independently verified compatibility-disabled SHA256 is
 `3a52b8d396a0d13dffc770cffccd70d3f36e93ffa4b05c26b523e519fe1f288c`.
 The feature group accounts for **127,109 Brotli bytes** on this exact source;
 compatibility-disabled is **1,196 Brotli bytes** above live, including every
 other source difference. Neither remainder nor total growth isolates the
-ABI3 delta adapter. This is owner-reported attribution, not a shipping variant,
-export-removal decision or performance acceptance. The newer `4f0eb3d6bf`
+ABI3 delta adapter. The immutable manifest SHA256
+`30fe8b54893f8d80d2a25dd6862178762fbdc15d5491596c0756cbf190a24d3f`
+and all six artifact hashes/byte sizes were independently verified. Compression
+was independently recomputed at **1,887,011 Brotli bytes**. Manifest/profile
+metadata matches the pinned comparison; the directory and files are read-only.
+Manifest: `/home/wolf/tmp/lexical-port/editor-perf/abi3-size-attribution/abi3-08ade-no-compat/manifest.json`.
+Evidence: `no-compat-ablation-independent-rehash.json` and
+`no-compat-ablation-independent-size.log` under the acceptance directory.
+This verifies the supplied artifacts, not an independent rebuild. It is not a
+shipping variant, export-removal decision or performance acceptance. The newer `4f0eb3d6bf`
 application artifact stays separate. Exact full-string aliases share function
 8879. A named optimized sibling is pending code-section equivalence checks;
 its names are not yet attribution evidence. Public export changes remain
