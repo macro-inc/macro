@@ -110,6 +110,7 @@ fn routed_history_uses_loro_after_key_and_command_listeners() {
                     &mut view,
                 )
                 .unwrap();
+            assert_eq!(surface.command_handled(), Handled::Yes);
             if consume.is_some() {
                 assert!(!changed);
                 assert_eq!(surface.state().to_json().unwrap(), committed);

@@ -551,6 +551,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
+        self.handled = Handled::Yes;
         let undo = self.undo.as_mut().ok_or(SessionError::NotReady)?;
         undo.group_end();
         self.group_active = false;
