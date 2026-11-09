@@ -489,7 +489,7 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (id === 'cursor') return 'In Cursor';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
-  return harness ? `In your harness · ${harness.name}` : 'Disconnected runtime';
+  return harness ? `On your machine · ${harness.name}` : 'Disconnected machine';
 }
 
 function AgentRow(props: {
@@ -867,13 +867,13 @@ function AgentEditorPage(props: {
                 <div class="flex items-center gap-2">
                   <p class="min-w-0 flex-1 text-xs text-negative">
                     Could not load models for{' '}
-                    {selectedHarness()?.name ?? 'this runtime'}.
+                    {selectedHarness()?.name ?? 'this machine'}.
                   </p>
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
+                    aria-label={`Retry models for ${selectedHarness()?.name ?? 'this machine'}`}
                     onClick={() =>
                       fireAndForget(query.refetch(), 'agent-settings')
                     }
@@ -887,7 +887,7 @@ function AgentEditorPage(props: {
                 when={selectedModelData()?.status === 'available'}
                 fallback={
                   <p class="settings-input text-ink-muted">
-                    Model selection is unsupported by this runtime.
+                    Model selection is unsupported by this machine.
                   </p>
                 }
               >
@@ -895,7 +895,7 @@ function AgentEditorPage(props: {
                   when={selectedModelOptions().length > 0}
                   fallback={
                     <p class="settings-input text-ink-muted">
-                      This runtime did not return any models.
+                      This machine did not return any models.
                     </p>
                   }
                 >
@@ -1323,7 +1323,7 @@ function AgentEditorPage(props: {
                   </WhereItRunsOption>
                   <WhereItRunsOption
                     value="harness"
-                    title="In your harness"
+                    title="On your machine"
                     description="Your own agent on your own machine. Local Claude Code, Codex, or other harness, via Macrod."
                     icon={<TerminalIcon />}
                     checked={selectedHarness()?.kind === 'macrod'}
@@ -1335,7 +1335,7 @@ function AgentEditorPage(props: {
                           variant="ghost"
                           size="sm"
                           class="text-ink"
-                          aria-label="Set up your own harness"
+                          aria-label="Set up your own machine"
                           disabled={busy()}
                           onClick={() => setSetup('pairing')}
                         >
@@ -1351,10 +1351,10 @@ function AgentEditorPage(props: {
                     <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-[repeat(2,minmax(0,280px))]">
                       <div class="flex min-w-0 flex-col gap-1.5">
                         <span class="text-xs font-medium text-ink-muted">
-                          Harness
+                          Machine
                         </span>
                         <SettingsSelect
-                          label="Harness"
+                          label="Machine"
                           options={macrodHarnesses()}
                           value={harnessId()}
                           onChange={handleHarnessChange}
@@ -1484,8 +1484,8 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts. Turn on
-                              Don't ask before acting in its Options in Runtimes
+                              This machine requires permission prompts. Turn on
+                              Don't ask before acting in its Options in Machines
                               settings.
                             </p>
                           }

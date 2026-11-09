@@ -124,7 +124,7 @@ export function ConnectedRuntimesSection(props: {
           </For>
           <Show when={props.error}>
             <p class="px-4 py-3 text-xs text-negative">
-              Could not load your runtimes. Try refreshing this page.
+              Could not load your machines. Try refreshing this page.
             </p>
           </Show>
         </SettingsCard>
