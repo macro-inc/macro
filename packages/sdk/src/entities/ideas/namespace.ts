@@ -59,7 +59,7 @@ export type IdeaSuggestion =
 /**
  * The user's ideas: proactive suggestions in their feed.
  *
- * @routing Use only in an ideas generation session, to manage the user's ideas; any other session gets a 403.
+ * @routing Use when an ideas generation session manages the user's Ideas feed of proactive suggestions; not for requests from the user, since any other session gets a 403.
  *
  * @agent
  * ## Ideas
