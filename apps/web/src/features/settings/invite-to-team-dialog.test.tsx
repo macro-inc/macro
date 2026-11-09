@@ -9,15 +9,6 @@ vi.mock('@queries/team/invites', () => ({
     mutate: mocks.mutate,
   }),
 }));
-vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: () => ({
-    isSuccess: true,
-    data: [
-      { id: 'mine', name: 'Mac mini', access: 'owner' },
-      { id: 'shared', name: 'Build box', access: 'use' },
-    ],
-  }),
-}));
 vi.mock('./TeamInviteLinkSection', () => ({
   TeamInviteLinkSection: () => null,
   CopyTeamInviteLinkButton: () => (
@@ -32,7 +23,7 @@ afterEach(() => {
   mocks.mutate.mockReset();
 });
 
-function sendInvite(onClose: () => void = () => {}, runtime?: string) {
+function sendInvite(onClose: () => void = () => {}) {
   render(() => (
     <InviteToTeamDialog
       teamId="team-1"
@@ -44,7 +35,6 @@ function sendInvite(onClose: () => void = () => {}, runtime?: string) {
 
   const email = screen.getByRole('textbox');
   fireEvent.input(email, { target: { value: 'invitee@signup.test' } });
-  if (runtime) fireEvent.click(screen.getByLabelText(runtime));
   fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
 }
 
@@ -54,11 +44,7 @@ describe('InviteToTeamDialog', () => {
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
-      request: {
-        invites: [{ email: 'invitee@signup.test' }],
-        is_agent: false,
-        harness_ids: [],
-      },
+      request: { invites: [{ email: 'invitee@signup.test' }], is_agent: false },
     });
   });
 
@@ -84,14 +70,5 @@ describe('InviteToTeamDialog', () => {
     mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
 
     expect(screen.queryByText("Let them know it's coming")).toBeNull();
-  });
-
-  it('offers only runtimes the inviter owns', () => {
-    sendInvite(() => {}, 'Mac mini');
-
-    expect(screen.queryByLabelText('Build box')).toBeNull();
-    expect(mocks.mutate.mock.calls[0]?.[0].request.harness_ids).toEqual([
-      'mine',
-    ]);
   });
 });

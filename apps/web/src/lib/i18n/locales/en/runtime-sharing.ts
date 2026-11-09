@@ -50,7 +50,4 @@ export default {
   requested: 'Requested',
   cancelRequest: 'Cancel request',
   requestDenied: 'Request denied',
-  inviteRuntimes: 'Share your runtimes',
-  inviteRuntimesHint:
-    'They can run agents on these computers as soon as they accept.',
 };
