@@ -13,6 +13,9 @@ Use the shared insertion-policy query before choosing a text splice: changed
 typing marks and token boundaries require an insertion command. Reattach a
 running session with `attachRunningSession` to restore text and selection while
 retaining its existing history and synchronization lifecycle.
+Pass editor editability and content-interaction permission separately. A content
+lock revokes input, paste, formatting and undo entry points without representing
+comment capability; the shared session continues to authorize comment commands.
 
 `NativeSessionHost` owns session lifetime beyond a mounted view, queues callback
 admissions on the main thread, maintains one deadline timer, and releases the

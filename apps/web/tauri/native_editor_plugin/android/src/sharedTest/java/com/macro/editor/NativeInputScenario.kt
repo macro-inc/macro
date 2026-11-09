@@ -47,7 +47,7 @@ internal object NativeInputScenario {
                     admissions += "$input -> ${session.textContent()} ${output.view}"
                 }
             }
-            val view = NativeEditorView(context, observed, host, initiallyEditable = true)
+            val view = NativeEditorView(context, observed, host, initiallyEditable = true, initiallyInteractable = true)
             view.admit(FfiInput.Start)
             view.admit(FfiInput.Seed(SeedKind.OPTIMISTIC, byteArrayOf()))
             view.admit(FfiInput.SetState(listOf(
@@ -117,11 +117,18 @@ internal object NativeInputScenario {
                     it.style == android.graphics.Typeface.BOLD &&
                         view.text?.getSpanStart(it) == 1 && view.text?.getSpanEnd(it) == 2
                 })
+            view.setContentInteractable(false)
+            assertNull(view.onCreateInputConnection(EditorInfo()))
+            assertFalse(input.commitText("locked", 1))
+            assertFalse(view.onTextContextMenuItem(android.R.id.paste))
+            assertEquals("ab", session.textContent())
+            view.setContentInteractable(true)
+            assertNotNull(view.onCreateInputConnection(EditorInfo()))
             view.setEditable(false)
             assertNull(view.onCreateInputConnection(EditorInfo()))
             assertFalse(input.commitText("blocked", 1))
             assertEquals("ab", session.textContent())
-            val replacement = NativeEditorView(context, observed, host, initiallyEditable = true)
+            val replacement = NativeEditorView(context, observed, host, initiallyEditable = true, initiallyInteractable = true)
             replacement.attachRunningSession()
             assertEquals("ab", replacement.text.toString())
             assertEquals(2, replacement.selectionStart)
