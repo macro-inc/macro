@@ -38,8 +38,13 @@ session plus telemetry, 61 all-feature session plus telemetry, seven FFI,
 schema freshness, nine feature graphs and scoped checks pass. The new native
 artifact passed 263 view tests and 18 keyboard/history cases across Chromium,
 Firefox and WebKit. The production web build passed with the usual optimizations
-and a 12 GiB Node heap. The current full workspace rust-check/clippy/format/hakari
-sequence is still running; no completed current-union broad claim is made yet.
+and a 12 GiB Node heap. The current full workspace rust-check, clippy, format
+and hakari sequence passed in order at nice 19 / two Cargo jobs, without source
+changes from formatting. The initial rust-check stopped on missing private SDK
+dependencies; a frozen private SDK install repaired the environment before the
+whole ordered sequence restarted. That failed attempt remains preserved. The
+current receipt is `cafc-workspace-green-receipt.json`; later collector additions
+change no Rust or native recipe inputs and have their separate bounded checks.
 
 Size is 8,421,630 raw / 1,913,972 Brotli bytes, 2,009 Brotli bytes above the prior
 native artifact and 313,972 above the advisory ceiling. Actual export inspection
