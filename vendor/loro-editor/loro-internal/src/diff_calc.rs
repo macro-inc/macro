@@ -1,4 +1,4 @@
-use std::{num::NonZeroU16, sync::Arc};
+use std::{cell::OnceCell, num::NonZeroU16, sync::Arc};
 
 #[cfg(feature = "counter")]
 mod counter;
@@ -34,6 +34,7 @@ use crate::{
         },
     },
     cursor::AbsolutePosition,
+    dag::Dag,
     delta::{
         Delta, DeltaItem, DeltaValue, ElementDelta, MapDelta, MapValue, MovableListInnerDelta,
     },
@@ -50,7 +51,7 @@ use self::unknown::UnknownDiffCalculator;
 
 use super::{
     event::InternalContainerDiff,
-    oplog::{OpLog, ReplayBase},
+    oplog::{BlockChangeRef, OpLog, ReplayBase},
 };
 
 /// Calculate the diff between two versions. given [OpLog][super::oplog::OpLog]
@@ -120,6 +121,7 @@ pub(crate) struct DiffCalcVersionInfo<'a> {
     /// nothing above it is concurrent with anything below it. See
     /// `OpLog::iter_from_replay_base_causally`.
     replay_base_is_critical: bool,
+    full_replay: &'a OnceCell<FullReplayIndex>,
 }
 
 fn changed_containers_between(
@@ -383,6 +385,7 @@ impl DiffCalculator {
                 .collect()
         };
         let mut ans = FxHashMap::default();
+        let full_replay = OnceCell::new();
         let info = DiffCalcVersionInfo {
             from_vv: before,
             to_vv: after,
@@ -390,6 +393,7 @@ impl DiffCalculator {
             to_frontiers: after_frontiers,
             replay_base_vv: &replay_base,
             replay_base_is_critical,
+            full_replay: &full_replay,
         };
         while !all.is_empty() {
             // sort by depth and lamport, ensure we iterate from top to bottom
@@ -585,6 +589,68 @@ trait RebuildOpVisitor {
     fn visit(&mut self, vv: &VersionVector, op: RichOp<'_>);
 }
 
+// Rebuilding several containers must not scan the complete history once per
+// container. Keep the causal order, source ID and slicing range of each change,
+// and index its ops once for this diff. Every rebuild below targets from ∪ to.
+#[derive(Debug)]
+struct FullReplayChange {
+    change: BlockChangeRef,
+    range: (Counter, Counter),
+    source: ID,
+}
+
+#[derive(Debug)]
+struct FullReplayIndex {
+    target: VersionVector,
+    changes: Vec<FullReplayChange>,
+    containers: FxHashMap<ContainerIdx, Vec<(usize, usize)>>,
+}
+
+impl FullReplayIndex {
+    fn new(oplog: &OpLog, target: &VersionVector) -> Self {
+        let empty_vv = VersionVector::default();
+        let empty_frontiers = Frontiers::default();
+        let target_frontiers = oplog.dag.vv_to_frontiers(target);
+        let (_, iter) = oplog.iter_from_replay_base_causally(
+            &empty_vv,
+            &empty_frontiers,
+            target,
+            &target_frontiers,
+        );
+        let mut changes = Vec::new();
+        let mut containers: FxHashMap<_, Vec<_>> = FxHashMap::default();
+        for (change, (start, end), _) in iter {
+            let change_index = changes.len();
+            let first = change
+                .ops
+                .binary_search_by(|op| op.ctr_last().cmp(&start))
+                .unwrap_or_else(|e| e);
+            for (op_index, op) in change.ops.vec().iter().enumerate().skip(first) {
+                if op.counter >= end {
+                    break;
+                }
+                if op.ctr_last() >= start {
+                    containers
+                        .entry(op.container)
+                        .or_default()
+                        .push((change_index, op_index));
+                }
+            }
+            let source = ID::new(change.peer(), start);
+            changes.push(FullReplayChange {
+                change,
+                range: (start, end),
+                source,
+            });
+        }
+        Self {
+            target: target.clone(),
+            changes,
+            containers,
+        }
+    }
+}
+
 #[cold]
 #[inline(never)]
 fn replay_container_ops_from_empty(
@@ -592,40 +658,44 @@ fn replay_container_ops_from_empty(
     oplog: &OpLog,
     vv: &VersionVector,
     visitor: &mut dyn RebuildOpVisitor,
+    full_replay: &OnceCell<FullReplayIndex>,
 ) {
-    let empty_vv = VersionVector::default();
-    let empty_frontiers = Frontiers::default();
-    let target_frontiers = oplog.dag.vv_to_frontiers(vv);
-    let (_, iter) =
-        oplog.iter_from_replay_base_causally(&empty_vv, &empty_frontiers, vv, &target_frontiers);
-
-    for (change, (start_counter, end_counter), vv) in iter {
-        let iter_start = change
-            .ops
-            .binary_search_by(|op| op.ctr_last().cmp(&start_counter))
-            .unwrap_or_else(|e| e);
-        for mut op in &change.ops.vec()[iter_start..] {
-            if op.counter >= end_counter {
-                break;
-            }
-
-            if op.container != idx || op.ctr_last() < start_counter {
-                continue;
-            }
-
-            let stack_sliced_op;
-            if op.counter < start_counter || op.ctr_end() > end_counter {
-                stack_sliced_op = Some(op.slice(
-                    (start_counter as usize).saturating_sub(op.counter as usize),
-                    op.atom_len().min((end_counter - op.counter) as usize),
-                ));
-                op = stack_sliced_op.as_ref().unwrap();
-            }
-
-            let vv = &mut vv.borrow_mut();
-            vv.extend_to_include_end_id(ID::new(change.peer(), op.counter));
-            visitor.visit(vv, RichOp::new_by_change(&change, op));
+    #[cfg(test)]
+    if replay_cache_test::use_reference() {
+        return replay_cache_test::reference_replay(idx, oplog, vv, visitor);
+    }
+    let replay = full_replay.get_or_init(|| FullReplayIndex::new(oplog, vv));
+    debug_assert_eq!(&replay.target, vv);
+    let Some(ops) = replay.containers.get(&idx) else {
+        return;
+    };
+    let mut source_change = None;
+    let mut source_vv = VersionVector::default();
+    for &(change_index, op_index) in ops {
+        let entry = &replay.changes[change_index];
+        let change = &entry.change;
+        let (start_counter, end_counter) = entry.range;
+        let mut op = &change.ops.vec()[op_index];
+        let sliced_op;
+        if op.counter < start_counter || op.ctr_end() > end_counter {
+            sliced_op = op.slice(
+                (start_counter as usize).saturating_sub(op.counter as usize),
+                op.atom_len().min((end_counter - op.counter) as usize),
+            );
+            op = &sliced_op;
         }
+        if source_change != Some(change_index) {
+            // Reuse the DAG's persistent causal VV, as the original iterator
+            // does. Retain only one mutable VV rather than a peers-sized map
+            // per change; the index itself grows only with history length.
+            let node = oplog.dag.get(entry.source).expect("causal replay DAG node");
+            source_vv.clear();
+            source_vv.extend_to_include_vv(oplog.dag.ensure_vv_for(&node).iter());
+            source_vv.extend_to_include_end_id(change.id);
+            source_change = Some(change_index);
+        }
+        source_vv.extend_to_include_end_id(ID::new(change.peer(), op.counter));
+        visitor.visit(&source_vv, RichOp::new_by_change(change, op));
     }
 }
 
@@ -845,7 +915,12 @@ impl ListDiffCalculator {
 
     #[cold]
     #[inline(never)]
-    fn build_full_tracker(idx: ContainerIdx, oplog: &OpLog, vv: &VersionVector) -> ListTracker {
+    fn build_full_tracker(
+        idx: ContainerIdx,
+        oplog: &OpLog,
+        vv: &VersionVector,
+        full_replay: &OnceCell<FullReplayIndex>,
+    ) -> ListTracker {
         struct ListRebuildVisitor<'a> {
             tracker: &'a mut ListTracker,
         }
@@ -861,7 +936,7 @@ impl ListDiffCalculator {
         let mut visitor = ListRebuildVisitor {
             tracker: &mut tracker,
         };
-        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor);
+        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor, full_replay);
 
         tracker
     }
@@ -948,7 +1023,7 @@ impl DiffCalculatorTrait for ListDiffCalculator {
             FULL_TRACKER_REBUILD_COUNT.with(|c| c.set(c.get() + 1));
             let mut merged = info.from_vv.clone();
             merged.merge(info.to_vv);
-            let mut full_tracker = Self::build_full_tracker(idx, oplog, &merged);
+            let mut full_tracker = Self::build_full_tracker(idx, oplog, &merged, info.full_replay);
             let diff_items = full_tracker.diff(info.from_vv, info.to_vv).collect_vec();
             *self.tracker = full_tracker;
             diff_items
@@ -1566,6 +1641,7 @@ impl RichtextDiffCalculator {
         idx: ContainerIdx,
         oplog: &OpLog,
         vv: &VersionVector,
+        full_replay: &OnceCell<FullReplayIndex>,
     ) -> (RichtextTracker, Vec<(StyleOp, usize)>, TrackerTexts) {
         struct RichtextRebuildVisitor<'a> {
             oplog: &'a OpLog,
@@ -1600,7 +1676,7 @@ impl RichtextDiffCalculator {
             styles: &mut styles,
             texts: &mut texts,
         };
-        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor);
+        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor, full_replay);
 
         (tracker, styles, texts)
     }
@@ -1922,7 +1998,7 @@ impl DiffCalculatorTrait for RichtextDiffCalculator {
                     let mut merged = info.from_vv.clone();
                     merged.merge(info.to_vv);
                     let (mut full_tracker, full_styles, full_texts) =
-                        Self::build_full_crdt_tracker(idx, oplog, &merged);
+                        Self::build_full_crdt_tracker(idx, oplog, &merged, info.full_replay);
 
                     let mut delta = DeltaRope::new();
                     for item in full_tracker.diff(info.from_vv, info.to_vv) {
@@ -2130,7 +2206,7 @@ impl DiffCalculatorTrait for MovableListDiffCalculator {
         {
             let mut merged = info.from_vv.clone();
             merged.merge(info.to_vv);
-            self.rebuild_full_tracker(idx, oplog, &merged);
+            self.rebuild_full_tracker(idx, oplog, &merged, info.full_replay);
         }
 
         let (InternalDiff::ListRaw(list_diff), diff_mode) =
@@ -2304,7 +2380,13 @@ impl MovableListDiffCalculator {
 
     #[cold]
     #[inline(never)]
-    fn rebuild_full_tracker(&mut self, idx: ContainerIdx, oplog: &OpLog, vv: &VersionVector) {
+    fn rebuild_full_tracker(
+        &mut self,
+        idx: ContainerIdx,
+        oplog: &OpLog,
+        vv: &VersionVector,
+        full_replay: &OnceCell<FullReplayIndex>,
+    ) {
         struct MovableListRebuildVisitor<'a> {
             oplog: &'a OpLog,
             tracker: &'a mut ListTracker,
@@ -2331,7 +2413,7 @@ impl MovableListDiffCalculator {
             tracker: &mut tracker,
             move_id_to_elem_id: &mut move_id_to_elem_id,
         };
-        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor);
+        replay_container_ops_from_empty(idx, oplog, vv, &mut visitor, full_replay);
 
         *self.list.tracker = tracker;
         self.inner.move_id_to_elem_id = move_id_to_elem_id;
@@ -2633,3 +2715,6 @@ fn persisted_walk_does_not_duplicate_style_entries() {
     let ids = text.tracked_style_ids();
     assert_eq!(ids.len(), marks, "duplicate style entries: {ids:?}");
 }
+
+#[cfg(test)]
+mod replay_cache_test;

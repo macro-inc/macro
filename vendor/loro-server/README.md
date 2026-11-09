@@ -24,3 +24,13 @@ Do not switch the server to the editor encoder or update golden bytes implicitly
 Run native Room replay and a fresh sync-service re-record with 155 zero normalized
 differences before changing this boundary. This directory is excluded from the
 workspace; consumer suites own validation. No third-party test expectation changes.
+
+Full tracker rebuilds share a lazily built causal operation index for one diff.
+The index preserves sliced operation order and derives visitor VVs from the same
+persistent DAG contexts; it retains one mutable visitor VV instead of a full
+peers-sized map per change. Test-only unindexed replay compares random concurrent
+imports/checkouts, complete state/VVs/frontiers/events, and sliced/shallow visits.
+The 256-peer resource control bounds retained index payload by history length.
+Encoder, version pins, public APIs and wire/corpus expectations remain unchanged.
+This patch is maintained for both server1.16.2 and editor1.17.1; upstream branch
+preparation is separate and does not authorize publication.

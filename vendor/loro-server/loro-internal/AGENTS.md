@@ -14,7 +14,11 @@ The editor stack separately uses Loro 1.17.1 and its local internal copy.
 - Upgrade only with an explicit wire/corpus compatibility decision.
 - Keep consumer behavior tests in sync_server_core, sync_server_sim and sync_sim.
 
+- Share the full-replay operation index only within one immutable diff; preserve causal/sliced visitor parity and reuse DAG contexts instead of retaining one mutable VV per change.
+
 ## Checks
+
+- `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-server/loro-internal/Cargo.toml --lib replay_cache_test`
 
 - `TMPDIR=/home/wolf/tmp cargo test -j4 --manifest-path vendor/loro-server/loro-internal/Cargo.toml dense_batch`
 

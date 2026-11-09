@@ -37,3 +37,13 @@ resumes at the committed frontiers even on native unwinding.
 Local undo patch (`src/undo.rs`): skip the group-disjoint container scan when
 the remote diff map is empty; retain the same merge and remote-conflict rules.
 Upstream rationale: an empty remote row cannot conflict, so local undo pushes need no scan of the group.
+
+Full tracker rebuilds share a lazily built causal operation index for one diff.
+The index preserves sliced operation order and derives visitor VVs from the same
+persistent DAG contexts; it retains one mutable visitor VV instead of a full
+peers-sized map per change. Test-only unindexed replay compares random concurrent
+imports/checkouts, complete state/VVs/frontiers/events, and sliced/shallow visits.
+The 256-peer resource control bounds retained index payload by history length.
+Encoder, version pins, public APIs and wire/corpus expectations remain unchanged.
+This patch is maintained for both server1.16.2 and editor1.17.1; upstream branch
+preparation is separate and does not authorize publication.

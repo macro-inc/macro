@@ -16,8 +16,11 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Check for a nonempty remote diff before scanning an undo group's touched containers; an empty remote row cannot conflict.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
 
+- Share the full-replay operation index only within one immutable diff; preserve causal/sliced visitor parity and reuse DAG contexts instead of retaining one mutable VV per change.
+
 ## Checks
 
+- `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml --lib replay_cache_test`
 - `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml dense_batch`
 - `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml --lib undo::` checks local merge scans and remote-conflict semantics; use the direct manifest because this dependency is excluded from workspace test membership.
 - Consumer projection/session/server suites and exact sim replay.

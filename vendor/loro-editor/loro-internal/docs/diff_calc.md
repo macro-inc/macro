@@ -123,3 +123,26 @@ List, Text, and MovableList still rebuild their trackers from CRDT IDs when
 retreating, when their source context is incomplete, or when shallow history
 requires it. That fallback is a correctness requirement, not a replay-base
 optimization.
+
+## Shared full-tracker replay
+
+A diff can rebuild many List/Text/MovableList trackers for the same merged
+`from ∪ to` history. Scan that causal history once, lazily on the first rebuild,
+and index each container's operation positions. Rebuilds still visit every
+matching operation in the same causal order and with the same slicing bounds.
+No critical-base, shallow-root, style-seeding or rebuild condition changes.
+
+The index retains change references, counter ranges and source IDs, not a full
+version-vector map per change. On each matching change, the visitor reconstructs
+its one mutable VV from the same persistent DAG context used by the original
+causal iterator, includes the change prefix, then advances to each sliced op.
+The index lives only for the immutable diff and every caller targets `from ∪ to`.
+This removes repeated whole-history scans without retaining O(changes × peers)
+mutable version maps. Index storage is linear in history/operation positions;
+retained change blocks and the existing document/DAG storage still count toward
+process memory.
+
+`replay_cache_test` compares the indexed visitor to the original streaming one,
+including sliced and shallow boundaries. Its randomized imports/checkouts compare
+state, version vectors, frontiers and complete event/diff receipts. The many-peer
+control measures retained index payload separately from document/hash-table costs.
