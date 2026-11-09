@@ -14,6 +14,7 @@ use utoipa::OpenApi;
         crate::inbound::router::suggest_idea,
         crate::inbound::router::rewrite_idea,
         crate::inbound::router::retire_idea,
+        crate::inbound::router::attach_idea_draft,
     ),
     components(schemas(
         crate::domain::model::Idea,
@@ -29,6 +30,7 @@ use utoipa::OpenApi;
         crate::domain::model::SuggestIdea,
         crate::domain::model::RewriteIdea,
         crate::domain::model::RetireIdea,
+        crate::domain::model::AttachDraft,
         crate::domain::model::IdeaWriteOutcome,
     )),
     tags((name = "ideas", description = "Each person's ideas, and the tools generation sessions manage them with")),

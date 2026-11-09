@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea SET session_id = $4, updated_at = $5\n               WHERE user_id = $1 AND id = $2 AND state = ANY($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61f763cd63d19810c75df5d260f29b18773b759e745f6ad822e5fd4ff24a1ec5"
+}
