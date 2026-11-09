@@ -11,6 +11,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
+import { EmailDraft } from '../email/draft';
 import type { MacroEntityType } from '../entity';
 
 /** An item an idea is about: any handle with an entity type, such as an `EmailThread`, and optionally a part of it, such as one message in a channel. */
@@ -183,6 +184,13 @@ export class Idea {
     return this.record.kind === 'entity' ? this.record.action : undefined;
   }
 
+  /** A reply idea's draft, once a session attached one; it no longer loads once the user deleted it. */
+  get draft(): EmailDraft | undefined {
+    if (this.record.kind !== 'entity') return undefined;
+    const partId = this.record.draft?.partId;
+    return partId ? EmailDraft.byId(this.client, partId) : undefined;
+  }
+
   /**
    * Rewrite this open idea's title, summary, prompt, importance, categories
    * or items, with a `reason`. Only an ideas generation session may; its kind,
@@ -196,6 +204,28 @@ export class Idea {
         await this.client.scheduledAction.rewriteIdea({
           path: { id: this.id },
           body: { ...rest, about: about ? targets(about) : undefined },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Attach a reply draft to this open reply idea, with a `reason`; it replaces
+   * the idea's old draft. Only an ideas generation session may. The draft is
+   * the user's own unsent draft in the thread the idea is about, from
+   * `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`.
+   * Nothing is sent.
+   */
+  async attachDraft(
+    draft: EmailDraft,
+    reason: string,
+  ): Promise<IdeaWriteOutcome> {
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.attachIdeaDraft({
+          path: { id: this.id },
+          body: { emailDraftId: draft.id, reason },
         }),
       ),
     );

@@ -70,6 +70,7 @@ export type IdeaSuggestion =
  * - Read every idea first with `macro.ideas.review()`. Then add with `suggest`, change with `idea.rewrite`, and retire with `idea.retire` what no longer matters.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
+ * - A reply idea may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `idea.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
  */
 export class IdeaNamespace {
   constructor(private readonly client: MacroClient) {}

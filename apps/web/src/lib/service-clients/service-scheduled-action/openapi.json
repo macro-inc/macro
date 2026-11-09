@@ -420,6 +420,96 @@
         }
       }
     },
+    "/ideas/{id}/draft": {
+      "put": {
+        "tags": ["ideas"],
+        "summary": "Make a reply draft an ideas generation session wrote the draft of an\nopen reply idea. Nothing is sent.",
+        "operationId": "attach_idea_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the idea",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the draft is now the idea's, replacing its old one, and what to fix when it isn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an ideas generation session may attach a draft",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such idea for the user, or ideas are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ideas/{id}/retire": {
       "post": {
         "tags": ["ideas"],
@@ -2359,6 +2449,23 @@
           }
         }
       },
+      "AttachDraft": {
+        "type": "object",
+        "description": "A reply draft a session wrote for an open reply idea, as the user,\nthrough `macro.email.createDraft`. It replaces the idea's draft, if any;\nnothing is ever sent.",
+        "required": ["emailDraftId", "reason"],
+        "properties": {
+          "emailDraftId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The email draft: an unsent draft in one of the user's own inboxes, in\nthe thread the idea is about."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
+      },
       "CatalogEntry": {
         "type": "object",
         "description": "One of Macro's routines, ready to start a new routine from.",
@@ -3364,7 +3471,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/Target",
-                    "description": "The draft made for it, once made."
+                    "description": "A reply idea's draft, once a session wrote one: the email thread\nit is in, with the draft as the part."
                   }
                 ]
               },

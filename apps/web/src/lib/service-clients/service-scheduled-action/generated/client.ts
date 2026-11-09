@@ -10,6 +10,7 @@ import type {
   ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  AttachDraft,
   CatalogEntry,
   CheckRoutineRequest,
   CodeUpgrade,
@@ -491,6 +492,83 @@ export const dismissIdea = async (
     status: res.status,
     headers: res.headers,
   } as dismissIdeaResponse;
+};
+
+/**
+ * @summary Make a reply draft an ideas generation session wrote the draft of an
+open reply idea. Nothing is sent.
+ */
+export type attachIdeaDraftResponse200 = {
+  data: IdeaWriteOutcome;
+  status: 200;
+};
+
+export type attachIdeaDraftResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type attachIdeaDraftResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type attachIdeaDraftResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type attachIdeaDraftResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type attachIdeaDraftResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type attachIdeaDraftResponseSuccess = attachIdeaDraftResponse200 & {
+  headers: Headers;
+};
+export type attachIdeaDraftResponseError = (
+  | attachIdeaDraftResponse400
+  | attachIdeaDraftResponse401
+  | attachIdeaDraftResponse403
+  | attachIdeaDraftResponse404
+  | attachIdeaDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type attachIdeaDraftResponse =
+  | attachIdeaDraftResponseSuccess
+  | attachIdeaDraftResponseError;
+
+export const getAttachIdeaDraftUrl = (id: string) => {
+  return `/ideas/${id}/draft`;
+};
+
+export const attachIdeaDraft = async (
+  id: string,
+  attachDraft: AttachDraft,
+  options?: RequestInit
+): Promise<attachIdeaDraftResponse> => {
+  const res = await fetch(getAttachIdeaDraftUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attachDraft),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: attachIdeaDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as attachIdeaDraftResponse;
 };
 
 /**

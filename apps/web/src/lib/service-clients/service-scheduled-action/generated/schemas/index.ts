@@ -34,6 +34,7 @@ export * from './agentTaskAgent';
 export * from './agentTaskAgentProperty';
 export * from './agentTaskModel';
 export * from './aiAdmissionErrorBody';
+export * from './attachDraft';
 export * from './catalogEntry';
 export * from './catalogEntryCode';
 export * from './catalogEntryNamedKnobs';

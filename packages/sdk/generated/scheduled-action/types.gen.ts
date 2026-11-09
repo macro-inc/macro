@@ -165,6 +165,23 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * A reply draft a session wrote for an open reply idea, as the user,
+ * through `macro.email.createDraft`. It replaces the idea's draft, if any;
+ * nothing is ever sent.
+ */
+export type AttachDraft = {
+    /**
+     * The email draft: an unsent draft in one of the user's own inboxes, in
+     * the thread the idea is about.
+     */
+    emailDraftId: string;
+    /**
+     * Why, for the change log.
+     */
+    reason: string;
+};
+
+/**
  * One of Macro's routines, ready to start a new routine from.
  */
 export type CatalogEntry = {
@@ -1855,6 +1872,43 @@ export type DismissIdeaResponses = {
 };
 
 export type DismissIdeaResponse = DismissIdeaResponses[keyof DismissIdeaResponses];
+
+export type AttachIdeaDraftData = {
+    body: AttachDraft;
+    path: {
+        /**
+         * ID of the idea
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/ideas/{id}/draft';
+};
+
+export type AttachIdeaDraftErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only an ideas generation session may attach a draft
+     */
+    403: string;
+    /**
+     * No such idea for the user, or ideas are off
+     */
+    404: string;
+    500: string;
+};
+
+export type AttachIdeaDraftError = AttachIdeaDraftErrors[keyof AttachIdeaDraftErrors];
+
+export type AttachIdeaDraftResponses = {
+    /**
+     * Whether the draft is now the idea's, replacing its old one, and what to fix when it isn't
+     */
+    200: IdeaWriteOutcome;
+};
+
+export type AttachIdeaDraftResponse = AttachIdeaDraftResponses[keyof AttachIdeaDraftResponses];
 
 export type RetireIdeaData = {
     body: RetireIdea;
