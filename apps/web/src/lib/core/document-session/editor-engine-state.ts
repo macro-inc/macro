@@ -12,9 +12,9 @@ export function createEditorEngineState<Module>(
       const active = enabled();
       if (active === undefined) return false;
       if (!active) return true;
-      if (module.state === 'errored') throw module.error;
       return module.state === 'ready';
     },
+    failed: () => enabled() === true && module.state === 'errored',
     module(): Module {
       if (enabled() !== true || module.state !== 'ready')
         throw new Error('Native editor engine is not ready');

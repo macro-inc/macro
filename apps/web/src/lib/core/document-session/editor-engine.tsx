@@ -2,10 +2,12 @@ import { Telemetry } from '@macro-inc/observability';
 import {
   createContext,
   type JSX,
+  Match,
   type ParentProps,
-  Show,
+  Switch,
   useContext,
 } from 'solid-js';
+import { fireAndForget } from '../util/fireAndForget';
 import { createEditorEngineState } from './editor-engine-state';
 import { RUST_EDITOR_ENGINE } from './engine-selection';
 import { type DocumentSessionModule, loadDocumentSession } from './load';
@@ -39,12 +41,17 @@ export function useEditorEngine(): EditorEngine {
 
 /** Place inside the shell, above any component that constructs editor handles. */
 export function EditorEngineBoundary(
-  props: ParentProps<{ fallback?: JSX.Element }>
+  props: ParentProps<{
+    fallback?: JSX.Element;
+    failure?: (retry: () => void) => JSX.Element;
+  }>
 ) {
   const engine = useEditorEngine();
+  const retry = () => fireAndForget(engine.retry(), 'editor.engine.retry');
   return (
-    <Show when={engine.ready()} fallback={props.fallback}>
-      {props.children}
-    </Show>
+    <Switch fallback={props.fallback}>
+      <Match when={engine.failed()}>{props.failure?.(retry)}</Match>
+      <Match when={engine.ready()}>{props.children}</Match>
+    </Switch>
   );
 }
