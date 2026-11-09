@@ -257,6 +257,11 @@ the gateway `/email` prefix.
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
+- A Gmail mailbox has one Google grant, held by the one FusionAuth user its
+  identity is linked to, so every account that reaches it shares one inbox
+  (delegation or a shared inbox). `/email/init` never provisions a second
+  inbox for a mailbox another account already holds: when neither path applies
+  (`data_source_target`), it answers `MAILBOX_CONNECTED_ELSEWHERE`.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see
