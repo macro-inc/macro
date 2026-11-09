@@ -21,3 +21,6 @@ phf = { workspace = true }
 indexmap = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+proptest.workspace = true

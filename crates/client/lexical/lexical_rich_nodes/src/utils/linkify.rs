@@ -234,25 +234,27 @@ impl LinkifyIt {
     }
     fn streams<'a>(&self, text: &'a str, units: &[u16]) -> [Vec<Found<'a>>; 3] {
         let mut streams = [Vec::new(), Vec::new(), Vec::new()];
-        for m in self.compiled.schema.find_from_ucs2(units, 0) {
-            let Some(group) = m.group(2) else { continue };
-            let schema = String::from_utf16_lossy(&units[group.clone()]);
-            let len = self.validate(units, &schema, m.end());
-            if len > 0 {
-                // Schema spellings are ASCII; choose the original slice to retain casing until normalization.
-                let start = units[..group.start].to_vec();
-                let byte_start = String::from_utf16_lossy(&start).len();
-                let schema = text
-                    .get(byte_start..byte_start + schema.len())
-                    .unwrap_or("");
-                streams[0].push(Found {
-                    schema,
-                    index: m.start() + m.group(1).map_or(0, |g| g.len()),
-                    end: m.end() + len,
-                });
+        if text.contains(':') || text.contains("//") {
+            for m in self.compiled.schema.find_from_ucs2(units, 0) {
+                let Some(group) = m.group(2) else { continue };
+                let schema = String::from_utf16_lossy(&units[group.clone()]);
+                let len = self.validate(units, &schema, m.end());
+                if len > 0 {
+                    // Schema spellings are ASCII; choose the original slice to retain casing until normalization.
+                    let start = units[..group.start].to_vec();
+                    let byte_start = String::from_utf16_lossy(&start).len();
+                    let schema = text
+                        .get(byte_start..byte_start + schema.len())
+                        .unwrap_or("");
+                    streams[0].push(Found {
+                        schema,
+                        index: m.start() + m.group(1).map_or(0, |g| g.len()),
+                        end: m.end() + len,
+                    });
+                }
             }
         }
-        if self.options.fuzzy_email {
+        if self.options.fuzzy_email && text.contains('@') {
             for m in self.compiled.email.find_from_ucs2(units, 0) {
                 streams[1].push(Found {
                     schema: "mailto:",
@@ -261,7 +263,14 @@ impl LinkifyIt {
                 });
             }
         }
-        if self.options.fuzzy_link {
+        if self.options.fuzzy_link
+            && self
+                .compiled
+                .host_test
+                .find_from_ucs2(units, 0)
+                .next()
+                .is_some()
+        {
             let regex = if self.options.fuzzy_ip {
                 &self.compiled.fuzzy
             } else {

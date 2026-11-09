@@ -11987,6 +11987,7 @@ dependencies = [
  "lexical_html",
  "lexical_model",
  "phf 0.13.1",
+ "proptest",
  "regress",
  "serde",
  "serde_json",
