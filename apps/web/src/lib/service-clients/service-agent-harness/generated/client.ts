@@ -66,6 +66,7 @@ import type {
   RetryAgentConversationTurnRequest,
   ReviewDecision,
   ReviewRecord,
+  RunDocumentProgram,
   SandboxSizeBody,
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
@@ -75,6 +76,7 @@ import type {
   StartFreshAgentConversationRequest,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  UserExecutionReceipt,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4345,6 +4347,85 @@ export const listCodingAgents = async (
     status: res.status,
     headers: res.headers,
   } as listCodingAgentsResponse;
+};
+
+/**
+ * @summary Run a program from the document the user has open, as that user, and
+return its outcome. Only directly signed-in users: a token minted for an
+agent's run may not start another run through here.
+ */
+export type runDocumentProgramResponse200 = {
+  data: UserExecutionReceipt;
+  status: 200;
+};
+
+export type runDocumentProgramResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type runDocumentProgramResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type runDocumentProgramResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type runDocumentProgramResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type runDocumentProgramResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type runDocumentProgramResponseSuccess =
+  runDocumentProgramResponse200 & {
+    headers: Headers;
+  };
+export type runDocumentProgramResponseError = (
+  | runDocumentProgramResponse400
+  | runDocumentProgramResponse401
+  | runDocumentProgramResponse403
+  | runDocumentProgramResponse404
+  | runDocumentProgramResponse500
+) & {
+  headers: Headers;
+};
+
+export type runDocumentProgramResponse =
+  | runDocumentProgramResponseSuccess
+  | runDocumentProgramResponseError;
+
+export const getRunDocumentProgramUrl = (documentId: string) => {
+  return `/documents/${documentId}/code-executions`;
+};
+
+export const runDocumentProgram = async (
+  documentId: string,
+  runDocumentProgram: RunDocumentProgram,
+  options?: RequestInit
+): Promise<runDocumentProgramResponse> => {
+  const res = await fetch(getRunDocumentProgramUrl(documentId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runDocumentProgram),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: runDocumentProgramResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as runDocumentProgramResponse;
 };
 
 /**

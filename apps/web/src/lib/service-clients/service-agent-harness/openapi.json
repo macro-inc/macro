@@ -3741,6 +3741,62 @@
         ]
       }
     },
+    "/documents/{document_id}/code-executions": {
+      "post": {
+        "tags": ["documents"],
+        "summary": "Run a program from the document the user has open, as that user, and\nreturn its outcome. Only directly signed-in users: a token minted for an\nagent's run may not start another run through here.",
+        "operationId": "run_document_program",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "The document the program is embedded in",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunDocumentProgram"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserExecutionReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -7593,6 +7649,31 @@
         ],
         "description": "What made a routine fire."
       },
+      "RunDocumentProgram": {
+        "type": "object",
+        "description": "A program taken from the open document, with the inputs its caller passed.",
+        "required": ["source"],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "description": "Spread into `main`'s argument beside `macro`."
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Send no writes: each one returns an empty result and is reported as\nskipped, so the run shows what the program would change."
+          },
+          "source": {
+            "type": "string",
+            "description": "TypeScript module exporting `async function main({macro, ...arguments})`,\nat most 64 KiB."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total deadline in milliseconds, from 1 to 30000.",
+            "minimum": 0
+          }
+        }
+      },
       "SandboxSize": {
         "type": "string",
         "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
@@ -8308,6 +8389,35 @@
           }
         }
       },
+      "UserExecutionReceipt": {
+        "type": "object",
+        "description": "Outcome returned to the caller without a saved execution journal.",
+        "required": ["status", "activity", "activityTruncated"],
+        "properties": {
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionActivity"
+            },
+            "description": "Observed SDK operations, without arguments or responses."
+          },
+          "activityTruncated": {
+            "type": "boolean",
+            "description": "More SDK operations ran than the activity list records."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe failure text, when execution did not succeed."
+          },
+          "result": {
+            "description": "Only the value explicitly returned by the program."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus",
+            "description": "How the program ended."
+          }
+        }
+      },
       "WarmAgentSessionRequest": {
         "type": "object",
         "description": "A client-minted id deduplicates warm calls without creating a conversation.",
@@ -8404,6 +8514,10 @@
     {
       "name": "agent-mode-choice",
       "description": "Whether a composer prompt goes to a chat or a coding agent"
+    },
+    {
+      "name": "documents",
+      "description": "Programs embedded in documents, run as the viewer"
     }
   ]
 }

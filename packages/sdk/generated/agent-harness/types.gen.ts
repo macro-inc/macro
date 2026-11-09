@@ -2699,6 +2699,32 @@ export type RoutineCause = {
 };
 
 /**
+ * A program taken from the open document, with the inputs its caller passed.
+ */
+export type RunDocumentProgram = {
+    /**
+     * Spread into `main`'s argument beside `macro`.
+     */
+    arguments?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Send no writes: each one returns an empty result and is reported as
+     * skipped, so the run shows what the program would change.
+     */
+    dryRun?: boolean;
+    /**
+     * TypeScript module exporting `async function main({macro, ...arguments})`,
+     * at most 64 KiB.
+     */
+    source: string;
+    /**
+     * Total deadline in milliseconds, from 1 to 30000.
+     */
+    timeoutMs?: number;
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -3034,6 +3060,32 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Outcome returned to the caller without a saved execution journal.
+ */
+export type UserExecutionReceipt = {
+    /**
+     * Observed SDK operations, without arguments or responses.
+     */
+    activity: Array<ExecutionActivity>;
+    /**
+     * More SDK operations ran than the activity list records.
+     */
+    activityTruncated: boolean;
+    /**
+     * Safe failure text, when execution did not succeed.
+     */
+    error?: string | null;
+    /**
+     * Only the value explicitly returned by the program.
+     */
+    result?: unknown;
+    /**
+     * How the program ended.
+     */
+    status: ExecutionStatus;
 };
 
 /**
@@ -4796,6 +4848,32 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type RunDocumentProgramData = {
+    body: RunDocumentProgram;
+    path: {
+        /**
+         * The document the program is embedded in
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/code-executions';
+};
+
+export type RunDocumentProgramErrors = {
+    400: unknown;
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    500: unknown;
+};
+
+export type RunDocumentProgramResponses = {
+    200: UserExecutionReceipt;
+};
+
+export type RunDocumentProgramResponse = RunDocumentProgramResponses[keyof RunDocumentProgramResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;
