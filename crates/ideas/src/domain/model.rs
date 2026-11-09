@@ -426,6 +426,19 @@ pub enum NewKind {
     },
 }
 
+/// What starts a generation: a person finishing onboarding, or their night.
+/// Shared by everything a generation's sessions write.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr, strum::IntoStaticStr,
+)]
+#[strum(serialize_all = "snake_case")]
+pub enum GenerationTrigger {
+    /// The person just signed up; their workspace is nearly empty.
+    Onboarding,
+    /// The nightly run in the person's night: full research, then manage.
+    Nightly,
+}
+
 /// What a generation session may call: ideas or routine suggestions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -447,6 +460,9 @@ pub struct GenerationSession {
     pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
     /// What it may write.
     pub kind: SessionKind,
+    /// The surfaces a routines session suggests for, by wire name; empty
+    /// for ideas.
+    pub surfaces: Vec<String>,
 }
 
 /// What a change-log entry records.

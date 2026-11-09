@@ -8,8 +8,8 @@ use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, Idea, IdeaContent, IdeaError, IdeaReview, IdeaState,
-    IdeaWriteOutcome, Ideas, NewKind, RetireIdea, RewriteIdea, SuggestIdea, Target,
+    Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
+    IdeaState, IdeaWriteOutcome, Ideas, NewKind, RetireIdea, RewriteIdea, SuggestIdea, Target,
 };
 
 /// Limits a write must stay within, checked where it is stored so two
@@ -41,12 +41,6 @@ pub trait IdeaRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The generation session `session`, if it is one and still open.
-    fn generation_session(
-        &self,
-        session: Uuid,
-    ) -> impl Future<Output = Result<Option<GenerationSession>, Self::Err>> + Send;
-
     /// Every idea the person has, in any state.
     fn ideas(
         &self,
@@ -69,6 +63,9 @@ pub trait IdeaRepo: Send + Sync + 'static {
 
     /// How many ideas generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+
+    /// How many changes session `session` logged.
+    fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Add a proposed idea `id` with `content` for the person, within
     /// `limits`, logging `change`.
@@ -131,14 +128,39 @@ pub trait RequestSessions: Send + Sync + 'static {
     async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>, rootcause::Report>;
 }
 
+/// The open hidden sessions of generations. Object-safe, so one adapter
+/// serves every crate whose tools a generation session calls.
+#[async_trait::async_trait]
+pub trait GenerationSessions: Send + Sync + 'static {
+    /// Session `session`, if it is a generation's and still open.
+    async fn open_session(
+        &self,
+        session: Uuid,
+    ) -> Result<Option<GenerationSession>, rootcause::Report>;
+}
+
+/// Who gets a nightly generation. Object-safe, for the same reason.
+#[async_trait::async_trait]
+pub trait SuggestionAudience: Send + Sync + 'static {
+    /// The person opened their suggestions at `now`, in IANA zone `timezone`.
+    async fn seen(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        timezone: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), rootcause::Report>;
+}
+
 /// Ideas as the API serves them: the person's feed, and the tools hidden
 /// generation sessions manage it with.
 pub trait IdeaApi: Send + Sync + 'static {
     /// The person's open ideas they can still open every item of, best
-    /// first.
+    /// first. With their `timezone`, it also counts them in for nightly
+    /// generations.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<Ideas, IdeaError>> + Send;
 
     /// The person acts on a proposed idea.
@@ -154,6 +176,13 @@ pub trait IdeaApi: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> impl Future<Output = Result<(), IdeaError>> + Send;
+
+    /// What an ideas session of a generation started by `trigger` is told,
+    /// for a person in `timezone`.
+    fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
+
+    /// How many changes ideas session `session` made.
+    fn kept(&self, session: Uuid) -> impl Future<Output = Result<u32, IdeaError>> + Send;
 
     /// Every idea of the person's, for the ideas session the request
     /// `correlation` names.

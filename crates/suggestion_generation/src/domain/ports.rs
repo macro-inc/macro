@@ -1,0 +1,86 @@
+//! What generations need from storage.
+
+use std::future::Future;
+
+use bot_id::BotId;
+use chrono::{DateTime, Utc};
+use ideas::domain::model::{GenerationTrigger, SessionKind};
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
+
+use super::model::{AudienceMember, StaleSession};
+
+/// Generations, their sessions and who gets a nightly one, in storage.
+pub trait GenerationRepo: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Start a generation for the person, triggered by `trigger`, at `now`;
+    /// its id, or none when none may start: one is running, the person's
+    /// onboarding one ran, or a nightly one started after `nightly_since`. A
+    /// running one of the same trigger that started before `stale_before`
+    /// was interrupted (its process stopped) and starts again.
+    fn begin(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        trigger: GenerationTrigger,
+        now: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
+        nightly_since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Record how generation `generation` ended.
+    fn finish(
+        &self,
+        generation: Uuid,
+        ready: bool,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Let hidden session `session` of `generation`, run as `agent` for the
+    /// person, call `kind`'s tools; a routines session suggests for
+    /// `surfaces`.
+    #[expect(clippy::too_many_arguments, reason = "one row, all of its columns")]
+    fn open_session(
+        &self,
+        session: Uuid,
+        generation: Uuid,
+        user: &MacroUserIdStr<'_>,
+        agent: BotId,
+        kind: SessionKind,
+        surfaces: &[String],
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Close `session`: its tools refuse it from now on.
+    fn close_session(&self, session: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Sessions opened before `before` and never closed, oldest first, at
+    /// most `limit`: left behind by a process that stopped.
+    fn stale_sessions(
+        &self,
+        before: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<StaleSession>, Self::Err>> + Send;
+
+    /// The person opened their suggestions at `now` in zone `timezone`.
+    fn see(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        timezone: &str,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// At most `limit` people seen since `seen_since`, whose local hour at
+    /// `now` is in `night` (start inclusive, end exclusive), with no
+    /// generation running and no nightly one started after `nightly_since`;
+    /// those seen longest ago first.
+    fn due(
+        &self,
+        now: DateTime<Utc>,
+        seen_since: DateTime<Utc>,
+        nightly_since: DateTime<Utc>,
+        night: (u8, u8),
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<AudienceMember>, Self::Err>> + Send;
+}

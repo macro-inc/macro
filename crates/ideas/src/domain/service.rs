@@ -18,11 +18,15 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Change, ChangeAction, GenerationSession, Idea, IdeaContent, IdeaError, IdeaKind, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea, SessionKind,
-    SuggestIdea, Target,
+    Change, ChangeAction, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
+    IdeaKind, IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea,
+    SessionKind, SuggestIdea, Target,
 };
-use super::ports::{IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions, Written};
+use super::ports::{
+    GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions, SuggestionAudience,
+    Written,
+};
+use super::prompt;
 
 #[cfg(test)]
 mod test;
@@ -50,6 +54,8 @@ pub struct IdeaService<Repo, Access, Flags> {
     repo: Arc<Repo>,
     access: Arc<Access>,
     request_sessions: Arc<dyn RequestSessions>,
+    generation_sessions: Arc<dyn GenerationSessions>,
+    audience: Arc<dyn SuggestionAudience>,
     flags: Option<Flags>,
 }
 
@@ -64,12 +70,16 @@ where
         repo: Arc<Repo>,
         access: Arc<Access>,
         request_sessions: Arc<dyn RequestSessions>,
+        generation_sessions: Arc<dyn GenerationSessions>,
+        audience: Arc<dyn SuggestionAudience>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
             repo,
             access,
             request_sessions,
+            generation_sessions,
+            audience,
             flags,
         }
     }
@@ -111,10 +121,10 @@ where
         };
         let session = match session {
             Some(session) => self
-                .repo
-                .generation_session(session)
+                .generation_sessions
+                .open_session(session)
                 .await
-                .map_err(IdeaError::internal)?,
+                .map_err(IdeaError::Internal)?,
             None => None,
         };
         let session = session
@@ -216,8 +226,21 @@ where
         ideas.done = tracing::field::Empty,
         ideas.hidden = tracing::field::Empty,
     ), err)]
-    async fn feed(&self, user: &MacroUserIdStr<'static>) -> Result<Ideas, IdeaError> {
+    async fn feed(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: Option<chrono_tz::Tz>,
+    ) -> Result<Ideas, IdeaError> {
         self.require_flag(user).await?;
+        if let Some(timezone) = timezone {
+            // Reading the feed counts the person in for nightly generations;
+            // a failure here never fails the read.
+            let _ = self
+                .audience
+                .seen(user, timezone.name(), Utc::now())
+                .await
+                .inspect_err(|error| tracing::warn!(?error, "could not record an ideas reader"));
+        }
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Idea> = self
             .repo
@@ -254,6 +277,17 @@ where
         span.record("ideas.done", done.len());
         span.record("ideas.hidden", hidden);
         Ok(Ideas { ideas, done })
+    }
+
+    fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
+        prompt::brief(trigger, timezone.name(), Utc::now())
+    }
+
+    async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
+        self.repo
+            .kept_by(session)
+            .await
+            .map_err(IdeaError::internal)
     }
 
     #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]

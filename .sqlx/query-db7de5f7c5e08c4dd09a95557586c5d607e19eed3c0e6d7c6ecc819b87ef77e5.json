@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.user_id, a.timezone FROM suggestion_audience a\n               WHERE a.seen_at > $2\n                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int >= $4\n                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int < $5\n                 AND NOT EXISTS (\n                     SELECT 1 FROM suggestion_generation g\n                     WHERE g.user_id = a.user_id\n                       AND (g.status = 'generating' OR (g.trigger = 'nightly' AND g.started_at > $3)))\n               ORDER BY a.seen_at\n               LIMIT $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "timezone",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "db7de5f7c5e08c4dd09a95557586c5d607e19eed3c0e6d7c6ecc819b87ef77e5"
+}
