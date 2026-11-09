@@ -157,3 +157,11 @@ as the application emoji menu, with its 200 ms lowercase query debounce. Rows
 carry canonical Unicode choices through the typed menu bridge. Catalog failures,
 query/surface replacement and failed commits cannot leave an active stale pick.
 This adapter does not supply the model InlineSearch lifecycle or admit a surface.
+
+`NativeActionSources` reuses the source slash-action catalog, ordered ID
+overrides, availability filter, node dependencies, database flag and 60 ms
+lowercase fuzzy search. It offers only actions with a supported typed native
+choice: the built-in paragraph/heading/quote/code/list transforms or an explicit
+choice supplied for an additional/overridden action. It never serializes or
+executes source callbacks. Picker, creation and media workflows need separate
+typed adapters, and InlineSearch lifecycle/application admission remain pending.

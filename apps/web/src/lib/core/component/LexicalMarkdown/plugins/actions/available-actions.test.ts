@@ -1,7 +1,7 @@
 import { DatabaseQueryNode } from '@macro-inc/lexical-core/nodes/DatabaseQueryNode';
 import { DocumentCardNode } from '@macro-inc/lexical-core/nodes/DocumentCardNode';
 import { describe, expect, it } from 'vitest';
-import { availableActions } from './available-actions';
+import { availableActions, mergeActions } from './available-actions';
 import type { Action } from './types';
 
 const icon = () => null;
@@ -70,4 +70,18 @@ describe('slash menu actions', () => {
       }).map((action) => action.id)
     ).toEqual(['database-query', 'database']);
   });
+});
+
+it('additional actions replace an ID in source order without mutating either catalog', () => {
+  const override: Action = { ...actions[2], name: 'Replacement' };
+  const extra: Action = { ...actions[2], id: 'extra' };
+  const merged = mergeActions(actions, [override, extra]);
+  expect(merged.map((action) => action.id)).toEqual([
+    'database-query',
+    'database',
+    'paragraph',
+    'extra',
+  ]);
+  expect(merged[2]).toBe(override);
+  expect(actions[2].name).toBe('Normal Text');
 });
