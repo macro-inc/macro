@@ -39,6 +39,8 @@ writes; the legacy conformance backend still makes diagnostic native calls.
 Run the package's strict TypeScript check and real WASM tests, the pinned node oracle,
 and node identity and crossing-count regressions. Report source-model oracle runs
 separately from actual native acceptance.
+Keep base TextNode slot proofs separate from mounted Element/TaskList acceptance;
+Element slots require the real active view editor and block-cursor binding.
 
 Run `tests/run-oracle.ts` with `LEXICAL_NODES_UPSTREAM_ROOT` pointing to the
 unaltered v0.45.0 source and `LEXICAL_NODES_NATIVE_CONFIG` pointing to the native
