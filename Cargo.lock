@@ -10622,6 +10622,7 @@ dependencies = [
  "entity_registry",
  "feature_flags",
  "futures",
+ "ideas_db_utils",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -10638,6 +10639,18 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "ideas_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "macro_uuid",
+ "serde_json",
+ "sqlx",
  "workspace-hack",
 ]
 
@@ -17608,6 +17621,7 @@ dependencies = [
  "github",
  "glob",
  "ideas",
+ "ideas_db_utils",
  "jev",
  "kafka_util",
  "lexical_client",

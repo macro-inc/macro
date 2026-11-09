@@ -90,12 +90,29 @@ impl SuggestionAudience for FakeAudience {
     }
 }
 
+/// Routine suggestions dismissed through the port.
+#[derive(Default)]
+struct FakeDismissal(Mutex<Vec<Uuid>>);
+
+#[async_trait::async_trait]
+impl RoutineSuggestionDismissal for FakeDismissal {
+    async fn dismiss_suggestion(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<bool, rootcause::Report> {
+        self.0.lock().unwrap().push(suggestion);
+        Ok(true)
+    }
+}
+
 type Service = IdeaService<PgIdeaRepo, FakeAccess, FakeFeatureFlags>;
 
 struct Harness {
     service: Service,
     access: Arc<FakeAccess>,
     audience: Arc<FakeAudience>,
+    dismissal: Arc<FakeDismissal>,
     pool: PgPool,
 }
 
@@ -115,6 +132,7 @@ async fn harness(pool: PgPool, flag: bool) -> Harness {
     }
     let access = Arc::new(FakeAccess::default());
     let audience = Arc::new(FakeAudience::default());
+    let dismissal = Arc::new(FakeDismissal::default());
     Harness {
         service: IdeaService::new(
             Arc::new(PgIdeaRepo::new(pool.clone())),
@@ -122,10 +140,12 @@ async fn harness(pool: PgPool, flag: bool) -> Harness {
             Arc::new(SameSession),
             Arc::new(RowSessions(pool.clone())),
             audience.clone(),
+            dismissal.clone(),
             Some(flags),
         ),
         access,
         audience,
+        dismissal,
         pool,
     }
 }
@@ -675,8 +695,92 @@ async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
     ));
 }
 
-/// The feed keeps ideas done in the last day, newest first, apart from the
-/// open ones; older ones and other closed ones leave it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let generation = sqlx::query_scalar!(
+        "SELECT generation_id FROM suggestion_generation_session WHERE session_id = $1",
+        session,
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    let suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO routine_suggestion
+             (id, user_id, session_id, surfaces, routine, reason, keep_probability, created_at)
+           VALUES ($1, $2, $3, '{tasks}', '{}'::jsonb, 'You plan on Mondays', 0.4, now())"#,
+        suggestion,
+        OWNER,
+        session,
+    )
+    .execute(&h.pool)
+    .await
+    .unwrap();
+    let mut tx = h.pool.begin().await.unwrap();
+    ideas_db_utils::add_routine_idea(
+        &mut tx,
+        &ideas_db_utils::NewRoutineIdea {
+            user: OWNER,
+            suggestion,
+            title: "Plan the week",
+            summary: "You plan on Mondays",
+            importance: 40,
+            categories: &[],
+            session,
+            generation,
+            at: Utc::now(),
+        },
+        OPEN_LIMIT,
+        NEW_PER_GENERATION,
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let idea = feed.ideas[0].clone();
+    assert_eq!(
+        idea.kind,
+        IdeaKind::Routine {
+            routine_suggestion_id: suggestion
+        }
+    );
+    // Sessions never rewrite or retire it here; its suggestion decides.
+    let rewrite = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            idea.id,
+            RewriteIdea {
+                importance: Some(90),
+                reason: "Matters more".to_owned(),
+                ..RewriteIdea::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!rewrite.ok);
+    let retire = h
+        .service
+        .retire(
+            &principal(OWNER),
+            Some(session),
+            idea.id,
+            RetireIdea {
+                reason: "No longer fits".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!retire.ok);
+    // The person dismissing it dismisses its suggestion, which closes both.
+    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
     let h = harness(pool, true).await;

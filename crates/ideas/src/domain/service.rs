@@ -23,8 +23,8 @@ use super::model::{
     SessionKind, SuggestIdea, Target,
 };
 use super::ports::{
-    GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions, SuggestionAudience,
-    Written,
+    GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
+    RoutineSuggestionDismissal, SuggestionAudience, Written,
 };
 use super::prompt;
 
@@ -56,6 +56,7 @@ pub struct IdeaService<Repo, Access, Flags> {
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
+    routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
     flags: Option<Flags>,
     /// The SDK reference an ideas session's brief carries.
     sdk_reference: String,
@@ -68,12 +69,14 @@ where
     Flags: FeatureFlags + 'static,
 {
     /// Without `flags`, ideas are off for everyone.
+    #[expect(clippy::too_many_arguments, reason = "each port is its own adapter")]
     pub fn new(
         repo: Arc<Repo>,
         access: Arc<Access>,
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
+        routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
         flags: Option<Flags>,
     ) -> Self {
         Self {
@@ -82,6 +85,7 @@ where
             request_sessions,
             generation_sessions,
             audience,
+            routine_suggestions,
             flags,
             sdk_reference: String::new(),
         }
@@ -326,6 +330,31 @@ where
     #[tracing::instrument(name = "ideas.dismiss", skip_all, fields(idea.id = %id), err)]
     async fn dismiss(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
+        let idea = self
+            .repo
+            .idea(user, id)
+            .await
+            .map_err(IdeaError::internal)?;
+        let idea = idea
+            .filter(|idea| idea.state.is_open())
+            .ok_or(IdeaError::NotFound)?;
+        // A routine idea and its suggestion are dismissed together, where
+        // the suggestion is kept.
+        if let IdeaKind::Routine {
+            routine_suggestion_id,
+        } = idea.kind
+        {
+            let dismissed = self
+                .routine_suggestions
+                .dismiss_suggestion(user, routine_suggestion_id)
+                .await
+                .map_err(IdeaError::Internal)?;
+            if !dismissed {
+                return Err(IdeaError::NotFound);
+            }
+            tracing::info!(event = "ideas.dismissed", kind = "routine");
+            return Ok(());
+        }
         let moved = self
             .repo
             .set_state(
