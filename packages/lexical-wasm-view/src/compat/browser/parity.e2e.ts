@@ -3,30 +3,76 @@ import { expect, type Page, test } from '@playwright/test';
 async function snapshot(page: Page) {
   return page.evaluate(() => window.compatSnapshot());
 }
-const granularities: ('word' | 'lineboundary')[] = ['word', 'lineboundary'];
+const granularities: ('character' | 'word' | 'lineboundary')[] = [
+  'character',
+  'word',
+  'lineboundary',
+];
 for (const granularity of granularities) {
-  test(`selection ${granularity} matches original browser movement`, async ({
-    page,
-  }) => {
-    await page.goto('http://127.0.0.1:41872');
-    await page.addStyleTag({
-      content: '#editor { width: 120px; white-space: pre-wrap; }',
+  for (const isBackward of [true, false]) {
+    test(`selection ${granularity} ${isBackward ? 'backward' : 'forward'} matches original browser movement`, async ({
+      page,
+    }) => {
+      await page.goto('http://127.0.0.1:41872');
+      await page.addStyleTag({
+        content: '#editor { width: 120px; white-space: pre-wrap; }',
+      });
+      await page.locator('#editor').click();
+      await page.keyboard.type(
+        'alpha 😀 café combining é and wrapped words finish'
+      );
+      const result = await page.evaluate(
+        ({ granularity, isBackward }) =>
+          window.compatModifySelection(granularity, isBackward),
+        { granularity, isBackward }
+      );
+      expect(result).toMatchObject({
+        equal: true,
+        moved: true,
+        dirtyMatches: true,
+        targetMatches: true,
+        domRestored: true,
+        modelUntouched: true,
+      });
     });
-    await page.locator('#editor').click();
-    await page.keyboard.type(
-      'alpha 😀 café combining é and wrapped words finish'
-    );
-    const result = await page.evaluate(
-      (granularity) => window.compatModifySelection(granularity),
-      granularity
-    );
-    expect(result).toMatchObject({
-      equal: true,
-      moved: true,
-      dirtyMatches: true,
-    });
-  });
+  }
 }
+test('target probe restores a real block cursor and its exact root style', async ({
+  page,
+}) => {
+  await page.goto('http://127.0.0.1:41872');
+  await page.locator('#editor').click();
+  const result = await page.evaluate(() =>
+    window.compatProbeRestoration('cursor')
+  );
+  expect(result).toMatchObject({
+    targetPresent: true,
+    cursorPresent: true,
+    cursorRestored: true,
+    styleRestored: true,
+    domRestored: true,
+    modelUntouched: true,
+    readonlyObserved: true,
+  });
+});
+
+test('target probe preserves active composition at a text boundary', async ({
+  page,
+}) => {
+  await page.goto('http://127.0.0.1:41872');
+  await page.locator('#editor').click();
+  const result = await page.evaluate(() =>
+    window.compatProbeRestoration('composition')
+  );
+  expect(result).toMatchObject({
+    targetPresent: true,
+    compositionSeeded: true,
+    compositionPreserved: true,
+    domRestored: true,
+    modelUntouched: true,
+  });
+});
+
 for (const [name, text] of [
   ['heading and Enter', '# title\n'],
   ['punctuation caret', 'b;'],

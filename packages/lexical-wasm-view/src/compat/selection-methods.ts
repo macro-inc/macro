@@ -12,12 +12,23 @@ import {
   getElementByKeyOrThrow,
   getWindow,
 } from './dom-utils';
+import { markSelectionChangeFromDOMUpdate } from './events';
 import type { CompatRuntime } from './runtime';
 import {
   $internalResolveSelectionPoints,
   setDOMSelectionBaseAndExtent,
 } from './selection';
-import type { CompatRangeSelection as RangeSelection } from './types';
+import type {
+  CompatEditor,
+  CompatRangeSelection as RangeSelection,
+} from './types';
+
+export interface DOMSelectionTarget {
+  start: Pick<import('./selection').PointType, 'key' | 'offset' | 'type'>;
+  end: Pick<import('./selection').PointType, 'key' | 'offset' | 'type'>;
+  resolutionDirty: boolean;
+  backwardInDOM: boolean;
+}
 
 type CaretDirection = 'next' | 'previous';
 interface SiblingCaret<D extends CaretDirection>
@@ -137,6 +148,150 @@ export function createSelectionDOMMethods(runtime: SelectionDOMRuntime) {
     // so we normalize for that
     $normalizeSelection(selection);
   }
+  function syncDOMSelection(
+    selection: RangeSelection,
+    editor: CompatEditor,
+    domSelection: Selection
+  ): void {
+    const anchorKeyedDOM = getElementByKeyOrThrow(editor, selection.anchor.key);
+    const focusKeyedDOM = getElementByKeyOrThrow(editor, selection.focus.key);
+    let nextAnchorDOM: HTMLElement | Text | null = anchorKeyedDOM;
+    let nextFocusDOM: HTMLElement | Text | null = focusKeyedDOM;
+    if (selection.anchor.type === 'text') {
+      const node = selection.anchor.getNode();
+      nextAnchorDOM = $isTextNode(node)
+        ? $getDOMTextNode(node, anchorKeyedDOM, editor)
+        : null;
+    }
+    if (selection.focus.type === 'text') {
+      const node = selection.focus.getNode();
+      nextFocusDOM = $isTextNode(node)
+        ? $getDOMTextNode(node, focusKeyedDOM, editor)
+        : null;
+    }
+    if (nextAnchorDOM && nextFocusDOM) {
+      setDOMSelectionBaseAndExtent(
+        domSelection,
+        nextAnchorDOM,
+        selection.anchor.offset,
+        nextFocusDOM,
+        selection.focus.offset
+      );
+    }
+  }
+
+  function getDOMSelectionTarget(
+    selection: RangeSelection,
+    isBackward: boolean,
+    granularity: 'character' | 'word' | 'lineboundary'
+  ): DOMSelectionTarget | null {
+    const editor = getActiveEditor();
+    return runtime.withReconciliation(
+      editor,
+      runtime.getActiveEditorState(),
+      () =>
+        collectDOMSelectionTarget(selection, isBackward, granularity, editor)
+    );
+  }
+
+  function collectDOMSelectionTarget(
+    selection: RangeSelection,
+    isBackward: boolean,
+    granularity: 'character' | 'word' | 'lineboundary',
+    editor: CompatEditor
+  ): DOMSelectionTarget | null {
+    const root = editor._rootElement;
+    if (root === null) return null;
+    const viewWindow = getWindow(editor);
+    const domSelection = getDOMSelection(viewWindow);
+    if (domSelection === null || typeof domSelection.modify !== 'function')
+      return null;
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = domSelection;
+    const cursor = editor._blockCursorElement;
+    const cursorParent = cursor?.parentNode ?? null;
+    const cursorNext = cursor?.nextSibling ?? null;
+    const rootStyle = root.getAttribute('style');
+    const scrollLeft = root.scrollLeft;
+    const scrollTop = root.scrollTop;
+    const scrollX = viewWindow.scrollX;
+    const scrollY = viewWindow.scrollY;
+    function markDOMChange(): void {
+      if (
+        domSelection !== null &&
+        (domSelection.anchorNode !== anchorNode ||
+          domSelection.anchorOffset !== anchorOffset ||
+          domSelection.focusNode !== focusNode ||
+          domSelection.focusOffset !== focusOffset)
+      ) {
+        markSelectionChangeFromDOMUpdate();
+      }
+    }
+    const focus = selection.focus.getNode();
+    const removeCursor =
+      cursor !== null &&
+      $isElementNode(focus) &&
+      !focus.isInline() &&
+      !focus.canBeEmpty();
+    try {
+      if (removeCursor) removeDOMBlockCursorElement(cursor, editor, root);
+      markDOMChange();
+      if (selection.dirty) syncDOMSelection(selection, editor, domSelection);
+      markDOMChange();
+      moveNativeSelection(
+        domSelection,
+        'extend',
+        isBackward ? 'backward' : 'forward',
+        granularity
+      );
+      markDOMChange();
+      if (domSelection.rangeCount === 0) return null;
+      const range = domSelection.getRangeAt(0);
+      const resolved = $internalResolveSelectionPoints(
+        range.startContainer,
+        range.startOffset,
+        range.endContainer,
+        range.endOffset,
+        editor,
+        editor.getEditorState()._selection
+      );
+      if (resolved === null) return null;
+      const [start, end, resolutionDirty] = resolved;
+      return {
+        start: { key: start.key, offset: start.offset, type: start.type },
+        end: { key: end.key, offset: end.offset, type: end.type },
+        resolutionDirty,
+        backwardInDOM:
+          domSelection.anchorNode !== range.startContainer ||
+          domSelection.anchorOffset !== range.startOffset,
+      };
+    } finally {
+      if (removeCursor) {
+        if (cursorParent !== null)
+          cursorParent.insertBefore(
+            cursor,
+            cursorNext?.parentNode === cursorParent ? cursorNext : null
+          );
+        editor._blockCursorElement = cursor;
+        if (rootStyle === null) root.removeAttribute('style');
+        else root.setAttribute('style', rootStyle);
+      }
+      if (anchorNode !== null && focusNode !== null) {
+        domSelection.setBaseAndExtent(
+          anchorNode,
+          anchorOffset,
+          focusNode,
+          focusOffset
+        );
+      } else {
+        domSelection.removeAllRanges();
+      }
+      if (root.scrollLeft !== scrollLeft) root.scrollLeft = scrollLeft;
+      if (root.scrollTop !== scrollTop) root.scrollTop = scrollTop;
+      if (viewWindow.scrollX !== scrollX || viewWindow.scrollY !== scrollY)
+        viewWindow.scrollTo(scrollX, scrollY);
+    }
+  }
+
   function modifyDOMSelection(
     selection: RangeSelection,
     alter: 'move' | 'extend',
@@ -177,34 +332,7 @@ export function createSelectionDOMMethods(runtime: SelectionDOMRuntime) {
       removeDOMBlockCursorElement(blockCursorElement, editor, rootElement);
     }
     if (selection.dirty) {
-      const anchorKeyedDOM = getElementByKeyOrThrow(
-        editor,
-        selection.anchor.key
-      );
-      const focusKeyedDOM = getElementByKeyOrThrow(editor, selection.focus.key);
-      let nextAnchorDOM: HTMLElement | Text | null = anchorKeyedDOM;
-      let nextFocusDOM: HTMLElement | Text | null = focusKeyedDOM;
-      if (selection.anchor.type === 'text') {
-        const node = selection.anchor.getNode();
-        nextAnchorDOM = $isTextNode(node)
-          ? $getDOMTextNode(node, anchorKeyedDOM, editor)
-          : null;
-      }
-      if (selection.focus.type === 'text') {
-        const node = selection.focus.getNode();
-        nextFocusDOM = $isTextNode(node)
-          ? $getDOMTextNode(node, focusKeyedDOM, editor)
-          : null;
-      }
-      if (nextAnchorDOM && nextFocusDOM) {
-        setDOMSelectionBaseAndExtent(
-          domSelection,
-          nextAnchorDOM,
-          selection.anchor.offset,
-          nextFocusDOM,
-          selection.focus.offset
-        );
-      }
+      syncDOMSelection(selection, editor, domSelection);
     }
     // We use the DOM selection.modify API here to "tell" us what the selection
     // will be. We then use it to update the Lexical selection accordingly. This
@@ -389,5 +517,5 @@ export function createSelectionDOMMethods(runtime: SelectionDOMRuntime) {
     $setPointFromCaret(selection.focus, focus);
     return checkForBlock || !isLineBoundary;
   }
-  return { applyDOMRange, modifyDOMSelection };
+  return { applyDOMRange, modifyDOMSelection, getDOMSelectionTarget };
 }
