@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   composeProgramDocument,
-  PROGRAM_BLOCK_TYPE,
   readRunRequest,
   readSubscriptionMessage,
 } from './frame-helper';
@@ -22,16 +21,16 @@ describe('composeProgramDocument', () => {
     expect(scripts[1]?.textContent).toBe('first()');
   });
 
-  it('keeps program blocks and body content', () => {
+  it('keeps the built page’s body and bundled client script', () => {
     const composed = composeProgramDocument(
-      `<p>Hello</p><script type="${PROGRAM_BLOCK_TYPE}" id="count">export async function main() {}</script>`,
+      '<p>Hello</p><script type="module">run("tasks")</script>',
       't'
     );
     const document = parse(composed);
     expect(document.body.querySelector('p')?.textContent).toBe('Hello');
-    expect(document.getElementById('count')?.textContent).toContain(
-      'export async function main'
-    );
+    expect(
+      document.body.querySelector('script[type="module"]')?.textContent
+    ).toBe('run("tasks")');
     expect(composed.startsWith('<!doctype html>')).toBe(true);
   });
 });
@@ -44,7 +43,7 @@ describe('readRunRequest', () => {
           type: 'macro:run',
           token: 'secret',
           id: 3,
-          source: 'export async function main() {}',
+          program: 'tasks',
           arguments: { limit: 5 },
         },
         'secret'
@@ -53,14 +52,14 @@ describe('readRunRequest', () => {
       type: 'macro:run',
       token: 'secret',
       id: 3,
-      source: 'export async function main() {}',
+      program: 'tasks',
       arguments: { limit: 5 },
     });
   });
 
   it('defaults non-object arguments to an empty object', () => {
     const request = readRunRequest(
-      { type: 'macro:run', token: 't', id: 1, source: 's', arguments: [1] },
+      { type: 'macro:run', token: 't', id: 1, program: 'p', arguments: [1] },
       't'
     );
     expect(request?.arguments).toEqual({});
@@ -69,7 +68,7 @@ describe('readRunRequest', () => {
   it('ignores messages with another token, type or shape', () => {
     expect(
       readRunRequest(
-        { type: 'macro:run', token: 'other', id: 1, source: 's' },
+        { type: 'macro:run', token: 'other', id: 1, program: 'p' },
         't'
       )
     ).toBeUndefined();
@@ -78,7 +77,14 @@ describe('readRunRequest', () => {
     ).toBeUndefined();
     expect(
       readRunRequest(
-        { type: 'macro:run', token: 't', id: '1', source: 's' },
+        { type: 'macro:run', token: 't', id: '1', program: 'p' },
+        't'
+      )
+    ).toBeUndefined();
+    // A frame can no longer send code to run.
+    expect(
+      readRunRequest(
+        { type: 'macro:run', token: 't', id: 1, source: 'export {}' },
         't'
       )
     ).toBeUndefined();

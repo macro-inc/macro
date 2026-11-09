@@ -3143,22 +3143,34 @@ types do not show these tabs.
 ### Program blocks in HTML previews
 
 With the `enable-html-code-mode` flag on (on by default in dev and on every
-local stack), the rendered frame of an HTML document gets `window.macro`.
-`macro.run(idOrSource, args)` runs a `<script type="text/macro" id="…">`
-block, or the string itself, as a TypeScript module on the server as the
-viewer. The program's `main({macro, ...args})` receives the Macro SDK already
-signed in and must return exactly `{ data }` (any JSON); `macro.run` resolves
-to that `{ data }` object, and a failed run rejects with the server's error
-text. The frame never sees a credential, and the file never reaches the API
-directly (its origin is opaque, so CORS refuses it). At most two runs per
-frame wait at once; a run lasts at most 30 seconds. The program's writes stand
-as the user's own, with no agent attribution.
+local stack), an HTML document opened in Render shows the server's build of
+its saved source, not the raw file. The build turns two kinds of block into
+code:
 
-`macro.on(events, handler, { ids })` delivers the viewer's live entity events
-(the same names as the SDK's `macro.events`, such as `document.created`,
+- Each `<script type="text/macro" id="…" lang="ts">` is a program that runs on
+  the server as the viewer. Its default export takes `(args, { macro }:
+  ProgramContext)`, where `macro` is the Macro SDK already signed in, and
+  returns plain JSON. The `id` must be a JavaScript identifier, and a document
+  holds at most 16 programs.
+- The one `<script type="module" lang="ts">` is the page's client code. It
+  imports each program as a typed function from `macro:programs` and `on` from
+  `macro:client`. Other scripts are left as they are and can't call programs.
+
+The server type-checks the programs, then the client with them, so a call with
+the wrong arguments fails the build. A failed build shows its problems by
+block (`program tasks`, `client script`) in place of the page. Program source
+never reaches the page, the frame never holds a credential and never sends
+code: a run names a program of the build the page shows, and the server
+refuses it with "this page changed" if the saved document has changed since,
+after which the preview fetches the new build. A run lasts at most 30 seconds,
+and its writes stand as the user's own, with no agent attribution. npm imports
+aren't available yet.
+
+`on(events, handler, { ids })` delivers the viewer's live entity events (the
+same names as the SDK's `macro.events`, such as `document.created`,
 `document.updated` and `message.posted`; tasks are documents) and returns an
 `off` function. The handler gets `{ type, id }`, the event name and the entity
-it is about, never its data: re-run a program to read what changed. Pass
+it is about, never its data: call the program again to read what changed. Pass
 `ids` to hear about specific entities only. After a dropped connection
 reconnects the handler gets `{ type: 'macro.resync' }`, because events in the
 gap are lost; a refused subscription gets `{ type: 'macro.error', message }`.
@@ -3171,36 +3183,39 @@ Two limits shape these pages. The frame is sandboxed with scripts only, so a
 `setTimeout`, so they cannot sleep or poll; the page's own script can.
 
 ```html
-<script type="text/macro" id="my-tasks">
-  export async function main({ macro, query }) {
-    const tasks = [];
+<ul id="out"></ul>
+<script type="text/macro" id="tasks" lang="ts">
+  export default async function ({ query }: { query: string }, { macro }: ProgramContext) {
+    const found = [];
     for await (const task of macro.tasks.search(query, { pageSize: 5 })) {
-      tasks.push(task);
-      if (tasks.length === 5) break;
+      found.push(task);
+      if (found.length === 5) break;
     }
-    const summaries = await macro.tasks.summaries(tasks);
-    return { data: summaries.map((summary) => summary.name) };
+    return (await macro.tasks.summaries(found)).map((summary) => summary.name);
   }
 </script>
-<ul id="out"></ul>
-<script>
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { tasks } from 'macro:programs';
+
+  const out = document.getElementById('out')!;
   async function load() {
-    const { data: names } = await macro.run('my-tasks', { query: 'launch' });
+    const names = await tasks({ query: 'launch' });
     out.replaceChildren(...names.map((name) => Object.assign(document.createElement('li'), { textContent: name })));
   }
-  macro.on(['document.created', 'document.updated', 'document.deleted'], load);
-  load();
+  on(['document.created', 'document.updated', 'document.deleted'], load);
+  await load();
 </script>
 ```
 
 To check it, upload such a file, open it, and confirm the list fills in Render;
 then rename a matching task in another split and watch the list follow without
-a reload. With the flag off, `macro` is undefined and the preview is a plain
-sandboxed frame. A program whose `main` throws, or returns anything but
-`{ data }`, shows nothing: inspect the rejection in the frame's own `catch`.
-In traces, `block_code.run_document_program` covers each run and
-`block_code.document_events.stream` each stream connection, with the events
-it delivered.
+a reload. Change `query: 'launch'` to `query: 42`, save, and reopen Render: it
+shows the type error against `client script` instead of the page. With the
+flag off the preview renders the file as plain sandboxed HTML. In traces,
+`document_programs.build` covers a build (with `cached`), `block_code.run_document_program`
+and `document_programs.run` each run, and `block_code.document_events.stream`
+each stream connection, with the events it delivered.
 
 ## Large-document undo checks
 

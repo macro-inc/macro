@@ -13,12 +13,18 @@ A block for editing code files with syntax highlighting and formatting.
 - Read-only viewers keep a caret and can select and copy code, but cannot edit
   it (`EditorState.readOnly`, not `EditorView.editable`)
 - HTML files render in a sandboxed `srcdoc` frame (`HtmlPreview`). Behind
-  `enableHtmlCodeMode`, `code-mode/` adds `window.macro` to the frame:
-  `frame-helper.ts` is the injected script and message protocol,
-  `preview-runner.ts` the host side that runs each `macro.run` on the server
-  as the viewer (`queries/document-programs.ts`) and posts only the outcome
-  back, and `event-host.ts` the host side of `macro.on`: one server event
-  stream per frame (`queries/document-events.ts`) whose filters are the union
-  of the frame's subscriptions, forwarding only each event's name and entity
-  id. The frame never holds a credential. See the agent guide's
-  "Program blocks in HTML previews" for the authoring contract.
+  `enableHtmlCodeMode`, a stored document renders the agent harness's build
+  of its saved source (`queries/document-programs.ts`, keyed in
+  `queries/keys.ts`): the page with its `text/macro` programs removed and its
+  TypeScript client script bundled, or the build's problems by block. A
+  document the server can't build renders as plain HTML. `code-mode/`
+  supplies the frame's `window.macro`, which the build's `macro:programs` and
+  `macro:client` imports compile onto: `frame-helper.ts` is the injected
+  script and message protocol, `preview-runner.ts` the host side that runs
+  each named program of the shown build on the server as the viewer, unwraps
+  its value and refetches the build when the server answers that the
+  document changed, and `event-host.ts` the host side of `on`: one server
+  event stream per frame (`queries/document-events.ts`) whose filters are the
+  union of the frame's subscriptions, forwarding only each event's name and
+  entity id. The frame never holds a credential or sends code. See the agent
+  guide's "Program blocks in HTML previews" for the authoring contract.

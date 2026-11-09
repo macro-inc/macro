@@ -26,14 +26,14 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
-  ExecutionActivity,
+  DocumentBuildResponse,
   ExecutionRecord,
-  ExecutionStatus,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
   PullRequestsSessionsResponse,
+  RunDocumentProgram,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
@@ -41,6 +41,7 @@ import type {
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
+  UserExecutionReceipt,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
@@ -49,35 +50,25 @@ export type {
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
+  DocumentBuildResponse,
+  RunDocumentProgram,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
+  UserExecutionReceipt,
 };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
-// Wire shapes of `run_document_program` (`agent_code_mode::inbound::document_router`).
-// Hand-written until `bun run gen-api agent-harness` adds them to `generated/`.
-
-/** Body of `POST /documents/{documentId}/code-executions`. */
-export type RunDocumentProgramRequest = {
-  /** TypeScript module exporting `async function main({macro, ...arguments})`. */
-  source: string;
-  /** Spread into `main`'s argument beside `macro`. */
-  arguments?: Record<string, unknown>;
-  /** Total deadline in milliseconds, from 1 to 30000. */
-  timeoutMs?: number;
-  /** Send no writes; each is reported as skipped so the run shows what it would change. */
-  dryRun?: boolean;
-};
-
-/** Outcome of a document program: `UserExecutionReceipt` on the server. */
-export type DocumentProgramReceipt = {
-  status: ExecutionStatus;
-  activity: ExecutionActivity[];
-  activityTruncated: boolean;
-  result?: unknown;
-  error?: string | null;
+/** A document program run's errors; `DOCUMENT_CHANGED` asks for a fresh build. */
+const documentProgramError: ErrorResponseHandler<'DOCUMENT_CHANGED'> = async (
+  response
+) => {
+  if (response.status !== 409) return sessionError(response);
+  return {
+    code: 'DOCUMENT_CHANGED',
+    message: 'This page changed since it was opened; it is reloading.',
+  };
 };
 
 /** Session endpoints return safe, user-facing errors as plain text. */
@@ -424,22 +415,33 @@ export const agentHarnessServiceClient = {
   },
 
   /**
-   * Run a program taken from a document the user has open, as the user, and
-   * wait for its outcome. The server never returns the credential it ran with.
+   * The stored HTML document's build, as the server made it: the page to
+   * render and its program ids, or the author's problems.
+   */
+  getDocumentBuild(documentId: string, signal?: AbortSignal) {
+    return fetchWithToken<DocumentBuildResponse>(
+      `${agentHarnessHost}/documents/${documentId}/build`,
+      { method: 'GET', signal, errorResponseHandler: sessionError }
+    );
+  },
+
+  /**
+   * Run one program of the build a page shows, as the user, and wait for its
+   * outcome. Answers 409 when the document changed since that build.
    */
   runDocumentProgram(
     documentId: string,
-    request: RunDocumentProgramRequest,
+    request: RunDocumentProgram,
     signal?: AbortSignal
   ) {
-    return fetchWithToken<DocumentProgramReceipt>(
+    return fetchWithToken<UserExecutionReceipt, 'DOCUMENT_CHANGED'>(
       `${agentHarnessHost}/documents/${documentId}/code-executions`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
         signal,
-        errorResponseHandler: sessionError,
+        errorResponseHandler: documentProgramError,
       }
     );
   },

@@ -1,15 +1,13 @@
+import { ThrownResultError } from '@core/util/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentProgramReceipt } from '../queries/document-programs';
-import { MAX_IN_FLIGHT_RUNS, attachProgramHost } from './preview-runner';
+import type { UserExecutionReceipt } from '../queries/document-programs';
+import { attachProgramHost, MAX_IN_FLIGHT_RUNS } from './preview-runner';
 
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     span: (
       _name: string,
-      operation: (span: {
-        setAttr: () => void;
-        error: () => void;
-      }) => unknown
+      operation: (span: { setAttr: () => void; error: () => void }) => unknown
     ) => operation({ setAttr: () => {}, error: () => {} }),
   },
 }));
@@ -38,12 +36,18 @@ function fakeFrame() {
   return { frame, posted, send };
 }
 
-const succeeded = (result: unknown): DocumentProgramReceipt => ({
+/** A run that returned `value`, wrapped as the runtime reports it. */
+const succeeded = (value: unknown): UserExecutionReceipt => ({
   status: 'succeeded',
   activity: [],
   activityTruncated: false,
-  result,
+  result: { data: value },
 });
+
+const options = (
+  run: Parameters<typeof attachProgramHost>[1]['run'],
+  onStale = () => {}
+) => ({ documentId: 'doc', sourceHash: 'hash', token: 't', run, onStale });
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -58,22 +62,20 @@ describe('attachProgramHost', () => {
   it('runs the program and posts its result back', async () => {
     const { frame, posted, send } = fakeFrame();
     const run = vi.fn(async () => succeeded({ count: 2 }));
-    detachers.push(
-      attachProgramHost(frame, { documentId: 'doc', token: 't', run })
-    );
+    detachers.push(attachProgramHost(frame, options(run)));
 
     send({
       type: 'macro:run',
       token: 't',
       id: 1,
-      source: 'src',
+      program: 'tasks',
       arguments: { a: 1 },
     });
     await flush();
 
     expect(run).toHaveBeenCalledWith(
       'doc',
-      { source: 'src', arguments: { a: 1 } },
+      { sourceHash: 'hash', program: 'tasks', arguments: { a: 1 } },
       expect.any(AbortSignal)
     );
     expect(posted).toEqual([
@@ -92,18 +94,16 @@ describe('attachProgramHost', () => {
   it('turns a failed receipt into an error reply', async () => {
     const { frame, posted, send } = fakeFrame();
     const run = vi.fn(
-      async (): Promise<DocumentProgramReceipt> => ({
+      async (): Promise<UserExecutionReceipt> => ({
         status: 'failed',
         activity: [],
         activityTruncated: false,
         error: 'main must return JSON',
       })
     );
-    detachers.push(
-      attachProgramHost(frame, { documentId: 'doc', token: 't', run })
-    );
+    detachers.push(attachProgramHost(frame, options(run)));
 
-    send({ type: 'macro:run', token: 't', id: 7, source: 'src' });
+    send({ type: 'macro:run', token: 't', id: 7, program: 'tasks' });
     await flush();
 
     expect(posted[0]?.message).toEqual({
@@ -117,14 +117,12 @@ describe('attachProgramHost', () => {
   it('ignores messages without the token or from another window', async () => {
     const { frame, posted, send } = fakeFrame();
     const run = vi.fn(async () => succeeded(null));
-    detachers.push(
-      attachProgramHost(frame, { documentId: 'doc', token: 't', run })
-    );
+    detachers.push(attachProgramHost(frame, options(run)));
 
-    send({ type: 'macro:run', token: 'other', id: 1, source: 'src' });
+    send({ type: 'macro:run', token: 'other', id: 1, program: 'tasks' });
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'macro:run', token: 't', id: 1, source: 'src' },
+        data: { type: 'macro:run', token: 't', id: 1, program: 'tasks' },
         source: window,
       })
     );
@@ -139,16 +137,14 @@ describe('attachProgramHost', () => {
     let release: (() => void) | undefined;
     const run = vi.fn(
       () =>
-        new Promise<DocumentProgramReceipt>((resolve) => {
+        new Promise<UserExecutionReceipt>((resolve) => {
           release = () => resolve(succeeded(1));
         })
     );
-    detachers.push(
-      attachProgramHost(frame, { documentId: 'doc', token: 't', run })
-    );
+    detachers.push(attachProgramHost(frame, options(run)));
 
     for (let id = 1; id <= MAX_IN_FLIGHT_RUNS + 1; id += 1)
-      send({ type: 'macro:run', token: 't', id, source: 'src' });
+      send({ type: 'macro:run', token: 't', id, program: 'tasks' });
     await flush();
 
     expect(run).toHaveBeenCalledTimes(MAX_IN_FLIGHT_RUNS);
@@ -160,17 +156,30 @@ describe('attachProgramHost', () => {
     release?.();
   });
 
+  it('asks for a fresh build when the document changed', async () => {
+    const { frame, posted, send } = fakeFrame();
+    const onStale = vi.fn();
+    const run = vi.fn(async (): Promise<UserExecutionReceipt> => {
+      throw new ThrownResultError([
+        { code: 'DOCUMENT_CHANGED', message: 'This page changed.' },
+      ]);
+    });
+    detachers.push(attachProgramHost(frame, options(run, onStale)));
+
+    send({ type: 'macro:run', token: 't', id: 1, program: 'tasks' });
+    await flush();
+
+    expect(onStale).toHaveBeenCalledTimes(1);
+    expect(posted[0]?.message).toMatchObject({ type: 'macro:error', id: 1 });
+  });
+
   it('stops answering once detached', async () => {
     const { frame, posted, send } = fakeFrame();
     const run = vi.fn(async () => succeeded(1));
-    const detach = attachProgramHost(frame, {
-      documentId: 'doc',
-      token: 't',
-      run,
-    });
+    const detach = attachProgramHost(frame, options(run));
     detach();
 
-    send({ type: 'macro:run', token: 't', id: 1, source: 'src' });
+    send({ type: 'macro:run', token: 't', id: 1, program: 'tasks' });
     await flush();
 
     expect(run).not.toHaveBeenCalled();

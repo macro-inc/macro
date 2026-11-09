@@ -1,19 +1,19 @@
 /**
- * The `window.macro` helper an HTML preview frame gets, and the messages it
- * exchanges with the host. The frame never holds a credential: it sends the
- * program's source and inputs up, and the host runs them on the server as
- * the viewer and sends only the outcome back.
+ * The `window.macro` transport an HTML preview frame gets, and the messages
+ * it exchanges with the host. Pages never call it directly: the server's
+ * build compiles the client's `macro:programs` and `macro:client` imports
+ * onto it. The frame never holds a credential and never sends code: it names
+ * a program of the build it shows, and the host runs that program on the
+ * server as the viewer and sends only the outcome back.
  */
 
-/** MIME type of a program block: `<script type="text/macro" id="…">`. */
-export const PROGRAM_BLOCK_TYPE = 'text/macro';
-
-/** Frame → host: run a program. */
+/** Frame → host: run one program of the page's build. */
 export type RunRequestMessage = {
   type: 'macro:run';
   token: string;
   id: number;
-  source: string;
+  /** The program's id, as the build named it. */
+  program: string;
   arguments: Record<string, unknown>;
 };
 
@@ -99,7 +99,7 @@ export function readRunRequest(
     message.type !== 'macro:run' ||
     message.token !== token ||
     typeof message.id !== 'number' ||
-    typeof message.source !== 'string'
+    typeof message.program !== 'string'
   )
     return undefined;
   const args =
@@ -112,31 +112,27 @@ export function readRunRequest(
     type: 'macro:run',
     token,
     id: message.id,
-    source: message.source,
+    program: message.program,
     arguments: args,
   };
 }
 
 /**
  * Script injected at the head's start so it runs before the document's own
- * code. `macro.run(idOrSource, args)` runs the `text/macro` block with that
- * id, or the string itself as a module, and resolves to the value `main`
- * returned. `macro.on(events, handler, {ids})` calls `handler` with a
- * {@link FrameEvent} for each matching live event and returns `off`.
+ * code. `macro.run(program, args)` runs that program of the page's build and
+ * resolves to the value it returned. `macro.on(events, handler, {ids})` calls
+ * `handler` with a {@link FrameEvent} for each matching live event and
+ * returns `off`.
  */
 export const frameHelperScript = (token: string) =>
   `(function (host, token) {
     var next = 1;
     var pending = {};
-    function run(idOrSource, args) {
-      var block = typeof idOrSource === 'string' ? document.getElementById(idOrSource) : null;
-      var source = block && block.tagName === 'SCRIPT' && block.type === ${JSON.stringify(PROGRAM_BLOCK_TYPE)}
-        ? block.textContent
-        : String(idOrSource);
+    function run(program, args) {
       return new Promise(function (resolve, reject) {
         var id = next++;
         pending[id] = { resolve: resolve, reject: reject };
-        host.postMessage({ type: 'macro:run', token: token, id: id, source: source, arguments: args && typeof args === 'object' ? args : {} }, '*');
+        host.postMessage({ type: 'macro:run', token: token, id: id, program: String(program), arguments: args && typeof args === 'object' ? args : {} }, '*');
       });
     }
     var handlers = {};

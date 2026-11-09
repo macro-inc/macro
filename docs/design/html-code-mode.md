@@ -1,9 +1,9 @@
 # Programs in HTML previews
 
-Status: first slice on `dev/html-code-mode`. Reads run end to end. Write
-consent, a separate execution pool, and saved per-file approval are not built.
-The agent guide's "Program blocks in HTML previews" describes the slice that
-ships.
+Status: on `dev/html-code-mode`. The server builds stored HTML documents
+(no npm yet) and runs their programs by id, with live events. Consent, the
+strict CSP, a separate execution pool and publishing are not built. The agent
+guide's "Program blocks in HTML previews" describes what ships.
 
 ## Goal
 
@@ -41,9 +41,11 @@ program up and get the outcome back.
   write `{ data }`. `macro` is the SDK, already signed in. The frame never
   sees the token.
 - **Run route.** `POST /documents/{id}/code-executions` takes
-  `{ version, program, arguments }`, never source. The server checks that the
-  viewer can view that version, loads its own build of it, and runs the
-  bundle stored under that program id.
+  `{ sourceHash, program, arguments }`, never source. The server checks that
+  the viewer can view the document, reads its current source, and runs the
+  bundle stored under that program id in its build of it. A build is named by
+  the hash of its source, so no storage version field is needed; a stale
+  hash gets `409`.
 - **Consent.** From the manifest, not a dry run. The server knows each
   program's SDK operations before anything runs. Opening a file whose author
   is someone else, or whose programs write, shows one prompt per file listing
@@ -93,60 +95,59 @@ program up and get the outcome back.
 ## Flow
 
 ```
-HTML file
-  <script type="text/macro" id="tasks">…main({ macro })…</script>
-  <script>macro.run("tasks", { query }).then(render)</script>
-        │  postMessage { source, arguments }   (per-frame token)
+stored HTML document
+  <script type="text/macro" id="tasks" lang="ts">export default (args, { macro }) => …</script>
+  <script type="module" lang="ts">import { tasks } from 'macro:programs'; …</script>
+        │  GET /documents/{id}/build          (view access, flag gate)
         ▼
-HtmlPreview host
-        │  POST /documents/{id}/code-executions
+agent harness: read the stored file, check, bundle, cache by source hash
+        │  { sourceHash, html, programs }  or  { diagnostics }
         ▼
-agent harness
-  UserOnly, flag gate, ToolCaller::Document
-        │
+HtmlPreview renders the built page with window.macro
+        │  postMessage { program, arguments }   (per-frame token)
         ▼
-UserCodeMode  →  Deno, network limited to Macro hosts
+POST /documents/{id}/code-executions { sourceHash, program, arguments }
+        │  409 if the document changed since the build
+        ▼
+UserCodeMode runs the stored bundle as ToolCaller::Document
+  →  Deno, network limited to Macro hosts
         │  receipt { status, result, activity, error }
         ▼
-frame promise resolves or rejects
+the program's value reaches the page's typed call
 ```
 
 The credential stays in the harness. Completed API writes are not rolled back
 if the run is cancelled.
 
-## What the slice contains
+## What is built
 
-- `POST /documents/{document_id}/code-executions` on the agent harness
-  (`crates/agent_code_mode/src/inbound/document_router.rs`). Body: `source`,
-  `arguments`, `timeoutMs`, `dryRun`. Returns `UserExecutionReceipt`.
-- `UserCodeMode::execute` takes an optional inputs contract. Document runs use
-  it (TypeScript, `main` receives `macro` and arguments, never the token).
-  Public MCP keeps the JavaScript contract.
-- Web: `features/block-code/code-mode/` injects `window.macro` and posts
-  results back. Calls go through `queries/document-programs.ts`. Span
-  `block_code.run_document_program` carries the document id.
-- Web: `code-mode/event-host.ts` answers `macro.on` from one stream per frame
-  (`queries/document-events.ts` over `service-storage/event-stream.ts`), capped
-  at 16 subscriptions. Span `block_code.document_events.stream` covers each
-  connection and counts the events it delivered.
-- The endpoint is app-internal in the SDK coverage list. An SDK user runs code
-  directly.
+- `code_execution`: `ProgramBundler` (`deno bundle`) on the checker's confined
+  workspace; the import map resolves `macro:programs` and `macro:client`.
+- `agent_code_mode`: `document_programs/build.rs` (extract, check programs
+  alone and with the client, bundle each, assemble the page; diagnostics by
+  block), `DocumentPrograms` (source-hash cache, run by id, `Changed` on a
+  stale hash), and the two routes in `inbound/document_router.rs`, which mint
+  a view receipt in the handler.
+- `agent_harness_service`: `code_mode/document_sources.rs` reads the stored
+  file through document storage (at most 2 MiB); the build uses the routine
+  checker, runs use public MCP's executor.
+- Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
+  `run` by program id and `on`. Spans: `document_programs.build`,
+  `document_programs.run`, `block_code.run_document_program`,
+  `block_code.document_events.stream`.
+- Both routes are app-internal in the SDK coverage list.
 
 ## Left to build
 
-1. The backend build: extract, check and bundle a stored HTML file. Cache the
-   result by the source's hash, and keep the manifest of program ids, hashes
-   and operations.
-2. The run route takes `{ version, program, arguments }` and runs the stored
-   bundle. Drop `source` and `dryRun`.
-3. The web preview loads the built HTML for Drive HTML documents with a
-   strict CSP, and stops wiring programs into code-block previews.
+1. npm imports in the build, through a registry proxy.
+2. The record of SDK operations each program calls, for consent and the gate.
+3. The strict CSP on the built page.
 4. Manifest consent: the per-file prompt, the saved approval, and the
    runtime gate on manifest operations.
 5. The publish SDK method, which returns diagnostics and replaces an existing
    document in place.
 6. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-7. Show a failed run or build in the preview chrome.
+7. Show a failed run in the preview chrome (a failed build already shows).
 8. Optional: `program.live(args, render)`, which re-runs a program when an
    event touches an entity type its operations read.
