@@ -42,3 +42,9 @@ fn mail_is_bounded_and_cannot_close_its_tag() {
     let subject = value["subject"].as_str().unwrap();
     assert!(!subject.contains('<') && !subject.contains('\u{0007}'));
 }
+
+#[test]
+fn the_brief_says_what_each_surface_holds() {
+    let brief = brief(&data(&[Surface::Reviews], &[], false));
+    assert!(brief.contains("reviews (pull requests and code review only"));
+}
