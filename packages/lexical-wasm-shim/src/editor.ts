@@ -1,5 +1,5 @@
 import type { EditorThemeClasses } from 'lexical';
-import { createBackend } from './backend/factory';
+import { createBackend, prepareRegisteredNodes } from './backend/factory';
 import { dispatchCommand, registerCommand } from './command/registry';
 import type { CommandRegistry } from './command/types';
 import type {
@@ -12,12 +12,16 @@ import type {
   CommandListenerPriorityBefore,
 } from './constants';
 import { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
-import type { NodeClass } from './foreign/registry';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
 import type {
   EditorConfig,
   EditorDOMRenderConfig,
 } from './nodes/editor-config';
+import { bindReplacementRuntime } from './nodes/replacement/runtime';
+import type {
+  NodeConfigInput,
+  RegisteredNodes,
+} from './nodes/replacement/types';
 import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
 import { UpdateController, type UpdateOptions } from './update';
 
@@ -55,7 +59,7 @@ export interface CreateEditorArgs {
   readonly disableEvents?: boolean;
   readonly dom?: Partial<EditorDOMRenderConfig>;
   readonly parentEditor?: LexicalEditor | null;
-  readonly nodes?: readonly NodeClass[];
+  readonly nodes?: readonly NodeConfigInput[];
   readonly onError?: (error: unknown, editor: LexicalEditor) => void;
 }
 
@@ -108,6 +112,7 @@ export class EditorState {
 }
 
 export class LexicalEditor {
+  readonly _nodes: RegisteredNodes;
   readonly _commands: CommandRegistry = new Map();
   _updating = false;
   readonly _config: EditorConfig;
@@ -145,7 +150,18 @@ export class LexicalEditor {
       dom: { ...DEFAULT_EDITOR_DOM_CONFIG, ...config.dom },
     };
     const onError = config.onError;
-    const backend = createBackend(config, this._config);
+    const registered =
+      editorConfig === undefined
+        ? prepareRegisteredNodes({
+            configOmitted: true,
+            inheritedRegistry: activeEditor?._nodes ?? null,
+          })
+        : prepareRegisteredNodes({
+            configOmitted: false,
+            nodes: config.nodes,
+          });
+    this._nodes = registered.registeredNodes;
+    const backend = createBackend(config, this._config, registered);
     this.runtime = new NodeRuntime(backend, nativeNode);
     this.state = new EditorState(this, backend.initialVersion);
     const withUpdating = <T>(body: () => T): T => {
@@ -255,6 +271,15 @@ export class LexicalEditor {
     this.updates.dispose();
   }
 }
+
+bindReplacementRuntime({
+  getActiveEditor,
+  getRegisteredNodes: (editor) => editor._nodes,
+  errorOnReadOnly() {
+    if (isCurrentlyReadOnlyMode())
+      throw new Error('Cannot use method in read-only mode.');
+  },
+});
 
 export function updateEditorSync(
   editor: LexicalEditor,

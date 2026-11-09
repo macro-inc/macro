@@ -1,18 +1,27 @@
+import type {
+  PreparedEditorRegisteredNodes,
+  RegistryPreparation,
+} from '../configuration/registered-nodes';
 import type { CreateEditorArgs, EditorConfig } from '../editor';
 import { foreignHooks } from '../hooks.generated';
 import type { ShimBackend } from './index';
 
 export type BackendFactory = (
   config: CreateEditorArgs,
-  normalized: EditorConfig
+  normalized: EditorConfig,
+  registered: PreparedEditorRegisteredNodes
 ) => ShimBackend;
 let factory: BackendFactory | undefined;
 let hookIndex: readonly string[] | undefined;
+let prepareRegistry:
+  | ((input: RegistryPreparation) => PreparedEditorRegisteredNodes)
+  | undefined;
 
 /** Bind only after the selected engine has initialized; imports never initialize WASM. */
 export function bindBackendFactory(
   next: BackendFactory,
-  hooks: readonly string[]
+  hooks: readonly string[],
+  prepare: (input: RegistryPreparation) => PreparedEditorRegisteredNodes
 ): void {
   if (
     hooks.length !== foreignHooks.length ||
@@ -23,16 +32,27 @@ export function bindBackendFactory(
     );
   }
   factory = next;
+  prepareRegistry = prepare;
   hookIndex = Object.freeze([...hooks]);
+}
+
+/** Bind the real class registry preparer after the cold class graph is loaded. */
+export function prepareRegisteredNodes(
+  input: RegistryPreparation
+): PreparedEditorRegisteredNodes {
+  if (prepareRegistry === undefined)
+    throw new Error('Lexical engine has not been initialized');
+  return prepareRegistry(input);
 }
 
 export function createBackend(
   config: CreateEditorArgs,
-  normalized: EditorConfig
+  normalized: EditorConfig,
+  registered: PreparedEditorRegisteredNodes
 ): ShimBackend {
   if (factory === undefined)
     throw new Error('Lexical engine has not been initialized');
-  return factory(config, normalized);
+  return factory(config, normalized, registered);
 }
 
 export function foreignHookIndex(): readonly string[] {

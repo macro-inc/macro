@@ -4,7 +4,17 @@ import type {
   HostNodeMutation,
 } from '../../../lexical-conformance/diff/host-packet.generated';
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
+import { prepareEditorRegisteredNodes } from '../configuration/registered-nodes';
 import { foreignHooks } from '../hooks.generated';
+import {
+  LineBreakNode,
+  ParagraphNode,
+  RootNode,
+  TabNode,
+  TextNode,
+} from '../nodes';
+import { ArtificialNode__DO_NOT_USE } from '../nodes/artificial';
+import type { NodeClass } from '../nodes/replacement/types';
 import { bindBackendFactory } from './factory';
 import type { NodeLifetime, ShimBackend, UpdateMetadata } from './index';
 import { isHostUpdateMetadata } from './update-metadata';
@@ -63,17 +73,32 @@ export function initializeConformance(
     );
   hookNames = Object.freeze(modelHooks);
   initialized = true;
-  bindBackendFactory((config, normalized) => {
-    const nodes = config.nodes;
-    if (nodes !== undefined && nodes.length !== 0)
-      throw new Error(
-        'JS node class registration requires the production compatibility host'
-      );
-    return new ConformanceBackend({
-      namespace: normalized.namespace,
-      nodes: [],
-    });
-  }, modelHooks);
+  bindBackendFactory(
+    (_config, normalized, prepared) => {
+      const builtins = new Set<NodeClass>([
+        RootNode,
+        TextNode,
+        LineBreakNode,
+        TabNode,
+        ParagraphNode,
+        ArtificialNode__DO_NOT_USE,
+      ]);
+      if (
+        [...prepared.registeredNodes.values()].some(
+          (row) => !builtins.has(row.klass) || row.replace !== null
+        )
+      )
+        throw new Error(
+          'JS node class registration requires the production compatibility host'
+        );
+      return new ConformanceBackend({
+        namespace: normalized.namespace,
+        nodes: [],
+      });
+    },
+    modelHooks,
+    prepareEditorRegisteredNodes
+  );
 }
 
 /** The override mask uses this Rust-derived order, never a second JS hook list. */
