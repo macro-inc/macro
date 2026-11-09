@@ -8,7 +8,10 @@ use crate::domain::meetings::{
     Meeting, MeetingInvitePermissions, MeetingToken, MeetingsResponse, UpdateMeetingRequest,
 };
 use axum::RequestPartsExt;
-use axum::extract::{FromRequestParts, Path};
+use axum::body::{Body, Bytes};
+use axum::extract::{FromRequest, FromRequestParts, Path, Request};
+use axum::http::request::Parts;
+use axum::response::Response;
 use ip_extractor::ClientIp;
 use rate_limit::{
     RateLimitConfig, RateLimitKey, RateLimitService,
@@ -275,7 +278,7 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
     Path(token): Path<String>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     headers: HeaderMap,
-    request: Option<Json<JoinCallRequest>>,
+    MeetingJoinBody(request): MeetingJoinBody,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
     // Only SDK callers send options. The app and shipped native builds send no
@@ -307,6 +310,29 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
             )
             .await?,
     ))
+}
+
+/// Optional SDK settings; shipped app requests send an empty JSON body.
+pub struct MeetingJoinBody(Option<Json<JoinCallRequest>>);
+
+impl<S: Send + Sync> FromRequest<S> for MeetingJoinBody {
+    type Rejection = Response;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
+        // Read through Axum's extractor so the configured body limit still applies.
+        let (parts, body) = <(Parts, Bytes)>::from_request(request, state).await?;
+        if body.is_empty() {
+            return Ok(Self(None));
+        }
+
+        // Only an actually empty body is absent. Nonempty requests still need
+        // the JSON content type, valid JSON syntax, and valid join settings.
+        let request = Request::from_parts(parts, Body::from(body));
+        Json::<JoinCallRequest>::from_request(request, state)
+            .await
+            .map(|body| Self(Some(body)))
+            .map_err(IntoResponse::into_response)
+    }
 }
 
 /// Handle `GET /call/join/{token}` through the call domain service.
