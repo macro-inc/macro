@@ -28,6 +28,8 @@ export function RoutinesList(props: {
   /** Templates to start from, above the list; absent where none are offered. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
+  /** Scrolls with the list, below it, e.g. suggested routines. */
+  footer?: JSX.Element;
 }) {
   const [search, setSearch] = createSignal('');
   const [show, setShow] = createSignal<'all' | 'on'>('all');
@@ -242,6 +244,7 @@ export function RoutinesList(props: {
             </div>
           </Show>
         </div>
+        {props.footer}
       </div>
     </div>
   );

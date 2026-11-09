@@ -93,6 +93,18 @@
       "post": {
         "tags": ["scheduled actions"],
         "operationId": "create_scheduled_action",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "query",
+            "description": "The routine suggestion it is saved from, recorded on the routine.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -157,25 +169,125 @@
         }
       }
     },
-    "/scheduled-actions/code/starters": {
+    "/scheduled-actions/catalog": {
       "get": {
         "tags": ["scheduled actions"],
-        "operationId": "routine_code_starters",
+        "operationId": "routine_catalog",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Starter routines whose step is code; empty where code steps aren't available",
+            "description": "Macro's routines, with schedules in the given zone; code steps only where code can be saved",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/StarterRoutine"
+                    "$ref": "#/components/schemas/CatalogEntry"
                   }
                 }
               }
             }
           },
+          "400": {
+            "description": "Not a time zone",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/check": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "What saving this routine would find wrong, without saving it: the same\nchecks as creating it. A routine draft's session hands its draft back\nthis way.",
+        "operationId": "check_scheduled_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRoutineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "text/plain": {
@@ -259,6 +371,243 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_routine_suggestions",
+        "parameters": [
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Only this surface's; every surface's when absent.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per surface, the routines AI suggested for the caller, then Macro's templates; reading never generates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Hand back one routine suggestion from a routine suggestion session, the\nway a draft's session checks its routine: a catalog routine with knob\nvalues, or a drafted routine, checked as saving checks it.",
+        "operationId": "suggest_routine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was kept, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a routine suggestion session may suggest",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/generate": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "generate_routine_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/{id}/dismiss": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "dismiss_routine_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion, AI's or a template's",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Never suggested again, on any surface"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1345,6 +1694,140 @@
           }
         }
       },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "One of Macro's routines, ready to start a new routine from.",
+        "required": [
+          "key",
+          "surfaces",
+          "title",
+          "description",
+          "request",
+          "action",
+          "trigger",
+          "namedKnobs",
+          "instructions",
+          "affectsOthers",
+          "safeDefault",
+          "template",
+          "suggest"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What it does, in a few words, for the line beside its trigger."
+          },
+          "affectsOthers": {
+            "type": "boolean",
+            "description": "It changes or sends what other people see."
+          },
+          "code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineStep",
+                "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+              }
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "What it does, in a short line."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The Ask AI step's instructions: its only step without code, and the\nstep to use where code can't be saved."
+          },
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "namedKnobs": {
+            "type": "object",
+            "description": "The code step's text knobs whose value names one of the owner's\nitems (a tag, channel or label), by knob name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NamedItemKind"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "safeDefault": {
+            "type": "boolean",
+            "description": "It may be switched on before its owner changes anything."
+          },
+          "suggest": {
+            "type": "boolean",
+            "description": "Offered unpicked as a suggestion from Macro."
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Surface"
+            },
+            "description": "Where it is offered, first the part of the app it belongs to most."
+          },
+          "template": {
+            "type": "boolean",
+            "description": "Offered among the templates when someone creates a routine."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its name once saved."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When it runs; schedules are in the zone the catalog was asked for."
+          }
+        }
+      },
+      "CheckRoutineRequest": {
+        "type": "object",
+        "description": "A routine to check, as the create body takes it.",
+        "required": ["routine"],
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedItem"
+            },
+            "description": "What a routine draft's session created for the routine to use, such as\nthe database it writes to; kept with its draft for the person to see."
+          },
+          "routine": {
+            "$ref": "#/components/schemas/ActionConfiguration"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CheckedStepProblems": {
+        "type": "object",
+        "description": "A code step that doesn't type-check.",
+        "required": ["index", "title", "problems"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Its place among the routine's steps, from zero.",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the type checker reports, first problems first."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title."
+          }
+        }
+      },
       "CodeIdentity": {
         "type": "string",
         "description": "Who a routine's code steps write as.",
@@ -1480,6 +1963,52 @@
         ],
         "description": "Why an event-triggered run was skipped before it started."
       },
+      "CreatedItem": {
+        "type": "object",
+        "description": "Something a routine draft's session created for the routine to use, such\nas the database it writes to: it exists whether or not the routine is\nsaved.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "Its id."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "crm_pipeline",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative",
+                  "database",
+                  "database_row",
+                  "form",
+                  "external_chat"
+                ]
+              }
+            ],
+            "description": "What kind of item."
+          }
+        }
+      },
       "Draft": {
         "oneOf": [
           {
@@ -1522,9 +2051,15 @@
           },
           {
             "type": "object",
-            "description": "Why there's no draft, for the person.",
+            "description": "Why there's no draft, for the person, and anything AI created before\nit gave up.",
             "required": ["message", "outcome"],
             "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DraftCreated"
+                }
+              },
               "message": {
                 "type": "string"
               },
@@ -1539,7 +2074,7 @@
       },
       "DraftContext": {
         "type": "object",
-        "description": "What the drafter may write, and the person's workspace by name and id.",
+        "description": "What the drafter may write. It looks up the items the person's words\nname itself, with their access.",
         "required": ["timezone", "agentModel"],
         "properties": {
           "agentModel": {
@@ -1557,12 +2092,59 @@
           "timezone": {
             "type": "string",
             "description": "IANA time zone schedules are written in, e.g. `America/New_York`."
-          },
-          "workspace": {
-            "$ref": "#/components/schemas/Workspace"
           }
         },
         "additionalProperties": false
+      },
+      "DraftCreated": {
+        "type": "object",
+        "description": "Something a draft's session created. It exists whether or not the draft\nis saved.",
+        "required": ["entityType", "entityId", "used"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "Its id."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "crm_pipeline",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative",
+                  "database",
+                  "database_row",
+                  "form",
+                  "external_chat"
+                ]
+              }
+            ],
+            "description": "What kind of item."
+          },
+          "used": {
+            "type": "boolean",
+            "description": "Whether the drafted routine uses it. One it doesn't use was made for\nnothing, or is the routine's own work done early."
+          }
+        }
       },
       "DraftRequest": {
         "oneOf": [
@@ -1648,8 +2230,15 @@
       "DraftedRoutine": {
         "type": "object",
         "description": "A drafted routine.",
-        "required": ["name", "steps", "problems"],
+        "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftCreated"
+            },
+            "description": "What AI created while drafting, such as the database the routine\nwrites to. These exist whether or not the routine is saved."
+          },
           "name": {
             "type": "string"
           },
@@ -1683,8 +2272,15 @@
       "DraftedStep": {
         "type": "object",
         "description": "A drafted step.",
-        "required": ["step", "reason", "problems"],
+        "required": ["step", "reason", "problems", "created"],
         "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftCreated"
+            },
+            "description": "What AI created while drafting the step. These exist whether or not\nthe step is saved."
+          },
           "problems": {
             "type": "array",
             "items": {
@@ -1865,6 +2461,11 @@
           }
         }
       },
+      "GenerationStatus": {
+        "type": "string",
+        "description": "Where a person's suggestions are in being generated.",
+        "enum": ["none", "generating", "ready", "failed"]
+      },
       "GithubSelector": {
         "type": "object",
         "description": "Which GitHub deliveries match.",
@@ -1925,19 +2526,10 @@
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
       },
-      "NamedItem": {
-        "type": "object",
-        "description": "An item and its name.",
-        "required": ["name", "id"],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
+      "NamedItemKind": {
+        "type": "string",
+        "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
+        "enum": ["tag", "channel", "label"]
       },
       "PayloadCondition": {
         "type": "object",
@@ -2024,6 +2616,35 @@
           }
         },
         "additionalProperties": false
+      },
+      "RoutineCheck": {
+        "type": "object",
+        "description": "What saving a routine would find wrong, without saving it: the answer to\n`POST /scheduled-actions/check`.",
+        "required": ["ok", "problems", "steps", "routine"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Whether saving it would succeed: no problems and no failing steps."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why saving it would fail, other than its code, for its author."
+          },
+          "routine": {
+            "$ref": "#/components/schemas/ActionConfiguration",
+            "description": "The routine as saving would store it: code steps named and the SDK\ntheir code checks against stamped."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckedStepProblems"
+            },
+            "description": "Code steps that don't type-check against Macro's SDK."
+          }
+        }
       },
       "RoutineKnob": {
         "oneOf": [
@@ -2265,6 +2886,66 @@
           }
         ],
         "description": "One step of a routine."
+      },
+      "RoutineSuggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestedPick"
+          },
+          {
+            "type": "object",
+            "required": ["id", "from", "surfaces", "onByDefault"],
+            "properties": {
+              "from": {
+                "$ref": "#/components/schemas/SuggestionFrom",
+                "description": "Who suggests it: AI, for this person, or Macro, as a template."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Saving a routine from it passes this as `suggestion_id`; dismissing\nit uses it too."
+              },
+              "keepProbability": {
+                "type": ["number", "null"],
+                "format": "float",
+                "description": "AI's estimate, from 0 to 1, that the person keeps it on; absent on\nMacro's templates."
+              },
+              "onByDefault": {
+                "type": "boolean",
+                "description": "Onboarding shows it switched on: one of at most two catalog\nroutines AI picked that are safe by default and likely kept. Never a\ndrafted routine or a template."
+              },
+              "reason": {
+                "type": ["string", "null"],
+                "description": "Why it fits this person, in a line; absent on Macro's templates."
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                },
+                "description": "The sidebars it shows in, first the one it belongs to most.\nDismissing it in one dismisses it everywhere."
+              }
+            }
+          }
+        ],
+        "description": "A routine offered to one person: one AI suggested for them, or one of\nMacro's catalog routines filling a surface."
+      },
+      "RoutineSuggestions": {
+        "type": "object",
+        "description": "A person's suggestions, and whether more are on the way.",
+        "required": ["status", "suggestions"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/GenerationStatus"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSuggestion"
+            },
+            "description": "Per surface, AI's first, best first, then Macro's templates, so each\nsurface has at least one and ideally three. A suggestion with\nseveral surfaces appears once."
+          }
+        }
       },
       "RoutineTask": {
         "oneOf": [
@@ -2560,6 +3241,11 @@
             "$ref": "#/components/schemas/RunVisibility",
             "description": "Whether the action's runs are listed in Home and the Agents list."
           },
+          "suggestion_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The routine suggestion it was saved from, if any: a plain pointer\nthat stays after the suggestion is replaced."
+          },
           "task": {
             "$ref": "#/components/schemas/RoutineTask"
           },
@@ -2710,28 +3396,6 @@
         },
         "additionalProperties": false
       },
-      "StarterRoutine": {
-        "type": "object",
-        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
-        "required": ["key", "request", "steps"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Names it, e.g. `inbox`."
-          },
-          "request": {
-            "type": "string",
-            "description": "What someone asks for, with when it runs."
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RoutineStep"
-            },
-            "description": "Its steps, in the shape a routine's task holds them."
-          }
-        }
-      },
       "StepId": {
         "type": "string",
         "description": "Names a step's output: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores."
@@ -2758,6 +3422,179 @@
             }
           }
         }
+      },
+      "SuggestOutcome": {
+        "type": "object",
+        "description": "What became of a suggestion handed back.",
+        "required": ["ok", "problems"],
+        "properties": {
+          "check": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineCheck",
+                "description": "A drafted routine's check, as `macro.routines.check` returns it."
+              }
+            ]
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The kept suggestion's id."
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it was kept."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why it wasn't, to fix and suggest again."
+          }
+        }
+      },
+      "SuggestRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog routine, with knob values.",
+            "required": [
+              "key",
+              "reason",
+              "surfaces",
+              "keepProbability",
+              "kind"
+            ],
+            "properties": {
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["catalog"]
+              },
+              "knobs": {
+                "type": "object"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine the catalog lacks, checked as saving checks it.",
+            "required": [
+              "routine",
+              "reason",
+              "surfaces",
+              "keepProbability",
+              "kind"
+            ],
+            "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CreatedItem"
+                },
+                "description": "What the session created for it, as `macro.routines.check` takes."
+              },
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "routine": {
+                "$ref": "#/components/schemas/ActionConfiguration"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          }
+        ],
+        "description": "What a suggestion session hands back through `macro.routines.suggest`."
+      },
+      "SuggestedPick": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog routine (`GET /scheduled-actions/catalog`), with the knob\nvalues AI filled in. Its trigger and steps come from the catalog.",
+            "required": ["key", "knobs", "kind"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The catalog routine, e.g. `inbox`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["catalog"]
+              },
+              "knobs": {
+                "type": "object",
+                "description": "Knob values by knob name; knobs left out keep the catalog's."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine AI drafted that passed saving's checks, as it would be\nsaved (switched off), for the person to review first.",
+            "required": ["routine", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routine": {
+                "$ref": "#/components/schemas/ActionConfiguration"
+              }
+            }
+          }
+        ],
+        "description": "What is suggested: a catalog routine with its knobs, or a routine AI\ndrafted and checked."
+      },
+      "SuggestionFrom": {
+        "type": "string",
+        "description": "Who suggests a routine.",
+        "enum": ["for_you", "macro"]
+      },
+      "Surface": {
+        "type": "string",
+        "description": "The part of the app a routine is about, where it is offered.",
+        "enum": [
+          "email",
+          "calendar",
+          "tasks",
+          "files",
+          "crm",
+          "chat",
+          "calls",
+          "reviews",
+          "agents"
+        ]
       },
       "TemplateVariable": {
         "oneOf": [
@@ -2834,84 +3671,6 @@
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
         "enum": ["activator", "shared", "choice"]
-      },
-      "Workspace": {
-        "type": "object",
-        "description": "The items AI may name in a draft. They are data for the model; saving\nchecks every id the draft uses.",
-        "properties": {
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkspaceAgent"
-            },
-            "description": "Agents a step may hand the run to."
-          },
-          "channels": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            }
-          },
-          "folders": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            },
-            "description": "Projects."
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Email label names."
-          },
-          "people": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            }
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkspaceTag"
-            },
-            "description": "Tag options, by the property definition they belong to."
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkspaceAgent": {
-        "type": "object",
-        "description": "An agent and its bot id.",
-        "required": ["name", "botId"],
-        "properties": {
-          "botId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkspaceTag": {
-        "type": "object",
-        "description": "A tag: one option of a property.",
-        "required": ["label", "definitionId", "optionId"],
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "optionId": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
       }
     }
   },

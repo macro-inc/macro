@@ -1139,6 +1139,13 @@ fn test_state(
             Arc::new(ai_usage::NoOpUsageRecorder),
         )),
         #[cfg(feature = "ai_tools")]
+        editing_worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                "http://localhost/unused-editing-worker".to_string(),
+            ),
+        ),
+        #[cfg(feature = "ai_tools")]
+        messages: Arc::new(messages::domain::api::MockMessageServiceApi::new()),
         spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             document_service.clone(),
             Arc::new(
@@ -2266,5 +2273,18 @@ async fn canvas_ai_edit_refuses_when_the_editor_applied_nothing_and_asked_back()
     assert_eq!(
         requests.lock().unwrap()[0]["request"],
         json!({ "action": "edit", "instructions": "Line the boxes up." })
+    );
+}
+
+#[tokio::test]
+async fn missing_email_attachment_is_a_coded_not_found() {
+    let response =
+        axum::response::IntoResponse::into_response(DocumentError::EmailAttachmentNotFound);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body["code"],
+        model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
     );
 }

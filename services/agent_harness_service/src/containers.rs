@@ -130,9 +130,15 @@ where
                 .session_bot(row.bot_id)
                 .await
                 .map_err(HarnessError::Session)?;
+            let billing = self
+                .sessions
+                .session_billing(session)
+                .await
+                .map_err(HarnessError::Session)?;
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
+                billing,
                 // A thread's reply is one message, rewritten only as each
                 // passage finishes; an opening line lands with what follows it.
                 delivery: if row.thread_id.is_some() {

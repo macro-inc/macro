@@ -196,6 +196,54 @@ fn push_source_scope(
     }
 }
 
+/// True when the candidates are exactly the returned rows: one per-link
+/// index walk that stops at the page LIMIT. Each thread's preview message
+/// is then picked while the thread is scanned, and that pick both filters
+/// the candidate and supplies its preview, replacing the candidate EXISTS
+/// and a second pick after the LIMIT. With several links, or branches that
+/// sort their whole candidate set (team, shared, project, folders, or a
+/// view-history sort), most
+/// candidates are discarded, and fetching their previews costs more than
+/// the second pick saves.
+fn picks_preview_in_candidates(view: &PreviewView, params: &QueryParams) -> bool {
+    wants_message_exists_pushdown(view)
+        && !super::folders::is_folder(view)
+        && matches!(params.shared, SharedEmailFilter::Exclude)
+        && params.project_scope.is_none()
+        && params.team_id.is_none()
+        && params.link_ids.len() == 1
+        && !sort_uses_view_history(&params.sort_method_str)
+}
+
+/// Pushes the latest message of `t` that the view and filter accept, as
+/// the `subject, snippet, from_contact_id, from_name, is_draft` preview.
+fn push_preview_message_select(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+) {
+    builder.push(
+        r#"
+            SELECT
+                   m.subject,
+                   m.snippet,
+                   m.from_contact_id,
+                   m.from_name,
+                   m.is_draft
+            FROM email_messages m
+            WHERE m.thread_id = t.id
+              AND "#,
+    );
+    build_preview_message_predicate(email_filter, view, &params.resolved)
+        .push_into(builder, &params.user_id);
+    builder.push(
+        r#"
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
+            LIMIT 1"#,
+    );
+}
+
 fn push_thread_candidate_select(
     builder: &mut QueryBuilder<'static, Postgres>,
     view: &PreviewView,
@@ -204,6 +252,7 @@ fn push_thread_candidate_select(
     sort_ts_field: &str,
     source: ThreadCandidateSource,
 ) {
+    let pick_preview = picks_preview_in_candidates(view, params);
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
     // All Mail displays the latest eligible message date, even when a newer
     // junk/trash message or a read-state write updates the thread metadata.
@@ -284,6 +333,17 @@ fn push_thread_candidate_select(
         ));
     }
 
+    if pick_preview {
+        builder.push(
+            r#",
+                    lmp.subject,
+                    lmp.snippet,
+                    lmp.from_contact_id,
+                    lmp.from_name,
+                    lmp.is_draft"#,
+        );
+    }
+
     // Team-scoped queries return one thread copy per team member on the
     // same conversation. Dedupe on the root message's RFC-822 Message-ID
     // (email_messages.global_id) — stable across mailboxes, unlike
@@ -321,6 +381,11 @@ fn push_thread_candidate_select(
             " LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id ",
         );
     }
+    if pick_preview {
+        builder.push(" CROSS JOIN LATERAL (");
+        push_preview_message_select(builder, view, email_filter, params);
+        builder.push(") AS lmp ");
+    }
     builder.push(" WHERE ");
 
     push_source_scope(builder, params, source, per_link_fanout);
@@ -348,8 +413,9 @@ fn push_thread_candidate_select(
     // is in play mirror the full lateral predicate as a correlated EXISTS;
     // otherwise push address-only constraints through the index-driven
     // `matching_threads` CTE referenced via
-    // `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if wants_message_exists_pushdown(view) {
+    // `t.id IN (SELECT thread_id FROM matching_threads)`. A preview picked
+    // in the candidate stage already is that message match.
+    if wants_message_exists_pushdown(view) && !pick_preview {
         build_thread_message_exists_filter(email_filter, view, &params.resolved)
             .push_into(builder, &params.user_id);
     }
@@ -451,7 +517,6 @@ fn build_query(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
     );
     let sort_ts_field = get_sort_timestamp_field(view);
-    let view_message_filter = build_view_message_filter(view);
     // When neither ordering nor filtering needs view history, the
     // `email_user_history` join is pushed past the candidate `LIMIT` so it
     // runs once per returned row instead of once per candidate thread.
@@ -677,43 +742,35 @@ fn build_query(
     builder.push_bind(params.query_limit);
 
     builder.push(") AS t");
-    if super::folders::is_folder(view) {
-        // Preserve the folder sort date inside mixed thread/message predicates
-        // in the preview LATERAL, after the candidate relation has been limited.
-        builder
-            .push(" CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ");
-    }
-    builder.push(
-        r#"
-        -- Step 2: For each thread, find its latest message matching the filter
+    if picks_preview_in_candidates(view, &params) {
+        builder.push(
+            r#"
+        -- Step 2: the preview message was picked with the candidate
         CROSS JOIN LATERAL (
-            SELECT
-                   m.subject,
-                   m.snippet,
-                   m.from_contact_id,
-                   m.from_name,
-                   m.is_draft
-            FROM email_messages m
-            WHERE m.thread_id = t.id
-              AND "#,
-    );
-    build_visible_message_check(&params.resolved).push_into(&mut builder, &params.user_id);
-
-    // Add view-specific message filters
-    if !view_message_filter.is_empty() {
-        view_message_filter.push_into(&mut builder, &params.user_id);
+            SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft
+        ) AS lmp"#,
+        );
+    } else {
+        if super::folders::is_folder(view) {
+            // Preserve the folder sort date inside mixed thread/message predicates
+            // in the preview LATERAL, after the candidate relation has been limited.
+            builder.push(
+                " CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ",
+            );
+        }
+        builder.push(
+            r#"
+        -- Step 2: For each thread, find its latest message matching the filter
+        CROSS JOIN LATERAL ("#,
+        );
+        push_preview_message_select(&mut builder, view, email_filter, &params);
+        builder.push(
+            r#"
+        ) AS lmp"#,
+        );
     }
-
-    if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
-            .push_into(&mut builder, &params.user_id);
-    }
-
     builder.push(
         r#"
-            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
-            LIMIT 1
-        ) AS lmp
         -- Step 3: Join to get the sender's details
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID

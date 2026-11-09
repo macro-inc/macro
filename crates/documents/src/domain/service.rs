@@ -708,6 +708,65 @@ impl<
         });
     }
 
+    async fn import_email_attachment_unlogged(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
+        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        // Imports reuse documents by attachment and content, so their ids are
+        // always server-chosen and never meet an existing session.
+        if args.document.id.is_some() {
+            return Err(DocumentError::BadRequest(
+                "email attachment imports cannot choose a document id".to_string(),
+            ));
+        }
+
+        let file_type = args.document.file_type;
+        let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
+        let sha = args.document.sha.clone();
+        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
+
+        let owner_team = self
+            .repo
+            .get_owner_team(&Owner::User(args.owner.clone()))
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
+
+        match self
+            .repo
+            .import_email_attachment_document(args, share_permission)
+            .await?
+        {
+            EmailImportRepoOutcome::Created(document_metadata) => {
+                self.finish_created_document(
+                    document_metadata,
+                    file_type,
+                    project_id,
+                    dates,
+                    sha,
+                    attribution,
+                    None,
+                )
+                .await
+            }
+            EmailImportRepoOutcome::Reused(document_metadata) => {
+                self.reused_email_import_response(document_metadata, file_type, &sha)
+                    .await
+            }
+        }
+    }
+
     async fn reused_email_import_response(
         &self,
         document_metadata: DocumentMetadata,
@@ -1648,64 +1707,19 @@ impl<
         .await
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(skip(self, args))]
     async fn import_email_attachment(
         &self,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
-        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
-            return Err(DocumentError::NameTooLong {
-                max: MAX_DOCUMENT_NAME_GRAPHEMES,
-            });
-        }
-
-        // Imports reuse documents by attachment and content, so their ids are
-        // always server-chosen and never meet an existing session.
-        if args.document.id.is_some() {
-            return Err(DocumentError::BadRequest(
-                "email attachment imports cannot choose a document id".to_string(),
-            ));
-        }
-
-        let file_type = args.document.file_type;
-        let project_id = args.document.project_id;
-        let dates = DocumentDates::of(&args.document);
-        let sha = args.document.sha.clone();
-        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
-
-        let owner_team = self
-            .repo
-            .get_owner_team(&Owner::User(args.owner.clone()))
+        // A deleted attachment is an expected outcome, not a failure.
+        self.import_email_attachment_unlogged(args)
             .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
-        let share_permission = SharePermissionV2::new_document_share_permission(
-            file_type,
-            owner_team.map(|team| team.default_link_share),
-        );
-
-        match self
-            .repo
-            .import_email_attachment_document(args, share_permission)
-            .await?
-        {
-            EmailImportRepoOutcome::Created(document_metadata) => {
-                self.finish_created_document(
-                    document_metadata,
-                    file_type,
-                    project_id,
-                    dates,
-                    sha,
-                    attribution,
-                    None,
-                )
-                .await
-            }
-            EmailImportRepoOutcome::Reused(document_metadata) => {
-                self.reused_email_import_response(document_metadata, file_type, &sha)
-                    .await
-            }
-        }
+            .inspect_err(|error| {
+                if !matches!(error, DocumentError::EmailAttachmentNotFound) {
+                    tracing::error!(error = ?error, "email attachment import failed");
+                }
+            })
     }
 
     #[tracing::instrument(err, skip(self, document_context, args))]
