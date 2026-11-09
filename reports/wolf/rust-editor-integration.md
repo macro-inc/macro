@@ -68,7 +68,7 @@ Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix
 The deterministic generator compiles one ordered combined schema and compares
 private temporary outputs. Own first/repeat/reversed-file-creation checks pass;
 a deliberately stale TS output is rejected without rewriting it. Output bytes
-and mtimes remain unchanged in all check cases. The new exact source hash is
+and mtimes remain unchanged in all check cases. At the Table checkpoint, the exact source hash was
 `6fa1a5da990a2c205e8f3469ae21405fc223b24692d364389c45fe309048db09`.
 Generated Rust SHA is
 `eaed6cc88e5426aa8f1c442dbdb935f5c0f9040fa76762bf2daef0a4f62c0016`,
@@ -101,6 +101,23 @@ directory: `compat-table-schema-reproduction.json`,
 `compat-table-oracle-results/{vitest,provenance}.json`,
 `compat-table-oracle-config-integrity.json`, and
 `compat-table-codec-native-blocked.log`.
+
+
+Latest schema-only checkpoint `7a101d5de7` is integrated as `4f222d8ed4`.
+`CompatInstanceBind` carries an exact record plus instance-owner, class and
+instance IDs. Its current source fingerprint is
+`8feac1f170dc0613b15934c07fa4f001add1fb0f07f3facd5b36b8b9cf7acddf`;
+generated Rust SHA is
+`2b407548a30d84b93bd22cd091b179d0dd0b5001fd2e815b9e3d475649ff4be1`,
+TS SHA is `490c70ade13915594218769f73ec1bc0999c5622d9233d54be1d0e9d7e660d48`.
+Own repeated/reversed-creation/nonwriting-failure checks, all 23 WASM tests,
+full shim TypeScript/hook checks and scoped `just check` pass. Audit found no
+defect in the additive schema. Nonzero ID/owner checks and exact native
+hydration are responsibilities of the forthcoming native consumer; a schema
+alone does not implement them. No live glue/artifact or app switch changed.
+Evidence: `compat-instance-schema-{reproduction.json,reproduction.log,wasm-tests.log,shim-check.log,root-check.log}`.
+The compatibility owner separately reports 163 optimized conformance tests
+across 31 files; that is not production Rust Tier B or initializer acceptance.
 
 
 A frozen flag-OFF build with real timing marks is served at local port 39870,
