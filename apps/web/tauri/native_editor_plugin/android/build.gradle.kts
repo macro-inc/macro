@@ -28,6 +28,9 @@ android {
         unitTests.all {
             it.systemProperty("jna.library.path", file("../../../../../target/${rustHost.get()}/debug").absolutePath)
             it.systemProperty("jna.tmpdir", "/home/wolf/tmp")
+            it.systemProperty("native.editor.probe.classpath", layout.buildDirectory.dir(
+                "intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes"
+            ).get().asFile.absolutePath)
         }
     }
     sourceSets["test"].java.srcDir("src/sharedTest/java")
