@@ -77,6 +77,7 @@ test('immutable records advance through the same Diff applier on local acknowled
   expect(mirror.node(2)?.parent).toBe(1);
   expect(diff.mutations.get(2)?.kind).toBe('updated');
   expect(diff.children.size).toBe(0);
+  expect(mirror.textLength).toBe(3);
 });
 test('authoritative text correction replaces the submitted value', () => {
   const mirror = initialized();
@@ -85,6 +86,7 @@ test('authoritative text correction replaces the submitted value', () => {
     new TextEncoder().encode('normalized')
   );
   expect(mirror.node(2)?.text).toBe('normalized');
+  expect(mirror.textLength).toBe(10);
 });
 test('generation and string bounds are strict', () => {
   const mirror = initialized();
@@ -97,6 +99,7 @@ test('generation and string bounds are strict', () => {
       new Uint8Array()
     )
   ).toThrow('string range');
+  expect(mirror.textLength).toBe(1);
 });
 test('subtree removal destroys every descendant record', () => {
   const mirror = initialized();
@@ -107,6 +110,7 @@ test('subtree removal destroys every descendant record', () => {
   expect(mirror.node(1)).toBeNull();
   expect(mirror.node(2)).toBeNull();
   expect(diff.mutations.get(2)?.kind).toBe('destroyed');
+  expect(mirror.textLength).toBe(0);
 });
 
 test('malformed graph updates roll back changed records without copying clean subtrees', () => {

@@ -2,8 +2,9 @@ import {
   EditorInputMsg,
   type IClipboardEntryMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
-import { Telemetry } from '@macro-inc/observability';
+import type { Span } from '@macro-inc/observability';
 import type { EditorView } from './editor-view';
+import { startEditorPerformance } from './performance';
 import type { EditorPort } from './port';
 import { readSelection, sameSelection } from './selection';
 import { selectionMessage } from './session-port';
@@ -61,48 +62,70 @@ export class ClipboardAccess {
     selection: ViewSelection = readSelection(this.view)
   ): Promise<boolean> {
     const view = this.view;
+    const measurement = startEditorPerformance(view, 'editor.paste');
+    const span = measurement.span;
     const facts: ClipboardFacts[] = [];
     let released = false;
+    let outcome = 'cancelled';
+    let inputPhase: Span | undefined;
     const release = () => {
       if (released) return;
       released = true;
       this.pending.delete(release);
-      for (const fact of facts) fact.release();
+      try {
+        for (const fact of facts) fact.release();
+      } finally {
+        inputPhase?.end();
+        measurement.finish(outcome);
+      }
     };
     this.pending.add(release);
-    try {
-      for (const provider of this.providers) facts.push(provider(clipboard));
-    } catch (error) {
-      release();
-      throw error;
-    }
-    const revision = view.revision,
-      originalSelection = readSelection(view);
-    const html = clipboard.getData('text/html');
-    const lexical = clipboard.getData('application/x-lexical-editor');
-    const entries = [...clipboard.types].map((mime) => ({
-      mime,
-      value: clipboard.getData(mime),
-    }));
-    entries.push(...facts.flatMap((fact) => fact.entries));
-    const hasFiles = clipboard.files.length > 0;
-    const span =
-      view.options.parentSpan?.span('editor.paste') ??
-      Telemetry.span('editor.paste');
     let admitted = false;
     try {
+      const read = span.span('editor.paste.clipboard_read');
+      let html: string;
+      let lexical: string;
+      let entries: IClipboardEntryMsg[];
+      let revision: number;
+      let originalSelection: ViewSelection;
+      try {
+        for (const provider of this.providers) facts.push(provider(clipboard));
+        revision = view.revision;
+        originalSelection = readSelection(view);
+        html = clipboard.getData('text/html');
+        lexical = clipboard.getData('application/x-lexical-editor');
+        entries = [...clipboard.types].map((mime) => ({
+          mime,
+          value: clipboard.getData(mime),
+        }));
+        entries.push(...facts.flatMap((fact) => fact.entries));
+        span.setAttr('editor.paste.html_code_units', html.length);
+        span.setAttr('editor.paste.lexical_code_units', lexical.length);
+        span.setAttr(
+          'editor.paste.clipboard_code_units',
+          entries.reduce((sum, entry) => sum + entry.value.length, 0)
+        );
+      } finally {
+        read.end();
+      }
+      const hasFiles = clipboard.files.length > 0;
       let htmlNodes: string[] = [];
       if (html && !matchesLexicalNamespace(lexical, view.options.namespace)) {
-        const phase = span.span('html_import');
-        phase.setAttr('bytes', new TextEncoder().encode(html).byteLength);
+        const load = span.span('editor.paste.import_module');
+        let importer: typeof import('./html-import');
         try {
-          const importer = await import('./html-import');
+          importer = await import('./html-import');
+        } finally {
+          load.end();
+        }
+        const phase = span.span('editor.paste.html_import');
+        try {
           htmlNodes = importer.importHTML(
             html,
             view.root.ownerDocument,
             view.registry
           );
-          phase.setAttr('nodes', htmlNodes.length);
+          phase.setAttr('editor.paste.imported_node_count', htmlNodes.length);
         } finally {
           phase.end();
         }
@@ -114,7 +137,8 @@ export class ClipboardAccess {
         !sameSelection(originalSelection, readSelection(view))
       )
         return false;
-      const phase = span.span('session.input');
+      const phase = span.span('editor.paste.session_input');
+      inputPhase = phase;
       try {
         phase.run(() =>
           this.port.input(
@@ -124,20 +148,24 @@ export class ClipboardAccess {
               hasFiles,
               htmlNodes,
             }),
-            release
+            (handled) => {
+              outcome = handled ? 'success' : 'unhandled';
+              release();
+            }
           )
         );
       } finally {
         phase.end();
       }
+      if (!released) inputPhase = span.span('editor.paste.completion_wait');
       admitted = true;
       return true;
     } catch (error) {
+      outcome = 'error';
       span.error('paste failed');
       throw error;
     } finally {
       if (!admitted) release();
-      span.end();
     }
   }
 }

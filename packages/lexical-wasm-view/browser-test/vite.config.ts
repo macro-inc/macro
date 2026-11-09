@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 export default defineConfig({
   plugins: [solid()],
+  cacheDir: process.env.LEXICAL_WASM_VIEW_TEST_CACHE_DIR,
   resolve: {
     alias: {
       '@core': fileURLToPath(
@@ -10,7 +11,10 @@ export default defineConfig({
       ),
     },
   },
-  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  optimizeDeps: {
+    include: ['@solid-primitives/scheduled'],
+    esbuildOptions: { target: 'esnext' },
+  },
   server: {
     host: '127.0.0.1',
     port: Number(process.env.LEXICAL_WASM_VIEW_TEST_PORT ?? 3076),

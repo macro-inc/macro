@@ -1287,7 +1287,7 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   (the universal-input browser suite checks the exported traces).
 - Cancel the form-submit measurement on teardown but let its in-flight save
   finish; late completion must not scroll or measure another view.
-- Runtime resource samples and typing bursts use the `perf` class decision
+- Runtime resource samples, editor performance and typing bursts use the `perf` class decision
   (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
   second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
   static `data-input-surface` categories on editor/field owners, never caller

@@ -1,3 +1,4 @@
+import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
 import { theme } from '@core/component/LexicalMarkdown/theme';
@@ -53,6 +54,7 @@ export default function RustMarkdownEditor(props: {
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
   let releaseEmpty: (() => void) | undefined;
+  let releaseScrollTelemetry: (() => void) | undefined;
   let lastError: Error | undefined;
   const showError = (value: unknown) => {
     const failure =
@@ -70,6 +72,7 @@ export default function RustMarkdownEditor(props: {
     rejectReady?.(new Error('Editor open cancelled'));
     releaseCommit?.();
     releaseEmpty?.();
+    releaseScrollTelemetry?.();
     props.onRuntime?.(undefined);
     const current = runtime();
     if (current) fireAndForget(current.close(), 'rust-editor.close');
@@ -134,6 +137,10 @@ export default function RustMarkdownEditor(props: {
               return;
             }
             setRuntime(mounted);
+            releaseScrollTelemetry = startEditorScrollTelemetry(
+              mounted.view,
+              documentId()
+            );
             const reportEmpty = () => {
               const empty = mounted.view.isEmpty();
               if (empty === null) return;

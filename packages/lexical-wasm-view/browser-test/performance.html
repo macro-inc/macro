@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Editor performance telemetry fixture</title></head>
+  <body>
+    <div id="scroller" style="height: 320px; width: 600px; overflow: auto">
+      <div id="editor" style="padding: 12px"></div>
+    </div>
+    <script>window.editorPerformanceReady = new Promise(resolve => { window.resolveEditorPerformanceReady = resolve; });</script>
+    <script type="module" src="./performance-fixture.ts"></script>
+  </body>
+</html>
