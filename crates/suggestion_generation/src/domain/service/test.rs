@@ -244,13 +244,16 @@ impl IdeaApi for FakeIdeas {
     }
 }
 
+/// A generation: its id, trigger, and whether it finished as ready.
+type StoredGeneration = (Uuid, GenerationTrigger, Option<bool>);
+/// A session: its kind, surfaces, and whether its row is open.
+type StoredSession = (SessionKind, Vec<String>, bool);
+
 /// Generations and sessions in memory.
 #[derive(Default)]
 struct FakeRepo {
-    /// (generation, trigger, finished as ready)
-    generations: Mutex<Vec<(Uuid, GenerationTrigger, Option<bool>)>>,
-    /// session → (kind, surfaces, open)
-    sessions: Mutex<HashMap<Uuid, (SessionKind, Vec<String>, bool)>>,
+    generations: Mutex<Vec<StoredGeneration>>,
+    sessions: Mutex<HashMap<Uuid, StoredSession>>,
     seen: Mutex<Vec<String>>,
     due: Mutex<Vec<AudienceMember>>,
 }
