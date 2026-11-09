@@ -2,6 +2,38 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Sparse native publication `e248a380bf` is integrated as `86382d8abb`, after cold
+audit schema `b57818fbaf` (equivalent producer `6f9798e030`) as `781a0e46fd`.
+Current schema fingerprint is
+`24c38b2078bf718c3812f5e0c4d25ee9bbb288845648c291d0eb79df730174eb`.
+Ordinary commits send dirty/normalized/mutated records and every removed subtree
+descendant; explicit snapshots and actual full reconciles remain full. Hot records
+omit root strings. The real-session regression passes equal edit encodings within
+4,096 bytes at10 and10,000 paragraphs (21 and20,001 records), not exact10/10,000
+nodes or full Macro physical typing. The descendant deletion control also passes.
+Independent61 native library tests, strict Clippy, wasm32 target check, schema freshness, session types
+and scoped checks pass. Audit count version/retirement-epoch production is a
+separate pending checkpoint; schema fields alone do not satisfy retention gates.
+
+View scope prerequisite `db3b35c033` is integrated as `61b4c48bdb`, followed by
+derived-cache component `86ff3a10de` as `7f543bd319`. The optional third scope
+argument preserves read-only defaults/probes; its producer forwards the complete
+adapter signature inside an injected real stage. Exact-instance weak cells retain
+root/element values without latest lookup. Reconcile requires Mutable next state
+and an authoritative removal delta, but actual stage/lease/field authorities are
+not wired. The removal guard applies only through this unwired entrypoint.
+Positive projection, stage, copy-on-write, rollback and freeze tests remain
+blocked; the component tests do not substitute for them.
+
+Independent value2, view68, full view types and full shim check (TypeScript6.0.3,
+41 hooks/489 sources) pass. Value tests cover400 cell reads with zero component
+crossings, not the whole-engine zero-crossing gate. Development WASM was rebuilt
+only in the disposable checkout; no shipping/live artifact promotion occurred.
+Owner33 browser results are portDOM/upstreammodel evidence, not native acceptance.
+Logs: `sparse-publication-{integrated-tests,integrated-clippy,wasm-check,schema-freshness,session-types}.log`,
+`sparse-derived-stage-scoped-check.log`, `derived-stage-{value-tests,view-focused,view-types,shim-check}.log`
+and `sparse-derived-stage-integration-audit.md` under the acceptance directory.
+
 Hydration prerequisite `fb442f1ee3` is integrated as `254168ddbb` after the cache
 ownership policy. Compat instance binding preserves an absent root cache, and
 snapshot/refresh no longer eagerly requests root-text aggregation. Default native
