@@ -272,6 +272,17 @@ impl SelectionValues {
         }
     }
 
+    /// Demote replaced active objects using the model's exact current identity.
+    pub fn reconcile_active(&mut self, identity: Option<&ForeignSelectionIdentity>, update: u32) {
+        for entry in self.entries.values_mut() {
+            if entry.value.origin == (Origin::Active { update })
+                && !identity.is_some_and(|identity| identity == &entry.value.identity)
+            {
+                entry.value.origin = Origin::Detached { update };
+            }
+        }
+    }
+
     pub fn finish_update(&mut self, update: u32, published: bool) {
         for entry in self.entries.values_mut() {
             if entry.value.origin == (Origin::Active { update }) {
