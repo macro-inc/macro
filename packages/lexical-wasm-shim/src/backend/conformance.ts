@@ -5,6 +5,7 @@ import type {
 } from '../../../lexical-conformance/diff/host-packet.generated';
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
 import { foreignHooks } from '../hooks.generated';
+import { bindBackendFactory } from './factory';
 import type { ShimBackend } from './index';
 
 let initialized = false;
@@ -61,6 +62,7 @@ export function initializeConformance(
     );
   hookNames = Object.freeze(modelHooks);
   initialized = true;
+  bindBackendFactory((config) => new ConformanceBackend(config));
 }
 
 /** The override mask uses this Rust-derived order, never a second JS hook list. */
