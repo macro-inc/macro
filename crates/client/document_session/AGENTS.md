@@ -45,7 +45,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - `TMPDIR=/home/wolf/tmp cargo check -p document_session --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p document_session --all-targets -j4 -- -D warnings`
 - `TMPDIR=/home/wolf/tmp cargo test -p document_session --no-default-features --features application -j2` checks generic admission with compatibility disabled.
-- `cargo tree -p document_session --target wasm32-unknown-unknown -i workspace-hack`
+- Inspect `cargo tree -p document_session --no-default-features --features application --target wasm32-unknown-unknown -e normal,build --format '{p} {f}'` and reject `workspace-hack`, `foreign-nodes` or `compatibility` in the native production closure.
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 
 ## Gotchas
@@ -112,3 +112,13 @@ Use EditorConfig.namespace for both rich paste and clipboard export; application
 Invalidate the injected durable ID key recursively at Critical/Before InsertClipboardNodes and yield to insertion handlers; never invalidate snapshot/remote imports or history restoration. Cross-document JSON/HTML, repeated paste, destination identity and exact undo/redo controls live in src/editor/clipboard_id_test.rs.
 
 Read current effective access through effective_access, which delegates to SyncCore; never infer it from construction or UI flags. Treat it as observation only and keep normal handle admission checks after queued permission changes.
+
+Route `PreparedAdmission` through the same generic admission handler and normal
+`handle` readiness/access checks. Recover the exact capsule only before adoption;
+an adopted update without a main-publication receipt is fatal, while a published
+update whose output fails must never be retried. The prepared snapshot is the
+sealed main transition; paste parity and completion inspect the drained correction
+chain and ordinary history grouping. Recheck the host's durable-state generation
+separately before admission: the model publication epoch cannot detect canonical
+Loro advancement. These APIs do not activate asynchronous paste or grant a scope
+that may survive an await.

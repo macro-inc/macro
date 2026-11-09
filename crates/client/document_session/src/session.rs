@@ -863,6 +863,8 @@ impl DocumentSession<EditorSurface> {
     }
 }
 
+#[path = "prepared.rs"]
+pub mod prepared;
 #[path = "staging.rs"]
 pub mod staging;
 
