@@ -93,7 +93,7 @@ export class DocumentEditConflictError extends MacroApiError {
 
 /**
  * The server rejected the committed state (HTTP 422): an unknown node type,
- * malformed node JSON, duplicate ids, or more than 500 changed blocks.
+ * malformed node JSON or duplicate ids.
  * Nothing changed; `reason` names the problem.
  */
 export class DocumentEditInvalidError extends MacroApiError {

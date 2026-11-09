@@ -357,8 +357,10 @@ another.
 - **Abort**: the worker checks the request signal before applying; aborted
   there, nothing applies. After that the commit lands whole or not at all.
 - **Validation** (422, nothing applied): unknown node types, malformed JSON,
-  duplicate ids, a `node` whose id differs from its entry, more than 500
-  blocks.
+  duplicate ids, or a `node` whose id differs from its entry.
+- **Oversized commits**: more than 500 changed blocks returns HTTP 400 before
+  the worker call, surfaced as a generic `MacroApiError`, not
+  `DocumentEditInvalidError`. Nothing is applied.
 - **Result**: `{ revision, webUrl }`. The handle adopts the merged live state
   and revision the worker returns as its new base, so a program can update and
   commit again without reading.
