@@ -3,7 +3,7 @@
 ## What it is
 
 Belongs to agent sessions: registration for user-run agent harnesses
-(macrod), called runtimes in the product. Owns device-code pairing (create,
+(macrod), called machines in the product. Owns device-code pairing (create,
 approve, claim), the usable list and teammate directory the UI renders, team
 access, residents, revocation, and the bound-agent listing the daemon reconciles
 its webhook feed from.
@@ -28,7 +28,7 @@ its webhook feed from.
   and `harness_can_run` for running agents on it; check the latter wherever
   something runs. A direct grant counts only while its holder shares a team with
   the owner.
-- Opening a runtime takes the owner's own session
+- Opening a machine takes the owner's own session
   (`MacroUserAuthentication::is_human_session`): agents can ask, never grant.
 - A resident is a bound agent with `is_coding` false. There is no move-in or
   eviction flow yet; the binding is all there is.

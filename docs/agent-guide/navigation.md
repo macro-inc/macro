@@ -1682,7 +1682,7 @@ restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
+Settings → Agents, its Cursor guide, and Machines render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
