@@ -102,6 +102,10 @@ export class EditorSession {
      */
     command(code: number, a: number, b: number, text: string | null | undefined, now: number): number;
     /**
+     * Observe retained captures and actual live nodes outside measured editing windows.
+     */
+    compatAuditSnapshot(): Uint8Array;
+    /**
      * Open unpublished edits on this session's actual core.
      */
     compatBegin(tags: Uint8Array): void;
@@ -424,6 +428,7 @@ export interface InitOutput {
     readonly editorsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_clipboard: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_command: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly editorsession_compatAuditSnapshot: (a: number) => [number, number, number, number];
     readonly editorsession_compatBegin: (a: number, b: number, c: number) => [number, number];
     readonly editorsession_compatBeginCompact: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCall: (a: number, b: number, c: number) => [number, number, number, number];
