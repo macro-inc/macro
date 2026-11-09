@@ -444,9 +444,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Suggestions run once per person, when their inbox connects, in hidden
     // sessions of the in-process Macro agent on the free tier's model, as
-    // drafts do, but metered as the non-billable `RoutineSuggestions` rather
-    // than billed as agent session usage; each session hands back its suggestions through
-    // `macro.routines.suggest`. They read the newest mail through
+    // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
+    // their usage is recorded, never billed; each session hands back its
+    // suggestions through `macro.routines.suggest`. They read the newest mail through
     // email_service, which reads it from the provider.
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),
