@@ -92,6 +92,8 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 /// Registry shared by all snapshots from one editor.
 /// s2: CFG-05, CFG-07
 pub struct Registry {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) has_foreign_payloads: bool,
     pub(crate) derive_view_caches: bool,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_overlays:
@@ -382,6 +384,8 @@ impl EditorBuilder {
             }
         }
         let mut registry = Registry {
+            #[cfg(feature = "foreign-nodes")]
+            has_foreign_payloads: false,
             derive_view_caches: self.derive_view_caches,
             #[cfg(feature = "foreign-nodes")]
             native_overlays: Default::default(),
@@ -433,6 +437,10 @@ impl EditorBuilder {
             registry.by_name.insert(v.type_name, index);
             #[cfg(feature = "foreign-nodes")]
             let is_foreign = v.foreign.is_some();
+            #[cfg(feature = "foreign-nodes")]
+            {
+                registry.has_foreign_payloads |= is_foreign;
+            }
             #[cfg(not(feature = "foreign-nodes"))]
             let is_foreign = false;
             if !is_foreign {

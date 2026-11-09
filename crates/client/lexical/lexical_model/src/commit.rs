@@ -39,6 +39,8 @@ impl Changes {
 #[cfg(feature = "bench-counters")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkCounters {
+    /// Runtime payloads validated at flush and publication.
+    pub foreign_payloads_checked: u64,
     /// Records visited by model processing.
     pub nodes_visited: u64,
     /// Node records cloned by writes.
@@ -240,7 +242,7 @@ impl Transaction<'_> {
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
-        self.view().check_foreign_payloads()?;
+        self.check_pending_foreign_payloads()?;
         changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
         if let Some(selection) = &mut self.pending.selection {

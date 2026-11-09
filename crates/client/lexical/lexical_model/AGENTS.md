@@ -219,3 +219,7 @@ entry points. Captured composition ownership belongs to the exact read snapshot.
 Preserve shared unbound hydration cells only in exact read copies; isolate them
 when cloning a record for mutation, without invoking JS constructors from
 NodeSlot::clone. Use clone_fields only for raw read captures and projections.
+
+Keep deferred foreign payload validation off registries with no runtime payload
+classes. Validate only dirty live records during normal flush/publication; use a
+full check for state replacement/full reconciliation and explicit state validation.

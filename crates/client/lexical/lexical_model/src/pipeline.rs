@@ -94,7 +94,7 @@ impl Transaction<'_> {
         #[cfg(feature = "foreign-nodes")]
         let result = result.and_then(|()| ForeignReadOperation::check());
         #[cfg(feature = "foreign-nodes")]
-        let result = result.and_then(|()| self.view().check_foreign_payloads());
+        let result = result.and_then(|()| self.check_pending_foreign_payloads());
         self.transform_iterations = 0;
         if result.is_ok() {
             self.dirty_since_flush = false;
