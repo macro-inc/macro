@@ -6,6 +6,6 @@
  */
 
 /**
- * Spread into `main`'s argument beside `macro`.
+ * The program's first argument.
  */
 export type RunDocumentProgramArguments = { [key: string]: unknown };

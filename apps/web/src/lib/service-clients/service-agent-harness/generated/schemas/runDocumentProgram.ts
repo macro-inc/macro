@@ -7,17 +7,15 @@
 import type { RunDocumentProgramArguments } from './runDocumentProgramArguments';
 
 /**
- * A program taken from the open document, with the inputs its caller passed.
+ * Run one program of the build a page shows.
  */
 export interface RunDocumentProgram {
-  /** Spread into `main`'s argument beside `macro`. */
+  /** The program's first argument. */
   arguments?: RunDocumentProgramArguments;
-  /** Send no writes: each one returns an empty result and is reported as
-skipped, so the run shows what the program would change. */
-  dryRun?: boolean;
-  /** TypeScript module exporting `async function main({macro, ...arguments})`,
-at most 64 KiB. */
-  source: string;
+  /** The program's id: its block's `id`. */
+  program: string;
+  /** `sourceHash` of the build the page was rendered from. */
+  sourceHash: string;
   /**
    * Total deadline in milliseconds, from 1 to 30000.
    * @minimum 0

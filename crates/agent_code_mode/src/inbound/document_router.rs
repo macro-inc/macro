@@ -92,9 +92,10 @@ where
 
 /// A document's build: the page to render, or why it doesn't build.
 #[derive(Serialize, ToSchema)]
-#[serde(tag = "status", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(tag = "status", rename_all = "camelCase")]
 pub enum DocumentBuildResponse {
     /// The page, with its programs removed and its client script bundled.
+    #[serde(rename_all = "camelCase")]
     Built {
         /// Send with each run, so a run never uses a newer build than the page.
         #[schema(value_type = String)]
@@ -106,6 +107,7 @@ pub enum DocumentBuildResponse {
         programs: Vec<ProgramId>,
     },
     /// The author's problems, by block.
+    #[serde(rename_all = "camelCase")]
     Failed {
         /// The source this verdict is for.
         #[schema(value_type = String)]

@@ -895,6 +895,20 @@ export type AutoArchivePreferencesBody = {
 export type BotId = string;
 
 /**
+ * One problem in a document's source.
+ */
+export type BuildProblem = {
+    /**
+     * The block it is in, such as `program tasks` or `client script`.
+     */
+    file?: string | null;
+    /**
+     * What is wrong, with its location.
+     */
+    message: string;
+};
+
+/**
  * Editable fields for calendar inference, before submission and identity resolution.
  */
 export type CalendarSuggestions = {
@@ -1690,6 +1704,35 @@ export type DiscoveryResult = {
      * True when some advertised tools were omitted.
      */
     tools_truncated: boolean;
+};
+
+/**
+ * A document's build: the page to render, or why it doesn't build.
+ */
+export type DocumentBuildResponse = {
+    /**
+     * The page to render in the sandboxed preview.
+     */
+    html: string;
+    /**
+     * The ids of the programs the page may run.
+     */
+    programs: Array<string>;
+    /**
+     * Send with each run, so a run never uses a newer build than the page.
+     */
+    sourceHash: string;
+    status: 'built';
+} | {
+    /**
+     * Each problem, with where it is.
+     */
+    diagnostics: Array<BuildProblem>;
+    /**
+     * The source this verdict is for.
+     */
+    sourceHash: string;
+    status: 'failed';
 };
 
 /**
@@ -2699,25 +2742,23 @@ export type RoutineCause = {
 };
 
 /**
- * A program taken from the open document, with the inputs its caller passed.
+ * Run one program of the build a page shows.
  */
 export type RunDocumentProgram = {
     /**
-     * Spread into `main`'s argument beside `macro`.
+     * The program's first argument.
      */
     arguments?: {
         [key: string]: unknown;
     };
     /**
-     * Send no writes: each one returns an empty result and is reported as
-     * skipped, so the run shows what the program would change.
+     * The program's id: its block's `id`.
      */
-    dryRun?: boolean;
+    program: string;
     /**
-     * TypeScript module exporting `async function main({macro, ...arguments})`,
-     * at most 64 KiB.
+     * `sourceHash` of the build the page was rendered from.
      */
-    source: string;
+    sourceHash: string;
     /**
      * Total deadline in milliseconds, from 1 to 30000.
      */
@@ -4849,11 +4890,39 @@ export type ListCodingAgentsResponses = {
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
+export type GetDocumentBuildData = {
+    body?: never;
+    path: {
+        /**
+         * A stored HTML document
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/build';
+};
+
+export type GetDocumentBuildErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    413: unknown;
+    422: unknown;
+    500: unknown;
+    503: unknown;
+};
+
+export type GetDocumentBuildResponses = {
+    200: DocumentBuildResponse;
+};
+
+export type GetDocumentBuildResponse = GetDocumentBuildResponses[keyof GetDocumentBuildResponses];
+
 export type RunDocumentProgramData = {
     body: RunDocumentProgram;
     path: {
         /**
-         * The document the program is embedded in
+         * The document the program is in
          */
         document_id: string;
     };
@@ -4866,7 +4935,10 @@ export type RunDocumentProgramErrors = {
     401: unknown;
     403: unknown;
     404: unknown;
+    409: unknown;
+    422: unknown;
     500: unknown;
+    503: unknown;
 };
 
 export type RunDocumentProgramResponses = {

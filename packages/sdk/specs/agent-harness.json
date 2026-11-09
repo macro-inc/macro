@@ -3741,16 +3741,68 @@
         ]
       }
     },
+    "/documents/{document_id}/build": {
+      "get": {
+        "tags": ["documents"],
+        "summary": "Build the document's current source, or return the cached build, for the\npreview to render.",
+        "operationId": "get_document_build",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "A stored HTML document",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBuildResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "413": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          },
+          "503": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/documents/{document_id}/code-executions": {
       "post": {
         "tags": ["documents"],
-        "summary": "Run a program from the document the user has open, as that user, and\nreturn its outcome. Only directly signed-in users: a token minted for an\nagent's run may not start another run through here.",
+        "summary": "Run one program of the document's build as the signed-in user and return\nits outcome. `409` means the document changed since the page was built.",
         "operationId": "run_document_program",
         "parameters": [
           {
             "name": "document_id",
             "in": "path",
-            "description": "The document the program is embedded in",
+            "description": "The document the program is in",
             "required": true,
             "schema": {
               "type": "string",
@@ -3791,7 +3843,16 @@
           "404": {
             "description": ""
           },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
           "500": {
+            "description": ""
+          },
+          "503": {
             "description": ""
           }
         }
@@ -5112,6 +5173,21 @@
       "BotId": {
         "type": "string"
       },
+      "BuildProblem": {
+        "type": "object",
+        "description": "One problem in a document's source.",
+        "required": ["message"],
+        "properties": {
+          "file": {
+            "type": ["string", "null"],
+            "description": "The block it is in, such as `program tasks` or `client script`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What is wrong, with its location."
+          }
+        }
+      },
       "CalendarSuggestions": {
         "type": "object",
         "description": "Editable fields for calendar inference, before submission and identity resolution.",
@@ -6106,6 +6182,59 @@
           }
         ],
         "description": "Discovery results never execute tools or change connections."
+      },
+      "DocumentBuildResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The page, with its programs removed and its client script bundled.",
+            "required": ["sourceHash", "html", "programs", "status"],
+            "properties": {
+              "html": {
+                "type": "string",
+                "description": "The page to render in the sandboxed preview."
+              },
+              "programs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The ids of the programs the page may run."
+              },
+              "sourceHash": {
+                "type": "string",
+                "description": "Send with each run, so a run never uses a newer build than the page."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["built"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The author's problems, by block.",
+            "required": ["sourceHash", "diagnostics", "status"],
+            "properties": {
+              "diagnostics": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BuildProblem"
+                },
+                "description": "Each problem, with where it is."
+              },
+              "sourceHash": {
+                "type": "string",
+                "description": "The source this verdict is for."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "A document's build: the page to render, or why it doesn't build."
       },
       "DocumentId": {
         "type": "string",
@@ -7651,20 +7780,20 @@
       },
       "RunDocumentProgram": {
         "type": "object",
-        "description": "A program taken from the open document, with the inputs its caller passed.",
-        "required": ["source"],
+        "description": "Run one program of the build a page shows.",
+        "required": ["sourceHash", "program"],
         "properties": {
           "arguments": {
             "type": "object",
-            "description": "Spread into `main`'s argument beside `macro`."
+            "description": "The program's first argument."
           },
-          "dryRun": {
-            "type": "boolean",
-            "description": "Send no writes: each one returns an empty result and is reported as\nskipped, so the run shows what the program would change."
-          },
-          "source": {
+          "program": {
             "type": "string",
-            "description": "TypeScript module exporting `async function main({macro, ...arguments})`,\nat most 64 KiB."
+            "description": "The program's id: its block's `id`."
+          },
+          "sourceHash": {
+            "type": "string",
+            "description": "`sourceHash` of the build the page was rendered from."
           },
           "timeoutMs": {
             "type": "integer",
