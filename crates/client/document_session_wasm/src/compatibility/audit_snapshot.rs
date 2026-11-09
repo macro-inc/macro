@@ -134,6 +134,9 @@ mod test {
         let version = editor.compat_current_version_inner()?;
         assert!(version > 0);
         let before = editor.compat_audit_snapshot_inner()?;
+        assert!(editor.compat_release_version_inner(version).is_err());
+        assert!(editor.compat_release_version_inner(u64::MAX).is_err());
+        assert_eq!(editor.compat_audit_snapshot_inner()?, before);
         editor.compat_release_version(0).expect("retire graph");
         let released = editor.compat_audit_snapshot_inner()?;
         assert!(released.retained_captures == 0);
