@@ -18,6 +18,9 @@ pub fn application_editor_config(
     clock: Arc<AtomicI64>,
     editor_type: macro_document_model::EditorType,
 ) -> EditorConfig {
+    if editor_type == macro_document_model::EditorType::MarkdownSync {
+        config.namespace = "block-md-main".into();
+    }
     config.policy = &macro_document_model::sync::MACRO_SYNC_POLICY;
     config.comment_node = |tx, ids| {
         Ok(macro_document_model::nodes::create_comment_node(

@@ -102,3 +102,5 @@ Recover an unadopted compatibility update through CompatUpdate::recover_unadopte
 when normal readiness/access policy refuses it; preserve its exact pending state
 for a later caller decision. Recovery is single-consumption and does not roll back
 an adopted update or a published transition. Check publication receipts separately.
+
+Use EditorConfig.namespace for both rich paste and clipboard export; application MarkdownSync uses the source document namespace, while portable standalone sessions retain their configured default.

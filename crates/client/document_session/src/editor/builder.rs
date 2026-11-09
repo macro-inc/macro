@@ -1,6 +1,10 @@
 use super::*;
 use lexical_rich_nodes::{code, link, list, mark, rich_text, table};
 
+pub(super) const DEFAULT_NAMESPACE: &str = "document-session";
+#[derive(Clone)]
+pub(super) struct ClipboardNamespace(pub String);
+
 /// Core and rich-node registry used until the application supplies its own factory.
 pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
     let builder = lexical_rich_nodes::register_rich_text_nodes(Editor::builder(mode));
@@ -144,6 +148,10 @@ impl Plugin for RichCommands {
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         if let Command::Paste(payload) = command {
+            let namespace = tx
+                .try_extension::<ClipboardNamespace>()
+                .map_or(DEFAULT_NAMESPACE, |configured| configured.0.as_str())
+                .to_owned();
             let entries = payload
                 .data
                 .iter()
@@ -151,7 +159,7 @@ impl Plugin for RichCommands {
                 .collect::<Vec<_>>();
             let handled = lexical_rich_nodes::clipboard::insert_data_transfer_for_rich_text(
                 tx,
-                "document-session",
+                &namespace,
                 &entries,
                 payload.html_nodes.as_deref(),
                 SelectionSlot::Active,
