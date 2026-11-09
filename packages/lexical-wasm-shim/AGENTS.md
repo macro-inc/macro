@@ -50,6 +50,8 @@ Defer collected-version release through an open update and recheck JS ownership 
 
 Own exactly one node-handle cache per backend, retained until disposal; never let independent caches release the same model version.
 
+Use NodeHandleBackend for the sole NodeHandles version finalizer: state pins own graph versions, while production raw wrappers own exact capture tokens independently of their allocation version. Treat nodeLifetime's not-yet-bound instance as opaque; retain-before-release on capture refresh and keep token storage weak outside actual graph ownership.
+
 Use selection.test.ts to check captured selection fields across suspension, replacement and rollback against the real backend.
 
 Keep mutations.test.ts literals tied to the pinned upstream observations; assert D-6/D-7 differences as specified errors, not upstream success cases.

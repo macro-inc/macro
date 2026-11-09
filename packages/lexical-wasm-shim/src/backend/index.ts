@@ -11,8 +11,27 @@ export interface UpdateMetadata {
   readonly dirtyType: number;
 }
 
+export type NodeLifetime =
+  | { readonly kind: 'version' }
+  | { readonly kind: 'capture'; readonly owner: object };
+
+export interface NodeHandleCache {
+  releaseCaptureHandle(handle: number): void;
+}
+
+/** Node/state ownership only; diagnostic native fixtures use the same finalizer. */
+export interface NodeHandleBackend {
+  ownNodeHandles(cache: NodeHandleCache): void;
+  nodeLifetime(handle: number, node: object): NodeLifetime;
+  collectVersion(
+    version: string,
+    unowned: () => boolean,
+    released: () => void
+  ): void;
+}
+
 /** Engine boundary. Scheduling and JS object handles live above it. */
-export interface ShimBackend {
+export interface ShimBackend extends NodeHandleBackend {
   readonly initialVersion: number;
   getUpdateMetadata(): UpdateMetadata;
   installForeign(
@@ -33,13 +52,7 @@ export interface ShimBackend {
   commit(): CommitPacket;
   discard(): void;
   readField(handle: number, field: string): unknown;
-  ownNodeHandles(cache: object): void;
   releaseVersion(version: string): void;
-  collectVersion(
-    version: string,
-    unowned: () => boolean,
-    released: () => void
-  ): void;
   registerTransform(type: string, dispatch: (node: unknown) => unknown): number;
   registerListener(
     command: object,
