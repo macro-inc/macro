@@ -224,3 +224,5 @@ unable to resurrect collected nodes. Union pending retirements (including nodes
 created and collected within one update) with committed subtree removals, filter
 final live membership, and bypass public exportJSON/getters during this path.
 Drain actual external compatibility commits through compatTakePublications until empty before currentVersion or Begin; preserve queued receipts and reject pending drains. Treat flags=0 as drain-only metadata, never a replacement for the causal session output. Close the one-time cold bootstrap only at the exact currentVersion/full-snapshot fence; reject later owner rebuilds without silently replacing state.
+
+Construct app document sessions with createMacroWithNamespace using the host wrapper allocator value; keep the view and core clipboard namespace identical without persisting the instance counter.

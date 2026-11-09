@@ -21,11 +21,12 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
         snapshot_interval: 0,
         observed: vec![],
     };
-    let mut writer = machine::Machine::create_macro(
+    let mut writer = machine::Machine::create_macro_with_namespace(
         generated::ABI_MAJOR,
         &bytes(&config).expect("config"),
         0.0,
         1000.0,
+        "source-editor-instance_17",
     )
     .expect("production Macro factory");
     writer.sync(SyncInput::Start, 0.0, None).expect("start");
@@ -55,9 +56,30 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
             2.0,
         )
         .expect("insert code");
+    writer
+        .editor(
+            Input::Command {
+                command: Command::SelectAll(None),
+                selection: ViewSelection::KeepModel,
+            },
+            3.0,
+        )
+        .expect("select code");
     let machine::Session::Editor(session) = &writer.session else {
         panic!("editor")
     };
+    assert_eq!(session.surface().namespace(), "source-editor-instance_17");
+    let clipboard = query::clipboard(
+        session.surface().state(),
+        session.surface().namespace(),
+        false,
+        query::ExportFlavor::Macro,
+    )
+    .expect("configured clipboard");
+    let clipboard: serde_json::Value =
+        serde_json::from_str(&clipboard.lexical).expect("clipboard JSON");
+    assert_eq!(clipboard["namespace"], "source-editor-instance_17");
+
     assert!(!session
         .last_output()
         .view
