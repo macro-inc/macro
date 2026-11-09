@@ -20,3 +20,9 @@ expectations are untouched. The preserved 1.16.2 server copy uses the same chang
 Validate ordered range updates against the existing sequential update algorithm,
 consumer tests, exact replay, and a fresh Worker re-record with 155 zero normalized
 differences. Keep this path dependency outside workspace membership.
+
+Local event ownership change: move already-owned InternalDocDiff buffers into
+the recorder instead of cloning their MapDelta maps a second time. Borrowed
+events still become independent owned copies; ordering, undo, remote consumers
+and encoder bytes retain their existing semantics. Validate the owned/borrowed
+event unit tests and projection/session differential suites.
