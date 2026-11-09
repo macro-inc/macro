@@ -83,6 +83,41 @@ export function getCallPlayerSnapTarget(
   return { ...target, width, height, corner };
 }
 
+/** Preview only: the magnet still engages at 24px on both edges. */
+export const CALL_PLAYER_APPROACH_DISTANCE = 120;
+
+export function getCallPlayerSnapPreview(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number
+) {
+  const corner = nearestCallPlayerCorner(
+    x,
+    y,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight
+  );
+  const gap = Math.max(
+    corner.endsWith('left') ? x : viewportWidth - x - width,
+    corner.startsWith('top') ? y : viewportHeight - y - height
+  );
+  if (gap >= CALL_PLAYER_APPROACH_DISTANCE) return undefined;
+  const progress = Math.max(
+    0,
+    Math.min(
+      1,
+      (CALL_PLAYER_APPROACH_DISTANCE - gap) /
+        (CALL_PLAYER_APPROACH_DISTANCE - 24)
+    )
+  );
+  return { corner, width, height, opacity: progress * progress };
+}
+
 export type CallPlayerResizeEdge =
   | 'top'
   | 'bottom'

@@ -76,8 +76,9 @@ only after explicit selection and reports success or failure. More stays availab
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
 starts bottom-right, follows the speaker and gives screen sharing priority.
-Drag its header freely within the window. When both edges reach within 24px
-of a window corner, an edge-anchored success gradient previews the snap, fading
+Drag its header freely within the window. The nearest corner glows faintly within
+120px, strengthening until both edges reach the 24px snap range. This
+edge-anchored success gradient previews the snap, fading
 toward the centre with only the two outer edges marked. Release there to ease
 into that corner, or elsewhere to keep the dropped position. The indicator
 fades over 150ms; reduced motion shows/hides and snaps without animation. Collapse

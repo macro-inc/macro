@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   constrainCallPlayerPosition,
+  getCallPlayerSnapPreview,
   getCallPlayerSnapTarget,
   nearestCallPlayerCorner,
   resizeCallPlayer,
@@ -8,6 +9,23 @@ import {
 } from '../call-mini-player';
 
 describe('call mini player', () => {
+  it('ramps only the nearest corner preview without changing the snap range', () => {
+    expect(
+      getCallPlayerSnapPreview(120, 120, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(getCallPlayerSnapPreview(72, 72, 336, 240, 1440, 900)?.opacity).toBe(
+      0.25
+    );
+    expect(getCallPlayerSnapPreview(24, 24, 336, 240, 1440, 900)?.opacity).toBe(
+      1
+    );
+    expect(
+      getCallPlayerSnapPreview(1032, 588, 336, 240, 1440, 900)?.corner
+    ).toBe('bottom-right');
+    expect(
+      getCallPlayerSnapTarget(72, 72, 336, 240, 1440, 900)
+    ).toBeUndefined();
+  });
   it('prioritizes a screen, then speaking, then video', () => {
     const camera = {
       id: 'camera',

@@ -25,6 +25,7 @@ import {
   type CallPlayerCorner,
   type CallPlayerResizeEdge,
   constrainCallPlayerPosition,
+  getCallPlayerSnapPreview,
   getCallPlayerSnapTarget,
   MAX_CALL_PLAYER_WIDTH,
   resizeCallPlayer,
@@ -45,10 +46,10 @@ export function CallMiniPlayer(props: {
   const [corner, setCorner] = createSignal<CallPlayerCorner>('bottom-right');
   const [position, setPosition] = createSignal<{ x: number; y: number }>();
   const [snapTarget, setSnapTarget] =
-    createSignal<ReturnType<typeof getCallPlayerSnapTarget>>();
+    createSignal<ReturnType<typeof getCallPlayerSnapPreview>>();
   const [snapping, setSnapping] = createSignal(false);
   const visibleSnapTarget = createMemo(
-    (previous: ReturnType<typeof getCallPlayerSnapTarget>) =>
+    (previous: ReturnType<typeof getCallPlayerSnapPreview>) =>
       snapTarget() ?? previous
   );
   const [storedWidth, setWidth] = usePreference(
@@ -233,6 +234,7 @@ export function CallMiniPlayer(props: {
             class="pointer-events-none fixed z-modal transition-[opacity,visibility] duration-150 motion-reduce:transition-none starting:opacity-0"
             classList={{ 'invisible opacity-0': !snapTarget() }}
             style={{
+              opacity: snapTarget()?.opacity ?? 0,
               left: target().corner.endsWith('left') ? '0px' : 'auto',
               right: target().corner.endsWith('right') ? '0px' : 'auto',
               top: target().corner.startsWith('top') ? '0px' : 'auto',
@@ -313,7 +315,7 @@ export function CallMiniPlayer(props: {
             );
             setPosition(point);
             setSnapTarget(
-              getCallPlayerSnapTarget(
+              getCallPlayerSnapPreview(
                 point.x,
                 point.y,
                 box.width,
