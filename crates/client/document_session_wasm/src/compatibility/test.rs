@@ -247,6 +247,68 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         Value::ForeignBooleanArgument { value: true }
     ));
     assert!(selection_read.selections.is_empty());
+    let memo = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::CreateRangeSelection,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    let Value::ForeignSelectionArgument { value: memo_ref } = memo.value else {
+        panic!("memo value");
+    };
+    editor
+        .compat_retain_selection(&bytes(&memo_ref)?)
+        .expect("retain memo value");
+    let mut memo_body = selection_body.clone();
+    if let compat::CompatSelectionData::CompatRangeSelection {
+        reference,
+        anchor,
+        focus,
+        dirty,
+        has_cached_backward,
+        has_cached_nodes,
+        cached_nodes,
+        ..
+    } = &mut memo_body
+    {
+        *reference = memo_ref;
+        anchor.offset = 1;
+        focus.offset = 0;
+        *dirty = false;
+        *has_cached_backward = false;
+        *has_cached_nodes = true;
+        *cached_nodes = vec![text];
+    }
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: seeded_version,
+        activate: false,
+        selection: memo_body,
+    })?)?;
+    let memo_reply = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionIsBackward,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument { value: memo_ref }],
+    })?)?;
+    assert!(matches!(
+        memo_reply.value,
+        Value::ForeignBooleanArgument { value: true }
+    ));
+    assert!(
+        matches!(&memo_reply.selections[..], [compat::CompatSelectionData::CompatRangeSelection {
+        reference, dirty: false, has_cached_backward: true, cached_backward: true,
+        has_cached_nodes: true, cached_nodes, ..
+    }] if *reference == memo_ref && cached_nodes == &[text])
+    );
+    editor
+        .compat_release_selection(&bytes(&memo_ref)?)
+        .expect("release memo value");
+
     let pending_version = editor
         .compatibility
         .as_ref()

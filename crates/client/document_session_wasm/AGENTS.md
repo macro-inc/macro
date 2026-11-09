@@ -94,6 +94,8 @@ Disable class static transforms in the compatibility factory so unchanged JS reg
 
 Install one module-stable compatibility host dispatcher and use exact callback-only scope IDs through compatibilityCallbackCall; release all native store/dispatcher borrows before JS callouts and validate acknowledgement scope/kind/identity before applying patches. The transport boundary does not install class hooks or make the initializer usable by itself.
 
-Resolve node capture/operand authority into an owned NativeCall before model execution when using callback frames; do not retain a mutable Host borrow across virtual model calls. Selection dispatch needs its own value/graph split before admitting hosted execution.
+Resolve node capture/operand authority into an owned NativeCall before model execution when using callback frames; do not retain a mutable Host borrow across virtual model calls. Execute selection graph plans outside metadata borrows and finalize owned value/cache/identity facts afterward.
 
-Use the scoped metadata frame for native node calls so authorization borrows end before virtual execution; keep selection graph execution outside the frame borrow when installing its separate executor. Scoped metadata alone does not supply the hosted factory or callback graph adapter.
+Use the scoped metadata frame for native node calls so authorization borrows end before virtual execution; keep selection graph execution outside the frame borrow through its owned executor. Scoped metadata alone does not supply the hosted factory or callback graph adapter.
+
+Return updated typed selection bodies beside ordinary scalar/node results; mutable current direction queries may acknowledge memo changes without dirtying the graph, while historical and frozen raw captures retain their metadata.

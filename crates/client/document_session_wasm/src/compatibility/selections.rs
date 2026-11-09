@@ -4,6 +4,39 @@ use calls::ResultValue;
 use compat::{CompatOperation as Op, ForeignCallbackValue as Value};
 use lexical_model::*;
 use selection_values::{Origin, Scope};
+pub(super) enum PreparedSelection {
+    Ready(ResultValue),
+    Execute(SelectionPlan),
+    Previous { state: EditorState, version: u64 },
+}
+pub(super) struct SelectionPlan {
+    value: selection_values::SelectionValue,
+    historical: bool,
+    op: Op,
+    args: Vec<Value>,
+    version: u64,
+    update: u32,
+}
+pub(super) struct SelectionCompletion {
+    execution: selection_execution::SelectionExecution,
+    historical: bool,
+    op: Op,
+    version: u64,
+    update: u32,
+}
+impl SelectionPlan {
+    pub fn execute(self, tx: &mut Transaction<'_>) -> Result<SelectionCompletion, BoundaryError> {
+        let execution =
+            selection_execution::execute(tx, self.value, self.historical, self.op, &self.args)?;
+        Ok(SelectionCompletion {
+            execution,
+            historical: self.historical,
+            op: self.op,
+            version: self.version,
+            update: self.update,
+        })
+    }
+}
 fn reference(
     data: &compat::CompatSelectionData,
 ) -> Result<Option<compat::ForeignSelectionRef>, BoundaryError> {
@@ -45,11 +78,12 @@ impl Host {
         }
         Ok(())
     }
-    pub(super) fn dispatch_selection(
+    pub(super) fn prepare_selection(
         &mut self,
         tx: &mut Transaction<'_>,
         request: &compat::CompatRequest,
-    ) -> Result<Option<ResultValue>, BoundaryError> {
+    ) -> Result<Option<PreparedSelection>, BoundaryError> {
+        let ready = |value| Some(PreparedSelection::Ready(value));
         let op = request.operation;
         let version = if request.historical {
             request.state_version
@@ -76,9 +110,9 @@ impl Host {
             let value = self
                 .selection_values
                 .allocate(value, version, self.update)?;
-            return Ok(Some(ResultValue::Scalar(Value::ForeignSelectionArgument {
-                value,
-            })));
+            return Ok(ready(ResultValue::Scalar(
+                Value::ForeignSelectionArgument { value },
+            )));
         }
         if op == Op::GetPreviousSelection {
             // $getPreviousSelection reads the editor's committed state even
@@ -88,10 +122,10 @@ impl Host {
                 .get(&self.version)
                 .ok_or(BoundaryError::Invalid("current compatibility publication"))?
                 .clone();
-            let source = committed.view().snapshot_for_foreign_read()?;
-            return Ok(Some(ResultValue::SelectionValue(
-                self.selection(&source, self.version)?,
-            )));
+            return Ok(Some(PreparedSelection::Previous {
+                state: committed,
+                version: self.version,
+            }));
         }
         if !matches!(
             op,
@@ -127,7 +161,7 @@ impl Host {
             )
         {
             tx.replace_selection(None)?;
-            return Ok(Some(ResultValue::Scalar(calls::undefined())));
+            return Ok(ready(ResultValue::Scalar(calls::undefined())));
         }
         let mut value = self.value_argument(request.args.first())?;
         let args = &request.args[1..];
@@ -140,9 +174,9 @@ impl Host {
             let value = self
                 .selection_values
                 .allocate(cloned, version, self.update)?;
-            return Ok(Some(ResultValue::Scalar(Value::ForeignSelectionArgument {
-                value,
-            })));
+            return Ok(ready(ResultValue::Scalar(
+                Value::ForeignSelectionArgument { value },
+            )));
         }
         let writes_graph = matches!(
             op,
@@ -214,74 +248,89 @@ impl Host {
                     tx.synchronize_foreign_selection_value(slot, value.value)?;
                 }
             }
-            return Ok(Some(result));
+            return Ok(ready(result));
         }
-        let slot = if request.historical {
-            // A readonly pending peer can inherit an older detached slot. Its
-            // caller-owned value must still come from the latest ledger patch.
-            tx.detach_foreign_selection(
-                value.value.snapshot_for_foreign_read(),
-                value.identity.clone(),
-            )
-        } else {
-            tx.foreign_selection_slot(&value.identity)
-                .unwrap_or_else(|| {
-                    tx.detach_foreign_selection(
-                        value.value.snapshot_for_foreign_read(),
-                        value.identity.clone(),
-                    )
-                })
-        };
-        if !request.historical {
-            tx.synchronize_foreign_selection_value(slot, value.value.snapshot_for_foreign_read())?;
+        if op != Op::SetSelection {
+            return Ok(Some(PreparedSelection::Execute(SelectionPlan {
+                value,
+                historical: request.historical,
+                op,
+                args: args.to_vec(),
+                version,
+                update: self.update,
+            })));
         }
-        if op == Op::SetSelection {
-            value.cached_nodes = None;
-            let backward = value
-                .value
-                .as_range()
-                .and_then(RangeSelection::cached_is_backward);
-            value.value = value.value.with_foreign_value_metadata(true, backward);
-            self.selection_values.patch(
-                value.reference,
-                value.encoded(),
-                Scope {
-                    historical: false,
-                    state_version: version,
-                    update: self.update,
-                    activate: true,
-                },
-            )?;
-            tx.synchronize_foreign_selection_value(slot, value.value)?;
-            tx.activate_foreign_selection(slot)?;
-            let active = tx.foreign_selection_identity(SelectionSlot::Active);
-            self.selection_values
-                .reconcile_active(active.as_ref(), self.update);
-            return Ok(Some(ResultValue::Scalar(calls::undefined())));
-        }
-        let result = selection_ops::apply(tx, slot, op, args);
+        let slot = tx
+            .foreign_selection_slot(&value.identity)
+            .unwrap_or_else(|| {
+                tx.detach_foreign_selection(
+                    value.value.snapshot_for_foreign_read(),
+                    value.identity.clone(),
+                )
+            });
+        value.cached_nodes = None;
+        let backward = value
+            .value
+            .as_range()
+            .and_then(RangeSelection::cached_is_backward);
+        value.value = value.value.with_foreign_value_metadata(true, backward);
+        self.selection_values.patch(
+            value.reference,
+            value.encoded(),
+            Scope {
+                historical: false,
+                state_version: version,
+                update: self.update,
+                activate: true,
+            },
+        )?;
+        tx.synchronize_foreign_selection_value(slot, value.value)?;
+        tx.activate_foreign_selection(slot)?;
+        let active = tx.foreign_selection_identity(SelectionSlot::Active);
+        self.selection_values
+            .reconcile_active(active.as_ref(), self.update);
+        Ok(ready(ResultValue::Scalar(calls::undefined())))
+    }
+    pub(super) fn finish_selection(
+        &mut self,
+        completion: SelectionCompletion,
+    ) -> Result<ResultValue, BoundaryError> {
+        let SelectionCompletion {
+            execution,
+            historical,
+            op,
+            version,
+            update,
+        } = completion;
+        let selection_execution::SelectionExecution {
+            result,
+            value,
+            active_identity,
+            value_is_active,
+            writes_graph,
+            value_metadata_changed,
+        } = execution;
         if writes_graph {
-            self.selection_values.invalidate_active_cache(self.update);
-            let current_slot = tx
-                .foreign_selection_slot(&value.identity)
-                .ok_or(BoundaryError::Invalid("selection identity retired"))?;
-            value.value = tx
-                .selection_at(current_slot)?
-                .ok_or(BoundaryError::Invalid("selection value retired"))?
-                .snapshot_for_foreign_read();
-            value.cached_nodes = None;
+            self.selection_values.invalidate_active_cache(update);
+        }
+        let encoded = value.encoded();
+        if writes_graph || value_metadata_changed {
             self.selection_values.patch(
                 value.reference,
-                value.encoded(),
+                encoded.clone(),
                 Scope {
                     historical: false,
                     state_version: version,
-                    update: self.update,
-                    activate: current_slot == SelectionSlot::Active,
+                    update,
+                    activate: value_is_active,
                 },
             )?;
         }
-        Ok(Some(match result? {
+        if !historical {
+            self.selection_values
+                .reconcile_active(active_identity.as_ref(), update);
+        }
+        let result = match result? {
             selection_ops::SelectionOpResult::Scalar(value) => ResultValue::Scalar(value),
             selection_ops::SelectionOpResult::None => ResultValue::Scalar(calls::undefined()),
             selection_ops::SelectionOpResult::Nodes(mut nodes)
@@ -290,7 +339,12 @@ impl Host {
                 ResultValue::Node(nodes.pop())
             }
             selection_ops::SelectionOpResult::Nodes(nodes) => ResultValue::Nodes(nodes),
-        }))
+        };
+        if writes_graph || value_metadata_changed {
+            Ok(ResultValue::WithSelection(Box::new(result), encoded))
+        } else {
+            Ok(result)
+        }
     }
 }
 
