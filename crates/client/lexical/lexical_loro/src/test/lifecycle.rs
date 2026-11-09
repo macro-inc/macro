@@ -344,3 +344,46 @@ fn event_free_local_commit_preserves_remote_undo_group_boundaries() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn local_event_recording_resumes_after_a_commit_callback_panics() -> Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let (_, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_end(text)
+    })?;
+    let doc = new_doc(1)?;
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PlainPolicy, 0)?;
+    let count = Arc::new(AtomicUsize::new(0));
+    let seen = count.clone();
+    let _events = doc.subscribe_root(Arc::new(move |_| {
+        seen.fetch_add(1, Ordering::Relaxed);
+    }));
+    let callback =
+        doc.subscribe_pre_commit(Box::new(|_| panic!("deliberate commit callback failure")));
+    let (_, commit) = editor.update(|tx| tx.insert_text("1"))?;
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        projection.local_commit_without_events(&doc, &[commit], 1)
+    }));
+    assert!(panic.is_err());
+    assert!(doc.with_state(|state| state.is_recording()));
+    assert_eq!(count.load(Ordering::Relaxed), 0);
+    callback.unsubscribe();
+    let (_, commit) = editor.update(|tx| tx.insert_text("2"))?;
+    projection.local_commit(&doc, &[commit], LOCAL_ORIGIN, 2)?;
+    assert_eq!(count.load(Ordering::Relaxed), 1);
+    assert_eq!(&*editor.state().root_text_content(), "a12");
+    projection
+        .check(&doc, editor.state())
+        .expect("consistent after recovery");
+    Ok(())
+}
