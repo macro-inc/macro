@@ -70,18 +70,7 @@ export class Point {
   }
 
   isBefore(point: PointType): boolean {
-    if (this.key === point.key) {
-      return this.offset < point.offset;
-    }
-    const caret = getSelectionRuntime().caret;
-    const aCaret = caret.$normalizeCaret(
-      caret.$caretFromPoint(
-        $createPoint(this.key, this.offset, this.type),
-        'next'
-      )
-    );
-    const bCaret = caret.$normalizeCaret(caret.$caretFromPoint(point, 'next'));
-    return caret.$comparePointCaretNext(aCaret, bCaret) < 0;
+    return isPointBefore(this, point, () => getSelectionRuntime().caret);
   }
 
   getNode(): LexicalNode {
@@ -152,4 +141,24 @@ export function $createPoint(
   type: 'text' | 'element'
 ): PointType {
   return createPointWithUpstreamType(key, offset, type);
+}
+
+/** Pure pinned ordering algorithm; each producer keeps its own real caret graph. */
+export function isPointBefore<C>(
+  anchor: import('./runtime').RawSelectionPoint,
+  focus: import('./runtime').RawSelectionPoint,
+  getCaret: () => {
+    $caretFromPoint(
+      point: import('./runtime').RawSelectionPoint,
+      direction: 'next'
+    ): C;
+    $normalizeCaret(point: C): C;
+    $comparePointCaretNext(a: C, b: C): -1 | 0 | 1;
+  }
+): boolean {
+  if (anchor.key === focus.key) return anchor.offset < focus.offset;
+  const caret = getCaret();
+  const a = caret.$normalizeCaret(caret.$caretFromPoint(anchor, 'next'));
+  const b = caret.$normalizeCaret(caret.$caretFromPoint(focus, 'next'));
+  return caret.$comparePointCaretNext(a, b) < 0;
 }

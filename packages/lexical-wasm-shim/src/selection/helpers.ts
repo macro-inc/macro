@@ -14,12 +14,7 @@ import { NodeSelection } from './node';
 import type { PointType } from './point';
 import { $createPoint } from './point';
 import { RangeSelection } from './range';
-import type {
-  BaseSelection,
-  CaretRange,
-  NodeCaret,
-  PointCaret,
-} from './runtime';
+import type { BaseSelection, CaretRange, PointCaret } from './runtime';
 import { getSelectionRuntime } from './runtime';
 
 export const textFormats: Record<TextFormatType, number> = {
@@ -81,11 +76,33 @@ export function $getPreviousSelection(): BaseSelection | null {
 
 export function $setSelection(selection: BaseSelection | null): void {
   const runtime = getSelectionRuntime();
-  if (runtime.isReadOnly()) {
+  setSelectionValue<BaseSelection>(selection, {
+    isReadOnly: () => runtime.isReadOnly(),
+    validate: validateSelectionClass,
+    activate(value) {
+      runtime.getActiveState()._selection = value;
+    },
+    buffer: (value, activate) => runtime.bufferSelection(value, activate),
+  });
+}
+
+/** Value transition shared by separately typed producers; no graph is fabricated. */
+export function setSelectionValue<
+  S extends { dirty: boolean; setCachedNodes(nodes: null): void },
+>(
+  selection: S | null,
+  target: {
+    isReadOnly(): boolean;
+    validate(selection: S): void;
+    activate(selection: S | null): void;
+    buffer(selection: S | null, activate: boolean): void;
+  }
+): void {
+  if (target.isReadOnly()) {
     throw new Error('Cannot use method in read-only mode.');
   }
   if (selection !== null) {
-    validateSelectionClass(selection);
+    target.validate(selection);
     if (process.env.NODE_ENV !== 'production' && Object.isFrozen(selection)) {
       throw new Error(
         '$setSelection called on frozen selection object. Ensure selection is cloned before passing in.'
@@ -94,8 +111,8 @@ export function $setSelection(selection: BaseSelection | null): void {
     selection.dirty = true;
     selection.setCachedNodes(null);
   }
-  runtime.getActiveState()._selection = selection;
-  runtime.bufferSelection(selection, true);
+  target.activate(selection);
+  target.buffer(selection, true);
 }
 
 export function $internalMakeRangeSelection(
@@ -487,31 +504,87 @@ export function adjustPointOffsetForMergedSibling(
 }
 
 export function $getNodesFromCaretRangeCompat(
-  // getNodes returned nodes in document order
   range: CaretRange<'next'>
 ): LexicalNode[] {
-  const { caret, isElementNode: $isElementNode } = getSelectionRuntime();
-  const {
-    $isChildCaret,
+  const runtime = getSelectionRuntime();
+  const { caret } = runtime;
+  return getNodesFromReadCaretRange<LexicalNode, PointCaret>(range, {
+    $isElementNode: runtime.isElementNode,
+    $childOrigin: (value) =>
+      value !== null && caret.$isChildCaret(value) ? value.origin : null,
+    $isSiblingCaret: caret.$isSiblingCaret,
+    $getChildCaret: (origin) => {
+      if (!runtime.isElementNode(origin))
+        throw new Error('Expected element origin');
+      return caret.$getChildCaret(origin, 'previous');
+    },
+    $getAdjacentChildCaret: (value) => {
+      if (!caret.$isChildCaret(value)) throw new Error('Expected child caret');
+      return caret.$getAdjacentChildCaret(value);
+    },
+    $normalizeCaret: caret.$normalizeCaret,
+    $isTextPointCaret: caret.$isTextPointCaret,
+    $isEmpty: (node) => {
+      if (!runtime.isElementNode(node)) throw new Error('Expected element');
+      return node.isEmpty();
+    },
+    $isSameNode: (node, other) => node.is(other),
+  });
+}
+
+export interface ReadCaret<N, C> {
+  readonly origin: N;
+  getNodeAtCaret(): N | null;
+  getFlipped(): C;
+}
+export interface ReadCaretRange<N, C> extends Iterable<C> {
+  readonly anchor: C;
+  readonly focus: C;
+  getTextSlices(): readonly [
+    null | { caret: { origin: N } },
+    null | { caret: { origin: N } },
+  ];
+  isCollapsed(): boolean;
+}
+/** Pure pinned getNodes algorithm; callbacks never mix node universes. */
+export function getNodesFromReadCaretRange<N, C extends ReadCaret<N, C>>(
+  range: ReadCaretRange<N, C>,
+  {
+    $isElementNode,
+    $childOrigin,
     $isSiblingCaret,
     $getChildCaret,
     $getAdjacentChildCaret,
     $normalizeCaret,
     $isTextPointCaret,
-  } = caret;
-  const nodes: LexicalNode[] = [];
+    $isEmpty,
+    $isSameNode,
+  }: {
+    $isElementNode(node: N): boolean;
+    $childOrigin(caret: C | null): N | null;
+    $isSiblingCaret(caret: C): boolean;
+    $getChildCaret(origin: N): C;
+    $getAdjacentChildCaret(caret: C): C | null;
+    $normalizeCaret(caret: C): C;
+    $isTextPointCaret(caret: C): boolean;
+    $isEmpty(node: N): boolean;
+    $isSameNode(node: N, other: N | undefined): boolean;
+  }
+): N[] {
+  const nodes: N[] = [];
   const [beforeSlice, afterSlice] = range.getTextSlices();
   if (beforeSlice) {
     nodes.push(beforeSlice.caret.origin);
   }
-  const seenAncestors = new Set<ElementNode>();
-  const seenElements = new Set<ElementNode>();
+  const seenAncestors = new Set<N>();
+  const seenElements = new Set<N>();
   for (const caret of range) {
-    if ($isChildCaret(caret)) {
+    if ($childOrigin(caret) !== null) {
       // Emulate the leading under-selection behavior of getNodes by
       // ignoring the 'enter' of any ElementNode until we've seen a
       // SiblingCaret
-      const { origin } = caret;
+      const origin = $childOrigin(caret);
+      if (origin === null) throw new Error('Expected child caret');
       if (nodes.length === 0) {
         seenAncestors.add(origin);
       } else {
@@ -536,14 +609,12 @@ export function $getNodesFromCaretRangeCompat(
     range.focus.getNodeAtCaret() === null
   ) {
     for (
-      let reverseCaret: null | NodeCaret<'previous'> = $getChildCaret(
-        range.focus.origin,
-        'previous'
-      );
-      $isChildCaret(reverseCaret) &&
+      let reverseCaret: null | C = $getChildCaret(range.focus.origin);
+      reverseCaret !== null &&
+      $childOrigin(reverseCaret) !== null &&
       seenAncestors.has(reverseCaret.origin) &&
-      !reverseCaret.origin.isEmpty() &&
-      reverseCaret.origin.is(nodes[nodes.length - 1]);
+      !$isEmpty(reverseCaret.origin) &&
+      $isSameNode(reverseCaret.origin, nodes[nodes.length - 1]);
       reverseCaret = $getAdjacentChildCaret(reverseCaret)
     ) {
       seenAncestors.delete(reverseCaret.origin);
@@ -555,7 +626,7 @@ export function $getNodesFromCaretRangeCompat(
     if ($isElementNode(lastIncludedNode)) {
       if (
         seenElements.has(lastIncludedNode) ||
-        lastIncludedNode.isEmpty() ||
+        $isEmpty(lastIncludedNode) ||
         seenAncestors.has(lastIncludedNode)
       ) {
         // fall through to break
@@ -570,7 +641,7 @@ export function $getNodesFromCaretRangeCompat(
     // Emulate the collapsed behavior of getNodes by returning the descendant
     const normCaret = $normalizeCaret(range.anchor);
     const flippedNormCaret = $normalizeCaret(range.anchor.getFlipped());
-    const $getCandidate = (caret: PointCaret): LexicalNode | null =>
+    const $getCandidate = (caret: C): N | null =>
       $isTextPointCaret(caret) ? caret.origin : caret.getNodeAtCaret();
     const node =
       $getCandidate(normCaret) ||
