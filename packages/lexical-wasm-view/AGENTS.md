@@ -37,6 +37,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Manage terminal placeholder line breaks only on block elements; inline links and marks keep their original children.
 
 - Resolve text leaves through dom.ts so nested semantic wrappers remain editable.
+- Keep native keys in the namespace-scoped DOM property and WeakMap; omit new empty class/style attributes while preserving upstream class/style clearing behavior.
 - Match pinned link URL formatting and parsed-protocol filtering before painting href.
 - Handle session effect kind 9 before painting: end native composition and suppress
   its redundant synchronous input/end events; Rust already merged the accepted text.

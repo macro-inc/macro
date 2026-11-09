@@ -82,7 +82,7 @@ test('document model selection, durable typing, reconnect and offline reopen', a
     });
     return;
   }
-  await expect(body(page)).toHaveAttribute('data-lexical-key', '0', {
+  await expect(body(page)).toHaveJSProperty('__lexicalKey_block-md-main', 0, {
     timeout: 60_000,
   });
   expect(assets.some((asset) => asset.endsWith('.wasm'))).toBe(true);
@@ -130,7 +130,7 @@ test('document model selection, durable typing, reconnect and offline reopen', a
   await navigateWithinApp(page, '/app/home');
   await expect(body(page)).toHaveCount(0);
   await navigateWithinApp(page, `/app/md/${encodeURIComponent(documentId)}`);
-  await expect(body(page)).toHaveAttribute('data-lexical-key', '0', {
+  await expect(body(page)).toHaveJSProperty('__lexicalKey_block-md-main', 0, {
     timeout: 30_000,
   });
   await expect(body(page)).toContainText(offline);

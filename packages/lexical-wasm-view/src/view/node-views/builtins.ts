@@ -91,12 +91,14 @@ function elementProps(
     dom.style.userSelect = 'text';
     dom.style.whiteSpace = 'pre-wrap';
     dom.style.wordBreak = 'break-word';
-  } else dom.style.cssText = fields?.style ?? '';
+  } else if (fields?.style || dom.hasAttribute('style')) {
+    dom.style.cssText = fields?.style ?? '';
+  }
   const alignment =
     ['', 'left', 'center', 'right', 'justify', 'start', 'end'][
       fields?.format ?? 0
     ] ?? '';
-  dom.style.textAlign = alignment;
+  if (alignment || dom.style.textAlign) dom.style.textAlign = alignment;
   if (fields?.indent) dom.style.paddingInlineStart = `${fields.indent * 40}px`;
   if (node.type === 'link' || node.type === 'autolink') {
     // The model stores the URL; the view only applies a safe DOM attribute.
@@ -196,14 +198,18 @@ function elementClasses(node: ViewNode, ctx: RenderContext): string {
 const element: NodeView = {
   createDOM(node, ctx) {
     const dom = ctx.document.createElement(tag(node));
-    dom.className = elementClasses(node, ctx);
+    const classes = elementClasses(node, ctx);
+    if (classes) dom.className = classes;
     elementProps(node, dom, ctx);
     return dom;
   },
   updateDOM(previous, next, dom, ctx) {
     if (tag(previous) !== tag(next)) return true;
     elementProps(next, dom, ctx);
-    if (next.kind !== 'root') dom.className = elementClasses(next, ctx);
+    if (next.kind !== 'root') {
+      const classes = elementClasses(next, ctx);
+      if (classes || dom.hasAttribute('class')) dom.className = classes;
+    }
     return false;
   },
 };
@@ -228,7 +234,8 @@ function textProperties(
 ): void {
   const props = node.textProps;
   const format = props?.format ?? 0;
-  dom.style.cssText = props?.style ?? '';
+  if (props?.style || dom.hasAttribute('style'))
+    dom.style.cssText = props?.style ?? '';
   const inner =
     dom.firstElementChild instanceof HTMLElement ? dom.firstElementChild : dom;
   const classes = [
@@ -267,7 +274,8 @@ function textProperties(
     );
   if (format & 16) dom.spellcheck = false;
   if (node.type === 'tab') classes.push(themeClass(ctx.theme, 'tab'));
-  inner.className = classes.filter(Boolean).join(' ');
+  const className = classes.filter(Boolean).join(' ');
+  if (className || inner.hasAttribute('class')) inner.className = className;
   dom.setAttribute('data-lexical-text', 'true');
 }
 const text: NodeView = {

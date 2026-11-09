@@ -648,7 +648,6 @@ export class EditorView implements ViewSink {
       node.kind === 'root' ? this.root : renderer.createDOM(node, this.context);
     this.dom.set(node.key, dom);
     this.keys.set(dom, node.key);
-    dom.setAttribute('data-lexical-key', String(node.key));
     Reflect.set(dom, `__lexicalKey_${this.options.namespace}`, node.key);
     if (node.kind === 'decorator') {
       dom.contentEditable = 'false';
