@@ -1,4 +1,5 @@
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createClient, fetchExchange } from '@urql/core';
 import { createSignal, type ParentProps } from 'solid-js';
 import { createCallMediaPermissions } from '../../call-media-permissions';
@@ -94,11 +95,37 @@ const participants = Array.from(
 );
 const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 const localCamera = videoTrack('You');
+const [previewCapture, setPreviewCapture] = createSignal<MediaStream>();
+if (params.get('cameraPreview') === 'true') {
+  fireAndForget(
+    (async () =>
+      setPreviewCapture(
+        await navigator.mediaDevices.getUserMedia({ video: true })
+      ))(),
+    'camera-preview-fixture'
+  );
+}
 const localParticipant = {
   identity: 'macro|me@example.com',
   getTrackPublication(source: string) {
     if (source === 'camera' && !videoMuted())
-      return { track: localCamera, isMuted: false, isSubscribed: true };
+      return {
+        track: {
+          ...localCamera,
+          mediaStream: params.has('processedPreview')
+            ? undefined
+            : previewCapture(),
+          mediaStreamTrack: params.has('processedPreview')
+            ? { readyState: 'ended' }
+            : (previewCapture()?.getVideoTracks()[0] ??
+              localCamera.mediaStreamTrack),
+          getProcessor: params.has('processedPreview')
+            ? () => ({ source: previewCapture()?.getVideoTracks()[0] })
+            : undefined,
+        },
+        isMuted: false,
+        isSubscribed: true,
+      };
     return undefined;
   },
   publishData: async () => {},

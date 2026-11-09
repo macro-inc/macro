@@ -1,5 +1,5 @@
 import Upload from '@icon/system/regular/upload-simple.svg';
-import { Dropdown } from '@ui';
+import { Dropdown, Tooltip } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { BackgroundEffect } from '../../media/background-effect';
@@ -37,6 +37,7 @@ export function RecentBackgroundImages(props: {
   onSelect: (effect: BackgroundEffect) => boolean | Promise<boolean>;
   onUploadClick: () => void;
   phone?: boolean;
+  embedded?: boolean;
 }) {
   onMount(() => {
     fireAndForget(
@@ -64,11 +65,21 @@ export function RecentBackgroundImages(props: {
     );
   };
   return (
-    <div class={props.phone ? 'space-y-2' : 'space-y-2 pt-2'}>
-      <span class="text-xs text-ink-muted">Recent</span>
+    <div
+      class={
+        props.embedded
+          ? 'contents'
+          : props.phone
+            ? 'space-y-2'
+            : 'space-y-2 pt-2'
+      }
+    >
+      <Show when={!props.embedded}>
+        <span class="text-xs text-ink-muted">Recent</span>
+      </Show>
       <Dynamic
         component={props.phone ? 'div' : Dropdown.RadioGroup}
-        class="grid grid-cols-3 gap-2"
+        class={props.embedded ? 'contents' : 'grid grid-cols-3 gap-2'}
         value={props.effect.type === 'image' ? props.effect.path : ''}
         onChange={(path: unknown) => {
           if (typeof path !== 'string') return;
@@ -79,28 +90,30 @@ export function RecentBackgroundImages(props: {
         <For each={recent()}>
           {(image, index) => (
             <div class="group relative min-w-0">
-              <Dynamic
-                component={props.phone ? 'button' : Dropdown.RadioItem}
-                value={image.path}
-                type="button"
-                closeOnSelect={false}
-                role={props.phone ? 'radio' : 'menuitemradio'}
-                aria-label={`Recent image ${index() + 1}`}
-                aria-checked={current(image)}
-                disabled={props.disabled}
-                class="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-muted p-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-highlighted:after:overlay-hover data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
-                classList={{ 'ring-2 ring-accent': current(image) }}
-                onClick={props.phone ? () => select(image) : undefined}
-                onKeyDown={(event: KeyboardEvent) => {
-                  if (event.key !== 'Delete' && event.key !== 'Backspace')
-                    return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  remove(image);
-                }}
-              >
-                <img src={image.path} alt="" class="size-full object-cover" />
-              </Dynamic>
+              <Tooltip label={`Recent image ${index() + 1}`} class="block">
+                <Dynamic
+                  component={props.phone ? 'button' : Dropdown.RadioItem}
+                  value={image.path}
+                  type="button"
+                  closeOnSelect={false}
+                  role={props.phone ? 'radio' : 'menuitemradio'}
+                  aria-label={`Recent image ${index() + 1}`}
+                  aria-checked={current(image)}
+                  disabled={props.disabled}
+                  class="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-muted p-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-highlighted:after:overlay-hover data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
+                  classList={{ 'ring-2 ring-accent': current(image) }}
+                  onClick={props.phone ? () => select(image) : undefined}
+                  onKeyDown={(event: KeyboardEvent) => {
+                    if (event.key !== 'Delete' && event.key !== 'Backspace')
+                      return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    remove(image);
+                  }}
+                >
+                  <img src={image.path} alt="" class="size-full object-cover" />
+                </Dynamic>
+              </Tooltip>
               <Show when={!current(image)}>
                 <button
                   type="button"
@@ -118,18 +131,22 @@ export function RecentBackgroundImages(props: {
             </div>
           )}
         </For>
-        <Dynamic
-          component={props.phone ? 'button' : Dropdown.Item}
-          type="button"
-          aria-label="Upload background image"
-          disabled={props.disabled || props.uploading}
-          class="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-edge-muted text-xs text-ink-muted"
-          onClick={props.phone ? props.onUploadClick : undefined}
-          onSelect={props.phone ? undefined : props.onUploadClick}
-        >
-          <Upload class="size-4" />
-          {props.uploading ? 'Loading…' : 'Upload'}
-        </Dynamic>
+        <Tooltip label="Upload background image" class="block">
+          <Dynamic
+            component={props.phone ? 'button' : Dropdown.Item}
+            type="button"
+            aria-label="Upload background image"
+            disabled={props.disabled || props.uploading}
+            class="flex w-full aspect-[4/3] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-edge-muted text-xs text-ink-muted"
+            onClick={props.phone ? props.onUploadClick : undefined}
+            onSelect={props.phone ? undefined : props.onUploadClick}
+          >
+            <Upload class="size-4" />
+            <Show when={!props.embedded}>
+              {props.uploading ? 'Loading…' : 'Upload'}
+            </Show>
+          </Dynamic>
+        </Tooltip>
       </Dynamic>
     </div>
   );

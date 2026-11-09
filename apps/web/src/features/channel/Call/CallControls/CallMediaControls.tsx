@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { BackgroundPreview } from '@core/component/media/media-background-picker';
+import { BackgroundCameraPreview } from '@core/component/media/background-camera-preview';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
 import {
   RecentBackgroundImages,
@@ -12,6 +12,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
 import { Dropdown, SingleSelectCheck, ToggleSwitch, Tooltip } from '@ui';
 import {
+  createMemo,
   createSignal,
   createUniqueId,
   For,
@@ -20,6 +21,7 @@ import {
   Show,
 } from 'solid-js';
 import type { CallState } from '../CallContext';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
 import { CallControlBar } from './CallControlBar';
 
 export type CallMediaControlsState = Pick<
@@ -47,7 +49,12 @@ export type CallMediaControlsState = Pick<
   | 'backgroundEffect'
   | 'setBackgroundEffect'
 > &
-  Partial<Pick<CallState, 'microphonePermission' | 'cameraPermission'>>;
+  Partial<
+    Pick<
+      CallState,
+      'microphonePermission' | 'cameraPermission' | 'room' | 'trackVersion'
+    >
+  >;
 
 type BackgroundChoice = 'none' | 'light' | 'heavy' | 'image';
 
@@ -70,6 +77,24 @@ export function CallMediaControls(props: {
   children?: JSX.Element;
 }) {
   const call = props.media;
+  const cameraTrack = createMemo(() => {
+    call.trackVersion?.();
+    if (call.isVideoMuted() || call.cameraPermission?.() === 'denied')
+      return undefined;
+    const track = call
+      .room?.()
+      ?.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Camera)?.track;
+    // mediaStreamTrack returns processed output when a processor is active.
+    const processor = track?.getProcessor?.();
+    const source =
+      processor &&
+      'source' in processor &&
+      processor.source instanceof MediaStreamTrack
+        ? processor.source
+        : (track?.mediaStream?.getVideoTracks()[0] ??
+          (!processor ? track?.mediaStreamTrack : undefined));
+    return source?.readyState === 'live' ? source : undefined;
+  });
   const [applyingBackground, setApplyingBackground] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let upload: HTMLInputElement | undefined;
@@ -308,7 +333,7 @@ export function CallMediaControls(props: {
                     label="None"
                     disabled={backgroundDisabled()}
                   >
-                    <BackgroundPreview />
+                    <BackgroundCameraPreview track={cameraTrack()} />
                   </BackgroundTile>
                   <BackgroundTile
                     value="light"
@@ -316,7 +341,10 @@ export function CallMediaControls(props: {
                     caption="Light"
                     disabled={backgroundDisabled()}
                   >
-                    <BackgroundPreview blur={2} />
+                    <BackgroundCameraPreview
+                      track={cameraTrack()}
+                      blur="light"
+                    />
                   </BackgroundTile>
                   <BackgroundTile
                     value="heavy"
@@ -324,12 +352,14 @@ export function CallMediaControls(props: {
                     caption="Strong"
                     disabled={backgroundDisabled()}
                   >
-                    <BackgroundPreview blur={5} />
+                    <BackgroundCameraPreview
+                      track={cameraTrack()}
+                      blur="heavy"
+                    />
                   </BackgroundTile>
                 </Dropdown.RadioGroup>
-              </div>
-              <div class="mx-2">
                 <RecentBackgroundImages
+                  embedded
                   effect={call.backgroundEffect()}
                   disabled={backgroundDisabled()}
                   uploading={applyingBackground()}
@@ -431,7 +461,16 @@ export function CallMediaControls(props: {
                         )
                       }
                     >
-                      <BackgroundPreview blur={option.blur} />
+                      <BackgroundCameraPreview
+                        track={cameraTrack()}
+                        blur={
+                          option.value === 'none'
+                            ? undefined
+                            : option.value === 'light'
+                              ? 'light'
+                              : 'heavy'
+                        }
+                      />
                       <span>{option.label}</span>
                     </MobileDrawer.Item>
                   )}
@@ -502,7 +541,7 @@ function DeviceDrawerOptions(props: {
     </div>
   );
 }
-/** One background choice as a small tile; `caption` shortens the visible name. */
+/** One background choice on the same grid as uploaded images. */
 function BackgroundTile(props: {
   value: BackgroundChoice;
   label: string;
@@ -511,17 +550,18 @@ function BackgroundTile(props: {
   children: JSX.Element;
 }) {
   return (
-    <Dropdown.RadioItem
-      value={props.value}
-      disabled={props.disabled}
-      class="group flex-col justify-center gap-1 p-0 text-center text-xs text-ink-muted data-checked:text-ink data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
-    >
-      <span class="relative block w-full rounded-lg after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] group-data-highlighted:after:overlay-hover">
-        {props.children}
-      </span>
-      <Dropdown.ItemLabel class="sr-only">{props.label}</Dropdown.ItemLabel>
-      <span aria-hidden="true">{props.caption ?? props.label}</span>
-    </Dropdown.RadioItem>
+    <Tooltip label={props.label} class="block">
+      <Dropdown.RadioItem
+        value={props.value}
+        disabled={props.disabled}
+        class="group flex-col justify-center gap-1 p-0 text-center text-xs text-ink-muted data-checked:text-ink data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        <span class="relative block w-full rounded-lg after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] group-data-highlighted:after:overlay-hover">
+          {props.children}
+        </span>
+        <Dropdown.ItemLabel class="sr-only">{props.label}</Dropdown.ItemLabel>
+      </Dropdown.RadioItem>
+    </Tooltip>
   );
 }
 

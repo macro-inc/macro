@@ -345,7 +345,10 @@ opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),
 and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, Recent images, and Upload. Screen share is
+Light blur, Strong blur, Recent images, and Upload in one even grid. In-call blur
+tiles show independent live previews of your camera with the same background
+processor while the menu is open (8fps on its canvas fallback); they never modify your published
+camera. Off, denied or unsupported cameras show a neutral effect tile. Screen share is
 also a split button: the left half starts or stops sharing (pressed while
 sharing), and **Screen share settings** holds **Share audio**, off by default,
 saved per device, and locked while sharing. Its disabled row stays focusable:
