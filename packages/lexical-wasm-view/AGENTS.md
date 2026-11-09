@@ -51,6 +51,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - `commit-work.browser.e2e.ts` counts real mark measurements and native Highlight range mutations with 8/128 comment/table/code groups, and checks downstream anchors after a block resizes; table observer tests cover merged rows and 8/256-row edit work.
 - `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing, Enter, and successive DOM-first characters against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
+- `history-keyboard.browser.e2e.ts` loads the same initial paragraph into both actual engines and clears their real histories before trusted typing, Ctrl-Z and both redo shortcuts; assert DOM, model JSON and model/DOM caret restoration. The three-engine input-parity configuration includes it.
 - Compare paste against the app plugin configuration, including trailingParagraphPlugin, and the external Markdown export; keep raw model and DOM evidence even when text matches.
 - Treat managed-browser paste timings as diagnostic; performance acceptance uses stock browsers, and Linux WebKit is an engine proxy.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.

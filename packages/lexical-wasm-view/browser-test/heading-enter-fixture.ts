@@ -1,13 +1,17 @@
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { HEADING, registerMarkdownShortcuts } from '@lexical/markdown';
 import { HeadingNode, QuoteNode, registerRichText } from '@lexical/rich-text';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  CommandCode,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   $createParagraphNode,
   $getNodeByKey,
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  CLEAR_HISTORY_COMMAND,
   createEditor,
 } from 'lexical';
 import { normalizeEnterPlugin } from '../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/normalize-enter/normalizeEnterPlugin';
@@ -81,6 +85,12 @@ function domSelection(root: HTMLElement) {
 }
 const inputParity = {
   errors,
+  prepareHistory() {
+    // Both engines start from the same loaded paragraph, outside undo history.
+    native.port.setState(JSON.stringify(upstream.getEditorState().toJSON()));
+    native.port.command(CommandCode.ClearHistory);
+    upstream.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+  },
   snapshot(engine: 'native' | 'upstream') {
     if (engine === 'native') {
       const selection = native.view.selection().selection;
