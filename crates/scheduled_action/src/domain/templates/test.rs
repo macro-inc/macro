@@ -128,6 +128,35 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
 }
 
 #[tokio::test]
+async fn a_shared_routine_never_operates_as_whoever_activates_it() {
+    let actions = service(false);
+    let templates = templates(&actions);
+    let mut routine = configuration(false);
+    routine.task = serde_json::json!({
+        "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        "dangerously_operate_as_user": true,
+    });
+    let id = actions
+        .create_action(&CreationPrincipal::User(user()), routine)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+
+    let shared = templates
+        .share_template(owner_receipt(user(), id), share_input())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        shared.task,
+        serde_json::json!({
+            "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        })
+    );
+}
+
+#[tokio::test]
 async fn only_the_owner_can_share_or_stop_sharing() {
     let actions = service(false);
     let templates = templates(&actions);

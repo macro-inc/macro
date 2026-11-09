@@ -4,8 +4,8 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { useSplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isGoToLeaderActive } from '@components/app/app-sidebar/go-to-leader';
 import {
-  isGoToLeaderActive,
   navigateToSidebarView,
   SidebarOpenInSplitMenu,
   sidebarContent,

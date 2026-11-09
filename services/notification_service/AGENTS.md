@@ -55,7 +55,14 @@ worker that sends email/mobile-push/websocket notifications.
 
 - Don't log notification payloads on tracing spans (#7892) — they can carry
   sensitive content; log ids/types instead.
+- `SES_CONFIGURATION_SET` is optional. When set, every notification email is
+  sent through that SES configuration set and tagged `notification_type`, so
+  its event destination reports delivery, bounce, open and click per type. Set
+  it only once the configuration set exists in that account and region and
+  the stack's SES policy (which allows `configuration-set/*`) is deployed.
 
 ## Related
 
 - Skill: `new-service`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

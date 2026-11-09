@@ -373,12 +373,11 @@ impl PgGithubPullRequestRepo {
                     OR ($9::text IS NOT NULL AND (
                         SELECT COALESCE(bit_or(CASE un.state
                             WHEN 'unseen' THEN 1 WHEN 'seen' THEN 2 WHEN 'done' THEN 4 END), 0)
-                        FROM notification n
-                        JOIN user_notification un ON un.notification_id = n.id
+                        FROM user_notification un
                         WHERE un.user_id = $9::text
                           AND un.deleted_at IS NULL
-                          AND n.event_item_type = 'foreign_entity'
-                          AND n.event_item_id = fe.id::text
+                          AND un.event_item_type = 'foreign_entity'
+                          AND un.event_item_id = fe.id::text
                     ) = ANY($8::int[]))
                   )
                 ORDER BY

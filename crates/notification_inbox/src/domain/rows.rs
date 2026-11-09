@@ -359,6 +359,41 @@ fn discussion_view(notification: &FeedNotification) -> Option<DiscussionView<'_>
     })
 }
 
+/// The message or comment a notification is about, when it is about one:
+/// the notifications sharing it present as one, by one-message-one-row.
+fn subject(notification: &FeedNotification, viewer: &MacroUserIdStr<'static>) -> Option<String> {
+    if let ChannelKind::Message { message_id, .. } = channel_view(notification, viewer).kind {
+        return Some(message_id.to_string());
+    }
+    discussion_view(notification).map(|view| view.comment_id)
+}
+
+/// The notifications a done of one shown notification acknowledges: it, and
+/// the hidden ones it speaks for. Other hidden notifications, the row's noise,
+/// stay with the row until its last shown notification is done.
+pub fn speaks_for(
+    row: &InboxRow,
+    notification: Uuid,
+    viewer: &MacroUserIdStr<'static>,
+) -> Vec<Uuid> {
+    let Some(shown) = row
+        .notifications
+        .iter()
+        .find(|shown| shown.notification_id == notification)
+    else {
+        return Vec::new();
+    };
+    let spoken = subject(shown, viewer);
+    std::iter::once(notification)
+        .chain(
+            row.hidden
+                .iter()
+                .filter(|hidden| spoken.is_some() && subject(hidden, viewer) == spoken)
+                .map(|hidden| hidden.notification_id),
+        )
+        .collect()
+}
+
 /// Place an entity's discussion notifications on its one row of comments.
 fn place_discussions(views: Vec<DiscussionView<'_>>) -> Vec<Placed> {
     let mut speakers: HashMap<&str, (MessageRole, Uuid)> = HashMap::new();

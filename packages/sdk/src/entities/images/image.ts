@@ -1,10 +1,16 @@
+import { wrapXml } from '../../mentions';
 import type { MacroClient } from '../../utils/client';
 
+/** The box Macro's editors fit a message image into, as the composer does. */
+const MESSAGE_IMAGE_BOX = 400;
+
 /**
- * An image in static file storage: an upload, or one made with
- * `macro.images.generate()`. Attach it to a channel message with
- * `channel.send(text, { images: [image] })`, or pass it back to `generate` as
- * a reference.
+ * An image in static file storage: an upload, a render from
+ * `canvas.render()`, or one made with `macro.images.generate()`. Attach it to
+ * a channel message with `channel.send(text, { images: [image] })`, show it in
+ * a reply or Markdown with {@link StaticImage.toMarkdown}, or pass it back to
+ * `generate` as a reference. It is not a document: never mention its `id` as
+ * one.
  */
 export class StaticImage {
   protected constructor(
@@ -36,13 +42,32 @@ export class StaticImage {
     );
   }
 
-  /** Serialize the image reference without its client. */
+  /**
+   * The `<m-image>` tag that shows this image in an agent reply, a channel
+   * message or a Markdown document. Put it on a line of its own.
+   */
+  toMarkdown(alt = ''): string {
+    return wrapXml('m-image', {
+      url: this.url,
+      alt,
+      srcType: 'sfs',
+      id: this.id,
+      width: this.width,
+      height: this.height,
+      scale: 1,
+      constrainedWidth: MESSAGE_IMAGE_BOX,
+      constrainedHeight: MESSAGE_IMAGE_BOX,
+    });
+  }
+
+  /** Serialize the image reference, and the markup that shows it, without its client. */
   toJSON() {
     return {
       id: this.id,
       url: this.url,
       width: this.width,
       height: this.height,
+      markdown: this.toMarkdown(),
     };
   }
 }

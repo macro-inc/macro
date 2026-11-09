@@ -794,3 +794,38 @@ async fn late_provider_upload_cannot_change_a_committed_schedule(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn scheduled_delivery_keeps_the_latest_invocation_after_request_completion(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let (link, message) = identity();
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    for id in [first, second] {
+        agent_correlation::context::scope(
+            Some(id),
+            repo.change_schedule(link, message, &actor(), future(), None, 0),
+        )
+        .await?;
+    }
+    assert_eq!(agent_correlation::context::current(), None);
+    let scheduled =
+        email_db_client::messages::scheduled::get::get_scheduled_message(&pool, link, message)
+            .await?
+            .unwrap();
+    assert_eq!(scheduled.agent_correlation_id, Some(second));
+    // A later ordinary SDK schedule must not retain an earlier agent attribution.
+    repo.change_schedule(link, message, &actor(), future(), None, 0)
+        .await?;
+    let scheduled =
+        email_db_client::messages::scheduled::get::get_scheduled_message(&pool, link, message)
+            .await?
+            .unwrap();
+    assert_eq!(scheduled.agent_correlation_id, None);
+    Ok(())
+}
