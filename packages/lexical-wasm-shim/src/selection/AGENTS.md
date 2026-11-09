@@ -5,6 +5,8 @@ compatibility protocol. Keep model operations in the native adapter and DOM
 selection movement in the injected view callbacks.
 
 - Keep constructors pure JS; buffer selection intent without references and allocate real native references only at explicit semantic write barriers.
+- Pass node arguments as deferred actual-node groups; encode captured/reserved authority only at semantic barriers, never fabricate native references or snapshot unacknowledged cached nodes.
+- Declare injected capability callbacks as function-valued properties to preserve strict parameter variance.
 - Bind the same JS selection instance before decoding barrier snapshots; never fabricate empty replies or sentinel references.
 - Capture the live active JS selection before publication as well as at write barriers, because raw field writes can bypass bufferSelection.
 - Read selection nodes, text and direction from the acknowledged JS graph with injected caret algorithms; never allocate references or invoke native queries from getters.

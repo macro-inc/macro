@@ -50,6 +50,14 @@ export interface RawTableSelectionValue {
 }
 export type SelectionValue = BaseSelection | RawTableSelectionValue;
 
+/** Node groups retain real JS instances until the barrier encodes issued authority. */
+export type SelectionArgument =
+  | IForeignCallbackValue
+  | {
+      readonly kind: 'nodes';
+      readonly nodes: readonly LexicalNode[];
+    };
+
 export interface SelectionRuntime {
   createTableSelection(): RawTableSelectionValue;
   isTableSelection(selection: unknown): selection is RawTableSelectionValue;
@@ -131,7 +139,7 @@ export interface SelectionRuntime {
   invokeSelection(
     selection: BaseSelection,
     operation: CompatOperation,
-    args: readonly IForeignCallbackValue[]
+    args: readonly SelectionArgument[]
   ): ICompatReply;
   selectionRef(selection: SelectionValue): IForeignSelectionRef | undefined;
   bindSelection(

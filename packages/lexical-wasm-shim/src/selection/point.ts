@@ -70,7 +70,11 @@ export class Point {
   }
 
   isBefore(point: PointType): boolean {
-    return isPointBefore(this, point, () => getSelectionRuntime().caret);
+    return isPointBefore<import('./runtime').PointCaret<'next'>>(
+      this,
+      point,
+      () => getSelectionRuntime().caret
+    );
   }
 
   getNode(): LexicalNode {
@@ -148,12 +152,12 @@ export function isPointBefore<C>(
   anchor: import('./runtime').RawSelectionPoint,
   focus: import('./runtime').RawSelectionPoint,
   getCaret: () => {
-    $caretFromPoint(
+    $caretFromPoint: (
       point: import('./runtime').RawSelectionPoint,
       direction: 'next'
-    ): C;
-    $normalizeCaret(point: C): C;
-    $comparePointCaretNext(a: C, b: C): -1 | 0 | 1;
+    ) => C;
+    $normalizeCaret: (point: C) => C;
+    $comparePointCaretNext: (a: C, b: C) => -1 | 0 | 1;
   }
 ): boolean {
   if (anchor.key === focus.key) return anchor.offset < focus.offset;

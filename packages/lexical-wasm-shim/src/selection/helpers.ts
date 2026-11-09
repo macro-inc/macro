@@ -92,10 +92,10 @@ export function setSelectionValue<
 >(
   selection: S | null,
   target: {
-    isReadOnly(): boolean;
-    validate(selection: S): void;
-    activate(selection: S | null): void;
-    buffer(selection: S | null, activate: boolean): void;
+    isReadOnly: () => boolean;
+    validate: (selection: S) => void;
+    activate: (selection: S | null) => void;
+    buffer: (selection: S | null, activate: boolean) => void;
   }
 ): void {
   if (target.isReadOnly()) {
@@ -560,15 +560,15 @@ export function getNodesFromReadCaretRange<N, C extends ReadCaret<N, C>>(
     $isEmpty,
     $isSameNode,
   }: {
-    $isElementNode(node: N): boolean;
-    $childOrigin(caret: C | null): N | null;
-    $isSiblingCaret(caret: C): boolean;
-    $getChildCaret(origin: N): C;
-    $getAdjacentChildCaret(caret: C): C | null;
-    $normalizeCaret(caret: C): C;
-    $isTextPointCaret(caret: C): boolean;
-    $isEmpty(node: N): boolean;
-    $isSameNode(node: N, other: N | undefined): boolean;
+    $isElementNode: (node: N) => boolean;
+    $childOrigin: (caret: C | null) => N | null;
+    $isSiblingCaret: (caret: C) => boolean;
+    $getChildCaret: (origin: N) => C;
+    $getAdjacentChildCaret: (caret: C) => C | null;
+    $normalizeCaret: (caret: C) => C;
+    $isTextPointCaret: (caret: C) => boolean;
+    $isEmpty: (node: N) => boolean;
+    $isSameNode: (node: N, other: N | undefined) => boolean;
   }
 ): N[] {
   const nodes: N[] = [];
