@@ -32,6 +32,12 @@ attributes, model and Markdown in all three engines. Native node keys are
 properties rather than serialized attributes; do not mask attributes in this
 comparison. This is behavior coverage, not a large-document latency gate.
 
+Check decorator selection with both engines: click an image and verify its node
+selection clears browser ranges, click an equation once without selecting it as
+a node, then click text after a node selection and verify a range caret returns.
+Repeat the return to text with touch input; nested editor and decorator input
+selections must remain owned by their own controls.
+
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.
 Keep the app shell open for the offline navigation; the app has no asset-caching
