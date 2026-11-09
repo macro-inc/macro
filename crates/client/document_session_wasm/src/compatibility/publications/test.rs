@@ -295,10 +295,103 @@ fn external_receipts_survive_observation_and_drain_exactly_once() -> Result<(), 
         })
         .collect();
     assert!(errors.is_empty(), "{errors:?}");
+    // History may publish a separate cursor repair after its tree projection.
+    // Compare against the actual observer chain, never a guessed history count.
+    let observed = editor
+        .compatibility
+        .as_ref()
+        .expect("host")
+        .receipts
+        .lock()
+        .expect("receipts")
+        .iter()
+        .map(|(_, commit)| commit.clone())
+        .collect::<Vec<_>>();
+    assert!(!observed.is_empty());
     let removed =
         compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?;
     assert_eq!(editor.machine.output, causal_output);
-    assert_eq!(removed.commits.len(), 1);
+    assert_eq!(removed.commits.len(), observed.len());
+    for (wire, source) in removed.commits.iter().zip(&observed) {
+        assert_eq!(wire.flags, 0);
+        assert_eq!(
+            wire.tags,
+            source
+                .tags
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            wire.dirty_leaves,
+            source
+                .changes
+                .dirty_leaves
+                .iter()
+                .copied()
+                .map(records::key)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            wire.dirty_elements.len(),
+            source.changes.dirty_elements.len()
+        );
+        for (wire, (key, intent)) in wire
+            .dirty_elements
+            .iter()
+            .zip(&source.changes.dirty_elements)
+        {
+            assert_eq!(wire.key, records::key(*key));
+            assert_eq!(wire.intentional, *intent == DirtyIntent::Intentional);
+        }
+        match (source.next.selection(), &wire.selection) {
+            (None, compat::CompatSelectionData::CompatNoSelection {}) => {}
+            (
+                Some(Selection::Range(actual)),
+                compat::CompatSelectionData::CompatRangeSelection {
+                    anchor,
+                    focus,
+                    format,
+                    style,
+                    ..
+                },
+            ) => {
+                assert_eq!(anchor.key, records::key(actual.anchor.key()));
+                assert_eq!(focus.key, records::key(actual.focus.key()));
+                assert_eq!(
+                    anchor.kind,
+                    match actual.anchor {
+                        Point::Text { .. } => compat::CompatPointKind::Text,
+                        Point::Element { .. } => compat::CompatPointKind::Element,
+                    }
+                );
+                assert_eq!(
+                    focus.kind,
+                    match actual.focus {
+                        Point::Text { .. } => compat::CompatPointKind::Text,
+                        Point::Element { .. } => compat::CompatPointKind::Element,
+                    }
+                );
+                assert_eq!({ anchor.offset }, actual.anchor.offset());
+                assert_eq!({ focus.offset }, actual.focus.offset());
+                assert_eq!(*format, actual.format.bits());
+                assert_eq!(*style, actual.style.encode_utf16().collect::<Vec<_>>());
+            }
+            _ => panic!("history selection receipt differs from actual publication"),
+        }
+    }
+    for pair in removed.commits.windows(2) {
+        assert!(pair[0].version < pair[1].version);
+    }
+    for (wire, source) in removed.commits.iter().zip(&observed).skip(1) {
+        assert!(source.changes.is_empty());
+        assert!(!source.composition_changed);
+        assert_ne!(source.prev.selection(), source.next.selection());
+        assert!(wire.batch.records.is_empty());
+        assert!(wire.batch.removed_keys.is_empty());
+    }
+    let last_version = removed.commits.last().expect("actual receipt").version;
+    assert_eq!(editor.compat_current_version_inner()?, last_version);
     let removed = &removed.commits[0];
     assert!(removed.tags.contains(&UpdateTag::Collaboration.to_string()));
 
@@ -317,7 +410,7 @@ fn external_receipts_survive_observation_and_drain_exactly_once() -> Result<(), 
         .records
         .iter()
         .all(|record| !removed.batch.removed_keys.contains(&record.record.node.key)));
-    let final_snapshot = editor.compat_snapshot_inner(removed.version)?;
+    let final_snapshot = editor.compat_snapshot_inner(last_version)?;
     assert_eq!(final_snapshot.batch.records.len(), 20_001);
     Ok(())
 }
