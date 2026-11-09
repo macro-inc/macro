@@ -803,13 +803,24 @@ impl RunSessions for FakeRuns {
         if self.fail_start.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(rootcause::report!("the session didn't open"));
         }
-        self.started.lock().unwrap().push((run.session, prompt.to_owned()));
-        self.progress.lock().unwrap().insert(run.session, RunProgress::Running);
+        self.started
+            .lock()
+            .unwrap()
+            .push((run.session, prompt.to_owned()));
+        self.progress
+            .lock()
+            .unwrap()
+            .insert(run.session, RunProgress::Running);
         Ok(())
     }
 
     async fn progress(&self, run: &StoredRun) -> Result<RunProgress, rootcause::Report> {
-        Ok(*self.progress.lock().unwrap().get(&run.session).unwrap_or(&RunProgress::Unknown))
+        Ok(*self
+            .progress
+            .lock()
+            .unwrap()
+            .get(&run.session)
+            .unwrap_or(&RunProgress::Unknown))
     }
 
     async fn produced(&self, _: &StoredRun) -> Result<Vec<Target>, rootcause::Report> {
@@ -830,7 +841,10 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
     h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
     let session = h.session(OWNER, "ideas").await;
     let idea = h
-        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
         .await
         .idea
         .unwrap();
@@ -849,16 +863,28 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
     ));
     let run_session = started[0].0;
     let run = h.first_run().await;
-    assert_eq!((run.session_id, run.progress), (run_session, RunProgress::Running));
-    assert_eq!(h.service.feed(&user(OWNER), None).await.unwrap().ideas[0].state, IdeaState::Accepted);
+    assert_eq!(
+        (run.session_id, run.progress),
+        (run_session, RunProgress::Running)
+    );
+    assert_eq!(
+        h.service.feed(&user(OWNER), None).await.unwrap().ideas[0].state,
+        IdeaState::Accepted
+    );
 
     // Waiting for an approval shows on the idea, for the person to answer.
-    runs.progress.lock().unwrap().insert(run_session, RunProgress::NeedsApproval);
+    runs.progress
+        .lock()
+        .unwrap()
+        .insert(run_session, RunProgress::NeedsApproval);
     assert_eq!(h.first_run().await.progress, RunProgress::NeedsApproval);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
 
     // Once its session finished, the idea is done with what the run made.
-    runs.progress.lock().unwrap().insert(run_session, RunProgress::Finished);
+    runs.progress
+        .lock()
+        .unwrap()
+        .insert(run_session, RunProgress::Finished);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     let done = PgIdeaRepo::new(h.pool.clone())
@@ -891,24 +917,35 @@ async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
     h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
     let session = h.session(OWNER, "ideas").await;
     let idea = h
-        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
         .await
         .idea
         .unwrap();
     // A session that never opened leaves the idea to try again.
-    runs.fail_start.store(true, std::sync::atomic::Ordering::SeqCst);
+    runs.fail_start
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     assert!(matches!(
         h.service.accept(&user(OWNER), idea.id).await,
         Err(IdeaError::Internal(_))
     ));
-    runs.fail_start.store(false, std::sync::atomic::Ordering::SeqCst);
+    runs.fail_start
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
-    runs.progress.lock().unwrap().insert(run_session, RunProgress::Failed);
+    runs.progress
+        .lock()
+        .unwrap()
+        .insert(run_session, RunProgress::Failed);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
-    assert_eq!(feed.ideas[0].run.as_ref().unwrap().progress, RunProgress::Failed);
+    assert_eq!(
+        feed.ideas[0].run.as_ref().unwrap().progress,
+        RunProgress::Failed
+    );
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
@@ -922,7 +959,11 @@ async fn accepting_any_other_idea_starts_no_run(pool: PgPool) {
     let mut composer = prompt_idea("quotes:compare", "Compare the supplier quotes");
     composer.run_mode = Some(RunMode::Composer);
     let composer = h.suggest(session, composer).await.idea.unwrap();
-    let entity = h.suggest(session, entity_idea("venue:headcount")).await.idea.unwrap();
+    let entity = h
+        .suggest(session, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
     h.service.accept(&user(OWNER), composer.id).await.unwrap();
     h.service.accept(&user(OWNER), entity.id).await.unwrap();
     assert!(runs.started.lock().unwrap().is_empty());
