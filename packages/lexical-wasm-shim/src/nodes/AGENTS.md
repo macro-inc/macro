@@ -10,6 +10,9 @@ classes; `index.ts` exports them and hydrates built-ins. Import superclass value
 from their defining module so class evaluation does not depend on barrel order.
 `dom-import.ts` and `text-dom.ts` implement the node DOM methods.
 `config.ts` and `dom-types.ts` carry the actual core's recursive types.
+`editor-config.ts` carries the full public render configuration with actual core
+node and editor types. Public node methods use it rather than the view's minimal
+internal configuration; resolve configured DOM hooks through the actual editor.
 `runtime-primitives.ts` resolves nodes, writable captures and native-backed field
 writes through `runtime.ts`. `../compatibility-exceptions.ts` centralizes the
 three approved upstream assertions; keep their call sites in the type-contract

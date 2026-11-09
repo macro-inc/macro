@@ -14,31 +14,26 @@ import type {
 type TextDetailType = 'directionless' | 'unmergable';
 
 import type { DOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
-import { $getEditor } from '../../../lexical-wasm-view/src/compat/runtime';
-import type {
-  CompatEditor,
-  CompatEditorConfig,
-} from '../../../lexical-wasm-view/src/compat/types';
+import {
+  getActiveEditor,
+  getEditorDOMRenderConfig,
+  type LexicalEditor,
+} from '../editor';
 import type { BaseSelection } from '../selection';
 import { $getSelection, $isRangeSelection } from '../selection/helpers';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
 import { type DOMConversionMap, textImportDOM } from './dom-import';
+import type { EditorConfig } from './editor-config';
 import { textFormats, toggleTextFormat } from './format';
 import { ElementNode } from './index';
 import { modeResult, nodeResult, nodesResult } from './results';
 import { nodeCall, nodeIsComposing, nodeSelect } from './runtime';
 import { createTextDOM, updateTextDOM } from './text-dom';
 
-function textSlot(
-  node: TextNode,
-  config: CompatEditorConfig,
-  dom: HTMLElement,
-  editor?: CompatEditor
-): DOMSlot<HTMLElement> {
-  return config.dom === undefined
-    ? node.getDOMSlot(dom)
-    : config.dom.$getDOMSlot(node, dom, editor ?? $getEditor());
+function textSlot(node: TextNode, dom: HTMLElement): DOMSlot<HTMLElement> {
+  const editor = getActiveEditor();
+  return getEditorDOMRenderConfig(editor).$getDOMSlot(node, dom, editor);
 }
 
 export class TextNode extends LexicalNode {
@@ -236,22 +231,22 @@ export class TextNode extends LexicalNode {
     _prevSelection: BaseSelection | null,
     _nextSelection: RangeSelection
   ): void {}
-  createDOM(config: CompatEditorConfig, editor?: CompatEditor): HTMLElement {
+  createDOM(config: EditorConfig, _editor?: LexicalEditor): HTMLElement {
     return createTextDOM(this, config, this.isComposing(), (dom) =>
-      textSlot(this, config, dom, editor)
+      textSlot(this, dom)
     );
   }
-  updateDOM(prev: this, dom: HTMLElement, config: CompatEditorConfig): boolean {
+  updateDOM(prev: this, dom: HTMLElement, config: EditorConfig): boolean {
     return updateTextDOM(
       this,
       prev,
       dom,
       config,
       this.isComposing(),
-      (element) => textSlot(this, config, element)
+      (element) => textSlot(this, element)
     );
   }
-  exportDOM(editor: CompatEditor): DOMExportOutput {
+  exportDOM(editor: LexicalEditor): DOMExportOutput {
     let element = this.createDOM(editor._config, editor);
     element.style.whiteSpace = 'pre-wrap';
     if (this.hasFormat('lowercase')) element.style.textTransform = 'lowercase';

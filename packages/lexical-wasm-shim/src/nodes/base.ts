@@ -10,10 +10,7 @@ import type {
 } from 'lexical';
 
 import { DOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
-import type {
-  CompatEditor,
-  CompatEditorConfig,
-} from '../../../lexical-wasm-view/src/compat/types';
+import type { LexicalEditor } from '../editor';
 import type { BaseSelection } from '../selection';
 import { $getSelection, $isRangeSelection } from '../selection/helpers';
 import type { RangeSelection } from '../selection/range';
@@ -23,6 +20,7 @@ import type {
   StaticNodeConfigValue,
 } from './config';
 import type { DOMConversionMap } from './dom-types';
+import type { EditorConfig } from './editor-config';
 import {
   DecoratorNode,
   defineNodeFields,
@@ -362,23 +360,23 @@ export class LexicalNode {
   selectNext(anchorOffset?: number, focusOffset?: number): RangeSelection {
     return nodeSelect(this, 'selectNext', [anchorOffset, focusOffset]);
   }
-  createDOM(_config: CompatEditorConfig, _editor: CompatEditor): HTMLElement {
+  createDOM(_config: EditorConfig, _editor: LexicalEditor): HTMLElement {
     throw new Error('createDOM: base method not extended');
   }
   updateDOM(
     _prevNode: unknown,
     _dom: HTMLElement,
-    _config: CompatEditorConfig
+    _config: EditorConfig
   ): boolean {
     throw new Error('updateDOM: base method not extended');
   }
   getDOMSlot(element: HTMLElement): DOMSlot<HTMLElement> {
     return new DOMSlot(element);
   }
-  exportDOM(editor: CompatEditor): DOMExportOutput {
+  exportDOM(editor: LexicalEditor): DOMExportOutput {
     return { element: this.createDOM(editor._config, editor) };
   }
-  reconcileObservedMutation(_dom: HTMLElement, _editor: CompatEditor): void {
+  reconcileObservedMutation(_dom: HTMLElement, _editor: LexicalEditor): void {
     this.markDirty();
   }
   exportJSON(): SerializedLexicalNode {

@@ -6,8 +6,8 @@ import type { SerializedTextNode, TextModeType } from 'lexical';
 
 type TextDetailType = 'directionless' | 'unmergable';
 
-import type { CompatEditorConfig } from '../../../lexical-wasm-view/src/compat/types';
 import type { DOMConversionMap } from './dom-import';
+import type { EditorConfig } from './editor-config';
 import { TextNode } from './text';
 import { classNames } from './text-dom';
 
@@ -27,7 +27,7 @@ export class TabNode extends TextNode {
   static importJSON(node: SerializedTextNode): TabNode {
     return new TabNode().updateFromJSON(node);
   }
-  createDOM(config: CompatEditorConfig): HTMLElement {
+  createDOM(config: EditorConfig): HTMLElement {
     const dom = super.createDOM(config);
     dom.classList.add(...classNames(config.theme.tab));
     return dom;

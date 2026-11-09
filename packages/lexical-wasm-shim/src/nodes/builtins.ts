@@ -10,10 +10,7 @@ import type {
   SerializedRootNode,
 } from 'lexical';
 
-import type {
-  CompatEditor,
-  CompatEditorConfig,
-} from '../../../lexical-wasm-view/src/compat/types';
+import type { LexicalEditor } from '../editor';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
 import {
@@ -21,6 +18,7 @@ import {
   lineBreakImportDOM,
   paragraphImportDOM,
 } from './dom-import';
+import type { EditorConfig } from './editor-config';
 import { ElementNode } from './element';
 import { nodeByKey } from './runtime';
 import { TextNode } from './text';
@@ -40,7 +38,7 @@ export class ParagraphNode extends ElementNode {
   static importJSON(node: SerializedParagraphNode): ParagraphNode {
     return new ParagraphNode().updateFromJSON(node);
   }
-  createDOM(config: CompatEditorConfig): HTMLElement {
+  createDOM(config: EditorConfig): HTMLElement {
     const dom = document.createElement('p');
     dom.classList.add(...classNames(config.theme.paragraph));
     return dom;
@@ -48,11 +46,11 @@ export class ParagraphNode extends ElementNode {
   updateDOM(
     _prevNode: ParagraphNode,
     _dom: HTMLElement,
-    _config: CompatEditorConfig
+    _config: EditorConfig
   ): boolean {
     return false;
   }
-  exportDOM(editor: CompatEditor): DOMExportOutput {
+  exportDOM(editor: LexicalEditor): DOMExportOutput {
     const { element } = super.exportDOM(editor);
     if (element instanceof HTMLElement) {
       if (this.isEmpty()) element.append(document.createElement('br'));
@@ -205,7 +203,7 @@ export class DecoratorNode<T> extends LexicalNode {
     }
     return node;
   }
-  decorate(_editor: CompatEditor, _config: CompatEditorConfig): T | null {
+  decorate(_editor: LexicalEditor, _config: EditorConfig): T | null {
     return null;
   }
   isIsolated(): boolean {
