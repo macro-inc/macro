@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { runDocumentProgram } from '../queries/document-programs';
 import { type RunReplyMessage, readRunRequest } from './frame-helper';
 
@@ -44,10 +45,27 @@ export function attachProgramHost(
     }
     inFlight += 1;
     try {
-      const receipt = await run(
-        options.documentId,
-        { source: request.source, arguments: request.arguments },
-        controller.signal
+      // The server run's request joins this span through fetchWithToken's
+      // captured context, so one trace covers the frame's call to its result.
+      const receipt = await Telemetry.span(
+        'block_code.run_document_program',
+        async (span) => {
+          span.setAttr('document.id', options.documentId);
+          span.setAttr('code_mode.source_bytes', request.source.length);
+          try {
+            const receipt = await run(
+              options.documentId,
+              { source: request.source, arguments: request.arguments },
+              controller.signal
+            );
+            span.setAttr('code_mode.status', receipt.status);
+            span.setAttr('code_mode.activity', receipt.activity.length);
+            return receipt;
+          } catch (error) {
+            span.error(error);
+            throw error;
+          }
+        }
       );
       if (receipt.status === 'succeeded') {
         reply({

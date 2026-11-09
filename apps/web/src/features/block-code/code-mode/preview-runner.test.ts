@@ -2,6 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentProgramReceipt } from '../queries/document-programs';
 import { MAX_IN_FLIGHT_RUNS, attachProgramHost } from './preview-runner';
 
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: (
+      _name: string,
+      operation: (span: {
+        setAttr: () => void;
+        error: () => void;
+      }) => unknown
+    ) => operation({ setAttr: () => {}, error: () => {} }),
+  },
+}));
+
 type Posted = { message: unknown; origin: string };
 
 /**
