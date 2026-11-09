@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
   MenuItem,
@@ -24,9 +24,23 @@ import {
   useMutedEntitiesQuery,
 } from '@queries/notification/unsubscribes';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { ChannelSectionKey } from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
 
+export function presetTranslationKey(id: string) {
+  return match(id)
+    .with('30-minutes', () => 'channelSections.muteFor30Minutes' as const)
+    .with('1-hour', () => 'channelSections.muteFor1Hour' as const)
+    .with('3-hours', () => 'channelSections.muteFor3Hours' as const)
+    .with('morning', () => 'channelSections.muteUntilMorning' as const)
+    .with('weekend', () =>
+      new Date().getDay() === 0 || new Date().getDay() >= 5
+        ? ('channelSections.muteForWeekend' as const)
+        : ('channelSections.muteUntilMonday' as const)
+    )
+    .otherwise(() => 'channelSections.muteForWeek' as const);
+}
 /** The same existing snooze presets and custom picker for channels and sections. */
 export function ChannelMuteMenu(props: {
   label: string;
@@ -61,19 +75,24 @@ export function ChannelMuteMenu(props: {
           />
           <MenuSeparator />
           <For each={snoozePresets(new Date())}>
-            {(preset) => (
-              <MenuItem
-                text={
-                  <span class="flex items-center gap-4">
-                    <span class="flex-1">{preset.label}</span>
-                    <span class="text-xs text-ink-extra-muted">
-                      {formatSnoozeDeadline(preset.until)}
-                    </span>
+            {(preset) => {
+              const label = (
+                <span class="flex items-center gap-4">
+                  <span class="flex-1">
+                    {t(presetTranslationKey(preset.id))}
                   </span>
-                }
-                onClick={() => props.onSnooze(preset.until)}
-              />
-            )}
+                  <span class="text-xs text-ink-extra-muted">
+                    {formatSnoozeDeadline(preset.until, formatLocale())}
+                  </span>
+                </span>
+              );
+              return (
+                <MenuItem
+                  text={label}
+                  onClick={() => props.onSnooze(preset.until)}
+                />
+              );
+            }}
           </For>
           <MenuSeparator />
           <MenuItem

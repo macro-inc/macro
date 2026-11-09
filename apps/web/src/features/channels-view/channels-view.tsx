@@ -41,6 +41,7 @@ import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import { createSectionSearchSource } from './components/rail/next/channel-discovery-source';
+import { MobileSectionsView } from './components/rail/next/mobile/MobileSectionsView';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
@@ -65,6 +66,7 @@ export type ChannelsViewProps = {
 
 // Mounted inside the mobile list's Suspense boundary.
 function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const { sectionsEnabled, sectionsLoading } = useChannelsView();
   const listChannels = useChannelListSearchPool();
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
@@ -88,12 +90,21 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
       .slice(0, MAX_PINNED_CHANNELS);
   });
   return (
-    <ChannelsMobileView
-      source={mobileSearchSource}
-      pinned={pinned()}
-      searchQuery={mobileSearchText()}
-      onClearSearch={() => SearchState.setQuery('')}
-    />
+    <Show when={!sectionsLoading()}>
+      <Show
+        when={sectionsEnabled()}
+        fallback={
+          <ChannelsMobileView
+            source={mobileSearchSource}
+            pinned={pinned()}
+            searchQuery={mobileSearchText()}
+            onClearSearch={() => SearchState.setQuery('')}
+          />
+        }
+      >
+        <MobileSectionsView sources={props.sources} pinned={pinned()} />
+      </Show>
+    </Show>
   );
 }
 
@@ -166,6 +177,7 @@ function ChannelsViewRoot() {
     setTab,
     mobileLayout,
     sectionsLoading,
+    sectionsEnabled,
     selectedChannel,
     setSelectedChannel,
   } = useChannelsView();
@@ -179,7 +191,14 @@ function ChannelsViewRoot() {
 
   const sources = useChannelsSources(
     (scope) => {
-      if (mobileLayout()) return scope === 'recents';
+      if (mobileLayout()) {
+        return (
+          scope === 'recents' ||
+          (!sectionsLoading() &&
+            sectionsEnabled() &&
+            scope === 'direct_messages')
+        );
+      }
       if (sectionsLoading()) return false;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
@@ -195,7 +214,7 @@ function ChannelsViewRoot() {
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Show
-          when={mobileLayout() || !sectionsLoading()}
+          when={!sectionsLoading()}
           fallback={
             <div class="grid size-full place-items-center">
               <SpinnerIcon
