@@ -32,6 +32,7 @@ class NativeEditorView(
     private var applying = false
     private var initialized = false
     private var ready = false
+    private var inputGeneration = 0L
     private var composing = false
     private var editable = initiallyEditable
     private var interactable = initiallyInteractable
@@ -94,7 +95,15 @@ class NativeEditorView(
                 admit(FfiInput.Command(command, replacedSelection))
             }
         })
-        setOnFocusChangeListener { _, focused -> if (ready && !applying) admit(FfiInput.Focus(focused)) }
+        setOnFocusChangeListener { _, focused ->
+            if (!focused) {
+                if (ready && !applying) finishComposition()
+                inputGeneration++
+                BaseInputConnectionCompat.finish(text)
+                if (applying) composing = false
+            }
+            if (ready && !applying) admit(FfiInput.Focus(focused))
+        }
     }
 
     /** Repaint an already seeded session without replacing its document or history. */
@@ -225,6 +234,7 @@ class NativeEditorView(
     }
 
     fun setEditable(value: Boolean) {
+        if (editable != value) inputGeneration++
         editable = value
         val wasApplying = applying
         val anchor = selectionStart
@@ -243,11 +253,19 @@ class NativeEditorView(
 
     /** Content locks are independent of editor editability and comment-mark capability. */
     fun setContentInteractable(value: Boolean) {
+        if (interactable != value) inputGeneration++
         interactable = value
         setEditable(editable)
     }
 
+    internal fun detachFromSession() {
+        setEditable(false)
+        ready = false
+        inputGeneration++
+    }
+
     private fun canEditContent() = editable && interactable
+    internal fun acceptsInput() = ready && canEditContent()
 
     override fun onKeyShortcut(keyCode: Int, event: android.view.KeyEvent): Boolean {
         if (canEditContent() && (event.isCtrlPressed || event.isMetaPressed)) {
@@ -268,6 +286,7 @@ class NativeEditorView(
     }
 
     override fun onTextContextMenuItem(id: Int): Boolean {
+        if (!ready) return false
         when (id) {
             android.R.id.paste, android.R.id.pasteAsPlainText -> {
                 if (!canEditContent()) return false
@@ -298,6 +317,11 @@ class NativeEditorView(
     private fun finishComposition() {
         if (!composing) return
         composing = false
+        BaseInputConnectionCompat.finish(text)
+        if (!canEditContent()) {
+            admit(FfiInput.Composition(CompositionEvent.Clear, ViewSelection.KeepModel))
+            return
+        }
         val point = projectionLayout.point(selectionStart.coerceIn(0, projectionLayout.text.length))
         if (point is Point.Text) {
             val end = projectionLayout.point(selectionEnd.coerceIn(0, projectionLayout.text.length))
@@ -314,36 +338,87 @@ class NativeEditorView(
     override fun onCreateInputConnection(info: EditorInfo): InputConnection? {
         if (!ready || !canEditContent()) return null
         val connection = super.onCreateInputConnection(info) ?: return null
-        return object : InputConnectionWrapper(connection, false) {
-            override fun setComposingText(value: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!ready || !canEditContent()) return false
-                if (!composing) {
-                    composing = true
-                    admit(FfiInput.Composition(CompositionEvent.Start(value?.toString() ?: ""),
-                        projectionLayout.selection(selectionStart, selectionEnd)))
+        val generation = ++inputGeneration
+        fun current() = ready && canEditContent() && generation == inputGeneration
+        fun composingText(value: CharSequence?) {
+            if (!composing) {
+                composing = true
+                admit(FfiInput.Composition(CompositionEvent.Start(value?.toString() ?: ""),
+                    projectionLayout.selection(selectionStart, selectionEnd)))
+            }
+        }
+        fun composingRegion(start: Int, end: Int): Boolean {
+            if (start < 0 || end < 0 || start > length() || end > length()) return false
+            if (!composing) {
+                composing = true
+                admit(FfiInput.Composition(CompositionEvent.Start(""),
+                    projectionLayout.selection(start, end)))
+            }
+            return true
+        }
+        val guarded = object : InputConnectionWrapper(connection, false) {
+            private var batches = 0
+            override fun beginBatchEdit(): Boolean {
+                if (!current()) return false
+                return super.beginBatchEdit().also { if (it) batches++ }
+            }
+            override fun endBatchEdit(): Boolean {
+                if (batches == 0 && !current()) return false
+                if (batches > 0) batches--
+                return super.endBatchEdit()
+            }
+            override fun closeConnection() {
+                if (!current()) {
+                    while (batches > 0) {
+                        batches--
+                        super.endBatchEdit()
+                    }
+                    return
                 }
+                finishComposition()
+                inputGeneration++
+                batches = 0
+                super.closeConnection()
+            }
+            override fun setSelection(start: Int, end: Int): Boolean = current() && super.setSelection(start, end)
+            override fun sendKeyEvent(event: android.view.KeyEvent): Boolean = current() && super.sendKeyEvent(event)
+            override fun performContextMenuAction(id: Int): Boolean = current() && super.performContextMenuAction(id)
+            override fun performEditorAction(action: Int): Boolean = current() && super.performEditorAction(action)
+            override fun performPrivateCommand(action: String?, data: android.os.Bundle?): Boolean = current() && super.performPrivateCommand(action, data)
+            override fun clearMetaKeyStates(states: Int): Boolean = current() && super.clearMetaKeyStates(states)
+            override fun reportFullscreenMode(enabled: Boolean): Boolean = current() && super.reportFullscreenMode(enabled)
+            override fun requestCursorUpdates(mode: Int): Boolean = current() && super.requestCursorUpdates(mode)
+            override fun getTextBeforeCursor(length: Int, flags: Int): CharSequence? = if (current()) super.getTextBeforeCursor(length, flags) else null
+            override fun getTextAfterCursor(length: Int, flags: Int): CharSequence? = if (current()) super.getTextAfterCursor(length, flags) else null
+            override fun getSelectedText(flags: Int): CharSequence? = if (current()) super.getSelectedText(flags) else null
+            override fun getCursorCapsMode(modes: Int): Int = if (current()) super.getCursorCapsMode(modes) else 0
+            override fun getExtractedText(request: android.view.inputmethod.ExtractedTextRequest?, flags: Int): android.view.inputmethod.ExtractedText? =
+                if (current()) super.getExtractedText(request, flags) else null
+            override fun commitCompletion(value: android.view.inputmethod.CompletionInfo?): Boolean {
+                if (!current()) return false
+                return super.commitCompletion(value).also { if (it) finishComposition() }
+            }
+            override fun commitCorrection(value: android.view.inputmethod.CorrectionInfo?): Boolean = current() && super.commitCorrection(value)
+            override fun setComposingText(value: CharSequence?, newCursorPosition: Int): Boolean {
+                if (!current()) return false
+                composingText(value)
                 return super.setComposingText(value, newCursorPosition)
             }
 
             override fun setComposingRegion(start: Int, end: Int): Boolean {
-                if (!ready || !canEditContent()) return false
-                if (!composing) {
-                    composing = true
-                    admit(FfiInput.Composition(CompositionEvent.Start(""),
-                        projectionLayout.selection(start, end)))
-                }
+                if (!current() || !composingRegion(start, end)) return false
                 return super.setComposingRegion(start, end)
             }
 
             override fun commitText(value: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!ready || !canEditContent()) return false
+                if (!current()) return false
                 val committed = super.commitText(value, newCursorPosition)
-                finishComposition()
+                if (committed) finishComposition()
                 return committed
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-                if (!ready || !canEditContent() || beforeLength < 0 || afterLength < 0) return false
+                if (!current() || beforeLength < 0 || afterLength < 0) return false
                 val value = text ?: return false
                 var start = minOf(selectionStart, selectionEnd)
                 var end = maxOf(selectionStart, selectionEnd)
@@ -362,16 +437,18 @@ class NativeEditorView(
             }
 
             override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
-                if (!ready || !canEditContent()) return false
+                if (!current()) return false
                 return super.deleteSurroundingTextInCodePoints(beforeLength, afterLength)
             }
 
             override fun finishComposingText(): Boolean {
+                if (!current()) return false
                 val finished = super.finishComposingText()
-                finishComposition()
+                if (finished) finishComposition()
                 return finished
             }
         }
+        return modernInputConnection(guarded, ::current, ::composingText, ::composingRegion, ::finishComposition)
     }
 }
 

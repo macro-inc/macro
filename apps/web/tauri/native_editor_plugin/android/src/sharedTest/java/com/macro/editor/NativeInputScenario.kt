@@ -63,9 +63,20 @@ internal object NativeInputScenario {
             val selection = ViewSelection.Range(Point.Element(paragraph, 0u),
                 Point.Element(paragraph, 0u), false)
             view.admit(FfiInput.SelectionFromView(selection, null))
+            val obsoleteInput = requireNotNull(view.onCreateInputConnection(EditorInfo()))
             val input = requireNotNull(view.onCreateInputConnection(EditorInfo()))
-            assertTrue(input.setComposingText("a", 1))
-            assertTrue(input.setComposingText("a😀", 1))
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                assertTrue(input.setComposingText("a", 1, android.view.inputmethod.TextAttribute.Builder().build()))
+            } else {
+                assertTrue(input.setComposingText("a", 1))
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                assertTrue(input.setComposingText("a😀", 1, android.view.inputmethod.TextAttribute.Builder().build()))
+            } else {
+                assertTrue(input.setComposingText("a😀", 1))
+            }
+            obsoleteInput.closeConnection()
+            assertTrue(android.view.inputmethod.BaseInputConnection.getComposingSpanStart(requireNotNull(view.text)) >= 0)
             assertTrue(input.finishComposingText())
             assertEquals(admissions.joinToString("\n"), "a😀", session.textContent())
             assertEquals("a😀", view.text.toString())
@@ -123,6 +134,14 @@ internal object NativeInputScenario {
             assertFalse(view.onTextContextMenuItem(android.R.id.paste))
             assertEquals("ab", session.textContent())
             view.setContentInteractable(true)
+            assertFalse(input.commitText("stale-after-unlock", 1))
+            assertFalse(input.setSelection(0, 1))
+            assertFalse(input.sendKeyEvent(android.view.KeyEvent(
+                android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DEL)))
+            assertFalse(input.performContextMenuAction(android.R.id.cut))
+            assertEquals(2, view.selectionStart)
+            assertEquals(2, view.selectionEnd)
+            assertEquals("ab", session.textContent())
             assertNotNull(view.onCreateInputConnection(EditorInfo()))
             view.setEditable(false)
             assertNull(view.onCreateInputConnection(EditorInfo()))
