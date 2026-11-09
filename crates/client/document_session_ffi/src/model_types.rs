@@ -130,9 +130,9 @@ pub enum TextMode {
     Segmented,
 }
 
-/// Native ElementFormat; fields retain their domain meaning.
-#[uniffi::remote(Enum)]
-pub enum ElementFormat {
+/// Public native alignment names; raw model numbers render as the empty alignment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiElementFormat {
     /// Unset.
     Unset,
     /// Left.
@@ -148,6 +148,34 @@ pub enum ElementFormat {
     /// Justify.
     Justify,
 }
+
+impl From<ElementFormat> for FfiElementFormat {
+    fn from(value: ElementFormat) -> Self {
+        match value {
+            ElementFormat::Unset | ElementFormat::Raw(_) => Self::Unset,
+            ElementFormat::Left => Self::Left,
+            ElementFormat::Start => Self::Start,
+            ElementFormat::Center => Self::Center,
+            ElementFormat::Right => Self::Right,
+            ElementFormat::End => Self::End,
+            ElementFormat::Justify => Self::Justify,
+        }
+    }
+}
+impl From<FfiElementFormat> for ElementFormat {
+    fn from(value: FfiElementFormat) -> Self {
+        match value {
+            FfiElementFormat::Unset => Self::Unset,
+            FfiElementFormat::Left => Self::Left,
+            FfiElementFormat::Start => Self::Start,
+            FfiElementFormat::Center => Self::Center,
+            FfiElementFormat::Right => Self::Right,
+            FfiElementFormat::End => Self::End,
+            FfiElementFormat::Justify => Self::Justify,
+        }
+    }
+}
+uniffi::custom_type!(ElementFormat,FfiElementFormat,{remote,lower:|value|value.into(),try_lift:|value|Ok(value.into())});
 
 /// Native TextDirection; fields retain their domain meaning.
 #[uniffi::remote(Enum)]

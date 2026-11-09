@@ -6748,69 +6748,6 @@ public object FfiConverterTypeEditDirection: FfiConverterRustBuffer<EditDirectio
 
 
 /**
- * Native ElementFormat; fields retain their domain meaning.
- */
-
-enum class ElementFormat {
-    
-    /**
-     * Unset.
-     */
-    UNSET,
-    /**
-     * Left.
-     */
-    LEFT,
-    /**
-     * Start.
-     */
-    START,
-    /**
-     * Center.
-     */
-    CENTER,
-    /**
-     * Right.
-     */
-    RIGHT,
-    /**
-     * End.
-     */
-    END,
-    /**
-     * Justify.
-     */
-    JUSTIFY;
-
-    
-
-
-    companion object
-}
-
-
-/**
- * @suppress
- */
-public object FfiConverterTypeElementFormat: FfiConverterRustBuffer<ElementFormat> {
-    override fun read(buf: ByteBuffer) = try {
-        ElementFormat.values()[buf.getInt() - 1]
-    } catch (e: IndexOutOfBoundsException) {
-        throw RuntimeException("invalid enum value, something is very wrong!!", e)
-    }
-
-    override fun allocationSize(value: ElementFormat) = 4UL
-
-    override fun write(value: ElementFormat, buf: ByteBuffer) {
-        buf.putInt(value.ordinal + 1)
-    }
-}
-
-
-
-
-
-/**
  * Typed native editing commands; extension plugin payloads remain application-owned.
  */
 sealed class FfiCommand {
@@ -7479,6 +7416,69 @@ public object FfiConverterTypeFfiEditorType: FfiConverterRustBuffer<FfiEditorTyp
     override fun allocationSize(value: FfiEditorType) = 4UL
 
     override fun write(value: FfiEditorType, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Public native alignment names; raw model numbers render as the empty alignment.
+ */
+
+enum class FfiElementFormat {
+    
+    /**
+     * Unset.
+     */
+    UNSET,
+    /**
+     * Left.
+     */
+    LEFT,
+    /**
+     * Start.
+     */
+    START,
+    /**
+     * Center.
+     */
+    CENTER,
+    /**
+     * Right.
+     */
+    RIGHT,
+    /**
+     * End.
+     */
+    END,
+    /**
+     * Justify.
+     */
+    JUSTIFY;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiElementFormat: FfiConverterRustBuffer<FfiElementFormat> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiElementFormat.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiElementFormat) = 4UL
+
+    override fun write(value: FfiElementFormat, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -15536,6 +15536,11 @@ public typealias FfiConverterTypeContainerId = FfiConverterString
 
 public typealias DocValue = FfiValue
 public typealias FfiConverterTypeDocValue = FfiConverterTypeFfiValue
+
+
+
+public typealias ElementFormat = FfiElementFormat
+public typealias FfiConverterTypeElementFormat = FfiConverterTypeFfiElementFormat
 
 
 
