@@ -187,3 +187,5 @@ Use EditorCore suspended host scopes to stage on the same editor, then adopt onl
 
 Use ModifyTarget::RequireView when a view-backed host has not supplied layout endpoints; keep NoView for source paths with no DOM view. Structural movement runs first, then unresolved movement returns LayoutRequired.
 Native boundaries reconstruct dense indices with `NodeTypeIndex::from_raw`; validate against the receiving registry before lookup.
+
+Restore owned selection metadata through with_foreign_value_metadata; synchronization preserves object identity and treats cached direction alone as a memo change without dirty/publication effects.
