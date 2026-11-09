@@ -219,7 +219,12 @@ for (const scenario of scenarios) {
         await page
           .getByRole('button', { name: 'Create Document', exact: true })
           .click();
-        await expect(page).not.toHaveURL(previousUrl);
+        await expect(page).toHaveURL(
+          (url) =>
+            /^\/app\/drive\/md\/[^/]+$/.test(url.pathname) &&
+            url.href !== previousUrl,
+          { timeout: 90_000 }
+        );
         await writeFile(
           info.outputPath(`${flag}-created-document.json`),
           JSON.stringify({ url: page.url() })
@@ -249,7 +254,10 @@ for (const scenario of scenarios) {
         }
         if (scenario.reload) {
           await page.reload();
-          await expect(body(page)).toContainText(scenario.text);
+          await expect(body(page)).toBeVisible({ timeout: 90_000 });
+          await expect(body(page)).toContainText(scenario.text, {
+            timeout: 30_000,
+          });
         }
         if (scenario.paste) {
           await body(page).evaluate((element, payload) => {
@@ -309,6 +317,13 @@ for (const scenario of scenarios) {
             .getByRole('button', { name: 'Add property', exact: true })
             .click();
         if (scenario.action === 'table') {
+          await page
+            .locator('.menu-surface:visible')
+            .getByText('Table', { exact: true })
+            .click();
+          await expect(
+            page.locator('.menu-surface:visible .grid')
+          ).toBeVisible();
           await page.keyboard.press('Enter');
           await expect(body(page).locator('table')).toBeVisible();
           await page.keyboard.type('Table cell');
@@ -316,7 +331,22 @@ for (const scenario of scenarios) {
           await page.keyboard.type('Second cell');
         }
         if (scenario.action === 'check') {
-          await body(page).getByRole('checkbox').click();
+          const checkbox = body(page).getByRole('checkbox');
+          const point = await checkbox.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            const marker = getComputedStyle(element, '::before');
+            return {
+              x:
+                rect.left +
+                parseFloat(marker.left) +
+                parseFloat(marker.width) / 2,
+              y:
+                rect.top +
+                parseFloat(marker.top) +
+                parseFloat(marker.height) / 2,
+            };
+          });
+          await page.mouse.click(point.x, point.y);
           await expect(body(page).getByRole('checkbox')).toBeChecked();
         }
         if (scenario.action === 'comment') {
@@ -427,6 +457,38 @@ for (const scenario of scenarios) {
           )
         );
         console.log(`${flag}: capture`);
+        const domSelection = await body(page).evaluate((root) => {
+          const selection = window.getSelection();
+          function path(node: Node | null): number[] | null {
+            const result: number[] = [];
+            while (node && node !== root) {
+              const parent = node.parentNode;
+              if (!parent) return null;
+              result.unshift(
+                [...parent.childNodes].findIndex((child) => child === node)
+              );
+              node = parent;
+            }
+            return node === root ? result : null;
+          }
+          return selection
+            ? {
+                collapsed: selection.isCollapsed,
+                anchor: {
+                  path: path(selection.anchorNode),
+                  offset: selection.anchorOffset,
+                },
+                focus: {
+                  path: path(selection.focusNode),
+                  offset: selection.focusOffset,
+                },
+              }
+            : null;
+        });
+        await writeFile(
+          info.outputPath(`${flag}-dom-selection.json`),
+          JSON.stringify(domSelection, null, 2)
+        );
         const screenshot = await page
           .locator('[data-block-content]')
           .screenshot({ animations: 'disabled', caret: 'hide' });
@@ -488,6 +550,7 @@ for (const scenario of scenarios) {
       for (const flag of ['OFF', 'ON']) {
         for (const suffix of [
           '-dom.json',
+          '-dom-selection.json',
           '.md',
           '-accessibility.yml',
           '-full-accessibility.json',
