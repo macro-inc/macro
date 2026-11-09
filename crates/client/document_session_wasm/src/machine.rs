@@ -27,7 +27,7 @@ impl Machine {
         wall: f64,
         editor: bool,
     ) -> Result<Self, BoundaryError> {
-        Self::create_with(abi, config, mono, wall, editor, false)
+        Self::create_with(abi, config, mono, wall, editor, false, None)
     }
     pub(crate) fn create_macro(
         abi: u32,
@@ -35,7 +35,16 @@ impl Machine {
         mono: f64,
         wall: f64,
     ) -> Result<Self, BoundaryError> {
-        Self::create_with(abi, config, mono, wall, true, true)
+        Self::create_with(abi, config, mono, wall, true, true, None)
+    }
+    pub(crate) fn create_macro_with_namespace(
+        abi: u32,
+        config: &[u8],
+        mono: f64,
+        wall: f64,
+        namespace: &str,
+    ) -> Result<Self, BoundaryError> {
+        Self::create_with(abi, config, mono, wall, true, true, Some(namespace))
     }
     fn create_with(
         abi: u32,
@@ -44,6 +53,7 @@ impl Machine {
         wall: f64,
         editor: bool,
         application: bool,
+        namespace: Option<&str>,
     ) -> Result<Self, BoundaryError> {
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
@@ -65,6 +75,9 @@ impl Machine {
             };
             if let Some(clock) = &constructor_clock {
                 editor_config = crate::macro_editor::config(editor_config, clock.clone());
+            }
+            if let Some(namespace) = namespace {
+                editor_config.namespace = namespace.into();
             }
             config.surface = SurfaceConfig::Editor(editor_config);
             Session::Editor(Box::new(DocumentSession::new(config, now)?))

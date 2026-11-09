@@ -28,6 +28,26 @@ impl EditorSession {
             compatibility: None,
         })
     }
+    /// Construct the application editor with the host's actual instance namespace.
+    #[wasm_bindgen(js_name=createMacroWithNamespace)]
+    pub fn create_macro_with_namespace(
+        abi_major: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+        namespace: &str,
+        hostname: Option<String>,
+    ) -> Result<Self, JsError> {
+        Ok(Self {
+            machine: machine::Machine::create_macro_with_namespace(
+                abi_major, config, now, wall, namespace,
+            )
+            .map_err(js)?,
+            hostname,
+            #[cfg(feature = "compatibility")]
+            compatibility: None,
+        })
+    }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
     pub fn create(abi_major: u32, config: &[u8], now: f64, wall: f64) -> Result<Self, JsError> {
         Ok(Self {
