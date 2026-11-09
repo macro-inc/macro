@@ -517,6 +517,7 @@ build-document-session-compat-wasm:
     scripts/cached-wasm-build.sh document_session_wasm {{justfile_directory()}}/src/lib/core/document-session/wasm-compat -- env CARGO_TARGET_DIR="{{document_session_compat_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/document_session_wasm --target web --profile document-session-wasm --out-dir {{justfile_directory()}}/src/lib/core/document-session/wasm-compat -- --no-default-features --features bebop-owned-all,compat-web
     wasm-opt -Oz --converge src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm -o src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
     bun scripts/native-editor-features.ts --compat-artifact src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
+    cp src/lib/core/document-session/wasm-compat/document_session_wasm.d.ts ../../packages/collaboration/src/session/wasm-compat.generated.d.ts
     bun scripts/document-session-size.ts src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
 
 check-native-editor-features:

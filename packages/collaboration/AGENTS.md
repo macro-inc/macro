@@ -26,8 +26,7 @@ that lock; TTL cleanup also holds the source lease so reopened owners remain liv
 Derive native field metadata from the checksum-pinned class declarations before generating the foreign host schema; keep typed UTF-16/scalar arguments separate from arbitrary opaque JS slots.
 Generate session/foreign-host.generated.ts from document_session_wasm/abi/foreign-host.bop; keep compiler output excluded from Biome like abi.generated.ts, mirror that exclusion in tooling/just/check.just, and format AST-derived descriptors in their generator. Preserve public export objects in opaque slots until an explicit serialization request; record references retain their instance owner namespace.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
-Keep wasm.generated.d.ts synchronized with wasm-pack; the build recipe copies it
-so clean checkouts can type-check before compiling the binary.
+Keep wasm.generated.d.ts synchronized with the native-only wasm-pack output; the native build recipe copies it so clean checkouts can type-check before compiling the binary. Keep the explicit compatibility-web output separate in wasm-compat.generated.d.ts and export it only as types through ./session/wasm-compat; never add compatibility stubs to native declarations.
 
 ## Checks
 
