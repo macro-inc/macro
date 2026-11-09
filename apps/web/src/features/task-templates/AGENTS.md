@@ -40,6 +40,8 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - The creator and current team admins can edit or delete team templates.
 - Team templates remain with the team after creator departure or account deletion.
 - Keep ownership immutable when editing a template.
+- Gate management actions on the current team and server-returned management permission.
+- Close management dialogs when the account, team, or edited selection changes.
 - Keep authorization and persistence in `crates/task_templates`; use generated API types.
 - Use focused confirmation dialogs for destructive actions; do not open a separate template content editor.
 - Put No template after search, group templates under Personal and the team name, and put New template last.

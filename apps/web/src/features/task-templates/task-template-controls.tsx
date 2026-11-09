@@ -191,12 +191,16 @@ export function TaskTemplateControls(props: {
     const selection = props.composer.templateSelection();
     if (
       !canUse() ||
+      !selectedCanManage() ||
       selection.kind !== 'editing' ||
       selection.template.id !== template.id
     )
       return;
+    const scope = scopeKey();
     const current = () =>
-      canUse() && props.composer.templateSelection() === selection;
+      canUse() &&
+      scopeKey() === scope &&
+      props.composer.templateSelection() === selection;
     openDialog(
       DeleteTemplateDialog,
       {
@@ -214,10 +218,20 @@ export function TaskTemplateControls(props: {
     );
   };
   const selectedCanManage = () => {
-    const key = selectedKey();
+    const selection = props.composer.templateSelection();
+    if (selection.kind !== 'saved' && selection.kind !== 'editing')
+      return false;
+    const target = selection.template;
+    if (viewerId() !== props.composer.draftOwner) return false;
+    if (target.teamId && target.teamId !== team()?.id) return false;
     return (
       query.isSuccess &&
-      query.data.some((template) => template.id === key && template.canManage)
+      query.data.some(
+        (template) =>
+          template.id === target.id &&
+          (template.teamId ?? null) === target.teamId &&
+          template.canManage
+      )
     );
   };
   const switchTemplate = (replace: () => void) => {
@@ -271,11 +285,19 @@ export function TaskTemplateControls(props: {
     dirty: props.composer.areTemplateFieldsDirty(),
     pending: props.composer.isCreating(),
     onReset: selectedCanManage()
-      ? props.composer.resetTemplateFields
+      ? () => {
+          if (isCurrent() && selectedCanManage())
+            props.composer.resetTemplateFields();
+        }
       : undefined,
     onUpdate: selectedCanManage()
-      ? () =>
-          fireAndForget(props.composer.updateTemplateFields(), 'task-templates')
+      ? () => {
+          if (isCurrent() && selectedCanManage())
+            fireAndForget(
+              props.composer.updateTemplateFields(),
+              'task-templates'
+            );
+        }
       : undefined,
     items: items(),
     onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
