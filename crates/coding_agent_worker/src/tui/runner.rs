@@ -219,7 +219,10 @@ async fn run_loop(
                 match event {
                     Some(TermEvent::Key(key)) => app.on_key(key).await,
                     Some(_) => {}
-                    None => return Ok(None),
+                    None => {
+                        tracing::info!("terminal input closed; exiting");
+                        return Ok(None);
+                    }
                 }
                 apply_pending_browser(app);
             }
@@ -252,6 +255,7 @@ async fn run_loop(
         }
 
         if app.quit {
+            tracing::info!("quit from the panel");
             app.stop_daemon().await;
             return Ok(None);
         }
