@@ -3,7 +3,11 @@
 Cloudflare Worker that collects and looks up Macro CLA signatures. Together
 with the `cla.yml` GitHub workflow (generated from
 `tooling/xtask/crates/xtask_workflows/src/workflows/cla.rs`) it enforces the
-CLA policy on `macro-inc/macro` pull requests.
+CLA policy on `macro-inc/macro` pull requests. Besides PR events and
+`/macro-cla` comments, the workflow sweeps open PRs every 10 minutes (or on
+manual dispatch) and checks any head commit with no `cla` status or an
+infrastructure-error one, so a run that never starts can't leave the required
+check pending.
 
 ## What it does
 

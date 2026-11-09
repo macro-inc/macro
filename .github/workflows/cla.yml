@@ -10,9 +10,12 @@ name: CLA
     - opened
     - synchronize
     - reopened
+  schedule:
+  - cron: '*/10 * * * *'
+  workflow_dispatch: {}
 jobs:
   cla:
-    if: github.event_name == 'pull_request_target' || (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))
     name: CLA
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
@@ -104,8 +107,62 @@ jobs:
               `CLA not signed — see CONTRIBUTING.md, sign at ${SIGN_URL}`);
           }
 
+          // Head commits of open PRs that need the check: no `cla` status at all
+          // (the PR's own run never started or died before writing it), or an
+          // infrastructure error worth retrying. GraphQL keeps this to a few
+          // requests however many PRs are open.
+          async function prsNeedingCheck() {
+            const needing = [];
+            let cursor = null;
+            do {
+              const { repository } = await github.graphql(`
+                query($owner: String!, $repo: String!, $cursor: String) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequests(states: OPEN, first: 100, after: $cursor) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        number
+                        commits(last: 1) {
+                          nodes { commit { status { context(name: "${STATUS_CONTEXT}") { state description } } } }
+                        }
+                      }
+                    }
+                  }
+                }`, { owner, repo, cursor });
+              const page = repository.pullRequests;
+              for (const pr of page.nodes) {
+                const status = pr.commits.nodes[0]?.commit.status?.context;
+                if (!status || status.description?.startsWith('CLA infrastructure error')) {
+                  needing.push(pr.number);
+                }
+              }
+              cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+            } while (cursor);
+            return needing;
+          }
+
+          // One PR's failure must not stop the sweep; fail the run at the end so
+          // a broken sweep is visible.
+          async function sweep() {
+            const numbers = await prsNeedingCheck();
+            core.info(`${numbers.length} open PR(s) need the CLA check`);
+            let failed = 0;
+            for (const number of numbers) {
+              try {
+                const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+                await runCheck(pr);
+              } catch (err) {
+                failed += 1;
+                core.warning(`CLA sweep of #${number} failed: ${err.message}`);
+              }
+            }
+            if (failed) core.setFailed(`CLA sweep failed for ${failed} PR(s)`);
+          }
+
           if (context.eventName === 'pull_request_target') {
             await runCheck(context.payload.pull_request);
+          } else if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') {
+            await sweep();
           } else {
             const command = (context.payload.comment.body ?? '').split('\n')[0].trim();
             const prNumber = context.issue.number;
@@ -148,5 +205,5 @@ jobs:
         ORG_READ_TOKEN: ${{ secrets.CLA_ORG_READ_TOKEN || github.token }}
         CLA_CHECK_API_KEY: ${{ secrets.CLA_CHECK_API_KEY }}
 concurrency:
-  group: cla-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: cla-${{ github.event.pull_request.number || github.event.issue.number || 'sweep' }}
   cancel-in-progress: false

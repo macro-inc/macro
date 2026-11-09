@@ -8,12 +8,18 @@
 //! idempotent. If the worker is unreachable the check fails *closed* with an
 //! infrastructure-error description.
 //!
-//! Two triggers:
+//! Three triggers:
 //! - `pull_request_target` (opened / synchronize / reopened): set the status,
 //!   silently — the bot never comments unprompted.
 //! - `issue_comment` (created) on PRs: `/macro-cla` (org members only)
 //!   posts the signing invitation; `/macro-cla check` (anyone) re-runs the
 //!   check.
+//! - `schedule` / `workflow_dispatch`: sweep every open PR and run the check
+//!   on any whose head commit has no `cla` status, or an infrastructure-error
+//!   one. `cla` is a required status that only this workflow writes, so a run
+//!   that never starts (GitHub reports `startup_failure` with no jobs, as it
+//!   did for every `pull_request_target` workflow during an Actions incident)
+//!   would otherwise leave the PR blocked on "Expected — waiting" forever.
 //!
 //! `pull_request_target` runs with base-repo secrets on fork PRs, so this job
 //! must never check out or execute PR head code — there is deliberately no
@@ -21,7 +27,7 @@
 
 use gh_workflow::{
     Concurrency, Event, Expression, IssueComment, IssueCommentType, Job, Level, Permissions,
-    PullRequestTarget, PullRequestType, Step, Use, Workflow,
+    PullRequestTarget, PullRequestType, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::runners;
@@ -42,12 +48,17 @@ pub fn cla() -> Workflow {
                     .add_type(PullRequestType::Synchronize)
                     .add_type(PullRequestType::Reopened),
             )
-            .issue_comment(IssueComment::default().add_type(IssueCommentType::Created)))
+            .issue_comment(IssueComment::default().add_type(IssueCommentType::Created))
+            // Backstop for PR events whose run never started or never wrote
+            // the status.
+            .add_schedule(Schedule::new("*/10 * * * *"))
+            .workflow_dispatch(WorkflowDispatch::default()))
         // Serialize runs per PR so a burst of events can't interleave status
         // writes; never cancel — a dropped run could leave a stale status.
+        // Sweeps share one group of their own.
         .concurrency(
             Concurrency::new(Expression::new(
-                "cla-${{ github.event.pull_request.number || github.event.issue.number }}",
+                "cla-${{ github.event.pull_request.number || github.event.issue.number || 'sweep' }}",
             ))
             .cancel_in_progress(false),
         )
@@ -61,7 +72,7 @@ fn cla_job() -> Job {
         // Skip non-PR comments and comments that can't be a command; the
         // command itself is exact-matched in the script.
         .cond(Expression::new(
-            "github.event_name == 'pull_request_target' || \
+            "github.event_name != 'issue_comment' || \
              (github.event.issue.pull_request && startsWith(github.event.comment.body, '/macro-cla'))",
         ))
         // `pull_requests` must be WRITE, not read. Posting the invitation goes
@@ -183,8 +194,62 @@ fn script() -> String {
             `CLA not signed — see CONTRIBUTING.md, sign at ${{SIGN_URL}}`);
         }}
 
+        // Head commits of open PRs that need the check: no `cla` status at all
+        // (the PR's own run never started or died before writing it), or an
+        // infrastructure error worth retrying. GraphQL keeps this to a few
+        // requests however many PRs are open.
+        async function prsNeedingCheck() {{
+          const needing = [];
+          let cursor = null;
+          do {{
+            const {{ repository }} = await github.graphql(`
+              query($owner: String!, $repo: String!, $cursor: String) {{
+                repository(owner: $owner, name: $repo) {{
+                  pullRequests(states: OPEN, first: 100, after: $cursor) {{
+                    pageInfo {{ hasNextPage endCursor }}
+                    nodes {{
+                      number
+                      commits(last: 1) {{
+                        nodes {{ commit {{ status {{ context(name: "${{STATUS_CONTEXT}}") {{ state description }} }} }} }}
+                      }}
+                    }}
+                  }}
+                }}
+              }}`, {{ owner, repo, cursor }});
+            const page = repository.pullRequests;
+            for (const pr of page.nodes) {{
+              const status = pr.commits.nodes[0]?.commit.status?.context;
+              if (!status || status.description?.startsWith('CLA infrastructure error')) {{
+                needing.push(pr.number);
+              }}
+            }}
+            cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+          }} while (cursor);
+          return needing;
+        }}
+
+        // One PR's failure must not stop the sweep; fail the run at the end so
+        // a broken sweep is visible.
+        async function sweep() {{
+          const numbers = await prsNeedingCheck();
+          core.info(`${{numbers.length}} open PR(s) need the CLA check`);
+          let failed = 0;
+          for (const number of numbers) {{
+            try {{
+              const {{ data: pr }} = await github.rest.pulls.get({{ owner, repo, pull_number: number }});
+              await runCheck(pr);
+            }} catch (err) {{
+              failed += 1;
+              core.warning(`CLA sweep of #${{number}} failed: ${{err.message}}`);
+            }}
+          }}
+          if (failed) core.setFailed(`CLA sweep failed for ${{failed}} PR(s)`);
+        }}
+
         if (context.eventName === 'pull_request_target') {{
           await runCheck(context.payload.pull_request);
+        }} else if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') {{
+          await sweep();
         }} else {{
           const command = (context.payload.comment.body ?? '').split('\n')[0].trim();
           const prNumber = context.issue.number;
