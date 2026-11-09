@@ -12,8 +12,9 @@ those crates' tools. Hosted by the harness's scheduling runtime.
 - `POST /scheduled-action/suggestions/generate?timezone=` (onboarding, once the
   inbox connects) or the nightly tick (`GenerationService::nightly`, every five
   minutes in the harness) starts a generation: one `suggestion_generation` row,
-  then one ideas session and a routines session per `SessionLayout` group at
-  once, each kind only when its flag is on (`enable-ideas`,
+  then one ideas session and routines sessions at once (at onboarding one per
+  `SessionLayout` group, for speed; at night one for every surface, for cost),
+  each kind only when its flag is on (`enable-ideas`,
   `enable-routine-suggestions`).
 - Each session is hidden, the person's, non-billable, and may call its kind's
   tools while its `suggestion_generation_session` row is open. Its brief comes
