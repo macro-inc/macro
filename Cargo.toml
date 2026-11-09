@@ -251,6 +251,7 @@ sync_service_client = { path = "crates/sync_service_client" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
 document_session = { path = "crates/client/document_session" }
 phf = { version = "0.13.1", features = ["macros"] }
+lexical_conformance = { path = "crates/client/lexical/lexical_conformance" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
 # Shared dependencies for the portable Lexical model and its conformance suites.
@@ -559,6 +560,8 @@ zune-core = "0.5"
 zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
+wasm-encoder = { version = "0.244", features = ["wasmparser"] }
+wasmparser = "0.244"
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
@@ -579,6 +582,7 @@ bytes = "1.11.1"
 doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
+scoped-tls-hkt = "0.1.5"
 scraper = "0.18"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
@@ -599,6 +603,8 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Same editor release, equivalent dense range updates; see vendor/loro-editor/README.md.
+loro-internal = { path = "vendor/loro-editor/loro-internal" }
 # Legacy ECMAScript case folding; see vendor/regress/README-MACRO.md.
 regress = { path = "vendor/regress" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
@@ -675,6 +681,18 @@ opt-level = 2
 # trace bytes. Keep the measured byte-hashing hot path optimized in tests while
 # preserving debug/overflow checks and every production profile.
 [profile.test.package.xxhash-rust]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+# Both encoder releases execute measured native rich-text tracking in tests.
+# Keep debug assertions and overflow checks enabled.
+[profile.test.package."loro-internal@1.16.2"]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+[profile.test.package."loro-internal@1.17.1"]
 opt-level = 2
 debug-assertions = true
 overflow-checks = true

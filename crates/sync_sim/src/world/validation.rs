@@ -5,7 +5,7 @@ impl Sim {
     pub(super) fn validate(&mut self) {
         let mut failures = Vec::new();
         let mut created = BTreeMap::<u64, i32>::new();
-        for event in &self.events {
+        for (index, event) in self.events.iter().enumerate() {
             match &event.fact {
                 Fact::ServerSeed { vv, .. } => {
                     for (peer, counter) in vv {
@@ -13,6 +13,28 @@ impl Sim {
                             .entry(*peer)
                             .and_modify(|old| *old = (*old).max(*counter))
                             .or_insert(*counter);
+                    }
+                }
+                Fact::ProjectionRecovered {
+                    client,
+                    session,
+                    doc,
+                    spans,
+                    vv,
+                    ..
+                } => {
+                    if !crate::invariants::projection_recovery_explained(
+                        &self.events[..index],
+                        client,
+                        *session,
+                        *doc,
+                        spans,
+                        vv,
+                    ) {
+                        failures.push(Failure::new(
+                            "projection_recovery_visible",
+                            "projection recovery without an imported injected span",
+                        ));
                     }
                 }
                 Fact::LocalCommit { spans, .. }
@@ -32,14 +54,23 @@ impl Sim {
             if !client.alive {
                 continue;
             }
+            let faulted = self.config.faulty_editor_clients.contains(name)
+                && crate::invariants::projection_faulted(
+                    &self.events,
+                    name,
+                    client.session,
+                    client.spec.doc,
+                );
             match client.core.editor_final() {
-                Ok(Some(editor)) if editor.synced_json != editor.reconstructed => {
+                Ok(Some(editor)) if !faulted && editor.synced_json != editor.reconstructed => {
                     failures.push(Failure::new(
                         "projection_consistent",
                         format!("{name:?}: live model differs from persisted reconstruction"),
                     ))
                 }
-                Err(error) => failures.push(error),
+                Err(error) if !faulted || error.invariant != "projection_consistent" => {
+                    failures.push(error)
+                }
                 _ => {}
             }
             let wal = client.core.wal();

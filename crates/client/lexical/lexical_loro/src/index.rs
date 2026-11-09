@@ -161,6 +161,26 @@ pub fn reconstruct_state(doc: &LoroDoc, policy: &dyn SyncPolicy) -> Result<Seria
         root: schema::read_node(&doc.get_map("root"), policy)?,
     })
 }
+/// Initial read with evidence that persisted transparent wrappers were lifted.
+pub struct InitialEditorState {
+    /// Policy-filtered editor state.
+    pub state: SerializedEditorState,
+    /// A persisted wrapper was lifted while reading; ordinary reads never mutate it.
+    pub has_transparent_wrappers: bool,
+}
+/// Reconstruct initialization data and report persisted transparent wrappers in one walk.
+pub fn reconstruct_initial_state(
+    doc: &LoroDoc,
+    policy: &dyn SyncPolicy,
+) -> Result<InitialEditorState> {
+    let mut has_transparent_wrappers = false;
+    let root =
+        schema::read_node_for_init(&doc.get_map("root"), policy, &mut has_transparent_wrappers)?;
+    Ok(InitialEditorState {
+        state: SerializedEditorState { root },
+        has_transparent_wrappers,
+    })
+}
 /// Construct a deterministic document; set its explicit peer before any operations.
 pub fn new_doc(peer: loro::PeerID) -> Result<LoroDoc> {
     let doc = LoroDoc::new();
@@ -190,7 +210,7 @@ impl LoroProjection {
         doc.set_record_timestamp(false);
         schema::initialize_map(
             &root,
-            &synced_json(state, policy)?.root,
+            &storage_node(state.view(), NodeKey::ROOT, policy)?,
             schema::MapSchema::Node,
         )?;
         doc.commit_with(

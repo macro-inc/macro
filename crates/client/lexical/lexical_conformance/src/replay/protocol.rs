@@ -179,11 +179,16 @@ impl Replayer {
         let key = node_key(receiver).ok()?;
         let identity = receiver["identity"].as_u64()?;
         self.bindings.snapshots().ok()?.into_iter().find(|state| {
-            state.view().node(key).is_some_and(|node| {
-                let pointer = std::ptr::from_ref(node.base()) as usize;
-                self.record_ids
-                    .matches(key, pointer, identity)
-                    .unwrap_or(false)
+            state.view().node(key).is_some_and(|_| {
+                state
+                    .view()
+                    .foreign_record_identity(key)
+                    .ok()
+                    .is_some_and(|record| {
+                        self.record_ids
+                            .matches(key, &record, identity)
+                            .unwrap_or(false)
+                    })
             })
         })
     }

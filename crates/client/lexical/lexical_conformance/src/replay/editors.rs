@@ -42,8 +42,8 @@ impl Replayer {
             .chain([tx.view(), tx.committed_state().view()])
         {
             for key in snapshot::keys(state.snapshot()) {
-                if let Some(node) = state.node(key) {
-                    live.insert((key, std::ptr::from_ref(node.base()) as usize));
+                if state.node(key).is_some() {
+                    live.insert((key, state.foreign_record_identity(key)?));
                 }
             }
         }
@@ -59,24 +59,46 @@ impl Replayer {
             .enumerate()
             .map(|(id, s)| {
                 if !clone_active && previous_active == Some(id) {
-                    SelectionSlot::Active
+                    tx.bind_foreign_selection_identity(
+                        SelectionSlot::Active,
+                        self.selections
+                            .identity(id)?
+                            .ok_or_else(|| fail("selection identity"))?,
+                    )?;
+                    Ok(Some(SelectionSlot::Active))
                 } else {
-                    s.map(|s| tx.detach_selection(s))
-                        .unwrap_or(SelectionSlot::Active)
+                    match s {
+                        Some(value) => {
+                            let identity = self
+                                .selections
+                                .identity(id)?
+                                .ok_or_else(|| fail("selection identity"))?;
+                            Ok(Some(match tx.foreign_selection_slot(&identity) {
+                                Some(slot) => slot,
+                                None => tx.detach_foreign_selection(value, identity),
+                            }))
+                        }
+                        None => Ok(None),
+                    }
                 }
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         self.selections.replace_slots(slots)
     }
     pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
+        lexical_model::ForeignReadOperation::check()?;
+        self.selections.synchronize(tx)?;
         self.bindings
             .capture_retired_records(tx, self.editor_id, self.version)?;
-        let values = self
-            .selections
-            .slots()?
-            .into_iter()
-            .map(|slot| tx.selection_at(slot).map(|s| s.cloned()))
-            .collect::<std::result::Result<_, _>>()?;
-        self.selections.replace_values(values)
+        for (id, slot) in self.selections.slots()?.into_iter().enumerate() {
+            if let Some(slot) = slot {
+                self.selections.save_value(
+                    id,
+                    tx.selection_at(slot)?
+                        .map(Selection::snapshot_for_foreign_read),
+                )?;
+            }
+        }
+        Ok(())
     }
 }

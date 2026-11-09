@@ -3,6 +3,149 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn commit_flushes_only_when_the_last_successful_flush_was_invalidated() -> Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Hooks(Arc<AtomicUsize>);
+    impl ForeignHooks for Hooks {
+        fn selection_transform(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+        ) -> Override<std::result::Result<(), Error>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Override::Value(Ok(()))
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "flush-count".into(),
+            class_name: "FlushCount".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks(calls.clone())),
+        })
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    host.begin_update(TagSet::default())?;
+    let text = host.with_update(|_, tx| {
+        let paragraph = tx.create(Paragraph::default())?.key();
+        let text = tx.create_foreign("flush-count", SerializedNode::new())?;
+        tx.text(text)?.set_text_content("text")?;
+        tx.append(paragraph, &[text])?;
+        tx.append(NodeKey::ROOT, &[paragraph])?;
+        tx.text(text)?
+            .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))?;
+        Ok(text)
+    })?;
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    host.begin_update(TagSet::default())?;
+    host.flush()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    host.begin_update(TagSet::default())?;
+    host.flush()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    host.with_update(|_, tx| {
+        tx.text(text)?.set_text_content("updated")?;
+        Ok(())
+    })?;
+    host.commit()?;
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+    Ok(())
+}
+
+#[test]
+fn failed_packet_preparation_keeps_the_committed_version_and_invalidates_pending_handles()
+-> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let root = super::super::index()
+        .binary_search(&"lexical.$getRoot")
+        .expect("root") as u32;
+    let paragraph = super::super::index()
+        .binary_search(&"lexical.$createParagraphNode")
+        .expect("paragraph") as u32;
+    let append = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    host.begin_update(TagSet::default())?;
+    let p = host.call(paragraph, json!([]), None)?;
+    let r = host.call(root, json!([]), None)?;
+    host.call(append, json!([p.clone()]), Some(r))?;
+    let error = host
+        .commit_prepared::<()>(|commit, version| {
+            assert_eq!(version, 1);
+            assert!(!commit.next.is_empty_state());
+            Err(fail("packet preparation failed"))
+        })
+        .expect_err("preparation error");
+    assert_eq!(error.to_string(), "packet preparation failed");
+    assert!(host.state().is_empty_state());
+    assert_eq!(host.committed_version(), 0);
+    assert!(
+        host.read_field(p["$h"].as_u64().expect("handle") as u32, "__type")
+            .is_err()
+    );
+    host.begin_update(TagSet::default())?;
+    let p = host.call(paragraph, json!([]), None)?;
+    let r = host.call(root, json!([]), None)?;
+    host.call(append, json!([p]), Some(r))?;
+    let (commit, artifact) = host.commit_prepared(|commit, version| {
+        assert_eq!(version, 2);
+        Ok(commit.next.to_json()?)
+    })?;
+    assert_eq!(host.committed_version(), 2);
+    assert_eq!(host.state().to_json()?, artifact);
+    assert_eq!(commit.id, CommitId(2));
+    Ok(())
+}
+
+#[test]
+fn closing_noop_retains_detached_values_without_burning_a_model_commit() -> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let create = super::super::index()
+        .binary_search(&"lexical.$createRangeSelection")
+        .expect("selection") as u32;
+    let collapsed = super::super::index()
+        .binary_search(&"Selection.isCollapsed")
+        .expect("collapsed") as u32;
+    let root = super::super::index()
+        .binary_search(&"lexical.$getRoot")
+        .expect("root") as u32;
+    let paragraph = super::super::index()
+        .binary_search(&"lexical.$createParagraphNode")
+        .expect("paragraph") as u32;
+    let append = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    host.begin_update(TagSet::default())?;
+    let selection = host.call(create, json!([]), None)?;
+    assert!(host.finish_noop()?);
+    assert!(host.flush().is_err());
+    host.begin_update(TagSet::default())?;
+    assert_eq!(host.call(collapsed, json!([]), Some(selection))?, true);
+    let root = host.call(root, json!([]), None)?;
+    let p = host.call(paragraph, json!([]), None)?;
+    host.call(append, json!([p]), Some(root))?;
+    assert!(!host.finish_noop()?);
+    assert_eq!(host.commit()?.id, CommitId(1));
+    Ok(())
+}
+
+#[test]
 fn captured_unattached_nodes_keep_raw_fields_after_collection_until_version_release() -> Result<()>
 {
     static FLAG: StateKey<bool> = StateKey::new("flag", |value| {
@@ -303,6 +446,9 @@ fn commit_transform_failure_rolls_back_writes_and_invalidates_only_pending_handl
         host.read_field(orphan["$h"].as_u64().expect("handle") as u32, "__text")?,
         "discarded"
     );
+    // A completed normalize-only flush needs a new write before commit runs
+    // the default pipeline again (S1 §7.1).
+    host.call(set, json!(["changed again"]), Some(writable.clone()))?;
     assert!(matches!(
         host.commit(),
         Err(crate::replay::ReplayError::Model(Error::NodeNotFound(_)))
@@ -353,6 +499,7 @@ fn configured_context_transform_reenters_the_owned_session_and_commits_once() ->
                 let node = self
                     .callback
                     .call(tx, get, json!([key.to_string()]), None)?;
+                assert_eq!(self.callback.node(tx, key)?["$h"], node["$h"]);
                 if self
                     .callback
                     .call(tx, content, json!([]), Some(node.clone()))?
@@ -439,3 +586,50 @@ fn configured_session_rejects_active_contexts_and_another_editor_binding() -> Re
     }
     Ok(())
 }
+
+#[test]
+fn detached_direction_memo_survives_host_boundaries_but_explicit_clone_clears_it() -> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let create = crate::api::index()
+        .binary_search(&"lexical.$createRangeSelection")
+        .expect("range") as u32;
+    let backward = crate::api::index()
+        .binary_search(&"Selection.isBackward")
+        .expect("backward") as u32;
+    let cached = crate::api::index()
+        .binary_search(&"get:_cachedIsBackward")
+        .expect("cache") as u32;
+    let clone = crate::api::index()
+        .binary_search(&"Selection.clone")
+        .expect("clone") as u32;
+    host.begin_update(TagSet::default())?;
+    let selection = host.call(create, json!([]), None)?;
+    assert_eq!(
+        host.call(backward, json!([]), Some(selection.clone()))?,
+        false
+    );
+    assert_eq!(
+        host.call(cached, json!([]), Some(selection.clone()))?,
+        false
+    );
+    assert!(host.finish_noop()?);
+    host.begin_update(TagSet::default())?;
+    assert_eq!(
+        host.call(cached, json!([]), Some(selection.clone()))?,
+        false
+    );
+    let copy = host.call(clone, json!([]), Some(selection.clone()))?;
+    assert_eq!(host.call(cached, json!([]), Some(copy))?, Value::Null);
+    host.discard_update()?;
+    host.begin_update(TagSet::default())?;
+    assert_eq!(host.call(cached, json!([]), Some(selection))?, false);
+    assert!(host.finish_noop()?);
+    Ok(())
+}
+
+mod state;
+
+mod failure;

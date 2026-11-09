@@ -755,3 +755,28 @@ fn identical_text_splice_still_publishes_updated_leaf() -> Result<(), Error> {
 }
 
 mod recorder_regressions;
+
+#[test]
+fn no_op_commit_preserves_the_published_selection_direction_memo() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_end(text)
+    })?;
+    let Some(Selection::Range(range)) = &mut editor.state.selection else {
+        panic!("range selection");
+    };
+    range.cached_direction = Some((range.anchor, range.focus, false));
+    let commit = editor.transaction().commit()?;
+    assert!(commit.is_noop());
+    let Some(Selection::Range(range)) = editor.state().selection() else {
+        panic!("published range selection");
+    };
+    assert_eq!(range.cached_is_backward(), Some(false));
+    Ok(())
+}

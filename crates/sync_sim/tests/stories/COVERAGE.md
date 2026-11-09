@@ -52,15 +52,18 @@ replay. Negative mutations reject changed editor JSON and missing observations.
 Live synced JSON and independent persisted reconstruction are compared per step
 and at settlement; sharedPeerIds remains synced, only policy-local data is excluded.
 
+`editor_undo` covers S7:48 with actual collaborative undo/redo after another peer's
+edit, including astral text. Both clients retain the other writer's content; real
+removed IDs feed the unchanged ownership query. A foreign-removal mutation fails
+that query, and empty history emits no applied-undo fact. The session collector is
+read-only and observes IDs before projection fixups, not inferred new op spans.
+
 ## Remaining M2 producers
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
-Remaining application/editor producers:
-collaborative undo after a remote edit; reset-budget closure driven by a faulty editor
-projection; stripping abandoned draft comment marks; restoration of editor cursors
-through remote edits; real Markdown corpus paste; comment-only gate verdict parity;
-undo removal attribution and undo/backspace generator floors. Existing core unit
-reset-budget tests do not establish faulty-editor integration.
+Remaining application/editor producers: comment commands, compound source paste,
+editor generation and observed undo/backspace floors. Actual faulty-editor
+integration and native gate parity are covered below.
 
 Executor-only unit rows remain in their existing adapters/core suites: IDB abort retry
 (S7:27), outage/TTL telemetry (25,33), stale connection events (61,64,71), Tauri read
@@ -122,3 +125,78 @@ first idle scan. Settlement repeats real Visible recovery after completed durabl
 write progress, drains actual adoption, and preserves every strict invariant and
 exact replay. Failed-adoption load retries remain core InFlight work; no additional
 orphan deletion or invariant exemption is introduced.
+
+`editor_commands`: actual typing, astral segmented backspace, range deletion,
+paragraph splitting, formatting and indent/outdent through both tab and headless
+sessions. Every command must produce actual own spans; both replicas' synced JSON
+and independent reconstruction pass unchanged invariants and exact replay. A second
+literal checks repeated backspace follows the updated cursor across astral text.
+Real package block/list/table operations are covered below; comment commands and
+editor generator floors remain pending.
+
+`editor_rich`: all six block forms preserve real application replacements and
+eight-character identities; all three headless list commands create TaskListNode;
+table behavior composes with the application-owned registry and preserves the
+requested rows/columns. Every story retains all invariants and exact replay.
+Markdown paste is covered below; comment commands and generated editor
+floors remain pending.
+
+`mixed_versions::real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays_exactly`
+uses the actual AI worker EditingWorkspace and upstream Lexical/loro-mirror over
+real SyncEngine/WAL/socket ports. Native collaborative undo preserves TS typing;
+source formatting, quote conversion and table insertion converge with native synced
+JSON, independent reconstruction, raw persisted Loro state and VV. All actual WAL
+rows are delivered. Both outcomes and the full IPC transcript replay exactly.
+Rotated local peer ranges come from update metadata, never imported VV growth.
+This direct source AI host has no browser movement/undo binding; native stories
+own those paths. Browser reconcile, faults/reconnect and cross-account editor
+interop remain outside this literal.
+
+`editor_cursor`: literal seed1 headless model cursor across a remote astral prefix
+insertion. Keep the actual original character cursor identity, strict projection,
+all invariants and twice-exact replay. Session repair uses a private model command;
+the core headless view-input guard remains intact.
+
+`editor_markdown`: each short corpus paste through real package importers in tab
+and headless sessions; the >1MB incompressible fenced paste produces one actual
+WAL row over900KB and multiple transport fragments. Exactly one update fragment
+is delivered before Hibernate and another afterward; complete code payload, strict
+projection, all invariants and exact replay remain checked. The actual shipping
+TS peer imports all three short snippets independently; native/editor/raw Loro/VV/WAL
+and twice-exact IPC checks remain. Compound heading-start source insertion is a
+separate known upstream stale-block case and is not covered by independent literals.
+
+`editor_drafts`: exact stored application JSON contains an abandoned draft and a
+published mark. Read-only initialization renders policy-filtered state without
+writes. Writable initialization removes only the abandoned wrapper through one
+actual full-sync local commit, preserving all text, the published mark and
+protected local state. Every invariant and exact replay remains enabled.
+
+`editor_shortcuts`: actual source-filtered package callbacks run through conditional
+model follow-ups for each character of the S8 corpus. Heading/task-list/quote
+conversions and literal triple-backtick decline match the source web-plugin probe.
+Ordinary Type stays literal; the shipping AI host explicitly lacks this browser
+capability. Strict projection/editor/WAL/quiet checks and exact replay remain enabled.
+
+`editor_projection_fault`: a test-only local serialization producer emits actual
+canonical-but-incorrect node type changes. Receiver resync errors and imported
+spans remain visible; repeated real projection recoveries exhaust the core budget.
+Reopen restores strict projection checks and retained-history convergence.
+Negative mutations cover configuration-only, healthy peers, incarnation identity,
+missing fault receipts, unrelated import spans and unchanged convergence checks.
+
+The editor ReadOnly ruling is exercised by
+`editor_readonly::revoked_editor_retains_exact_private_rows_and_delivers_after_regrant`:
+private astral text remains durable and unsaved/access-revoked without a read-only
+push, then delivers automatically on write regrant. Missing, quarantined,
+already-delivered, unparked and foreign-user retention cannot exempt convergence;
+missing bytes cannot exempt edit loss. Own projection and acknowledged-edit
+checks remain strict.
+
+Editor-room permission checks use the real native application comment gate,
+including stored editor seeds and cold durable forks. T0's `gate_parity` test
+runs all20,000 real service/adversarial cases and the570 exact fail-closed
+partial-import divergences. Every ledger row binds the original oracle hash,
+native error, source verdict and source parse-error messages. Source-error
+observation is a separate generated sidecar; original oracle rows stay byte-identical.
+Comment command producers remain a separate pending item.

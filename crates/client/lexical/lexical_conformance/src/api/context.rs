@@ -3,9 +3,10 @@ use crate::replay::{Replayer, Result, fail, integer, node_key, tagged_key};
 use lexical_model::{EditorState, NodeKey, Selection, Transaction};
 use serde_json::{Value, json};
 use std::sync::Arc;
+mod arguments;
 mod callbacks;
-pub use callbacks::CallbackContext;
 use callbacks::Frames;
+pub use callbacks::{CallbackContext, CallbackRead};
 
 /// Shared dispatch and fixture-value encoding across suspended host calls.
 ///
@@ -40,6 +41,18 @@ impl Default for Context {
 }
 
 impl Context {
+    /// Version owning the most recently published host records.
+    pub fn committed_version(&self) -> u64 {
+        self.replay.committed_version
+    }
+
+    pub(super) fn publishing_version(&self) -> Result<u64> {
+        if self.scope != Scope::Publishing {
+            return Err(fail("finish the API update before preparation"));
+        }
+        Ok(self.replay.version)
+    }
+
     /// Capture a weak callback capability before registering foreign hooks.
     pub fn callbacks(&self) -> CallbackContext {
         CallbackContext::new(&self.frames)
@@ -69,6 +82,16 @@ impl Context {
             self.replay
                 .bindings
                 .pin_state(self.replay.committed_version, tx.committed_state().clone())?;
+        }
+        // Register the committed object before taking the rollback backup. A
+        // first capture during this update still belongs to the committed state.
+        if let Some(slot) = tx.detach_previous_foreign_selection()? {
+            let value = self.replay.selection_at(tx, slot)?;
+            self.replay.selections.save_value(
+                integer(&value["$selection"])? as usize,
+                tx.selection_at(slot)?
+                    .map(Selection::snapshot_for_foreign_read),
+            )?;
         }
         self.previous_selections = self.replay.selections.values()?;
         self.replay.record_owner =
@@ -137,7 +160,78 @@ impl Context {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
         self.frames.validate(tx)?;
+        self.dispatch(tx, id, args, receiver)
+    }
+
+    fn dispatch(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Option<Value>,
+    ) -> Result<Value> {
+        let _arguments = match (
+            super::index()
+                .get(id as usize)
+                .and_then(|name| name.strip_prefix("LexicalNode.")),
+            receiver.as_ref(),
+            args.as_array(),
+        ) {
+            (Some(method), Some(receiver), Some(args)) => {
+                let hook = lexical_model::ForeignHook::ALL
+                    .iter()
+                    .copied()
+                    .find(|hook| hook.upstream_name() == method);
+                match hook {
+                    Some(hook) => {
+                        let key = node_key(&self.replay.decode(receiver)?)?;
+                        Some(self.frames.arguments.enter(key, hook, args.clone()))
+                    }
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         let result = super::call_by_id(&mut self.replay, tx, id, args, receiver)?;
+        self.encode(result)
+    }
+
+    /// Dispatch to the nearest native ancestor, preserving nested virtual calls.
+    /// This does not select an explicitly named older native prototype.
+    pub fn call_native(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Value,
+    ) -> Result<Value> {
+        if self.scope != Scope::Updating {
+            return Err(crate::replay::ReplayError::NoActiveEditor);
+        }
+        self.frames.validate(tx)?;
+        self.dispatch_native(tx, id, args, receiver)
+    }
+
+    fn dispatch_native(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Value,
+    ) -> Result<Value> {
+        let method = super::index()
+            .get(id as usize)
+            .and_then(|name| name.strip_prefix("LexicalNode."))
+            .ok_or_else(|| fail("native-super requires a node hook API"))?;
+        let hook = lexical_model::ForeignHook::ALL
+            .iter()
+            .copied()
+            .find(|hook| hook.upstream_name() == method)
+            .ok_or_else(|| fail("native-super requires a node hook API"))?;
+        let key = node_key(&self.replay.decode(&receiver)?)?;
+        let result = tx.with_foreign_native(key, hook, |tx| {
+            super::call_by_id(&mut self.replay, tx, id, args, Some(receiver))
+        })?;
         self.encode(result)
     }
 
@@ -153,8 +247,19 @@ impl Context {
         } else {
             self.frames.validate(tx)?;
         }
+        self.read_captured_field(tx, handle, field)
+    }
+
+    fn read_captured_field(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        handle: u32,
+        field: &str,
+    ) -> Result<Value> {
+        let operation = lexical_model::ForeignReadOperation::begin()?;
         let receiver = self.replay.decode(&json!({"$h":handle}))?;
-        let value = super::properties::get(&mut self.replay, tx, &receiver, field)?;
+        let value = super::properties::get(&mut self.replay, tx, &receiver, field);
+        let value = operation.finish(value)?;
         self.encode(value)
     }
 
@@ -192,6 +297,7 @@ impl Context {
     }
 
     fn encode(&mut self, value: Value) -> Result<Value> {
+        lexical_model::ForeignReadOperation::check()?;
         if value.get("$nodeKey").is_some() {
             let key = tagged_key(&value, "$nodeKey")?;
             let raw = key.to_string();
@@ -231,6 +337,27 @@ impl Context {
             let owner = match raw_tag {
                 "$node" => integer(&value["ver"])?,
                 "$snapshot" => self.replay.committed_version,
+                "$selection" | "$point" => {
+                    let id = if raw_tag == "$selection" {
+                        integer(&value[raw_tag])?
+                    } else {
+                        integer(&value[raw_tag]["selection"])?
+                    } as usize;
+                    let token = self.replay.selections.identity(id)?;
+                    let committed = self.replay.bindings.state(&self.replay.committed_version)?;
+                    let is_committed = match (token, committed) {
+                        (Some(token), Some(state)) => state
+                            .view()
+                            .snapshot_for_foreign_read()?
+                            .contains_selection_identity(&token),
+                        _ => false,
+                    };
+                    if is_committed {
+                        self.replay.committed_version
+                    } else {
+                        self.replay.version
+                    }
+                }
                 _ => self.replay.version,
             };
             let (id, fresh) = self

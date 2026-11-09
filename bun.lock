@@ -609,10 +609,14 @@
     "tooling/sync-sim": {
       "name": "@macro-inc/sync-sim-peer",
       "dependencies": {
+        "@lexical/list": "catalog:",
+        "@lexical/markdown": "catalog:",
         "@loro-mirror/core": "workspace:*",
         "@macro-inc/collaboration": "workspace:*",
+        "@macro-inc/lexical-core": "workspace:*",
         "@sinonjs/fake-timers": "13.0.5",
         "fake-indexeddb": "6.2.5",
+        "lexical": "catalog:",
         "loro-crdt": "catalog:",
         "loro-crdt-legacy": "npm:loro-crdt@1.16.3",
       },

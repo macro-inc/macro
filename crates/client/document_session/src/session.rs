@@ -40,6 +40,9 @@ pub enum SessionInput {
 /// Ordered effects from the last handle call.
 #[derive(Default)]
 pub struct SessionOutput {
+    /// Development-only actual undo/redo removals before projection repair.
+    #[cfg(feature = "conformance")]
+    pub undo_applied: Vec<crate::UndoObservation>,
     /// Development-only observations of actual sync events, including nested calls.
     #[cfg(feature = "conformance")]
     pub sync_events: Vec<SyncEvent>,
@@ -195,6 +198,11 @@ pub trait Surface: sealed::Sealed {
     fn take_resynced(&mut self) -> bool {
         false
     }
+    #[cfg(feature = "conformance")]
+    #[doc(hidden)]
+    fn take_undo_applied(&mut self) -> Vec<crate::UndoObservation> {
+        Vec::new()
+    }
 }
 
 struct CompositionHold {
@@ -273,6 +281,7 @@ impl<S: Surface> DocumentSession<S> {
         {
             self.out.sync_events.clear();
             self.out.imports.clear();
+            self.out.undo_applied.clear();
         }
         self.out.io.clear();
         // Admit the final displayed IME text on its original branch before a
@@ -429,6 +438,10 @@ impl<S: Surface> DocumentSession<S> {
             self.out.view.push(ViewEffect::Cursors(cursors));
         }
         self.out.need_peer_ids = self.sync.needs_peer_ids();
+        #[cfg(feature = "conformance")]
+        self.out
+            .undo_applied
+            .extend(self.surface.take_undo_applied());
         &self.out
     }
     fn release_composition(&mut self, now: Now, force: bool) -> Result<(), SessionError> {
@@ -763,6 +776,7 @@ impl<S: Surface> DocumentSession<S> {
             need_peer_ids: self.out.need_peer_ids,
             sync_events: std::mem::take(&mut self.out.sync_events),
             imports: std::mem::take(&mut self.out.imports),
+            undo_applied: std::mem::take(&mut self.out.undo_applied),
         }
     }
     /// Development-only native snapshot for the Tier C relay; never exposes a mutable handle.
@@ -826,5 +840,20 @@ impl DocumentSession<EditorSurface> {
             &self.doc,
             self.surface.config.policy,
         )?)
+    }
+}
+
+#[cfg(feature = "test-faults")]
+impl DocumentSession<EditorSurface> {
+    /// Inject an incorrect node type after the next real local projection commit.
+    /// Simulation only; peers reject this type change through their normal projection.
+    #[doc(hidden)]
+    pub fn inject_wrong_type_on_next_local_projection(&mut self) {
+        self.surface.wrong_next_type = true;
+    }
+    /// Drain receipts from actual malformed writes; arming alone produces no receipt.
+    #[doc(hidden)]
+    pub fn take_projection_fault_writes(&mut self) -> Vec<crate::ProjectionFaultWrite> {
+        std::mem::take(&mut self.surface.projection_fault_writes)
     }
 }

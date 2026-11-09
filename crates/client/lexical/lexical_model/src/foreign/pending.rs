@@ -32,11 +32,13 @@ impl ForeignUpdateIdentity {
 /// Dropping it discards its writes, events, extensions, tags and queued updates.
 pub struct PendingUpdate {
     update: Arc<()>,
+    native_calls: Arc<super::native::NativeCalls>,
     read_only: bool,
     read_sources: Option<crate::state::NodeMap>,
     read_origin: Option<super::ReadOrigin>,
     retired_records: crate::state::NodeMap,
     previous_selection: Option<Selection>,
+    previous_selection_identity: Option<ForeignSelectionIdentity>,
     owner: Arc<()>,
     version: CommitId,
     extensions: crate::extension::Extensions,
@@ -60,10 +62,36 @@ pub struct PendingUpdate {
     work: WorkCounters,
     detached: Vec<Option<Selection>>,
     selection_replacements: u64,
+    foreign_selections: super::selections::SelectionIdentities,
     native_projection: Option<super::projection::NativeProjection>,
 }
 
 impl Transaction<'_> {
+    /// Whether writes or queued work require another pipeline pass before commit.
+    /// This is the same predicate used by commit and survives suspend/resume.
+    pub fn needs_flush(&self) -> bool {
+        self.dirty_since_flush
+    }
+    /// Whether dropping this update would lose model effects beyond host API values/tags.
+    /// This observes the current pending state; it neither flushes nor authorizes writes.
+    pub fn has_foreign_effects(&self) -> bool {
+        self.has_dirty_nodes()
+            || self.selection_will_change()
+            || self.composition_key != self.editor.composition_key
+            || self.full_reconcile
+            || self.default_prevented
+            || !self.events.is_empty()
+            || !self.nested.is_empty()
+            || self.foreign_extensions_changed()
+            || self.preceding.as_ref().is_some_and(|commit| {
+                commit.chain().any(|entry| {
+                    !entry.is_noop()
+                        || entry.composition_changed
+                        || entry.full_reconcile
+                        || entry.default_prevented
+                })
+            })
+    }
     /// Capture editor identity without retaining its state or registry.
     pub fn foreign_editor_identity(&self) -> ForeignEditorIdentity {
         ForeignEditorIdentity(self.editor.suspend_owner.clone())
@@ -78,11 +106,13 @@ impl Transaction<'_> {
     pub fn suspend(self) -> PendingUpdate {
         PendingUpdate {
             update: self.foreign_update,
+            native_calls: self.foreign_native_calls,
             read_only: self.foreign_read_only,
             read_sources: self.foreign_read_sources,
             read_origin: self.foreign_read_origin,
             retired_records: self.foreign_retired_records,
             previous_selection: self.foreign_previous_selection,
+            previous_selection_identity: self.foreign_previous_selection_identity,
             native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
             version: self.editor.suspend_version,
@@ -107,6 +137,7 @@ impl Transaction<'_> {
             work: self.work,
             detached: self.detached,
             selection_replacements: self.selection_replacements,
+            foreign_selections: self.foreign_selections,
         }
     }
 }
@@ -121,11 +152,13 @@ impl Editor {
         }
         Ok(Transaction {
             foreign_update: update.update,
+            foreign_native_calls: update.native_calls,
             foreign_read_only: update.read_only,
             foreign_read_sources: update.read_sources,
             foreign_read_origin: update.read_origin,
             foreign_retired_records: update.retired_records,
             foreign_previous_selection: update.previous_selection,
+            foreign_previous_selection_identity: update.previous_selection_identity,
             native_projection: update.native_projection,
             editor: self,
             extensions: update.extensions,
@@ -149,6 +182,7 @@ impl Editor {
             work: update.work,
             detached: update.detached,
             selection_replacements: update.selection_replacements,
+            foreign_selections: update.foreign_selections,
         })
     }
 }

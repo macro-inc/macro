@@ -38,9 +38,8 @@ import {
 } from 'lexical';
 import { ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
-import { processFile, uploadStaticFile, validateMediaFile } from './io';
-
 import { mapRegisterDelete } from '../shared';
+import { processFile, uploadStaticFile, validateMediaFile } from './io';
 import {
   $insertImageIntoListItem,
   registerListItemImages,

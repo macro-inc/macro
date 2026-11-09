@@ -2,6 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.
 - `bun run check`: check typescript changes 
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
@@ -977,7 +978,9 @@ document_session_wasm when documentSessionPreload is selected. Do not preload bo
 
 Resolve `rust-editor-model` before constructing the document body owner in both
 block and Drive loaders; keep SessionExecutor/EditorView imports lazy and the
-flag-off CollabProvider path intact. Keep the selected model for that open
+flag-off CollabProvider path intact. Mount both body engines inside the same
+Notebook and MarkdownEditorChrome; keep document layout and status UI out of
+RustMarkdownEditor. Keep the selected model for that open
 session and reopen after a flag change. Reuse account/epoch-fenced metadata for
 flagged browser offline opens; fetch fresh reconnect credentials and invalidate
 that epoch before logout clearing.

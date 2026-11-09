@@ -2,22 +2,41 @@
 use super::*;
 use loro::LoroMovableList;
 use serde_json::Value;
+use std::borrow::Cow;
 
 /// Reconcile the document's root map and commit with the source mirror origin.
 /// Existing containers are retained; list movement uses post-deletion positions.
 pub fn set_state(doc: &LoroDoc, root: &Value) -> Result<()> {
+    set_state_inner(doc, root, None)
+}
+/// Fully reconcile already-synced editor state while retaining protected local fields.
+/// Use synced_json to produce the state; new nodes contain only that synced payload.
+#[tracing::instrument(name = "doc.projection.full_sync", skip_all, err)]
+pub fn set_synced_state(
+    doc: &LoroDoc,
+    state: &SerializedEditorState,
+    policy: &dyn SyncPolicy,
+) -> Result<()> {
+    set_state_inner(doc, &Value::Object(state.root.clone()), Some(policy))
+}
+fn set_state_inner(doc: &LoroDoc, root: &Value, policy: Option<&dyn SyncPolicy>) -> Result<()> {
     let root = root.as_object().ok_or_else(|| schema_error("root"))?;
-    reconcile(&doc.get_map("root"), root)?;
+    reconcile(&doc.get_map("root"), root, policy)?;
     doc.commit_with(loro::CommitOptions::new().origin(LOCAL_ORIGIN));
     Ok(())
 }
-fn reconcile(map: &LoroMap, new: &SerializedNode) -> Result<()> {
+fn reconcile(map: &LoroMap, new: &SerializedNode, policy: Option<&dyn SyncPolicy>) -> Result<()> {
     let before = schema::from_loro(&map.get_deep_value())?;
-    let before = before.as_object().ok_or_else(|| schema_error("node"))?;
+    let mut before = Cow::Borrowed(before.as_object().ok_or_else(|| schema_error("node"))?);
+    let mut new_fields = Cow::Borrowed(new);
+    if let Some(policy) = policy {
+        mask_local_state(before.to_mut(), policy);
+        storage_fields(new_fields.to_mut(), policy);
+    }
     schema::diff_map(
         map,
-        before,
-        new,
+        &before,
+        &new_fields,
         schema::MapSchema::Node,
         &mut ProjectionStats::default(),
     )?;
@@ -27,7 +46,7 @@ fn reconcile(map: &LoroMap, new: &SerializedNode) -> Result<()> {
                 Some(ValueOrContainer::Container(Container::MovableList(list))) => list,
                 _ => map.insert_container("children", LoroMovableList::new())?,
             };
-            reconcile_children(&list, children)?;
+            reconcile_children(&list, children, policy)?;
         }
         Some(value) => {
             map.insert("children", schema::to_loro(value))?;
@@ -45,7 +64,11 @@ fn id(node: &Value) -> Option<&str> {
         .as_str()
         .filter(|id| !id.is_empty())
 }
-fn reconcile_children(list: &LoroMovableList, new: &[Value]) -> Result<()> {
+fn reconcile_children(
+    list: &LoroMovableList,
+    new: &[Value],
+    policy: Option<&dyn SyncPolicy>,
+) -> Result<()> {
     let old: Vec<_> = (0..list.len())
         .map(|index| {
             let map = schema::map_at(list.get(index), "children")?;
@@ -136,7 +159,11 @@ fn reconcile_children(list: &LoroMovableList, new: &[Value]) -> Result<()> {
             continue;
         }
         let map = list.insert_container(index, LoroMap::new())?;
-        schema::initialize_map(&map, own, schema::MapSchema::Node)?;
+        let mut stored = Cow::Borrowed(own);
+        if let Some(policy) = policy {
+            storage_tree(stored.to_mut(), policy);
+        }
+        schema::initialize_map(&map, &stored, schema::MapSchema::Node)?;
         live.insert(index, (id(node).map(str::to_owned), usize::MAX));
     }
     for node in new {
@@ -148,7 +175,11 @@ fn reconcile_children(list: &LoroMovableList, new: &[Value]) -> Result<()> {
                 .position(|(_, original)| Some(original) == positions.get(id))
                 .ok_or_else(|| diverged("snapshot common child missing"))?;
             let map = schema::map_at(list.get(index), "common child")?;
-            reconcile(&map, node.as_object().ok_or_else(|| schema_error("child"))?)?;
+            reconcile(
+                &map,
+                node.as_object().ok_or_else(|| schema_error("child"))?,
+                policy,
+            )?;
         }
     }
     Ok(())

@@ -6,7 +6,7 @@ publish = false
 
 [features]
 # Development-only runtime hosting and suspended updates; no production consumer.
-foreign-nodes = []
+foreign-nodes = ["dep:syn"]
 bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]
 
@@ -23,6 +23,9 @@ strum = { workspace = true }
 nom = { workspace = true }
 ryu-js = { workspace = true }
 unicode-segmentation = { workspace = true, optional = true }
+
+[build-dependencies]
+syn = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

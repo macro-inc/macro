@@ -123,6 +123,7 @@ fn comment_and_undo_queries_reject_false_claims_without_editor_clients() {
         at,
         fact: Fact::UndoApplied {
             client,
+            redo: false,
             removed: spans,
         },
     });

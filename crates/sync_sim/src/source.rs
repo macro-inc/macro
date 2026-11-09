@@ -31,6 +31,14 @@ impl Outcome {
         ] {
             writeln!(out, "    config.{field} = {value};").expect("String write");
         }
+        for client in &self.config.faulty_editor_clients {
+            writeln!(
+                out,
+                "    config.faulty_editor_clients.insert(ClientName({:?}.into()));",
+                client.0
+            )
+            .expect("String write");
+        }
         for doc in &self.config.surfaces {
             writeln!(out, "    config.surfaces.insert(DocIx({}));", doc.0).expect("String write");
         }
@@ -101,6 +109,10 @@ fn policy(value: &impl std::fmt::Debug) -> String {
 fn seed_source(seed: &SeedDocument) -> String {
     match seed {
         SeedDocument::Editor(state) => format!("SeedDocument::Editor(serde_json::json!({state}))"),
+        SeedDocument::StoredEditor(state) => format!(
+            "SeedDocument::StoredEditor(serde_json::from_str({:?}).expect(\"stored editor JSON\"))",
+            state.to_string()
+        ),
         SeedDocument::Empty => "SeedDocument::Empty".into(),
         SeedDocument::Form(fields) => format!("SeedDocument::Form(vec!{fields:?})"),
         SeedDocument::Cached { server, s3, local } => format!(

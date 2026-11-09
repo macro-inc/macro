@@ -4,8 +4,19 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import type { SerializedEditorState } from 'lexical';
-import { object } from '../../corpus/dev/scan';
+import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
+
+type GateNode = SerializedLexicalNode & {
+  [field: string]: unknown;
+  children?: GateNode[];
+  text?: string;
+  format?: string | number;
+  style?: string;
+  mode?: string;
+  detail?: number;
+  language?: string;
+  $?: Record<string, unknown>;
+};
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 const output = process.argv[2];
@@ -56,8 +67,8 @@ function random() {
   rng ^= rng << 5;
   return rng >>> 0;
 }
-function walk(node: unknown, out: Record<string, unknown>[] = []) {
-  if (object(node)) {
+function walk(node: GateNode, out: GateNode[] = []): GateNode[] {
+  if (node && typeof node === 'object' && !Array.isArray(node)) {
     out.push(node);
     if (Array.isArray(node.children))
       for (const child of node.children) walk(child, out);
@@ -75,6 +86,17 @@ function observe(before: SerializedEditorState, after: SerializedEditorState) {
     return { throws: true };
   }
 }
+let sourceErrors: string[] = [];
+export type SourceErrorRow = { index: number; errors: string[] };
+const sourceErrorRows: SourceErrorRow[] = [];
+const sourceConsoleError = console.error;
+console.error = (...args: unknown[]) => {
+  sourceErrors.push(
+    args
+      .map((value) => (value instanceof Error ? value.message : String(value)))
+      .join(' ')
+  );
+};
 const lines: string[] = [];
 for (let index = 0; index < 20000; index++) {
   const seed = seedPairs[index % seedPairs.length];
@@ -88,14 +110,16 @@ for (let index = 0; index < 20000; index++) {
     const nodes = walk(after.root);
     const node = nodes[random() % nodes.length];
     const text = nodes.find(
-      (value): value is Record<string, unknown> & { text: string } =>
+      (value): value is GateNode & { text: string } =>
         value.type === 'text' && typeof value.text === 'string'
     );
     const mutation = index % 20;
     switch (mutation) {
       case 0:
         node.$ = {
-          ...(object(node.$) ? node.$ : {}),
+          ...(node.$ && typeof node.$ === 'object' && !Array.isArray(node.$)
+            ? node.$
+            : {}),
           id: `id-${random()}`,
           peerId: 'peer',
           sharedPeerIds: [],
@@ -103,7 +127,12 @@ for (let index = 0; index < 20000; index++) {
         };
         break;
       case 1:
-        node.$ = { ...(object(node.$) ? node.$ : {}), retained: random() % 9 };
+        node.$ = {
+          ...(node.$ && typeof node.$ === 'object' && !Array.isArray(node.$)
+            ? node.$
+            : {}),
+          retained: random() % 9,
+        };
         break;
       case 2:
         if (text) text.text += '!';
@@ -136,7 +165,7 @@ for (let index = 0; index < 20000; index++) {
               Array.isArray(value.children) && value.children.includes(text)
           );
           if (!parent || !Array.isArray(parent.children))
-            throw new Error('Text parent required');
+            throw new Error('Text fixture has no parent');
           const at = parent.children.indexOf(text);
           let split = random() % (text.text.length + 1);
           if (
@@ -219,11 +248,15 @@ for (let index = 0; index < 20000; index++) {
         break;
     }
   }
+  sourceErrors = [];
   lines.push(
     JSON.stringify({ index, before, after, expected: observe(before, after) })
   );
+  sourceErrorRows.push({ index, errors: sourceErrors });
 }
+console.error = sourceConsoleError;
 writeFileSync(output, lines.join('\n') + '\n');
+writeFileSync(output + '.errors.json', JSON.stringify(sourceErrorRows));
 console.log(
   `Checked 12 service seeds and generated ${lines.length} gate oracle cases`
 );

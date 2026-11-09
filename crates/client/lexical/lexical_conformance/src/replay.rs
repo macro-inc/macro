@@ -907,8 +907,9 @@ impl Replayer {
         Ok(())
     }
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
+        lexical_model::ForeignReadOperation::check()?;
         let node = view.node_or_err(key)?;
-        let pointer = std::ptr::from_ref(node.base()) as usize;
+        let record = view.foreign_record_identity(key)?;
         let version = self
             .record_owner
             .as_ref()
@@ -916,28 +917,60 @@ impl Replayer {
                 state
                     .view()
                     .node(key)
-                    .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
+                    .is_some_and(|node| record.matches(node))
             })
             .map_or(self.version, |(version, _)| *version);
-        let (version, identity) = self.record_ids.identify(key, pointer, version)?;
+        let (version, identity) = self.record_ids.identify(key, record, version)?;
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
         )
     }
+    pub(crate) fn selection_slot(
+        &self,
+        tx: &mut Transaction<'_>,
+        id: usize,
+    ) -> Result<SelectionSlot> {
+        self.selections
+            .resolve(tx, id)?
+            .ok_or_else(|| fail("selection handle"))
+    }
     pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Result<Value> {
-        if tx.selection().is_none() {
+        self.selection_at(tx, SelectionSlot::Active)
+    }
+    pub(crate) fn selection_at(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        slot: SelectionSlot,
+    ) -> Result<Value> {
+        self.selections.synchronize(tx)?;
+        let identity = tx
+            .foreign_selection_identity(slot)
+            .ok_or_else(|| fail("selection slot identity"))?;
+        let slot = tx.foreign_selection_slot(&identity).unwrap_or(slot);
+        let Some(selection) = tx.selection_at(slot)? else {
             return Ok(Value::Null);
-        }
-        let id = if let Some(active) = self.selections.active()? {
-            active.id
-        } else {
-            let id = self.selections.push(SelectionSlot::Active)?;
-            self.selections.set_active(Some(id))?;
-            id
         };
-        Ok(
-            json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}}),
-        )
+        let kind = if selection.is_range() {
+            "range"
+        } else {
+            "node"
+        };
+        let id = match self.selections.find(&identity)? {
+            Some(id) => {
+                self.selections.set_slot(id, slot)?;
+                id
+            }
+            None => self.selections.push(slot, identity)?,
+        };
+        if slot == SelectionSlot::Active
+            && self
+                .selections
+                .active()?
+                .is_none_or(|active| active.id != id)
+        {
+            self.selections.set_active(Some(id))?;
+        }
+        Ok(json!({"$selection":id,"kind":kind}))
     }
 }
 pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {

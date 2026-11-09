@@ -19,7 +19,7 @@ const { isCommentOnlyChange, contentWithoutComments } = await import(
 const { rawMarkdownStateToLoroSnapshot } = await import(
   root + 'packages/lexical-core/markdown-loro-snapshot.ts'
 );
-const { LoroDoc, LoroMap, LoroMovableList, LoroText } = await import(
+const { LoroDoc, LoroList, LoroMap, LoroMovableList, LoroText } = await import(
   'loro-crdt'
 );
 const seed = {
@@ -63,20 +63,29 @@ for (let index = 0; index < 2048; index++) {
   const before = doc.toJSON();
   const vv = doc.oplogVersion();
   const rootMap = doc.getMap('root');
-  const children = rootMap.get('children');
+  const rootChildren = rootMap.get('children');
+  if (
+    !(
+      rootChildren instanceof LoroList ||
+      rootChildren instanceof LoroMovableList
+    )
+  )
+    throw new Error('Seed root children are not a Loro list');
+  const p = rootChildren.get(0);
+  if (!(p instanceof LoroMap))
+    throw new Error('Seed paragraph is not a Loro map');
+  const children = p.get('children');
   if (!(children instanceof LoroMovableList))
-    throw new Error('Root list required');
-  const p = children.get(0);
-  if (!(p instanceof LoroMap)) throw new Error('Paragraph map required');
-  const paragraphChildren = p.get('children');
-  if (!(paragraphChildren instanceof LoroMovableList))
-    throw new Error('Paragraph list required');
-  const text = paragraphChildren.get(0);
-  if (!(text instanceof LoroMap)) throw new Error('Text map required');
+    throw new Error('Seed paragraph children are not a Loro movable list');
+  const text = children.get(0);
+  if (!(text instanceof LoroMap))
+    throw new Error('Seed text is not a Loro map');
   const content = text.get('text');
+  if (!(content instanceof LoroText))
+    throw new Error('Seed content is not Loro text');
   const state = text.get('$');
-  if (!(content instanceof LoroText) || !(state instanceof LoroMap))
-    throw new Error('Text containers required');
+  if (!(state instanceof LoroMap))
+    throw new Error('Seed text state is not a Loro map');
   switch (index % 10) {
     case 0:
       content.insert(random() % 6, '!');
@@ -106,7 +115,7 @@ for (let index = 0; index < 2048; index++) {
       state.set('local', Boolean(random() % 2));
       break;
     case 9:
-      paragraphChildren.set(0, {
+      children.set(0, {
         type: 'comment-mark',
         version: 1,
         ids: ['mark'],
@@ -117,7 +126,13 @@ for (let index = 0; index < 2048; index++) {
   }
   doc.commit();
   const after = doc.toJSON();
-  let expected;
+  let expected:
+    | {
+        commentOnly: boolean;
+        before: ReturnType<typeof contentWithoutComments>;
+        after: ReturnType<typeof contentWithoutComments>;
+      }
+    | { throws: true };
   try {
     expected = {
       commentOnly: isCommentOnlyChange(before, after),

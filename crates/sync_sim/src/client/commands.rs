@@ -28,6 +28,6 @@ impl Plugin for ModelSelection {
         Ok(Handled::Yes)
     }
 }
-pub(crate) fn builder(mode: EditorMode, peer: u64) -> EditorBuilder {
-    document_session::default_editor_builder(mode, peer).plugin(ModelSelection)
+pub(crate) fn register(builder: EditorBuilder) -> EditorBuilder {
+    builder.plugin(ModelSelection)
 }

@@ -7,8 +7,11 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Start here
 
+- `src/client/application.rs`: real application registries, policy and injected constructor ports.
+- `src/client/rich_commands.rs`: package block/table/Markdown paste operations; list commands use the registered list plugin.
 - `src/client/runtime.rs`: exclusive generic/session ownership; `src/client/resolve.rs`: live UTF-16 positions.
-- `src/world/editor.rs`: real session editor inputs and effects.
+- `src/world/editor.rs`: real session editor inputs and effects; `editor/input.rs`
+  lowers range edits and segmented backspace without resetting consecutive cursors.
 - `src/world.rs`: virtual event executor; `src/world/settle.rs`: healing and quiescence.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/storage_reference.rs`: independent flat-row IndexedDbModel and portable StorageCase/StorageContract suite.
@@ -23,8 +26,12 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `tests/random_sessions.rs` and `.regressions*`: standard proptest shrinking/persistence.
 - `src/generate/test.rs`: literal minimized revoked memory-writer recovery draw; keep every invariant and replay check enabled.
 - `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
-- `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore.
-- `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
+- `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore;
+  actual local-update ranges cover rotating foreign editor peers.
+- `src/client/shortcuts.rs`: actual browser-only Markdown shortcut package calls in conditional model transactions.
+- `tests/stories/COVERAGE.md`: story/S7 map and pending editor producers.
+- `fixtures/`: shared exact native/TS Markdown inputs, including the incompressible large paste.
+- `SeedDocument::StoredEditor`: exact previously persisted JSON before client policy/initialization; render it as literal JSON in reproductions.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
@@ -55,7 +62,19 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   projection, undo and document; never keep a shadow core or mutable document copy.
 - Capture live synced editor JSON and independently reconstructed persisted JSON.
   Compare both per step and in finals; include editor finals in replay/hash evidence.
-  Remaining M2 command/story and comment-gate producers are listed in COVERAGE.md.
+  Exempt projection consistency only after an actual injected-write receipt for the
+  exact client session incarnation. Keep all healthy projection, convergence and
+  loss checks; reopening never inherits an exemption.
+  Record visible successful projection resync errors with actual imported spans;
+  unexplained errors still fail per-step and final checks. Match an earlier fault
+  receipt on the same document, or its exact author incarnation still observing
+  that bad write. Never accept an armed configuration or arbitrary error text.
+  Remaining M2 command/story producers are listed in COVERAGE.md.
+- Exempt editor convergence only for exact private history covered by valid,
+  unacknowledged ReadOnly parked WAL rows for that profile/document/user. Keep
+  own projection checks strict, show Unsaved(ReadOnly), and require automatic
+  delivery plus strict equality after an explicit write regrant. A parked label
+  without retained bytes never exempts edit loss.
 - Headless inputs always use KeepModel. Install resolved selection through the
   registered model-selection-only command, then dispatch the actual command in
   the same core Batch. SelectionFromView(Range) is rejected in headless mode even
@@ -219,8 +238,49 @@ and emitted fact. Public images/reads stay owned; restore the oldest popped imag
 once after computing the same rollback sequence. Compare with the original owned
 history algorithm across mixed writes, adoption, TTL, corruption and snapshot changes.
 
-The workspace test profile optimizes xxhash byte hashing, measured in real cold
-snapshot checksum validation and exact trace hashing. Debug assertions and
-overflow checks stay enabled; production profiles and hash algorithms do not
+The workspace test profile optimizes measured xxhash and both native Loro rich-text
+tracker paths. The two internal releases use checked bulk range fills with ordered
+sequential-update parity tests; public versions and encoder algorithms stay fixed.
+Debug assertions and overflow checks stay enabled; production profiles and hash algorithms do not
 change. Prebuild before timing a warm T0 run and retain all256 shrinking cases,
 500 coverage seeds, every story/peer and every invariant.
+
+Record UndoApplied only when the real Loro UndoManager reports a change. Capture
+actual visible text-character and editor-node creation IDs immediately before and
+after undo/redo, before projection fixups; never infer removals from new operation
+spans or requested inputs. Keep ownership checks over both undo and redo, including
+foreign-removal negative mutations and a no-op-history control.
+
+Editor runtimes use the source application headless/MarkdownSync registries,
+MacroSyncPolicy and source NodeIdPlugin lengths (web8; AI default11). Supply constructor
+time from each actual Now before handling input. Seed deterministic constructor
+and transactional identity streams by peer and factory creation ordinal, so a
+rebuild cannot restart a retired identity stream. Keep the staging comment factory
+matched to CommentNode. Editor rooms install the real fail-closed application comment gate through the
+simulation port, including StoredEditor seeds and cold forks. T0 runs the complete
+20,000-case source gate corpus alongside random sessions. Bind every approved
+partial-import divergence to the unchanged source-row hash, exact native error,
+source verdict and exact captured source parse errors; reject stale entries.
+
+PasteMarkdown imports the committed corpus through lexical_markdown and the source
+ALL_TRANSFORMERS, restores the original selection, then uses the real insert-nodes
+operation. Preserve typed package callback errors through Error::Extension. The
+large literal checks actual one-row fragmentation and delivered frames before and
+after Hibernate, plus the complete payload, every invariant and exact replay.
+The TS literals cover each short snippet independently; compound insertion at a
+heading start retains a separate upstream stale-block reproduction and is not
+claimed by those literals. Editor-generated floors remain pending.
+
+The abandoned-draft literal seeds actual stored application JSON, including source
+paragraph textFormat/textStyle fields. Read-only clients render filtered state with
+zero own writes; writable initialization emits one full-sync cleanup commit, retains
+published marks/text and protected local data, and leaves every invariant enabled.
+
+MarkdownShortcut selects a live block start and sends the four S8 corpus sequences
+character by character through real tab-session inputs. Use the source application
+transformers, conversion-only/dependency filtering and HistoryPush only on success;
+discard false follow-ups. Type remains literal. Keep one aggregate LocalOp with
+observed spans and every actual LocalCommit; never invent per-character Type facts.
+The shipping headless AI workspace lacks the browser shortcut plugin: native AI
+skips this capability explicitly and the TS peer rejects it. Bare triple backticks
+remain literal as in the source probe; do not claim every corpus entry converts.

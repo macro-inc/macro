@@ -27,6 +27,8 @@ impl Transaction<'_> {
     pub fn range_is_backward_at(&mut self, slot: SelectionSlot) -> Result<bool, Error> {
         let backward = self.range_at(slot)?.is_backward(self.view())?;
         #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
             return Ok(backward);
         }
@@ -118,6 +120,8 @@ impl Transaction<'_> {
         role: PointRole,
         point: Point,
     ) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
             self.check_point_type(point)?;

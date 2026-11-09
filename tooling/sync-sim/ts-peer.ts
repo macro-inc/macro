@@ -1,7 +1,7 @@
 import { mock } from 'bun:test';
 import { createInterface } from 'node:readline';
 import type { PeerCommand, PeerReport } from './generated';
-import { clock, WALL_ORIGIN, wakeAt } from './runtime';
+import { activity, clock, WALL_ORIGIN, wakeAt } from './runtime';
 
 // Each child selects its actual Loro implementation before importing the shipping
 // engine/mirror. The legacy lane exercises real 1.16 updates against native 1.17.
@@ -27,7 +27,7 @@ for (const [key, value] of Object.entries(idb)) {
     Object.defineProperty(globalThis, key, { value, configurable: true });
 }
 const { effects } = await import('./transport');
-const { command, finals, activity } = await import('./peer');
+const { command, finals } = await import('./peer');
 for await (const line of createInterface({
   input: process.stdin,
   crlfDelay: Infinity,
@@ -45,6 +45,11 @@ for await (const line of createInterface({
     effects: effects.splice(0),
     peers,
   };
-  process.stdout.write(`${JSON.stringify(report)}\n`);
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(`${JSON.stringify(report)}\n`, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
   if (input.type === 'shutdown') process.exit(0);
 }

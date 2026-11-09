@@ -236,6 +236,39 @@ impl Sim {
         }
         Ok(())
     }
+    /// Record actual local-update ranges from a foreign editor's commit subscription.
+    /// Imported VV growth alone is never evidence of local authorship.
+    pub fn external_authored(
+        &mut self,
+        name: &ClientName,
+        current: Vv,
+        spans: Vec<IdSpan>,
+    ) -> Result<(), Failure> {
+        if spans.iter().any(|span| {
+            span.start < 0
+                || span.end <= span.start
+                || current.get(&span.peer).copied().unwrap_or(0) < span.end
+        }) {
+            return Err(Failure::new(
+                "external_commit",
+                "local range exceeds the observed document",
+            ));
+        }
+        let peer = self
+            .external
+            .get_mut(name)
+            .ok_or_else(|| Failure::new("external_identity", "unknown peer"))?;
+        let doc = peer.spec.doc;
+        peer.vv = current;
+        if !spans.is_empty() {
+            self.emit(Fact::ExternalCommit {
+                client: name.clone(),
+                doc,
+                spans,
+            });
+        }
+        Ok(())
+    }
     /// Drain actual delivered frames/chatter. Child execution remains caller-owned.
     pub fn external_events(&mut self, name: &ClientName) -> Vec<ExternalEvent> {
         self.external

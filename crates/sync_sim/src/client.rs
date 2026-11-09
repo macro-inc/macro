@@ -4,9 +4,12 @@ use crate::{
     *,
 };
 use doc_sync_core::*;
+pub(crate) mod application;
 pub(crate) mod commands;
 pub(crate) mod resolve;
+pub(crate) mod rich_commands;
 pub(crate) mod runtime;
+pub(crate) mod shortcuts;
 use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) struct Identity {
@@ -165,12 +168,13 @@ impl SimClient {
             out,
             imports,
             errors,
+            undo_applied,
+            projection_faults,
+            projection_recoveries,
         } = handled;
-        self.failures.extend(
-            errors
-                .into_iter()
-                .map(|error| Failure::new("editor_surface", error)),
-        );
+        self.failures.extend(errors.into_iter().map(|error| {
+            Failure::new("editor_surface", format!("{:?}: {error}", self.spec.client))
+        }));
         let peer = self.core.peer_id();
         if self.spec.kind == ClientKind::Tab {
             self.presence_key = peer.to_string();
@@ -178,10 +182,75 @@ impl SimClient {
         let start = before.get(&peer).copied().unwrap_or(0);
         let end = self.core.version().get(&peer).copied().unwrap_or(0);
         let mut facts = Vec::new();
+        for fault in projection_faults {
+            facts.push(Fact::ProjectionFaultWrite {
+                doc: self.spec.doc,
+                client: self.spec.client.clone(),
+                session: self.session,
+                node: fault.node,
+                peer: fault.peer,
+                start: fault.start,
+                end: fault.end,
+                previous: fault.previous,
+                written: fault.written,
+            });
+        }
+        for error in projection_recoveries {
+            let spans = self
+                .core
+                .version()
+                .iter()
+                .filter_map(|(peer, end)| {
+                    let start = before.get(peer).copied().unwrap_or(0);
+                    (*end > start).then_some(IdSpan {
+                        peer: *peer,
+                        start,
+                        end: *end,
+                    })
+                })
+                .collect();
+            facts.push(Fact::ProjectionRecovered {
+                client: self.spec.client.clone(),
+                session: self.session,
+                doc: self.spec.doc,
+                error,
+                spans,
+                vv: vv(&self.core.version()),
+            });
+        }
         if end > start {
             facts.push(Fact::LocalCommit {
                 client: self.spec.client.clone(),
                 spans: vec![IdSpan { peer, start, end }],
+            });
+        }
+        for undo in undo_applied {
+            let ids = match undo.removed {
+                Ok(ids) => ids,
+                Err(error) => {
+                    self.failures.push(Failure::new("undo_observation", error));
+                    continue;
+                }
+            };
+            let mut removed = Vec::new();
+            for id in ids {
+                let Some(end) = id.counter.checked_add(1) else {
+                    self.failures.push(Failure::new(
+                        "undo_observation",
+                        "removed identity counter overflow",
+                    ));
+                    continue;
+                };
+                removed.push(IdSpan {
+                    peer: id.peer,
+                    start: id.counter,
+                    end,
+                });
+            }
+            facts.push(Fact::UndoApplied {
+                client: self.spec.client.clone(),
+                redo: undo.redo,
+                removed,
             });
         }
         for (origin, pending, error) in imports {

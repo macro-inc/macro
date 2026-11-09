@@ -222,7 +222,7 @@ impl LoroProjection {
             stats.nodes_visited += 1;
             let map = self.index.map(doc, key)?;
             let mut before = if prev.contains(key) {
-                own(prev, key, self.policy)?
+                storage_own(prev, key, self.policy)?
             } else {
                 SerializedNode::new()
             };
@@ -231,10 +231,10 @@ impl LoroProjection {
             {
                 before.insert("text".into(), schema::read_value(&text)?);
             }
-            let new = own(next, key, self.policy)?;
+            let new = storage_own(next, key, self.policy)?;
             if origin == FIXUP_ORIGIN {
                 let mut current = schema::own_map(&map)?;
-                mask_local(&mut current, self.policy);
+                mask_local_state(&mut current, self.policy);
                 if schema::owned_equal(
                     &serde_json::Value::Object(current),
                     Some(&serde_json::Value::Object(before.clone())),
@@ -402,7 +402,7 @@ impl LoroProjection {
                 continue;
             }
             let map = list.insert_container(i, loro::LoroMap::new())?;
-            let json = synced_node(view, *key, self.policy)?;
+            let json = storage_node(view, *key, self.policy)?;
             schema::initialize_map(&map, &json, schema::MapSchema::Node)?;
             self.index.bind_tree(view, *key, &map, self.policy)?;
             handled.insert(*key);

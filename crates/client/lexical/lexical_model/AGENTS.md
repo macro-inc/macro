@@ -8,13 +8,14 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Start here
 
 - `src/lib.rs` exposes the model API.
+- `build.rs` derives development ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
 - `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
 - `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
-- `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
+- `src/pipeline/` implements flush order, normalization, GC and view-attached caches; its non-converging transform regression pins the upstream invariant text.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
@@ -28,12 +29,15 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Reuse `json::js_string` and `json::js_to_number` for JSON boundary coercions; JSON.stringify is a different operation.
 - `src/style/css.rs` is the shared ordered JavaScript CSS parser for selections and HTML export.
 
+- `src/foreign/native.rs`: one-shot native-super scopes shared by owned read captures; skip only the matching outer virtual dispatch.
+
 ## Boundaries
 
 - Keep parse_editor_state strict; parse_editor_state_report exposes partial state and its diagnostic only to hosts that choose a logging error policy.
 - Require equivalent NodeState on both text neighbors before normalization merges them, including absent versus populated state.
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 
+- Preserve owning-package extension callback errors in Error::Extension; never classify them as unrelated model failures.
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data for foreign projections; runtime foreign types without defaults reject create_resolved.
 - Pure Rust model; no network, database, runtime or browser dependencies.
@@ -56,7 +60,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
-- Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
+- Hooks share one follow-up transaction per round; conditional hooks then run isolated transactions and discard false results, including early flushes. Keep the shared 99-round guard and roll back extension state with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
 - Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
@@ -65,6 +69,10 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 
 - Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration, opaque editor/update identity markers and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
+- Use Transaction::has_foreign_effects before closing a host no-op; selection, composition, extension state, events, reconciliation and queued work must survive even without node diff operations.
+- Use dev-only Transaction::commit_foreign for fallible prepublication encoding; preparation errors drop current effects without rolling back previously published commits or reusing allocated identities.
+- Preserve getNodesBetween's directional walk and crossed ancestors in Read::nodes_between; it is not a slice of document preorder, especially for ancestor/root endpoints.
+- Resolve descendant_by_index past the child count through the last child's last descendant; an in-range child resolves through its first descendant.
 - Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
 - Runtime command registration deduplicates callback identity at each command/priority and snapshots each priority when reached; runtime transforms snapshot per type for each pipeline pass and follow build-time transforms. Unregister updates listener priorities immediately.
 - Foreign state values stay in unknown JSON slots; first read binds the codec without dirtying the record. Use codec equality/default omission only for bound keys, preserve raw unbound JSON, and let class declarations override a config's flat default. Release registration/binding guards before every host callback.
@@ -96,6 +104,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Keep key allocation outside rollback, and snapshots independent on first write.
 - Give owned captures of pending state a separate root-text memo; materialize native projections without clone hooks while retaining their source record identity. Preserve detached slot indices, holes and selection caches when capturing read inputs.
 - Use SharedKeyCounter::allocate_for_foreign_host for dev generateRandomKey; it shares allocation with editors without creating records or consuming commit identities.
+- Preserve update provenance through pending and previous root-text cache evaluation, including publication; plain external state views remain originless.
 - Preserve source editor/update provenance through pure read peers; combine matches_origin with active callback checks, and keep plain editor-state captures originless.
 
 ## Tests
@@ -133,3 +142,39 @@ Copy only own fields when importing opaque elements; never recursively clone chi
 
 Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;
 keep typed event payload ownership in the plugin registry.
+
+Capture an existing selection for a foreign host with snapshot_for_foreign_read; Clone intentionally clears range direction memos for upstream clone() semantics.
+
+Apply splice_text through its own check hook and direct text write, without dispatching set_text_content; move_selection edits an existing range in place, preserving its identity and typing attributes.
+
+Move existing text ranges through point edits in select and splice_text so composition follows the old anchor/focus node.
+
+Use with_foreign_native for explicit development native-super dispatch; consume the exact node/hook before entering native behavior so nested virtual calls stay active. Keep scopes update-local and thread-local even when read captures share their owner; drop guards independent of transaction borrows; import/clone lifecycle dispatch needs its own construction scope.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
+
+Track foreign captured-record identity with immutable marker tokens that do not retain records or affect writability; copy-on-write slot clones receive fresh markers. Resolve materialized read identities through source aliases, and never substitute payload-copy addresses for source identity.
+
+Hide typed native projections while invoking pure foreign hooks, but retain the lexical projection stack for owned read captures; nested native predicates and sibling hooks must capture all pending projected payload fields with their original source identities.
+
+Give runtime ForeignHooks text setters the current mutable transaction and ownership of the whole operation; Override::Value does not trigger a second framework write. Native TextNode coercion stays pure on fallback. Run the write guard before callbacks, and consume native-super bypass before walking any runtime ancestors.
+
+Toggle text directionless/unmergeable bits directly on the writable detail field, clearing absent-detail export state; do not call the virtual set_detail hook or Tab's forbidden setter. toggle_format remains virtual through set_format.
+
+Development selection identities use pointer tokens with no retained model data. Retire replaced objects into detached slots before callbacks; preserve tokens across suspend/read captures, explicit reactivation and removeText restoration. In-place point/format/normalization updates preserve tokens. Native replace installs a cloned RangeSelection after structural edits; NodeSelection stays the original object.
+
+Use ForeignReadSnapshot::contains_selection_identity to distinguish inherited selection objects from newly owned peer values; never infer that distinction from transaction-local slot indices.
+
+Retain the current selection token and memo in immutable committed state clones; clone/reset selection values explicitly for pending updates. Publish the pending token only with the pending state so no-op commits retain the committed object. Give with_selection replacement snapshots a fresh token. Carry previous selection identity through owned read captures/suspension and hydrate it with detach_previous_foreign_selection without activation or write permission.
+
+Invoke selection_transform through its public guarded transaction entry point for explicit host calls; read-only peers must reject before callbacks. The flush pipeline uses the same vtable entry and reevaluates live focus after the anchor hook.
+
+Use needs_flush for a development host's implicit pre-commit pipeline pass; preserve the model dirty_since_flush predicate across suspension and keep explicit flush semantics unchanged.
+
+ForeignReadSnapshot::is_originless_capture_of compares the exact canonical records and selection identity, including native projection sources. Compare selection values, memo and order too. Save ForeignReadContext metadata without pinning pending records before cache writes; pair an authorized publication state only under a ForeignReadLease and have the host check its exact installed lease on derived reads. Pairing alone grants no dispatcher authority.
+
+Bracket fallible development runtime reads with ForeignReadOperation. Its thread-local stack transports owned failures only and grants no editor authority; nested failures are isolated, first error wins, and unscoped deferral rejects without retaining thread state. Check before callbacks, writes, memo publication, projection writeback and commit publication; infallible native signatures alone cannot report JS exceptions. Restore native scopes from the latest already-decoded payload even after a child failure; block payload writeback instead of restoring stale typed fields.
+
+ForeignCloneContext exposes an owned source read only during payload cloning. Capture after materializing the persistent-map path but before borrowing its writable record; no transaction pointer enters TLS. Normal native/default-feature clones are unchanged.
+
+ForeignSelectionCapture owns an explicit ordinary argument and optional identity. StateRef.with_foreign_selection_argument carries provenance through native traversal; recognize exact objects, never infer identity from equal selection fields. Owned read snapshots hydrate captured arguments without granting graph write authority.

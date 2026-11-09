@@ -389,7 +389,7 @@ pub(crate) fn call(
         "$setPointFromCaret" => {
             let target = first()?;
             let id = integer(&target["$point"]["selection"])? as usize;
-            let slot = r.selections.slot(id)?;
+            let slot = r.selection_slot(tx, id)?;
             let role = match target["$point"]["role"].as_str() {
                 Some("anchor") => PointRole::Anchor,
                 Some("focus") => PointRole::Focus,
@@ -454,10 +454,10 @@ pub(crate) fn call(
             r.carets.set_endpoints(id, (anchor, focus))?;
             return Ok(result);
         }
-        "$caretRangeFromSelection" => CaretValue::Range(caret_range_from_selection(
-            tx.view(),
-            tx.range_at(slot_arg(r, first()?)?)?,
-        )?),
+        "$caretRangeFromSelection" => {
+            let slot = slot_arg(r, tx, first()?)?;
+            CaretValue::Range(caret_range_from_selection(tx.view(), tx.range_at(slot)?)?)
+        }
         "$removeTextFromCaretRange" => {
             let input = first()?.clone();
             let range = range(r, &input)?;

@@ -18,6 +18,8 @@ fn run(
     cache.prepare(tx, index);
     let transforms = tx.pending.registry.vtable(index).transforms.clone();
     for transform in transforms {
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         if !tx.is_attached(key) {
             break;
         }
