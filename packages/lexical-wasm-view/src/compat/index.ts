@@ -1,5 +1,6 @@
 export { DOMSlot, ElementDOMSlot } from './dom-slot';
 export { GenMap } from './gen-map';
+export type { DOMInternalCallSubset } from './internal-contract.type-test';
 export { stopLexicalPropagation } from './root-events';
 export type { CompatRuntime } from './runtime';
 export {
@@ -30,5 +31,3 @@ export type {
   DOMObservableExpected,
 } from './upstream-contract.type-test';
 export { type CompatCommit, type CompatView, createCompatView } from './view';
-
-export type { DOMInternalCallSubset } from './internal-contract.type-test';
