@@ -102,6 +102,62 @@ export class EditorSession {
      */
     command(code: number, a: number, b: number, text: string | null | undefined, now: number): number;
     /**
+     * Open unpublished edits on this session's actual core.
+     */
+    compatBegin(tags: Uint8Array): void;
+    /**
+     * Begin a compact update with native key tickets and current composition state.
+     */
+    compatBeginCompact(request: Uint8Array): Uint8Array;
+    /**
+     * Execute one typed operation in the live update or an exact historical read.
+     */
+    compatCall(request: Uint8Array): Uint8Array;
+    /**
+     * Admit the staged update through the normal readiness, access and WAL path.
+     */
+    compatCommit(now: number, wall: number): Uint8Array;
+    /**
+     * Observe native publications outside the JS update path without reusing versions.
+     */
+    compatCurrentVersion(): bigint;
+    /**
+     * Discard unpublished edits without rolling back other session inputs.
+     */
+    compatDiscard(): void;
+    /**
+     * Close a flushed no-op without publishing a replacement state or listeners.
+     */
+    compatFinishNoop(): boolean;
+    /**
+     * Normalize the unpublished update without admitting or publishing it.
+     */
+    compatFlush(): void;
+    /**
+     * Release exactly one JS binding lease without releasing its graph.
+     */
+    compatReleaseSelection(reference: Uint8Array): void;
+    /**
+     * Release a retained historical publication and its captured host references.
+     */
+    compatReleaseVersion(version: bigint): void;
+    /**
+     * Refill an exhausted native key ticket block in the same update.
+     */
+    compatReserveKeys(count: number): Uint8Array;
+    /**
+     * Retain a value independently of its original allocation graph.
+     */
+    compatRetainSelection(reference: Uint8Array): void;
+    /**
+     * Synchronize one owned selection value against the caller's chosen graph.
+     */
+    compatSetSelection(request: Uint8Array): Uint8Array;
+    /**
+     * Capture the exact retained publication, including version zero.
+     */
+    compatSnapshot(version: bigint): Uint8Array;
+    /**
      * Full IME primitive input, preserving UTF-16 offsets and composition data.
      */
     composition(kind: number, key: number, text: string | null | undefined, anchor_offset: number, focus_offset: number, data: string | null | undefined, now: number): number;
@@ -117,6 +173,10 @@ export class EditorSession {
      * Construct a session; reject incompatible ABI majors before decoding configuration.
      */
     static create(abi_major: number, config: Uint8Array, now: number, wall: number): EditorSession;
+    /**
+     * Create the JS-configured core with no parallel native editing plugins.
+     */
+    static createCompat(abi: number, config: Uint8Array, now: number, wall: number, registration: Uint8Array): EditorSession;
     /**
      * Construct the application's MarkdownSync registry and projection policy.
      */
@@ -302,6 +362,31 @@ export class SyncRouter {
 }
 
 /**
+ * Static callback entry point; never receives an already-borrowed EditorSession.
+ */
+export function compatibilityCallbackCall(host_slot: number, scope_id: bigint, bytes: Uint8Array): Uint8Array;
+
+/**
+ * Hook names in the generated production class-mask order.
+ */
+export function compatibility_hook_index(): string[];
+
+/**
+ * Exact compatibility envelope version required before editor construction.
+ */
+export function compatibility_protocol_major(): number;
+
+/**
+ * Exact generated schema fingerprint required by the production JS backend.
+ */
+export function compatibility_schema_hash(): string;
+
+/**
+ * Install the single module-stable dispatcher; editor slots remain weak in JS.
+ */
+export function installCompatibilityHost(dispatcher: Function): void;
+
+/**
  * Prepare the MarkdownSync linkifier before editors accept their first paste.
  * The host schedules this after paint while preparing the shared editor engine.
  */
@@ -314,6 +399,10 @@ export interface InitOutput {
     readonly __wbg_docsession_free: (a: number, b: number) => void;
     readonly __wbg_editorsession_free: (a: number, b: number) => void;
     readonly __wbg_syncrouter_free: (a: number, b: number) => void;
+    readonly compatibilityCallbackCall: (a: number, b: bigint, c: number, d: number) => [number, number, number, number];
+    readonly compatibility_hook_index: () => [number, number];
+    readonly compatibility_protocol_major: () => number;
+    readonly compatibility_schema_hash: () => [number, number];
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly docsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -335,10 +424,25 @@ export interface InitOutput {
     readonly editorsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_clipboard: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_command: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly editorsession_compatBegin: (a: number, b: number, c: number) => [number, number];
+    readonly editorsession_compatBeginCompact: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatCall: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatCommit: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatCurrentVersion: (a: number) => [bigint, number, number];
+    readonly editorsession_compatDiscard: (a: number) => [number, number];
+    readonly editorsession_compatFinishNoop: (a: number) => [number, number, number];
+    readonly editorsession_compatFlush: (a: number) => [number, number];
+    readonly editorsession_compatReleaseSelection: (a: number, b: number, c: number) => [number, number];
+    readonly editorsession_compatReleaseVersion: (a: number, b: bigint) => [number, number];
+    readonly editorsession_compatReserveKeys: (a: number, b: number) => [number, number, number, number];
+    readonly editorsession_compatRetainSelection: (a: number, b: number, c: number) => [number, number];
+    readonly editorsession_compatSetSelection: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatSnapshot: (a: number, b: bigint) => [number, number, number, number];
     readonly editorsession_composition: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_compositionEnd: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly editorsession_createCompat: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_createMacro: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
@@ -366,6 +470,7 @@ export interface InitOutput {
     readonly editorsession_tick: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_typeTable: (a: number) => [number, number, number, number];
+    readonly installCompatibilityHost: (a: any) => [number, number];
     readonly prepareMacroPaste: () => [number, number];
     readonly syncrouter_attach: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly syncrouter_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -390,6 +495,7 @@ export interface InitOutput {
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_start: () => void;
 }
 
