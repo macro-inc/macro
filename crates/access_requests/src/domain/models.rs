@@ -180,6 +180,29 @@ pub struct RequestEvent {
     pub trace_context: std::collections::HashMap<String, String>,
     /// Previous requested notifications and their recipients to complete.
     pub superseded: Vec<(Uuid, Vec<MacroUserIdStr<'static>>)>,
+    /// Residents this change stopped, when it removed or lowered someone's
+    /// access to a runtime their agents live on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<StoppedResidents>,
+}
+
+/// A person's agents that stopped because a change ended their User access to
+/// the runtime the agents live on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoppedResidents {
+    /// The agents' owner, whose access changed.
+    pub owner: MacroUserIdStr<'static>,
+    /// The agents that were running and no longer may.
+    pub agents: Vec<Resident>,
+}
+
+/// An agent living on a runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Resident {
+    /// The agent's bot id.
+    pub bot_id: Uuid,
+    /// The agent's display name.
+    pub name: String,
 }
 /// Domain failures translated to HTTP only at the inbound boundary.
 #[derive(Debug, thiserror::Error)]

@@ -963,3 +963,82 @@ async fn a_runtime_is_shared_only_among_the_owners_teammates(pool: PgPool) {
     let state = s.state(user("teammate"), runtime, 0).await.unwrap();
     assert_eq!(state.access_level, None);
 }
+
+/// Binds an agent owned by `owner` to `runtime`, returning its id.
+async fn bind_agent(
+    pool: &PgPool,
+    runtime: ShareEntity,
+    owner: &str,
+    name: &str,
+    is_coding: bool,
+) -> Uuid {
+    let bot_id = Uuid::now_v7();
+    let owner = user(owner);
+    sqlx::query!(
+        "INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent) VALUES ($1, 'owned', $2, $3, $4, true)",
+        bot_id,
+        owner.as_ref(),
+        name,
+        format!("agent-{bot_id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding) VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, $3)",
+        bot_id,
+        runtime.entity_id,
+        is_coding,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    bot_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn removing_runtime_access_names_the_residents_it_stopped(pool: PgPool) {
+    let runtime = seed_harness(&pool).await;
+    let (s, _) = setup(pool.clone());
+    s.set_direct_access(
+        user("owner"),
+        runtime,
+        user("teammate"),
+        Some(AccessLevel::Edit),
+    )
+    .await
+    .unwrap();
+    let resident = bind_agent(&pool, runtime, "teammate", "Scout", false).await;
+    bind_agent(&pool, runtime, "teammate", "Coder", true).await;
+    s.repository.claim_events().await.unwrap();
+
+    // Lowered to Read: the resident stops, and the event says so.
+    s.set_direct_access(
+        user("owner"),
+        runtime,
+        user("teammate"),
+        Some(AccessLevel::View),
+    )
+    .await
+    .unwrap();
+    let events = s.repository.claim_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].stopped,
+        Some(StoppedResidents {
+            owner: user("teammate"),
+            agents: vec![Resident {
+                bot_id: resident,
+                name: "Scout".to_owned(),
+            }],
+        })
+    );
+
+    // Removing Read stops nothing more.
+    s.set_direct_access(user("owner"), runtime, user("teammate"), None)
+        .await
+        .unwrap();
+    let events = s.repository.claim_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].stopped, None);
+}
