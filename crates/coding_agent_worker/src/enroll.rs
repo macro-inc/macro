@@ -174,12 +174,24 @@ fn run(program: &str, args: &[&str]) -> rootcause::Result<()> {
 }
 
 /// Enroll this computer, or refresh its token helper when already enrolled.
-#[tracing::instrument(skip_all, fields(computer_id = tracing::field::Empty), err)]
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
     run_enroll_with_host(options, &SystemHost).await
 }
 
+/// The setup trace this enrollment belongs to; older control planes only put
+/// it in the persona configuration.
+fn setup_parent(enrollment: &Enrollment) -> Option<&str> {
+    enrollment.traceparent.as_deref().or_else(|| {
+        enrollment
+            .persona
+            .as_ref()
+            .and_then(|persona| persona.config.get("BRAIN_PROVISION_TRACEPARENT"))
+            .map(String::as_str)
+    })
+}
+
 async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootcause::Result<()> {
+    use tracing::Instrument as _;
     let paths = SystemPaths {
         root: options.root.clone(),
     };
@@ -191,22 +203,34 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     }
 
     let enrollment = read_enrollment(&options.from, &paths).await?;
-    hosted_runtimes::domain::telemetry::resume(
-        enrollment
-            .persona
-            .as_ref()
-            .and_then(|persona| persona.config.get("BRAIN_PROVISION_TRACEPARENT"))
-            .map(String::as_str),
+    // Parent before entering so enrollment joins the setup trace.
+    let span = tracing::info_span!(
+        "run_enroll",
+        computer_id = %enrollment.computer_id,
+        generation = i64::from(enrollment.generation.get()),
+        otel.status_code = tracing::field::Empty
     );
-    tracing::Span::current().record(
-        "computer_id",
-        tracing::field::display(enrollment.computer_id),
-    );
+    hosted_runtimes::domain::telemetry::attach(&span, setup_parent(&enrollment));
+    enroll(&options, host, &paths, &marker, &enrollment)
+        .instrument(span.clone())
+        .await
+        .inspect_err(|_| {
+            span.record("otel.status_code", "ERROR");
+        })
+}
+
+async fn enroll(
+    options: &EnrollOptions,
+    host: &impl Host,
+    paths: &SystemPaths,
+    marker: &Path,
+    enrollment: &Enrollment,
+) -> rootcause::Result<()> {
     // Validate everything before the first side effect.
     let persona = enrollment
         .persona
         .as_ref()
-        .map(|persona| PersonaFiles::render(persona, &enrollment.persona_enrollment, &paths))
+        .map(|persona| PersonaFiles::render(persona, &enrollment.persona_enrollment, paths))
         .transpose()?;
     let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides)?;
 
@@ -215,32 +239,28 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     } else {
         Some(crate::service::installed_agent(&options.agent)?)
     };
-    write_config(&options, agent, urls.as_ref())?;
+    write_config(options, agent, urls.as_ref())?;
     // Claim only after the persona file is safely installed: a claimed guest
     // must never be left with the credentials from a retired issuance.
     if let Some(persona) = persona {
         persona.install(host)?;
     }
-    ensure_credentials(&options.config, &enrollment).await?;
+    ensure_credentials(&options.config, enrollment).await?;
     own_like_parent(&options.config, host)?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
             .context(format!("could not create {}", parent.display()))?;
     }
-    install_token_store(&options.config, &paths, host)?;
-    if let Some(parent) = enrollment
-        .persona
-        .as_ref()
-        .and_then(|persona| persona.config.get("BRAIN_PROVISION_TRACEPARENT"))
-    {
+    install_token_store(&options.config, paths, host)?;
+    if let Some(parent) = setup_parent(enrollment) {
         write_file(
             &paths.at(crate::telemetry::PROVISION_PARENT_PATH),
             parent,
             0o644,
         )?;
     }
-    std::fs::write(&marker, enrollment.computer_id.to_string())
+    std::fs::write(marker, enrollment.computer_id.to_string())
         .context(format!("could not write {}", marker.display()))?;
     tracing::info!("enrolled");
     Ok(())
@@ -388,6 +408,7 @@ fn write_config(
 
 /// Claim the pre-approved pairing unless a credential is already stored,
 /// which is what a retried enrollment finds.
+#[tracing::instrument(name = "macrod.enroll.claim", skip_all, fields(attempts = tracing::field::Empty), err)]
 async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::Result<()> {
     let config = Config::load(path)?;
     if config
@@ -398,9 +419,13 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         tracing::info!("credential already stored; skipping the claim");
         return Ok(());
     }
-    let client = PairingClient::new(&config);
+    let client =
+        PairingClient::new(&config).with_trace_parent(setup_parent(enrollment).map(str::to_owned));
     let started = Instant::now();
+    let mut attempts: i64 = 0;
     loop {
+        attempts += 1;
+        tracing::Span::current().record("attempts", attempts);
         match client
             .claim(enrollment.pairing_id, enrollment.device_secret.expose())
             .await

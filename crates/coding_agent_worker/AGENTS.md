@@ -243,10 +243,17 @@ stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
 Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment and audited persona supervision spans export; health
-spans emit on state change and restart spans record attempt/backoff/outcome.
-Enrollment retains only W3C context in `/var/lib/macrod/provision.traceparent`;
-supervision joins it and records the marker's computer UUID plus a hashed persona ID.
+(gRPC). Only enrollment (`run_enroll`, `macrod.enroll.claim`), capability
+report and audited persona supervision spans export; health spans emit on state
+change and restart spans record attempt/backoff/outcome.
+Enrollment joins the setup trace from `Enrollment.traceparent` (or the persona's
+`BRAIN_PROVISION_TRACEPARENT` from older control planes) and retains only that
+W3C context in `/var/lib/macrod/provision.traceparent`; supervision joins it and
+records the marker's computer UUID plus a hashed persona ID.
+A daemon started within an hour of enrollment is part of setup: its claim and
+capability reports send the setup `traceparent` (the raw parent when this daemon
+exports nothing), until a report with every persona healthy succeeds, and each
+persona gets a `macrod.persona.startup` span that ends at its first healthy check.
 Steady unit-state polling emits no span. stdout remains the daemon protocol.
 
 ## Enrollment configuration regression

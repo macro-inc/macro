@@ -28,6 +28,7 @@ pub enum ClaimStatus {
 pub struct PairingClient {
     http: reqwest::Client,
     base: String,
+    trace_parent: Option<String>,
 }
 
 impl PairingClient {
@@ -40,7 +41,14 @@ impl PairingClient {
                 .storage_url
                 .trim_end_matches('/')
                 .to_owned(),
+            trace_parent: None,
         }
+    }
+
+    /// Claim inside a Macro computer's setup trace.
+    pub fn with_trace_parent(mut self, trace_parent: Option<String>) -> Self {
+        self.trace_parent = trace_parent;
+        self
     }
 
     /// Open a pairing named after this machine. Ownership, permission bypass,
@@ -76,6 +84,9 @@ impl PairingClient {
         let response = self
             .http
             .post(format!("{}/harness-pairings/{pairing_id}/claim", self.base))
+            .headers(crate::telemetry::trace_headers(
+                self.trace_parent.as_deref(),
+            ))
             .json(&ClaimPairingRequest {
                 device_secret: device_secret.to_owned(),
             })

@@ -514,3 +514,72 @@ fn issued_credentials_and_environment_are_written_only_to_the_private_env_file()
     assert!(!unit.contains("fixture-api-value"));
     assert!(!unit.contains("fixture-repo-value"));
 }
+
+#[test]
+fn the_setup_parent_prefers_the_enrollment_and_falls_back_to_the_persona() {
+    let parent = "00-11111111111111111111111111111111-2222222222222222-01";
+    let mut enrollment = enrollment();
+    assert_eq!(setup_parent(&enrollment), None);
+    enrollment.persona.as_mut().unwrap().config.insert(
+        PersonaConfigKey::parse("BRAIN_PROVISION_TRACEPARENT").unwrap(),
+        "00-33333333333333333333333333333333-4444444444444444-01".to_owned(),
+    );
+    assert_eq!(
+        setup_parent(&enrollment),
+        Some("00-33333333333333333333333333333333-4444444444444444-01")
+    );
+    enrollment.traceparent = Some(parent.to_owned());
+    assert_eq!(setup_parent(&enrollment), Some(parent));
+    enrollment.persona = None;
+    assert_eq!(setup_parent(&enrollment), Some(parent));
+}
+
+#[tokio::test]
+async fn the_claim_joins_the_setup_trace() {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{header, method, path},
+    };
+    let parent = "00-11111111111111111111111111111111-2222222222222222-01";
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(
+            "/dss/harness-pairings/00000000-0000-0000-0000-00000000000a/claim",
+        ))
+        .and(header("traceparent", parent))
+        .respond_with(ResponseTemplate::new(202))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let config = directory.path().join("macrod.toml");
+    std::fs::write(
+        &config,
+        format!(
+            r#"
+[macro]
+api_url = "{uri}/agent-harness"
+storage_url = "{uri}/dss"
+
+[harness]
+command = "claude-code-acp"
+
+[workspace]
+path = "/"
+"#,
+            uri = server.uri()
+        ),
+    )
+    .unwrap();
+    let client = crate::outbound::pairing::PairingClient::new(&Config::load(&config).unwrap())
+        .with_trace_parent(Some(parent.to_owned()));
+    let status = client
+        .claim(enrollment().pairing_id, "mhds_secret")
+        .await
+        .unwrap();
+    assert!(matches!(
+        status,
+        crate::outbound::pairing::ClaimStatus::Pending
+    ));
+    server.verify().await;
+}

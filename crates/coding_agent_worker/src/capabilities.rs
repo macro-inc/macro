@@ -62,6 +62,8 @@ pub fn spawn_reporter(
     );
     track_reporter(tasks, cancel, async move {
         let mut reported = None;
+        // Join the setup trace until the control plane has seen a live brain.
+        let mut setup_parent = crate::telemetry::setup_parent();
         let mut current = HarnessCapabilities::default();
         let mut screen_at = Instant::now();
         let mut interval = tokio::time::interval(PROBE_INTERVAL);
@@ -95,8 +97,13 @@ pub fn spawn_reporter(
                 }
             }
             if reported.as_ref() != Some(&current) {
-                match report(&http, &url, &token, &current).await {
-                    Ok(()) => reported = Some(current.clone()),
+                match report(&http, &url, &token, &current, setup_parent).await {
+                    Ok(()) => {
+                        if alive(&current) {
+                            setup_parent = None;
+                        }
+                        reported = Some(current.clone());
+                    }
                     Err(error) => tracing::warn!(error = ?error, "capability report failed"),
                 }
             }
@@ -125,26 +132,51 @@ fn track_reporter(
     });
 }
 
-#[tracing::instrument(name = "macrod.capabilities.report", skip_all, fields(screen = capabilities.screen, persona_count = capabilities.personas.len()), err)]
+/// Setup ends once every persona is healthy (or there is none to wait for).
+fn alive(capabilities: &HarnessCapabilities) -> bool {
+    capabilities.personas.values().all(|health| {
+        matches!(
+            health,
+            harnesses::domain::models::PersonaHealth::Healthy { .. }
+        )
+    })
+}
+
 async fn report(
     http: &reqwest::Client,
     url: &str,
     token: &str,
     capabilities: &HarnessCapabilities,
+    setup_parent: Option<&str>,
 ) -> rootcause::Result<()> {
-    let mut headers = reqwest::header::HeaderMap::new();
-    macro_tower_layers::inject_trace_headers(&mut headers);
-    let status = http
-        .put(url)
-        .headers(headers)
-        .header(HARNESS_TOKEN_HEADER, token)
-        .json(capabilities)
-        .send()
-        .await
-        .context("could not reach the service to report capabilities")?
-        .status();
-    if !status.is_success() {
-        rootcause::bail!("capability report returned HTTP {status}");
+    use tracing::Instrument as _;
+    let span = tracing::info_span!(
+        "macrod.capabilities.report",
+        screen = capabilities.screen,
+        persona_count = capabilities.personas.len() as i64,
+        alive = alive(capabilities),
+        setup = setup_parent.is_some(),
+        otel.status_code = tracing::field::Empty
+    );
+    hosted_runtimes::domain::telemetry::attach(&span, setup_parent);
+    async {
+        let status = http
+            .put(url)
+            .headers(crate::telemetry::trace_headers(setup_parent))
+            .header(HARNESS_TOKEN_HEADER, token)
+            .json(capabilities)
+            .send()
+            .await
+            .context("could not reach the service to report capabilities")?
+            .status();
+        if !status.is_success() {
+            rootcause::bail!("capability report returned HTTP {status}");
+        }
+        Ok(())
     }
-    Ok(())
+    .instrument(span.clone())
+    .await
+    .inspect_err(|_| {
+        span.record("otel.status_code", "ERROR");
+    })
 }

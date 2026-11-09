@@ -76,10 +76,66 @@ async fn persona_health_uses_the_existing_authenticated_capability_report() {
         &format!("{}/harnesses/me/capabilities", server.uri()),
         "test-harness-token",
         &capabilities,
+        None,
     )
     .await
     .unwrap();
     server.verify().await;
+}
+
+#[tokio::test]
+async fn setup_reports_join_the_purchase_trace_until_the_brain_is_alive() {
+    use chrono::Utc;
+    use harnesses::domain::models::PersonaHealth;
+    use std::collections::BTreeMap;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{header, method, path},
+    };
+    let parent = "00-11111111111111111111111111111111-2222222222222222-01";
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/harnesses/me/capabilities"))
+        .and(header("traceparent", parent))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let starting = HarnessCapabilities {
+        screen: false,
+        personas: BTreeMap::from([(
+            "agent-ada".to_owned(),
+            PersonaHealth::Missing {
+                checked_at: Utc::now(),
+                last_error: "brain unit is starting or stopping".to_owned(),
+                last_turn_at: None,
+            },
+        )]),
+    };
+    report(
+        &http,
+        &format!("{}/harnesses/me/capabilities", server.uri()),
+        "test-harness-token",
+        &starting,
+        Some(parent),
+    )
+    .await
+    .unwrap();
+    server.verify().await;
+
+    assert!(!alive(&starting));
+    assert!(alive(&HarnessCapabilities::default()));
+    assert!(alive(&HarnessCapabilities {
+        screen: false,
+        personas: BTreeMap::from([(
+            "agent-ada".to_owned(),
+            PersonaHealth::Healthy {
+                checked_at: Utc::now(),
+                last_turn_at: None,
+            },
+        )]),
+    }));
 }
 
 #[test]
@@ -156,13 +212,13 @@ async fn capability_reports_follow_changed_dns_after_a_healthy_connection_return
     let capabilities = HarnessCapabilities::default();
     let url = "http://storage.test/harnesses/me/capabilities";
     assert!(
-        report(&http, url, "test-harness-token", &capabilities)
+        report(&http, url, "test-harness-token", &capabilities, None)
             .await
             .is_err()
     );
 
     dns.changed.store(true, Ordering::SeqCst);
-    report(&http, url, "test-harness-token", &capabilities)
+    report(&http, url, "test-harness-token", &capabilities, None)
         .await
         .unwrap();
     stale.verify().await;

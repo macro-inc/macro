@@ -80,7 +80,9 @@ impl<Units: UnitController, Health: HealthProbe> Supervisor<Units, Health> {
     ) -> BTreeMap<String, PersonaHealth> {
         self.personas.retain(|name, _| config.contains_key(name));
         for name in config.keys() {
-            self.personas.entry(name.clone()).or_default();
+            self.personas
+                .entry(name.clone())
+                .or_insert_with(|| Observation::starting(name));
         }
         let units = &self.units;
         let health = &self.health;
@@ -104,6 +106,10 @@ impl<Units: UnitController, Health: HealthProbe> Supervisor<Units, Health> {
                         PersonaHealth::Unhealthy { .. } => "unhealthy",
                         PersonaHealth::Missing { .. } => "missing",
                     };
+                    if state == "healthy" {
+                        // Ends the wait from first observation to a live brain.
+                        observation.startup.take();
+                    }
                     if observation.reported_state != Some(state) {
                         let span = tracing::info_span!(
                             "macrod.persona.health",
@@ -135,9 +141,26 @@ struct Observation {
     failures: u8,
     retry_at: Option<Instant>,
     last_turn_at: Option<DateTime<Utc>>,
+    /// Open from first observation until the brain is healthy, during setup only.
+    startup: Option<tracing::Span>,
 }
 
 impl Observation {
+    fn starting(name: &str) -> Self {
+        let startup = crate::telemetry::setup_parent().map(|parent| {
+            let span = tracing::info_span!(
+                "macrod.persona.startup",
+                persona_id = %macro_user_id::telemetry_id(name)
+            );
+            hosted_runtimes::domain::telemetry::attach(&span, Some(parent));
+            span
+        });
+        Self {
+            startup,
+            ..Self::default()
+        }
+    }
+
     async fn check<Units: UnitController, Health: HealthProbe>(
         &mut self,
         name: &str,
