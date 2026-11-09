@@ -6,7 +6,7 @@
 import { invariant } from '../../../lexical-wasm-view/src/compat/support';
 import { compareNumberWithUpstreamType } from '../compatibility-exceptions';
 import { ElementNode, type LexicalNode } from '../nodes';
-import type { PointCaret } from '../selection/runtime';
+import type { PointCaret } from './types';
 
 function $isElementNode(
   node: LexicalNode | null | undefined
