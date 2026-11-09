@@ -81,6 +81,13 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never previews sessions")
     }
 
+    async fn billing(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<agent_session::domain::model::SessionBilling> {
+        Ok(agent_session::domain::model::SessionBilling::default())
+    }
+
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
             origin: Default::default(),

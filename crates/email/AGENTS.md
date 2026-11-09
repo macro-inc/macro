@@ -117,9 +117,11 @@ tools — hexagonal, heavily feature-gated.
   `domain/service/thread_labels.rs`); route new label actions through them.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
-  each of their own inboxes; an inbox whose read fails is skipped, and
-  subjects and snippets are cut to 200 and 300 characters there, not in the
-  adapters.
+  each of their own inboxes (50 by default, at most 100); an inbox whose read
+  fails is skipped. Subjects are cut to 200 characters and snippets to the
+  caller's `snippet_chars` (the provider's 300 by default, at most 500, past
+  the preview taken from the body) there, not in the adapters; each message
+  carries its label names.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
