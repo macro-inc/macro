@@ -19,6 +19,7 @@ import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
+  MAILBOX_CONNECTED_ELSEWHERE_CODE,
   NO_GMAIL_GRANT_CODE,
   SHARED_INBOX_CONFLICT_CODE,
 } from '@service-email/client';
@@ -32,6 +33,7 @@ import { createMemo, createSignal, getOwner } from 'solid-js';
 import { inboxAuthorizationUrl } from './consent';
 import {
   announceAlreadyConnected,
+  announceConnectedElsewhere,
   announceConsentCancelled,
   announceLinkedInbox,
   type InboxAddition,
@@ -64,6 +66,8 @@ type EmailInitError =
   | { tag: 'AlreadyInitialized' }
   /** No Gmail grant to provision from — scope declined at consent or grant removed. */
   | { tag: 'NoGmailGrant' }
+  /** The mailbox is already an inbox in another account; remove it there first. */
+  | { tag: 'MailboxConnectedElsewhere' }
   /** The mailbox is already connected by another user; confirm to share it. */
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   | { tag: 'FailedToInitialize'; message: string };
@@ -120,6 +124,15 @@ function initEmailLink(args?: {
       }
       if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
         return err<string, EmailInitError>({ tag: 'NoGmailGrant' });
+      }
+      if (
+        initResult.error.some(
+          (e) => e.code === MAILBOX_CONNECTED_ELSEWHERE_CODE
+        )
+      ) {
+        return err<string, EmailInitError>({
+          tag: 'MailboxConnectedElsewhere',
+        });
       }
       const error: EmailInitError = initResult.error.some(
         (e) => e.code === ALREADY_INITIALIZED_CODE
@@ -300,6 +313,10 @@ export function useAddInboxFlow() {
                 'add-inbox'
               ),
           });
+          return;
+        }
+        if (error.tag === 'MailboxConnectedElsewhere') {
+          announceConnectedElsewhere();
           return;
         }
         toast.failure('Failed to add inbox');

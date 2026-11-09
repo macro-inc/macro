@@ -48,6 +48,16 @@ export function announceLinkedInbox(
   return 'connected';
 }
 
+/**
+ * The mailbox is already an inbox in another Macro account, which holds its
+ * Google grant. The message never names that account.
+ */
+export function announceConnectedElsewhere() {
+  toast.failure(
+    'This mailbox is already connected as an inbox in another Macro account. Remove it there, then connect it again.'
+  );
+}
+
 export function announceConsentCancelled() {
   toast.alert('Account not connected', {
     subtext: 'Sign-in was cancelled before access was granted.',

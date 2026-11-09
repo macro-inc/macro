@@ -15,6 +15,7 @@ import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmailLinks } from '@core/email-link';
 import {
   announceAlreadyConnected,
+  announceConnectedElsewhere,
   announceConsentCancelled,
   announceLinkedInbox,
 } from '@core/email-link/link-outcome';
@@ -311,6 +312,12 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
             toast.failure(
               'A professional subscription is required to add another inbox.'
             );
+            navigateAfterLink();
+            return;
+          }
+          if (err.tag === 'MailboxConnectedElsewhere') {
+            trackOutcome('mailbox_connected_elsewhere');
+            announceConnectedElsewhere();
             navigateAfterLink();
             return;
           }

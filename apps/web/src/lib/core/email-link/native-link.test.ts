@@ -62,6 +62,7 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@service-email/client', () => ({
   emailClient: { init: mocks.provision },
   ALREADY_INITIALIZED_CODE: 'ALREADY_INITIALIZED',
+  MAILBOX_CONNECTED_ELSEWHERE_CODE: 'MAILBOX_CONNECTED_ELSEWHERE',
   NO_GMAIL_GRANT_CODE: 'NO_GMAIL_GRANT',
   SHARED_INBOX_CONFLICT_CODE: 'SHARED_INBOX_CONFLICT',
 }));
@@ -364,6 +365,23 @@ describe('native account linking', () => {
     await useAddInboxFlow()({ provider: 'GMAIL' });
     expect(mocks.refetch).toHaveBeenCalledOnce();
     expect(mocks.alert).toHaveBeenCalledOnce();
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it('says a mailbox connected in another account must be removed there', async () => {
+    mocks.provision.mockResolvedValue(
+      err([
+        {
+          code: 'MAILBOX_CONNECTED_ELSEWHERE',
+          message:
+            'Mailbox is already connected as an inbox in another account',
+        },
+      ])
+    );
+    await useAddInboxFlow()({ provider: 'GMAIL' });
+    expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+      'This mailbox is already connected as an inbox in another Macro account. Remove it there, then connect it again.'
+    );
     expect(mocks.success).not.toHaveBeenCalled();
   });
 });

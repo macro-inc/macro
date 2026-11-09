@@ -249,6 +249,21 @@ describe('inbox consent callback', () => {
     );
   });
 
+  it('says a mailbox connected in another account must be removed there', async () => {
+    mocks.init.mockReturnValue(errAsync({ tag: 'MailboxConnectedElsewhere' }));
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+        'This mailbox is already connected as an inbox in another Macro account. Remove it there, then connect it again.'
+      )
+    );
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'mailbox_connected_elsewhere' }
+    );
+  });
+
   it('still holds the callback for a shared-inbox confirmation', async () => {
     mocks.init.mockReturnValueOnce(
       errAsync({
