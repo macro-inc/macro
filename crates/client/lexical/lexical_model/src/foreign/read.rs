@@ -85,6 +85,7 @@ impl Hash for ForeignRecordIdentity {
 /// is already borrowed by the operation invoking them. A host still needs a
 /// separate guarded read dispatcher; this value grants no mutation capability.
 pub struct ForeignReadSnapshot {
+    pub(super) update_facts: Arc<ForeignUpdateFacts>,
     argument: Option<ForeignSelectionCapture>,
     state: EditorState,
     native_calls: Option<Arc<super::native::NativeCalls>>,
@@ -120,6 +121,7 @@ impl Clone for ForeignReadSnapshot {
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
         Self {
+            update_facts: self.update_facts.clone(),
             argument: self.argument.clone(),
             state,
             native_calls: self.native_calls.clone(),
@@ -213,6 +215,7 @@ impl ForeignReadSnapshot {
             return Err(Error::ForeignEditorState);
         }
         let mut captured = self.clone();
+        captured.update_facts = source.update_facts.clone();
         captured.state.foreign_instances = source.foreign_instances.clone();
         let mut origin = source.origin.clone();
         origin.lease = Some(Arc::downgrade(&lease.0));
@@ -320,6 +323,7 @@ impl ForeignReadSnapshot {
         }
         tx.foreign_read_sources = Some(self.source_records.clone());
         tx.foreign_read_origin = self.origin.clone();
+        tx.foreign_read_update_facts = Some(self.update_facts.clone());
         tx.foreign_retired_records = self.retired_records.clone();
         tx.foreign_previous_selection = self
             .previous_selection
@@ -348,6 +352,9 @@ impl ForeignReadSnapshot {
 impl Read for ForeignReadSnapshot {
     fn view(&self) -> StateRef<'_> {
         StateRef {
+            foreign_update_facts: Some(super::update_facts::UpdateFactsRef::Captured(
+                &self.update_facts,
+            )),
             foreign_selection_argument: self.argument.as_ref(),
             state: &self.state,
             native_projection: None,
@@ -444,6 +451,7 @@ impl StateRef<'_> {
             state.nodes.insert(projection.key, Arc::new(record));
         }
         Ok(ForeignReadSnapshot {
+            update_facts: self.foreign_update_facts(),
             argument: self.foreign_selection_argument.cloned(),
             state,
             native_calls: self.foreign_native_calls.cloned(),

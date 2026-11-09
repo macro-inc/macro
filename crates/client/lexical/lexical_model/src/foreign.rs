@@ -47,3 +47,6 @@ mod selection_values;
 mod reserved;
 
 pub(crate) mod native_overlay;
+
+pub(crate) mod update_facts;
+pub use update_facts::{ForeignDirtyType, ForeignUpdateFacts};

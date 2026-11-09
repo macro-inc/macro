@@ -32,6 +32,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_origin: Option<crate::foreign::ReadOrigin>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_update_facts: Option<Arc<ForeignUpdateFacts>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_retired_records: crate::state::NodeMap,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_previous_selection: Option<Selection>,
@@ -89,6 +91,8 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             foreign_read_origin: None,
             #[cfg(feature = "foreign-nodes")]
+            foreign_read_update_facts: None,
+            #[cfg(feature = "foreign-nodes")]
             foreign_retired_records: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_previous_selection: None,
@@ -137,6 +141,15 @@ impl<'editor> Transaction<'editor> {
             previous_selection
         };
         StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update_facts: Some(match &self.foreign_read_update_facts {
+                Some(facts) => crate::foreign::update_facts::UpdateFactsRef::Captured(facts),
+                None => crate::foreign::update_facts::UpdateFactsRef::Transaction {
+                    leaves: &self.dirty_leaves,
+                    elements: &self.dirty_elements,
+                    full_reconcile: self.full_reconcile,
+                },
+            }),
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_argument: None,
             #[cfg(feature = "foreign-nodes")]
