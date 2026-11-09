@@ -17,191 +17,347 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 39, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 77, 105,
-115, 115, 105, 110, 103, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 70,
-111, 114, 101, 105, 103, 110, 85, 110, 100, 101, 102, 105,
-110, 101, 100, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 70, 111, 114,
-101, 105, 103, 110, 78, 117, 108, 108, 0, 1, 0, 0, 0, 0,
-0, 0, 1, 0, 70, 111, 114, 101, 105, 103, 110, 83, 108,
-111, 116, 0, 1, 0, 0, 4, 0, 0, 0, 1, 1, 115, 108, 111,
-116, 73, 100, 0, 251, 255, 255, 255, 0, 70, 111, 114, 101,
-105, 103, 110, 79, 112, 97, 113, 117, 101, 86, 97, 108,
-117, 101, 0, 3, 0, 5, 0, 0, 0, 4, 1, 0, 0, 0, 0, 2, 1, 0,
-0, 0, 3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 70, 111, 114, 101,
-105, 103, 110, 78, 111, 100, 101, 75, 105, 110, 100, 0, 4,
-0, 254, 255, 255, 255, 0, 1, 0, 0, 0, 5, 85, 110, 107,
-110, 111, 119, 110, 0, 0, 0, 69, 108, 101, 109, 101, 110,
-116, 0, 0, 1, 84, 101, 120, 116, 0, 0, 2, 68, 101, 99,
-111, 114, 97, 116, 111, 114, 0, 0, 3, 76, 105, 110, 101,
-66, 114, 101, 97, 107, 0, 0, 4, 70, 111, 114, 101, 105,
-103, 110, 65, 99, 99, 101, 115, 115, 0, 4, 0, 254, 255,
-255, 255, 0, 1, 0, 0, 0, 5, 85, 110, 107, 110, 111, 119,
-110, 0, 0, 0, 82, 101, 97, 100, 0, 0, 1, 70, 114, 111,
-122, 101, 110, 0, 0, 2, 87, 114, 105, 116, 97, 98, 108,
-101, 0, 0, 3, 83, 116, 97, 103, 101, 0, 0, 4, 70, 111,
-114, 101, 105, 103, 110, 75, 101, 121, 0, 1, 0, 0, 8, 0,
-0, 0, 1, 2, 105, 110, 100, 101, 120, 0, 251, 255, 255,
-255, 0, 103, 101, 110, 101, 114, 97, 116, 105, 111, 110,
-0, 251, 255, 255, 255, 0, 70, 111, 114, 101, 105, 103,
-110, 79, 112, 116, 105, 111, 110, 97, 108, 75, 101, 121,
-0, 1, 0, 0, 9, 0, 0, 0, 1, 2, 112, 114, 101, 115, 101,
-110, 116, 0, 255, 255, 255, 255, 0, 107, 101, 121, 0, 7,
-0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 69, 100,
-105, 116, 111, 114, 82, 101, 102, 0, 1, 0, 0, 4, 0, 0, 0,
-1, 1, 101, 100, 105, 116, 111, 114, 73, 100, 0, 251, 255,
-255, 255, 0, 70, 111, 114, 101, 105, 103, 110, 83, 116,
-97, 116, 101, 82, 101, 102, 0, 1, 0, 0, 12, 0, 0, 0, 1, 2,
-101, 100, 105, 116, 111, 114, 73, 100, 0, 251, 255, 255,
-255, 0, 118, 101, 114, 115, 105, 111, 110, 0, 249, 255,
-255, 255, 0, 70, 111, 114, 101, 105, 103, 110, 78, 111,
-100, 101, 82, 101, 102, 0, 1, 0, 0, 28, 0, 0, 0, 1, 5,
-101, 100, 105, 116, 111, 114, 73, 100, 0, 251, 255, 255,
-255, 0, 118, 101, 114, 115, 105, 111, 110, 0, 249, 255,
-255, 255, 0, 107, 101, 121, 0, 7, 0, 0, 0, 0, 99, 108, 97,
-115, 115, 73, 100, 0, 251, 255, 255, 255, 0, 105, 110,
-115, 116, 97, 110, 99, 101, 73, 100, 0, 251, 255, 255,
-255, 0, 70, 111, 114, 101, 105, 103, 110, 83, 101, 108,
-101, 99, 116, 105, 111, 110, 82, 101, 102, 0, 1, 0, 0, 16,
-0, 0, 0, 1, 3, 101, 100, 105, 116, 111, 114, 73, 100, 0,
+3, 49, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 78, 97,
+116, 105, 118, 101, 70, 105, 101, 108, 100, 0, 4, 0, 251,
+255, 255, 255, 0, 4, 0, 0, 0, 28, 85, 110, 107, 110, 111,
+119, 110, 0, 0, 0, 0, 0, 0, 65, 117, 116, 111, 76, 105,
+110, 107, 78, 111, 100, 101, 73, 115, 85, 110, 108, 105,
+110, 107, 101, 100, 0, 0, 1, 0, 0, 0, 67, 111, 100, 101,
+72, 105, 103, 104, 108, 105, 103, 104, 116, 78, 111, 100,
+101, 72, 105, 103, 104, 108, 105, 103, 104, 116, 84, 121,
+112, 101, 0, 0, 2, 0, 0, 0, 67, 111, 100, 101, 78, 111,
+100, 101, 73, 115, 83, 121, 110, 116, 97, 120, 72, 105,
+103, 104, 108, 105, 103, 104, 116, 83, 117, 112, 112, 111,
+114, 116, 101, 100, 0, 0, 3, 0, 0, 0, 67, 111, 100, 101,
+78, 111, 100, 101, 76, 97, 110, 103, 117, 97, 103, 101, 0,
+0, 4, 0, 0, 0, 67, 111, 100, 101, 78, 111, 100, 101, 84,
+104, 101, 109, 101, 0, 0, 5, 0, 0, 0, 72, 101, 97, 100,
+105, 110, 103, 78, 111, 100, 101, 84, 97, 103, 0, 0, 6, 0,
+0, 0, 76, 105, 110, 107, 78, 111, 100, 101, 82, 101, 108,
+0, 0, 7, 0, 0, 0, 76, 105, 110, 107, 78, 111, 100, 101,
+84, 97, 114, 103, 101, 116, 0, 0, 8, 0, 0, 0, 76, 105,
+110, 107, 78, 111, 100, 101, 84, 105, 116, 108, 101, 0, 0,
+9, 0, 0, 0, 76, 105, 110, 107, 78, 111, 100, 101, 85, 114,
+108, 0, 0, 10, 0, 0, 0, 76, 105, 115, 116, 73, 116, 101,
+109, 78, 111, 100, 101, 67, 104, 101, 99, 107, 101, 100,
+0, 0, 11, 0, 0, 0, 76, 105, 115, 116, 73, 116, 101, 109,
+78, 111, 100, 101, 86, 97, 108, 117, 101, 0, 0, 12, 0, 0,
+0, 76, 105, 115, 116, 78, 111, 100, 101, 76, 105, 115,
+116, 84, 121, 112, 101, 0, 0, 13, 0, 0, 0, 76, 105, 115,
+116, 78, 111, 100, 101, 83, 116, 97, 114, 116, 0, 0, 14,
+0, 0, 0, 76, 105, 115, 116, 78, 111, 100, 101, 84, 97,
+103, 0, 0, 15, 0, 0, 0, 77, 97, 114, 107, 78, 111, 100,
+101, 73, 100, 115, 0, 0, 16, 0, 0, 0, 84, 97, 98, 108,
+101, 67, 101, 108, 108, 78, 111, 100, 101, 66, 97, 99,
+107, 103, 114, 111, 117, 110, 100, 67, 111, 108, 111, 114,
+0, 0, 17, 0, 0, 0, 84, 97, 98, 108, 101, 67, 101, 108,
+108, 78, 111, 100, 101, 67, 111, 108, 83, 112, 97, 110, 0,
+0, 18, 0, 0, 0, 84, 97, 98, 108, 101, 67, 101, 108, 108,
+78, 111, 100, 101, 72, 101, 97, 100, 101, 114, 83, 116,
+97, 116, 101, 0, 0, 19, 0, 0, 0, 84, 97, 98, 108, 101, 67,
+101, 108, 108, 78, 111, 100, 101, 82, 111, 119, 83, 112,
+97, 110, 0, 0, 20, 0, 0, 0, 84, 97, 98, 108, 101, 67, 101,
+108, 108, 78, 111, 100, 101, 86, 101, 114, 116, 105, 99,
+97, 108, 65, 108, 105, 103, 110, 0, 0, 21, 0, 0, 0, 84,
+97, 98, 108, 101, 67, 101, 108, 108, 78, 111, 100, 101,
+87, 105, 100, 116, 104, 0, 0, 22, 0, 0, 0, 84, 97, 98,
+108, 101, 78, 111, 100, 101, 67, 111, 108, 87, 105, 100,
+116, 104, 115, 0, 0, 23, 0, 0, 0, 84, 97, 98, 108, 101,
+78, 111, 100, 101, 70, 114, 111, 122, 101, 110, 67, 111,
+108, 117, 109, 110, 67, 111, 117, 110, 116, 0, 0, 24, 0,
+0, 0, 84, 97, 98, 108, 101, 78, 111, 100, 101, 70, 114,
+111, 122, 101, 110, 82, 111, 119, 67, 111, 117, 110, 116,
+0, 0, 25, 0, 0, 0, 84, 97, 98, 108, 101, 78, 111, 100,
+101, 82, 111, 119, 83, 116, 114, 105, 112, 105, 110, 103,
+0, 0, 26, 0, 0, 0, 84, 97, 98, 108, 101, 82, 111, 119, 78,
+111, 100, 101, 72, 101, 105, 103, 104, 116, 0, 0, 27, 0,
+0, 0, 70, 111, 114, 101, 105, 103, 110, 77, 105, 115, 115,
+105, 110, 103, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 70, 111, 114,
+101, 105, 103, 110, 85, 110, 100, 101, 102, 105, 110, 101,
+100, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 70, 111, 114, 101, 105,
+103, 110, 78, 117, 108, 108, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0,
+70, 111, 114, 101, 105, 103, 110, 83, 108, 111, 116, 0, 1,
+0, 0, 4, 0, 0, 0, 1, 1, 115, 108, 111, 116, 73, 100, 0,
+251, 255, 255, 255, 0, 70, 111, 114, 101, 105, 103, 110,
+79, 112, 97, 113, 117, 101, 86, 97, 108, 117, 101, 0, 3,
+0, 5, 0, 0, 0, 4, 1, 1, 0, 0, 0, 2, 2, 0, 0, 0, 3, 3, 0,
+0, 0, 4, 4, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 78,
+111, 100, 101, 75, 105, 110, 100, 0, 4, 0, 254, 255, 255,
+255, 0, 1, 0, 0, 0, 5, 85, 110, 107, 110, 111, 119, 110,
+0, 0, 0, 69, 108, 101, 109, 101, 110, 116, 0, 0, 1, 84,
+101, 120, 116, 0, 0, 2, 68, 101, 99, 111, 114, 97, 116,
+111, 114, 0, 0, 3, 76, 105, 110, 101, 66, 114, 101, 97,
+107, 0, 0, 4, 70, 111, 114, 101, 105, 103, 110, 65, 99,
+99, 101, 115, 115, 0, 4, 0, 254, 255, 255, 255, 0, 1, 0,
+0, 0, 5, 85, 110, 107, 110, 111, 119, 110, 0, 0, 0, 82,
+101, 97, 100, 0, 0, 1, 70, 114, 111, 122, 101, 110, 0, 0,
+2, 87, 114, 105, 116, 97, 98, 108, 101, 0, 0, 3, 83, 116,
+97, 103, 101, 0, 0, 4, 70, 111, 114, 101, 105, 103, 110,
+75, 101, 121, 0, 1, 0, 0, 8, 0, 0, 0, 1, 2, 105, 110, 100,
+101, 120, 0, 251, 255, 255, 255, 0, 103, 101, 110, 101,
+114, 97, 116, 105, 111, 110, 0, 251, 255, 255, 255, 0, 70,
+111, 114, 101, 105, 103, 110, 79, 112, 116, 105, 111, 110,
+97, 108, 75, 101, 121, 0, 1, 0, 0, 9, 0, 0, 0, 1, 2, 112,
+114, 101, 115, 101, 110, 116, 0, 255, 255, 255, 255, 0,
+107, 101, 121, 0, 8, 0, 0, 0, 0, 70, 111, 114, 101, 105,
+103, 110, 69, 100, 105, 116, 111, 114, 82, 101, 102, 0, 1,
+0, 0, 4, 0, 0, 0, 1, 1, 101, 100, 105, 116, 111, 114, 73,
+100, 0, 251, 255, 255, 255, 0, 70, 111, 114, 101, 105,
+103, 110, 83, 116, 97, 116, 101, 82, 101, 102, 0, 1, 0, 0,
+12, 0, 0, 0, 1, 2, 101, 100, 105, 116, 111, 114, 73, 100,
+0, 251, 255, 255, 255, 0, 118, 101, 114, 115, 105, 111,
+110, 0, 249, 255, 255, 255, 0, 70, 111, 114, 101, 105,
+103, 110, 78, 111, 100, 101, 82, 101, 102, 0, 1, 0, 0, 28,
+0, 0, 0, 1, 5, 101, 100, 105, 116, 111, 114, 73, 100, 0,
 251, 255, 255, 255, 0, 118, 101, 114, 115, 105, 111, 110,
-0, 249, 255, 255, 255, 0, 115, 101, 108, 101, 99, 116,
-105, 111, 110, 73, 100, 0, 251, 255, 255, 255, 0, 70, 111,
-114, 101, 105, 103, 110, 82, 101, 99, 111, 114, 100, 82,
-101, 102, 0, 1, 0, 0, 33, 0, 0, 0, 1, 3, 110, 111, 100,
-101, 0, 11, 0, 0, 0, 0, 117, 112, 100, 97, 116, 101, 73,
-100, 0, 251, 255, 255, 255, 0, 97, 99, 99, 101, 115, 115,
-0, 6, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 67,
-108, 97, 115, 115, 82, 101, 103, 105, 115, 116, 114, 97,
-116, 105, 111, 110, 0, 1, 0, 0, 29, 0, 0, 0, 0, 7, 99,
-108, 97, 115, 115, 73, 100, 0, 251, 255, 255, 255, 0, 116,
-121, 112, 101, 78, 97, 109, 101, 0, 245, 255, 255, 255, 0,
-99, 108, 97, 115, 115, 78, 97, 109, 101, 0, 245, 255, 255,
-255, 0, 107, 105, 110, 100, 0, 5, 0, 0, 0, 0, 97, 110, 99,
-101, 115, 116, 114, 121, 0, 242, 255, 255, 255, 0, 251,
-255, 255, 255, 0, 110, 97, 116, 105, 118, 101, 84, 121,
-112, 101, 0, 245, 255, 255, 255, 0, 104, 111, 111, 107,
-115, 0, 249, 255, 255, 255, 0, 70, 111, 114, 101, 105,
-103, 110, 84, 101, 120, 116, 66, 97, 115, 101, 0, 2, 0, 5,
-0, 0, 0, 5, 116, 101, 120, 116, 0, 242, 255, 255, 255, 0,
-253, 255, 255, 255, 0, 1, 102, 111, 114, 109, 97, 116, 0,
-251, 255, 255, 255, 0, 2, 100, 101, 116, 97, 105, 108, 0,
-251, 255, 255, 255, 0, 3, 109, 111, 100, 101, 0, 254, 255,
-255, 255, 0, 4, 115, 116, 121, 108, 101, 0, 245, 255, 255,
-255, 0, 5, 70, 111, 114, 101, 105, 103, 110, 69, 108, 101,
-109, 101, 110, 116, 66, 97, 115, 101, 0, 2, 0, 5, 0, 0, 0,
-6, 102, 111, 114, 109, 97, 116, 0, 251, 255, 255, 255, 0,
-1, 105, 110, 100, 101, 110, 116, 0, 251, 255, 255, 255, 0,
-2, 100, 105, 114, 101, 99, 116, 105, 111, 110, 0, 254,
-255, 255, 255, 0, 3, 116, 101, 120, 116, 70, 111, 114,
-109, 97, 116, 0, 251, 255, 255, 255, 0, 4, 116, 101, 120,
-116, 83, 116, 121, 108, 101, 0, 245, 255, 255, 255, 0, 5,
-115, 116, 121, 108, 101, 0, 245, 255, 255, 255, 0, 6, 70,
-111, 114, 101, 105, 103, 110, 66, 97, 115, 101, 80, 97,
-116, 99, 104, 0, 2, 0, 5, 0, 0, 0, 2, 116, 101, 120, 116,
-0, 15, 0, 0, 0, 0, 1, 101, 108, 101, 109, 101, 110, 116,
-0, 16, 0, 0, 0, 0, 2, 70, 111, 114, 101, 105, 103, 110,
-84, 114, 101, 101, 76, 105, 110, 107, 115, 0, 1, 0, 0, 49,
-0, 0, 0, 1, 6, 112, 97, 114, 101, 110, 116, 0, 8, 0, 0, 0,
-0, 112, 114, 101, 118, 105, 111, 117, 115, 0, 8, 0, 0, 0,
-0, 110, 101, 120, 116, 0, 8, 0, 0, 0, 0, 102, 105, 114,
-115, 116, 0, 8, 0, 0, 0, 0, 108, 97, 115, 116, 0, 8, 0, 0,
-0, 0, 115, 105, 122, 101, 0, 251, 255, 255, 255, 0, 70,
-111, 114, 101, 105, 103, 110, 67, 108, 111, 110, 101, 83,
-116, 97, 103, 101, 0, 1, 0, 0, 143, 0, 0, 0, 0, 10, 115,
-116, 97, 103, 101, 73, 100, 0, 251, 255, 255, 255, 0, 101,
-100, 105, 116, 111, 114, 73, 100, 0, 251, 255, 255, 255,
-0, 117, 112, 100, 97, 116, 101, 73, 100, 0, 251, 255, 255,
-255, 0, 118, 101, 114, 115, 105, 111, 110, 0, 249, 255,
-255, 255, 0, 115, 111, 117, 114, 99, 101, 0, 11, 0, 0, 0,
-0, 99, 116, 111, 114, 75, 101, 121, 0, 7, 0, 0, 0, 0, 100,
-101, 115, 116, 105, 110, 97, 116, 105, 111, 110, 0, 11, 0,
-0, 0, 0, 98, 97, 115, 101, 0, 17, 0, 0, 0, 0, 111, 119,
-110, 70, 105, 101, 108, 100, 115, 0, 4, 0, 0, 0, 0, 114,
-101, 113, 117, 105, 114, 101, 100, 76, 105, 110, 107, 115,
-0, 18, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 67,
-108, 111, 110, 101, 65, 99, 107, 0, 1, 0, 0, 87, 0, 0, 0,
-0, 8, 115, 116, 97, 103, 101, 73, 100, 0, 251, 255, 255,
-255, 0, 99, 108, 97, 115, 115, 73, 100, 0, 251, 255, 255,
-255, 0, 105, 110, 115, 116, 97, 110, 99, 101, 73, 100, 0,
-251, 255, 255, 255, 0, 99, 116, 111, 114, 75, 101, 121, 0,
-7, 0, 0, 0, 0, 100, 101, 115, 116, 105, 110, 97, 116, 105,
-111, 110, 75, 101, 121, 0, 7, 0, 0, 0, 0, 98, 97, 115,
-101, 80, 97, 116, 99, 104, 0, 17, 0, 0, 0, 0, 111, 119,
-110, 70, 105, 101, 108, 100, 115, 0, 4, 0, 0, 0, 0, 111,
-98, 115, 101, 114, 118, 101, 100, 76, 105, 110, 107, 115,
-0, 18, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 70,
-105, 101, 108, 100, 82, 101, 97, 100, 0, 1, 0, 0, 41, 0,
-0, 0, 0, 3, 114, 101, 99, 111, 114, 100, 0, 13, 0, 0, 0,
-0, 112, 114, 111, 116, 111, 116, 121, 112, 101, 67, 108,
-97, 115, 115, 73, 100, 0, 251, 255, 255, 255, 0, 102, 105,
-101, 108, 100, 0, 245, 255, 255, 255, 0, 70, 111, 114,
-101, 105, 103, 110, 70, 105, 101, 108, 100, 87, 114, 105,
-116, 101, 0, 1, 0, 0, 46, 0, 0, 0, 0, 4, 114, 101, 99,
-111, 114, 100, 0, 13, 0, 0, 0, 0, 112, 114, 111, 116, 111,
-116, 121, 112, 101, 67, 108, 97, 115, 115, 73, 100, 0,
-251, 255, 255, 255, 0, 102, 105, 101, 108, 100, 0, 245,
-255, 255, 255, 0, 118, 97, 108, 117, 101, 0, 4, 0, 0, 0,
-0, 70, 111, 114, 101, 105, 103, 110, 83, 116, 97, 116,
-101, 67, 111, 110, 102, 105, 103, 0, 1, 0, 0, 9, 0, 0, 0,
-0, 3, 99, 111, 110, 102, 105, 103, 73, 100, 0, 251, 255,
-255, 255, 0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 102,
-108, 97, 116, 0, 255, 255, 255, 255, 0, 70, 111, 114, 101,
-105, 103, 110, 83, 116, 97, 116, 101, 79, 112, 101, 114,
-97, 116, 105, 111, 110, 0, 4, 0, 254, 255, 255, 255, 0, 1,
-0, 0, 0, 5, 85, 110, 107, 110, 111, 119, 110, 0, 0, 0, 80,
+0, 249, 255, 255, 255, 0, 107, 101, 121, 0, 8, 0, 0, 0, 0,
+99, 108, 97, 115, 115, 73, 100, 0, 251, 255, 255, 255, 0,
+105, 110, 115, 116, 97, 110, 99, 101, 73, 100, 0, 251,
+255, 255, 255, 0, 70, 111, 114, 101, 105, 103, 110, 83,
+101, 108, 101, 99, 116, 105, 111, 110, 82, 101, 102, 0, 1,
+0, 0, 16, 0, 0, 0, 1, 3, 101, 100, 105, 116, 111, 114, 73,
+100, 0, 251, 255, 255, 255, 0, 118, 101, 114, 115, 105,
+111, 110, 0, 249, 255, 255, 255, 0, 115, 101, 108, 101,
+99, 116, 105, 111, 110, 73, 100, 0, 251, 255, 255, 255, 0,
+70, 111, 114, 101, 105, 103, 110, 82, 101, 99, 111, 114,
+100, 82, 101, 102, 0, 1, 0, 0, 33, 0, 0, 0, 1, 3, 110,
+111, 100, 101, 0, 12, 0, 0, 0, 0, 117, 112, 100, 97, 116,
+101, 73, 100, 0, 251, 255, 255, 255, 0, 97, 99, 99, 101,
+115, 115, 0, 7, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103,
+110, 67, 108, 97, 115, 115, 82, 101, 103, 105, 115, 116,
+114, 97, 116, 105, 111, 110, 0, 1, 0, 0, 29, 0, 0, 0, 0,
+7, 99, 108, 97, 115, 115, 73, 100, 0, 251, 255, 255, 255,
+0, 116, 121, 112, 101, 78, 97, 109, 101, 0, 245, 255, 255,
+255, 0, 99, 108, 97, 115, 115, 78, 97, 109, 101, 0, 245,
+255, 255, 255, 0, 107, 105, 110, 100, 0, 6, 0, 0, 0, 0,
+97, 110, 99, 101, 115, 116, 114, 121, 0, 242, 255, 255,
+255, 0, 251, 255, 255, 255, 0, 110, 97, 116, 105, 118,
+101, 84, 121, 112, 101, 0, 245, 255, 255, 255, 0, 104,
+111, 111, 107, 115, 0, 249, 255, 255, 255, 0, 70, 111,
+114, 101, 105, 103, 110, 84, 101, 120, 116, 66, 97, 115,
+101, 0, 2, 0, 5, 0, 0, 0, 5, 116, 101, 120, 116, 0, 242,
+255, 255, 255, 0, 253, 255, 255, 255, 0, 1, 102, 111, 114,
+109, 97, 116, 0, 251, 255, 255, 255, 0, 2, 100, 101, 116,
+97, 105, 108, 0, 251, 255, 255, 255, 0, 3, 109, 111, 100,
+101, 0, 254, 255, 255, 255, 0, 4, 115, 116, 121, 108, 101,
+0, 245, 255, 255, 255, 0, 5, 70, 111, 114, 101, 105, 103,
+110, 69, 108, 101, 109, 101, 110, 116, 66, 97, 115, 101,
+0, 2, 0, 5, 0, 0, 0, 6, 102, 111, 114, 109, 97, 116, 0,
+251, 255, 255, 255, 0, 1, 105, 110, 100, 101, 110, 116, 0,
+251, 255, 255, 255, 0, 2, 100, 105, 114, 101, 99, 116,
+105, 111, 110, 0, 254, 255, 255, 255, 0, 3, 116, 101, 120,
+116, 70, 111, 114, 109, 97, 116, 0, 251, 255, 255, 255, 0,
+4, 116, 101, 120, 116, 83, 116, 121, 108, 101, 0, 245,
+255, 255, 255, 0, 5, 115, 116, 121, 108, 101, 0, 245, 255,
+255, 255, 0, 6, 70, 111, 114, 101, 105, 103, 110, 66, 97,
+115, 101, 80, 97, 116, 99, 104, 0, 2, 0, 5, 0, 0, 0, 2,
+116, 101, 120, 116, 0, 16, 0, 0, 0, 0, 1, 101, 108, 101,
+109, 101, 110, 116, 0, 17, 0, 0, 0, 0, 2, 70, 111, 114,
+101, 105, 103, 110, 84, 114, 101, 101, 76, 105, 110, 107,
+115, 0, 1, 0, 0, 49, 0, 0, 0, 1, 6, 112, 97, 114, 101,
+110, 116, 0, 9, 0, 0, 0, 0, 112, 114, 101, 118, 105, 111,
+117, 115, 0, 9, 0, 0, 0, 0, 110, 101, 120, 116, 0, 9, 0,
+0, 0, 0, 102, 105, 114, 115, 116, 0, 9, 0, 0, 0, 0, 108,
+97, 115, 116, 0, 9, 0, 0, 0, 0, 115, 105, 122, 101, 0,
+251, 255, 255, 255, 0, 70, 111, 114, 101, 105, 103, 110,
+67, 108, 111, 110, 101, 83, 116, 97, 103, 101, 0, 1, 0, 0,
+152, 0, 0, 0, 0, 11, 115, 116, 97, 103, 101, 73, 100, 0,
+251, 255, 255, 255, 0, 101, 100, 105, 116, 111, 114, 73,
+100, 0, 251, 255, 255, 255, 0, 117, 112, 100, 97, 116,
+101, 73, 100, 0, 251, 255, 255, 255, 0, 118, 101, 114,
+115, 105, 111, 110, 0, 249, 255, 255, 255, 0, 115, 111,
+117, 114, 99, 101, 0, 12, 0, 0, 0, 0, 99, 116, 111, 114,
+75, 101, 121, 0, 8, 0, 0, 0, 0, 100, 101, 115, 116, 105,
+110, 97, 116, 105, 111, 110, 0, 12, 0, 0, 0, 0, 98, 97,
+115, 101, 0, 18, 0, 0, 0, 0, 110, 97, 116, 105, 118, 101,
+80, 114, 111, 106, 101, 99, 116, 105, 111, 110, 0, 47, 0,
+0, 0, 0, 111, 119, 110, 70, 105, 101, 108, 100, 115, 0, 5,
+0, 0, 0, 0, 114, 101, 113, 117, 105, 114, 101, 100, 76,
+105, 110, 107, 115, 0, 19, 0, 0, 0, 0, 70, 111, 114, 101,
+105, 103, 110, 67, 108, 111, 110, 101, 65, 99, 107, 0, 1,
+0, 0, 96, 0, 0, 0, 0, 9, 115, 116, 97, 103, 101, 73, 100,
+0, 251, 255, 255, 255, 0, 99, 108, 97, 115, 115, 73, 100,
+0, 251, 255, 255, 255, 0, 105, 110, 115, 116, 97, 110, 99,
+101, 73, 100, 0, 251, 255, 255, 255, 0, 99, 116, 111, 114,
+75, 101, 121, 0, 8, 0, 0, 0, 0, 100, 101, 115, 116, 105,
+110, 97, 116, 105, 111, 110, 75, 101, 121, 0, 8, 0, 0, 0,
+0, 98, 97, 115, 101, 80, 97, 116, 99, 104, 0, 18, 0, 0, 0,
+0, 110, 97, 116, 105, 118, 101, 80, 114, 111, 106, 101,
+99, 116, 105, 111, 110, 0, 47, 0, 0, 0, 0, 111, 119, 110,
+70, 105, 101, 108, 100, 115, 0, 5, 0, 0, 0, 0, 111, 98,
+115, 101, 114, 118, 101, 100, 76, 105, 110, 107, 115, 0,
+19, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 70, 105,
+101, 108, 100, 82, 101, 97, 100, 0, 1, 0, 0, 41, 0, 0, 0,
+0, 3, 114, 101, 99, 111, 114, 100, 0, 14, 0, 0, 0, 0, 112,
+114, 111, 116, 111, 116, 121, 112, 101, 67, 108, 97, 115,
+115, 73, 100, 0, 251, 255, 255, 255, 0, 102, 105, 101,
+108, 100, 0, 245, 255, 255, 255, 0, 70, 111, 114, 101,
+105, 103, 110, 70, 105, 101, 108, 100, 87, 114, 105, 116,
+101, 0, 1, 0, 0, 46, 0, 0, 0, 0, 4, 114, 101, 99, 111,
+114, 100, 0, 14, 0, 0, 0, 0, 112, 114, 111, 116, 111, 116,
+121, 112, 101, 67, 108, 97, 115, 115, 73, 100, 0, 251,
+255, 255, 255, 0, 102, 105, 101, 108, 100, 0, 245, 255,
+255, 255, 0, 118, 97, 108, 117, 101, 0, 5, 0, 0, 0, 0, 70,
+111, 114, 101, 105, 103, 110, 83, 116, 97, 116, 101, 67,
+111, 110, 102, 105, 103, 0, 1, 0, 0, 9, 0, 0, 0, 0, 3, 99,
+111, 110, 102, 105, 103, 73, 100, 0, 251, 255, 255, 255,
+0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 102, 108, 97,
+116, 0, 255, 255, 255, 255, 0, 70, 111, 114, 101, 105,
+103, 110, 83, 116, 97, 116, 101, 79, 112, 101, 114, 97,
+116, 105, 111, 110, 0, 4, 0, 254, 255, 255, 255, 0, 1, 0,
+0, 0, 5, 85, 110, 107, 110, 111, 119, 110, 0, 0, 0, 80,
 97, 114, 115, 101, 0, 0, 1, 85, 110, 112, 97, 114, 115,
 101, 0, 0, 2, 73, 115, 69, 113, 117, 97, 108, 0, 0, 3, 73,
 115, 68, 101, 102, 97, 117, 108, 116, 0, 0, 4, 70, 111,
 114, 101, 105, 103, 110, 83, 116, 97, 116, 101, 67, 97,
 108, 108, 0, 1, 0, 0, 15, 0, 0, 0, 0, 4, 99, 111, 110,
 102, 105, 103, 73, 100, 0, 251, 255, 255, 255, 0, 111,
-112, 101, 114, 97, 116, 105, 111, 110, 0, 24, 0, 0, 0, 0,
-108, 101, 102, 116, 0, 4, 0, 0, 0, 0, 114, 105, 103, 104,
-116, 0, 4, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110,
+112, 101, 114, 97, 116, 105, 111, 110, 0, 25, 0, 0, 0, 0,
+108, 101, 102, 116, 0, 5, 0, 0, 0, 0, 114, 105, 103, 104,
+116, 0, 5, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110,
 79, 112, 97, 113, 117, 101, 65, 114, 103, 117, 109, 101,
 110, 116, 0, 1, 0, 0, 5, 0, 0, 0, 0, 1, 118, 97, 108, 117,
-101, 0, 4, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110,
+101, 0, 5, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110,
 78, 111, 100, 101, 65, 114, 103, 117, 109, 101, 110, 116,
 0, 1, 0, 0, 28, 0, 0, 0, 1, 1, 118, 97, 108, 117, 101, 0,
-11, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 83, 101,
+12, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 83, 101,
 108, 101, 99, 116, 105, 111, 110, 65, 114, 103, 117, 109,
 101, 110, 116, 0, 1, 0, 0, 16, 0, 0, 0, 1, 1, 118, 97,
-108, 117, 101, 0, 12, 0, 0, 0, 0, 70, 111, 114, 101, 105,
+108, 117, 101, 0, 13, 0, 0, 0, 0, 70, 111, 114, 101, 105,
 103, 110, 83, 116, 97, 116, 101, 65, 114, 103, 117, 109,
 101, 110, 116, 0, 1, 0, 0, 12, 0, 0, 0, 1, 1, 118, 97,
-108, 117, 101, 0, 10, 0, 0, 0, 0, 70, 111, 114, 101, 105,
+108, 117, 101, 0, 11, 0, 0, 0, 0, 70, 111, 114, 101, 105,
 103, 110, 82, 101, 99, 111, 114, 100, 65, 114, 103, 117,
 109, 101, 110, 116, 0, 1, 0, 0, 33, 0, 0, 0, 1, 1, 118,
-97, 108, 117, 101, 0, 13, 0, 0, 0, 0, 70, 111, 114, 101,
+97, 108, 117, 101, 0, 14, 0, 0, 0, 0, 70, 111, 114, 101,
 105, 103, 110, 69, 100, 105, 116, 111, 114, 65, 114, 103,
 117, 109, 101, 110, 116, 0, 1, 0, 0, 4, 0, 0, 0, 1, 1,
-118, 97, 108, 117, 101, 0, 9, 0, 0, 0, 0, 70, 111, 114,
+118, 97, 108, 117, 101, 0, 10, 0, 0, 0, 0, 70, 111, 114,
 101, 105, 103, 110, 78, 111, 100, 101, 65, 114, 114, 97,
 121, 65, 114, 103, 117, 109, 101, 110, 116, 0, 1, 0, 0, 4,
 0, 0, 0, 0, 1, 118, 97, 108, 117, 101, 115, 0, 242, 255,
-255, 255, 0, 11, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103,
+255, 255, 0, 12, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103,
+110, 66, 111, 111, 108, 101, 97, 110, 65, 114, 103, 117,
+109, 101, 110, 116, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 118, 97,
+108, 117, 101, 0, 255, 255, 255, 255, 0, 70, 111, 114,
+101, 105, 103, 110, 78, 117, 109, 98, 101, 114, 65, 114,
+103, 117, 109, 101, 110, 116, 0, 1, 0, 0, 8, 0, 0, 0, 1,
+1, 118, 97, 108, 117, 101, 0, 246, 255, 255, 255, 0, 70,
+111, 114, 101, 105, 103, 110, 83, 116, 114, 105, 110, 103,
+65, 114, 103, 117, 109, 101, 110, 116, 0, 1, 0, 0, 4, 0,
+0, 0, 0, 1, 118, 97, 108, 117, 101, 0, 242, 255, 255, 255,
+0, 253, 255, 255, 255, 0, 70, 111, 114, 101, 105, 103,
+110, 78, 117, 109, 98, 101, 114, 65, 114, 114, 97, 121,
+65, 114, 103, 117, 109, 101, 110, 116, 0, 1, 0, 0, 4, 0,
+0, 0, 0, 1, 118, 97, 108, 117, 101, 115, 0, 242, 255, 255,
+255, 0, 246, 255, 255, 255, 0, 70, 111, 114, 101, 105,
+103, 110, 83, 116, 114, 105, 110, 103, 65, 114, 114, 97,
+121, 65, 114, 103, 117, 109, 101, 110, 116, 0, 1, 0, 0, 4,
+0, 0, 0, 0, 1, 118, 97, 108, 117, 101, 115, 0, 242, 255,
+255, 255, 0, 45, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103,
 110, 67, 97, 108, 108, 98, 97, 99, 107, 86, 97, 108, 117,
-101, 0, 3, 0, 9, 0, 0, 0, 7, 1, 26, 0, 0, 0, 2, 27, 0, 0,
-0, 3, 28, 0, 0, 0, 4, 29, 0, 0, 0, 5, 30, 0, 0, 0, 6, 31,
-0, 0, 0, 7, 32, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110,
-72, 111, 111, 107, 67, 97, 108, 108, 0, 1, 0, 0, 46, 0, 0,
-0, 0, 5, 99, 97, 108, 108, 98, 97, 99, 107, 73, 100, 0,
-251, 255, 255, 255, 0, 104, 111, 111, 107, 0, 254, 255,
-255, 255, 0, 114, 101, 99, 101, 105, 118, 101, 114, 0, 13,
-0, 0, 0, 0, 112, 114, 111, 116, 111, 116, 121, 112, 101,
-67, 108, 97, 115, 115, 73, 100, 0, 251, 255, 255, 255, 0,
-97, 114, 103, 115, 0, 242, 255, 255, 255, 0, 33, 0, 0, 0,
-0, 70, 111, 114, 101, 105, 103, 110, 82, 101, 116, 117,
-114, 110, 101, 100, 0, 1, 0, 0, 9, 0, 0, 0, 0, 1, 118, 97,
-108, 117, 101, 0, 33, 0, 0, 0, 0, 70, 111, 114, 101, 105,
-103, 110, 73, 110, 104, 101, 114, 105, 116, 101, 100, 0,
-1, 0, 0, 0, 0, 0, 0, 1, 0, 70, 111, 114, 101, 105, 103,
-110, 84, 104, 114, 111, 119, 110, 0, 1, 0, 0, 5, 0, 0, 0,
-0, 1, 101, 114, 114, 111, 114, 0, 4, 0, 0, 0, 0, 70, 111,
-114, 101, 105, 103, 110, 72, 111, 111, 107, 82, 101, 115,
-117, 108, 116, 0, 3, 0, 5, 0, 0, 0, 3, 1, 35, 0, 0, 0, 2,
-36, 0, 0, 0, 3, 37, 0, 0, 0, 0, 0, 0, 0
+101, 0, 3, 0, 6, 0, 0, 0, 12, 1, 27, 0, 0, 0, 2, 28, 0, 0,
+0, 3, 29, 0, 0, 0, 4, 30, 0, 0, 0, 5, 31, 0, 0, 0, 6, 32,
+0, 0, 0, 7, 33, 0, 0, 0, 8, 34, 0, 0, 0, 9, 35, 0, 0, 0,
+10, 36, 0, 0, 0, 11, 37, 0, 0, 0, 12, 38, 0, 0, 0, 70,
+111, 114, 101, 105, 103, 110, 72, 111, 111, 107, 67, 97,
+108, 108, 0, 1, 0, 0, 46, 0, 0, 0, 0, 5, 99, 97, 108, 108,
+98, 97, 99, 107, 73, 100, 0, 251, 255, 255, 255, 0, 104,
+111, 111, 107, 0, 254, 255, 255, 255, 0, 114, 101, 99,
+101, 105, 118, 101, 114, 0, 14, 0, 0, 0, 0, 112, 114, 111,
+116, 111, 116, 121, 112, 101, 67, 108, 97, 115, 115, 73,
+100, 0, 251, 255, 255, 255, 0, 97, 114, 103, 115, 0, 242,
+255, 255, 255, 0, 39, 0, 0, 0, 0, 70, 111, 114, 101, 105,
+103, 110, 82, 101, 116, 117, 114, 110, 101, 100, 0, 1, 0,
+0, 6, 0, 0, 0, 0, 1, 118, 97, 108, 117, 101, 0, 39, 0, 0,
+0, 0, 70, 111, 114, 101, 105, 103, 110, 73, 110, 104, 101,
+114, 105, 116, 101, 100, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 70,
+111, 114, 101, 105, 103, 110, 84, 104, 114, 111, 119, 110,
+0, 1, 0, 0, 5, 0, 0, 0, 0, 1, 101, 114, 114, 111, 114, 0,
+5, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 72, 111,
+111, 107, 82, 101, 115, 117, 108, 116, 0, 3, 0, 5, 0, 0,
+0, 3, 1, 41, 0, 0, 0, 2, 42, 0, 0, 0, 3, 43, 0, 0, 0, 70,
+111, 114, 101, 105, 103, 110, 85, 116, 102, 49, 54, 83,
+116, 114, 105, 110, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1,
+118, 97, 108, 117, 101, 0, 242, 255, 255, 255, 0, 253,
+255, 255, 255, 0, 70, 111, 114, 101, 105, 103, 110, 78,
+97, 116, 105, 118, 101, 70, 105, 101, 108, 100, 86, 97,
+108, 117, 101, 0, 1, 0, 0, 10, 0, 0, 0, 0, 2, 102, 105,
+101, 108, 100, 0, 0, 0, 0, 0, 0, 118, 97, 108, 117, 101,
+0, 39, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103, 110, 78,
+97, 116, 105, 118, 101, 80, 114, 111, 106, 101, 99, 116,
+105, 111, 110, 0, 1, 0, 0, 9, 0, 0, 0, 0, 3, 110, 97, 116,
+105, 118, 101, 84, 121, 112, 101, 0, 245, 255, 255, 255,
+0, 99, 111, 109, 112, 108, 101, 116, 101, 0, 255, 255,
+255, 255, 0, 102, 105, 101, 108, 100, 115, 0, 242, 255,
+255, 255, 0, 46, 0, 0, 0, 0, 70, 111, 114, 101, 105, 103,
+110, 82, 101, 99, 111, 114, 100, 80, 97, 116, 99, 104, 0,
+1, 0, 0, 47, 0, 0, 0, 0, 3, 114, 101, 99, 111, 114, 100,
+0, 14, 0, 0, 0, 0, 98, 97, 115, 101, 80, 97, 116, 99, 104,
+0, 18, 0, 0, 0, 0, 110, 97, 116, 105, 118, 101, 80, 114,
+111, 106, 101, 99, 116, 105, 111, 110, 0, 47, 0, 0, 0, 0,
+0, 0, 0, 0
 ]);
+
+export enum ForeignNativeField {
+
+  Unknown = 0,
+
+  AutoLinkNodeIsUnlinked = 1,
+
+  CodeHighlightNodeHighlightType = 2,
+
+  CodeNodeIsSyntaxHighlightSupported = 3,
+
+  CodeNodeLanguage = 4,
+
+  CodeNodeTheme = 5,
+
+  HeadingNodeTag = 6,
+
+  LinkNodeRel = 7,
+
+  LinkNodeTarget = 8,
+
+  LinkNodeTitle = 9,
+
+  LinkNodeUrl = 10,
+
+  ListItemNodeChecked = 11,
+
+  ListItemNodeValue = 12,
+
+  ListNodeListType = 13,
+
+  ListNodeStart = 14,
+
+  ListNodeTag = 15,
+
+  MarkNodeIds = 16,
+
+  TableCellNodeBackgroundColor = 17,
+
+  TableCellNodeColSpan = 18,
+
+  TableCellNodeHeaderState = 19,
+
+  TableCellNodeRowSpan = 20,
+
+  TableCellNodeVerticalAlign = 21,
+
+  TableCellNodeWidth = 22,
+
+  TableNodeColWidths = 23,
+
+  TableNodeFrozenColumnCount = 24,
+
+  TableNodeFrozenRowCount = 25,
+
+  TableNodeRowStriping = 26,
+
+  TableRowNodeHeight = 27,
+}
+
 
 export const FOREIGN_HOST_PROTOCOL_MAJOR: number = 1;
 
@@ -2384,6 +2540,8 @@ export interface IForeignCloneStage extends BebopRecord {
 
   readonly base: IForeignBasePatch;
 
+  readonly nativeProjection: IForeignNativeProjection;
+
   readonly ownFields: ForeignOpaqueValue;
 
   readonly requiredLinks: IForeignTreeLinks;
@@ -2398,6 +2556,7 @@ export class ForeignCloneStage implements IForeignCloneStage {
   public readonly ctorKey: IForeignKey;
   public readonly destination: IForeignNodeRef;
   public readonly base: IForeignBasePatch;
+  public readonly nativeProjection: IForeignNativeProjection;
   public readonly ownFields: ForeignOpaqueValue;
   public readonly requiredLinks: IForeignTreeLinks;
 
@@ -2410,6 +2569,7 @@ export class ForeignCloneStage implements IForeignCloneStage {
     this.ctorKey = record.ctorKey;
     this.destination = record.destination;
     this.base = record.base;
+    this.nativeProjection = record.nativeProjection;
     this.ownFields = record.ownFields;
     this.requiredLinks = record.requiredLinks;
   }
@@ -2447,6 +2607,7 @@ export class ForeignCloneStage implements IForeignCloneStage {
     ForeignKey.validateCompatibility(record.ctorKey);
     ForeignNodeRef.validateCompatibility(record.destination);
     ForeignBasePatch.validateCompatibility(record.base);
+    ForeignNativeProjection.validateCompatibility(record.nativeProjection);
     ForeignOpaqueValue.validateCompatibility(record.ownFields);
     ForeignTreeLinks.validateCompatibility(record.requiredLinks);
   }
@@ -2459,6 +2620,7 @@ export class ForeignCloneStage implements IForeignCloneStage {
       record.ctorKey = ForeignKey.unsafeCast(record.ctorKey);
       record.destination = ForeignNodeRef.unsafeCast(record.destination);
       record.base = ForeignBasePatch.unsafeCast(record.base);
+      record.nativeProjection = ForeignNativeProjection.unsafeCast(record.nativeProjection);
       record.ownFields = ForeignOpaqueValue.unsafeCast(record.ownFields);
       record.requiredLinks = ForeignTreeLinks.unsafeCast(record.requiredLinks);
       return new ForeignCloneStage(record);
@@ -2496,6 +2658,7 @@ export class ForeignCloneStage implements IForeignCloneStage {
     ForeignKey.encodeInto(record.ctorKey, view)
     ForeignNodeRef.encodeInto(record.destination, view)
     ForeignBasePatch.encodeInto(record.base, view)
+    ForeignNativeProjection.encodeInto(record.nativeProjection, view)
     ForeignOpaqueValue.encodeInto(record.ownFields, view)
     ForeignTreeLinks.encodeInto(record.requiredLinks, view)
     const after = view.length;
@@ -2525,10 +2688,12 @@ export class ForeignCloneStage implements IForeignCloneStage {
     field6 = ForeignNodeRef.readFrom(view);
     let field7: IForeignBasePatch;
     field7 = ForeignBasePatch.readFrom(view);
-    let field8: ForeignOpaqueValue;
-    field8 = ForeignOpaqueValue.readFrom(view);
-    let field9: IForeignTreeLinks;
-    field9 = ForeignTreeLinks.readFrom(view);
+    let field8: IForeignNativeProjection;
+    field8 = ForeignNativeProjection.readFrom(view);
+    let field9: ForeignOpaqueValue;
+    field9 = ForeignOpaqueValue.readFrom(view);
+    let field10: IForeignTreeLinks;
+    field10 = ForeignTreeLinks.readFrom(view);
     let message: IForeignCloneStage = {
       stageId: field0,
       editorId: field1,
@@ -2538,8 +2703,9 @@ export class ForeignCloneStage implements IForeignCloneStage {
       ctorKey: field5,
       destination: field6,
       base: field7,
-      ownFields: field8,
-      requiredLinks: field9,
+      nativeProjection: field8,
+      ownFields: field9,
+      requiredLinks: field10,
     };
     return new ForeignCloneStage(message);
   }
@@ -2560,6 +2726,8 @@ export interface IForeignCloneAck extends BebopRecord {
 
   readonly basePatch: IForeignBasePatch;
 
+  readonly nativeProjection: IForeignNativeProjection;
+
   readonly ownFields: ForeignOpaqueValue;
 
   readonly observedLinks: IForeignTreeLinks;
@@ -2572,6 +2740,7 @@ export class ForeignCloneAck implements IForeignCloneAck {
   public readonly ctorKey: IForeignKey;
   public readonly destinationKey: IForeignKey;
   public readonly basePatch: IForeignBasePatch;
+  public readonly nativeProjection: IForeignNativeProjection;
   public readonly ownFields: ForeignOpaqueValue;
   public readonly observedLinks: IForeignTreeLinks;
 
@@ -2582,6 +2751,7 @@ export class ForeignCloneAck implements IForeignCloneAck {
     this.ctorKey = record.ctorKey;
     this.destinationKey = record.destinationKey;
     this.basePatch = record.basePatch;
+    this.nativeProjection = record.nativeProjection;
     this.ownFields = record.ownFields;
     this.observedLinks = record.observedLinks;
   }
@@ -2617,6 +2787,7 @@ export class ForeignCloneAck implements IForeignCloneAck {
     ForeignKey.validateCompatibility(record.ctorKey);
     ForeignKey.validateCompatibility(record.destinationKey);
     ForeignBasePatch.validateCompatibility(record.basePatch);
+    ForeignNativeProjection.validateCompatibility(record.nativeProjection);
     ForeignOpaqueValue.validateCompatibility(record.ownFields);
     ForeignTreeLinks.validateCompatibility(record.observedLinks);
   }
@@ -2628,6 +2799,7 @@ export class ForeignCloneAck implements IForeignCloneAck {
       record.ctorKey = ForeignKey.unsafeCast(record.ctorKey);
       record.destinationKey = ForeignKey.unsafeCast(record.destinationKey);
       record.basePatch = ForeignBasePatch.unsafeCast(record.basePatch);
+      record.nativeProjection = ForeignNativeProjection.unsafeCast(record.nativeProjection);
       record.ownFields = ForeignOpaqueValue.unsafeCast(record.ownFields);
       record.observedLinks = ForeignTreeLinks.unsafeCast(record.observedLinks);
       return new ForeignCloneAck(record);
@@ -2663,6 +2835,7 @@ export class ForeignCloneAck implements IForeignCloneAck {
     ForeignKey.encodeInto(record.ctorKey, view)
     ForeignKey.encodeInto(record.destinationKey, view)
     ForeignBasePatch.encodeInto(record.basePatch, view)
+    ForeignNativeProjection.encodeInto(record.nativeProjection, view)
     ForeignOpaqueValue.encodeInto(record.ownFields, view)
     ForeignTreeLinks.encodeInto(record.observedLinks, view)
     const after = view.length;
@@ -2688,10 +2861,12 @@ export class ForeignCloneAck implements IForeignCloneAck {
     field4 = ForeignKey.readFrom(view);
     let field5: IForeignBasePatch;
     field5 = ForeignBasePatch.readFrom(view);
-    let field6: ForeignOpaqueValue;
-    field6 = ForeignOpaqueValue.readFrom(view);
-    let field7: IForeignTreeLinks;
-    field7 = ForeignTreeLinks.readFrom(view);
+    let field6: IForeignNativeProjection;
+    field6 = ForeignNativeProjection.readFrom(view);
+    let field7: ForeignOpaqueValue;
+    field7 = ForeignOpaqueValue.readFrom(view);
+    let field8: IForeignTreeLinks;
+    field8 = ForeignTreeLinks.readFrom(view);
     let message: IForeignCloneAck = {
       stageId: field0,
       classId: field1,
@@ -2699,8 +2874,9 @@ export class ForeignCloneAck implements IForeignCloneAck {
       ctorKey: field3,
       destinationKey: field4,
       basePatch: field5,
-      ownFields: field6,
-      observedLinks: field7,
+      nativeProjection: field6,
+      ownFields: field7,
+      observedLinks: field8,
     };
     return new ForeignCloneAck(message);
   }
@@ -3873,6 +4049,523 @@ export class ForeignNodeArrayArgument implements IForeignNodeArrayArgument {
 }
 
 
+export interface IForeignBooleanArgument extends BebopRecord {
+
+  readonly value: boolean;
+}
+
+export class ForeignBooleanArgument implements IForeignBooleanArgument {
+  public readonly discriminator: number = 8 as 8;
+  public static readonly discriminator: number = 8 as 8;
+  public readonly value: boolean;
+
+  constructor(record: IForeignBooleanArgument) {
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignBooleanArgument.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignBooleanArgument): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignBooleanArgument.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignBooleanArgument}.
+   */
+  public static validateCompatibility(record: IForeignBooleanArgument): void {
+    BebopTypeGuard.ensureBoolean(record.value)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignBooleanArgument} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignBooleanArgument {
+      return new ForeignBooleanArgument(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignBooleanArgument} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignBooleanArgument {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignBooleanArgument.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignBooleanArgument.validateCompatibility(parsed);
+    return ForeignBooleanArgument.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignBooleanArgument.encode(this);
+  }
+
+  public static encode(record: IForeignBooleanArgument): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignBooleanArgument.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignBooleanArgument, view: BebopView): number {
+    const before = view.length;
+    view.writeByte(Number(record.value));
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignBooleanArgument {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignBooleanArgument.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignBooleanArgument {
+    let field0: boolean;
+    field0 = !!view.readByte();
+    let message: IForeignBooleanArgument = {
+      value: field0,
+    };
+    return new ForeignBooleanArgument(message);
+  }
+}
+
+
+export interface IForeignNumberArgument extends BebopRecord {
+
+  readonly value: number;
+}
+
+export class ForeignNumberArgument implements IForeignNumberArgument {
+  public readonly discriminator: number = 9 as 9;
+  public static readonly discriminator: number = 9 as 9;
+  public readonly value: number;
+
+  constructor(record: IForeignNumberArgument) {
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignNumberArgument.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignNumberArgument): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignNumberArgument.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignNumberArgument}.
+   */
+  public static validateCompatibility(record: IForeignNumberArgument): void {
+    BebopTypeGuard.ensureFloat(record.value)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignNumberArgument} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignNumberArgument {
+      return new ForeignNumberArgument(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignNumberArgument} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignNumberArgument {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignNumberArgument.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignNumberArgument.validateCompatibility(parsed);
+    return ForeignNumberArgument.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignNumberArgument.encode(this);
+  }
+
+  public static encode(record: IForeignNumberArgument): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignNumberArgument.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignNumberArgument, view: BebopView): number {
+    const before = view.length;
+    view.writeFloat64(record.value);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignNumberArgument {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignNumberArgument.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignNumberArgument {
+    let field0: number;
+    field0 = view.readFloat64();
+    let message: IForeignNumberArgument = {
+      value: field0,
+    };
+    return new ForeignNumberArgument(message);
+  }
+}
+
+
+export interface IForeignStringArgument extends BebopRecord {
+
+  readonly value: Array<number>;
+}
+
+export class ForeignStringArgument implements IForeignStringArgument {
+  public readonly discriminator: number = 10 as 10;
+  public static readonly discriminator: number = 10 as 10;
+  public readonly value: Array<number>;
+
+  constructor(record: IForeignStringArgument) {
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignStringArgument.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignStringArgument): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignStringArgument.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignStringArgument}.
+   */
+  public static validateCompatibility(record: IForeignStringArgument): void {
+    BebopTypeGuard.ensureArray(record.value, BebopTypeGuard.ensureUint16);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignStringArgument} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignStringArgument {
+      return new ForeignStringArgument(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignStringArgument} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignStringArgument {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignStringArgument.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignStringArgument.validateCompatibility(parsed);
+    return ForeignStringArgument.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignStringArgument.encode(this);
+  }
+
+  public static encode(record: IForeignStringArgument): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignStringArgument.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignStringArgument, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.value.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        view.writeUint16(record.value[i0]);
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignStringArgument {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignStringArgument.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignStringArgument {
+    let field0: Array<number>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<number>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: number;
+        x0 = view.readUint16();
+        field0[i0] = x0;
+      }
+    }
+    let message: IForeignStringArgument = {
+      value: field0,
+    };
+    return new ForeignStringArgument(message);
+  }
+}
+
+
+export interface IForeignNumberArrayArgument extends BebopRecord {
+
+  readonly values: Array<number>;
+}
+
+export class ForeignNumberArrayArgument implements IForeignNumberArrayArgument {
+  public readonly discriminator: number = 11 as 11;
+  public static readonly discriminator: number = 11 as 11;
+  public readonly values: Array<number>;
+
+  constructor(record: IForeignNumberArrayArgument) {
+    this.values = record.values;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignNumberArrayArgument.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignNumberArrayArgument): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignNumberArrayArgument.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignNumberArrayArgument}.
+   */
+  public static validateCompatibility(record: IForeignNumberArrayArgument): void {
+    BebopTypeGuard.ensureArray(record.values, BebopTypeGuard.ensureFloat);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignNumberArrayArgument} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignNumberArrayArgument {
+      return new ForeignNumberArrayArgument(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignNumberArrayArgument} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignNumberArrayArgument {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignNumberArrayArgument.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignNumberArrayArgument.validateCompatibility(parsed);
+    return ForeignNumberArrayArgument.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignNumberArrayArgument.encode(this);
+  }
+
+  public static encode(record: IForeignNumberArrayArgument): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignNumberArrayArgument.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignNumberArrayArgument, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.values.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        view.writeFloat64(record.values[i0]);
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignNumberArrayArgument {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignNumberArrayArgument.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignNumberArrayArgument {
+    let field0: Array<number>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<number>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: number;
+        x0 = view.readFloat64();
+        field0[i0] = x0;
+      }
+    }
+    let message: IForeignNumberArrayArgument = {
+      values: field0,
+    };
+    return new ForeignNumberArrayArgument(message);
+  }
+}
+
+
+export interface IForeignStringArrayArgument extends BebopRecord {
+
+  readonly values: Array<IForeignUtf16String>;
+}
+
+export class ForeignStringArrayArgument implements IForeignStringArrayArgument {
+  public readonly discriminator: number = 12 as 12;
+  public static readonly discriminator: number = 12 as 12;
+  public readonly values: Array<IForeignUtf16String>;
+
+  constructor(record: IForeignStringArrayArgument) {
+    this.values = record.values;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignStringArrayArgument.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignStringArrayArgument): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignStringArrayArgument.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignStringArrayArgument}.
+   */
+  public static validateCompatibility(record: IForeignStringArrayArgument): void {
+    BebopTypeGuard.ensureArray(record.values, ForeignUtf16String.validateCompatibility);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignStringArrayArgument} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignStringArrayArgument {
+      return new ForeignStringArrayArgument(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignStringArrayArgument} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignStringArrayArgument {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignStringArrayArgument.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignStringArrayArgument.validateCompatibility(parsed);
+    return ForeignStringArrayArgument.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignStringArrayArgument.encode(this);
+  }
+
+  public static encode(record: IForeignStringArrayArgument): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignStringArrayArgument.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignStringArrayArgument, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.values.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        ForeignUtf16String.encodeInto(record.values[i0], view)
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignStringArrayArgument {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignStringArrayArgument.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignStringArrayArgument {
+    let field0: Array<IForeignUtf16String>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<IForeignUtf16String>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IForeignUtf16String;
+        x0 = ForeignUtf16String.readFrom(view);
+        field0[i0] = x0;
+      }
+    }
+    let message: IForeignStringArrayArgument = {
+      values: field0,
+    };
+    return new ForeignStringArrayArgument(message);
+  }
+}
+
+
 export type IForeignCallbackValueType
   = { discriminator: 1, value: IForeignOpaqueArgument }
   | { discriminator: 2, value: IForeignNodeArgument }
@@ -3880,7 +4573,12 @@ export type IForeignCallbackValueType
   | { discriminator: 4, value: IForeignStateArgument }
   | { discriminator: 5, value: IForeignRecordArgument }
   | { discriminator: 6, value: IForeignEditorArgument }
-  | { discriminator: 7, value: IForeignNodeArrayArgument };
+  | { discriminator: 7, value: IForeignNodeArrayArgument }
+  | { discriminator: 8, value: IForeignBooleanArgument }
+  | { discriminator: 9, value: IForeignNumberArgument }
+  | { discriminator: 10, value: IForeignStringArgument }
+  | { discriminator: 11, value: IForeignNumberArrayArgument }
+  | { discriminator: 12, value: IForeignStringArrayArgument };
 
 export interface IForeignCallbackValue extends BebopRecord {
   readonly data: IForeignCallbackValueType;
@@ -3957,6 +4655,46 @@ export class ForeignCallbackValue implements IForeignCallbackValue {
     return this.data.value instanceof ForeignNodeArrayArgument;
   }
 
+  public static fromForeignBooleanArgument(value: IForeignBooleanArgument) {
+    return new ForeignCallbackValue({ discriminator: 8, value: new ForeignBooleanArgument(value)});
+  }
+
+  public isForeignBooleanArgument(): this is { value: ForeignBooleanArgument } & { data: Extract<IForeignCallbackValueType, { discriminator: 8 }> } {
+    return this.data.value instanceof ForeignBooleanArgument;
+  }
+
+  public static fromForeignNumberArgument(value: IForeignNumberArgument) {
+    return new ForeignCallbackValue({ discriminator: 9, value: new ForeignNumberArgument(value)});
+  }
+
+  public isForeignNumberArgument(): this is { value: ForeignNumberArgument } & { data: Extract<IForeignCallbackValueType, { discriminator: 9 }> } {
+    return this.data.value instanceof ForeignNumberArgument;
+  }
+
+  public static fromForeignStringArgument(value: IForeignStringArgument) {
+    return new ForeignCallbackValue({ discriminator: 10, value: new ForeignStringArgument(value)});
+  }
+
+  public isForeignStringArgument(): this is { value: ForeignStringArgument } & { data: Extract<IForeignCallbackValueType, { discriminator: 10 }> } {
+    return this.data.value instanceof ForeignStringArgument;
+  }
+
+  public static fromForeignNumberArrayArgument(value: IForeignNumberArrayArgument) {
+    return new ForeignCallbackValue({ discriminator: 11, value: new ForeignNumberArrayArgument(value)});
+  }
+
+  public isForeignNumberArrayArgument(): this is { value: ForeignNumberArrayArgument } & { data: Extract<IForeignCallbackValueType, { discriminator: 11 }> } {
+    return this.data.value instanceof ForeignNumberArrayArgument;
+  }
+
+  public static fromForeignStringArrayArgument(value: IForeignStringArrayArgument) {
+    return new ForeignCallbackValue({ discriminator: 12, value: new ForeignStringArrayArgument(value)});
+  }
+
+  public isForeignStringArrayArgument(): this is { value: ForeignStringArrayArgument } & { data: Extract<IForeignCallbackValueType, { discriminator: 12 }> } {
+    return this.data.value instanceof ForeignStringArrayArgument;
+  }
+
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -4015,6 +4753,26 @@ export class ForeignCallbackValue implements IForeignCallbackValue {
         ForeignNodeArrayArgument.validateCompatibility(record.data.value);
         break;
       }
+      case 8: {
+        ForeignBooleanArgument.validateCompatibility(record.data.value);
+        break;
+      }
+      case 9: {
+        ForeignNumberArgument.validateCompatibility(record.data.value);
+        break;
+      }
+      case 10: {
+        ForeignStringArgument.validateCompatibility(record.data.value);
+        break;
+      }
+      case 11: {
+        ForeignNumberArrayArgument.validateCompatibility(record.data.value);
+        break;
+      }
+      case 12: {
+        ForeignStringArrayArgument.validateCompatibility(record.data.value);
+        break;
+      }
       default: {
         throw new Error(`Unknown discriminator for ForeignCallbackValue: ${discriminator}`);
       }
@@ -4047,6 +4805,21 @@ export class ForeignCallbackValue implements IForeignCallbackValue {
         }
         case 7: {
           return new ForeignCallbackValue({ discriminator: 7, value: ForeignNodeArrayArgument.unsafeCast(record.value) });
+        }
+        case 8: {
+          return new ForeignCallbackValue({ discriminator: 8, value: ForeignBooleanArgument.unsafeCast(record.value) });
+        }
+        case 9: {
+          return new ForeignCallbackValue({ discriminator: 9, value: ForeignNumberArgument.unsafeCast(record.value) });
+        }
+        case 10: {
+          return new ForeignCallbackValue({ discriminator: 10, value: ForeignStringArgument.unsafeCast(record.value) });
+        }
+        case 11: {
+          return new ForeignCallbackValue({ discriminator: 11, value: ForeignNumberArrayArgument.unsafeCast(record.value) });
+        }
+        case 12: {
+          return new ForeignCallbackValue({ discriminator: 12, value: ForeignStringArrayArgument.unsafeCast(record.value) });
         }
       }
       throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
@@ -4101,6 +4874,21 @@ export class ForeignCallbackValue implements IForeignCallbackValue {
       case 7:
         ForeignNodeArrayArgument.encodeInto(record.data.value, view);
         break;
+      case 8:
+        ForeignBooleanArgument.encodeInto(record.data.value, view);
+        break;
+      case 9:
+        ForeignNumberArgument.encodeInto(record.data.value, view);
+        break;
+      case 10:
+        ForeignStringArgument.encodeInto(record.data.value, view);
+        break;
+      case 11:
+        ForeignNumberArrayArgument.encodeInto(record.data.value, view);
+        break;
+      case 12:
+        ForeignStringArrayArgument.encodeInto(record.data.value, view);
+        break;
     }
     const end = view.length;
     view.fillMessageLength(pos, end - start);
@@ -4132,6 +4920,16 @@ export class ForeignCallbackValue implements IForeignCallbackValue {
         return this.fromForeignEditorArgument(ForeignEditorArgument.readFrom(view));
       case 7:
         return this.fromForeignNodeArrayArgument(ForeignNodeArrayArgument.readFrom(view));
+      case 8:
+        return this.fromForeignBooleanArgument(ForeignBooleanArgument.readFrom(view));
+      case 9:
+        return this.fromForeignNumberArgument(ForeignNumberArgument.readFrom(view));
+      case 10:
+        return this.fromForeignStringArgument(ForeignStringArgument.readFrom(view));
+      case 11:
+        return this.fromForeignNumberArrayArgument(ForeignNumberArrayArgument.readFrom(view));
+      case 12:
+        return this.fromForeignStringArrayArgument(ForeignStringArrayArgument.readFrom(view));
       default:
         view.index = end;
         throw new BebopRuntimeError("Unrecognized discriminator while decoding ForeignCallbackValue");
@@ -4743,6 +5541,455 @@ export class ForeignHookResult implements IForeignHookResult {
         view.index = end;
         throw new BebopRuntimeError("Unrecognized discriminator while decoding ForeignHookResult");
     }
+  }
+}
+
+
+export interface IForeignUtf16String extends BebopRecord {
+
+  readonly value: Array<number>;
+}
+
+export class ForeignUtf16String implements IForeignUtf16String {
+  public readonly value: Array<number>;
+
+  constructor(record: IForeignUtf16String) {
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignUtf16String.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignUtf16String): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignUtf16String.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignUtf16String}.
+   */
+  public static validateCompatibility(record: IForeignUtf16String): void {
+    BebopTypeGuard.ensureArray(record.value, BebopTypeGuard.ensureUint16);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignUtf16String} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignUtf16String {
+      return new ForeignUtf16String(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignUtf16String} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignUtf16String {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignUtf16String.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignUtf16String.validateCompatibility(parsed);
+    return ForeignUtf16String.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignUtf16String.encode(this);
+  }
+
+  public static encode(record: IForeignUtf16String): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignUtf16String.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignUtf16String, view: BebopView): number {
+    const before = view.length;
+    {
+      const length0 = record.value.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        view.writeUint16(record.value[i0]);
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignUtf16String {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignUtf16String.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignUtf16String {
+    let field0: Array<number>;
+    {
+      let length0 = view.readUint32();
+      field0 = new Array<number>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: number;
+        x0 = view.readUint16();
+        field0[i0] = x0;
+      }
+    }
+    let message: IForeignUtf16String = {
+      value: field0,
+    };
+    return new ForeignUtf16String(message);
+  }
+}
+
+
+export interface IForeignNativeFieldValue extends BebopRecord {
+
+  readonly field: ForeignNativeField;
+
+  readonly value: ForeignCallbackValue;
+}
+
+export class ForeignNativeFieldValue implements IForeignNativeFieldValue {
+  public readonly field: ForeignNativeField;
+  public readonly value: ForeignCallbackValue;
+
+  constructor(record: IForeignNativeFieldValue) {
+    this.field = record.field;
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignNativeFieldValue.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignNativeFieldValue): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignNativeFieldValue.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignNativeFieldValue}.
+   */
+  public static validateCompatibility(record: IForeignNativeFieldValue): void {
+    BebopTypeGuard.ensureEnum(record.field, ForeignNativeField);
+    ForeignCallbackValue.validateCompatibility(record.value);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignNativeFieldValue} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignNativeFieldValue {
+      record.value = ForeignCallbackValue.unsafeCast(record.value);
+      return new ForeignNativeFieldValue(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignNativeFieldValue} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignNativeFieldValue {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignNativeFieldValue.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignNativeFieldValue.validateCompatibility(parsed);
+    return ForeignNativeFieldValue.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignNativeFieldValue.encode(this);
+  }
+
+  public static encode(record: IForeignNativeFieldValue): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignNativeFieldValue.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignNativeFieldValue, view: BebopView): number {
+    const before = view.length;
+    view.writeUint32(record.field);
+    ForeignCallbackValue.encodeInto(record.value, view)
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignNativeFieldValue {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignNativeFieldValue.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignNativeFieldValue {
+    let field0: ForeignNativeField;
+    field0 = view.readUint32() as ForeignNativeField;
+    let field1: ForeignCallbackValue;
+    field1 = ForeignCallbackValue.readFrom(view);
+    let message: IForeignNativeFieldValue = {
+      field: field0,
+      value: field1,
+    };
+    return new ForeignNativeFieldValue(message);
+  }
+}
+
+
+export interface IForeignNativeProjection extends BebopRecord {
+
+  readonly nativeType: string;
+
+  readonly complete: boolean;
+
+  readonly fields: Array<IForeignNativeFieldValue>;
+}
+
+export class ForeignNativeProjection implements IForeignNativeProjection {
+  public readonly nativeType: string;
+  public readonly complete: boolean;
+  public readonly fields: Array<IForeignNativeFieldValue>;
+
+  constructor(record: IForeignNativeProjection) {
+    this.nativeType = record.nativeType;
+    this.complete = record.complete;
+    this.fields = record.fields;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignNativeProjection.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignNativeProjection): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignNativeProjection.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignNativeProjection}.
+   */
+  public static validateCompatibility(record: IForeignNativeProjection): void {
+    BebopTypeGuard.ensureString(record.nativeType)
+    BebopTypeGuard.ensureBoolean(record.complete)
+    BebopTypeGuard.ensureArray(record.fields, ForeignNativeFieldValue.validateCompatibility);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignNativeProjection} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignNativeProjection {
+      return new ForeignNativeProjection(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignNativeProjection} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignNativeProjection {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignNativeProjection.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignNativeProjection.validateCompatibility(parsed);
+    return ForeignNativeProjection.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignNativeProjection.encode(this);
+  }
+
+  public static encode(record: IForeignNativeProjection): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignNativeProjection.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignNativeProjection, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.nativeType);
+    view.writeByte(Number(record.complete));
+    {
+      const length0 = record.fields.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        ForeignNativeFieldValue.encodeInto(record.fields[i0], view)
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignNativeProjection {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignNativeProjection.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignNativeProjection {
+    let field0: string;
+    field0 = view.readString();
+    let field1: boolean;
+    field1 = !!view.readByte();
+    let field2: Array<IForeignNativeFieldValue>;
+    {
+      let length0 = view.readUint32();
+      field2 = new Array<IForeignNativeFieldValue>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IForeignNativeFieldValue;
+        x0 = ForeignNativeFieldValue.readFrom(view);
+        field2[i0] = x0;
+      }
+    }
+    let message: IForeignNativeProjection = {
+      nativeType: field0,
+      complete: field1,
+      fields: field2,
+    };
+    return new ForeignNativeProjection(message);
+  }
+}
+
+
+export interface IForeignRecordPatch extends BebopRecord {
+
+  readonly record: IForeignRecordRef;
+
+  readonly basePatch: IForeignBasePatch;
+
+  readonly nativeProjection: IForeignNativeProjection;
+}
+
+export class ForeignRecordPatch implements IForeignRecordPatch {
+  public readonly record: IForeignRecordRef;
+  public readonly basePatch: IForeignBasePatch;
+  public readonly nativeProjection: IForeignNativeProjection;
+
+  constructor(record: IForeignRecordPatch) {
+    this.record = record.record;
+    this.basePatch = record.basePatch;
+    this.nativeProjection = record.nativeProjection;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ForeignRecordPatch.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IForeignRecordPatch): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ForeignRecordPatch.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ForeignRecordPatch}.
+   */
+  public static validateCompatibility(record: IForeignRecordPatch): void {
+    ForeignRecordRef.validateCompatibility(record.record);
+    ForeignBasePatch.validateCompatibility(record.basePatch);
+    ForeignNativeProjection.validateCompatibility(record.nativeProjection);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ForeignRecordPatch} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IForeignRecordPatch {
+      record.record = ForeignRecordRef.unsafeCast(record.record);
+      record.basePatch = ForeignBasePatch.unsafeCast(record.basePatch);
+      record.nativeProjection = ForeignNativeProjection.unsafeCast(record.nativeProjection);
+      return new ForeignRecordPatch(record);
+  }
+
+  /**
+   * Creates a new {@link ForeignRecordPatch} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IForeignRecordPatch {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ForeignRecordPatch.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ForeignRecordPatch.validateCompatibility(parsed);
+    return ForeignRecordPatch.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ForeignRecordPatch.encode(this);
+  }
+
+  public static encode(record: IForeignRecordPatch): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ForeignRecordPatch.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IForeignRecordPatch, view: BebopView): number {
+    const before = view.length;
+    ForeignRecordRef.encodeInto(record.record, view)
+    ForeignBasePatch.encodeInto(record.basePatch, view)
+    ForeignNativeProjection.encodeInto(record.nativeProjection, view)
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IForeignRecordPatch {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ForeignRecordPatch.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IForeignRecordPatch {
+    let field0: IForeignRecordRef;
+    field0 = ForeignRecordRef.readFrom(view);
+    let field1: IForeignBasePatch;
+    field1 = ForeignBasePatch.readFrom(view);
+    let field2: IForeignNativeProjection;
+    field2 = ForeignNativeProjection.readFrom(view);
+    let message: IForeignRecordPatch = {
+      record: field0,
+      basePatch: field1,
+      nativeProjection: field2,
+    };
+    return new ForeignRecordPatch(message);
   }
 }
 

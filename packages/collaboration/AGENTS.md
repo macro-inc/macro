@@ -23,6 +23,7 @@ Hold the source owner's lease during adoption and the shared snapshot lock while
 checking covers and moving WAL rows; reject changed selections without mutation.
 Prune only delivered rows covered by the current matching-owner snapshot, under
 that lock; TTL cleanup also holds the source lease so reopened owners remain live.
+Derive native field metadata from the checksum-pinned class declarations before generating the foreign host schema; keep typed UTF-16/scalar arguments separate from arbitrary opaque JS slots.
 Generate session/foreign-host.generated.ts from document_session_wasm/abi/foreign-host.bop; opaque slot IDs preserve JS values without JSON conversion, and native node/selection/state references retain their typed identities.
 Generate session/abi.generated.ts from document_session_wasm/abi/session.bop.
 Keep wasm.generated.d.ts synchronized with wasm-pack; the build recipe copies it
