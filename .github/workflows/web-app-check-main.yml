@@ -355,6 +355,11 @@ jobs:
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
+    - name: Install standalone Lexical facade dependencies
+      run: bun install --frozen-lockfile --ignore-scripts
+      working-directory: packages/lexical-wasm-shim
+    - name: Clear prior Lexical export evidence
+      run: rm -rf target/lexical-export-surface
     - name: Run checks
       run: |
         set -uo pipefail
@@ -368,6 +373,7 @@ jobs:
           names+=("$name")
           pids+=("$!")
         }
+        check 'Check Lexical Export Surface' 'packages/lexical-wasm-shim' 'bunx tsc --noEmit -p tests/export-surface/tsconfig.json && bunx vitest run --config tests/export-surface/vitest.config.mts && LEXICAL_EXPORT_OUTPUT=../../target/lexical-export-surface bun run check:exports'
         check 'Check Types' 'apps/web' 'bun run type-check'
         check 'Check Lexical Assertion Boundary' 'apps/web' 'bun run check:lexical-exceptions'
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
@@ -391,6 +397,14 @@ jobs:
           fi
         done
         exit "$failed"
+    - name: Upload lexical-export-surface artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: lexical-export-surface
+        path: target/lexical-export-surface
+        if-no-files-found: error
+        retention-days: '30'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

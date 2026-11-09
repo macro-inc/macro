@@ -79,26 +79,37 @@ jobs:
 
 #[test]
 fn planned_lexical_filter_requires_its_exact_group_and_committed_specification() {
-    // Exercise an absent planned path even after that package has landed.
-    let checkout = tempfile::tempdir().unwrap();
-    let root = checkout.path();
-    let specification = root.join("docs/design/lexical-port");
-    std::fs::create_dir_all(&specification).unwrap();
-    std::fs::copy(
-        xtask_paths::repo_root().join("docs/design/lexical-port/S4-tests.md"),
-        specification.join("S4-tests.md"),
+    let checkout = xtask_paths::repo_root();
+    // The shim exists now and must resolve as a real checkout path in any group.
+    super::validate_glob(
+        "packages/lexical-wasm-shim/**",
+        &checkout,
+        "other group".into(),
+    )
+    .unwrap();
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().to_path_buf();
+    std::fs::create_dir_all(root.join("docs/design/lexical-port")).unwrap();
+    std::fs::write(
+        root.join("docs/design/lexical-port/S4-tests.md"),
+        std::fs::read(checkout.join("docs/design/lexical-port/S4-tests.md")).unwrap(),
     )
     .unwrap();
     let context = "workflow `pr-ci.yml` dorny path-filter group `lexical`";
-    super::validate_glob("packages/lexical-wasm-shim/**", root, context.into()).unwrap();
+    super::validate_glob("crates/client/doc_sync_core/**", &root, context.into()).unwrap();
     assert!(
-        super::validate_glob("packages/lexical-wasm-shim/**", root, "other group".into()).is_err()
+        super::validate_glob(
+            "crates/client/doc_sync_core/**",
+            &root,
+            "other group".into()
+        )
+        .is_err()
     );
-    assert!(super::validate_glob("packages/misspelled-shim/**", root, context.into()).is_err());
+    assert!(super::validate_glob("packages/misspelled-shim/**", &root, context.into()).is_err());
     let empty = tempfile::tempdir().unwrap();
     assert!(
         super::validate_glob(
-            "packages/lexical-wasm-shim/**",
+            "crates/client/doc_sync_core/**",
             empty.path(),
             context.into()
         )

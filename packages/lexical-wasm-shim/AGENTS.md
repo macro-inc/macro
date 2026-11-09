@@ -20,6 +20,7 @@ use the real development conformance host.
 - `src/update.ts`: JS update scheduling, batching and callback phases.
 - `src/__tests__/setup.ts`: synchronous pinned WASM initialization and editor leak checks.
 - `src/__tests__/surface.test.ts`: literal node API observations from the pinned upstream oracle, exercised through the real backend.
+- `tests/export-surface/`: complete runtime and ordinary declaration export inventory for every Lexical package imported by the app; missing, extra, mismatched or blocked namespaces fail the permanent package check.
 
 ## Boundaries
 
