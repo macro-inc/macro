@@ -107,3 +107,4 @@ Keep CreateEditorArgs distinct from the full normalized EditorConfig; retain the
 
 Read editor dirty sets/type through backend.getUpdateMetadata; reject unavailable metadata instead of guessing from rendered records or returning empty sets. The development adapter obtains exact owned native facts through update_metadata; this diagnostic RPC is not the production zero-crossing mirror.
 
+Install this standalone package with its own frozen bun.lock before checking hooks; the root workspace does not install it. Derive hook evidence with the package-pinned TypeScript version, since symbol inference can change the first recorded caller across compiler versions.

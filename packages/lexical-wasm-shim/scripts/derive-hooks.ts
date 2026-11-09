@@ -3,8 +3,18 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { buildWasm, root } from '../../lexical-conformance/diff/build-wasm';
 import { inventoryHooks, type Source } from './hook-inventory';
+
+const compiler: { devDependencies: { typescript: string } } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
+if (ts.version !== compiler.devDependencies.typescript) {
+  throw new Error(
+    `Hook inventory requires TypeScript ${compiler.devDependencies.typescript}, loaded ${ts.version}. Install the standalone shim with its frozen package lock.`
+  );
+}
 
 const upstream = path.join(root, 'target/lexical-upstream');
 const pin: { version: string; sha256: string } = JSON.parse(
