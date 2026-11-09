@@ -21,6 +21,10 @@ opens the recipient picker directly. `Start an instant call` opens `/app/meet/ne
 without creating a meeting, the same setup reached from `New Call` beside
 Calendar's `New event` or `Create` → `Call` (`C C`). Scheduled calls are created
 through Calendar and can be shared with people who do not have a Macro account.
+Verify signed-in joins for both instant and scheduled links with
+`enable-programmatic-calls` on and off: the app's empty POST must work even
+with its `Content-Type: application/json` header. Guest joins send a JSON body
+through the separate public endpoint.
 The channel/contact option opens the recipient picker. Starting a channel call
 connects the creator without waiting for recording, transcription, or recipient
 notification delivery. Verify that a second participant still receives the ring
