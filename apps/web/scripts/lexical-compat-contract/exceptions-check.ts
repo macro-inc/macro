@@ -33,6 +33,7 @@ const approved = [
   'applyValueOrUpdater',
   'assumeNodeType',
   'commandBucket',
+  'compareNumberWithUpstreamType',
   'createPointWithUpstreamType',
   'invokeDOMConversionWithNode',
   'nodeConfigRecord',
@@ -175,7 +176,7 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
     approved.join()
   )
     throw new Error(
-      'Exactly the seven approved exception helpers are required'
+      'Exactly the eight approved exception helpers are required'
     );
   const domInvocation = manifest.exceptions.find(
     (entry) => entry.helper === 'invokeDOMConversionWithNode'
@@ -234,7 +235,7 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
       .join()
   )
     throw new Error(
-      'Central function list differs from seven assertions and declared runtime-witness guards'
+      'Central function list differs from eight assertions and declared runtime-witness guards'
     );
   for (const guard of manifest.runtimeGuards) {
     const declaration = declarations.find(

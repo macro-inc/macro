@@ -12,6 +12,7 @@
     "firefox >= 128"
   ],
   "scripts": {
+    "check:lexical-exceptions": "bun scripts/lexical-compat-contract/check-exceptions.ts",
     "dev": "bun run dev:prepare && bun run dev:server",
     "dev:prepare": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm",
     "dev:server": "vite -c vite.config.ts",

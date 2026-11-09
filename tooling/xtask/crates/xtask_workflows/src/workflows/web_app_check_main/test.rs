@@ -850,6 +850,11 @@ fn every_former_typecheck_step_still_runs() {
     for (name, directory, command) in [
         ("Check Types", "apps/web", "bun run type-check"),
         (
+            "Check Lexical Assertion Boundary",
+            "apps/web",
+            "bun run check:lexical-exceptions",
+        ),
+        (
             "Check Floating Promises",
             ".",
             "bun run lint:oxlint --quiet",

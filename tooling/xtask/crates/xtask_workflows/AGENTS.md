@@ -21,6 +21,8 @@ TypeScript job logic in the owning package.
 - Keep deployment and production access out of conformance workflows.
 - Run the resolved native editor feature-graph guard before lexical/session compilation; production closures exclude compatibility/foreign-node features while explicit compatibility web remains a positive control.
 
+- Run the pinned Lexical assertion-boundary guard in the web Typecheck job for web and shared-package changes.
+
 ## Checks
 
 - `cargo test -p xtask_workflows -j4`
