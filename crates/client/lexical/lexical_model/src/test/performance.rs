@@ -201,3 +201,70 @@ fn root_deletion_preserves_the_insertion_boundary_after_a_decorator() -> Result<
     assert!(state.is_line_break(children[0]));
     Ok(())
 }
+
+#[test]
+fn tail_append_preserves_links_selection_and_untouched_sibling_snapshots() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let ((first, second), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?.key();
+        let second = tx.create(Paragraph::default())?.key();
+        tx.append(NodeKey::ROOT, &[first, second])?;
+        tx.select_points(
+            Point::element(NodeKey::ROOT, ChildIndex(2)),
+            Point::element(NodeKey::ROOT, ChildIndex(2)),
+        )?;
+        Ok((first, second))
+    })?;
+    let previous = editor.state().clone();
+    let ((third, fourth), commit) = editor.update(|tx| {
+        let third = tx.create(Paragraph::default())?.key();
+        let fourth = tx.create(Paragraph::default())?.key();
+        tx.append(NodeKey::ROOT, &[third, fourth])?;
+        Ok((third, fourth))
+    })?;
+    assert_eq!(
+        commit.next.view().children_keys(NodeKey::ROOT)?,
+        vec![first, second, third, fourth]
+    );
+    assert_eq!(commit.next.view().prev_sibling(third), Some(second));
+    assert_eq!(commit.next.view().next_sibling(second), Some(third));
+    assert_eq!(commit.next.view().prev_sibling(fourth), Some(third));
+    assert_eq!(commit.next.view().next_sibling(fourth), None);
+    assert_eq!(
+        commit.next.selection().unwrap().as_range().unwrap().anchor,
+        Point::element(NodeKey::ROOT, ChildIndex(2))
+    );
+    assert!(Arc::ptr_eq(
+        previous.nodes.get(&first).unwrap(),
+        commit.next.nodes.get(&first).unwrap()
+    ));
+    assert_eq!(
+        previous.view().children_keys(NodeKey::ROOT)?,
+        vec![first, second]
+    );
+    let (_, empty) = editor.update(|tx| tx.append(NodeKey::ROOT, &[]))?;
+    assert!(empty.changes.dirty_elements.contains_key(&NodeKey::ROOT));
+    assert!(empty.changes.dirty_elements.contains_key(&fourth));
+    assert_eq!(
+        empty
+            .changes
+            .dirty_elements
+            .keys()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![fourth, NodeKey::ROOT]
+    );
+    editor.update(|tx| tx.append(NodeKey::ROOT, &[first]))?;
+    assert_eq!(
+        editor.state().view().children_keys(NodeKey::ROOT)?,
+        vec![second, third, fourth, first]
+    );
+    editor.update(|tx| tx.splice(NodeKey::ROOT, ChildIndex(1), 2, &[fourth, third]))?;
+    assert_eq!(
+        editor.state().view().children_keys(NodeKey::ROOT)?,
+        vec![second, fourth, third, first]
+    );
+    Ok(())
+}

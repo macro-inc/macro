@@ -85,6 +85,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Structural deletion and movement traverse directional carets before consuming host layout targets; direct child blocks are not adjacent block boundaries.
 - Block insertion compares captured writability when upstream checks node object identity.
 
+Preserve empty-splice dirty ordering and selection points when optimizing detached tail appends; update only new links, the previous tail and the parent.
+
 ## Checks
 
 - `cargo test -p lexical_model -j4`
