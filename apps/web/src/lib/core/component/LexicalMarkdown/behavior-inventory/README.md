@@ -58,8 +58,9 @@ Optional trailing arguments are OFF Vitest JSON reports from separate runs:
 bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor-results.json
 ```
 
-`scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts` and
-`editor-async-behavior-map.ts` and `editor-node-behavior-map.ts` map
+`scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts`,
+`editor-async-behavior-map.ts`, `editor-node-behavior-map.ts` and
+`editor-menu-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
@@ -87,7 +88,10 @@ Reviewed existing comment mappings distinguish legacy draft wrappers from modern
 cursor-based ephemeral anchors. Their assertions cover filtering/reconciliation,
 mark removal, publication identity/cancellation and deferred navigation. Service,
 publication, flush and layout boundaries are supplied; they do not prove remote
-delivery, visible thread UI or native draft handoff. Private node-map injection
+delivery, visible thread UI or native draft handoff. Agent slash mappings
+cover the real root keydown trigger, argument-space plain-text insertion and
+search removal; they do not establish subsequent skill/PR insertion, rendered
+skills UI or delivery to an agent. Private node-map injection
 and scroll-only focus-named tests are excluded. Mention search mappings likewise
 cover supplied query/cache snapshots, ranking, pagination forwarding and stable
 controller allocation, rather than remote search or service-backed menu UI. Cleanup
