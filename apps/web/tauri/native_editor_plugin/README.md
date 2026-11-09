@@ -33,6 +33,14 @@ The view itself does not execute storage or
 network requests. Render failures cannot discard I/O effects. `EditorMount` handles viewport placement and clipping; its owner
 must drain Stop before destroying the session.
 
+`EditorClipboard` exports Android's standard HTML/plain pair and retains the
+shared model's internal-node and Markdown strings in app-owned clip metadata.
+Native-to-native paste imports that structured payload through the shared node
+registry, retaining marks and Unicode selections. Explicit plain paste supplies
+the shared typed paste facts so the application Markdown importer leaves it literal. Other applications continue
+to receive standard text/HTML. General external HTML conversion and file paste
+remain separate host adapters.
+
 `NativeSessionStorage` executes the typed storage operations in private SQLite
 with full synchronization, idempotent WAL keys and atomic adoption/pruning.
 Hold its OS owner lease until pending storage work has drained. Run it on a

@@ -7,6 +7,11 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeEditorInputTest {
+    @Test fun clipboardPreservesRichTextAcrossSessions() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeClipboardScenario.run(instrumentation.targetContext) }
+    }
+
     @Test fun inputConnectionCommitsUnicodeCompositionAndUndo() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeInputScenario.run(instrumentation.targetContext) }
