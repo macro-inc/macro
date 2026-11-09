@@ -101,7 +101,7 @@ Exercise clone staging, original-version reads, native copyNode fresh keys, read
 
 Use hosting-extract.test.ts for child/selection/destination dispatch and native markdown extraction with selection identity, native super and opaque failure/retry. These backend literals do not replace full subclass acceptance.
 
-Keep native node graph methods on the active runtime; captured raw fields and is() use their original record keys. Save the actual state handle at publication for historical toJSON. Editor-less reads expose state helpers without an active editor. Native constructor field accessors currently read captured versions; writable fields and explicit older-native-prototype dispatch still require their model bridges.
+Keep native node graph methods on the active runtime; captured raw fields and is() use their original record keys. Pin each EditorState's published version for native ownership; EditorState.toJSON uses JS hooks in the state owner's associated readonly scope. Editor-less reads expose state helpers without an active editor. Native constructor field accessors currently read captured versions; writable fields and explicit older-native-prototype dispatch still require their model bridges.
 
 Capture NativeNodeCatalog metadata without consulting an engine; validate the generated hook order when binding the backend, and construct the initial EditorState from that backend's published initialVersion.
 
@@ -126,3 +126,4 @@ Forward LexicalNodeReplacement from the replacement type barrel so the root pres
 Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.
 
 Route public builtin creation factories through actual registered replacements while preserving node identity and cold module evaluation.
+Let the production backend seed its initial mirror independently of EditorState construction. Associate every EditorState with its real editor at construction; route toJSON through the JS serialization algorithms and restore nested scopes on errors. Keep detached parseEditorState blocked until a real native detached-state parsing capability is provided.

@@ -1,4 +1,4 @@
-import type { EditorThemeClasses } from 'lexical';
+import type { EditorThemeClasses, SerializedEditorState } from 'lexical';
 import { createBackend, prepareRegisteredNodes } from './backend/factory';
 import { dispatchCommand, registerCommand } from './command/registry';
 import type { CommandRegistry } from './command/types';
@@ -23,11 +23,14 @@ import type {
   RegisteredNodes,
 } from './nodes/replacement/types';
 import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
+import { exportEditorState } from './serialization/export';
+import { bindJSONRuntime } from './serialization/runtime';
 import { UpdateController, type UpdateOptions } from './update';
 
 let activeEditor: LexicalEditor | undefined;
 let activeStateEditor: LexicalEditor | undefined;
 let readOnlyMode = false;
+const stateOwners = new WeakMap<EditorState, LexicalEditor>();
 const synchronousUpdates = new WeakMap<
   LexicalEditor,
   (body: () => void, options?: UpdateOptions) => void
@@ -65,16 +68,13 @@ export interface CreateEditorArgs {
 
 export class EditorState {
   private readonly ownership: object;
-  private readonly snapshot: unknown;
 
   constructor(
     private readonly editor: LexicalEditor,
     private readonly version: number
   ) {
     this.ownership = editor.runtime.handles.pinVersion(version);
-    this.snapshot = editor.runtime.backend.readState(String(version), () =>
-      editor.runtime.backend.call('LexicalEditor.getEditorState', [])
-    );
+    stateOwners.set(this, editor);
   }
 
   read<T>(body: () => T, options?: { editor?: LexicalEditor }): T {
@@ -104,11 +104,18 @@ export class EditorState {
     });
   }
 
-  toJSON(): unknown {
-    return this.read(() =>
-      this.editor.runtime.backend.call('EditorState.toJSON', [], this.snapshot)
-    );
+  toJSON(): SerializedEditorState {
+    return exportEditorState(this);
   }
+}
+
+export function readEditorStateAssociated<V>(
+  state: EditorState,
+  body: () => V
+): V {
+  const editor = stateOwners.get(state);
+  if (editor === undefined) throw new Error('Unknown editor state owner');
+  return state.read(body, { editor });
 }
 
 export class LexicalEditor {
@@ -279,6 +286,13 @@ bindReplacementRuntime({
     if (isCurrentlyReadOnlyMode())
       throw new Error('Cannot use method in read-only mode.');
   },
+});
+
+bindJSONRuntime({
+  getActiveEditor,
+  getRegisteredNodes: (editor) => editor._nodes,
+  readEditorState: readEditorStateAssociated,
+  getRoot: $getRoot,
 });
 
 export function updateEditorSync(

@@ -9,8 +9,10 @@ children and recursively appends. Export invokes exportJSON before constructor
 validation and child traversal; append to the exact array returned by the hook.
 Preserve property/getter and hook order without pre-validating unrelated fields.
 
-JSONRuntime is typed injection only. The editor owner supplies the actual active
-editor, registered map, associated readonly state read and Root. Never fabricate
+JSONRuntime binds the actual active editor, prepared registered map and Root in
+editor.ts. Its associated readonly read obtains the real editor from the private
+EditorState owner WeakMap; exportJSON hooks run under that owner even inside
+another editor's read. Detached parseEditorState remains blocked on native support. Never fabricate
 an active scope or bind a fake runtime for tests. Constructors remain subject to
 real registry/clone authority; unsupported construction must remain explicit.
 See README.md for the design-only detached writable-scope requirements; do not
