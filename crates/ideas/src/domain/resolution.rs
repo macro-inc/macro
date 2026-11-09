@@ -87,13 +87,18 @@ impl ResolutionEvent {
     fn settles(&self, target: &OpenTarget) -> bool {
         match self {
             Self::Replied {
-                user, thread, at, ..
+                user,
+                item,
+                thread,
+                at,
             } => {
-                // An idea about one message's thread ends with a reply in
-                // that thread; an idea about the whole item, with any post.
+                // An idea about one channel thread ends with a reply in that
+                // thread; an idea about a whole item, or about one message of
+                // an email thread, with any reply on it (sent mail names no
+                // thread part).
                 let same_thread = match (&target.part_id, thread) {
                     (Some(part), Some(thread)) => part == thread,
-                    (Some(_), None) => false,
+                    (Some(_), None) => item.entity_type == EntityType::EmailThread,
                     (None, _) => true,
                 };
                 target.reply && target.user == *user && target.created_at < *at && same_thread
