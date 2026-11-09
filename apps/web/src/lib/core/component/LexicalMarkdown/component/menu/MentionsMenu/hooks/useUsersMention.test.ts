@@ -6,9 +6,17 @@ import { useUsersMention } from './useUsersMention';
 
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
+  loading: false,
+  error: undefined as unknown,
 }));
 vi.mock('@core/context/quickAccess', () => ({
-  useQuickAccess: () => ({ useList: () => ({ items: () => mocks.users() }) }),
+  useQuickAccess: () => ({
+    useList: () => ({
+      items: () => mocks.users(),
+      isLoading: () => mocks.loading,
+      error: () => mocks.error,
+    }),
+  }),
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
@@ -40,6 +48,8 @@ const userItem = (user: IUser, lastInteraction?: Date): UserItem => ({
 });
 
 beforeEach(() => {
+  mocks.loading = false;
+  mocks.error = undefined;
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-29T12:00:00Z'));
   mocks.users = () => [
@@ -140,6 +150,21 @@ it('keeps @here out of composers that do not post to a channel', () => {
     });
     expect(mention.groups()).toEqual([]);
     expect(mention.usersAndGroups().map((item) => item.id)).toEqual([sean.id]);
+    dispose();
+  });
+});
+
+it('reports actual workspace search state without blocking supplied people', () => {
+  createRoot((dispose) => {
+    const workspace = useUsersMention({ searchTerm: () => '' });
+    const supplied = useUsersMention({ searchTerm: () => '', users: () => [] });
+    const failure = new Error('fixture search failed');
+    mocks.loading = true;
+    mocks.error = failure;
+    expect(workspace.isLoading()).toBe(true);
+    expect(workspace.error()).toBe(failure);
+    expect(supplied.isLoading()).toBe(false);
+    expect(supplied.error()).toBeUndefined();
     dispose();
   });
 });

@@ -494,3 +494,7 @@ export async function beginAndroidEditorAccount(user: string) {
     },
   };
 }
+
+export type NativeAndroidSurface = Awaited<
+  ReturnType<Awaited<ReturnType<typeof beginAndroidEditorAccount>>['create']>
+>;

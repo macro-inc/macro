@@ -160,4 +160,11 @@ account/surface/mount/model/invocation/query; a selected row remains pending unt
 its typed choice arrives. The shared `group-a.menu-select` command verifies the
 exact UTF-16 span and current caret before applying it. Async answers cannot edit
 a replaced view or newer query. Search text and row labels never enter tracing.
-This bridge does not by itself admit a surface or wire its application providers.
+`NativeMentionSources` reuses the application's actual mention providers and
+controller without mounting DOM rows. Providers retain their own source loading,
+error and pagination state. Explicit row rejection releases a pending native
+selection; disabled rows cannot commit. Touch selection ends active composition
+before revalidating the returned query span. Query normalization follows source
+whitespace rules while retaining the exact raw replacement literal.
+The bridge and provider component do not themselves admit or mount a surface;
+full inline-search lifecycle parity remains required.

@@ -69,6 +69,7 @@ export function useCrmContactMentionSource(
       : []
   );
   return {
+    error: () => query.error,
     entities,
     totalCount: () => entities().length,
     hasMore: () => !!query.hasNextPage,

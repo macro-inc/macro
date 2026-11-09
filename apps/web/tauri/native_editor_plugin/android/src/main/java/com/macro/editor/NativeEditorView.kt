@@ -54,6 +54,7 @@ class NativeEditorView(
         menu?.close()
         menu = NativeEditorMenu(this, mountGeneration, emit)
     }
+    internal fun finishMenuComposition() { finishComposition() }
     internal fun menuRows(request: MenuRowsRequest) { menu?.rows(request) }
     internal fun menuChoice(request: MenuCommitRequest): String? = menu?.commit(request)
     private fun syncMenu(trigger: Char? = null) {

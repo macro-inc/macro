@@ -16,6 +16,10 @@ internal class NativeEditorMenu(
     private val mountGeneration: Long,
     private val emit: (MenuEvent) -> Unit,
 ) {
+    // Match the source's ECMAScript \s boundary/trim policy, including BOM and Zs.
+    private fun sourceWhitespace(value: Char) = value in "\t\n\u000b\u000c\r\uFEFF\u2028\u2029" ||
+        Character.getType(value) == Character.SPACE_SEPARATOR.toInt()
+
     private data class Target(val key: NodeKey, val offset: Int, val symbol: Char)
     private data class Frontier(val bucket: String, val query: String, val index: Int, val count: Int)
     private var target: Target? = null
@@ -45,8 +49,8 @@ internal class NativeEditorMenu(
                 layout.text[caret - 1] != trigger) return
             val before = layout.text.getOrNull(caret - 2)
             val after = layout.text.getOrNull(caret)
-            if (before != null && !before.isWhitespace()) return
-            if (trigger != '@' && after != null && !after.isWhitespace()) return
+            if (before != null && !sourceWhitespace(before)) return
+            if (trigger != '@' && after != null && !sourceWhitespace(after)) return
             check(invocation < UInt.MAX_VALUE.toLong())
             invocation++
             target = Target(range.key, caret - range.start - 1, requireNotNull(trigger))
@@ -58,7 +62,7 @@ internal class NativeEditorMenu(
         if (range.key != live.key || start < range.start || caret <= start ||
             layout.text.getOrNull(start) != live.symbol) { close(); return }
         literal = layout.text.substring(start, caret)
-        val term = literal.substring(1).replace("\u200b", "")
+        val term = literal.replace("\u200b", "").trim(::sourceWhitespace).drop(1)
         if (term.contains('\n')) { close(); return }
         val previous = requireNotNull(query)
         if (previous.term != term || trigger != null && current == null) {
@@ -75,7 +79,13 @@ internal class NativeEditorMenu(
     }
 
     fun rows(request: MenuRowsRequest) {
-        if (query?.identity != request.identity || pending != null) return
+        if (query?.identity != request.identity) return
+        request.rejectedRowID?.let {
+            if (pending != it) return
+            pending = null
+        }
+        if (request.buckets.isEmpty() && request.rows.isEmpty()) { close(); return }
+        if (pending != null) return
         require(request.buckets.map { it.id }.distinct().size == request.buckets.size)
         require(request.buckets.all { it.loadedCount >= 0 })
         val ids = request.buckets.map { it.id }.toSet()
@@ -133,6 +143,10 @@ internal class NativeEditorMenu(
     private fun select() {
         if (pending != null) return
         val row = rows.getOrNull(selected) ?: run { close(); return }
+        if (row.disabled == true) return
+        val identity = query?.identity
+        editor.finishMenuComposition()
+        if (query?.identity != identity || rows.getOrNull(selected)?.id != row.id) return
         pending = row.id
         hide()
         emit(MenuEvent(Action.Select, row.bucketID, requireNotNull(query).copy(selectedIndex = selected.toLong()), row.id))
@@ -159,7 +173,7 @@ internal class NativeEditorMenu(
         val labels = rows.map { row -> listOfNotNull(row.label, row.detail).joinToString("\n") }
             .ifEmpty { listOf(if (loading) "Loading…" else if (buckets.any { it.error != null }) "Search unavailable" else "No results") }
         content.adapter = object : ArrayAdapter<String>(editor.context, android.R.layout.simple_list_item_activated_1, labels) {
-            override fun isEnabled(position: Int) = position < rows.size
+            override fun isEnabled(position: Int) = position < rows.size && rows[position].disabled != true
         }
         content.choiceMode = ListView.CHOICE_MODE_SINGLE
         content.setItemChecked(selected, true)

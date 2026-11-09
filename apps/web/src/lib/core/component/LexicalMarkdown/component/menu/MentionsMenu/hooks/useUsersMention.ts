@@ -21,6 +21,8 @@ type UseUsersMentionOptions = {
 };
 
 type UseUsersMentionResult = {
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown>;
   users: Accessor<UserItem[]>;
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
@@ -46,7 +48,8 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
-  const workspaceUsers = quickAccess.useList('person').items;
+  const workspace = quickAccess.useList('person');
+  const workspaceUsers = workspace.items;
   const currentUserEmail = useEmail();
 
   const currentUserDomain = () => {
@@ -126,6 +129,8 @@ export function useUsersMention(
   });
 
   return {
+    isLoading: () => !customUsers && workspace.isLoading(),
+    error: () => (customUsers ? undefined : workspace.error()),
     users,
     currentUserDomain,
     groups,

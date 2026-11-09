@@ -319,7 +319,7 @@ pub struct MenuChoice {
 pub struct MenuAgentSession {
     pub id: String,
 
-    pub label: String,
+    pub label: Option<String>,
 
     pub mention_uuid: Option<String>,
 }
@@ -375,7 +375,7 @@ pub struct MenuDate {
 pub struct MenuDocument {
     pub block_name: String,
 
-    pub block_params: HashMap<String, String>,
+    pub block_params: Option<HashMap<String, String>>,
 
     pub channel_type: Option<String>,
 
@@ -439,10 +439,13 @@ pub struct MenuIdentity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MenuRowsRequest {
     pub buckets: Vec<MenuBucket>,
 
     pub identity: MenuIdentity,
+
+    pub rejected_row_id: Option<String>,
 
     pub rows: Vec<MenuRow>,
 
@@ -473,6 +476,8 @@ pub struct MenuRow {
     pub bucket_id: String,
 
     pub detail: Option<String>,
+
+    pub disabled: Option<bool>,
 
     pub id: String,
 

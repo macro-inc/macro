@@ -34,10 +34,10 @@ internal object NativeMenuScenario {
             val query = events.last { it.action == Action.Query }.query
             assertEquals(QueryKind.Mention, query.kind)
             assertEquals("", query.term)
-            val rows = MenuRowsRequest(listOf(MenuBucket(hasMore = true, id = "users", isLoading = false,
-                isLoadingMore = false, label = "People", loadedCount = 2)), query.identity,
-                listOf(MenuRow("users", id = "first", label = "First"), MenuRow("users", id = "second", label = "Second")),
-                SurfaceScope(1, 1, "fixture"))
+            val rows = MenuRowsRequest(buckets = listOf(MenuBucket(hasMore = true, id = "users", isLoading = false,
+                isLoadingMore = false, label = "People", loadedCount = 2)), identity = query.identity,
+                rows = listOf(MenuRow("users", id = "first", label = "First"), MenuRow("users", id = "second", label = "Second")),
+                scope = SurfaceScope(1, 1, "fixture"))
             view.menuRows(rows)
             afterRows(view, rows, events)
             view.menuRows(rows)
@@ -74,6 +74,22 @@ internal object NativeMenuScenario {
             assertEquals("menu events=$events native=${view.text} caret=${view.selectionStart}", count + 1, events.count { it.action == Action.Query })
             assertTrue(view.onKeyDown(KeyEvent.KEYCODE_ENTER, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)))
             assertEquals("/ ; ;", session.textContent())
+            for ((boundary, opens) in listOf("\uFEFF" to true, "\u001C" to false)) {
+                view.admit(FfiInput.SetState(BridgeJson.root("""{"root":{"type":"root","children":[{"type":"paragraph","children":[]}]}}""")))
+                view.setSelection(0)
+                val connection = requireNotNull(view.onCreateInputConnection(EditorInfo()))
+                val before = events.count { it.action == Action.Query }
+                assertTrue(connection.commitText(boundary, 1))
+                assertTrue(connection.commitText("@", 1))
+                assertEquals(before + if (opens) 1 else 0, events.count { it.action == Action.Query })
+                assertEquals(boundary + "@", session.textContent())
+                if (opens) {
+                    assertTrue(connection.commitText("p\uFEFF", 1))
+                    assertEquals("p", events.last { it.action == Action.Query }.query.term)
+                    assertTrue(view.onKeyDown(KeyEvent.KEYCODE_ESCAPE, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE)))
+                    assertEquals(boundary + "@p\uFEFF", session.textContent())
+                }
+            }
         } finally { session.destroy() }
     }
 }
