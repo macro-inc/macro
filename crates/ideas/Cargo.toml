@@ -1,0 +1,34 @@
+[package]
+name = "ideas"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent_correlation = { path = "../agent_correlation" }
+async-trait = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
+feature_flags = { path = "../feature_flags" }
+macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shown_text = { path = "../shown_text" }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+futures = { workspace = true }
