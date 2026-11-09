@@ -24,6 +24,7 @@ it('starts at navigation time, lets the first view close its window, and aggrega
   const phase = { ...NOOP_SPAN, setAttr: vi.fn(), end: vi.fn() };
   vi.spyOn(Telemetry, 'span').mockReturnValue(phase);
   vi.stubGlobal('performance', {
+    mark: vi.fn(() => ({ startTime: 200 })),
     timeOrigin: 1700000000000,
     now: () => 200,
     getEntriesByType: (type: string) => {
@@ -96,6 +97,10 @@ it('starts at navigation time, lets the first view close its window, and aggrega
   expect(options).toMatchObject({ startTime: 0, closeOnJoin: true });
   options?.onFinish?.(root, 'success', 200);
   expect(root.setAttr).toHaveBeenCalledWith('boot.outcome', 'success');
+  expect(performance.mark).toHaveBeenCalledWith('macro.boot.interactive', {
+    detail: { outcome: 'success' },
+    startTime: 200,
+  });
   expect(Telemetry.span).toHaveBeenCalledWith('boot.auth.refresh', {
     startTime: 1700000000010,
   });
