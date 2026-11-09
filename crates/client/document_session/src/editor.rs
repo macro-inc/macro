@@ -8,7 +8,10 @@ use loro_internal::undo::UndoManager;
 use std::sync::Arc;
 mod builder;
 mod history;
-pub use builder::{default_editor_builder, register_editor_commands, with_session_plugins};
+pub use builder::{
+    default_editor_builder, register_editor_commands, with_session_plugins,
+    with_session_plugins_with_id_state,
+};
 static PLAIN: PlainPolicy = PlainPolicy;
 
 /// Annotation constructor supplied by the editor's application registry.
@@ -836,3 +839,6 @@ mod routed_history_test;
 
 #[cfg(test)]
 mod identity_test;
+
+#[cfg(test)]
+mod id_state_test;

@@ -23,8 +23,10 @@ The host supplies identities and both clocks and executes the returned effects.
 - Use the supplied editor factory for live editors and headless comment forks.
   Supply its matching comment-node constructor for fresh-peer staging; the default
   creates MarkNode. Application registry/policy wiring belongs to macro_document_model.
-- Install register_editor_commands when the application owns identities; use
-  with_session_plugins for session identity tracking over a supplied registry.
+- Install register_editor_commands when the application owns identity registration,
+  or pass the importer's exact StateKey<Option<String>> to
+  with_session_plugins_with_id_state. Never install another key named id in that
+  registry. default_editor_builder retains standalone identities and its private key.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping.
@@ -55,6 +57,7 @@ successful binding. Validate complete generic batches before changing the live d
 - `src/editor.rs`: initialization, remote repair and deterministic Loro grouping.
 - `src/editor/builder.rs`: default registry, command handlers and persistent node-id index.
 - `src/editor/identity_test.rs`: complete subtree-history JSON, durable identities, caret restoration and typed root metadata regressions.
+- `src/editor/id_state_test.rs`: supplied-key code snapshot/fresh-load round trip and strict rejection of distinct state keys named id.
 - `src/generic/validate.rs`: semantic shadow validation before any native operation.
 - `src/generic/surface.rs`: native event collection and observed-path replacement handling.
 - `src/comments.rs`: fresh-peer mark staging and idempotent publication retries.
