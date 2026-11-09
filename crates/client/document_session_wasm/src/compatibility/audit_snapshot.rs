@@ -29,6 +29,7 @@ impl EditorSession {
             .lock()
             .map_err(|_| BoundaryError::Invalid("compatibility receipt lock"))?;
         if !receipts.is_empty()
+            || !host.publications.is_empty()
             || !host
                 .owner
                 .same_owner(&state.view().foreign_instance_owner())
@@ -133,6 +134,31 @@ mod test {
             None,
         )?;
         assert!(editor.compat_audit_snapshot_inner().is_err());
+        loop {
+            let delivered =
+                compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?;
+            if delivered.commits.is_empty() {
+                break;
+            }
+            let ids: Vec<_> = delivered
+                .commits
+                .iter()
+                .flat_map(|commit| {
+                    commit
+                        .batch
+                        .records
+                        .iter()
+                        .map(|record| record.record.capture_id)
+                })
+                .collect();
+            // This counter-only caller discards decoded records; transfer and release
+            // their actual emission pins, including repeated-ID multiplicities.
+            editor.compat_capture_leases_inner(&bytes(&compat::CompatCaptureLeases {
+                editor_id: 1,
+                retain: ids.clone(),
+                release: ids,
+            })?)?;
+        }
         let version = editor.compat_current_version_inner()?;
         assert!(version > 0);
         let before = editor.compat_audit_snapshot_inner()?;

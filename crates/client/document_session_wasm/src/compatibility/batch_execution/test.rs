@@ -45,6 +45,10 @@ fn scoped_callbacks_leave_normalization_to_the_outer_flush() -> Result<(), Bound
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     editor.compat_current_version_inner()?;
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
     let (host, machine) = editor.compat_parts()?;

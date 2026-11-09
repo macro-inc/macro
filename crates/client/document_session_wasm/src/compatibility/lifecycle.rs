@@ -11,25 +11,25 @@ impl Host {
         Ok(version)
     }
     fn refresh(&mut self, state: &EditorState) -> Result<Vec<Commit>, BoundaryError> {
-        let receipts = std::mem::take(
-            &mut *self
-                .receipts
-                .lock()
-                .map_err(|_| BoundaryError::Invalid("compatibility receipt lock"))?,
-        );
+        self.ensure_publications_drained()?;
         let owner = state.view().foreign_instance_owner();
-        let commits: Vec<_> = receipts
-            .into_iter()
-            .filter(|(receipt_owner, _)| receipt_owner.same_owner(&owner))
-            .map(|(_, commit)| commit)
-            .collect();
-        if !self.owner.same_owner(&owner) || !commits.is_empty() {
-            self.version = self.reserve_version()?;
+        if !self.owner.same_owner(&owner) {
+            if !self.cold_bootstrap {
+                return Err(BoundaryError::Invalid(
+                    "compatibility owner rebuild requires an explicit cold fence",
+                ));
+            }
+            let version = self.reserve_version()?;
+            self.version = version;
+            self.states.insert(version, state.clone());
             self.owner_aliases.insert(owner.downgrade());
             self.owner = owner;
-            self.states.insert(self.version, state.clone());
         }
-        Ok(commits)
+        Ok(Vec::new())
+    }
+
+    fn refresh_inline(&mut self, state: &EditorState) -> Result<Vec<Commit>, BoundaryError> {
+        self.take_inline_receipts(state)
     }
 }
 impl EditorSession {
@@ -124,24 +124,44 @@ impl EditorSession {
             return Err(BoundaryError::Invalid("compatibility editor surface"));
         };
         host.refresh(session.surface().state())?;
+        if host.cold_bootstrap {
+            host.bootstrap_fence_version = Some(host.version);
+        }
         Ok(host.version)
     }
     pub(super) fn compat_snapshot_inner(
         &mut self,
         version: u64,
     ) -> Result<compat::CompatSnapshot, BoundaryError> {
-        let (host, _) = self.compat_parts()?;
+        let (host, machine) = self.compat_parts()?;
         let state = host
             .states
             .get(&version)
             .ok_or(BoundaryError::Invalid("unknown compatibility version"))?
             .clone();
+        let fence = host.cold_bootstrap && host.bootstrap_fence_version == Some(version);
+        if fence {
+            host.ensure_publications_drained()?;
+            let machine::Session::Editor(session) = &machine.session else {
+                return Err(BoundaryError::Invalid("compatibility editor surface"));
+            };
+            if version != host.version || !session.surface().state().same_snapshot(&state) {
+                return Err(BoundaryError::Invalid(
+                    "cold bootstrap snapshot requires the exact current state",
+                ));
+            }
+        }
         let source = state.view().snapshot_for_foreign_read()?;
-        Ok(compat::CompatSnapshot {
+        let snapshot = compat::CompatSnapshot {
             version,
             batch: host.batch(&state, version)?,
             selection: host.selection(&source, version)?,
-        })
+        };
+        if fence {
+            host.cold_bootstrap = false;
+            host.bootstrap_fence_version = None;
+        }
+        Ok(snapshot)
     }
     pub(super) fn compat_commit_inner(
         &mut self,
@@ -149,6 +169,7 @@ impl EditorSession {
         wall: f64,
     ) -> Result<compat::CompatCommit, BoundaryError> {
         codec::now(now, wall)?;
+        self.compat_parts()?.0.ensure_publications_drained()?;
         let dropped = self.compatibility.as_ref().and_then(|host| {
             host.pending
                 .as_ref()
@@ -190,6 +211,7 @@ impl EditorSession {
         observed_flags: &mut u32,
     ) -> Result<(compat::CompatCommit, Option<BoundaryError>), BoundaryError> {
         let (host, machine) = self.compat_parts()?;
+        host.ensure_publications_drained()?;
         let pending = host
             .pending
             .take()
@@ -228,7 +250,7 @@ impl EditorSession {
         if recover_refusal {
             host.discard_reservations();
         }
-        let commits = host.refresh(session.surface().state())?;
+        let commits = host.refresh_inline(session.surface().state())?;
         if commits.is_empty() {
             return Err(error.unwrap_or(BoundaryError::Invalid("adopted update did not publish")));
         }
@@ -373,6 +395,10 @@ impl EditorSession {
         if version >= host.next_version
             || version == host.version
             || host.pending_version == Some(version)
+            || host
+                .publications
+                .iter()
+                .any(|publication| publication.version == version)
         {
             return Err(BoundaryError::Invalid(
                 "cannot release unissued or active compatibility version",

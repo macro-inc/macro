@@ -41,6 +41,10 @@ fn actual_session_batches_keep_pending_identity_and_acknowledge_failed_prefixes(
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     editor.compat_current_version_inner()?;
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
     let (host, machine) = editor.compat_parts()?;
