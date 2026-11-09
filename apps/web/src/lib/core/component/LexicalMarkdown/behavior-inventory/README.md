@@ -260,3 +260,10 @@ physical clipboard/keyboard input. Separate mutation controls omit the actual
 corrector or substitute the captured main snapshot as completion; both must fail
 these unchanged assertions. This is an OFF source oracle, not native/ON or
 mega-paste acceptance.
+
+`html-paste-nodes.test.ts` records actual OFF RichText copy-to-HTML and paste
+for every configured node type using the production node replacements and theme.
+Its snapshots describe the pasted result, including intentional DOM loss;
+they do not assert that HTML preserves the original JSON. Clipboard and drag
+event constructors are host boundaries. This source cohort does not prove
+native import, mounted native rendering, physical clipboard behavior or ON parity.
