@@ -2,8 +2,12 @@
 use crate::compatibility_generated::owned as compat;
 use crate::*;
 use lexical_model::{EditorState, ForeignReadSnapshot, PendingUpdate};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 mod calls;
+mod capture_index;
 mod lifecycle;
 pub(crate) mod observer;
 mod records;
@@ -15,9 +19,10 @@ pub(crate) struct Host {
     pending_version: Option<u64>,
     update: u32,
     next_capture: u64,
+    capture_index: capture_index::CaptureIndex,
     pending: Option<PendingUpdate>,
     states: BTreeMap<u64, EditorState>,
-    captures: BTreeMap<u64, records::Capture>,
+    captures: HashMap<u64, records::Capture>,
     selections: BTreeMap<u32, lexical_model::ForeignSelectionIdentity>,
     next_selection: u32,
     receipts: observer::Receipts,
@@ -73,9 +78,10 @@ impl EditorSession {
             pending_version: None,
             update: 0,
             next_capture: 1,
+            capture_index: Default::default(),
             pending: None,
             states: [(0, state)].into(),
-            captures: BTreeMap::new(),
+            captures: HashMap::new(),
             selections: BTreeMap::new(),
             next_selection: 1,
             receipts,
@@ -104,4 +110,10 @@ pub fn compatibility_hook_index() -> Vec<String> {
         .iter()
         .map(|hook| hook.upstream_name().to_owned())
         .collect()
+}
+
+/// Exact generated schema fingerprint required by the production JS backend.
+#[wasm_bindgen]
+pub fn compatibility_schema_hash() -> String {
+    compatibility_generated::COMPATIBILITY_SCHEMA_HASH.to_owned()
 }

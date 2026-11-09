@@ -42,7 +42,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 - Serialize application PluginEvent payloads through surface.rs group encoders into the existing editor-effect envelope; never perform host I/O in the model.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
-- `src/compatibility.rs` and `compatibility/`: optional production same-core adapter, exact typed capture IDs, retained publications and normal session admission; schema generation stays in the separate compatibility generator. Never silently run native behavior for advertised JS hooks before their callback host is installed.
+- `src/compatibility.rs` and `compatibility/`: optional production same-core adapter, indexed exact captures, retained publications and normal session admission; schema generation stays in the separate compatibility generator. Reply only with receiver/result/dirty records, reuse an unchanged exact capture, and distinguish capture identity from the JS state/key instance map. Never silently run native behavior for advertised JS hooks before their callback host is installed.
 - `src/application_exports.rs`: raw serializedState and download-safe savedState; Macro markdown uses internal/external application transformers while generic sessions keep built-ins.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
 - `src/paste_init.rs`: additive prepareMacroPaste export; the shared engine gate calls it during idle preparation after paint, before admitting editor input. Reserve 16 MiB through the allocator in that hook so idle initialization owns growth and dlmalloc can reuse the pages.

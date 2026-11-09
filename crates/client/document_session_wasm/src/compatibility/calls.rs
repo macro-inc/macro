@@ -3,6 +3,13 @@ use super::*;
 use compat::{CompatOperation as Op, ForeignCallbackValue as Value};
 use lexical_model::*;
 
+struct ReplyScope<'a> {
+    version: u64,
+    update: u32,
+    dirty: &'a [NodeKey],
+    writable: &'a [NodeKey],
+    receiver: Option<NodeKey>,
+}
 enum ResultValue {
     Scalar(Value),
     Node(Option<NodeKey>),
@@ -65,11 +72,7 @@ impl Host {
         if reference.editor_id != self.editor {
             return Err(BoundaryError::Invalid("foreign editor node"));
         }
-        if !self
-            .captures
-            .values()
-            .any(|capture| capture.reference.node == *reference)
-        {
+        if !self.capture_index.contains_node(*reference) {
             return Err(BoundaryError::Invalid(
                 "unissued compatibility node reference",
             ));
@@ -412,13 +415,27 @@ impl Host {
         &mut self,
         source: Arc<ForeignReadSnapshot>,
         result: ResultValue,
-        version: u64,
-        update: u32,
-        writable: &[NodeKey],
+        scope: ReplyScope<'_>,
     ) -> Result<compat::CompatReply, BoundaryError> {
+        let ReplyScope {
+            version,
+            update,
+            dirty,
+            writable,
+            receiver,
+        } = scope;
+        let mut keys: std::collections::HashSet<_> = dirty.iter().copied().collect();
+        keys.extend(receiver);
+        match &result {
+            ResultValue::Node(key) => keys.extend(*key),
+            ResultValue::Nodes(nodes) => keys.extend(nodes.iter().copied()),
+            _ => {}
+        }
+        let mut keys: Vec<_> = keys.into_iter().collect();
+        keys.sort_unstable();
         let records = self.records(
             source.clone(),
-            source.record_keys(),
+            keys,
             version,
             update,
             if update == 0 {
@@ -428,11 +445,23 @@ impl Host {
             },
             writable,
         )?;
+        let references: std::collections::HashMap<_, _> = records
+            .iter()
+            .map(|record| {
+                let node = record.record.node;
+                (
+                    NodeKey::from_parts(KeyParts {
+                        index: node.key.index,
+                        generation: node.key.generation,
+                    }),
+                    node,
+                )
+            })
+            .collect();
         let reference = |key: NodeKey| {
-            records
-                .iter()
-                .find(|record| record.record.node.key == records::key(key))
-                .map(|record| record.record.node)
+            references
+                .get(&key)
+                .copied()
                 .ok_or(BoundaryError::Invalid("result record missing"))
         };
         let mut selections = vec![];
@@ -488,7 +517,22 @@ impl EditorSession {
             let source = Arc::new(state.view().snapshot_for_foreign_read()?);
             let result =
                 source.with_read_transaction(&state, |tx| host.dispatch(tx, &request))??;
-            return host.reply(source, result, request.state_version, 0, &[]);
+            let receiver = if request.has_receiver {
+                Some(host.receiver(&request)?)
+            } else {
+                None
+            };
+            return host.reply(
+                source,
+                result,
+                ReplyScope {
+                    version: request.state_version,
+                    update: 0,
+                    dirty: &[],
+                    writable: &[],
+                    receiver,
+                },
+            );
         }
         let machine::Session::Editor(session) = &mut machine.session else {
             return Err(BoundaryError::Invalid("compatibility editor surface"));
@@ -503,22 +547,36 @@ impl EditorSession {
                 let result = host.dispatch(tx, &request);
                 let result = operation.finish(result)?;
                 let source = Arc::new(tx.view().snapshot_for_foreign_read()?);
-                let writable = source
-                    .record_keys()
-                    .into_iter()
+                let dirty = tx
+                    .foreign_dirty_keys()
+                    .filter(|key| tx.view().contains(*key))
+                    .collect::<Vec<_>>();
+                let writable = dirty
+                    .iter()
+                    .copied()
                     .filter(|key| tx.foreign_is_writable(*key))
                     .collect::<Vec<_>>();
-                Ok((source, result, writable))
+                Ok((source, result, dirty, writable))
             })?;
         host.pending = Some(pending);
-        let (source, result, writable) = result?;
+        let (source, result, dirty, writable) = result?;
+        let receiver = if request.has_receiver {
+            Some(host.receiver(&request)?)
+        } else {
+            None
+        };
         host.reply(
             source,
             result,
-            host.pending_version
-                .ok_or(BoundaryError::Invalid("pending publication version"))?,
-            host.update,
-            &writable,
+            ReplyScope {
+                version: host
+                    .pending_version
+                    .ok_or(BoundaryError::Invalid("pending publication version"))?,
+                update: host.update,
+                dirty: &dirty,
+                writable: &writable,
+                receiver,
+            },
         )
     }
 }

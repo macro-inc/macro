@@ -156,6 +156,13 @@ impl StateRef<'_> {
 }
 
 impl Transaction<'_> {
+    /// Dirty records in the current update without scanning the document map.
+    pub fn foreign_dirty_keys(&self) -> impl Iterator<Item = NodeKey> + '_ {
+        self.dirty_leaves
+            .iter()
+            .copied()
+            .chain(self.dirty_elements.keys().copied())
+    }
     /// Semantic writability survives incidental Arc sharing by owned read captures.
     pub fn foreign_is_writable(&self, key: NodeKey) -> bool {
         let Some(slot) = self.pending.nodes.get(&key) else {
