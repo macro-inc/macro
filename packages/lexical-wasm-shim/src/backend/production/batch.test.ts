@@ -42,6 +42,7 @@ function receipt(patch: Partial<ICompatBatchReply> = {}): Uint8Array {
     version: 7n,
     mutationEpoch: 2n,
     composition: { present: false, key: { index: 0, generation: 0 } },
+    selectionBindings: [],
     selection: CompatSelectionData.fromCompatNoSelection({}),
     selections: [],
     tags: [],
