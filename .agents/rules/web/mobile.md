@@ -21,7 +21,8 @@ read their code, and follow that pattern rather than inventing a new one.
 ## Detection and input
 
 - `isTouchDevice()` / `touch:` decide input (no hover); `isMobile()` /
-  `mobile:` decide phone layout (touch and under 640px). Hide a desktop
+  `mobile:` decide phone layout (touch and UIKit compact width when available,
+  otherwise under 640px). Hide a desktop
   control and show its touch replacement with the same one, or tablets get
   neither. Native checks (`isPlatform` in `@core/util/platform`) are for
   native bridges and platform-specific visual effects, not layout.
@@ -119,6 +120,8 @@ read their code, and follow that pattern rather than inventing a new one.
   `var(--virtual-keyboard-height,0px)`, fallback included (Android leaves it
   unset); in JS read `virtualKeyboardVisible()`. Sheets with inputs call
   `scrollToFocusedInput` from `onFocusIn`.
+  Native iOS viewport clearance must be remeasured on fold/rotation even when
+  the keyboard does not emit another show event.
 - Never remount a focused editor (keys on content ids, Suspense around it).
   Collapsed inputs match the focused height (`CollapsedInput`), and hidden
   controls use `hidden`, not `opacity-0`, so neighbors don't jump.

@@ -1,0 +1,3 @@
+ios/.build/
+ios/Package.resolved
+.tauri/

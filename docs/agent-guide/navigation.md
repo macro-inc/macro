@@ -145,6 +145,27 @@ lost. It must report an uncertain outcome, not retry or fall through to a second
 API write. Verify this lost-reply case only with an isolated synthetic fixture,
 not by injecting mutation failures into a dev or production account.
 
+## iPhone Duo navigation
+
+With a native build containing `layout_plugin`, the mobile navigation dock
+follows UIKit's preferred edge: a right-side vertical sidebar in the usual Duo
+layouts, the outer edge in Split View, and the bottom when horizontal bars are
+appropriate. Search stays horizontal above the keyboard. More retains hidden
+destinations, Settings, and dock customization; opening or closing the phone
+must retain the current view and navigation order.
+
+The vertical dock must share the outer system column beneath the status controls,
+using UIKit's bar layout region. Verify that there is one column, with no second
+dock or extra blank strip to its left; the content safe-area inset alone is not
+a bar placement guide.
+
+Verify closed/open, both rotations, partial folds, and both Split View sides.
+Check Search focus, More, and a composer with the software keyboard showing.
+Rotate and fold with search focused, including after switching to a hardware
+keyboard: search must track the new viewport instead of retaining the old height.
+Controls and content must clear each safe-area edge independently. Repeat on
+a conventional iPhone; old native binaries retain the existing bottom dock.
+
 ## Android system navigation and sharing
 
 In the Android app, Back first hides the keyboard, then dismisses the active
@@ -164,7 +185,8 @@ With the keyboard closed, the Android dock sits above the measured system
 navigation inset with the usual 12px gutter. Check both gesture and three-button
 navigation, including after rotation and display-size changes. Opening the
 keyboard leaves only the usual gutter above it. iOS retains its existing 28px
-bottom padding with the keyboard closed and 12px with it open.
+minimum bottom padding with the keyboard closed (or its larger safe-area inset)
+and 12px with it open.
 
 Sharing text, links, images, or documents from another Android app opens Share to
 Macro after login. A second incoming share waits behind the current one. Back or
