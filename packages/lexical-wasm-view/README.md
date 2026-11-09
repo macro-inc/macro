@@ -14,6 +14,11 @@ the view is non-editable; this never changes collaborative authorization.
 Close the returned runtime when its owning surface is disposed. Closing twice
 shares one completion and releases the native view before draining the executor.
 
+`@macro-inc/lexical-wasm-view/compat` exports the compatibility DOM adapter and
+its runtime contract. It binds only the root supplied through setRootElement;
+reconcile then publish mutations before core update listeners. Its current oracle
+tests use the upstream model and do not establish Rust bridge compatibility.
+
 The flat Diff applier owns immutable mirror records. A zero TextFromView result
 acknowledges exactly the submitted DOM text through that applier. Other results
 carry authoritative Rust text or full repair. Development builds compare mirror

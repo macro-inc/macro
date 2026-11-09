@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./compat": "./src/compat/index.ts",
     "./view/*": "./src/view/*.ts"
   },
   "scripts": {
