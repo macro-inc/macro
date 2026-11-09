@@ -33,8 +33,9 @@ stacks. Process isolation belongs to
   `409` if the document changed since. The frame never sends source. Both
   need view access (a receipt minted in the handler), the rollout gate
   (`DocumentProgramGate`, `enable-html-code-mode`; harness adapter
-  `FlaggedDocumentPrograms`) and a directly signed-in user: a token minted
-  for an agent's run is refused. Runs are `ToolCaller::Document` with the
+  `FlaggedDocumentPrograms`) and a signed-in user. Builds accept a token
+  minted for an agent's run, so the SDK's `publishPage` works in code mode;
+  runs refuse it, so a program cannot start another run. Runs are `ToolCaller::Document` with the
   inputs contract and a plain user token (no agent). `DocumentSources` reads
   the stored file (harness adapter `code_mode/document_sources.rs`); builds
   are cached by source hash in memory, so a miss only rebuilds.

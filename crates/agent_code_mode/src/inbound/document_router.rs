@@ -215,17 +215,13 @@ impl IntoResponse for DocumentProgramApiError {
 }
 
 /// The signed-in user, admitted by the rollout, with view access to the
-/// document. Only directly signed-in users: a token minted for an agent's run
-/// may not start another run through here.
+/// document. An agent's token may build a page it published, but only
+/// [`run_document_program`] runs anything.
 async fn admit<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     caller: &MacroAuthorizationExtractor<Auth, UserOnly>,
     state: &DocumentProgramRouterState<Access, Auth>,
     document_id: Uuid,
 ) -> Result<EntityAccessReceipt<ViewAccessLevel>, DocumentProgramApiError> {
-    let forbidden = || DocumentProgramApiError(CodeModeError::Forbidden.into());
-    if caller.authorization.agent_id.is_some() {
-        return Err(forbidden());
-    }
     let user = &caller.authorization.macro_user_id;
     if !state.gate.allows(user).await {
         return Err(DocumentProgramApiError(CodeModeError::NotFound.into()));
@@ -283,6 +279,11 @@ pub async fn run_document_program<Access: EntityAccessService, Auth: MacroAuthor
     Path(document_id): Path<Uuid>,
     Json(body): Json<RunDocumentProgram>,
 ) -> Result<Json<UserExecutionReceipt>, DocumentProgramApiError> {
+    // Only a directly signed-in user: a token minted for an agent's run may
+    // not start another run through here.
+    if caller.authorization.agent_id.is_some() {
+        return Err(DocumentProgramApiError(CodeModeError::Forbidden.into()));
+    }
     let document = admit(&caller, &state, document_id).await?;
     let receipt = state
         .service
