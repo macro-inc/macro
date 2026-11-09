@@ -1,6 +1,62 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: native view/history preview and notification correction
+## Current checkpoint: routed keyboard history and combined source build
+
+Keyboard history fix 87163f3a57 is integrated as ae9b506f1f. The existing
+integration handled-command metadata is retained in the shared history method
+by 61a842a479: its literal failed before and passes after (2/2). The listener-first,
+commit-before-navigation policy remains intact; no JavaScript bypass or ABI
+change was introduced. Native lifecycle prerequisites are integrated as
+e5cdd413d2 / bcef915f27 / b073fd8004, and sparse payload validation as 2a9b28956a.
+The newer 52e schema was preserved. The JS batch driver is integrated as 87ed78ea71;
+its 7 protocol tests and types/hooks/scoped checks pass; full shim 241/242 retains
+the known 2,396-crossing failure. Actual consumer/initializer wiring is absent.
+Normalization may report actual no-op retirement; the backend must apply
+sidecars/leases and retire from that flag, never infer retirement from unchanged.
+
+An independent combined source build at e9ca2e89f5 matches main native inputs at
+2a9b28956a. Normal profile/six hot opt3 crates/wasm-opt -Oz --converge, Cargo-j2,
+and the specified TMPDIR produced 9,149,457 raw / 2,065,337 Brotli bytes. WASM SHA256:
+`adc4e7b5e3dbd9ce38e8a3b9d69e9ad4cf94ed121c64de6ead3f8fae2d159522`.
+This is 21,303 Brotli bytes above the previous combined build and 465,337 above the
+advisory ceiling. These aggregate changes are not a per-change size ablation.
+Matched feature-on/off timing and strict startup/open performance gates remain
+pending. The owner artifact was not promoted. Matching generated declarations
+are committed as 937f54b55c; browser regression/guide/config as e051b32924.
+
+Both native and upstream history tests load the same real initial state and clear
+their real histories. Chromium, Firefox and Linux WebKit pass 12/12 static cases:
+trusted typing, Ctrl-Z, Ctrl-Shift-Z and Ctrl-Y with exact model JSON and model/DOM
+caret restoration. The previous artifact with the SAME corrected fixture passes
+six upstream controls and fails six native undo cases. Early multi-character
+history-grouping and unequal native-empty/source-paragraph fixtures are retained
+as diagnostics, excluded from this acceptance. Linux WebKit is an engine proxy,
+not Safari qualification.
+
+The source-matched build is installed in the local preview. Live code typing,
+undo and redo change/restore text and restore both model and DOM caret exactly.
+The stronger live full-JSON comparison is RED: deleting/recreating a code subtree
+changes its text leaf `$id` (5 to 8), while the code ID is preserved. The native
+owner has the raw snapshots and is investigating identity tracking. No ID mask
+or acceptance waiver was applied. Table-picker and Comment-button gaps remain
+OPEN. Full parity and Integration3 remain unchecked.
+
+Own combined checks pass 485 model, 56 session plus telemetry, 65 WASM-adapter and 46
+projection tests; all 1,421 replay harness checks (1,367 actual passes + 54 expected
+ledger outcomes, 452 actual Macro passes), flat-diff 2/2, strict three-crate Clippy,
+view/app types and scoped check. The raw hosted lifecycle smoke uses the actual
+pinned 0.45 class and this rebuilt artifact: one Root clone, retained source,
+null root cache. It is not full hosted initialization or derived-cache acceptance.
+
+Evidence under `/home/wolf/tmp/integration3-acceptance` includes
+`routed-history-{build-freeze,artifact-manifest,preview-install}.json`,
+`routed-history-static-three-engine.json`,
+`history-keyboard-loaded-state-old-control.json`,
+`routed-history-combined-{native-tests,replay,clippy,scoped-check}.log`,
+`hosted-lifecycle-source-matched-smoke.log` and
+`preview-routed-history-first-snapshots.json`. Live acceptance is not green.
+
+## Previous checkpoint: native view/history preview and notification correction
 
 The LIVE native-view O(edit) chain is integrated as 0f754d883f, 7b875ec594,
 af7fd810ae, 07b29bd983 and 956002830c. History-selection fix c9282eaa41 is
