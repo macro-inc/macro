@@ -98,7 +98,7 @@ export function CallQuickControls(props: {
                     : t('calls.microphoneOff')
               }
               tooltip={
-                audioBlocked() ? t('calls.microphoneBlocked') : undefined
+                audioBlocked() ? t('calls.microphoneBlockedTooltip') : undefined
               }
               disabled={call.isConnecting()}
               onClick={() =>
@@ -131,7 +131,9 @@ export function CallQuickControls(props: {
                       ? t('calls.cameraOn')
                       : t('calls.cameraOff')
                 }
-                tooltip={videoBlocked() ? t('calls.cameraBlocked') : undefined}
+                tooltip={
+                  videoBlocked() ? t('calls.cameraBlockedTooltip') : undefined
+                }
                 disabled={call.isConnecting()}
                 onClick={() =>
                   fireAndForget(call.toggleVideo(), 'call-quick-controls')

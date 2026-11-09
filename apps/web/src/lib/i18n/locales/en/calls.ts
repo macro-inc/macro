@@ -84,6 +84,8 @@ export default {
   availableOnceJoined: "Available once you've joined",
   microphoneOff: 'Microphone off',
   microphoneOn: 'Microphone on',
+  microphoneBlockedTooltip: 'Microphone blocked by the browser',
+  cameraBlockedTooltip: 'Camera blocked by the browser',
   microphoneBlocked:
     'Microphone blocked by the browser. Allow microphone access in browser settings, then try again.',
   cameraBlocked:

@@ -39,6 +39,7 @@ export function BlockedMediaBadge(props: { blocked: boolean }) {
 function MediaSplitButton(props: {
   label: string;
   toggleLabel: string;
+  tooltipLabel?: string;
   shortcut?: string;
   menuLabel: string;
   disabled?: boolean;
@@ -86,7 +87,11 @@ function MediaSplitButton(props: {
                     )
               }
               tooltip={{
-                content: props.toggleLabel,
+                content: (
+                  <span class="whitespace-nowrap">
+                    {props.tooltipLabel ?? props.toggleLabel}
+                  </span>
+                ),
                 placement: 'top',
                 shortcut: props.shortcut,
               }}
@@ -198,6 +203,11 @@ export function CallControlBar(props: {
                 ? 'Unmute microphone'
                 : 'Mute microphone'
           }
+          tooltipLabel={
+            props.audioPermission === 'denied'
+              ? t('calls.microphoneBlockedTooltip')
+              : undefined
+          }
           menuLabel="Audio settings"
           mobileContent={props.audioDrawer}
           disabled={props.disabled}
@@ -238,6 +248,11 @@ export function CallControlBar(props: {
                 : 'Turn off camera'
           }
           mobileContent={props.videoDrawer}
+          tooltipLabel={
+            props.videoPermission === 'denied'
+              ? t('calls.cameraBlockedTooltip')
+              : undefined
+          }
           menuLabel="Video settings"
           disabled={props.disabled}
           onToggle={props.onToggleVideo}
