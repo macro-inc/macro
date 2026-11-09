@@ -10,18 +10,19 @@ struct ReplyScope<'a> {
     writable: &'a [NodeKey],
     receiver: Option<NodeKey>,
 }
-enum ResultValue {
+pub(super) enum ResultValue {
     Scalar(Value),
     Node(Option<NodeKey>),
     Nodes(Vec<NodeKey>),
     Selection,
+    SelectionValue(compat::CompatSelectionData),
 }
-fn null() -> Value {
+pub(super) fn null() -> Value {
     Value::ForeignOpaqueArgument {
         value: compat::ForeignOpaqueValue::ForeignNull {},
     }
 }
-fn undefined() -> Value {
+pub(super) fn undefined() -> Value {
     Value::ForeignOpaqueArgument {
         value: compat::ForeignOpaqueValue::ForeignUndefined {},
     }
@@ -60,10 +61,21 @@ fn mutates(op: Op) -> bool {
             | Op::SetIndent
             | Op::AddUpdateTag
             | Op::SetNativeField
+            | Op::SetSelection
+            | Op::SelectionInsertText
+            | Op::SelectionInsertNodes
+            | Op::SelectionFormatText
+            | Op::SelectionDeleteCharacter
+            | Op::SelectionDeleteWord
+            | Op::SelectionDeleteLine
+            | Op::SelectionInsertParagraph
+            | Op::SelectionInsertLineBreak
+            | Op::SelectionExtract
+            | Op::SetCompositionKey
     )
 }
 impl Host {
-    fn node_argument(&self, value: Option<&Value>) -> Result<NodeKey, BoundaryError> {
+    pub(super) fn node_argument(&self, value: Option<&Value>) -> Result<NodeKey, BoundaryError> {
         let reference = match value {
             Some(Value::ForeignNodeArgument { value }) => value,
             Some(Value::ForeignRecordArgument { value }) => return self.validate_record(*value),
@@ -112,9 +124,6 @@ impl Host {
         }
         let reference = request.receiver;
         let key = self.validate_record(reference)?;
-        if request.historical && reference.node.version != request.state_version {
-            return Err(BoundaryError::Invalid("historical receiver mismatch"));
-        }
         Ok(key)
     }
     fn read_captured_field(
@@ -204,7 +213,7 @@ impl Host {
         })
     }
     fn dispatch(
-        &self,
+        &mut self,
         tx: &mut Transaction<'_>,
         request: &compat::CompatRequest,
     ) -> Result<ResultValue, BoundaryError> {
@@ -215,6 +224,15 @@ impl Host {
         };
         let key = || receiver.ok_or(BoundaryError::Invalid("compatibility receiver required"));
         let arg = |index| request.args.get(index);
+        if let Some(result) = self.dispatch_selection(tx, request)? {
+            return Ok(result);
+        }
+        if matches!(
+            request.operation,
+            Op::GetWritable | Op::Append | Op::SetTextContent | Op::SetIndent | Op::SetNativeField
+        ) {
+            self.selection_values.invalidate_active_cache(self.update);
+        }
         Ok(match request.operation {
             Op::GetRoot => ResultValue::Node(Some(NodeKey::ROOT)),
             Op::GetNodeByKey => {
@@ -390,6 +408,16 @@ impl Host {
             }
             Op::GetSelection => ResultValue::Selection,
             Op::GetCompositionKey => ResultValue::Node(tx.composition_key()),
+            Op::SetCompositionKey => {
+                let key = match arg(0) {
+                    Some(Value::ForeignOpaqueArgument {
+                        value: compat::ForeignOpaqueValue::ForeignNull {},
+                    }) => None,
+                    value => Some(self.node_argument(value)?),
+                };
+                tx.set_composition_key(key)?;
+                ResultValue::Scalar(undefined())
+            }
             Op::AddUpdateTag => {
                 tx.add_tag(
                     string(arg(0))?
@@ -474,12 +502,16 @@ impl Host {
             ResultValue::Nodes(keys) => Value::ForeignNodeArrayArgument {
                 values: keys.into_iter().map(reference).collect::<Result<_, _>>()?,
             },
-            ResultValue::Selection => {
-                let selection = self.selection(&source, version)?;
+            ResultValue::Selection | ResultValue::SelectionValue(_) => {
+                let selection = match result {
+                    ResultValue::SelectionValue(value) => value,
+                    _ => self.selection(&source, version)?,
+                };
                 let value = match &selection {
                     compat::CompatSelectionData::CompatNoSelection {} => null(),
                     compat::CompatSelectionData::CompatRangeSelection { reference, .. }
-                    | compat::CompatSelectionData::CompatNodeSelection { reference, .. } => {
+                    | compat::CompatSelectionData::CompatNodeSelection { reference, .. }
+                    | compat::CompatSelectionData::CompatTableSelection { reference, .. } => {
                         Value::ForeignSelectionArgument { value: *reference }
                     }
                     _ => return Err(BoundaryError::Invalid("unknown selection type")),
@@ -508,6 +540,42 @@ impl EditorSession {
         if request.historical {
             if mutates(request.operation) {
                 return Err(BoundaryError::Invalid("historical compatibility mutation"));
+            }
+            if host.pending_version == Some(request.state_version) {
+                let machine::Session::Editor(session) = &mut machine.session else {
+                    return Err(BoundaryError::Invalid("compatibility editor surface"));
+                };
+                let committed = session.surface().state().clone();
+                let pending = host
+                    .pending
+                    .take()
+                    .ok_or(BoundaryError::Invalid("compatibility update required"))?;
+                let (pending, result) =
+                    session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
+                        let source = Arc::new(tx.view().snapshot_for_foreign_read()?);
+                        let result = source.with_read_transaction(&committed, |peer| {
+                            host.dispatch(peer, &request)
+                        })??;
+                        Ok((source, result))
+                    })?;
+                host.pending = Some(pending);
+                let (source, result) = result?;
+                let receiver = if request.has_receiver {
+                    Some(host.receiver(&request)?)
+                } else {
+                    None
+                };
+                return host.reply(
+                    source,
+                    result,
+                    ReplyScope {
+                        version: request.state_version,
+                        update: 0,
+                        dirty: &[],
+                        writable: &[],
+                        receiver,
+                    },
+                );
             }
             let state = host
                 .states
@@ -545,6 +613,11 @@ impl EditorSession {
             session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
                 let operation = ForeignReadOperation::begin()?;
                 let result = host.dispatch(tx, &request);
+                let active = tx
+                    .selection()
+                    .and_then(|_| tx.foreign_selection_identity(SelectionSlot::Active));
+                host.selection_values
+                    .reconcile_active(active.as_ref(), host.update);
                 let result = operation.finish(result)?;
                 let source = Arc::new(tx.view().snapshot_for_foreign_read()?);
                 let dirty = tx

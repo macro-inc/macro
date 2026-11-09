@@ -165,6 +165,219 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     request.receiver = root;
     request.args = vec![Value::ForeignNodeArrayArgument { values: vec![p] }];
     editor.compat_call_inner(&bytes(&request)?)?;
+    let selection_reply = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::CreateRangeSelection,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    assert!(selection_reply.selections.is_empty());
+    let Value::ForeignSelectionArgument {
+        value: selection_ref,
+    } = selection_reply.value
+    else {
+        panic!("owned selection");
+    };
+    editor
+        .compat_retain_selection(&bytes(&selection_ref)?)
+        .expect("retain owned selection");
+    let selection_body = compat::CompatSelectionData::CompatRangeSelection {
+        reference: selection_ref,
+        anchor: compat::CompatPoint {
+            key: text.key,
+            offset: 2,
+            kind: compat::CompatPointKind::Text,
+        },
+        focus: compat::CompatPoint {
+            key: text.key,
+            offset: 2,
+            kind: compat::CompatPointKind::Text,
+        },
+        format: 0,
+        style: vec![],
+        dirty: true,
+        has_cached_backward: false,
+        cached_backward: false,
+        has_cached_nodes: false,
+        cached_nodes: vec![],
+    };
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: seeded_version,
+        activate: true,
+        selection: selection_body.clone(),
+    })?)?;
+    let selection_read = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionIsCollapsed,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument {
+            value: selection_ref,
+        }],
+    })?)?;
+    assert!(matches!(
+        selection_read.value,
+        Value::ForeignBooleanArgument { value: true }
+    ));
+    assert!(selection_read.selections.is_empty());
+    let pending_version = editor
+        .compatibility
+        .as_ref()
+        .unwrap()
+        .pending_version
+        .unwrap();
+    let readonly_value = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::CreateRangeSelection,
+        historical: true,
+        state_version: pending_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    let Value::ForeignSelectionArgument {
+        value: readonly_ref,
+    } = readonly_value.value
+    else {
+        panic!("readonly owned value");
+    };
+    editor
+        .compat_retain_selection(&bytes(&readonly_ref)?)
+        .expect("retain readonly value");
+    let mut readonly_body = selection_body.clone();
+    if let compat::CompatSelectionData::CompatRangeSelection { reference, .. } = &mut readonly_body
+    {
+        *reference = readonly_ref;
+    }
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: true,
+        state_version: pending_version,
+        activate: false,
+        selection: readonly_body,
+    })?)?;
+    let readonly_nodes = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionGetNodes,
+        historical: true,
+        state_version: pending_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument {
+            value: readonly_ref,
+        }],
+    })?)?;
+    assert!(
+        matches!(readonly_nodes.value, Value::ForeignNodeArrayArgument { values } if values.len() == 1 && values[0].key == text.key)
+    );
+    editor
+        .compat_release_selection(&bytes(&readonly_ref)?)
+        .expect("release readonly value");
+    // The same detached object may already have a slot in the live update.
+    // A readonly peer must still hydrate the latest patched fields.
+    let materialized = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::CreateRangeSelection,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    let Value::ForeignSelectionArgument {
+        value: materialized_ref,
+    } = materialized.value
+    else {
+        panic!("materialized owned value");
+    };
+    editor
+        .compat_retain_selection(&bytes(&materialized_ref)?)
+        .expect("retain materialized");
+    editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionIsCollapsed,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument {
+            value: materialized_ref,
+        }],
+    })?)?;
+    let mut patched_readonly = selection_body.clone();
+    if let compat::CompatSelectionData::CompatRangeSelection {
+        reference,
+        anchor,
+        focus,
+        ..
+    } = &mut patched_readonly
+    {
+        *reference = materialized_ref;
+        anchor.offset = 1;
+        focus.offset = 4;
+    }
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: true,
+        state_version: pending_version,
+        activate: false,
+        selection: patched_readonly,
+    })?)?;
+    let readonly_text = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionGetTextContent,
+        historical: true,
+        state_version: pending_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument {
+            value: materialized_ref,
+        }],
+    })?)?;
+    assert!(
+        matches!(readonly_text.value, Value::ForeignStringArgument { value } if String::from_utf16(&value).unwrap() == "ati")
+    );
+    editor
+        .compat_release_selection(&bytes(&materialized_ref)?)
+        .expect("release materialized");
+    let second = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::CreateRangeSelection,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    let Value::ForeignSelectionArgument { value: second_ref } = second.value else {
+        panic!("second owned selection");
+    };
+    editor
+        .compat_retain_selection(&bytes(&second_ref)?)
+        .expect("retain replacement");
+    let second_body = compat::CompatSelectionData::CompatRangeSelection {
+        reference: second_ref,
+        anchor: compat::CompatPoint {
+            key: text.key,
+            offset: 1,
+            kind: compat::CompatPointKind::Text,
+        },
+        focus: compat::CompatPoint {
+            key: text.key,
+            offset: 1,
+            kind: compat::CompatPointKind::Text,
+        },
+        format: 0,
+        style: vec![],
+        dirty: true,
+        has_cached_backward: false,
+        cached_backward: false,
+        has_cached_nodes: false,
+        cached_nodes: vec![],
+    };
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: seeded_version,
+        activate: true,
+        selection: second_body.clone(),
+    })?)?;
+
     let machine::Session::Editor(session) = &editor.machine.session else {
         panic!("editor");
     };
@@ -174,8 +387,50 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         panic!("editor");
     };
     assert!(session.surface().state().is_empty_state());
+    assert!(editor.compat_commit_inner(f64::NAN, 2.0).is_err());
+    assert!(editor.compatibility.as_ref().unwrap().pending.is_some());
     let committed = editor.compat_commit_inner(2.0, 2.0)?;
     assert!(committed.changed);
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: true,
+        state_version: committed.version,
+        activate: false,
+        selection: selection_body,
+    })?)?;
+    assert!(editor
+        .compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+            historical: true,
+            state_version: committed.version,
+            activate: false,
+            selection: second_body,
+        })?)
+        .is_err());
+    let previous = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::GetPreviousSelection,
+        historical: true,
+        state_version: 0,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![],
+    })?)?;
+    let compat::CompatSelectionData::CompatRangeSelection {
+        reference: previous_ref,
+        anchor,
+        ..
+    } = previous.selections[0]
+    else {
+        panic!("current editor previous selection");
+    };
+    assert!(previous_ref == second_ref);
+    let previous_offset = anchor.offset;
+    assert_eq!(previous_offset, 1);
+    editor
+        .compat_release_selection(&bytes(&second_ref)?)
+        .expect("release replacement");
+
+    editor
+        .compat_release_selection(&bytes(&selection_ref)?)
+        .expect("release owned selection binding");
     assert!(editor
         .compatibility
         .as_ref()
@@ -221,6 +476,85 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         matches!(editor.compat_call_inner(&bytes(&request)?)?.value,Value::ForeignStringArgument{value} if String::from_utf16(&value).unwrap()=="native text")
     );
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
+    let cloned = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionClone,
+        historical: false,
+        state_version: committed.version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument { value: second_ref }],
+    })?)?;
+    let Value::ForeignSelectionArgument {
+        value: detached_ref,
+    } = cloned.value
+    else {
+        panic!("detached clone");
+    };
+    editor
+        .compat_retain_selection(&bytes(&detached_ref)?)
+        .expect("retain detached clone");
+    let mut detached_body = editor
+        .compatibility
+        .as_ref()
+        .unwrap()
+        .selection_values
+        .get(detached_ref)?
+        .encoded();
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: committed.version,
+        activate: false,
+        selection: detached_body.clone(),
+    })?)?;
+    editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionIsCollapsed,
+        historical: false,
+        state_version: committed.version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![Value::ForeignSelectionArgument {
+            value: detached_ref,
+        }],
+    })?)?;
+    if let compat::CompatSelectionData::CompatRangeSelection { anchor, focus, .. } =
+        &mut detached_body
+    {
+        anchor.offset = 3;
+        focus.offset = 3;
+    }
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: committed.version,
+        activate: false,
+        selection: detached_body,
+    })?)?;
+    editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SelectionInsertText,
+        historical: false,
+        state_version: committed.version,
+        has_receiver: false,
+        receiver: NO_RECORD,
+        args: vec![
+            Value::ForeignSelectionArgument {
+                value: detached_ref,
+            },
+            Value::ForeignStringArgument { value: vec![33] },
+        ],
+    })?)?;
+    let staged = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::GetTextContent,
+        historical: false,
+        state_version: committed.version,
+        has_receiver: true,
+        receiver: frozen_text,
+        args: vec![],
+    })?)?;
+    assert!(
+        matches!(staged.value, Value::ForeignStringArgument { value } if String::from_utf16(&value).unwrap() == "nat!ive text")
+    );
+    editor
+        .compat_release_selection(&bytes(&detached_ref)?)
+        .expect("release detached clone");
     request.operation = Op::SetTextContent;
     request.historical = false;
     request.receiver = frozen_text;
@@ -392,12 +726,53 @@ fn admission_rejects_readonly_and_unseeded_sessions_without_publishing_staged_te
             }],
         };
         editor.compat_call_inner(&bytes(&request)?)?;
+        let retained = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+            operation: Op::CreateRangeSelection,
+            historical: false,
+            state_version: 0,
+            has_receiver: false,
+            receiver: NO_RECORD,
+            args: vec![],
+        })?)?;
+        let Value::ForeignSelectionArgument {
+            value: retained_ref,
+        } = retained.value
+        else {
+            panic!("retained rejected selection");
+        };
+        editor
+            .compat_retain_selection(&bytes(&retained_ref)?)
+            .expect("retain rejected value");
+        let retained_body = editor
+            .compatibility
+            .as_ref()
+            .unwrap()
+            .selection_values
+            .get(retained_ref)?
+            .encoded();
+        editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+            historical: false,
+            state_version: 0,
+            activate: true,
+            selection: retained_body.clone(),
+        })?)?;
         assert!(editor.compat_commit_inner(2.0, 2.0).is_err());
         let machine::Session::Editor(session) = &editor.machine.session else {
             panic!("editor");
         };
         assert!(session.surface().state().is_empty_state());
         assert!(editor.compatibility.as_ref().unwrap().pending.is_none());
+        editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
+        editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+            historical: false,
+            state_version: 0,
+            activate: false,
+            selection: retained_body,
+        })?)?;
+        editor
+            .compat_release_selection(&bytes(&retained_ref)?)
+            .expect("release rejected value");
+        editor.compat_discard().expect("discard retry scope");
     }
     Ok(())
 }
