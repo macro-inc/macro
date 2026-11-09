@@ -61,13 +61,23 @@ export type IdeaSuggestion =
 /**
  * The user's ideas: proactive suggestions in their feed.
  *
- * @routing Use when an ideas generation session manages the user's Ideas feed of proactive suggestions; not for requests from the user, since any other session gets a 403.
+ * @routing Use when the user asks about their Ideas feed of proactive suggestions or wants to take one up or dismiss one, or when an ideas generation session manages that feed; not for routines, tasks or reminders the user asks to create.
  *
  * @agent
  * ## Ideas
  *
- * - Only an ideas generation session may call these; any other session gets a 403.
- * - Read every idea first with `macro.ideas.review()`. Then add with `suggest`, change with `idea.rewrite`, and retire with `idea.retire` what no longer matters.
+ * Each idea is a prompt to run, a note about specific items, or a routine suggestion.
+ *
+ * ### For the user
+ *
+ * - Read their feed with `macro.ideas.list()`: their open ideas, best first.
+ * - When they take one up, call `idea.accept()`, then do it yourself: run a prompt idea's `prompt`, or do its `action` on the items in `about`. Accepting only marks it accepted.
+ * - When they don't want one, call `idea.dismiss()`.
+ * - Never suggest, rewrite or retire ideas for the user: only an ideas generation session may, and any other session gets a 403.
+ *
+ * ### In an ideas generation session
+ *
+ * - Read every idea first with `macro.ideas.review()`. Then add with `suggest`, change with `idea.rewrite`, and retire with `idea.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply idea may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `idea.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
@@ -75,7 +85,20 @@ export type IdeaSuggestion =
 export class IdeaNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Every idea of the user's, open or not, and how many more may be added. */
+  /**
+   * The user's feed: their open ideas about items they can still open, best
+   * first. For the user's own agent; a generation session gets a 403.
+   *
+   * @example
+   * const ideas = await macro.ideas.list();
+   * return ideas.map((idea) => ({ title: idea.title, kind: idea.kind }));
+   */
+  async list(): Promise<Idea[]> {
+    const feed = unwrap(await this.client.scheduledAction.listIdeas());
+    return feed.ideas.map((idea) => Idea.from(this.client, idea));
+  }
+
+  /** Every idea of the user's, open or not, and how many more may be added. Only an ideas generation session may. */
   async review(): Promise<IdeaReview> {
     const review = unwrap(await this.client.scheduledAction.reviewIdeas());
     return {

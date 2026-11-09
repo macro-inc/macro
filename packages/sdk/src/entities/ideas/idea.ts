@@ -69,8 +69,8 @@ export function outcome(
 
 /**
  * One of the user's ideas: a prompt to run, a note about specific items, or a
- * routine suggestion. List-sourced only, from `macro.ideas.review()`, so this
- * wraps the record the caller already has.
+ * routine suggestion. List-sourced only, from `macro.ideas.list()` or
+ * `macro.ideas.review()`, so this wraps the record the caller already has.
  */
 export class Idea {
   private constructor(
@@ -189,6 +189,28 @@ export class Idea {
     if (this.record.kind !== 'entity') return undefined;
     const partId = this.record.draft?.partId;
     return partId ? EmailDraft.byId(this.client, partId) : undefined;
+  }
+
+  /**
+   * The user takes up this proposed idea: it is marked accepted, and nothing
+   * else happens, so do what it suggests yourself. For the user's own agent;
+   * a generation session gets a 403.
+   */
+  async accept(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.acceptIdea({ path: { id: this.id } }),
+    );
+  }
+
+  /**
+   * The user doesn't want this open idea; a routine idea's routine
+   * suggestion is dismissed with it. For the user's own agent; a generation
+   * session gets a 403.
+   */
+  async dismiss(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.dismissIdea({ path: { id: this.id } }),
+    );
   }
 
   /**
