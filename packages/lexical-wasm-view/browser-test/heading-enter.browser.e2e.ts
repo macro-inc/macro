@@ -37,3 +37,42 @@ test('heading shortcut then Enter creates exactly one paragraph and caret', asyn
   }
   expect(await page.evaluate(() => window.inputParity.errors)).toEqual([]);
 });
+
+test('DOM-first second character keeps the accepted caret synchronized', async ({
+  page,
+}, info) => {
+  await page.goto('/browser-test/heading-enter.html');
+  await page.waitForFunction(() => Boolean(window.inputParity));
+  for (const engine of ['upstream', 'native'] as const) {
+    const root = page.locator(`#${engine}`);
+    await root.click();
+    await page.keyboard.type('b');
+    await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+    await page.keyboard.type(';');
+    await page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+    const snapshot = await page.evaluate(
+      (engine) => window.inputParity.snapshot(engine),
+      engine
+    );
+    await info.attach(engine, {
+      body: JSON.stringify(snapshot, null, 2),
+      contentType: 'application/json',
+    });
+    await expect(root).toHaveText('b;');
+    expect.soft(snapshot.selection).toEqual({
+      anchor: { path: [0, 0], offset: 2, type: 'text' },
+      focus: { path: [0, 0], offset: 2, type: 'text' },
+    });
+    expect.soft(snapshot.domSelection).toEqual({
+      anchor: { path: [0, 0, 0], offset: 2 },
+      focus: { path: [0, 0, 0], offset: 2 },
+    });
+  }
+  expect(await page.evaluate(() => window.inputParity.errors)).toEqual([]);
+});
