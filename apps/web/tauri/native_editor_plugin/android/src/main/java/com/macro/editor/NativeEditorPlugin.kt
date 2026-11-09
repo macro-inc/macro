@@ -52,6 +52,8 @@ class NativeEditorPlugin(private val activity: Activity) : Plugin(activity) {
     @Command fun permissions(invoke: Invoke) = onUi(invoke) { controller().permissions(request(invoke)); invoke.resolve() }
     @Command fun tokenResult(invoke: Invoke) = onUi(invoke) { controller().token(request(invoke)); invoke.resolve() }
     @Command fun action(invoke: Invoke) = onUi(invoke) { controller().action(request(invoke)); invoke.resolve() }
+    @Command fun menuRows(invoke: Invoke) = onUi(invoke) { controller().menuRows(request(invoke)); invoke.resolve() }
+    @Command fun menuCommit(invoke: Invoke) = onUi(invoke) { controller().menuCommit(request(invoke)); invoke.resolve() }
     @Command fun query(invoke: Invoke) = onUi(invoke) { invoke.resolveObject(controller().query(request(invoke))) }
     @Command fun lifecycle(invoke: Invoke) = onUi(invoke) { controller().lifecycle(request<LifecycleRequest>(invoke)); invoke.resolve() }
     @Command fun unmount(invoke: Invoke) = onUi(invoke) { controller().unmount(request(invoke)); invoke.resolve() }

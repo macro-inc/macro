@@ -12,6 +12,8 @@ Native editor session lifetime, placement and application callbacks.
 - `allow-permissions`
 - `allow-token-result`
 - `allow-action`
+- `allow-menu-rows`
+- `allow-menu-commit`
 - `allow-query`
 - `allow-lifecycle`
 - `allow-unmount`
@@ -178,6 +180,58 @@ Enables the lifecycle command without any pre-configured scope.
 <td>
 
 Denies the lifecycle command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-editor:allow-menu-commit`
+
+</td>
+<td>
+
+Enables the menu_commit command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-editor:deny-menu-commit`
+
+</td>
+<td>
+
+Denies the menu_commit command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-editor:allow-menu-rows`
+
+</td>
+<td>
+
+Enables the menu_rows command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-editor:deny-menu-rows`
+
+</td>
+<td>
+
+Denies the menu_rows command without any pre-configured scope.
 
 </td>
 </tr>

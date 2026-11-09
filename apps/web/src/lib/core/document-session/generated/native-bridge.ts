@@ -11,6 +11,8 @@ export interface NativeBridgeTypes {
   focusRequest: FocusRequest;
   layoutRequest: LayoutRequest;
   lifecycleRequest: LifecycleRequest;
+  menuCommitRequest: MenuCommitRequest;
+  menuRowsRequest: MenuRowsRequest;
   mountRequest: MountRequest;
   permissionRequest: PermissionRequest;
   queryReply: QueryReply;
@@ -128,6 +130,117 @@ export interface LifecycleRequest {
 
 export type Signal = 'visible' | 'hidden' | 'online' | 'pageHide';
 
+export interface MenuCommitRequest {
+  choice: MenuChoice;
+  identity: MenuIdentity;
+  rowId: string;
+  scope: SurfaceScope;
+}
+
+export interface MenuChoice {
+  agentSession?: MenuAgentSession;
+  block?: Block;
+  bookingLink?: MenuBookingLink;
+  date?: MenuDate;
+  document?: MenuDocument;
+  groupAlias?: string;
+  kind: ChoiceKind;
+  snippetNodesJson?: string;
+  text?: string;
+  user?: MenuUser;
+}
+
+export interface MenuAgentSession {
+  id: string;
+  label: string;
+  mentionUuid?: string;
+}
+
+export type Block =
+  | 'paragraph'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'quote'
+  | 'code'
+  | 'link'
+  | 'bullet'
+  | 'number'
+  | 'check';
+
+export interface MenuBookingLink {
+  label?: string;
+  profileId?: string;
+  slug?: string;
+  url: string;
+}
+
+export interface MenuDate {
+  date: string;
+  displayFormat: string;
+  mentionUuid?: string;
+}
+
+export interface MenuDocument {
+  blockName: string;
+  blockParams: { [key: string]: string };
+  channelType?: string;
+  collapsed?: boolean;
+  createdAt?: number;
+  documentId: string;
+  documentName: string;
+  mentionUuid?: string;
+}
+
+export type ChoiceKind =
+  | 'text'
+  | 'user'
+  | 'document'
+  | 'date'
+  | 'group'
+  | 'agent-session'
+  | 'booking-link'
+  | 'block'
+  | 'snippet';
+
+export interface MenuUser {
+  displayName: string;
+  email?: string;
+  mentionUuid?: string;
+  userId: string;
+}
+
+export interface MenuIdentity {
+  invocation: number;
+  modelGeneration: number;
+  mountGeneration: number;
+  queryGeneration: number;
+}
+
+export interface MenuRowsRequest {
+  buckets: MenuBucket[];
+  identity: MenuIdentity;
+  rows: MenuRow[];
+  scope: SurfaceScope;
+}
+
+export interface MenuBucket {
+  error?: string;
+  hasMore: boolean;
+  id: string;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  label: string;
+  loadedCount: number;
+}
+
+export interface MenuRow {
+  bucketId: string;
+  detail?: string;
+  id: string;
+  label: string;
+}
+
 export interface MountRequest {
   ariaLabel: string;
   darkMode: boolean;
@@ -170,6 +283,7 @@ export interface SurfaceEvent {
   canRedo?: boolean;
   canUndo?: boolean;
   kind: SurfaceEventKind;
+  menu?: MenuEvent;
   message?: string;
   modelGeneration: number;
   name?: string;
@@ -188,7 +302,27 @@ export type SurfaceEventKind =
   | 'token'
   | 'stopped'
   | 'error'
-  | 'telemetry';
+  | 'telemetry'
+  | 'menu';
+
+export interface MenuEvent {
+  action: Action;
+  bucketId?: string;
+  query: MenuQuery;
+  rowId?: string;
+}
+
+export type Action = 'query' | 'select' | 'more' | 'closed';
+
+export interface MenuQuery {
+  identity: MenuIdentity;
+  kind: QueryKind;
+  nodeTypes: string[];
+  selectedIndex: number;
+  term: string;
+}
+
+export type QueryKind = 'mention' | 'action' | 'snippet' | 'emoji';
 
 export interface TokenResultRequest {
   access: TokenResultRequestAccess;

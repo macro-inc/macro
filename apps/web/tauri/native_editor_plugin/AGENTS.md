@@ -11,6 +11,7 @@ Android registration exposes bridge commands; it does not select native editing 
 
 - `android/src/main/java/com/macro/editor/EditorProjection.kt`: keyed diff and UTF-16 mapping.
 - `android/src/main/java/com/macro/editor/NativeEditorView.kt`: Android input and session effects.
+- `android/src/main/java/com/macro/editor/NativeEditorMenu.kt`: native popup navigation and generation-bound provider replies.
 - `android/src/main/java/com/macro/editor/NativeInputConnection.kt`: SDK-isolated modern IME methods.
 - `android/src/main/java/com/macro/editor/NativeSessionHost.kt`: serialized callbacks, timers and graceful lifetime.
 - `android/src/main/java/com/macro/editor/NativeSessionStorage.kt`: transactional SQLite and live-owner leases.
@@ -25,6 +26,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - Keep editing, history and synchronization policy in the shared Rust session.
 - Execute host effects after the FFI call returns, and report durable writes only
   after the storage transaction commits.
+- Reject stale menu identities at both bridge endpoints and validate the exact native query span again in the shared model; close popups on blur, locks and unmount.
 - Match mount generations independently of session generations before placement, focus or unmount; clear pending mount configuration on unmount.
 - Retain retired surface generations until the account changes; never reuse a stopped generation.
 - Check the process-wide lease registry before opening a lease file; use one channel per live OS lease.

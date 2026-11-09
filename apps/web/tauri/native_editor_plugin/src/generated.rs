@@ -13,6 +13,7 @@
 // }
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Source of truth for the Android editor bridge. The root is a type catalog; commands carry
 /// their named request, never this catalog.
@@ -32,6 +33,10 @@ pub struct NativeBridgeTypes {
     pub layout_request: LayoutRequest,
 
     pub lifecycle_request: LifecycleRequest,
+
+    pub menu_commit_request: MenuCommitRequest,
+
+    pub menu_rows_request: MenuRowsRequest,
 
     pub mount_request: MountRequest,
 
@@ -275,6 +280,207 @@ pub enum Signal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MenuCommitRequest {
+    pub choice: MenuChoice,
+
+    pub identity: MenuIdentity,
+
+    pub row_id: String,
+
+    pub scope: SurfaceScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuChoice {
+    pub agent_session: Option<MenuAgentSession>,
+
+    pub block: Option<Block>,
+
+    pub booking_link: Option<MenuBookingLink>,
+
+    pub date: Option<MenuDate>,
+
+    pub document: Option<MenuDocument>,
+
+    pub group_alias: Option<String>,
+
+    pub kind: ChoiceKind,
+
+    pub snippet_nodes_json: Option<String>,
+
+    pub text: Option<String>,
+
+    pub user: Option<MenuUser>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuAgentSession {
+    pub id: String,
+
+    pub label: String,
+
+    pub mention_uuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Block {
+    Bullet,
+
+    Check,
+
+    Code,
+
+    Heading1,
+
+    Heading2,
+
+    Heading3,
+
+    Link,
+
+    Number,
+
+    Paragraph,
+
+    Quote,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuBookingLink {
+    pub label: Option<String>,
+
+    pub profile_id: Option<String>,
+
+    pub slug: Option<String>,
+
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuDate {
+    pub date: String,
+
+    pub display_format: String,
+
+    pub mention_uuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuDocument {
+    pub block_name: String,
+
+    pub block_params: HashMap<String, String>,
+
+    pub channel_type: Option<String>,
+
+    pub collapsed: Option<bool>,
+
+    pub created_at: Option<i64>,
+
+    pub document_id: String,
+
+    pub document_name: String,
+
+    pub mention_uuid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ChoiceKind {
+    #[serde(rename = "agent-session")]
+    AgentSession,
+
+    Block,
+
+    #[serde(rename = "booking-link")]
+    BookingLink,
+
+    Date,
+
+    Document,
+
+    Group,
+
+    Snippet,
+
+    Text,
+
+    User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuUser {
+    pub display_name: String,
+
+    pub email: Option<String>,
+
+    pub mention_uuid: Option<String>,
+
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuIdentity {
+    pub invocation: i64,
+
+    pub model_generation: i64,
+
+    pub mount_generation: i64,
+
+    pub query_generation: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MenuRowsRequest {
+    pub buckets: Vec<MenuBucket>,
+
+    pub identity: MenuIdentity,
+
+    pub rows: Vec<MenuRow>,
+
+    pub scope: SurfaceScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuBucket {
+    pub error: Option<String>,
+
+    pub has_more: bool,
+
+    pub id: String,
+
+    pub is_loading: bool,
+
+    pub is_loading_more: bool,
+
+    pub label: String,
+
+    pub loaded_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuRow {
+    pub bucket_id: String,
+
+    pub detail: Option<String>,
+
+    pub id: String,
+
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MountRequest {
     pub aria_label: String,
 
@@ -350,6 +556,8 @@ pub struct SurfaceEvent {
 
     pub kind: SurfaceEventKind,
 
+    pub menu: Option<MenuEvent>,
+
     pub message: Option<String>,
 
     pub model_generation: i64,
@@ -374,6 +582,8 @@ pub enum SurfaceEventKind {
 
     History,
 
+    Menu,
+
     Plugin,
 
     Ready,
@@ -385,6 +595,56 @@ pub enum SurfaceEventKind {
     Telemetry,
 
     Token,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuEvent {
+    pub action: Action,
+
+    pub bucket_id: Option<String>,
+
+    pub query: MenuQuery,
+
+    pub row_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Action {
+    Closed,
+
+    More,
+
+    Query,
+
+    Select,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuQuery {
+    pub identity: MenuIdentity,
+
+    pub kind: QueryKind,
+
+    pub node_types: Vec<String>,
+
+    pub selected_index: i64,
+
+    pub term: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryKind {
+    Action,
+
+    Emoji,
+
+    Mention,
+
+    Snippet,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

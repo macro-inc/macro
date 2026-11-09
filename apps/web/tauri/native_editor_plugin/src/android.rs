@@ -105,6 +105,28 @@ pub(crate) async fn action<R: Runtime>(
         .map_err(|error| error.to_string())
 }
 #[tauri::command]
+pub(crate) async fn menu_rows<R: Runtime>(
+    app: AppHandle<R>,
+    request: MenuRowsRequest,
+) -> Result<(), String> {
+    app.state::<NativeEditor<R>>()
+        .0
+        .run_mobile_plugin_async("menuRows", Request { request })
+        .await
+        .map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub(crate) async fn menu_commit<R: Runtime>(
+    app: AppHandle<R>,
+    request: MenuCommitRequest,
+) -> Result<(), String> {
+    app.state::<NativeEditor<R>>()
+        .0
+        .run_mobile_plugin_async("menuCommit", Request { request })
+        .await
+        .map_err(|error| error.to_string())
+}
+#[tauri::command]
 pub(crate) async fn query<R: Runtime>(
     app: AppHandle<R>,
     request: QueryRequest,

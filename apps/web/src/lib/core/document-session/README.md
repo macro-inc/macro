@@ -115,3 +115,13 @@ of the retained document session. Queued callbacks recheck both lifetimes;
 cleanup from an older mount cannot remove its replacement. Unmount also clears
 pending placement/focus configuration so late model readiness cannot recreate
 an abandoned view. Remount through the same surface to retain document/history.
+
+
+Native menu events include their mount/model/invocation/query identity and actual
+registered node types. Answer through `menuRows()` and `menuCommit()` on that
+surface; both discard replaced queries before queued IPC. A late close cannot
+clear a newer query. Providers retain typed identity/payloads, loaded counts,
+loading/error state and pagination; native rows never carry executable callbacks.
+Menu selection IPC is traced without query text or row labels. Application
+provider composition and complete source menu lifecycle parity are separate
+prerequisites for admission.

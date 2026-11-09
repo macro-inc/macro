@@ -56,6 +56,7 @@ internal class EditorProjection {
     }
 
     fun typeName(node: Node): String? = types[node.type]
+    fun registeredTypeNames(): List<String> = types.values.toList()
 
     fun apply(diff: Diff, displayedText: Pair<NodeKey, String>? = null) {
         if (diff.fullReconcile) nodes.clear()

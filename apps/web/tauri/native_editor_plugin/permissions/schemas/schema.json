@@ -367,6 +367,30 @@
           "markdownDescription": "Denies the lifecycle command without any pre-configured scope."
         },
         {
+          "description": "Enables the menu_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-menu-commit",
+          "markdownDescription": "Enables the menu_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the menu_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-menu-commit",
+          "markdownDescription": "Denies the menu_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the menu_rows command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-menu-rows",
+          "markdownDescription": "Enables the menu_rows command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the menu_rows command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-menu-rows",
+          "markdownDescription": "Denies the menu_rows command without any pre-configured scope."
+        },
+        {
           "description": "Enables the mount command without any pre-configured scope.",
           "type": "string",
           "const": "allow-mount",
@@ -439,10 +463,10 @@
           "markdownDescription": "Denies the unmount command without any pre-configured scope."
         },
         {
-          "description": "Native editor session lifetime, placement and application callbacks.\n#### This default permission set includes:\n\n- `allow-begin-account`\n- `allow-create`\n- `allow-mount`\n- `allow-layout`\n- `allow-focus`\n- `allow-permissions`\n- `allow-token-result`\n- `allow-action`\n- `allow-query`\n- `allow-lifecycle`\n- `allow-unmount`\n- `allow-stop`",
+          "description": "Native editor session lifetime, placement and application callbacks.\n#### This default permission set includes:\n\n- `allow-begin-account`\n- `allow-create`\n- `allow-mount`\n- `allow-layout`\n- `allow-focus`\n- `allow-permissions`\n- `allow-token-result`\n- `allow-action`\n- `allow-menu-rows`\n- `allow-menu-commit`\n- `allow-query`\n- `allow-lifecycle`\n- `allow-unmount`\n- `allow-stop`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Native editor session lifetime, placement and application callbacks.\n#### This default permission set includes:\n\n- `allow-begin-account`\n- `allow-create`\n- `allow-mount`\n- `allow-layout`\n- `allow-focus`\n- `allow-permissions`\n- `allow-token-result`\n- `allow-action`\n- `allow-query`\n- `allow-lifecycle`\n- `allow-unmount`\n- `allow-stop`"
+          "markdownDescription": "Native editor session lifetime, placement and application callbacks.\n#### This default permission set includes:\n\n- `allow-begin-account`\n- `allow-create`\n- `allow-mount`\n- `allow-layout`\n- `allow-focus`\n- `allow-permissions`\n- `allow-token-result`\n- `allow-action`\n- `allow-menu-rows`\n- `allow-menu-commit`\n- `allow-query`\n- `allow-lifecycle`\n- `allow-unmount`\n- `allow-stop`"
         }
       ]
     }
