@@ -3179,7 +3179,11 @@ The app keeps one server event stream per open preview, filtered and
 access-checked on the server, and closes it with the preview. A page may hold
 16 subscriptions.
 
-Two limits shape these pages. The frame is sandboxed with scripts only, so a
+Three limits shape these pages. The built page runs under a strict
+Content-Security-Policy with no network: inline scripts and styles only,
+images, fonts and media only as `data:` or `blob:` URLs, and no `fetch`,
+beacons, remote scripts, stylesheets, fonts or image URLs, so every read and
+write goes through a program. The frame is sandboxed with scripts only, so a
 `<form>` never submits: use buttons and key handlers. Programs have no
 `setTimeout`, so they cannot sleep or poll; the page's own script can.
 

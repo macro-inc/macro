@@ -169,13 +169,35 @@ export const frameHelperScript = (token: string) =>
   })(parent, ${JSON.stringify(token)});`;
 
 /**
- * The preview document with the helper installed. Parsing and reserializing
- * keeps the helper first in `<head>` even for documents without one.
+ * The built page's content security policy. A page runs programs as the
+ * viewer, so it may only run its own inline code and show inline media: no
+ * fetch, beacon, remote script, stylesheet or image can carry what it read
+ * out of the frame. It does not stop the frame navigating itself.
+ */
+export const PROGRAM_DOCUMENT_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'",
+  'img-src data: blob:',
+  'font-src data:',
+  'media-src data: blob:',
+  "connect-src 'none'",
+  "form-action 'none'",
+  "base-uri 'none'",
+].join('; ');
+
+/**
+ * The preview document with its policy and the helper installed. Parsing and
+ * reserializing keeps both first in `<head>`, the policy before any script,
+ * even for documents without a head.
  */
 export function composeProgramDocument(html: string, token: string): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const policy = parsed.createElement('meta');
+  policy.httpEquiv = 'Content-Security-Policy';
+  policy.content = PROGRAM_DOCUMENT_CSP;
   const helper = parsed.createElement('script');
   helper.textContent = frameHelperScript(token);
-  parsed.head.prepend(helper);
+  parsed.head.prepend(policy, helper);
   return `<!doctype html>${parsed.documentElement.outerHTML}`;
 }

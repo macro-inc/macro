@@ -1,8 +1,9 @@
 # Programs in HTML previews
 
 Status: on `dev/html-code-mode`. The server builds stored HTML documents
-and runs their programs by id, with live events. Consent, the
-strict CSP, a separate execution pool and publishing are not built. The agent
+and runs their programs by id, with live events, and the built page runs
+under a strict CSP. Consent, a separate execution pool and publishing are not
+built. The agent
 guide's "Program blocks in HTML previews" describes what ships.
 
 ## Goal
@@ -29,9 +30,15 @@ program up and get the outcome back.
 - **Where.** Stored HTML documents only, previewed in Drive detail. HTML in a
   chat or Markdown code block has no stored file to build, version or hash,
   so it stays a plain sandboxed frame. Canvas artifacts are out. Render stays
-  the default mode. The preview gets a strict CSP (no network), which closes
-  fetch, beacon and image leaks but not the frame navigating itself, so
-  consent still covers reads.
+  the default mode. The built page gets a strict CSP as the first element of
+  its head (`composeProgramDocument`): `default-src 'none'; script-src
+  'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src
+  data:; media-src data: blob:; connect-src 'none'; form-action 'none';
+  base-uri 'none'`. A page that runs programs as the viewer can then run only
+  its own inline code and show only inline media, so fetch, beacons, remote
+  scripts, stylesheets and image URLs can't carry what it read out. CSP does
+  not stop the frame navigating itself (`location = …?leak`), so consent still
+  covers reads. The plain fallback frame runs no programs and gets no policy.
 - **How a file calls it.** Only by program id. The client imports its
   programs from `macro:programs` and calls them as typed functions. The
   build compiles those calls into the host transport. `window.macro` and its
@@ -137,7 +144,8 @@ if the run is cancelled.
   internal principal for document content. The build uses the routine
   checker, runs use public MCP's executor.
 - Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
-  `run` by program id and `on`. Spans: `document_programs.build`,
+  `run` by program id and `on`, and puts the strict CSP first in the built
+  page's head. Spans: `document_programs.build`,
   `document_programs.run`, `block_code.run_document_program`,
   `block_code.document_events.stream`.
 - Both routes are app-internal in the SDK coverage list.
@@ -145,13 +153,12 @@ if the run is cancelled.
 ## Left to build
 
 1. The record of SDK operations each program calls, for consent and the gate.
-2. The strict CSP on the built page.
-3. Manifest consent: the per-file prompt, the saved approval, and the
+2. Manifest consent: the per-file prompt, the saved approval, and the
    runtime gate on manifest operations.
-4. The publish SDK method, which returns diagnostics and replaces an existing
+3. The publish SDK method, which returns diagnostics and replaces an existing
    document in place.
-5. A `Limits` profile with a per-viewer queue, instead of the shared public
+4. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-6. Show a failed run in the preview chrome (a failed build already shows).
-7. Optional: `program.live(args, render)`, which re-runs a program when an
+5. Show a failed run in the preview chrome (a failed build already shows).
+6. Optional: `program.live(args, render)`, which re-runs a program when an
    event touches an entity type its operations read.

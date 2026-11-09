@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   composeProgramDocument,
+  PROGRAM_DOCUMENT_CSP,
   readRunRequest,
   readSubscriptionMessage,
 } from './frame-helper';
@@ -19,6 +20,27 @@ describe('composeProgramDocument', () => {
     expect(scripts[0]?.textContent).toContain("'macro'");
     expect(scripts[0]?.textContent).toContain('"token"');
     expect(scripts[1]?.textContent).toBe('first()');
+  });
+
+  it('puts the content security policy first, before every script', () => {
+    const composed = composeProgramDocument(
+      '<html><head><meta charset="utf-8"><script>first()</script></head><body><script type="module">run()</script></body></html>',
+      'token'
+    );
+    const document = parse(composed);
+    const policy = document.head.firstElementChild;
+    expect(policy?.tagName).toBe('META');
+    expect(policy?.getAttribute('http-equiv')).toBe('Content-Security-Policy');
+    expect(policy?.getAttribute('content')).toBe(PROGRAM_DOCUMENT_CSP);
+    expect(PROGRAM_DOCUMENT_CSP).toContain("default-src 'none'");
+    expect(PROGRAM_DOCUMENT_CSP).toContain("connect-src 'none'");
+
+    const scripts = [...document.querySelectorAll('script')];
+    expect(scripts).toHaveLength(3);
+    for (const script of scripts) {
+      const position = policy?.compareDocumentPosition(script) ?? 0;
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
   });
 
   it('keeps the built page’s body and bundled client script', () => {

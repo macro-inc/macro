@@ -26,5 +26,11 @@ A block for editing code files with syntax highlighting and formatting.
   document changed, and `event-host.ts` the host side of `on`: one server
   event stream per frame (`queries/document-events.ts`) whose filters are the
   union of the frame's subscriptions, forwarding only each event's name and
-  entity id. The frame never holds a credential or sends code. See the agent
+  entity id. The frame never holds a credential or sends code.
+- `composeProgramDocument` puts a strict Content-Security-Policy `<meta>`
+  first in the built page's head, before the helper: inline scripts and
+  styles, `data:`/`blob:` media, and no network, forms or `<base>`, so a page
+  that runs programs as the viewer can't send what it read anywhere. CSP does
+  not block the frame navigating itself; manifest consent is what covers
+  that. The plain fallback frame runs no programs and gets no policy. See the agent
   guide's "Program blocks in HTML previews" for the authoring contract.
