@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct EditorSession {
     pub(crate) machine: machine::Machine,
+    pub(crate) hostname: Option<String>,
 }
 #[wasm_bindgen]
 impl EditorSession {
@@ -16,15 +17,18 @@ impl EditorSession {
         config: &[u8],
         now: f64,
         wall: f64,
+        hostname: Option<String>,
     ) -> Result<Self, JsError> {
         Ok(Self {
             machine: machine::Machine::create_macro(abi_major, config, now, wall).map_err(js)?,
+            hostname,
         })
     }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
     pub fn create(abi_major: u32, config: &[u8], now: f64, wall: f64) -> Result<Self, JsError> {
         Ok(Self {
             machine: machine::Machine::create(abi_major, config, now, wall, true).map_err(js)?,
+            hostname: None,
         })
     }
     /// Deliver a cold Bebop input.
@@ -682,9 +686,10 @@ fn utf16(text: js_sys::JsString) -> Result<String, JsError> {
 
 #[wasm_bindgen]
 impl EditorSession {
-    /// Bulk Markdown export: flavor 0 upstream, flavor 1 application indentation.
+    /// Bulk Markdown export: Macro sessions use internal/external lists for flavors 0/1.
+    /// Built-in sessions retain upstream conversion and flavor-specific indentation.
     pub fn markdown(&self, flavor: u32) -> Result<String, JsError> {
-        query::markdown(self.surface().state(), flavor, false).map_err(js)
+        query::markdown_for_session(self, flavor, false).map_err(js)
     }
     /// Bulk typed read queries; no per-node JavaScript callbacks.
     pub fn query(&self, msg: &[u8]) -> Result<Vec<u8>, JsError> {
