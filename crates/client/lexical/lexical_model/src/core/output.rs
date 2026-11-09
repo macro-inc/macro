@@ -5,6 +5,9 @@ use std::sync::Arc;
 /// The observable result of one input.
 #[derive(Clone, Debug)]
 pub struct Output {
+    /// Selection installed before the input runs, after view boundary resolution.
+    /// Outer None means no input selection was installed; inner None clears it.
+    pub installed_selection: Option<Option<Selection>>,
     /// Published commits, flattened oldest first.
     pub commits: SmallVec<[Commit; 1]>,
     /// Patch from the first previous to the last next snapshot.

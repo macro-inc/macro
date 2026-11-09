@@ -6678,6 +6678,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",
+ "loro-internal 1.17.1",
  "macro_document_model",
  "proptest",
  "rand_chacha 0.9.0",

@@ -131,6 +131,7 @@ impl EditorCore {
         let mut handled = Handled::No;
         let mut installed = None;
         let mut displayed_delta = None;
+        let mut selection_installed = false;
         let result = (|| {
             let mut fresh = true;
             for item in inputs {
@@ -180,6 +181,7 @@ impl EditorCore {
                         range.style = style;
                     }
                     installed = tx.selection().cloned();
+                    selection_installed = true;
                     fresh = false;
                 }
                 if !command_empty {
@@ -281,6 +283,7 @@ impl EditorCore {
                 | Input::Composition { .. }
         );
         // Serialization failures after publication must retain the chain too.
+        let accepted_selection = selection_installed.then_some(installed.clone());
         self.output(
             &commit,
             handled,
@@ -288,6 +291,10 @@ impl EditorCore {
             view_match,
             elide.then_some(installed),
         )
+        .map(|mut output| {
+            output.installed_selection = accepted_selection;
+            output
+        })
         .map_err(|error| ApplyError {
             error,
             committed: Box::new(output::flatten(&commit)),
@@ -405,6 +412,7 @@ impl EditorCore {
             output::flatten(commit)
         };
         Output {
+            installed_selection: None,
             commits,
             diff,
             effects,

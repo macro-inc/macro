@@ -3,6 +3,7 @@ use super::*;
 use crate::client::{resolve::resolve, runtime::Runtime};
 use document_session::SessionInput;
 use lexical_model::{Command, Input as EditorInput, ViewSelection};
+mod history;
 mod input;
 
 impl Sim {
@@ -139,6 +140,7 @@ impl Sim {
         } else {
             vec![]
         };
+        let selection = history::observe(name, client.session, session, op.as_ref(), end > start)?;
         let session = client.session;
         let (out, facts) = client.finish(before, handled);
         let failures = std::mem::take(&mut client.failures);
@@ -148,6 +150,7 @@ impl Sim {
             .stats
             .wal_max_depth
             .max(u64::try_from(client.core.wal().entries.len()).unwrap_or(u64::MAX));
+        self.emit(selection);
         if let Some(op) = op {
             self.emit(Fact::LocalOp {
                 client: name.clone(),

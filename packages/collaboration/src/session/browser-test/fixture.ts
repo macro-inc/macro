@@ -3,6 +3,7 @@ import { type IStorageOpMsg, LocalStateMsg } from '../abi.generated';
 import { SessionLease } from '../lease';
 import { StorageAdapter } from '../storage';
 import { revokedClose } from './close';
+import { historyFixture } from './history';
 
 const sessions = new Map<
   string,
@@ -126,9 +127,11 @@ declare global {
   interface Window {
     storageFixture: typeof fixture;
     closeFixture: typeof revokedClose;
+    historyFixture: typeof historyFixture;
   }
 }
 window.storageFixture = fixture;
 window.closeFixture = revokedClose;
+window.historyFixture = historyFixture;
 const output = document.querySelector('output');
 if (output) output.textContent = 'ready';

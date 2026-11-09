@@ -78,3 +78,5 @@ Apply exact host dirty sets, pinned dirtyType (0/1/2) and composition metadata b
 Apply active and changed detached selection snapshots before callbacks or rethrowing a failed batch; bind newly issued references to their original JS values before decoding sidecars, preserving partial native effects without read queries.
 
 Run CompatHostReconcile on the real mutable pending state before admission/freeze; acknowledge buffered derived writes and opaque bookkeeping without sending root strings per keystroke. Preserve old captured instance cache values.
+
+The browser history fixture routes real keyboard Enter/undo/redo to production EditorSession WASM; assert committed content and durable endpoint identities/offsets after paragraph recreation, with no substitute history or selection model.

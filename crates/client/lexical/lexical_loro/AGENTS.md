@@ -63,3 +63,5 @@ rebinding a moved descendant must not turn its old container into a foreign chil
 
 Local projection uses debug metrics without per-keystroke tracing spans; cold session
 flows own the parent spans.
+
+Resolve transformed undo cursors through the current text/children container owner; recreated history nodes cannot be located with stale model keys or metadata node IDs.

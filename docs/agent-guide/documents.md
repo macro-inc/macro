@@ -3191,6 +3191,14 @@ from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
 Loro's undo and the mirror read, and `editor.history.apply` lasts until the
 reconciled editor update commits.
 
+For a native session, check the caret as well as the document: enter a newline,
+undo, then redo. Redo must return to the committed paragraph and offset even
+when that paragraph is recreated. Repeat after a remote insertion before the
+caret, and with two separate edit groups that revisit the same text. An Android
+composition ending in a newline must behave the same way. The backend-free
+session keyboard regression runs from `packages/collaboration` with
+`bunx playwright test --config src/session/browser-test/playwright.config.ts`.
+
 ### Task mention status
 
 Task @mention pills and @mention menu rows display the same circular

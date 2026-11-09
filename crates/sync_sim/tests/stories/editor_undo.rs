@@ -189,3 +189,113 @@ fn undo_of_a_new_text_node_observes_the_node_and_its_astral_character() {
         "one real node identity and one Unicode character identity"
     );
 }
+
+#[test]
+fn redo_restores_the_selection_after_the_original_split_commit() {
+    let outcome = verify(
+        SimConfig::editor(735),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Settle,
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Editor(EditorOp::SplitBlock {
+                    at: Pos {
+                        block: 0,
+                        offset: 0,
+                    },
+                }),
+            },
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Editor(EditorOp::Undo),
+            },
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Editor(EditorOp::Redo),
+            },
+            Step::Settle,
+        ],
+    );
+    assert!(outcome.events.iter().any(|event| matches!(
+        &event.fact,
+        Fact::EditorSelectionObserved {
+            history: 2,
+            changed: true,
+            ..
+        }
+    )));
+    let mut damaged = outcome.clone();
+    let selection = damaged
+        .events
+        .iter_mut()
+        .find_map(|event| match &mut event.fact {
+            Fact::EditorSelectionObserved {
+                history: 2,
+                selection,
+                ..
+            } => Some(selection),
+            _ => None,
+        })
+        .unwrap();
+    *selection = serde_json::json!([["wrong-node", false, 0], ["wrong-node", false, 0]]);
+    assert!(invariants::redo_restores_selection(&damaged).is_err());
+}
+
+#[test]
+fn repeated_equal_trees_keep_distinct_history_selection_lineage() {
+    let mut script = vec![Step::Open(OpenSpec::form("a", "one")), Step::Settle];
+    for offset in [0, 2] {
+        script.extend([
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Editor(EditorOp::Type {
+                    at: Pos { block: 0, offset },
+                    text: "x".into(),
+                }),
+            },
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Editor(EditorOp::Backspace {
+                    at: Pos {
+                        block: 0,
+                        offset: offset + 1,
+                    },
+                    count: 1,
+                }),
+            },
+            Step::Run(Millis(500)),
+        ]);
+    }
+    for _ in 0..4 {
+        script.push(Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::Editor(EditorOp::Undo),
+        });
+    }
+    for _ in 0..4 {
+        script.push(Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::Editor(EditorOp::Redo),
+        });
+    }
+    script.push(Step::Settle);
+    let outcome = verify(SimConfig::editor(736), &script);
+    assert_eq!(
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(
+                &event.fact,
+                Fact::EditorSelectionObserved {
+                    history: 2,
+                    changed: true,
+                    ..
+                }
+            ))
+            .count(),
+        4
+    );
+}

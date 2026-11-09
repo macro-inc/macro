@@ -112,6 +112,25 @@ pub enum Fact {
         /// Core completion.
         reply: CommentResult,
     },
+    /// Actual model selection and content after a local editor input.
+    EditorSelectionObserved {
+        /// Exact client session, excluding earlier reopened instances.
+        client: ClientName,
+        /// Runtime identity.
+        session: SessionId,
+        /// Hash of the complete actual synced editor tree.
+        state: u64,
+        /// Durable endpoint identities, point kinds and UTF-16/child offsets.
+        selection: serde_json::Value,
+        /// Real UndoManager stack depths, retaining entry lineage across equal trees.
+        undo_depth: usize,
+        /// Real opposite stack depth.
+        redo_depth: usize,
+        /// Zero for edits, one for undo and two for redo.
+        history: u8,
+        /// Whether the real input authored operations.
+        changed: bool,
+    },
     /// Actual text/node removals observed around real collaborative undo or redo.
     UndoApplied {
         /// Undoing client.

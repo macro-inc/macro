@@ -209,3 +209,5 @@ Capture actual update dirty sets, intent and full-reconcile mode in ForeignReadS
 Read captured/retired root __cachedText through NodeRef::foreign_raw_root_cached_text without materializing text or resolving latest; retain the separate lazy StateRef cache API for callers that explicitly request computation.
 
 Apply ForeignBaseField assignments only to existing writable records, without virtual setter dispatch or another semantic clone; keep unknown u32 element formats raw while their exported/public alignment name is empty, matching the pinned numeric-property fallback.
+
+EditorCore output exposes the selection accepted before an input runs, including explicit clearing and resolved view boundaries; external collaborative history must use it rather than reconstruct raw host points. This is native metadata, not a host wire field.

@@ -85,3 +85,5 @@ Portable HTML and Markdown exports are available through the typed native FFI.
 
 Enable the application feature to share application_editor_config and application exporters across native and WASM hosts; supply the same clock and continuing per-peer entropy streams, never server composers.
 Initialize the editor only after Seeded includes every startup WAL adoption; optimistic and socket seeds must not expose an empty model while durable rows are still being recovered.
+
+Record before/after selection cursors per Loro history group, using the model-accepted inline selection; restore transformed popped cursors after projection binding for undo/redo, headless and focused views. Use the pinned native UndoManager metadata setters to preserve each entry across Loro loop substitution. Keep history metadata local to the session, outside wire bytes.
