@@ -52,3 +52,8 @@ rejection returns authoritative repair/error output, including malformed UTF-16.
 
 `ExecutorOptions.onStatus` observes native connection/save status for application
 chrome; keep retry, authorization and persistence decisions in the native core.
+
+The browser Close regression loads the normal source-built EditorSession WASM with
+Direct/durable/chatter and real SessionExecutor/storage/lease. Check revocation both
+before/after/reentrant Start and cancellation without Start, actual MAX request
+reply, disposal, Close idempotency and unchanged DOM. No DOM view is allocated.

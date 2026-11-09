@@ -2137,3 +2137,4 @@ mod comment_factory;
 mod ime;
 
 mod presence;
+mod close;

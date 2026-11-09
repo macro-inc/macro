@@ -460,8 +460,10 @@ pub enum ServerStep {
 /// Script transition. Unsupported editor operations have no placeholder success path.
 #[derive(Clone, Debug)]
 pub enum Step {
-    /// Create a session.
+    /// Create and start a session.
     Open(OpenSpec),
+    /// Construct without Start, for host registration cancellation.
+    Create(OpenSpec),
     /// Perform one valid-or-skipped form operation.
     Edit {
         /// Client.

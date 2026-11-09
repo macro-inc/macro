@@ -76,7 +76,7 @@ impl RunStats {
                     current.remove(client);
                 }
                 Fact::ProfileCrashed { .. } => self.profile_crashes += 1,
-                Fact::Closed { client } => {
+                Fact::Closed { client, .. } => {
                     current.remove(client);
                 }
                 Fact::Status { client, status } => {

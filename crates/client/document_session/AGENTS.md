@@ -76,3 +76,6 @@ Run `cargo test -p document_session --all-features -j4` for the native bridge to
 `tests/telemetry.rs` isolates its tracing subscriber from parallel unit callsites.
 
 The compatibility feature exposes same-core unpublished host scopes and a single-consumption adoption command. Route it through normal handle readiness/access checks; never add the extension command to local_commands. compat_editor_builder installs only that admission handler, without native behavior plugins.
+Forward late Stop even when the session is already terminal. Its real Stopped reply
+acknowledges host Close only after the original terminal WAL barrier completes.
+

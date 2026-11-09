@@ -101,3 +101,6 @@ mod editor_projection_fault;
 
 #[path = "stories/editor_readonly.rs"]
 mod editor_readonly;
+
+#[path = "stories/close_termination.rs"]
+mod close_termination;

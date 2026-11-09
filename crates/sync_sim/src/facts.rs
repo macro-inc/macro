@@ -490,10 +490,32 @@ pub enum Fact {
         /// Client.
         client: ClientName,
     },
+    /// A native graceful close was requested by the host.
+    CloseRequested {
+        /// Client.
+        client: ClientName,
+        /// Exact incarnation.
+        session: SessionId,
+        /// Actual Stop request.
+        request: u32,
+        /// Host completion deadline.
+        deadline: u64,
+    },
+    /// Actual core Stopped reply, before host teardown.
+    CloseAcknowledged {
+        /// Client.
+        client: ClientName,
+        /// Exact incarnation.
+        session: SessionId,
+        /// Actual Stop request.
+        request: u32,
+    },
     /// A graceful stop actually completed.
     Closed {
         /// Client.
         client: ClientName,
+        /// Exact incarnation.
+        session: SessionId,
     },
     /// Real core request result.
     Reply {

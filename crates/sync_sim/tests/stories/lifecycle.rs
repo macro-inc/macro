@@ -75,7 +75,7 @@ fn host_editor_error_stops_and_clears_presence() {
         outcome
             .events
             .iter()
-            .any(|event| matches!(&event.fact, Fact::Closed { client } if client.0 == "a"))
+            .any(|event| matches!(&event.fact, Fact::Closed { client, .. } if client.0 == "a"))
     );
     assert_eq!(outcome.stats.close_in_window, 1);
     assert!(
@@ -122,7 +122,7 @@ fn ai_worker_is_hidden_and_flush_is_loud_while_partitioned() {
         outcome
             .events
             .iter()
-            .any(|event| matches!(&event.fact, Fact::Closed { client } if client.0 == "ai"))
+            .any(|event| matches!(&event.fact, Fact::Closed { client, .. } if client.0 == "ai"))
     );
     assert_eq!(
         outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],

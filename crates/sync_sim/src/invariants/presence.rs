@@ -174,12 +174,12 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
                 continue;
             };
             if outcome.events[receiver_open..index].iter().any(|event|
-                matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client } if client == target)) { continue; }
+                matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client, .. } if client == target)) { continue; }
             // A network-only partition does not disconnect BroadcastChannel peers.
             if matches!(event.fact, Fact::Partition { .. }) && client.profile == *source_profile {
                 continue;
             }
-            if outcome.events.iter().skip(index + 1).any(|event| event.at.0 <= deadline && matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client } if client == target)) { continue }
+            if outcome.events.iter().skip(index + 1).any(|event| event.at.0 <= deadline && matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client, .. } if client == target)) { continue }
             let before = outcome
                 .events
                 .iter()
@@ -211,7 +211,7 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
                 .unwrap_or(false);
             let receiver_deadline = if frozen {
                 match outcome.events.iter().find(|event| event.at.0 > deadline && matches!(&event.fact,
-                    Fact::Thawed { client } | Fact::Opened { client, .. } | Fact::Crashed { client } | Fact::Closed { client }
+                    Fact::Thawed { client } | Fact::Opened { client, .. } | Fact::Crashed { client } | Fact::Closed { client, .. }
                     if client == target)) {
                     Some(Event { at, fact: Fact::Thawed { .. } }) => at.0,
                     _ => continue,
