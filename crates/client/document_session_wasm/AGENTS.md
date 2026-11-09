@@ -180,3 +180,8 @@ capture. Constructor failure burns a consumed ticket/claimed instance identity;
 never rerun it or allocate a substitute key. Clear constructed operand bindings
 when the update retires. Preserve opaque JS fields in the JS instance store rather
 than serializing them into native payloads.
+
+Use with_pending_frame and dispatch_current for synchronous child callback
+execution. Keep metadata guards inside prepare/encode closures, release them
+before native model calls, and reject missing/overlapping frame access. Direct
+child dispatch must validate captured node receivers before selection effects.
