@@ -82,6 +82,10 @@ export default {
   speaking: 'Speaking',
   microphoneOff: 'Microphone off',
   microphoneOn: 'Microphone on',
+  microphoneBlocked:
+    'Microphone blocked by the browser. Allow microphone access in browser settings, then try again.',
+  cameraBlocked:
+    'Camera blocked by the browser. Allow camera access in browser settings, then try again.',
   cameraOn: 'Camera on',
   cameraOff: 'Camera off',
   shareScreenTitle: 'Share your screen',

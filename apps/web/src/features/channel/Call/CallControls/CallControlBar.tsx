@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretUp from '@icon/system/regular/caret-up.svg';
+import ExclamationMark from '@icon/system/regular/exclamation-mark.svg';
 import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
@@ -12,6 +14,20 @@ import { CallSettingsMenu } from './CallSettingsMenu';
 
 export function callMediaButtonVariant(off: boolean, disabled: boolean) {
   return off && !disabled ? 'danger' : 'secondary';
+}
+
+export function BlockedMediaBadge(props: { blocked: boolean }) {
+  return (
+    <Show when={props.blocked}>
+      <span
+        aria-hidden="true"
+        data-call-permission-badge
+        class="pointer-events-none absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full bg-warning-bg text-warning-ink ring-2 ring-menu"
+      >
+        <ExclamationMark class="size-3" />
+      </span>
+    </Show>
+  );
 }
 /**
  * A media toggle split from its settings menu: the left half turns the device
@@ -26,6 +42,7 @@ function MediaSplitButton(props: {
   disabled?: boolean;
   compact?: boolean;
   off?: boolean;
+  blocked?: boolean;
   /** Set for a toggle whose icon stays the same in both states. */
   pressed?: boolean;
   onToggle: () => void;
@@ -46,56 +63,64 @@ function MediaSplitButton(props: {
       }}
       mobileContent={props.mobileContent}
       trigger={(triggerProps) => (
-        <ButtonGroup
-          variant={
-            props.off
-              ? callMediaButtonVariant(true, !!props.disabled)
-              : 'secondary'
-          }
-          size={props.compact ? 'icon-md' : 'icon-lg'}
-          aria-label={props.label}
-          class="shrink-0"
-        >
-          <ButtonGroup.Button
-            aria-label={props.toggleLabel}
-            variant={
-              props.pressed
-                ? 'accent'
-                : callMediaButtonVariant(!!props.off, !!props.disabled)
-            }
-            tooltip={{
-              content: props.toggleLabel,
-              placement: 'top',
-              shortcut: props.shortcut,
-            }}
-            aria-pressed={props.pressed}
-            disabled={props.disabled}
-            onClick={props.onToggle}
+        <div class="relative shrink-0">
+          <ButtonGroup
+            variant={callMediaButtonVariant(
+              !!props.off,
+              !!props.disabled || !!props.blocked
+            )}
+            size={props.compact ? 'icon-md' : 'icon-lg'}
+            aria-label={props.label}
+            class="shrink-0"
           >
-            {props.icon}
-          </ButtonGroup.Button>
-          <Show when={!isMobile() && !props.hideMenu}>
-            <ButtonGroup.Divider />
             <ButtonGroup.Button
-              {...triggerProps}
-              disabled={props.disabled}
-              variant={callMediaButtonVariant(!!props.off, !!props.disabled)}
-              size={props.compact ? 'icon-md' : 'icon-lg'}
-              aria-label={props.menuLabel}
+              aria-label={props.toggleLabel}
+              variant={
+                props.pressed
+                  ? 'accent'
+                  : callMediaButtonVariant(
+                      !!props.off,
+                      !!props.disabled || !!props.blocked
+                    )
+              }
               tooltip={{
-                content: props.menuLabel,
+                content: props.toggleLabel,
                 placement: 'top',
-                disabled: open(),
+                shortcut: props.shortcut,
               }}
-              class={props.compact ? 'w-4' : 'w-6'}
+              aria-pressed={props.pressed}
+              disabled={props.disabled}
+              onClick={props.onToggle}
             >
-              <CaretUp
-                class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
-                classList={{ 'rotate-180': open() }}
-              />
+              {props.icon}
             </ButtonGroup.Button>
-          </Show>
-        </ButtonGroup>
+            <Show when={!isMobile() && !props.hideMenu}>
+              <ButtonGroup.Divider />
+              <ButtonGroup.Button
+                {...triggerProps}
+                disabled={props.disabled}
+                variant={callMediaButtonVariant(
+                  !!props.off,
+                  !!props.disabled || !!props.blocked
+                )}
+                size={props.compact ? 'icon-md' : 'icon-lg'}
+                aria-label={props.menuLabel}
+                tooltip={{
+                  content: props.menuLabel,
+                  placement: 'top',
+                  disabled: open(),
+                }}
+                class={props.compact ? 'w-4' : 'w-6'}
+              >
+                <CaretUp
+                  class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
+                  classList={{ 'rotate-180': open() }}
+                />
+              </ButtonGroup.Button>
+            </Show>
+          </ButtonGroup>
+          <BlockedMediaBadge blocked={!!props.blocked} />
+        </div>
       )}
     >
       {props.children}
@@ -111,6 +136,8 @@ export function CallControlBar(props: {
   canLeave?: boolean;
   audioMuted: boolean;
   videoMuted: boolean;
+  audioPermission?: PermissionState;
+  videoPermission?: PermissionState;
   screenSharing: boolean;
   screenUnavailable?: boolean;
   onToggleAudio: () => void;
@@ -153,6 +180,7 @@ export function CallControlBar(props: {
         <MediaSplitButton
           label="Microphone"
           off={props.audioMuted}
+          blocked={props.audioPermission === 'denied'}
           shortcut={props.showShortcuts && !isMobile() ? 'cmd+d' : undefined}
           compact={props.compact}
           onOpenChange={(open) => {
@@ -160,7 +188,11 @@ export function CallControlBar(props: {
             props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
           }}
           toggleLabel={
-            props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
+            props.audioPermission === 'denied'
+              ? t('calls.microphoneBlocked')
+              : props.audioMuted
+                ? 'Unmute microphone'
+                : 'Mute microphone'
           }
           menuLabel="Audio settings"
           mobileContent={props.audioDrawer}
@@ -168,10 +200,15 @@ export function CallControlBar(props: {
           onToggle={props.onToggleAudio}
           icon={
             <Show
-              when={props.audioMuted}
+              when={props.audioMuted || props.audioPermission === 'denied'}
               fallback={<Microphone class="size-5" />}
             >
-              <MicrophoneSlash class="size-5" />
+              <MicrophoneSlash
+                class={cn(
+                  'size-5',
+                  props.audioPermission === 'denied' && 'text-ink-subtle'
+                )}
+              />
             </Show>
           }
         >
@@ -180,6 +217,7 @@ export function CallControlBar(props: {
         <MediaSplitButton
           label="Camera"
           off={props.videoMuted}
+          blocked={props.videoPermission === 'denied'}
           shortcut={
             props.showShortcuts && !isMobile() ? 'shift+cmd+e' : undefined
           }
@@ -188,17 +226,28 @@ export function CallControlBar(props: {
             videoOpen = open;
             props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
           }}
-          toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
+          toggleLabel={
+            props.videoPermission === 'denied'
+              ? t('calls.cameraBlocked')
+              : props.videoMuted
+                ? 'Turn on camera'
+                : 'Turn off camera'
+          }
           mobileContent={props.videoDrawer}
           menuLabel="Video settings"
           disabled={props.disabled}
           onToggle={props.onToggleVideo}
           icon={
             <Show
-              when={props.videoMuted}
+              when={props.videoMuted || props.videoPermission === 'denied'}
               fallback={<VideoCamera class="size-5" />}
             >
-              <VideoCameraSlash class="size-5" />
+              <VideoCameraSlash
+                class={cn(
+                  'size-5',
+                  props.videoPermission === 'denied' && 'text-ink-subtle'
+                )}
+              />
             </Show>
           }
         >

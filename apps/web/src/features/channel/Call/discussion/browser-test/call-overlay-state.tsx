@@ -1,12 +1,14 @@
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { createClient, fetchExchange } from '@urql/core';
 import { createSignal, type ParentProps } from 'solid-js';
+import { createCallMediaPermissions } from '../../call-media-permissions';
 
 const params = new URLSearchParams(location.search);
 if (params.has('layout'))
   localStorage.setItem('call.layout', JSON.stringify(params.get('layout')));
 const callId = '00000000-0000-7000-8000-0000000ca110';
 const channelId = '00000000-0000-7000-8000-00000000c0c0';
+let permissions: ReturnType<typeof createCallMediaPermissions> | undefined;
 const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
   type: 'none',
 });
@@ -143,13 +145,23 @@ const call = {
   isParticipantSpeaking: () => false,
   isConnecting: () => false,
   isAudioMuted: audioMuted,
+  microphonePermission: () => permissions?.microphone() ?? 'prompt',
+  cameraPermission: () => permissions?.camera() ?? 'prompt',
   isVideoMuted: videoMuted,
   isScreenSharing: screenSharing,
   toggleAudio: async () => {
-    setAudioMuted(!audioMuted());
+    if (permissions?.microphone() === 'denied')
+      throw new DOMException('Microphone blocked', 'NotAllowedError');
+    await permissions?.capture('microphone', async () =>
+      setAudioMuted(!audioMuted())
+    );
   },
   toggleVideo: async () => {
-    setVideoMuted(!videoMuted());
+    if (permissions?.camera() === 'denied')
+      throw new DOMException('Camera blocked', 'NotAllowedError');
+    await permissions?.capture('camera', async () =>
+      setVideoMuted(!videoMuted())
+    );
   },
   toggleScreenShare: async () => {
     setScreenSharing(!screenSharing());
@@ -176,7 +188,10 @@ const call = {
   isSharedWithTeam: () => false,
 };
 export const CallProvider = (props: ParentProps) => props.children;
-export const useCallContext = () => call;
+export const useCallContext = () => {
+  permissions ??= createCallMediaPermissions();
+  return call;
+};
 export const useCallContextOptional = () => call;
 
 // Only transport and the feature flag are substituted; the Work controller stays real.

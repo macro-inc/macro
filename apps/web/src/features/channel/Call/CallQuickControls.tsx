@@ -9,7 +9,10 @@ import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { callMediaButtonVariant } from './CallControls/CallControlBar';
+import {
+  BlockedMediaBadge,
+  callMediaButtonVariant,
+} from './CallControls/CallControlBar';
 import { CallMediaControls } from './CallControls/CallMediaControls';
 import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
@@ -31,6 +34,8 @@ export function CallQuickControls(props: {
   const call = useCallContext();
   const sharing = useActiveCallTeamShare();
   const companion = useActiveCallCompanion();
+  const audioBlocked = () => call.microphonePermission?.() === 'denied';
+  const videoBlocked = () => call.cameraPermission?.() === 'denied';
   const screenUnavailable = () => {
     call.trackVersion();
     return (
@@ -72,51 +77,71 @@ export function CallQuickControls(props: {
       when={props.settings}
       fallback={
         <div class="flex items-center gap-1.5 p-2">
-          <Button
-            variant={callMediaButtonVariant(
-              call.isAudioMuted(),
-              call.isConnecting()
-            )}
-            size={props.size ?? 'icon-md'}
-            aria-label={
-              call.isAudioMuted()
-                ? t('calls.microphoneOn')
-                : t('calls.microphoneOff')
-            }
-            disabled={call.isConnecting()}
-            onClick={() =>
-              fireAndForget(call.toggleAudio(), 'call-quick-controls')
-            }
-          >
-            <Show
-              when={call.isAudioMuted()}
-              fallback={<Microphone class="size-4" />}
-            >
-              <MicrophoneSlash class="size-4" />
-            </Show>
-          </Button>
-          <Show when={props.controls.includes('camera')}>
+          <div class="relative">
             <Button
               variant={callMediaButtonVariant(
-                call.isVideoMuted(),
-                call.isConnecting()
+                call.isAudioMuted(),
+                call.isConnecting() || audioBlocked()
               )}
               size={props.size ?? 'icon-md'}
               aria-label={
-                call.isVideoMuted() ? t('calls.cameraOn') : t('calls.cameraOff')
+                audioBlocked()
+                  ? t('calls.microphoneBlocked')
+                  : call.isAudioMuted()
+                    ? t('calls.microphoneOn')
+                    : t('calls.microphoneOff')
+              }
+              tooltip={
+                audioBlocked() ? t('calls.microphoneBlocked') : undefined
               }
               disabled={call.isConnecting()}
               onClick={() =>
-                fireAndForget(call.toggleVideo(), 'call-quick-controls')
+                fireAndForget(call.toggleAudio(), 'call-quick-controls')
               }
             >
               <Show
-                when={call.isVideoMuted()}
-                fallback={<VideoCamera class="size-4" />}
+                when={call.isAudioMuted() || audioBlocked()}
+                fallback={<Microphone class="size-4" />}
               >
-                <VideoCameraSlash class="size-4" />
+                <MicrophoneSlash
+                  class={audioBlocked() ? 'size-4 text-ink-subtle' : 'size-4'}
+                />
               </Show>
             </Button>
+            <BlockedMediaBadge blocked={audioBlocked()} />
+          </div>
+          <Show when={props.controls.includes('camera')}>
+            <div class="relative">
+              <Button
+                variant={callMediaButtonVariant(
+                  call.isVideoMuted(),
+                  call.isConnecting() || videoBlocked()
+                )}
+                size={props.size ?? 'icon-md'}
+                aria-label={
+                  videoBlocked()
+                    ? t('calls.cameraBlocked')
+                    : call.isVideoMuted()
+                      ? t('calls.cameraOn')
+                      : t('calls.cameraOff')
+                }
+                tooltip={videoBlocked() ? t('calls.cameraBlocked') : undefined}
+                disabled={call.isConnecting()}
+                onClick={() =>
+                  fireAndForget(call.toggleVideo(), 'call-quick-controls')
+                }
+              >
+                <Show
+                  when={call.isVideoMuted() || videoBlocked()}
+                  fallback={<VideoCamera class="size-4" />}
+                >
+                  <VideoCameraSlash
+                    class={videoBlocked() ? 'size-4 text-ink-subtle' : 'size-4'}
+                  />
+                </Show>
+              </Button>
+              <BlockedMediaBadge blocked={videoBlocked()} />
+            </div>
           </Show>
           <Show when={props.controls.includes('screen')}>
             <Button

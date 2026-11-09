@@ -38,7 +38,8 @@ export type CallMediaControlsState = Pick<
   | 'toggleNoiseSuppression'
   | 'backgroundEffect'
   | 'setBackgroundEffect'
->;
+> &
+  Partial<Pick<CallState, 'microphonePermission' | 'cameraPermission'>>;
 
 type BackgroundChoice = 'none' | 'light' | 'heavy' | 'image';
 
@@ -141,6 +142,8 @@ export function CallMediaControls(props: {
         disabled={call.isConnecting()}
         audioMuted={call.isAudioMuted()}
         videoMuted={call.isVideoMuted()}
+        audioPermission={call.microphonePermission?.()}
+        videoPermission={call.cameraPermission?.()}
         screenSharing={call.isScreenSharing()}
         screenUnavailable={props.screenUnavailable}
         onToggleAudio={() => fire(call.toggleAudio)}

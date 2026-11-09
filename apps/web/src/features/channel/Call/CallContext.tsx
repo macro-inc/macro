@@ -42,6 +42,7 @@ import {
   stopPrejoinTracks,
 } from './CallSessionController';
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
+import { createCallMediaPermissions } from './call-media-permissions';
 import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
@@ -415,6 +416,8 @@ export type CallState = {
   isAudioMuted: () => boolean;
   /** Whether local video is muted */
   isVideoMuted: () => boolean;
+  microphonePermission: () => PermissionState;
+  cameraPermission: () => PermissionState;
   /** Whether local screen share is active */
   isScreenSharing: () => boolean;
   /** Available audio input devices (microphones) */
@@ -501,6 +504,7 @@ function createCallState() {
   const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
+  const mediaPermissions = createCallMediaPermissions();
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
@@ -1230,34 +1234,40 @@ function createCallState() {
     enableDevice: () => Promise<unknown>,
     mediaSpan?: Span
   ) {
-    const callId = store.activeCallId;
-    if (prejoinTrack?.readyState === 'live') {
-      try {
+    return mediaPermissions.capture(
+      source,
+      async () => {
+        const callId = store.activeCallId;
+        if (prejoinTrack?.readyState === 'live') {
+          try {
+            await traceCallMedia(
+              'publish_prejoin',
+              {
+                'call.id': callId ?? undefined,
+                'call.media.device': source,
+              },
+              () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+              mediaSpan
+            );
+            return;
+          } catch (e) {
+            console.error(`failed to publish prejoin ${source} track`, e);
+            if (source === 'camera' && store.backgroundEffect.type !== 'none')
+              throw e;
+          }
+        }
+        prejoinTrack?.stop();
         await traceCallMedia(
-          'publish_prejoin',
+          'enable',
           {
             'call.id': callId ?? undefined,
             'call.media.device': source,
           },
-          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          enableDevice,
           mediaSpan
         );
-        return;
-      } catch (e) {
-        console.error(`failed to publish prejoin ${source} track`, e);
-        if (source === 'camera' && store.backgroundEffect.type !== 'none')
-          throw e;
-      }
-    }
-    prejoinTrack?.stop();
-    await traceCallMedia(
-      'enable',
-      {
-        'call.id': callId ?? undefined,
-        'call.media.device': source,
       },
-      enableDevice,
-      mediaSpan
+      () => room() === targetRoom
     );
   }
 
@@ -1476,7 +1486,8 @@ function createCallState() {
   async function toggleAudio() {
     const r = room();
     if (!r) return;
-    const newMuted = !store.isAudioMuted;
+    const newMuted =
+      mediaPermissions.microphone() === 'denied' ? false : !store.isAudioMuted;
     try {
       if (newMuted) {
         await traceCallMedia(
@@ -1502,9 +1513,14 @@ function createCallState() {
             'call.media.enabled': true,
           },
           () =>
-            r.localParticipant.setMicrophoneEnabled(
-              true,
-              currentMicrophoneCaptureOptions(deviceId)
+            mediaPermissions.capture(
+              'microphone',
+              () =>
+                r.localParticipant.setMicrophoneEnabled(
+                  true,
+                  currentMicrophoneCaptureOptions(deviceId)
+                ),
+              () => room() === r
             )
         );
         // The mic track may have changed — re-apply the selected audio processing.
@@ -1513,6 +1529,7 @@ function createCallState() {
       setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
+      throw e;
     }
   }
 
@@ -1526,7 +1543,8 @@ function createCallState() {
 
     const r = room();
     if (!r) return;
-    const newMuted = !store.isVideoMuted;
+    const newMuted =
+      mediaPermissions.camera() === 'denied' ? false : !store.isVideoMuted;
     try {
       if (newMuted) {
         await traceCallMedia(
@@ -1550,9 +1568,14 @@ function createCallState() {
             'call.media.enabled': true,
           },
           () =>
-            r.localParticipant.setCameraEnabled(
-              true,
-              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            mediaPermissions.capture(
+              'camera',
+              () =>
+                r.localParticipant.setCameraEnabled(
+                  true,
+                  deviceId ? { deviceId: { exact: deviceId } } : undefined
+                ),
+              () => room() === r
             )
         );
         // Read the actual device the browser chose so the dropdown is accurate
@@ -1573,6 +1596,7 @@ function createCallState() {
       setStore('isVideoMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle video', e);
+      throw e;
     }
   }
 
@@ -1838,6 +1862,8 @@ function createCallState() {
     },
     isAudioMuted: currentIsAudioMuted,
     isVideoMuted: currentIsVideoMuted,
+    microphonePermission: mediaPermissions.microphone,
+    cameraPermission: mediaPermissions.camera,
     isScreenSharing: () => store.isScreenSharing,
     audioInputDevices: () => store.audioInputDevices,
     audioOutputDevices: () => store.audioOutputDevices,
