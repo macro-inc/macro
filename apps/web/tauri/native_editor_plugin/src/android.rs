@@ -129,7 +129,7 @@ pub(crate) async fn lifecycle<R: Runtime>(
 #[tauri::command]
 pub(crate) async fn unmount<R: Runtime>(
     app: AppHandle<R>,
-    request: SurfaceScope,
+    request: UnmountRequest,
 ) -> Result<(), String> {
     app.state::<NativeEditor<R>>()
         .0

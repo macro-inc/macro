@@ -8,7 +8,10 @@ The Android Tauri plugin exposes generated lifecycle, layout, permission,
 application-action and query requests. `NativeEditorSurfaces` issues account
 generations, retains retired surface generations, and rejects stale scope or
 model/revision results. Input connections and detached-view callbacks cannot
-resume after their view or permission generation changes. Registration does not
+resume after their view or permission generation changes. Mount, placement,
+focus and unmount carry a separate mount generation; session scope alone cannot
+identify a replacement view. Unmount clears pending placement/focus configuration,
+including before model initialization. Registration does not
 change the application's existing editor admission.
 
 `EditorProjection` retains keyed view state and maps UTF-16 positions. A native

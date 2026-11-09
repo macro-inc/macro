@@ -87,7 +87,10 @@ data class NativeBridgeTypes (
     val surfaceScope: SurfaceScope,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
-    val tokenResultRequest: TokenResultRequest
+    val tokenResultRequest: TokenResultRequest,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val unmountRequest: UnmountRequest
 ) {
     fun toJson() = mapper.writeValueAsString(this)
 
@@ -304,6 +307,9 @@ data class FocusRequest (
     val focused: Boolean,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val mountGeneration: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val scope: SurfaceScope
 )
 
@@ -325,6 +331,9 @@ data class LayoutRequest (
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val left: Double,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val mountGeneration: Long,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val scope: SurfaceScope,
@@ -382,6 +391,9 @@ data class MountRequest (
 
     @get:JsonProperty("lineHeightCssPx", required=true)@field:JsonProperty("lineHeightCssPx", required=true)
     val lineHeightCSSPx: Double,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val mountGeneration: Long,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val placeholder: String,
@@ -529,4 +541,12 @@ enum class TokenResultRequestAccess(val value: String) {
         }
     }
 }
+
+data class UnmountRequest (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val mountGeneration: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val scope: SurfaceScope
+)
 

@@ -108,3 +108,10 @@ same `SessionAuthorization` source and `session-socket-url.ts` route as WASM;
 editor editability and content interaction remain independent permissions.
 This client does not change application surface admission. Native menus,
 decorators, draft handoff and fixture/device acceptance remain prerequisites.
+
+A native surface's `mount()` returns a separate view lease with `layout()`,
+`focus()` and `unmount()`. Each lease has a monotonic mount generation independent
+of the retained document session. Queued callbacks recheck both lifetimes;
+cleanup from an older mount cannot remove its replacement. Unmount also clears
+pending placement/focus configuration so late model readiness cannot recreate
+an abandoned view. Remount through the same surface to retain document/history.

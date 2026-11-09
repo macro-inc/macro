@@ -183,7 +183,9 @@ test('close waits for stopped acknowledgement and unsubscribes once', async () =
   emit('stopped');
   await closing;
   expect(auth.unsubscribe).toHaveBeenCalledTimes(1);
-  expect(() => surface.focus(true)).toThrow('no longer current');
+  expect(() => surface.action({ kind: 'command', name: 'undo' })).toThrow(
+    'no longer current'
+  );
 });
 test('queries reject replies from a replaced model', async () => {
   const { beginAndroidEditorAccount } = await import('./native-android');
@@ -457,4 +459,118 @@ test('permission changes stay ordered across subscription and explicit controls'
       },
     }
   );
+});
+
+const appearance = {
+  ariaLabel: 'Fixture editor',
+  darkMode: false,
+  fontSizeCssPx: 16,
+  lineHeightCssPx: 24,
+  placeholder: '',
+  textColorArgb: 0xff000000,
+  hintColorArgb: 0xff808080,
+};
+const bounds = {
+  left: 0,
+  top: 0,
+  width: 100,
+  height: 40,
+  viewportWidth: 100,
+  clipLeft: 0,
+  clipTop: 0,
+  clipRight: 100,
+  clipBottom: 40,
+  visible: true,
+};
+
+test('replaced mount callbacks cannot move, focus or unmount the current native view', async () => {
+  const { beginAndroidEditorAccount } = await import('./native-android');
+  const account = await beginAndroidEditorAccount('fixture-user');
+  const surface = await account.create({
+    request,
+    surfaceId: 'fixture',
+    authorization: authorization(),
+    onEvent: vi.fn(),
+    onError: vi.fn(),
+  });
+  const first = await surface.mount(appearance);
+  const second = await surface.mount(appearance);
+  expect(() => first.layout(bounds)).toThrow('mount is no longer current');
+  expect(() => first.focus(true)).toThrow('mount is no longer current');
+  await first.unmount();
+  expect(
+    native.invoke.mock.calls.some(([command]) => command.endsWith('|unmount'))
+  ).toBe(false);
+  await second.layout(bounds);
+  expect(native.invoke).toHaveBeenLastCalledWith(
+    'plugin:native-editor|layout',
+    { request: { ...bounds, scope, mountGeneration: 2 } }
+  );
+  const unmounting = second.unmount();
+  expect(second.unmount()).toBe(unmounting);
+  await unmounting;
+  expect(() => second.focus(true)).toThrow('mount is no longer current');
+  expect(await surface.query({ kind: 'text' })).toBe('native text');
+});
+
+test('old mount cleanup queued behind replacement is cancelled before native admission', async () => {
+  const { beginAndroidEditorAccount } = await import('./native-android');
+  const account = await beginAndroidEditorAccount('fixture-user');
+  const surface = await account.create({
+    request,
+    surfaceId: 'fixture',
+    authorization: authorization(),
+    onEvent: vi.fn(),
+    onError: vi.fn(),
+  });
+  const first = await surface.mount(appearance);
+  let releaseMount: (() => void) | undefined;
+  let mountStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    mountStarted = resolve;
+  });
+  native.invoke.mockImplementation(async (command) => {
+    if (command.endsWith('|mount'))
+      return new Promise<void>((resolve) => {
+        releaseMount = resolve;
+        mountStarted?.();
+      });
+    return null;
+  });
+  const mounting = surface.mount(appearance);
+  await started;
+  const oldCleanup = first.unmount();
+  releaseMount?.();
+  const second = await mounting;
+  await oldCleanup;
+  expect(
+    native.invoke.mock.calls.some(([command]) => command.endsWith('|unmount'))
+  ).toBe(false);
+  await second.focus(true);
+  expect(native.invoke).toHaveBeenLastCalledWith('plugin:native-editor|focus', {
+    request: { scope, mountGeneration: 2, focused: true },
+  });
+});
+
+test('failed unmount can retry without losing its retained native lease', async () => {
+  const { beginAndroidEditorAccount } = await import('./native-android');
+  const account = await beginAndroidEditorAccount('fixture-user');
+  const surface = await account.create({
+    request,
+    surfaceId: 'fixture',
+    authorization: authorization(),
+    onEvent: vi.fn(),
+    onError: vi.fn(),
+  });
+  const mount = await surface.mount(appearance);
+  let unmounts = 0;
+  native.invoke.mockImplementation(async (command) => {
+    if (command.endsWith('|unmount') && ++unmounts === 1)
+      throw new Error('fixture unmount failure');
+    return null;
+  });
+  await expect(mount.unmount()).rejects.toThrow('fixture unmount failure');
+  await mount.focus(true);
+  await mount.unmount();
+  expect(unmounts).toBe(2);
 });

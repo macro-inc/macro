@@ -91,6 +91,8 @@ export async function beginAndroidEditorAccount(user: string) {
     let resolveStopped: (() => void) | undefined;
     let modelGeneration: number | undefined;
     let revision = 0;
+    let nextMountGeneration = 0;
+    let activeMountGeneration: number | undefined;
     let permissions = { ...options.request.permissions };
     const pendingPermissions: SurfacePermissions[] = [];
     let unsubscribe = () => {};
@@ -113,7 +115,11 @@ export async function beginAndroidEditorAccount(user: string) {
         throw new Error('Native surface is not ready');
       return modelGeneration;
     }
-    function request<T>(command: string, payload: object): Promise<T> {
+    function request<T>(
+      command: string,
+      payload: object,
+      before?: () => void
+    ): Promise<T> {
       const previous = controlQueue;
       const pending = (async () => {
         await previous;
@@ -121,6 +127,7 @@ export async function beginAndroidEditorAccount(user: string) {
           if (epoch !== accountEpoch)
             throw new Error('Native account was replaced');
         } else if (command !== 'stop') assertCurrent();
+        before?.();
         return await invoke<T>(`plugin:native-editor|${command}`, {
           request: payload,
         });
@@ -243,17 +250,67 @@ export async function beginAndroidEditorAccount(user: string) {
         })();
         return creation;
       },
-      mount(appearance: Omit<MountRequest, 'scope'>) {
+      async mount(appearance: Omit<MountRequest, 'scope' | 'mountGeneration'>) {
         assertCurrent();
-        return request<void>('mount', { ...appearance, scope });
-      },
-      layout(bounds: Omit<LayoutRequest, 'scope'>) {
+        if (nextMountGeneration === 0xffffffff)
+          throw new Error('Native mount generation exhausted');
+        const mountGeneration = ++nextMountGeneration;
+        await request<void>('mount', { ...appearance, scope, mountGeneration });
         assertCurrent();
-        return request<void>('layout', { ...bounds, scope });
-      },
-      focus(focused: boolean) {
-        assertCurrent();
-        return request<void>('focus', { scope, focused });
+        activeMountGeneration = mountGeneration;
+        let closed = false;
+        let unmounting: Promise<void> | undefined;
+        function assertMount() {
+          assertCurrent();
+          if (closed || activeMountGeneration !== mountGeneration)
+            throw new Error('Native mount is no longer current');
+        }
+        return {
+          layout(bounds: Omit<LayoutRequest, 'scope' | 'mountGeneration'>) {
+            assertMount();
+            return request<void>(
+              'layout',
+              { ...bounds, scope, mountGeneration },
+              assertMount
+            );
+          },
+          focus(focused: boolean) {
+            assertMount();
+            return request<void>(
+              'focus',
+              { scope, mountGeneration, focused },
+              assertMount
+            );
+          },
+          unmount(): Promise<void> {
+            if (unmounting) return unmounting;
+            closed = true;
+            if (!current() || activeMountGeneration !== mountGeneration)
+              return Promise.resolve();
+            unmounting = (async () => {
+              try {
+                await request<void>(
+                  'unmount',
+                  { scope, mountGeneration },
+                  () => {
+                    assertCurrent();
+                    if (activeMountGeneration !== mountGeneration)
+                      throw new Error('Native mount was replaced');
+                  }
+                );
+                if (activeMountGeneration === mountGeneration)
+                  activeMountGeneration = undefined;
+              } catch (error) {
+                if (!current() || activeMountGeneration !== mountGeneration)
+                  return;
+                unmounting = undefined;
+                closed = false;
+                throw error;
+              }
+            })();
+            return unmounting;
+          },
+        };
       },
       permissions(editorEditable: boolean, contentInteractable: boolean) {
         assertCurrent();
@@ -284,10 +341,6 @@ export async function beginAndroidEditorAccount(user: string) {
       lifecycle(signal: LifecycleRequest['signal']) {
         assertCurrent();
         return request<void>('lifecycle', { scope, signal });
-      },
-      unmount() {
-        assertCurrent();
-        return request<void>('unmount', scope);
       },
       revision: () => revision,
       close(): Promise<void> {
@@ -356,13 +409,10 @@ export async function beginAndroidEditorAccount(user: string) {
       return {
         scope: api.scope,
         mount: api.mount,
-        layout: api.layout,
-        focus: api.focus,
         permissions: api.permissions,
         action: api.action,
         query: api.query,
         lifecycle: api.lifecycle,
-        unmount: api.unmount,
         revision: api.revision,
         close: api.close,
       };

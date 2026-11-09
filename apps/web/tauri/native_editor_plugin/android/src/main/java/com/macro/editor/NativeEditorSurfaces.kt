@@ -72,21 +72,27 @@ internal class NativeEditorSurfaces(
         require(request.textColorArgb in 0..UInt.MAX_VALUE.toLong() && request.hintColorArgb in 0..UInt.MAX_VALUE.toLong())
         require(request.fontSizeCSSPx.isFinite() && request.fontSizeCSSPx > 0)
         require(request.lineHeightCSSPx.isFinite() && request.lineHeightCSSPx > 0)
+        require(request.mountGeneration in 1..UInt.MAX_VALUE.toLong())
+        if (surface.mountRequest == request) return
+        require(request.mountGeneration > surface.mountGeneration) { "Mount generation is not newer" }
+        surface.mountGeneration = request.mountGeneration
+        surface.bounds = null
+        surface.pendingFocus = null
         surface.mountRequest = request
         if (surface.initialized) surface.mount()
     }
 
     fun layout(request: LayoutRequest) {
-        val surface = current(request.scope)
+        val surface = currentMount(request.scope, request.mountGeneration)
         val bounds = EditorBounds(request.left, request.top, request.width, request.height,
             request.viewportWidth, request.clipLeft, request.clipTop, request.clipRight, request.clipBottom, request.visible)
         surface.bounds = bounds
-        surface.placement?.update(request.scope.surfaceGeneration, bounds)
+        surface.placement?.update(request.mountGeneration, bounds)
         surface.applyFocus()
     }
 
     fun focus(request: FocusRequest) {
-        val surface = current(request.scope)
+        val surface = currentMount(request.scope, request.mountGeneration)
         surface.pendingFocus = request.focused
         surface.applyFocus()
     }
@@ -184,7 +190,15 @@ internal class NativeEditorSurfaces(
     fun hasAccount(generation: Long) = surfaces.values.any { it.request.scope.accountGeneration == generation } ||
         retiring.any { it.request.scope.accountGeneration == generation }
 
-    fun unmount(scope: SurfaceScope) { current(scope).unmount() }
+    fun unmount(request: UnmountRequest) {
+        val surface = current(request.scope)
+        require(request.mountGeneration in 1..UInt.MAX_VALUE.toLong() && request.mountGeneration == surface.mountGeneration) { "Stale mount generation" }
+        if (surface.mountRequest == null) return
+        surface.mountRequest = null
+        surface.bounds = null
+        surface.pendingFocus = null
+        surface.unmount()
+    }
     fun stop(scope: SurfaceScope) {
         validate(scope)
         val surface = surfaces[scope.surfaceID]
@@ -229,6 +243,10 @@ internal class NativeEditorSurfaces(
         }
     }
 
+    private fun currentMount(scope: SurfaceScope, generation: Long): Surface = current(scope).also {
+        require(generation in 1..UInt.MAX_VALUE.toLong() && it.mountRequest != null && generation == it.mountGeneration) { "Stale mount generation" }
+    }
+
     private fun retire(surface: Surface) {
         if (surface.closing) return
         surface.closing = true
@@ -245,6 +263,7 @@ internal class NativeEditorSurfaces(
         var closing = false
         var permissions = request.permissions
         var mountRequest: MountRequest? = null
+        var mountGeneration = 0L
         var editor: NativeEditorView? = null
         var placement: EditorMount? = null
         var bounds: EditorBounds? = null
@@ -325,15 +344,15 @@ internal class NativeEditorSurfaces(
             })
             host.attach(view)
             editor = view
-            placement = EditorMount(webView, view, request.scope.surfaceGeneration,
+            placement = EditorMount(webView, view, mountGeneration,
                 appearance.fontSizeCSSPx, appearance.lineHeightCSSPx)
-            bounds?.let { placement?.update(request.scope.surfaceGeneration, it) }
+            bounds?.let { placement?.update(mountGeneration, it) }
             applyFocus()
         }
 
         fun applyFocus() {
             pendingFocus?.let {
-                if (placement?.focus(request.scope.surfaceGeneration, it) == true) pendingFocus = null
+                if (placement?.focus(mountGeneration, it) == true) pendingFocus = null
             }
         }
 
