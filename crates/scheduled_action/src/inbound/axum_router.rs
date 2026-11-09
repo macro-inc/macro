@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use crate::domain::code_check::{CodeCheckError, StarterRoutine};
+use crate::domain::catalog::CatalogEntry;
+use crate::domain::code_check::CodeCheckError;
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
@@ -197,10 +198,7 @@ where
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
-        .route(
-            "/scheduled-actions/code/starters",
-            get(code_starters::<S, Svc, Auth>),
-        )
+        .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
 }
 
@@ -600,26 +598,38 @@ where
     Ok(Json(upgrades))
 }
 
+/// Which zone the catalog's schedules are written in.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CatalogQuery {
+    /// IANA time zone, e.g. `America/New_York`.
+    #[param(value_type = String)]
+    pub timezone: Tz,
+}
+
 #[utoipa::path(
     get,
-    path = "/scheduled-actions/code/starters",
+    path = "/scheduled-actions/catalog",
     tag = "scheduled actions",
-    operation_id = "routine_code_starters",
+    operation_id = "routine_catalog",
+    params(CatalogQuery),
     responses(
-        (status = 200, body = Vec<StarterRoutine>, description = "Starter routines whose step is code; empty where code steps aren't available"),
+        (status = 200, body = Vec<CatalogEntry>, description = "Macro's routines, with schedules in the given zone; code steps only where code can be saved"),
+        (status = 400, body = String, description = "Not a time zone"),
         (status = 401, body = String),
     )
 )]
-pub async fn code_starters<S, Svc, Auth>(
+pub async fn catalog<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     _user: MacroAuthorizationExtractor<Auth, UserOnly>,
-) -> Json<Vec<StarterRoutine>>
+    Query(query): Query<CatalogQuery>,
+) -> Json<Vec<CatalogEntry>>
 where
     S: ScheduledActionService + Send + Sync + 'static,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    Json(state.service.code_starters())
+    Json(state.service.catalog(query.timezone))
 }
 
 pub enum ScheduledActionApiError {

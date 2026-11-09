@@ -157,6 +157,58 @@
         }
       }
     },
+    "/scheduled-actions/catalog": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "routine_catalog",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Macro's routines, with schedules in the given zone; code steps only where code can be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a time zone",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/check": {
       "post": {
         "tags": ["scheduled actions"],
@@ -224,37 +276,6 @@
             }
           },
           "503": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/scheduled-actions/code/starters": {
-      "get": {
-        "tags": ["scheduled actions"],
-        "operationId": "routine_code_starters",
-        "responses": {
-          "200": {
-            "description": "Starter routines whose step is code; empty where code steps aren't available",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/StarterRoutine"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
             "description": "",
             "content": {
               "text/plain": {
@@ -1424,6 +1445,99 @@
           }
         }
       },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "One of Macro's routines, ready to start a new routine from.",
+        "required": [
+          "key",
+          "surfaces",
+          "title",
+          "description",
+          "request",
+          "action",
+          "trigger",
+          "namedKnobs",
+          "instructions",
+          "affectsOthers",
+          "safeDefault",
+          "template",
+          "suggest"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What it does, in a few words, for the line beside its trigger."
+          },
+          "affectsOthers": {
+            "type": "boolean",
+            "description": "It changes or sends what other people see."
+          },
+          "code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineStep",
+                "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+              }
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "What it does, in a short line."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The Ask AI step's instructions: its only step without code, and the\nstep to use where code can't be saved."
+          },
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "namedKnobs": {
+            "type": "object",
+            "description": "The code step's text knobs whose value names one of the owner's\nitems (a tag, channel or label), by knob name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NamedItemKind"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "safeDefault": {
+            "type": "boolean",
+            "description": "It may be switched on before its owner changes anything."
+          },
+          "suggest": {
+            "type": "boolean",
+            "description": "Offered unpicked as a suggestion from Macro."
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Surface"
+            },
+            "description": "Where it is offered, first the part of the app it belongs to most."
+          },
+          "template": {
+            "type": "boolean",
+            "description": "Offered among the templates when someone creates a routine."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its name once saved."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When it runs; schedules are in the zone the catalog was asked for."
+          }
+        }
+      },
       "CheckRoutineRequest": {
         "type": "object",
         "description": "A routine to check, as the create body takes it.",
@@ -2157,6 +2271,11 @@
       "KnobName": {
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
+      },
+      "NamedItemKind": {
+        "type": "string",
+        "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
+        "enum": ["tag", "channel", "label"]
       },
       "PayloadCondition": {
         "type": "object",
@@ -2958,28 +3077,6 @@
         },
         "additionalProperties": false
       },
-      "StarterRoutine": {
-        "type": "object",
-        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
-        "required": ["key", "request", "steps"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Names it, e.g. `inbox`."
-          },
-          "request": {
-            "type": "string",
-            "description": "What someone asks for, with when it runs."
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RoutineStep"
-            },
-            "description": "Its steps, in the shape a routine's task holds them."
-          }
-        }
-      },
       "StepId": {
         "type": "string",
         "description": "Names a step's output: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores."
@@ -3006,6 +3103,21 @@
             }
           }
         }
+      },
+      "Surface": {
+        "type": "string",
+        "description": "The part of the app a routine is about, where it is offered.",
+        "enum": [
+          "email",
+          "calendar",
+          "tasks",
+          "files",
+          "crm",
+          "chat",
+          "calls",
+          "reviews",
+          "agents"
+        ]
       },
       "TemplateVariable": {
         "oneOf": [

@@ -24,7 +24,7 @@ use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -775,7 +775,8 @@ fn brief(
     let model = &context.agent_model;
     let steps = if code {
         format!(
-            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
+            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            catalog_examples(context.conditions)
         )
     } else {
         format!(
@@ -810,6 +811,47 @@ For this draft:
 
 4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
+}
+
+/// Macro's catalog routines that are code, as worked examples of whole
+/// routines: what someone asked for, and the trigger and step that do it.
+/// Their code type-checks against the SDK (the harness's real-Deno tests).
+fn catalog_examples(conditions: bool) -> String {
+    let examples: String = CATALOG
+        .iter()
+        // A routine whose trigger asks a condition is no example where
+        // triggers can't.
+        .filter(|routine| conditions || !asks_condition(&routine.trigger))
+        .filter_map(|routine| {
+            let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
+            let example = json!({ "trigger": routine.trigger, "steps": [step] });
+            Some(format!(
+                "<example>\n<request>{}</request>\n{example}\n</example>\n",
+                routine.request
+            ))
+        })
+        .collect();
+    format!(
+        "Macro's own routines that are code, as worked examples (a cron trigger here leaves out its `timezone`; yours needs one):\n{examples}"
+    )
+}
+
+/// Whether a catalog trigger's filters ask AI a yes/no condition.
+fn asks_condition(trigger: &Value) -> bool {
+    let triggers = match trigger.get("triggers").and_then(Value::as_array) {
+        Some(triggers) => triggers.iter().collect(),
+        None => vec![trigger],
+    };
+    triggers.iter().any(|trigger| {
+        trigger
+            .get("filters")
+            .and_then(Value::as_array)
+            .is_some_and(|filters| {
+                filters
+                    .iter()
+                    .any(|filter| filter.get("condition").is_some())
+            })
+    })
 }
 
 /// The routine as the agent reads it: data, not instructions.

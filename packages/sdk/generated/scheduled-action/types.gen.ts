@@ -165,6 +165,69 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * One of Macro's routines, ready to start a new routine from.
+ */
+export type CatalogEntry = {
+    /**
+     * What it does, in a few words, for the line beside its trigger.
+     */
+    action: string;
+    /**
+     * It changes or sends what other people see.
+     */
+    affectsOthers: boolean;
+    code?: null | RoutineStep;
+    /**
+     * What it does, in a short line.
+     */
+    description: string;
+    /**
+     * The Ask AI step's instructions: its only step without code, and the
+     * step to use where code can't be saved.
+     */
+    instructions: string;
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * The code step's text knobs whose value names one of the owner's
+     * items (a tag, channel or label), by knob name.
+     */
+    namedKnobs: {
+        [key: string]: NamedItemKind;
+    };
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * It may be switched on before its owner changes anything.
+     */
+    safeDefault: boolean;
+    /**
+     * Offered unpicked as a suggestion from Macro.
+     */
+    suggest: boolean;
+    /**
+     * Where it is offered, first the part of the app it belongs to most.
+     */
+    surfaces: Array<Surface>;
+    /**
+     * Offered among the templates when someone creates a routine.
+     */
+    template: boolean;
+    /**
+     * Its name once saved.
+     */
+    title: string;
+    /**
+     * When it runs; schedules are in the zone the catalog was asked for.
+     */
+    trigger: ActionTrigger;
+};
+
+/**
  * A routine to check, as the create body takes it.
  */
 export type CheckRoutineRequest = {
@@ -536,6 +599,12 @@ export type InProgressExecution = {
  * digits, e.g. `dueWithinDays`.
  */
 export type KnobName = string;
+
+/**
+ * What a text knob's value names: one of its owner's items, which a client
+ * matches by name or lets them pick.
+ */
+export type NamedItemKind = 'tag' | 'channel' | 'label';
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -986,25 +1055,6 @@ export type ShareRoutineTemplate = {
 };
 
 /**
- * A starter routine whose step is code: offered when a routine is created,
- * and shown to the drafter as a worked example.
- */
-export type StarterRoutine = {
-    /**
-     * Names it, e.g. `inbox`.
-     */
-    key: string;
-    /**
-     * What someone asks for, with when it runs.
-     */
-    request: string;
-    /**
-     * Its steps, in the shape a routine's task holds them.
-     */
-    steps: Array<RoutineStep>;
-};
-
-/**
  * Names a step's output: a lowercase letter, then up to 31 lowercase
  * letters, digits or underscores.
  */
@@ -1025,6 +1075,11 @@ export type StepProblem = {
     index: number;
     problems: Array<string>;
 };
+
+/**
+ * The part of the app a routine is about, where it is offered.
+ */
+export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
 
 /**
  * A user-specific part of a shared routine.
@@ -1123,6 +1178,37 @@ export type CreateScheduledActionResponses = {
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
 
+export type RoutineCatalogData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/catalog';
+};
+
+export type RoutineCatalogErrors = {
+    /**
+     * Not a time zone
+     */
+    400: string;
+    401: string;
+};
+
+export type RoutineCatalogError = RoutineCatalogErrors[keyof RoutineCatalogErrors];
+
+export type RoutineCatalogResponses = {
+    /**
+     * Macro's routines, with schedules in the given zone; code steps only where code can be saved
+     */
+    200: Array<CatalogEntry>;
+};
+
+export type RoutineCatalogResponse = RoutineCatalogResponses[keyof RoutineCatalogResponses];
+
 export type CheckScheduledActionData = {
     body: CheckRoutineRequest;
     path?: never;
@@ -1145,28 +1231,6 @@ export type CheckScheduledActionResponses = {
 };
 
 export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
-
-export type RoutineCodeStartersData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/scheduled-actions/code/starters';
-};
-
-export type RoutineCodeStartersErrors = {
-    401: string;
-};
-
-export type RoutineCodeStartersError = RoutineCodeStartersErrors[keyof RoutineCodeStartersErrors];
-
-export type RoutineCodeStartersResponses = {
-    /**
-     * Starter routines whose step is code; empty where code steps aren't available
-     */
-    200: Array<StarterRoutine>;
-};
-
-export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
 
 export type DraftRoutineData = {
     body: DraftRoutineRequest;

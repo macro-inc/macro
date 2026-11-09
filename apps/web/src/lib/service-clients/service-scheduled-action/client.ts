@@ -33,6 +33,7 @@ import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
+  CatalogEntry,
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
@@ -42,7 +43,6 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  StarterRoutine,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -127,11 +127,15 @@ export const scheduledActionClient = {
       { method: 'GET' }
     ),
 
-  /** Starter routines whose step is code; empty where code can't be saved. */
-  codeStarters: async () =>
-    scheduledActionFetch<StarterRoutine[]>('/scheduled-actions/code/starters', {
-      method: 'GET',
-    }),
+  /**
+   * Macro's catalog routines, with schedules in `timezone`; code steps only
+   * where code can be saved.
+   */
+  catalog: async (args: { timezone: string }) =>
+    scheduledActionFetch<CatalogEntry[]>(
+      `/scheduled-actions/catalog?${new URLSearchParams({ timezone: args.timezone })}`,
+      { method: 'GET' }
+    ),
 
   /** Have AI draft a routine or one of its steps, its code checked as saving would. */
   draftRoutine: async (body: DraftRoutineRequest) =>

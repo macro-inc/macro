@@ -1133,7 +1133,7 @@ count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
 `enable-routine-starter-templates` is on (on in development; PostHog decides in
 deployed environments), **Templates** above the rows shows
-four template cards (icon, name, one line and its trigger → first step, such as
+the catalog's first four available template cards (icon, name, one line and its trigger → first step, such as
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
@@ -1175,12 +1175,16 @@ channels, folders, people and agents it names with the user's access; one it
 can't find, or that matches several, is left for the user to pick, and
 anything it had to create for the routine, such as a new database, is listed
 on the review), **Templates** (with
-`enable-routine-starter-templates` on; Macro's cards: **Sort
-my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
-**Share updates** only where AI decisions are enabled, for its trigger
-condition; each shows its icon, what it does and its trigger → first step.
-**Sort my inbox**, **Triage new tasks** and **Share updates** start with the
-scheduler's starter code, or an Ask AI step where code can't be saved), and
+`enable-routine-starter-templates` on; the scheduler's routine catalog,
+`GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
+tasks**, **Morning brief**, **Share updates** only where AI decisions are
+enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
+email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
+review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
+agent digest**; each shows its icon, what it does and its trigger → first
+step. Routines with code start with it when `enable-routine-code-steps` is on
+and the scheduler can save code, otherwise with an Ask AI step; schedules are
+in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
 `/app/routines/new`, as do the list's template cards directly. That page is

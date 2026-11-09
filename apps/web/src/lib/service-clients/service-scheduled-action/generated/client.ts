@@ -10,6 +10,7 @@ import type {
   ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CatalogEntry,
   CheckRoutineRequest,
   CodeUpgrade,
   Draft,
@@ -17,12 +18,12 @@ import type {
   EmptyResponse,
   InProgressExecution,
   ListScheduledActionsParams,
+  RoutineCatalogParams,
   RoutineCheck,
   RoutineTemplate,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  StarterRoutine,
 } from './schemas';
 
 export type scheduledActionHealthResponse200 = {
@@ -206,6 +207,70 @@ export const createScheduledAction = async (
   } as createScheduledActionResponse;
 };
 
+export type routineCatalogResponse200 = {
+  data: CatalogEntry[];
+  status: 200;
+};
+
+export type routineCatalogResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type routineCatalogResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type routineCatalogResponseSuccess = routineCatalogResponse200 & {
+  headers: Headers;
+};
+export type routineCatalogResponseError = (
+  | routineCatalogResponse400
+  | routineCatalogResponse401
+) & {
+  headers: Headers;
+};
+
+export type routineCatalogResponse =
+  | routineCatalogResponseSuccess
+  | routineCatalogResponseError;
+
+export const getRoutineCatalogUrl = (params: RoutineCatalogParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduled-actions/catalog?${stringifiedParams}`
+    : `/scheduled-actions/catalog`;
+};
+
+export const routineCatalog = async (
+  params: RoutineCatalogParams,
+  options?: RequestInit
+): Promise<routineCatalogResponse> => {
+  const res = await fetch(getRoutineCatalogUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: routineCatalogResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as routineCatalogResponse;
+};
+
 /**
  * @summary What saving this routine would find wrong, without saving it: the same
 checks as creating it. A routine draft's session hands its draft back
@@ -284,53 +349,6 @@ export const checkScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as checkScheduledActionResponse;
-};
-
-export type routineCodeStartersResponse200 = {
-  data: StarterRoutine[];
-  status: 200;
-};
-
-export type routineCodeStartersResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type routineCodeStartersResponseSuccess =
-  routineCodeStartersResponse200 & {
-    headers: Headers;
-  };
-export type routineCodeStartersResponseError =
-  routineCodeStartersResponse401 & {
-    headers: Headers;
-  };
-
-export type routineCodeStartersResponse =
-  | routineCodeStartersResponseSuccess
-  | routineCodeStartersResponseError;
-
-export const getRoutineCodeStartersUrl = () => {
-  return `/scheduled-actions/code/starters`;
-};
-
-export const routineCodeStarters = async (
-  options?: RequestInit
-): Promise<routineCodeStartersResponse> => {
-  const res = await fetch(getRoutineCodeStartersUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: routineCodeStartersResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as routineCodeStartersResponse;
 };
 
 export type draftRoutineResponse200 = {
