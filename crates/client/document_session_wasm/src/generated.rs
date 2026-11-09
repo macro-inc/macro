@@ -295,6 +295,7 @@ pub enum CommandCode {
     DeleteCharacter = 15,
     DeleteWord = 16,
     DeleteLine = 17,
+    Click = 18,
 }
 
 impl ::core::convert::TryFrom<u32> for CommandCode {
@@ -319,6 +320,7 @@ impl ::core::convert::TryFrom<u32> for CommandCode {
             15 => Ok(CommandCode::DeleteCharacter),
             16 => Ok(CommandCode::DeleteWord),
             17 => Ok(CommandCode::DeleteLine),
+            18 => Ok(CommandCode::Click),
             d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
         }
     }
@@ -344,6 +346,7 @@ impl ::core::convert::From<CommandCode> for u32 {
             CommandCode::DeleteCharacter => 15,
             CommandCode::DeleteWord => 16,
             CommandCode::DeleteLine => 17,
+            CommandCode::Click => 18,
         }
     }
 }
