@@ -17,7 +17,8 @@ pub trait GenerationRepo: Send + Sync + 'static {
 
     /// Start a generation for the person, triggered by `trigger`, at `now`;
     /// its id, or none when none may start: one is running, the person's
-    /// onboarding one ran, or a nightly one started after `nightly_since`. A
+    /// onboarding one ran, or, for a nightly one, any started after
+    /// `nightly_since`. A
     /// running one of the same trigger that started before `stale_before`
     /// was interrupted (its process stopped) and starts again.
     fn begin(
@@ -73,7 +74,7 @@ pub trait GenerationRepo: Send + Sync + 'static {
 
     /// At most `limit` people seen since `seen_since`, whose local hour at
     /// `now` is in `night` (start inclusive, end exclusive), with no
-    /// generation running and no nightly one started after `nightly_since`;
+    /// generation running and none started after `nightly_since`;
     /// those seen longest ago first.
     fn due(
         &self,
