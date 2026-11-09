@@ -238,3 +238,25 @@ They pin expression-only updates, exact display-name IDs, truthy whitespace,
 attached-node traversal, history/selection/scroll tags and legacy missing/null
 property lookup. These are model command oracles; component rendering and native
 interaction acceptance require the separate browser fixtures.
+
+
+## Paste correction and history oracle
+
+`paste-correction-history.test.ts` combines the actual rich-text paste handler,
+Macro document-metadata corrector and plugin-manager snapshot history, over the
+production node registry and replacements. Transform registration finishes before
+the user command; a public mutation observer then enables the corrector's real
+`mutatedNodes` prerequisite. Native microtask completion fences observe the
+actual queued callbacks without replacing them, advancing a fake clock, polling,
+or forcing correction commits early.
+
+The source case distinguishes the main plain-text paste from the drained root
+metadata/version correction, compares complete JSON, retains caret offset 10,
+and restores the original state/selection in one undo and the drained state in
+one redo. The observed paste chain has four update notifications and three root
+mutations; subsequent notifications carry the history-merge tag. It exercises
+the `markdown` snapshot-history branch, not collaborative Loro history or
+physical clipboard/keyboard input. Separate mutation controls omit the actual
+corrector or substitute the captured main snapshot as completion; both must fail
+these unchanged assertions. This is an OFF source oracle, not native/ON or
+mega-paste acceptance.
