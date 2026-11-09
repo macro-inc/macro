@@ -65,7 +65,8 @@ Fresh unreadable rows keep no action identity and do not block valid siblings.
 Await rollback on empty or blocked claims so their session lock is released
 before the next real prompt attempts to attach quiet events.
 Discovery uses bounded cursor pages so callers can
-advance past unavailable sessions. Quiet batches bind to the actual prompt action ID;
+advance past unavailable sessions. `defer_until_prompt` also clears `wake`, so a
+deferred batch leaves discovery until a real prompt claims it. Quiet batches bind to the actual prompt action ID;
 notification-only turns record `PrompterKind::System` and no human authority.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event

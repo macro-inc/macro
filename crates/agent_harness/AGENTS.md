@@ -81,7 +81,9 @@ Advance the bounded discovery cursor even when a session is busy or unreachable;
 wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
-wakes; interrupted quiet batches return to the next real prompt.
+wakes; interrupted quiet batches return to the next real prompt. A quota denial
+(`AiAdmissionError::Denied`) parks the staged batch the same way and rejects it
+once (`park_denied_notifications`); never release it, or the sweep retries it forever.
 
 ## Checks
 

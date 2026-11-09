@@ -262,6 +262,11 @@ inspect the content type and code rather than assuming every 503 is billing.
   rather than announcing a rejection that was not saved. Retrying an already
   queued/in-flight action ID does not duplicate work or retroactively refuse the
   original turn. A rejected steering follow-up does not cancel the running turn.
+- A waking system event (the durable session outbox) refused on exhaustion is
+  rejected once and deferred to the owner's next admitted prompt; it stops waking
+  the session, so the two-second recovery sweep does not retry it. The sweep's
+  `DrainNotifications` command completes rather than failing. Billing
+  unavailability still leaves the event waking for the next sweep.
 - AI imports check before running/spawn and again when delayed AI work begins;
   failures clear running state and remain visible in import status. Deterministic
   connector fetches/import branches and status/dismiss/discard remain available.
