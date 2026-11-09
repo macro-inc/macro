@@ -83,3 +83,16 @@ pub trait ProgramChecker: Send + Sync + 'static {
         declarations: &str,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }
+
+/// Bundles TypeScript modules into one ES module, without type-checking or
+/// running them. `#[async_trait]` keeps it object-safe for `Arc<dyn …>`.
+#[async_trait]
+pub trait ProgramBundler: Send + Sync + 'static {
+    /// Bundle `entry`, one of `files`, with the modules it imports from them.
+    async fn bundle(
+        &self,
+        files: &[super::SourceFile],
+        entry: &str,
+        target: super::BundleTarget,
+    ) -> Result<super::Bundle, super::CheckError>;
+}
