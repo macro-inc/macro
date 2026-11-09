@@ -99,6 +99,7 @@ members = [
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
+  "crates/hosted_runtimes",
   "crates/stripe_price_id",
   "crates/incus_client",
   "crates/import",
@@ -217,6 +218,8 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+pairing_id = { path = "crates/pairing_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
