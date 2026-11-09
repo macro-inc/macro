@@ -6,7 +6,9 @@ list deletion, indentation, clipboard precedence and quoted paste, focus
 boundaries, equation/table picker commands, menu navigation, Android input
 triggers, emoji/tag lifecycle, checklist input, word counts, location restoration,
 metadata/accessories, platform formatting, decorator navigation, list transform
-boundaries and mention insertion/deletion/history. Direct transformer calls
+boundaries, mention insertion/deletion/history and media mutation/permission
+guards. HEIC conversion and transport are boundary stubs in media unit cases;
+these do not establish actual decoding or uploads. Direct transformer calls
 cover import/typing modes; direct mention commands do not establish menu UI
 coverage. Remote-label history tests establish grouping, not preservation of
 remote labels through undo/redo.
@@ -83,14 +85,19 @@ uses one worker without retries, and blocks nonlocal HTTP/WebSocket traffic.
 `EDITOR_BEHAVIOR_PORT`, `EDITOR_BEHAVIOR_OUTPUT` and `EDITOR_BEHAVIOR_JSON` select
 its port and evidence destinations. Defaults use the OS temporary directory.
 Desktop, tablet touch and phone touch run the same paste, formatting,
-read-only, save/reopen, undo and production slash-menu interactions. The menu
+read-only, save/reopen, undo and production slash/emoji-menu interactions.
+Emoji filtering, wrapped keyboard navigation, shortcode resolution, Escape,
+empty results, Space dismissal and pointer/touch insertion use the real catalog. The menu
 uses the real analytics/flag providers, editor theme and Macro stylesheet, with service-backed
 actions excluded from this isolated fixture. Its filtering, wrapping keyboard
 navigation, insertion, dismissal and pointer/touch focus behavior are exercised.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing
-the phone viewport. File paste/drop tests stop at the host callback boundary.
+the phone viewport. File paste/drop tests stop at the host callback boundary. Existing upload
+reference tests also mock file I/O, hashing and a list-insertion helper; their
+mappings cover node lifecycle/reference updates, not real transport, list
+insertion or rendered spinners.
 Touch profiles in Chromium do not
 prove iOS/WebKit or Android virtual-keyboard behavior.
 

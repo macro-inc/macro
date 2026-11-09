@@ -20,11 +20,14 @@ import {
 } from 'lexical';
 import { render } from 'solid-js/web';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
+import { EmojiMenu } from '../../component/menu/EmojiMenu';
 import { actionsPlugin } from '../../plugins/actions/actionsPlugin';
 import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
 import { dragInsertPlugin } from '../../plugins/drag-insert/dragInsertPlugin';
+import { emojisPlugin } from '../../plugins/emojis/emojisPlugin';
 import { filePastePlugin } from '../../plugins/file-paste/filePastePlugin';
+import { insertTextPlugin } from '../../plugins/insert-text/insertTextPlugin';
 import {
   DefaultShortcuts,
   keyboardShortcutsPlugin,
@@ -89,6 +92,9 @@ tabIndentationPlugin()(BODY);
 checklistPlugin()(BODY);
 const ACTION_MENU = createMenuOperations();
 actionsPlugin({ menu: ACTION_MENU })(BODY);
+const EMOJI_MENU = createMenuOperations();
+emojisPlugin({ menu: EMOJI_MENU })(BODY);
+insertTextPlugin()(BODY);
 filePastePlugin({
   onPasteFilesAndDirs: (files, directories) => {
     element('pasted-files').textContent = JSON.stringify({
@@ -131,6 +137,7 @@ render(
             'code',
           ]}
         />
+        <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
       </PosthogProvider>
     </AnalyticsContextProvider>
   ),

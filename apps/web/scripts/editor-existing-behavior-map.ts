@@ -522,4 +522,103 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'findAndReplacePlugin nested blocks separates inline text from a block nested after it',
     ],
   },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.ts',
+    anchor: '  const $selectMarksAtCaret =',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/comments/commentPlugin.test.ts',
+    cases: [
+      'commentPlugin selects the comment under an unmoved caret again when the editor is clicked',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/listItemImages.ts',
+    anchor: 'export function $insertImageIntoListItem',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/listItemImages.test.ts',
+    cases: [
+      'images in lists puts an image under the item the caret is in without splitting the list',
+      'images in lists attaches an image on the empty item Enter left to the item above, and a second Enter still leaves the list',
+      'images in lists leaves an image outside a list when the caret is not in one',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/listItemImages.ts',
+    anchor: 'function $insertParagraphAboveImages',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/listItemImages.test.ts',
+    cases: ['images in lists starts the next item below the images on Enter'],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: 'function $staticUploadSuccess',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.test.ts',
+    cases: [
+      'points a pasted image at its static file once the upload finishes',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '  const followCreatedLocalMedia =',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.test.ts',
+    cases: [
+      'gives a copy pasted into another editor mid-upload the same static file',
+      'gives a copy pasted into a chat editor, which has no video nodes, the same static file',
+      'points an image deleted mid-upload and restored by undo at its static file',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '  const uploadFile = async',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.test.ts',
+    cases: ['uploads a file pasted twice once and points both images at it'],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.ts',
+    anchor: '  const followUpload = async',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/media/mediaPlugin.test.ts',
+    cases: ['tells every image waiting on a failed upload that it failed'],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/createMentionPageLoader.ts',
+    anchor: 'export function createMentionPageLoader',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/createMentionPageLoader.test.ts',
+    cases: [
+      'does not turn a bounded empty/duplicate scan into an automatic loading loop',
+      'allows another automatic load after leaving or changing category',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MarkdownImage.tsx',
+    anchor: '  const persistScale = debounce',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MediaReadonly.test.tsx',
+    cases: [
+      'stops active and debounced image resizing on lock while preserving committed size',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MarkdownVideo.tsx',
+    anchor: '  const persistScale = debounce',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MediaReadonly.test.tsx',
+    cases: [
+      'stops active and debounced video resizing on lock while preserving committed size',
+    ],
+  },
 ] as const;
