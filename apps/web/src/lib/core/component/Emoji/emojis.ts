@@ -9,11 +9,17 @@ type EmojiCatalog = typeof import('./emoji-catalog');
 // The emoji tables are several hundred KB, so they load as their own chunk the
 // first time a picker or the `:` menu reads them rather than at app start.
 const [catalog, setCatalog] = createSignal<EmojiCatalog>();
+const [loadError, setLoadError] = createSignal<unknown>();
 let catalogRequested = false;
 
 async function importEmojiCatalog(): Promise<void> {
-  const module = await import('./emoji-catalog');
-  setCatalog(() => module);
+  try {
+    const module = await import('./emoji-catalog');
+    setCatalog(() => module);
+  } catch (error) {
+    setLoadError(() => error);
+    throw error;
+  }
 }
 
 // Every read starts the load, so the guard keeps a failed chunk to one report
@@ -43,6 +49,8 @@ export const useEmojiData = () => {
   const groups = createMemo(() => catalog()?.emojiGroups() ?? []);
 
   return {
+    isLoading: () => catalogRequested && !catalog() && !loadError(),
+    error: loadError,
     groups: () => {
       loadEmojiCatalog();
       return groups();

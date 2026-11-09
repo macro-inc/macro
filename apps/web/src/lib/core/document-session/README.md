@@ -131,3 +131,9 @@ async boundary; a rejected or unavailable row releases the native pending pick.
 The source label helper supplies native row text without reducing insertion
 payloads to labels. Complete source menu lifecycle parity and application mounting
 remain prerequisites for admission.
+
+`NativeEmojiSources` uses the same lazy Unicode catalog, ranking and usage store
+as the application emoji menu, with its 200 ms lowercase query debounce. Rows
+carry canonical Unicode choices through the typed menu bridge. Catalog failures,
+query/surface replacement and failed commits cannot leave an active stale pick.
+This adapter does not supply the model InlineSearch lifecycle or admit a surface.
