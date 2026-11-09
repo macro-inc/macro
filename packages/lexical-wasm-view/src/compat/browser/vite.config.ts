@@ -16,7 +16,7 @@ export default defineConfig({
   build: {
     rollupOptions: { treeshake: false },
     outDir: join(
-      tmpdir(),
+      process.env.COMPAT_DOM_TEST_DIST ?? tmpdir(),
       `lexical-compat-dom-${upstream ? 'upstream' : 'port'}`
     ),
     emptyOutDir: true,

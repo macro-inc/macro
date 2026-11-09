@@ -54,3 +54,6 @@ The focused tsconfig excludes the real-upstream source fixtures from production
 checking. Tests resolve the installed pinned source so their internal scopes are
 the same core as the public API. The package-wide check additionally requires the
 generated document_session_wasm artifact used by the existing native view tests.
+
+Set COMPAT_DOM_TEST_DIST and COMPAT_DOM_TEST_RESULTS to private directories when
+validating alongside another worktree; keep the fixture ports in a private network namespace.

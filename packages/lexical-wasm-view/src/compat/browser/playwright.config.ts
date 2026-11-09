@@ -6,7 +6,9 @@ export default defineConfig({
   testMatch: '*.e2e.ts',
   workers: 1,
   reporter: 'list',
-  outputDir: join(tmpdir(), 'lexical-compat-dom-results'),
+  outputDir:
+    process.env.COMPAT_DOM_TEST_RESULTS ??
+    join(tmpdir(), 'lexical-compat-dom-results'),
   use: { headless: true },
   projects: ['chromium', 'firefox', 'webkit'].map((browserName) => ({
     name: browserName,
