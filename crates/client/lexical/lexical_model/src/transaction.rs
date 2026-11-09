@@ -478,11 +478,26 @@ impl<'editor> Transaction<'editor> {
         data: Arc<dyn crate::node::AnyNodeData>,
         base: BaseData,
     ) -> Result<NodeKey, Error> {
+        self.insert_record_with_key(index, data, base, None)
+    }
+    pub(crate) fn insert_record_with_key(
+        &mut self,
+        index: NodeTypeIndex,
+        data: Arc<dyn crate::node::AnyNodeData>,
+        base: BaseData,
+        reserved: Option<NodeKey>,
+    ) -> Result<NodeKey, Error> {
         if self.pending.registry.registered(index).type_name == Root::TYPE {
             return Err(Error::Invariant("root already exists"));
         }
         self.guard_write()?;
-        let key = self.editor.keys.next()?;
+        let key = match reserved {
+            Some(key) => key,
+            None => self.editor.keys.next()?,
+        };
+        if key == NodeKey::ROOT || self.pending.nodes.contains_key(&key) {
+            return Err(Error::Invariant("constructor key already exists"));
+        }
         if matches!(base, BaseData::Decorator) {
             self.pending.opaque_text_count += 1;
         }

@@ -190,3 +190,5 @@ Use ModifyTarget::RequireView when a view-backed host has not supplied layout en
 Native boundaries reconstruct dense indices with `NodeTypeIndex::from_raw`; validate against the receiving registry before lookup.
 
 Restore owned selection metadata through with_foreign_value_metadata; synchronization preserves object identity and treats cached direction alone as a memo change without dirty/publication effects.
+
+Consume ForeignReservedKey capabilities for externally constructed native records; keys come from the exact allocator and are never reallocated or rolled back.
