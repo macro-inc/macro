@@ -62,13 +62,14 @@ export function initializeConformance(
     );
   hookNames = Object.freeze(modelHooks);
   initialized = true;
-  bindBackendFactory((config) => {
-    if (config.nodes !== undefined && config.nodes.length !== 0)
+  bindBackendFactory((config, normalized) => {
+    const nodes = config.nodes;
+    if (nodes !== undefined && nodes.length !== 0)
       throw new Error(
         'JS node class registration requires the production compatibility host'
       );
     return new ConformanceBackend({
-      namespace: config.namespace ?? '',
+      namespace: normalized.namespace,
       nodes: [],
     });
   }, modelHooks);

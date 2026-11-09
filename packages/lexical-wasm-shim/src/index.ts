@@ -1,13 +1,20 @@
 import { getActiveEditor } from './editor';
 import { LineBreakNode, ParagraphNode, TextNode } from './nodes';
 
-export type { EditorConfig } from './editor';
+export type {
+  CreateEditorArgs,
+  EditorConfig,
+  EditorDOMRenderConfig,
+} from './editor';
 export {
   $getNodeByKey,
   $getRoot,
   $isElementNode,
   createEditor,
   EditorState,
+  getEditorDOMRenderConfig,
+  getEditorDOMRenderConfig as $getEditorDOMRenderConfig,
+  isCurrentlyReadOnlyMode,
   LexicalEditor,
 } from './editor';
 export {

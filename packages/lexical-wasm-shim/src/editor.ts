@@ -1,11 +1,22 @@
+import type { EditorThemeClasses } from 'lexical';
 import { createBackend } from './backend/factory';
+import { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
 import type { NodeClass } from './foreign/registry';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
+import type {
+  EditorConfig,
+  EditorDOMRenderConfig,
+} from './nodes/editor-config';
 import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
 import { UpdateController, type UpdateOptions } from './update';
 
 let activeEditor: LexicalEditor | undefined;
 let activeStateEditor: LexicalEditor | undefined;
+let readOnlyMode = false;
+
+export function isCurrentlyReadOnlyMode(): boolean {
+  return readOnlyMode;
+}
 
 export function getActiveEditor(): LexicalEditor {
   if (activeEditor === undefined)
@@ -23,8 +34,12 @@ export function getActiveStateEditor(): LexicalEditor {
   return activeStateEditor;
 }
 
-export interface EditorConfig {
+export interface CreateEditorArgs {
   readonly namespace?: string;
+  readonly theme?: EditorThemeClasses;
+  readonly disableEvents?: boolean;
+  readonly dom?: Partial<EditorDOMRenderConfig>;
+  readonly parentEditor?: LexicalEditor | null;
   readonly nodes?: readonly NodeClass[];
   readonly onError?: (error: unknown, editor: LexicalEditor) => void;
 }
@@ -51,7 +66,7 @@ export class EditorState {
     let result: { value: T } | undefined;
     this.editor.runtime.backend.readState(String(this.version), () => {
       result = {
-        value: this.editor.scope(body, options?.editor !== undefined),
+        value: this.editor.scope(body, options?.editor !== undefined, true),
       };
       return owner;
     });
@@ -78,12 +93,33 @@ export class EditorState {
 }
 
 export class LexicalEditor {
+  readonly _config: EditorConfig;
+  readonly _parentEditor: LexicalEditor | null;
+  readonly _keyToDOMMap = new Map<string, HTMLElement>();
   readonly runtime: NodeRuntime;
   private readonly updates: UpdateController;
   private state: EditorState;
 
-  constructor(config: EditorConfig = {}) {
-    const backend = createBackend(config);
+  constructor(editorConfig?: CreateEditorArgs) {
+    const config = editorConfig || {};
+    this._parentEditor =
+      editorConfig === undefined
+        ? (activeEditor ?? null)
+        : config.parentEditor || null;
+    this._config = {
+      namespace:
+        config.namespace ||
+        this._parentEditor?._config.namespace ||
+        Math.random()
+          .toString(36)
+          .replace(/[^a-z]+/g, '')
+          .substring(0, 5),
+      theme: config.theme || {},
+      disableEvents: config.disableEvents || false,
+      dom: { ...DEFAULT_EDITOR_DOM_CONFIG, ...config.dom },
+    };
+    const onError = config.onError;
+    const backend = createBackend(config, this._config);
     this.runtime = new NodeRuntime(backend, nativeNode);
     this.state = new EditorState(this, backend.initialVersion);
     this.updates = new UpdateController({
@@ -101,15 +137,17 @@ export class LexicalEditor {
         this.state = new EditorState(this, metadata.version);
       },
       onError: (error) => {
-        if (config.onError !== undefined) config.onError(error, this);
+        if (onError !== undefined) onError(error, this);
         else throw error;
       },
     });
   }
 
-  scope<T>(body: () => T, associated = true): T {
+  scope<T>(body: () => T, associated = true, readOnly = false): T {
     const previous = activeEditor;
     const previousState = activeStateEditor;
+    const previousReadOnly = readOnlyMode;
+    readOnlyMode = readOnly;
     activeEditor = associated ? this : undefined;
     activeStateEditor = this;
     try {
@@ -117,6 +155,7 @@ export class LexicalEditor {
     } finally {
       activeEditor = previous;
       activeStateEditor = previousState;
+      readOnlyMode = previousReadOnly;
     }
   }
 
@@ -126,6 +165,9 @@ export class LexicalEditor {
   read<T>(body: () => T): T {
     this.updates.flush();
     return this.state.read(body, { editor: this });
+  }
+  getElementByKey(key: string): HTMLElement | null {
+    return this._keyToDOMMap.get(key) ?? null;
   }
   getEditorState(): EditorState {
     return this.state;
@@ -162,7 +204,7 @@ export class LexicalEditor {
   }
 }
 
-export function createEditor(config?: EditorConfig): LexicalEditor {
+export function createEditor(config?: CreateEditorArgs): LexicalEditor {
   return new LexicalEditor(config);
 }
 
@@ -181,3 +223,12 @@ export function $getNodeByKey(key: string): LexicalNode | null {
 export function $isElementNode(node: unknown): node is ElementNode {
   return node instanceof ElementNode;
 }
+
+export {
+  DEFAULT_EDITOR_DOM_CONFIG,
+  getEditorDOMRenderConfig,
+} from './editor-dom-config';
+export type {
+  EditorConfig,
+  EditorDOMRenderConfig,
+} from './nodes/editor-config';
