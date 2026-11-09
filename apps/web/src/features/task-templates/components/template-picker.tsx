@@ -5,6 +5,7 @@ import CopyIcon from '@icon/system/regular/copy.svg';
 import FileIcon from '@icon/system/regular/file.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { DropdownSearchInput } from '@property/editors/selectors/PropertyOptionSelector';
 import {
   Button,
   type ButtonVariant,
@@ -12,7 +13,6 @@ import {
   cn,
   Dialog,
   Dropdown,
-  Input,
   type ManagedDialogProps,
   SingleSelectCheck,
 } from '@ui';
@@ -129,17 +129,16 @@ function TemplateChoices(
   };
   return (
     <div class="flex min-h-0 flex-col">
-      <div class="shrink-0 p-1.5">
-        <Input
-          ref={(element) => {
+      <div class="shrink-0">
+        <DropdownSearchInput
+          inputRef={(element) => {
             searchInput = element;
             if (props.menu)
               queueMicrotask(() => element.isConnected && element.focus());
           }}
           value={search()}
-          onInput={(event) => setSearch(event.currentTarget.value)}
+          onInput={setSearch}
           placeholder={t('create.taskTemplateSearch')}
-          aria-label={t('create.taskTemplateSearch')}
           onKeyDown={(event) => {
             if (event.key === 'Escape' || event.key === 'Tab') return;
             event.stopPropagation();
@@ -156,7 +155,7 @@ function TemplateChoices(
       </div>
       <div
         ref={choices}
-        class="flex max-h-80 min-h-0 flex-col overflow-y-auto overscroll-contain p-1.5 pt-0"
+        class="flex max-h-80 min-h-0 flex-col overflow-y-auto overscroll-contain p-1.5"
         onKeyDown={(event) => {
           if (props.menu && event.key === 'ArrowUp') {
             const first = choices?.querySelector(
