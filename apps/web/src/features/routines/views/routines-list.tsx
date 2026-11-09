@@ -15,8 +15,8 @@ export function RoutinesListView(props: {
   /** Templates to start from, above the list. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
-  /** Shows above the list in place of the templates when it has something. */
-  featured?: (templates: JSX.Element) => JSX.Element;
+  /** Below the list, e.g. suggested routines. */
+  footer?: JSX.Element;
 }) {
   const rows = createRoutineRows(props.source, props.userId);
   return (
@@ -33,7 +33,7 @@ export function RoutinesListView(props: {
       onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
       templates={props.templates}
       onTemplate={props.onTemplate}
-      featured={props.featured}
+      footer={props.footer}
     />
   );
 }

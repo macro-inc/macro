@@ -433,20 +433,19 @@ export type AppEvents = {
   };
   /** A sidebar's suggestions card was closed for good. */
   routine_suggestions_card_dismissed: { surface: string };
-  /** "Not interested" in one suggestion. */
-  routine_suggestion_dismissed: {
-    suggestionId: string;
-    surface: string;
-    kind: 'starter' | 'request';
-    catalogKey?: string;
+  /** A suggestion's row was on screen in an opened list. */
+  routine_suggestion_shown: RoutineSuggestionEvent;
+  /** Enabled in one click from its row; `edited` if changed there first. */
+  routine_suggestion_enabled: RoutineSuggestionEvent & {
+    routineId: string;
+    edited: boolean;
   };
-  /** A suggestion opened for review before saving. */
-  routine_suggestion_reviewed: {
-    suggestionId: string;
-    surface: string;
-    kind: 'starter' | 'request';
-    catalogKey?: string;
-  };
+  /** First change to a suggestion's name, instructions or notifications. */
+  routine_suggestion_edited: RoutineSuggestionEvent;
+  /** Opened in the full routine editor before saving. */
+  routine_suggestion_customized: RoutineSuggestionEvent & { edited: boolean };
+  /** "Not interested": dismissed on every surface. */
+  routine_suggestion_dismissed: RoutineSuggestionEvent;
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;
@@ -456,3 +455,16 @@ export type AppEvents = {
 };
 
 export type AppEventNames = keyof AppEvents;
+
+/** Which suggestion, where it showed, and who suggested what kind. */
+type RoutineSuggestionEvent = {
+  suggestionId: string;
+  /** The sidebar's surface, or the suggestion's main one on the Routines page. */
+  surface: string;
+  placement: 'sidebar' | 'routines';
+  /** `for_you` from AI, `macro` for Macro's templates. */
+  from: 'for_you' | 'macro';
+  /** A catalog routine with AI's values, or a routine AI drafted. */
+  kind: 'catalog' | 'routine';
+  catalogKey?: string;
+};

@@ -1,5 +1,4 @@
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
-import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import type { JSX } from 'solid-js';
@@ -10,8 +9,8 @@ export function RoutineSuggestionsDialog(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   title: string;
-  refreshing: boolean;
-  onRefresh(): void;
+  /** AI's suggestions are still arriving. */
+  generating: boolean;
   onSeeAll(): void;
   children: JSX.Element;
 }) {
@@ -32,8 +31,8 @@ export function RoutineSuggestionsDialog(props: {
                   {props.title}
                 </Dialog.Title>
                 <Dialog.Description class="mt-0.5 text-sm text-ink-muted">
-                  Picked by AI from your workspace. Review one to see and change
-                  it before it’s saved.
+                  Picked for you from your workspace, and templates from Macro.
+                  Enable one in a click, or open it to edit first.
                 </Dialog.Description>
               </div>
               <Dialog.CloseButton
@@ -47,15 +46,9 @@ export function RoutineSuggestionsDialog(props: {
             </header>
             <div class="relative px-3 pb-3">{props.children}</div>
             <footer class="flex items-center justify-between gap-2 border-t border-edge-muted px-6 py-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={props.refreshing}
-                onClick={() => props.onRefresh()}
-              >
-                <ArrowsClockwiseIcon aria-hidden="true" />
-                {props.refreshing ? 'Refreshing…' : 'Refresh suggestions'}
-              </Button>
+              <span class="text-xs text-ink-muted" aria-live="polite">
+                {props.generating ? 'Finding more for you…' : ''}
+              </span>
               <Button
                 variant="outline"
                 size="sm"

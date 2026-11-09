@@ -22,8 +22,6 @@ export function RoutineCreator(
   props: {
     /** Opens the new routine's page; by default in the Agents workspace. */
     onStart?: () => void;
-    /** Fills the description box, e.g. a suggestion AI couldn't draft. */
-    initialDescription?: string;
   } = {}
 ) {
   const panel = useSplitPanelOrThrow();
@@ -41,7 +39,6 @@ export function RoutineCreator(
       templatesEnabled={templates().enabled}
       catalog={catalog()}
       codeSteps={codeSteps().enabled}
-      initialDescription={props.initialDescription}
       renderComposer={(apply, current, initialDescription) => (
         <RoutineAiComposer
           apply={apply}

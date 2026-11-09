@@ -4,6 +4,7 @@ import {
   enableRoutineSuggestions,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { getDefaultTimezone } from '@core/util/cron';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
@@ -19,8 +20,8 @@ import {
 } from '@tanstack/solid-query';
 import { routineSuggestionKeys } from './keys';
 
-/** How often to ask again while the scheduler is still generating. */
-const GENERATING_POLL_MS = 3_000;
+/** How often to ask again while AI's suggestions are still arriving. */
+const GENERATING_POLL_MS = 2_000;
 
 function pollWhileGenerating(query: Query<RoutineSuggestions>) {
   return query.state.data?.status === 'generating' ? GENERATING_POLL_MS : false;
@@ -50,47 +51,45 @@ export function useRoutineSuggestionsEnabled(): () => boolean {
 }
 
 export type RoutineSuggestionsSource = {
-  /** Undefined until loaded; earlier ones stay while a generation runs. */
+  /** Undefined until loaded; AI's arrive one by one while generating. */
   suggestions(): RoutineSuggestion[] | undefined;
-  /** A generation is running (the first, or a refresh). */
+  /** AI's suggestions are still being generated. */
   generating(): boolean;
-  /** Nothing to show because loading or generating failed. */
+  /** Nothing to show because loading failed. */
   failed(): boolean;
-  refresh(): Promise<unknown>;
+  retry(): void;
 };
 
-/** The user's suggestions, generated and stored by the scheduler. */
+/**
+ * The user's suggestions on every surface, read once and filtered by each
+ * sidebar, so dismissing one removes it everywhere at once.
+ */
 export function useRoutineSuggestions(): RoutineSuggestionsSource {
   const enabled = useRoutineSuggestionsEnabled();
   const query = useQuery(() => routineSuggestionsQueryOptions(enabled()));
   // FE-48: read data only once settled, and keep it through refetch errors.
   const current = () => (query.isPending ? undefined : query.data);
   return {
-    suggestions: () => {
-      const set = current();
-      if (!set) return undefined;
-      // Nothing generated yet reads as loading, not as "none".
-      if (set.generatedAt == null && set.suggestions.length === 0) {
-        return undefined;
-      }
-      return set.suggestions;
-    },
+    suggestions: () => current()?.suggestions,
     generating: () => current()?.status === 'generating',
-    failed: () => {
-      const set = current();
-      if (set?.suggestions.length) return false;
-      if (!set) return query.isError;
-      return set.status === 'failed';
+    failed: () => query.isError && current() === undefined,
+    retry: () => {
+      queryClient.refetchQueries({ queryKey: routineSuggestionKeys.all.queryKey });
     },
-    refresh: () => refreshRoutineSuggestions(),
   };
 }
 
-/** Start a generation now; polling picks up its result. */
-export async function refreshRoutineSuggestions(): Promise<RoutineSuggestions> {
+/**
+ * Start the person's one generation of suggestions (onboarding calls it once
+ * their inbox is connected); later calls change nothing.
+ */
+export async function generateRoutineSuggestions(): Promise<RoutineSuggestions> {
   const set = await throwOnErr(() =>
-    scheduledActionClient.refreshRoutineSuggestions()
+    scheduledActionClient.generateRoutineSuggestions({
+      timezone: getDefaultTimezone(),
+    })
   );
+  // A generating answer turns polling on.
   queryClient.setQueryData(routineSuggestionKeys.all.queryKey, set);
   return set;
 }
