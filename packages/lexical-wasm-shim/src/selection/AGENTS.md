@@ -13,7 +13,7 @@ selection movement in the injected view callbacks.
 - Preserve pinned v0.45 fields, cache invalidation, owner links and clone semantics.
 - Keep the sole upstream declaration exception in $createPoint: upstream declares a non-null owner for an actual owner-less point. Never copy its suppression or add another assertion.
 - Import runtime core and DOM operations through SelectionRuntime; never import upstream runtime code.
-- Validate public exports with contract.type-test.ts against upstream declarations.
+- Export exact SelectionObservableExpected/SelectionObservableActual bundles for the strict emitted-declaration oracle; keep only the safe owner-gap assertions direct in contract.type-test.ts.
 
 ## Checks
 

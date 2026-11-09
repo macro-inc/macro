@@ -1,43 +1,35 @@
 import type * as Lexical from 'lexical';
 import type {
   CommandPayloadType,
-  EditorState,
   EditorUpdateOptions,
   LexicalCommand,
-  LexicalEditor,
-  PointType,
-  RangeSelection as RangeSelectionType,
 } from 'lexical';
+import type { BaseSelection, PointType } from './selection';
+import type {
+  CompatDecoratorNode,
+  CompatDOMRenderConfig,
+  CompatElementNode,
+  CompatLineBreakNode,
+  CompatNode,
+  CompatNodeSelection,
+  CompatRangeSelection,
+  CompatRootNode,
+  CompatTabNode,
+  CompatTextNode,
+  CompatEditorState as EditorState,
+  CompatEditor as LexicalEditor,
+} from './types';
 export type CompatRuntime = Pick<
   typeof Lexical,
-  | '$isElementNode'
-  | '$isTextNode'
-  | '$getNodeByKey'
-  | '$isRootNode'
-  | '$getEditor'
-  | 'DEFAULT_EDITOR_DOM_CONFIG'
-  | '$isLineBreakNode'
-  | '$isDecoratorNode'
   | 'KEY_DOWN_COMMAND'
   | 'COMPOSITION_START_COMMAND'
   | 'COMPOSITION_END_COMMAND'
   | 'INPUT_COMMAND'
-  | '$getSelection'
-  | '$getPreviousSelection'
-  | '$isRangeSelection'
-  | '$getRoot'
-  | 'isLexicalEditor'
-  | '$getTextNodeOffset'
-  | '$createPoint'
-  | '$setSelection'
   | 'CLICK_COMMAND'
-  | '$isTabNode'
   | 'SELECTION_CHANGE_COMMAND'
-  | '$isBlockElementNode'
   | 'BEFORE_INPUT_COMMAND'
   | '$setCompositionKey'
   | 'DELETE_CHARACTER_COMMAND'
-  | '$createTextNode'
   | 'INSERT_LINE_BREAK_COMMAND'
   | 'INSERT_PARAGRAPH_COMMAND'
   | 'CONTROLLED_TEXT_INSERTION_COMMAND'
@@ -51,7 +43,6 @@ export type CompatRuntime = Pick<
   | 'UNDO_COMMAND'
   | 'REDO_COMMAND'
   | 'COMMAND_PRIORITY_EDITOR'
-  | '$isNodeSelection'
   | 'KEY_ENTER_COMMAND'
   | 'COMPOSITION_START_TAG'
   | 'COMPOSITION_END_TAG'
@@ -79,27 +70,69 @@ export type CompatRuntime = Pick<
   | 'COLLABORATION_TAG'
   | 'SKIP_SCROLL_INTO_VIEW_TAG'
 > & {
-  createEmptyEditorState(): EditorState;
-  withReconciliation<T>(
+  $isElementNode: (
+    node: CompatNode | null | undefined
+  ) => node is CompatElementNode;
+  $isTextNode: (node: CompatNode | null | undefined) => node is CompatTextNode;
+  $isRootNode: (
+    node: CompatNode | CompatRootNode | null | undefined
+  ) => node is CompatRootNode;
+  $isLineBreakNode: (
+    node: CompatNode | null | undefined
+  ) => node is CompatLineBreakNode;
+  $isDecoratorNode: <T>(
+    node: CompatNode | null | undefined
+  ) => node is CompatDecoratorNode<T>;
+  $getSelection: () => BaseSelection | null;
+  $getPreviousSelection: () => BaseSelection | null;
+  $isRangeSelection: (value: unknown) => value is CompatRangeSelection;
+  $isNodeSelection: (value: unknown) => value is CompatNodeSelection;
+  $getRoot: () => CompatRootNode;
+  $getTextNodeOffset: (
+    origin: CompatTextNode,
+    offset: number | 'next' | 'previous',
+    mode?: 'error' | 'clamp'
+  ) => number;
+  $createPoint: (
+    key: string,
+    offset: number,
+    type: 'text' | 'element'
+  ) => PointType;
+  $setSelection: (selection: BaseSelection | null) => void;
+  $isTabNode: (node: CompatNode | null | undefined) => node is CompatTabNode;
+  $isBlockElementNode: (
+    node: CompatNode | null | undefined
+  ) => node is CompatElementNode;
+  $createTextNode: (text?: string) => CompatTextNode;
+  DEFAULT_EDITOR_DOM_CONFIG: CompatDOMRenderConfig;
+
+  $getEditor: () => LexicalEditor;
+  isLexicalEditor: (value: unknown) => value is LexicalEditor;
+  $getNodeByKey: <T extends CompatNode>(
+    key: string,
+    state?: EditorState
+  ) => T | null;
+  createEmptyEditorState: () => EditorState;
+  withReconciliation: <T>(
     editor: LexicalEditor,
     state: EditorState,
     body: () => T
-  ): T;
+  ) => T;
   RangeSelection: new (
     anchor: PointType,
     focus: PointType,
     format: number,
     style: string
-  ) => RangeSelectionType;
-  getActiveEditor(): LexicalEditor;
-  getActiveEditorState(): EditorState;
-  isCurrentlyReadOnlyMode(): boolean;
-  updateEditorSync(
+  ) => CompatRangeSelection;
+  getActiveEditor: () => LexicalEditor;
+  getActiveEditorState: () => EditorState;
+  isCurrentlyReadOnlyMode: () => boolean;
+  updateEditorSync: (
     editor: LexicalEditor,
     update: () => void,
     options?: EditorUpdateOptions
-  ): void;
-  $getCompositionKey(): string | null;
+  ) => void;
+  $getCompositionKey: () => string | null;
 };
 export let $isElementNode: CompatRuntime['$isElementNode'];
 export let $isTextNode: CompatRuntime['$isTextNode'];
@@ -175,7 +208,7 @@ export let COLLABORATION_TAG: CompatRuntime['COLLABORATION_TAG'];
 export let SKIP_SCROLL_INTO_VIEW_TAG: CompatRuntime['SKIP_SCROLL_INTO_VIEW_TAG'];
 export let isCurrentlyReadOnlyMode: CompatRuntime['isCurrentlyReadOnlyMode'];
 export let getActiveEditorState: CompatRuntime['getActiveEditorState'];
-export type RangeSelection = RangeSelectionType;
+export type RangeSelection = CompatRangeSelection;
 let installed: CompatRuntime | undefined;
 export function installCompatRuntime(runtime: CompatRuntime): void {
   if (installed && installed !== runtime)

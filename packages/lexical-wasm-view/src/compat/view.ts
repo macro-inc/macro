@@ -1,5 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
-import type { LexicalEditor, UpdateListenerPayload } from 'lexical';
+import type { UpdateListenerPayload } from 'lexical';
 import {
   $updateDOMBlockCursorElement,
   getCachedClassNameArray,
@@ -15,17 +15,18 @@ import { initMutationObserver } from './mutations';
 import { $reconcileRoot } from './reconciler';
 import { type CompatRuntime, installCompatRuntime } from './runtime';
 import { $updateDOMSelection } from './selection';
-import type { LexicalPrivateDOM, MutatedNodes } from './types';
+import type {
+  CompatEditor as LexicalEditor,
+  LexicalPrivateDOM,
+  MutatedNodes,
+} from './types';
 
 export type CompatCommit = Pick<
   UpdateListenerPayload,
-  | 'editorState'
-  | 'prevEditorState'
-  | 'dirtyElements'
-  | 'dirtyLeaves'
-  | 'normalizedNodes'
-  | 'tags'
+  'dirtyElements' | 'dirtyLeaves' | 'normalizedNodes' | 'tags'
 > & {
+  editorState: import('./types').CompatEditorState;
+  prevEditorState: import('./types').CompatEditorState;
   dirtyType: 0 | 1 | 2;
   mutatedNodes?: MutatedNodes | null;
 };

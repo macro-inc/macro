@@ -6,15 +6,15 @@
  *
  */
 
-import type {
-  BaseSelection,
-  EditorConfig,
-  EditorThemeClasses,
-  LexicalEditor,
-  LexicalNode,
-} from 'lexical';
+import type { EditorThemeClasses } from 'lexical';
 import { $isDecoratorNode, $isElementNode, $isRangeSelection } from './runtime';
+import type { BaseSelection } from './selection';
 import { normalizeClassNames } from './support';
+import type {
+  CompatEditorConfig as EditorConfig,
+  CompatEditor as LexicalEditor,
+  CompatNode as LexicalNode,
+} from './types';
 import { $getDOMSlot } from './utils';
 
 export function getCachedClassNameArray(

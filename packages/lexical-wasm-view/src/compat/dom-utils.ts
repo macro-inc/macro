@@ -2,19 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type {
-  DOMSlotForNode,
-  EditorDOMRenderConfig,
-  ElementNode,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
-  NodeMap,
-  NodeMutation,
-  RootNode,
-  Spread,
-  TextNode,
-} from 'lexical';
+import type { NodeKey, NodeMutation, Spread } from 'lexical';
 import { DOM_DOCUMENT_FRAGMENT_TYPE, DOM_ELEMENT_TYPE } from './constants';
 import { type DOMSlot, ElementDOMSlot } from './dom-slot';
 import { CAN_USE_DOM, IS_APPLE } from './environment';
@@ -28,10 +16,18 @@ import {
 import type { PointType } from './selection';
 import { invariant } from './support';
 import type {
+  CompatDOMSlotForNode as DOMSlotForNode,
+  CompatDOMRenderConfig as EditorDOMRenderConfig,
+  CompatElementNode as ElementNode,
+  CompatEditor as LexicalEditor,
+  CompatNode as LexicalNode,
   LexicalPrivateDOM,
   MutatedNodes,
   MutationListeners,
+  CompatNodeMap as NodeMap,
   RegisteredNodes,
+  CompatRootNode as RootNode,
+  CompatTextNode as TextNode,
 } from './types';
 import {
   CONTROL_OR_META,

@@ -21,29 +21,27 @@ type SelectionExports =
   | '$getTextContent'
   | '$normalizeSelection__EXPERIMENTAL'
   | 'tokenizeRawText';
-export type SelectionPublicContract = Matches<
-  Pick<typeof import('lexical'), SelectionExports>,
-  Pick<typeof import('./index'), SelectionExports>
->;
-export type RangeSelectionContract = Matches<
-  import('lexical').RangeSelection,
-  RangeSelection
->;
-export type PointContract = Matches<import('lexical').Point, Point>;
-export type TableSelectionFactoryContract = Matches<
-  Pick<
+/** Compared only by the whole-graph declaration oracle after strict emit. */
+export type SelectionObservableExpected = {
+  public: Pick<typeof import('lexical'), SelectionExports>;
+  range: import('lexical').RangeSelection;
+  point: import('lexical').Point;
+  node: import('lexical').NodeSelection;
+  tableFactory: Pick<
     typeof import('@lexical/table'),
     '$createTableSelection' | '$isTableSelection'
-  >,
-  {
+  >;
+};
+export type SelectionObservableActual = {
+  public: Pick<typeof import('./index'), SelectionExports>;
+  range: RangeSelection;
+  point: Point;
+  node: NodeSelection;
+  tableFactory: {
     $createTableSelection: SelectionRuntime['createTableSelection'];
     $isTableSelection: SelectionRuntime['isTableSelection'];
-  }
->;
-export type NodeSelectionContract = Matches<
-  import('lexical').NodeSelection,
-  NodeSelection
->;
+  };
+};
 /** Named exception: upstream excludes the actual owner-less construction state. */
 export type UpstreamPointOwnerGap = Matches<
   false,

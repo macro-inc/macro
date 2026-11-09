@@ -2,19 +2,17 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type {
-  EditorConfig,
-  EditorDOMRenderConfig,
-  EditorState,
-  LexicalEditor,
-  NodeKey,
-  NodeMap,
-} from 'lexical';
+import type { NodeKey } from 'lexical';
 import type { IntentionallyMarkedAsDirtyElement } from './reconciler';
 import type {
+  CompatEditorConfig as EditorConfig,
+  CompatDOMRenderConfig as EditorDOMRenderConfig,
+  CompatEditorState as EditorState,
+  CompatEditor as LexicalEditor,
   LexicalPrivateDOM,
   MutatedNodes,
   MutationListeners,
+  CompatNodeMap as NodeMap,
   RegisteredNodes,
 } from './types';
 

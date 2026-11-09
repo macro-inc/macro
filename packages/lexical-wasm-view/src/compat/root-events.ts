@@ -2,7 +2,7 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed; see ../../LICENSE. Retargeted from lexical@0.45.0.
  */
-import type { LexicalEditor, NodeKey } from 'lexical';
+import type { NodeKey } from 'lexical';
 import {
   markHandledSelectionCommandInsertText,
   onSelectionChange,
@@ -54,6 +54,7 @@ import {
 } from './runtime';
 import { $internalCreateRangeSelection } from './selection';
 import { invariant, warnOnlyOnce } from './support';
+import type { CompatEditor as LexicalEditor } from './types';
 import {
   getDOMSelectionFromTarget,
   getEditorPropertyFromDOMNode,

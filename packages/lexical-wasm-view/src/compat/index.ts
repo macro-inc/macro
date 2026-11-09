@@ -12,4 +12,21 @@ export {
   createSelectionDOMMethods,
   type SelectionDOMRuntime,
 } from './selection-methods';
+export type {
+  CompatDecoratorNode,
+  CompatDOMRenderConfig,
+  CompatEditor,
+  CompatEditorConfig,
+  CompatEditorState,
+  CompatElementNode,
+  CompatNode,
+  CompatNodeSelection,
+  CompatRangeSelection,
+  CompatRootNode,
+  CompatTextNode,
+} from './types';
+export type {
+  DOMObservableActual,
+  DOMObservableExpected,
+} from './upstream-contract.type-test';
 export { type CompatCommit, type CompatView, createCompatView } from './view';

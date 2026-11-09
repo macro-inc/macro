@@ -5,14 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  *
  */
+import type {
+  CompatEditorState as EditorState,
+  CompatEditor as LexicalEditor,
+  CompatNode as LexicalNode,
+  CompatTextNode as TextNode,
+} from './types';
 
 // Retargeted from lexical@0.45.0; model operations are injected by runtime.ts.
-import type {
-  EditorState,
-  LexicalEditor,
-  LexicalNode,
-  TextNode,
-} from 'lexical';
+
 import { IS_FIREFOX } from './environment';
 import {
   $getNodeByKey,
