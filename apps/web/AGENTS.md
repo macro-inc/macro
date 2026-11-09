@@ -38,6 +38,8 @@ LexicalMarkdown core browser suite (see its README).
 
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
+After a pre-commit hook restores unstaged frontend files, verify the dev server serves the final source; touch affected files if its transform cache still serves an older version.
+
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped

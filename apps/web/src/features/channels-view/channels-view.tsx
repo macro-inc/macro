@@ -23,7 +23,6 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useIsAuthenticated } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -42,6 +41,7 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelsViewMain } from './components/ChannelsViewMain';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
@@ -152,16 +152,6 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
     />
   );
 }
-function ChannelsNavigationHeader() {
-  return (
-    <Show when={isTouchDevice()}>
-      <ViewShell.Header class="empty:hidden">
-        <ViewSidebar.Toggle action="expand" presentation="pill" />
-      </ViewShell.Header>
-    </Show>
-  );
-}
-
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
@@ -217,8 +207,7 @@ function ChannelsViewRoot() {
               />
             </DebugSuspense>
           </ViewShell.Aside>
-          <ViewShell.Main class="overflow-hidden">
-            <ChannelsNavigationHeader />
+          <ChannelsViewMain mobileLayout={mobileLayout()}>
             <Show
               when={!mobileLayout()}
               fallback={
@@ -273,7 +262,7 @@ function ChannelsViewRoot() {
                 </ChannelSourcesContext.Provider>
               </Show>
             </Show>
-          </ViewShell.Main>
+          </ChannelsViewMain>
         </Show>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>

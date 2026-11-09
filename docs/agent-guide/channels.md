@@ -1070,6 +1070,9 @@ docks above 720px, and opens as an overlay at 720px or narrower. It remains
 collapsible with no conversation selected and while showing Threads. Narrow
 touch keeps the Recent conversation list and full-screen navigation; unfolded
 touch uses the same inline conversation selection as a wide desktop pane.
+The narrow touch list fills the frame behind its floating navigation row. Its
+initial top clearance scrolls away with the conversations while the row stays
+fixed and remains tappable.
 
 ### Sidebar redesign rollout
 

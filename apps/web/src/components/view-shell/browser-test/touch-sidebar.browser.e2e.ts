@@ -64,3 +64,35 @@ test('uses the same width breakpoint on touch and retains the wide preference af
   await page.setViewportSize({ width: 1000, height: 800 });
   await expect(expand).toBeVisible();
 });
+
+test('the mobile channel list scrolls full frame behind its navigation row', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?channels'
+  );
+  const expand = page.getByRole('button', { name: 'Show navigation' });
+  await expect(expand).toBeVisible();
+  const scroller = page.getByTestId('channel-scroll');
+  const shell = page.locator('[data-view-shell-main]');
+  const scrollBox = await scroller.boundingBox();
+  const shellBox = await shell.boundingBox();
+  expect(scrollBox!.y).toBe(shellBox!.y);
+  expect(scrollBox!.height).toBe(shellBox!.height);
+  const buttonBefore = await expand.boundingBox();
+  const first = scroller.locator('[data-channel-row="0"]');
+  const rowBefore = await first.boundingBox();
+  expect(rowBefore!.y).toBeGreaterThanOrEqual(
+    buttonBefore!.y + buttonBefore!.height
+  );
+  await scroller.evaluate((element) => {
+    element.scrollTop = 80;
+  });
+  expect((await first.boundingBox())!.y).toBeLessThan(buttonBefore!.y);
+  expect(await expand.boundingBox()).toEqual(buttonBefore);
+  await expand.tap();
+  await expect(
+    page.getByRole('button', { name: 'Close navigation backdrop' })
+  ).toBeVisible();
+});
