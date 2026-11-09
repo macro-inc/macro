@@ -21,6 +21,46 @@ for (const theme of ['light', 'dark']) {
         path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d55-${theme}.png`,
       });
   });
+  for (const width of [390, 680]) {
+    test(`inline transcript rows align with the content (${theme}, ${width}px)`, async ({
+      browser,
+    }) => {
+      const context = await browser.newContext({
+        viewport: { width: width === 390 ? 390 : 1440, height: 844 },
+        hasTouch: width === 390,
+        isMobile: width === 390,
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto(`${fixture}?theme=${theme}&pane=${width}`);
+        await page
+          .locator('label')
+          .filter({ hasText: /^Transcript$/ })
+          .click();
+        const card = page.getByRole('complementary', { name: 'Transcript' });
+        const geometry = await card.evaluate((element) => {
+          const card = element.getBoundingClientRect();
+          const row = element
+            .querySelector('[data-call-transcript-row]')!
+            .getBoundingClientRect();
+          const list = element.querySelector('[data-call-transcript-row]')!
+            .parentElement!;
+          return {
+            offset: row.left - card.left,
+            width: row.width - card.width,
+            padding: getComputedStyle(list).paddingInline,
+          };
+        });
+        expect(geometry).toEqual({ offset: 0, width: 0, padding: '0px' });
+        if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+          await page.screenshot({
+            path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d61-${theme}-${width}.png`,
+          });
+      } finally {
+        await context.close();
+      }
+    });
+  }
   test(`long speaker names truncate with a full tooltip (${theme})`, async ({
     page,
   }) => {

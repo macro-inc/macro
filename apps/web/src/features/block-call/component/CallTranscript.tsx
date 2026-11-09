@@ -253,7 +253,10 @@ export function CallTranscript(props: {
           </h3>
         </Show>
         <StaticMarkdownContext>
-          <div class="flex flex-col gap-1 px-3 pb-6">
+          <div
+            class="flex flex-col gap-1 pb-6"
+            classList={{ 'px-3': !props.scrollElement }}
+          >
             <For each={timeline()}>
               {(item) => {
                 if (item.kind === 'chat') {

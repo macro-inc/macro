@@ -83,7 +83,8 @@ started the call can change sharing; it never substitutes their email.
 An editable switch stays disabled while its change is pending.
 
 Below that threshold, medium-size Summary/Transcript tabs sit below the recording.
-The tab selection and one mounted video/transcript survive resizing in either
+The inline transcript list has no horizontal padding, aligning its row edges with
+the tabs and Summary. The tab selection and one mounted video/transcript survive resizing in either
 direction. On wide panes, Summary has its own heading with attribution on the
 right; narrow panes keep attribution below the tabs. Details starts closed and
 floats over content without moving it. Playback remains reachable in a pinned bar
