@@ -471,15 +471,24 @@ where
         Ended { ending, kept }
     }
 
-    /// One routines session per layout group; at onboarding, one that kept
-    /// nothing is retried once. Each session's end, and whether it was
+    /// At onboarding, one routines session per layout group, and one that
+    /// kept nothing is retried once; at night, one session for every
+    /// surface. Each session's end, and whether it was
     /// retried.
     async fn routine_sessions(
         &self,
         run: &Run,
         shutdown: &CancellationToken,
     ) -> Vec<(Ended, bool)> {
-        let groups = self.layout.sessions().iter().map(|surfaces| async move {
+        // Onboarding splits the surfaces so the first suggestions arrive
+        // fast; at night nobody waits, so one session covers them all at a
+        // third of the cost.
+        let nightly = SessionLayout::single();
+        let layout = match run.trigger {
+            GenerationTrigger::Onboarding => &self.layout,
+            GenerationTrigger::Nightly => &nightly,
+        };
+        let groups = layout.sessions().iter().map(|surfaces| async move {
             let first = self.routine_session(run, surfaces, 1, shutdown).await;
             let retry = run.trigger == GenerationTrigger::Onboarding
                 && first.kept == 0

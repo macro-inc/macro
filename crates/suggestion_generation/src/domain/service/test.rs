@@ -535,7 +535,17 @@ async fn an_onboarding_routines_session_that_kept_nothing_is_retried_once_a_nigh
     });
     assert_eq!(h.service.nightly().await.unwrap(), 1);
     h.service.wait().await;
-    assert_eq!(h.sessions.prepared.lock().unwrap().len(), 1 + groups);
+    // At night one routines session covers every surface.
+    assert_eq!(h.sessions.prepared.lock().unwrap().len(), 2);
+    assert!(
+        h.repo
+            .sessions
+            .lock()
+            .unwrap()
+            .values()
+            .any(|(kind, surfaces, _)| *kind == SessionKind::Routines
+                && surfaces.len() == ALL_SURFACES.len())
+    );
     let prompts = h.sessions.prompts.lock().unwrap().clone();
     assert!(prompts.contains(&"ideas nightly".to_owned()));
     // A nightly run never counts the person in; reading their feed does.

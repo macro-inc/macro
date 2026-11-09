@@ -6,10 +6,10 @@ Its alert links the **Routine suggestions** dashboard.
 
 When a person's inbox connects (onboarding), and each night in their time
 zone, agent-harness-service runs a generation (`crates/suggestion_generation`):
-an ideas session and up to three routines sessions of the in-process Macro
-agent, each routines session suggesting for some of the nine surfaces
-through `macro.routines.suggest`. A nightly routines session also reviews and
-retires earlier suggestions. At onboarding a routines session that suggests
+an ideas session and routines sessions of the in-process Macro agent (three
+at onboarding, each suggesting for some of the nine surfaces, and one at
+night for all of them) through `macro.routines.suggest`. A nightly routines
+session also reviews and retires earlier suggestions and adds at most two. At onboarding a routines session that suggests
 nothing is retried once. Surfaces AI leaves empty show Macro's templates.
 Routine suggestions are behind the `enable-routine-suggestions` flag.
 
