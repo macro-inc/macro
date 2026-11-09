@@ -244,7 +244,7 @@ pub(crate) fn query(
         FfiQuery::Clipboard => {
             let mut entries = lexical_rich_nodes::clipboard::get_clipboard_data_from_selection(
                 view,
-                "document-session",
+                surface.namespace(),
                 state.selection(),
             )
             .map_err(invalid)?;

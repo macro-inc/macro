@@ -478,3 +478,159 @@ fn typed_snippet_sequence_keeps_the_confirmed_source_extractor_behavior() {
         assert!(keys.is_empty());
     }
 }
+
+#[test]
+fn native_clipboard_namespace_matches_its_application_and_portable_paste_profiles() {
+    let config = application_config();
+    let source = NativeEditorSession::new(
+        config.clone(),
+        None,
+        FfiNow {
+            mono_ms: 0,
+            wall_ms: 1_000_000,
+        },
+    )
+    .unwrap();
+    for (step, input) in [
+        FfiInput::Start,
+        FfiInput::Seed { kind: SeedKind::Optimistic, snapshot: vec![] },
+        FfiInput::SetState { root: serde_json::from_value(json!({"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"rich","format":1}]}]})).unwrap() },
+        FfiInput::Command { command: FfiCommand::SelectAll, selection: ViewSelection::KeepModel },
+    ].into_iter().enumerate() {
+        let output = source.handle(FfiNow { mono_ms: step as u64, wall_ms: 1_000_000 + step as i64 }, input).unwrap();
+        assert!(!output.view.iter().any(|effect| matches!(effect, FfiViewEffect::Error { .. })));
+    }
+    let FfiQueryReply::Clipboard { entries } = source.query(FfiQuery::Clipboard).unwrap() else {
+        panic!("clipboard")
+    };
+    let internal = entries
+        .into_iter()
+        .find(|entry| entry.mime == "application/x-lexical-editor")
+        .unwrap()
+        .text;
+    let payload: serde_json::Value = serde_json::from_str(&internal).unwrap();
+    assert_eq!(payload["namespace"], "block-md-main");
+    let mut portable = config.clone();
+    portable.application = None;
+    for (target_config, namespace, expected, format) in [
+        (config, "block-md-main", "rich", 1),
+        (portable, "document-session", "fallback", 0),
+    ] {
+        let target = NativeEditorSession::new(
+            target_config,
+            None,
+            FfiNow {
+                mono_ms: 0,
+                wall_ms: 1_000_000,
+            },
+        )
+        .unwrap();
+        for (step, input) in [
+            FfiInput::Start,
+            FfiInput::Seed {
+                kind: SeedKind::Optimistic,
+                snapshot: vec![],
+            },
+            FfiInput::SetState {
+                root: serde_json::from_value(
+                    json!({"type":"root","children":[{"type":"paragraph","children":[]}]}),
+                )
+                .unwrap(),
+            },
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let output = target
+                .handle(
+                    FfiNow {
+                        mono_ms: step as u64,
+                        wall_ms: 1_000_000 + step as i64,
+                    },
+                    input,
+                )
+                .unwrap();
+            assert!(
+                !output
+                    .view
+                    .iter()
+                    .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+            );
+        }
+        let FfiQueryReply::Nodes { keys, .. } = target
+            .query(FfiQuery::NodesOfType {
+                name: "paragraph".into(),
+            })
+            .unwrap()
+        else {
+            panic!("paragraph")
+        };
+        let point = Point::element(keys[0], ChildIndex(0));
+        let output = target
+            .handle(
+                FfiNow {
+                    mono_ms: 3,
+                    wall_ms: 1_000_003,
+                },
+                FfiInput::Paste {
+                    payload: FfiClipboardPayload {
+                        data: vec![
+                            FfiClipboardEntry {
+                                mime: "application/x-lexical-editor".into(),
+                                text: internal.clone(),
+                            },
+                            FfiClipboardEntry {
+                                mime: "text/plain".into(),
+                                text: "fallback".into(),
+                            },
+                        ],
+                        has_files: false,
+                        html_nodes: None,
+                    },
+                    selection: ViewSelection::Range {
+                        anchor: point,
+                        focus: point,
+                        resolution_dirty: false,
+                    },
+                },
+            )
+            .unwrap();
+        assert!(
+            !output
+                .view
+                .iter()
+                .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+        );
+        assert_eq!(target.text_content().unwrap(), expected, "{namespace}");
+        let FfiQueryReply::State { root } = target.query(FfiQuery::State).unwrap() else {
+            panic!("state")
+        };
+        assert_eq!(
+            root["children"][0]["children"][0]["format"], format,
+            "{namespace}"
+        );
+        target
+            .handle(
+                FfiNow {
+                    mono_ms: 4,
+                    wall_ms: 1_000_004,
+                },
+                FfiInput::Command {
+                    command: FfiCommand::SelectAll,
+                    selection: ViewSelection::KeepModel,
+                },
+            )
+            .unwrap();
+        let FfiQueryReply::Clipboard { entries } = target.query(FfiQuery::Clipboard).unwrap()
+        else {
+            panic!("clipboard")
+        };
+        let internal = entries
+            .into_iter()
+            .find(|entry| entry.mime == "application/x-lexical-editor")
+            .unwrap()
+            .text;
+        let payload: serde_json::Value = serde_json::from_str(&internal).unwrap();
+        assert_eq!(payload["namespace"], namespace);
+    }
+}

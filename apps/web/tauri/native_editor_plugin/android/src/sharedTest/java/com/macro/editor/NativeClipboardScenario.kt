@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.view.ContextThemeWrapper
 import com.macro.documentsession.*
+import com.macro.editor.bridge.mapper
 import org.junit.Assert.*
 
 /** Real Rust import/export across two independent native views and Android clipboard. */
@@ -43,6 +44,31 @@ internal object NativeClipboardScenario {
             assertTrue(source.onTextContextMenuItem(android.R.id.copy))
             val clip = requireNotNull(context.getSystemService(ClipboardManager::class.java).primaryClip)
             assertEquals("bold😀", clip.getItemAt(0).text.toString())
+            val internal = requireNotNull(EditorClipboard(context).read()).data
+                .single { it.mime == "application/x-lexical-editor" }.text
+            assertEquals("block-md-main", mapper.readTree(internal).get("namespace").textValue())
+            // No HTML fallback: a portable session must reject the foreign rich namespace.
+            val portable = NativeEditorSession(NativeInputScenario.config().copy(application = null), null, host.now())
+            try {
+                val view = NativeEditorView(context, portable, host, true, true)
+                view.admit(FfiInput.Start)
+                view.admit(FfiInput.Seed(SeedKind.OPTIMISTIC, byteArrayOf()))
+                view.admit(FfiInput.SetState(BridgeJson.root("""{"root":{"type":"root","children":[{"type":"paragraph","children":[]}]}}""")))
+                val diff = (portable.query(FfiQuery.ViewDiff) as FfiQueryReply.ViewDiff).diff
+                val paragraph = diff.ops.filterIsInstance<DiffOp.CreateElement>().first { it.key.index != 0u }.key
+                view.admit(FfiInput.SelectionFromView(ViewSelection.Range(Point.Element(paragraph, 0u), Point.Element(paragraph, 0u), false), null))
+                view.admit(FfiInput.Paste(FfiClipboardPayload(listOf(
+                    FfiClipboardEntry("application/x-lexical-editor", internal),
+                    FfiClipboardEntry("text/plain", "fallback")), false, null), ViewSelection.KeepModel))
+                assertEquals("fallback", portable.textContent())
+                view.setSelection(0, view.length())
+                val exported = (portable.query(FfiQuery.Clipboard) as FfiQueryReply.Clipboard).entries
+                    .single { it.mime == "application/x-lexical-editor" }.text
+                val payload = mapper.readTree(exported)
+                assertEquals("document-session", payload.get("namespace").textValue())
+                assertEquals(0, payload.get("nodes").get(0).get("format").intValue())
+            } finally { portable.close() }
+
             assertTrue(requireNotNull(clip.getItemAt(0).htmlText).contains("bold😀"))
             val missingPlain = android.content.ClipData(android.content.ClipDescription(clip.description),
                 android.content.ClipData.Item(android.content.Intent()))
