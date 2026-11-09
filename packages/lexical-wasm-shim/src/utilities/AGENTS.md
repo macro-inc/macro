@@ -13,6 +13,7 @@ local type, without casts or changed setter/exception behavior.
 
 ## Checks
 
-Run pure.config.mts tests against independent Original controls, strict package
+Keep the jsdom directive on DOM tests so the default package runner also uses a
+real DOM. Run pure.config.mts tests against independent Original controls, strict package
 types/hooks, ordinary declaration emission, cold import and scoped just check.
 These helpers do not bind an editor, clone authority or the native oracle.

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import * as Original from 'lexical';
 import { expect, test } from 'vitest';
 import { normalizeClassNames as viewClassNames } from '../../../lexical-wasm-view/src/compat/support';
