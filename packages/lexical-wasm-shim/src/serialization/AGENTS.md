@@ -13,6 +13,8 @@ JSONRuntime is typed injection only. The editor owner supplies the actual active
 editor, registered map, associated readonly state read and Root. Never fabricate
 an active scope or bind a fake runtime for tests. Constructors remain subject to
 real registry/clone authority; unsupported construction must remain explicit.
+See README.md for the design-only detached writable-scope requirements; do not
+add speculative receipt objects, binders or guard-only authority APIs.
 Public serialized data aliases are upstream type-only exports. Root export uses
 the actual Root method's strong type, not an arbitrary generic return assertion.
 
