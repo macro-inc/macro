@@ -2,8 +2,8 @@
 
 Status: on `dev/html-code-mode`. The server builds stored HTML documents
 and runs their programs by id, with live events, and the built page runs
-under a strict CSP. A separate execution pool and publishing are not built.
-The agent guide's "Program blocks in HTML previews" describes what ships.
+under a strict CSP. A separate execution pool is not built. The agent
+guide's "Program blocks in HTML previews" describes what ships.
 
 ## Goal
 
@@ -22,8 +22,9 @@ program up and get the outcome back.
 
 ## Decisions
 
-- **Who.** The viewer's own session. Only a directly signed-in user. A token
-  minted for an agent's run is refused, so a program cannot start another run.
+- **Who.** The viewer's own session. Only a directly signed-in user runs a
+  program. A token minted for an agent's run is refused, so a program cannot
+  start another run; it may still build a page, which runs nothing.
 - **What.** Reads and writes. Writes are the user's own: `ToolCaller::Document`
   mints a token with no agent.
 - **Where.** Stored HTML documents only, previewed in Drive detail. HTML in a
@@ -154,13 +155,15 @@ if the run is cancelled.
   whether or not the page catches its call's rejection. Spans: `document_programs.build`,
   `document_programs.run`, `block_code.run_document_program`,
   `block_code.document_events.stream`.
-- Both routes are app-internal in the SDK coverage list.
+- SDK: `documents.publishPage({ name, html, project })` uploads and builds;
+  `Document.republishPage(html)` saves a new version through storage's
+  `simple_save` and builds. Both return `{ document, problems }`, the build's
+  diagnostics by block. Their TSDoc carries the page contract agents read.
+  The run route stays app-internal in the SDK coverage list.
 
 ## Left to build
 
-1. The publish SDK method, which returns diagnostics and replaces an existing
-   document in place.
-2. A `Limits` profile with a per-viewer queue, instead of the shared public
+1. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-3. Optional: `program.live(args, render)`, which re-runs a program when a
+2. Optional: `program.live(args, render)`, which re-runs a program when a
    live event arrives for what it reads.

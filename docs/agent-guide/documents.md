@@ -3216,7 +3216,15 @@ write goes through a program. The frame is sandboxed with scripts only, so a
 </script>
 ```
 
-To check it, upload such a file, open it, and confirm the list fills in Render;
+Agents publish such a page with the SDK's `macro.documents.publishPage({ name,
+html, project })`, which uploads it, builds it and returns `{ document,
+problems }`: each problem names its block, and an empty list means the page
+built. They fix it with `document.republishPage(html)`, which saves the whole
+page as a new version of the same document and builds again. Both work inside
+code mode. A plain upload or an edit in Drive builds when the page is first
+opened.
+
+To check it, publish such a page (or upload the file), open it, and confirm the list fills in Render;
 then rename a matching task in another split and watch the list follow without
 a reload. Change `query: 'launch'` to `query: 42`, save, and reopen Render: it
 shows the type error against `client script` instead of the page. With the
