@@ -8,9 +8,10 @@ feature unions are not production profiles.
 
 The explicit `build-document-session-compat-wasm` recipe enables `compat-web`
 and writes its own complete artifact set under `wasm-compat/`, using a separate
-Cargo target directory and feature-aware cache key. Its declarations belong to
-the compatibility module; never add optional compatibility methods to native
-types. Native build/cache reuse also checks actual WASM exports, so a previous
+Cargo target directory and feature-aware cache key. Its exact generated declarations
+are copied to the type-only `@macro-inc/collaboration/session/wasm-compat` export.
+The compatibility module owns those types; never add optional compatibility
+methods to native types. Native build/cache reuse also checks actual WASM exports, so a previous
 compatibility artifact cannot silently become the native module.
 
 Native feature isolation replaces the former feature-on/off 5% timing gate.
