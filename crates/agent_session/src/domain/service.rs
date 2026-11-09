@@ -196,6 +196,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// What the session's in-process turns are admitted and metered as, set
+    /// by whoever opened it.
+    fn session_metering(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionMetering>> + Send;
+
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
         &self,
@@ -925,6 +932,13 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn session_metering(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::domain::model::SessionMetering> {
+        self.repo.metering(id).await
     }
 
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -2124,6 +2138,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn metering(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionMetering> {
+        self.repo.metering(id).await
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
