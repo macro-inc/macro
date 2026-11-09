@@ -13,8 +13,6 @@ mod test;
 
 /// The task, before the data.
 const TASK: &str = include_str!("prompt.md");
-/// What the fast first wave is told before the data.
-pub const FIRST_WAVE_INSTRUCTIONS: &str = include_str!("first_wave.md");
 
 /// Longest subject passed on, in characters.
 const MAX_SUBJECT_CHARS: usize = 200;
@@ -164,69 +162,4 @@ fn truncate(text: &str, max: usize) -> String {
         .filter(|c| !matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'))
         .take(max)
         .collect()
-}
-
-/// The fast first wave's prompt: every catalog routine, the mail and the
-/// apps, as data.
-pub fn first_wave_prompt(inbox: &[InboxMessage], apps: &[String], dismissed: &[String]) -> String {
-    let catalog: Vec<Value> = CATALOG
-        .iter()
-        .filter(|routine| !dismissed.iter().any(|key| key == routine.key))
-        .map(catalog_entry)
-        .collect();
-    let inbox: Vec<Value> = inbox.iter().map(message).collect();
-    let apps: Vec<String> = apps
-        .iter()
-        .filter_map(|app| line(app, MAX_NAME_CHARS))
-        .collect();
-    format!(
-        "Macro's catalog (written by Macro):\n{catalog}\n\nThe user's connected apps:\n<untrusted>\n{apps}\n</untrusted>\n\nThe user's newest mail, newest first:\n<untrusted>\n{inbox}\n</untrusted>",
-        catalog = Value::Array(catalog),
-        apps = json!(apps),
-        inbox = Value::Array(inbox),
-    )
-}
-
-/// The shape the first wave answers in. Knob values are name/value pairs,
-/// so the schema stays strict.
-pub fn first_wave_schema() -> Value {
-    json!({
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["suggestions"],
-        "properties": {
-            "suggestions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["key", "knobs", "reason", "surfaces", "keepProbability"],
-                    "properties": {
-                        "key": { "type": "string" },
-                        "knobs": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "additionalProperties": false,
-                                "required": ["name", "value"],
-                                "properties": {
-                                    "name": { "type": "string" },
-                                    "value": { "type": ["string", "number", "boolean"] }
-                                }
-                            }
-                        },
-                        "reason": { "type": "string" },
-                        "surfaces": {
-                            "type": "array",
-                            "items": {
-                                "type": "string",
-                                "enum": ["email", "calendar", "tasks", "files", "crm", "chat", "calls", "reviews", "agents"]
-                            }
-                        },
-                        "keepProbability": { "type": "number" }
-                    }
-                }
-            }
-        }
-    })
 }
