@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { BackgroundPreview } from '@core/component/media/media-background-picker';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
@@ -9,8 +10,15 @@ import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
-import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { Dropdown, SingleSelectCheck, ToggleSwitch, Tooltip } from '@ui';
+import {
+  createSignal,
+  createUniqueId,
+  For,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { CallState } from '../CallContext';
 import { CallControlBar } from './CallControlBar';
 
@@ -121,6 +129,14 @@ export function CallMediaControls(props: {
       await applyBackground({ type: 'blur', intensity: value });
   }
 
+  const shareAudioDescription = createUniqueId();
+  const [shareAudioFocused, setShareAudioFocused] = createSignal(false);
+  const shareAudioReason = () =>
+    call.isScreenSharing()
+      ? t('calls.stopSharingToChange')
+      : call.isConnecting()
+        ? t('calls.availableOnceJoined')
+        : undefined;
   const backgroundDisabled = () => call.isConnecting() || applyingBackground();
   const selectMicrophone = (id: string) =>
     fire(() => call.switchAudioInput(id || 'default'));
@@ -200,25 +216,52 @@ export function CallMediaControls(props: {
         }
         screenMenu={
           <Dropdown.Group>
-            <Dropdown.CheckboxItem
-              class="flex-row-reverse"
-              aria-label="Share audio"
-              checked={call.shareScreenAudio()}
-              disabled={call.isConnecting() || call.isScreenSharing()}
-              closeOnSelect={false}
-              onChange={(checked) => call.setShareScreenAudio(checked)}
-              indicator={
-                <span inert aria-hidden="true">
-                  <ToggleSwitch
-                    size="sm"
-                    checked={call.shareScreenAudio()}
-                    disabled={call.isConnecting() || call.isScreenSharing()}
-                  />
-                </span>
-              }
+            <Tooltip
+              label={shareAudioReason() ?? ''}
+              disabled={!shareAudioReason()}
+              open={shareAudioFocused()}
+              class="w-full"
+              placement="top"
             >
-              <ShareAudioLabel />
-            </Dropdown.CheckboxItem>
+              <Dropdown.CheckboxItem
+                ref={(element: HTMLDivElement) => {
+                  const focus = () => setShareAudioFocused(true);
+                  const blur = () => setShareAudioFocused(false);
+                  element.addEventListener('focus', focus);
+                  element.addEventListener('blur', blur);
+                  onCleanup(() => {
+                    element.removeEventListener('focus', focus);
+                    element.removeEventListener('blur', blur);
+                  });
+                }}
+                class="flex-row-reverse"
+                classList={{ 'opacity-50': !!shareAudioReason() }}
+                aria-label="Share audio"
+                aria-disabled={!!shareAudioReason()}
+                aria-describedby={
+                  shareAudioReason() ? shareAudioDescription : undefined
+                }
+                checked={call.shareScreenAudio()}
+                closeOnSelect={false}
+                onChange={(checked) => {
+                  if (!shareAudioReason()) call.setShareScreenAudio(checked);
+                }}
+                indicator={
+                  <span inert aria-hidden="true">
+                    <ToggleSwitch
+                      size="sm"
+                      checked={call.shareScreenAudio()}
+                      disabled={call.isConnecting() || call.isScreenSharing()}
+                    />
+                  </span>
+                }
+              >
+                <ShareAudioLabel />
+              </Dropdown.CheckboxItem>
+              <span id={shareAudioDescription} class="sr-only">
+                {shareAudioReason()}
+              </span>
+            </Tooltip>
           </Dropdown.Group>
         }
         screenDrawer={

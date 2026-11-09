@@ -215,3 +215,58 @@ test('companion controls match the shared bar height', async ({
     }
   }
 });
+
+test('companion controls explain disabled screen audio', async ({
+  page,
+}, info) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || info.project.name === 'phone'
+  );
+  for (const reason of ['sharing', 'connecting', 'enabled']) {
+    await page.goto(
+      `/src/features/channel/Call/discussion/browser-test/call-overlay.html?work=off&share=${reason === 'sharing' ? 'local' : ''}`
+    );
+    await page
+      .getByRole('button', { name: 'Screen share settings', exact: true })
+      .click();
+    const row = page.getByRole('menuitemcheckbox', {
+      name: 'Share audio',
+      exact: true,
+    });
+    await expect(row).toBeVisible();
+    if (reason === 'connecting')
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event('fixture-connecting'))
+      );
+    await row.hover();
+    if (reason === 'enabled') {
+      await expect(
+        page.getByRole('tooltip', { includeHidden: true })
+      ).toHaveCount(0);
+      await row.click();
+      await expect(row).toHaveAttribute('aria-checked', 'true');
+    } else {
+      const message =
+        reason === 'sharing'
+          ? 'Stop sharing to change this'
+          : "Available once you've joined";
+      await expect(row).toHaveAttribute('aria-disabled', 'true');
+      await expect(row).toHaveAccessibleDescription(message);
+      await expect(
+        page.getByRole('tooltip', { includeHidden: true })
+      ).toContainText(message);
+      await row.click({ force: true });
+      await expect(row).toHaveAttribute('aria-checked', 'false');
+      await page.mouse.move(0, 0);
+      await page.keyboard.press('Home');
+      await expect(row).toBeFocused();
+      await expect(
+        page.getByRole('tooltip', { includeHidden: true })
+      ).toContainText(message);
+    }
+    if (process.env.CALL_REPRO_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_REPRO_DIR}/L104-${reason}.png`,
+      });
+  }
+});

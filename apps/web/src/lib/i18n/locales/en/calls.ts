@@ -80,6 +80,8 @@ export default {
   guest: 'Guest',
   agent: 'Agent',
   speaking: 'Speaking',
+  stopSharingToChange: 'Stop sharing to change this',
+  availableOnceJoined: "Available once you've joined",
   microphoneOff: 'Microphone off',
   microphoneOn: 'Microphone on',
   microphoneBlocked:

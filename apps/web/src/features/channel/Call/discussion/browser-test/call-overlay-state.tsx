@@ -13,6 +13,10 @@ const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
   type: 'none',
 });
 const [audioMuted, setAudioMuted] = createSignal(true);
+const [connecting, setConnecting] = createSignal(
+  params.get('connecting') === 'true'
+);
+window.addEventListener('fixture-connecting', () => setConnecting(true));
 const [videoMuted, setVideoMuted] = createSignal(params.get('media') !== 'on');
 const [screenSharing, setScreenSharing] = createSignal(
   ['local', 'both'].includes(params.get('share') ?? '')
@@ -143,7 +147,7 @@ const call = {
     ),
   isLocalSpeaking: () => false,
   isParticipantSpeaking: () => false,
-  isConnecting: () => false,
+  isConnecting: connecting,
   isAudioMuted: audioMuted,
   microphonePermission: () => permissions?.microphone() ?? 'prompt',
   cameraPermission: () => permissions?.camera() ?? 'prompt',

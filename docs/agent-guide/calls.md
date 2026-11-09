@@ -343,7 +343,10 @@ and a noise suppression switch with its label on the left.
 Light blur, Strong blur, Recent images, and Upload. Screen share is
 also a split button: the left half starts or stops sharing (pressed while
 sharing), and **Screen share settings** holds **Share audio**, off by default,
-saved per device, and locked while sharing. The compact row aligns its speaker
+saved per device, and locked while sharing. Its disabled row stays focusable:
+hover or keyboard focus explains “Stop sharing to change this” or, while
+connecting, “Available once you've joined”; the description is also announced
+to screen readers. The compact row aligns its speaker
 icon, title and switch on one line. With it on, the browser picker offers
 tab audio (and system audio where Chromium supports it), and other participants
 hear it alongside microphones, even away from the Call tab. Leave call is a
