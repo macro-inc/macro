@@ -1,0 +1,233 @@
+import {
+  CompatBatchOutcome,
+  CompatBatchReply,
+  CompatBatchRequest,
+  CompatFailureLocation,
+  CompatInstanceSeed,
+  CompatNodeOperand,
+  CompatOperation,
+  CompatSelectionData,
+  ForeignCallbackValue,
+  ForeignOpaqueValue,
+  type ICompatBatchReply,
+} from '@macro-inc/collaboration/session/compatibility.generated';
+import { expect, test } from 'vitest';
+import { NativeBatch } from './batch';
+
+const leases = { editorId: 1, retain: [], release: [] };
+const begin = { tags: ['typing'], reserveKeys: 8, classMaskPatches: [] };
+const operation = {
+  operation: CompatOperation.AddUpdateTag,
+  receiver: CompatNodeOperand.fromCompatNoNode({}),
+  args: [],
+  initialInstance: CompatInstanceSeed.fromCompatNoInstanceSeed({}),
+};
+const result = {
+  value: ForeignCallbackValue.fromForeignOpaqueArgument({
+    value: ForeignOpaqueValue.fromForeignUndefined({}),
+  }),
+  delta: { records: [], removedKeys: [], invalidateRootText: false },
+};
+
+// Protocol fixtures exercise queue ownership and acknowledgements, not a model
+// or an initializer. Real native compact-batch acceptance remains separate.
+function receipt(patch: Partial<ICompatBatchReply> = {}): Uint8Array {
+  return CompatBatchReply.encode({
+    updateId: 4,
+    reservations: [],
+    flags: 0,
+    published: false,
+    changed: false,
+    noop: false,
+    version: 7n,
+    mutationEpoch: 2n,
+    composition: { present: false, key: { index: 0, generation: 0 } },
+    selection: CompatSelectionData.fromCompatNoSelection({}),
+    selections: [],
+    tags: [],
+    dirtyLeaves: [],
+    dirtyElements: [],
+    dirtyType: 0,
+    delta: { records: [], removedKeys: [], invalidateRootText: false },
+    results: [],
+    outcome: CompatBatchOutcome.fromCompatBatchSuccess({}),
+    ...patch,
+  }).slice();
+}
+
+test('logical begin is cold; flush and admission continue one issued native scope', () => {
+  const requests: ReturnType<typeof CompatBatchRequest.decode>[] = [];
+  const acknowledgements: ICompatBatchReply[] = [];
+  const replies = [
+    receipt({ results: [result] }),
+    receipt({ mutationEpoch: 3n, published: true }),
+  ];
+  const batch = new NativeBatch({
+    call(bytes) {
+      requests.push(CompatBatchRequest.decode(bytes));
+      const reply = replies.shift();
+      if (!reply) throw new Error('No protocol fixture reply');
+      return reply;
+    },
+    now: () => 10,
+    wall: () => 20,
+    acknowledge: (reply) => acknowledgements.push(reply),
+  });
+  batch.begin(6n, begin);
+  expect(requests).toHaveLength(0);
+  expect(batch.hasNativeScope).toBe(false);
+  batch.enqueue(operation);
+  const flush = batch.send(false, leases);
+  expect(acknowledgements[0]).toBe(flush);
+  expect(batch.hasNativeScope).toBe(true);
+  expect(batch.hasOperations).toBe(false);
+  const first = requests[0].scope.data;
+  expect(first.discriminator).toBe(1);
+  if (first.discriminator !== 1) throw new Error('Expected lazy begin');
+  expect(first.value.expectedVersion).toBe(6n);
+  expect(first.value.begin.tags).toEqual(['typing']);
+  expect(requests[0].operations).toHaveLength(1);
+  const admission = batch.send(true, leases);
+  expect(admission.published).toBe(true);
+  const next = requests[1].scope.data;
+  expect(next.discriminator).toBe(2);
+  if (next.discriminator !== 2) throw new Error('Expected continuation');
+  expect(next.value).toMatchObject({ updateId: 4, expectedEpoch: 2n });
+  expect(requests[1].operations).toHaveLength(0);
+  batch.retire();
+  expect(batch.hasNativeScope).toBe(false);
+});
+
+test('typed partial failure acknowledges effects and never retries its skipped suffix', () => {
+  let request: ReturnType<typeof CompatBatchRequest.decode> | undefined;
+  let acknowledged = false;
+  let response = receipt({
+    results: [result],
+    outcome: CompatBatchOutcome.fromCompatBatchNativeFailure({
+      location: CompatFailureLocation.fromCompatOperationFailure({ index: 1 }),
+      errorText: [120],
+    }),
+  });
+  const batch = new NativeBatch({
+    call(bytes) {
+      request = CompatBatchRequest.decode(bytes);
+      return response;
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      acknowledged = true;
+    },
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  batch.enqueue(operation);
+  batch.enqueue(operation);
+  const failed = batch.send(false, leases);
+  expect(failed.outcome.data.discriminator).toBe(2);
+  expect(acknowledged).toBe(true);
+  response = receipt();
+  batch.send(false, leases);
+  expect(request?.operations).toHaveLength(0);
+});
+
+test('invalid admission during flush cannot be retried before native discard', () => {
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt({ published: true });
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      throw new Error('Invalid receipt must not be acknowledged');
+    },
+  });
+  batch.begin(6n, begin);
+  expect(() => batch.send(false, leases)).toThrow('cannot admit');
+  expect(() => batch.send(false, leases)).toThrow('Discard');
+  expect(calls).toBe(1);
+  batch.retire();
+  batch.begin(6n, begin);
+  expect(batch.hasNativeScope).toBe(false);
+});
+
+test('malformed failure prefix rejects before applying any reply', () => {
+  const batch = new NativeBatch({
+    call: () =>
+      receipt({
+        outcome: CompatBatchOutcome.fromCompatBatchNativeFailure({
+          location: CompatFailureLocation.fromCompatOperationFailure({
+            index: 1,
+          }),
+          errorText: [],
+        }),
+      }),
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      throw new Error('Invalid prefix must not be applied');
+    },
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  expect(() => batch.send(false, leases)).toThrow('invalid prefix');
+});
+
+test('acknowledgement failure preserves the original error and requires discard', () => {
+  const error = {};
+  const batch = new NativeBatch({
+    call: () => receipt(),
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      throw error;
+    },
+  });
+  batch.begin(6n, begin);
+  let observed: unknown;
+  try {
+    batch.send(false, leases);
+  } catch (caught) {
+    observed = caught;
+  }
+  expect(observed).toBe(error);
+  expect(() => batch.enqueue(operation)).toThrow('Discard');
+});
+
+test('scoped callbacks cannot recursively enter or mutate the session batch', () => {
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      expect(() => batch.send(false, leases)).toThrow('scoped callback');
+      expect(() => batch.enqueue(operation)).toThrow('scoped callback');
+      expect(() => batch.retire()).toThrow('during its call');
+      return receipt();
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {},
+  });
+  batch.begin(6n, begin);
+  batch.send(false, leases);
+  expect(calls).toBe(1);
+  expect(batch.hasOperations).toBe(false);
+});
+
+test('terminal success requires exactly publication or explicit no-op retirement', () => {
+  let response = receipt({ published: true, noop: true });
+  const batch = new NativeBatch({
+    call: () => response,
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {},
+  });
+  batch.begin(6n, begin);
+  expect(() => batch.send(true, leases)).toThrow('both publish');
+  batch.retire();
+  batch.begin(6n, begin);
+  response = receipt();
+  expect(() => batch.send(true, leases)).toThrow('did not publish or retire');
+});
