@@ -1,0 +1,8 @@
+[crates.document_session_ffi.bindings.swift]
+module_name = "DocumentSession"
+ffi_module_name = "DocumentSessionFFI"
+generate_module_map = true
+
+[crates.document_session_ffi.bindings.kotlin]
+package_name = "com.macro.documentsession"
+cdylib_name = "document_session_ffi"

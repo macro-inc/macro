@@ -1,0 +1,28 @@
+# Document session FFI
+
+## What it is
+
+Typed UniFFI adapter for native-view editors and generic document sessions.
+Swift and Kotlin bindings ship beside their matching staticlib/cdylib.
+
+## Boundaries
+
+Keep sync, authorization and editing policy in document_session/doc_sync_core.
+Handle holds the session mutex only for synchronous model work, never host I/O.
+Native view inputs use Native ViewEngine; chatter is disabled. Optional in-process
+storage requires doc_store_turso; reject store_path when no executor is configured.
+Use typed UniFFI records/enums. Never encode FFI inputs or effects with Bebop or
+postcard. Remote definitions mirror native types and are checked by Rust.
+
+## Checks
+
+- `TMPDIR=/home/wolf/tmp cargo test -p document_session_ffi -j2`
+- `TMPDIR=/home/wolf/tmp cargo clippy -p document_session_ffi --all-targets -j2 -- -D warnings`
+- `TMPDIR=/home/wolf/tmp cargo check -p document_session_ffi --target aarch64-apple-ios-sim -j2`
+- `TMPDIR=/home/wolf/tmp cargo check -p document_session_ffi --target aarch64-linux-android -j2`
+- `cargo x deps --check`, `just check`, `just pr-privacy`
+
+On Linux, iOS validation stops before linking. Android linking requires an NDK.
+Generated bindings live under this crate; Android host integration lives in apps/web/tauri/.
+
+Preserve current commit tags, resolved peer cursors, forced composition end and WAL adoption expected rows at the boundary. Reattach views through ViewDiff without resetting history or synchronization.

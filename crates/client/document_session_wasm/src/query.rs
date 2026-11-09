@@ -64,31 +64,14 @@ pub(crate) fn markdown(
     flavor: u32,
     selected: bool,
 ) -> Result<String, BoundaryError> {
-    let list_indent = match flavor {
-        0 => 4,
-        1 => 2,
+    let flavor = match flavor {
+        0 => document_session::MarkdownFlavor::Upstream,
+        1 => document_session::MarkdownFlavor::Application,
         _ => return Err(BoundaryError::Invalid("markdown flavor")),
     };
-    let options = lexical_markdown::MarkdownOptions {
-        list_indent,
-        ..Default::default()
-    };
-    if selected {
-        Ok(lexical_markdown::convert_selection_to_markdown_string(
-            state,
-            &lexical_markdown::builtin::TRANSFORMERS,
-            state.selection(),
-            &options,
-        )?)
-    } else {
-        Ok(lexical_markdown::convert_to_markdown_string(
-            state,
-            &lexical_markdown::builtin::TRANSFORMERS,
-            None,
-            &options,
-        )?)
-    }
+    Ok(document_session::export_markdown(state, flavor, selected)?)
 }
+
 fn html(
     state: &EditorState,
     selected: bool,
@@ -112,116 +95,9 @@ fn html_for_selection(
         )
         .generate_html_from_nodes(state, selection)?);
     }
-    let registry = lexical_html::register_core(lexical_html::ExportRegistry::builder());
-    let registry = [
-        "heading",
-        "quote",
-        "link",
-        "autolink",
-        "list",
-        "listitem",
-        "code",
-        "code-highlight",
-        "mark",
-        "table",
-        "tablerow",
-        "tablecell",
-    ]
-    .into_iter()
-    .fold(registry, |registry, name| {
-        registry.override_export(name, rich_html)
-    })
-    .build();
-    Ok(
-        lexical_html::HtmlExporter::new(registry, lexical_html::EditorTheme::default())
-            .generate_html_from_nodes(state, selection)?,
-    )
-}
-fn rich_html<'a>(
-    ctx: &lexical_html::ExportCtx<'a>,
-    key: NodeKey,
-) -> lexical_html::Result<lexical_html::DomExportOutput<'a>> {
-    use lexical_html::{DomExportOutput, HtmlElement};
-    let node = ctx.state.view().export_json(key)?;
-    let kind = node
-        .get("type")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
-    if kind == "code-highlight" {
-        return Ok(DomExportOutput::node(lexical_html::nodes::text_export_dom(
-            ctx,
-            key,
-            lexical_html::nodes::text_create_dom(ctx, key)?,
-        )?));
-    }
-    let tag = match kind {
-        "heading" => node
-            .get("tag")
-            .and_then(serde_json::Value::as_str)
-            .filter(|tag| matches!(*tag, "h1" | "h2" | "h3" | "h4" | "h5" | "h6"))
-            .unwrap_or("h1"),
-        "quote" => "blockquote",
-        "link" | "autolink" => "a",
-        "list" => {
-            if node.get("listType").and_then(serde_json::Value::as_str) == Some("number") {
-                "ol"
-            } else {
-                "ul"
-            }
-        }
-        "listitem" => "li",
-        "code" => "pre",
-        "mark" => "mark",
-        "table" => "table",
-        "tablerow" => "tr",
-        "tablecell" => {
-            if node
-                .get("headerState")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0)
-                > 0
-            {
-                "th"
-            } else {
-                "td"
-            }
-        }
-        _ => "span",
-    };
-    let mut element = HtmlElement::new(tag);
-    if tag == "a" {
-        let url = node
-            .get("url")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default();
-        let safe = lexical_rich_nodes::link::sanitize_url(url);
-        element.set_attribute("href", safe);
-        for attribute in ["target", "rel", "title"] {
-            if let Some(value) = node.get(attribute).and_then(serde_json::Value::as_str) {
-                element.set_attribute(attribute, value);
-            }
-        }
-    }
-    if tag == "ol" {
-        if let Some(start) = node.get("start").and_then(serde_json::Value::as_u64) {
-            element.set_attribute("start", start.to_string());
-        }
-    }
-    if matches!(tag, "td" | "th") {
-        for (key, attribute) in [("colSpan", "colspan"), ("rowSpan", "rowspan")] {
-            if let Some(span) = node
-                .get(key)
-                .and_then(serde_json::Value::as_u64)
-                .filter(|v| *v > 1)
-            {
-                element.set_attribute(attribute, span.to_string());
-            }
-        }
-    }
-    if ctx.state.view().is_element(key) {
-        lexical_html::nodes::element_export_dom(ctx, key, &mut element)?;
-    }
-    Ok(DomExportOutput::element(element))
+    Ok(document_session::export_html_for_selection(
+        state, selection,
+    )?)
 }
 pub(crate) fn clipboard(
     state: &EditorState,

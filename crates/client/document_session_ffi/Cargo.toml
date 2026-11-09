@@ -1,0 +1,38 @@
+[package]
+name = "document_session_ffi"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+bindgen = ["uniffi/cli"]
+conformance = ["dep:lexical_conformance"]
+
+[dependencies]
+document_session.workspace = true
+doc_sync_core.workspace = true
+lexical_model.workspace = true
+lexical_loro.workspace = true
+macro_user_id.workspace = true
+lexical_rich_nodes.workspace = true
+loro.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uniffi.workspace = true
+lexical_conformance = { workspace = true, optional = true }
+
+[[bin]]
+name = "document-session-bindgen"
+path = "src/bin/bindgen.rs"
+required-features = ["bindgen"]
+
+[dev-dependencies]
+libtest-mimic.workspace = true
+
+[[test]]
+name = "replay"
+harness = false
+required-features = ["conformance"]

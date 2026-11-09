@@ -35,6 +35,8 @@ use wasm_bindgen::prelude::*;
 const _: () = assert!(lexical_model::DIFF_FORMAT_VERSION == generated::DIFF_FORMAT_VERSION);
 #[derive(Debug, thiserror::Error)]
 enum BoundaryError {
+    #[error(transparent)]
+    Query(#[from] document_session::QueryError),
     #[error("AbiMismatch")]
     AbiMismatch,
     #[error("invalid boundary value: {0}")]

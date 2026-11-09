@@ -26,3 +26,6 @@ mod test;
 mod observation;
 #[cfg(feature = "conformance")]
 pub use observation::UndoObservation;
+
+mod query;
+pub use query::*;

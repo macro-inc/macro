@@ -82,3 +82,4 @@ Generate compatibility_generated.rs and collaboration/session/compatibility.gene
 Use editor/update-bound native key reservations for compact buffered writes; never invent keys or reuse discarded reservations. Batch capture retains before releases, preserve leased frozen records, and invalidate root text caches in incremental deltas instead of retransmitting document text.
 
 Use compatBeginCompact/compatReserveKeys for real native allocator tickets; blocks are bounded to 65,536 keys and belong to one editor/update. Retire unused tickets on commit/discard/no-op without rolling the allocator back. These additive reservation exports do not provide batch construction by themselves.
+Use document_session export helpers for upstream HTML/Markdown so native and WASM share the same renderer; keep Macro export policy in the application branch.
