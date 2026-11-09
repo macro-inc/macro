@@ -1,0 +1,7 @@
+[default]
+description = "Native editor session lifetime, placement and application callbacks."
+permissions = [
+  "allow-begin-account", "allow-create", "allow-mount", "allow-layout", "allow-focus",
+  "allow-permissions", "allow-token-result", "allow-action", "allow-query",
+  "allow-lifecycle", "allow-unmount", "allow-stop",
+]

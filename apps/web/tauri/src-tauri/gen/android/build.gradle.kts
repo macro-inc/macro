@@ -11,6 +11,14 @@ buildscript {
 }
 
 allprojects {
+    listOf("com.android.application", "com.android.library").forEach { androidPlugin ->
+        plugins.withId(androidPlugin) {
+            extensions.configure<com.android.build.gradle.BaseExtension> {
+                buildToolsVersion = "36.0.0"
+                ndkVersion = "30.0.16248370"
+            }
+        }
+    }
     repositories {
         google()
         mavenCentral()

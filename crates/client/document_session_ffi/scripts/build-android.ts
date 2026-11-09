@@ -10,6 +10,7 @@ const targets = [
 	{ rust: "i686-linux-android", clang: "i686-linux-android" },
 ];
 const requested = process.argv[2] ?? "x86_64-linux-android";
+const release = process.argv.includes("--release");
 const target = targets.find((value) => value.rust === requested);
 if (!target) throw new Error(`Unsupported Android target: ${requested}`);
 const ndk = process.env.NDK_HOME;
@@ -23,7 +24,7 @@ const cargoTarget = target.rust.replaceAll("-", "_").toUpperCase();
 const nativeTarget = target.rust.replaceAll("-", "_");
 execFileSync(
 	"cargo",
-	["build", "-p", "document_session_ffi", "--target", target.rust, "-j2"],
+	["build", "-p", "document_session_ffi", "--target", target.rust, "-j2", ...(release ? ["--release"] : [])],
 	{
 		cwd: root,
 		stdio: "inherit",

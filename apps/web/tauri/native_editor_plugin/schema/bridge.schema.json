@@ -1,0 +1,591 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NativeBridgeTypes",
+  "description": "Source of truth for the Android editor bridge. The root is a type catalog; commands carry their named request, never this catalog.",
+  "definitions": {
+    "SurfaceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "surfaceId": {
+          "type": "string"
+        },
+        "surfaceGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "accountGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "surfaceId",
+        "surfaceGeneration",
+        "accountGeneration"
+      ]
+    },
+    "SurfacePermissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "editorEditable": {
+          "type": "boolean"
+        },
+        "contentInteractable": {
+          "type": "boolean"
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "canWrite": {
+          "type": "boolean"
+        },
+        "canComment": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "editorEditable",
+        "contentInteractable",
+        "current",
+        "canWrite",
+        "canComment"
+      ]
+    },
+    "CreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "documentId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "preset": {
+          "type": "string",
+          "enum": [
+            "plainText",
+            "title",
+            "markdown",
+            "markdownSync",
+            "chat",
+            "calendar"
+          ]
+        },
+        "access": {
+          "type": "string",
+          "enum": [
+            "read",
+            "comment",
+            "edit"
+          ]
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "none",
+            "direct"
+          ]
+        },
+        "durable": {
+          "type": "boolean"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "snapshotBase64": {
+          "type": "string"
+        },
+        "traceparent": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/definitions/SurfacePermissions"
+        },
+        "snapshotIntervalMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "presenceTimeoutMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "presenceRefreshMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "presenceUserId": {
+          "type": "string"
+        },
+        "presenceColor": {
+          "type": "string",
+          "enum": [
+            "red",
+            "orange",
+            "yellow",
+            "lime",
+            "green",
+            "teal",
+            "cyan",
+            "blue",
+            "violet",
+            "purple",
+            "pink"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "documentId",
+        "sessionId",
+        "user",
+        "preset",
+        "access",
+        "transport",
+        "durable",
+        "snapshotBase64",
+        "permissions",
+        "snapshotIntervalMs",
+        "presenceTimeoutMs",
+        "presenceColor"
+      ]
+    },
+    "MountRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "ariaLabel": {
+          "type": "string"
+        },
+        "darkMode": {
+          "type": "boolean"
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "textColorArgb": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "hintColorArgb": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "fontSizeCssPx": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "lineHeightCssPx": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "scope",
+        "ariaLabel",
+        "darkMode",
+        "placeholder",
+        "textColorArgb",
+        "hintColorArgb",
+        "fontSizeCssPx",
+        "lineHeightCssPx"
+      ]
+    },
+    "LayoutRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "left": {
+          "type": "number"
+        },
+        "top": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "viewportWidth": {
+          "type": "number"
+        },
+        "clipLeft": {
+          "type": "number"
+        },
+        "clipTop": {
+          "type": "number"
+        },
+        "clipRight": {
+          "type": "number"
+        },
+        "clipBottom": {
+          "type": "number"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scope",
+        "left",
+        "top",
+        "width",
+        "height",
+        "viewportWidth",
+        "clipLeft",
+        "clipTop",
+        "clipRight",
+        "clipBottom",
+        "visible"
+      ]
+    },
+    "FocusRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "focused": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scope",
+        "focused"
+      ]
+    },
+    "PermissionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "permissions": {
+          "$ref": "#/definitions/SurfacePermissions"
+        }
+      },
+      "required": [
+        "scope",
+        "permissions"
+      ]
+    },
+    "TokenResultRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "token": {
+          "type": "string"
+        },
+        "socketUrl": {
+          "type": "string"
+        },
+        "access": {
+          "type": "string",
+          "enum": [
+            "none",
+            "commentMarks",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "requestId",
+        "access"
+      ]
+    },
+    "ActionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "name": {
+          "type": "string"
+        },
+        "payloadJson": {
+          "type": "string"
+        },
+        "modelGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "application",
+            "command",
+            "setState"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "name",
+        "modelGeneration",
+        "kind"
+      ]
+    },
+    "QueryRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "text",
+            "markdown",
+            "state",
+            "savedState",
+            "selectedMarkdown",
+            "clipboard",
+            "application"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "payloadJson": {
+          "type": "string"
+        },
+        "modelGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "scope",
+        "kind",
+        "modelGeneration"
+      ]
+    },
+    "LifecycleRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "signal": {
+          "type": "string",
+          "enum": [
+            "visible",
+            "hidden",
+            "online",
+            "pageHide"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "signal"
+      ]
+    },
+    "QueryReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "json": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "json"
+      ]
+    },
+    "SurfaceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "changed",
+            "history",
+            "status",
+            "plugin",
+            "token",
+            "stopped",
+            "error",
+            "telemetry"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "modelGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "name": {
+          "type": "string"
+        },
+        "payloadJson": {
+          "type": "string"
+        },
+        "canUndo": {
+          "type": "boolean"
+        },
+        "canRedo": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "kind",
+        "revision",
+        "modelGeneration"
+      ]
+    },
+    "AccountRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "user": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "user"
+      ]
+    },
+    "AccountReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accountGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "accountGeneration"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "surfaceScope": {
+      "$ref": "#/definitions/SurfaceScope"
+    },
+    "surfacePermissions": {
+      "$ref": "#/definitions/SurfacePermissions"
+    },
+    "createRequest": {
+      "$ref": "#/definitions/CreateRequest"
+    },
+    "mountRequest": {
+      "$ref": "#/definitions/MountRequest"
+    },
+    "layoutRequest": {
+      "$ref": "#/definitions/LayoutRequest"
+    },
+    "focusRequest": {
+      "$ref": "#/definitions/FocusRequest"
+    },
+    "permissionRequest": {
+      "$ref": "#/definitions/PermissionRequest"
+    },
+    "tokenResultRequest": {
+      "$ref": "#/definitions/TokenResultRequest"
+    },
+    "actionRequest": {
+      "$ref": "#/definitions/ActionRequest"
+    },
+    "queryRequest": {
+      "$ref": "#/definitions/QueryRequest"
+    },
+    "lifecycleRequest": {
+      "$ref": "#/definitions/LifecycleRequest"
+    },
+    "queryReply": {
+      "$ref": "#/definitions/QueryReply"
+    },
+    "surfaceEvent": {
+      "$ref": "#/definitions/SurfaceEvent"
+    },
+    "accountRequest": {
+      "$ref": "#/definitions/AccountRequest"
+    },
+    "accountReply": {
+      "$ref": "#/definitions/AccountReply"
+    }
+  },
+  "required": [
+    "surfaceScope",
+    "surfacePermissions",
+    "createRequest",
+    "mountRequest",
+    "layoutRequest",
+    "focusRequest",
+    "permissionRequest",
+    "tokenResultRequest",
+    "actionRequest",
+    "queryRequest",
+    "lifecycleRequest",
+    "queryReply",
+    "surfaceEvent",
+    "accountRequest",
+    "accountReply"
+  ]
+}

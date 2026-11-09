@@ -25,13 +25,14 @@ class NativeSessionHost(
     private val onViewEffect: (FfiViewEffect) -> Unit,
     private val onFailure: (Exception) -> Unit,
     private val clock: () -> FfiNow = { FfiNow(SystemClock.elapsedRealtime().toULong(), System.currentTimeMillis()) },
+    private val observe: (FfiOutput) -> Unit = {},
 ) : NativeEditorHost {
     private val handler = Handler(Looper.getMainLooper())
     private var view: NativeEditorView? = null
     private var timer: Runnable? = null
     private var stopping: UInt? = null
     private var stopped = false
-    private val pending = java.util.ArrayDeque<FfiInput>()
+    private val pending = java.util.ArrayDeque<() -> FfiOutput>()
     private var admitting = false
 
     override fun now(): FfiNow = clock()
@@ -49,15 +50,24 @@ class NativeSessionHost(
         checkMainThread()
         if (view !== editor) return
         // End platform composition while the old view can still receive corrections.
-        editor.setEditable(false)
+        editor.detachFromSession()
         view = null
+        admit(FfiInput.Focus(false))
     }
 
     /** Start, seed, lifecycle and I/O admissions also work while no view is mounted. */
     fun admit(input: FfiInput) {
+        admitOperation { session.handle(now(), input) }
+    }
+
+    fun applicationCommand(name: String, payload: JsonValue, generation: UInt) {
+        admitOperation { session.applicationCommand(now(), name, payload, generation, ViewSelection.KeepModel) }
+    }
+
+    private fun admitOperation(operation: () -> FfiOutput) {
         checkMainThread()
         if (stopped) return
-        pending.addLast(input)
+        pending.addLast(operation)
         if (admitting) return
         admitting = true
         try {
@@ -68,9 +78,9 @@ class NativeSessionHost(
         }
     }
 
-    private fun handle(input: FfiInput) {
+    private fun handle(operation: () -> FfiOutput) {
         try {
-            val output = session.handle(now(), input)
+            val output = operation()
             try {
                 val mounted = view
                 if (mounted == null) output.view.forEach(::viewEffect)
@@ -93,6 +103,7 @@ class NativeSessionHost(
     override fun execute(output: FfiOutput, admit: (FfiInput) -> Unit) {
         checkMainThread()
         if (stopped) return
+        try { observe(output) } catch (error: Exception) { failed(error) }
         timer?.let(handler::removeCallbacks)
         timer = null
         for (effect in output.io) {

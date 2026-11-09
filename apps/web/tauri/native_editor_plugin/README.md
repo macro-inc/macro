@@ -4,6 +4,13 @@ The Android library hosts the shared Rust session in an AppCompatEditText. Its
 InputConnection owns platform IME input, selection handles and accessibility text;
 `document_session_ffi` owns document changes, history and synchronization policy.
 
+The Android Tauri plugin exposes generated lifecycle, layout, permission,
+application-action and query requests. `NativeEditorSurfaces` issues account
+generations, retains retired surface generations, and rejects stale scope or
+model/revision results. Input connections and detached-view callbacks cannot
+resume after their view or permission generation changes. Registration does not
+change the application's existing editor admission.
+
 `EditorProjection` retains keyed view state and maps UTF-16 positions. A native
 text edit may elide its entire Rust text diff: update the view cache from that edit
 before applying model corrections. Read type names from the session type table,
@@ -50,6 +57,13 @@ Application adoption requires native menu/search adapters, complete decorators
 and block interactions, durable sync and old-draft handoff, and parity across all
 existing surfaces. Keep the application feature-flag admission unchanged until
 that acceptance is complete.
+The UI action bridge requires content interaction; background provider results
+and comment publication need their own correlated adapters. Preserve both legacy
+draft-wrapper save/sync stripping and the modern cursor-based draft protocol in
+[LocalCommentDraft](../../src/features/block-md/comments/LocalCommentDraft.tsx)
+and [message comment operations](../../src/features/block-md/comments/messageCommentOperations.ts):
+publication awaits the anchor acknowledgement, rechecks identity after awaits,
+and retains uncertain potentially posted anchors.
 
 ## Build and validation
 
@@ -64,9 +78,7 @@ nix develop --command bun crates/client/document_session_ffi/scripts/generate-bi
 Run JVM/Robolectric tests and compile instrumentation:
 
 ```sh
-apps/web/tauri/src-tauri/gen/android/gradlew \
-  -p apps/web/tauri/native_editor_plugin/android --max-workers=4 \
-  testDebugUnitTest assembleDebugAndroidTest
+bun apps/web/tauri/native_editor_plugin/scripts/android-check.ts
 ```
 
 For a runnable emulator instrumentation APK, add
@@ -74,6 +86,20 @@ For a runnable emulator instrumentation APK, add
 Rust library. ARM64 uses `aarch64-linux-android`. Native builds are limited to
 two Cargo jobs. The host-library test path includes the compiler host triple,
 matching binding generation; an Android target directory cannot stand in for it.
+The helper resolves the pinned Tauri Android project through Cargo metadata.
+Use root-qualified Gradle tasks such as `:testDebugUnitTest` when passing filters,
+so a filter for editor tests is not applied to Tauri's own test project.
+App builds package the same target list and build profile as the Tauri build;
+standalone builds package a device library only when explicitly selected.
 
 `connectedDebugAndroidTest` exercises the same real-session input scenario on a
 device. Compiling its APK does not establish device or IME acceptance.
+
+Bridge records for all three languages are generated from `schema/bridge.schema.json`.
+Install the private generator
+dependencies and regenerate or check freshness from the repository root:
+
+```sh
+bun install --cwd apps/web/tauri/native_editor_plugin --frozen-lockfile --ignore-scripts
+nix develop --command bun apps/web/tauri/native_editor_plugin/scripts/generate-bridge.ts --check
+```

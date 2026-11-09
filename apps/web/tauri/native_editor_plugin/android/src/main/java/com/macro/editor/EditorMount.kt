@@ -19,13 +19,20 @@ data class EditorBounds(
     val clipRight: Double,
     val clipBottom: Double,
     val visible: Boolean,
-)
+) {
+    init {
+        require(listOf(left, top, width, height, viewportWidth, clipLeft, clipTop, clipRight, clipBottom).all { it.isFinite() })
+        require(width >= 0 && height >= 0 && viewportWidth > 0)
+    }
+}
 
 /** A placement owns only its view; the session owner drains Stop before destroying the session. */
 internal class EditorMount(
     private val webView: WebView,
     private val editor: NativeEditorView,
     val generation: Long,
+    private val fontSizeCssPx: Double,
+    private val lineHeightCssPx: Double,
 ) {
     private val parent = requireNotNull(webView.parent as? FrameLayout)
     private val clip = FrameLayout(webView.context)
@@ -41,14 +48,14 @@ internal class EditorMount(
 
     fun update(requestGeneration: Long, bounds: EditorBounds) {
         if (closed || requestGeneration != generation) return
-        require(listOf(bounds.left, bounds.top, bounds.width, bounds.height, bounds.viewportWidth,
-            bounds.clipLeft, bounds.clipTop, bounds.clipRight, bounds.clipBottom).all { it.isFinite() })
-        require(bounds.width >= 0 && bounds.height >= 0 && bounds.viewportWidth > 0)
         if (!bounds.visible || !webView.isShown || webView.width == 0) {
             hide()
             return
         }
         val scale = webView.width / bounds.viewportWidth
+        require(fontSizeCssPx.isFinite() && fontSizeCssPx > 0 && lineHeightCssPx.isFinite() && lineHeightCssPx > 0)
+        editor.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, (fontSizeCssPx * scale).toFloat())
+        editor.setLineSpacing((lineHeightCssPx * scale).toFloat() - editor.paint.fontSpacing, 1f)
         val location = IntArray(2)
         val parentLocation = IntArray(2)
         webView.getLocationOnScreen(location)
@@ -92,16 +99,18 @@ internal class EditorMount(
         clip.visibility = View.VISIBLE
     }
 
-    fun focus(requestGeneration: Long, focused: Boolean) {
-        if (closed || requestGeneration != generation) return
+    fun focus(requestGeneration: Long, focused: Boolean): Boolean {
+        if (closed || requestGeneration != generation) return false
         if (!focused) {
             editor.clearFocus()
-            return
+            return true
         }
         if (clip.visibility == View.VISIBLE && editor.requestFocus()) {
-            editor.context.getSystemService(InputMethodManager::class.java)
+            if (editor.acceptsInput()) editor.context.getSystemService(InputMethodManager::class.java)
                 .showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
+            return true
         }
+        return false
     }
 
     private fun hide() {

@@ -309,6 +309,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-input-accessory",
  "tauri-plugin-log",
+ "tauri-plugin-native-editor",
  "tauri-plugin-network-status",
  "tauri-plugin-notification",
  "tauri-plugin-notifications",
@@ -7952,6 +7953,16 @@ dependencies = [
  "thiserror 2.0.18",
  "time",
  "tracing",
+]
+
+[[package]]
+name = "tauri-plugin-native-editor"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-token-result"
+description = "Enables the token_result command without any pre-configured scope."
+commands.allow = ["token_result"]
+
+[[permission]]
+identifier = "deny-token-result"
+description = "Denies the token_result command without any pre-configured scope."
+commands.deny = ["token_result"]
