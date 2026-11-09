@@ -2,7 +2,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   disableCrmContactSearch,
   enableCrm,
-  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { EntityItem } from '@core/context/quickAccess';
 import { useQuickAccess } from '@core/context/quickAccess/context';
@@ -93,10 +92,11 @@ export function useCrmContactDiscovery(
   active: Accessor<boolean>
 ) {
   const flag = useFeatureFlag(enableCrm);
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const query = () => search().trim();
   const enabled = () =>
     flag().enabled &&
-    !isFeatureEnabled(disableCrmContactSearch) &&
+    !contactSearchDisabled().enabled &&
     active() &&
     query().length > 0;
   const serverQuery = debouncedDependent(query, CONTACT_SEARCH_DEBOUNCE_MS);
