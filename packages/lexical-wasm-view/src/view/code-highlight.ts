@@ -1,10 +1,13 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import Prism from 'prismjs';
-import type { EditorView } from './editor-view';
+import { textLeaf } from './dom';
+import type { CommitInfo, EditorView } from './editor-view';
 
-const highlights = new WeakMap<
-  Document,
-  Map<string, Map<symbol, readonly Range[]>>
->();
+interface PublishedHighlight {
+  readonly value: Highlight;
+  readonly owners: Map<symbol, readonly Range[]>;
+}
+const highlights = new WeakMap<Document, Map<string, PublishedHighlight>>();
 function publish(
   view: EditorView,
   name: string,
@@ -19,23 +22,26 @@ function publish(
     names = new Map();
     highlights.set(doc, names);
   }
-  let owners = names.get(name);
-  if (!owners) {
-    owners = new Map();
-    names.set(name, owners);
+  let entry = names.get(name);
+  if (!entry) {
+    if (!ranges.length) return;
+    entry = { value: new window.Highlight(), owners: new Map() };
+    names.set(name, entry);
+    window.CSS.highlights.set(name, entry.value);
   }
-  if (ranges.length) owners.set(owner, ranges);
-  else owners.delete(owner);
-  if (owners.size)
-    window.CSS.highlights.set(
-      name,
-      new window.Highlight(...[...owners.values()].flat())
-    );
-  else {
+  for (const old of entry.owners.get(owner) ?? []) entry.value.delete(old);
+  if (ranges.length) {
+    entry.owners.set(owner, ranges);
+    for (const range of ranges) entry.value.add(range);
+    if (window.CSS.highlights.get(name) !== entry.value)
+      window.CSS.highlights.set(name, entry.value);
+  } else entry.owners.delete(owner);
+  if (!entry.owners.size) {
     window.CSS.highlights.delete(name);
     names.delete(name);
   }
 }
+
 interface TokenRange {
   readonly type: string;
   readonly start: number;
@@ -72,23 +78,40 @@ export function installCodeHighlighting(view: EditorView): () => void {
   const window = browser;
   const hasIdle = typeof window.requestIdleCallback === 'function';
   const pending = new Set<number>();
-  const painted = new Map<number, Map<string, Range[]>>();
-  const names = new Set<string>();
-  const owner = Symbol();
+  const painted = new Map<
+    number,
+    { owner: symbol; tokens: Map<string, Range[]> }
+  >();
   let idle: number | null = null;
   let frame: number | null = null;
   let disposed = false;
-  function dirty(key: number): void {
-    for (
-      let node = view.node(key);
-      node;
-      node = node.parent === null ? null : view.node(node.parent)
-    ) {
+  let context = Telemetry.captureContext();
+  function dirty(key: number, commit?: CommitInfo, previous = false): void {
+    let node = previous
+      ? (commit?.mutations.get(key)?.before ?? view.node(key))
+      : view.node(key);
+    while (node) {
       if (node.type === 'code' || node.type === 'custom-code') {
         pending.add(node.key);
-        break;
+        return;
       }
+      if (node.parent === null) return;
+      node = previous
+        ? (commit?.mutations.get(node.parent)?.before ?? view.node(node.parent))
+        : view.node(node.parent);
     }
+  }
+  function release(key: number): void {
+    const previous = painted.get(key);
+    if (!previous) return;
+    for (const type of previous.tokens.keys())
+      publish(
+        view,
+        `code-${view.options.namespace}-${type}`,
+        previous.owner,
+        []
+      );
+    painted.delete(key);
   }
   function schedule(): void {
     if (frame !== null || idle !== null || !pending.size || disposed) return;
@@ -99,13 +122,33 @@ export function installCodeHighlighting(view: EditorView): () => void {
     });
   }
   function paint(): void {
+    context.run(() => {
+      const span = Telemetry.span('view.code_highlight', { sampling: 'perf' });
+      span.setAttr('editor.namespace', view.options.namespace);
+      try {
+        paintBlock(span);
+      } catch (error) {
+        span.error(error instanceof Error ? error.name : 'UnknownError');
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
+  }
+  function paintBlock(span: Span): void {
     idle = null;
     const key = pending.values().next().value;
     if (key === undefined || disposed) return;
     pending.delete(key);
+    span.setAttr('blocks.processed', 1);
     const block = view.node(key),
       element = view.getElementByKey(key);
-    if (!block || !element) painted.delete(key);
+    if (
+      !block ||
+      !element ||
+      (block.type !== 'code' && block.type !== 'custom-code')
+    )
+      release(key);
     else {
       const segments: { node: Text; start: number; end: number }[] = [];
       let text = '';
@@ -113,7 +156,7 @@ export function installCodeHighlighting(view: EditorView): () => void {
         const node = view.node(key);
         if (!node) return;
         if (node.kind === 'text') {
-          const dom = view.getElementByKey(key)?.firstChild;
+          const dom = textLeaf(view.getElementByKey(key));
           if (dom instanceof Text)
             segments.push({
               node: dom,
@@ -147,32 +190,30 @@ export function installCodeHighlighting(view: EditorView): () => void {
         list.push(range);
         ranges.set(token.type, list);
       }
-      painted.set(key, ranges);
-    }
-    if ('highlights' in CSS) {
-      for (const name of names) publish(view, name, owner, []);
-      names.clear();
-      const all = new Map<string, Range[]>();
-      for (const [key, tokens] of painted) {
-        if (!view.node(key)) {
-          painted.delete(key);
-          continue;
-        }
-        for (const [type, ranges] of tokens)
-          all.set(type, [...(all.get(type) ?? []), ...ranges]);
-      }
-      for (const [type, ranges] of all) {
-        const name = `code-${view.options.namespace}-${type}`;
-        publish(view, name, owner, ranges);
-        names.add(name);
-      }
+      span.setAttr(
+        'ranges.created',
+        [...ranges.values()].reduce((total, values) => total + values.length, 0)
+      );
+      const previous = painted.get(key);
+      const owner = previous?.owner ?? Symbol();
+      for (const type of previous?.tokens.keys() ?? [])
+        if (!ranges.has(type))
+          publish(view, `code-${view.options.namespace}-${type}`, owner, []);
+      for (const [type, values] of ranges)
+        publish(view, `code-${view.options.namespace}-${type}`, owner, values);
+      painted.set(key, { owner, tokens: ranges });
     }
     schedule();
   }
   const detach = view.onCommit((info) => {
+    context = Telemetry.captureContext();
+    if (info.fullReconcile) {
+      for (const key of painted.keys()) release(key);
+      pending.clear();
+    }
     for (const key of info.keys) {
-      if (!view.node(key) && painted.has(key)) pending.add(key);
-      else dirty(key);
+      if (!info.fullReconcile) dirty(key, info, true);
+      dirty(key, info);
     }
     schedule();
   });
@@ -183,6 +224,6 @@ export function installCodeHighlighting(view: EditorView): () => void {
     detach();
     if (idle !== null) window.cancelIdleCallback(idle);
     if (frame !== null) window.cancelAnimationFrame(frame);
-    for (const name of names) publish(view, name, owner, []);
+    for (const key of painted.keys()) release(key);
   };
 }

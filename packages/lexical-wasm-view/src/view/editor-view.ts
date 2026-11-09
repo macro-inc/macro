@@ -45,6 +45,7 @@ import type {
   AppliedDiff,
   JsonValue,
   MutationKind,
+  NodeMutation,
   NodeKey,
   TypeFlags,
   ViewNode,
@@ -58,6 +59,9 @@ export interface CommitInfo {
   readonly keys: readonly NodeKey[];
   readonly fullReconcile: boolean;
   readonly selectionChanged: boolean;
+  readonly mutations: ReadonlyMap<NodeKey, NodeMutation>;
+  readonly children: ReadonlySet<NodeKey>;
+  readonly properties: ReadonlySet<NodeKey>;
 }
 export interface ViewOptions {
   readonly namespace: string;
@@ -690,6 +694,9 @@ export class EditorView implements ViewSink {
       keys: [...diff.mutations.keys()],
       fullReconcile: diff.fullReconcile,
       selectionChanged,
+      mutations: diff.mutations,
+      children: diff.children,
+      properties: diff.properties,
     };
     for (const listener of this.commits) listener(info);
     const keys = [...diff.mutations]
