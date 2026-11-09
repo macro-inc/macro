@@ -2,6 +2,25 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Cache-ownership prerequisite `7033671fc6` is integrated as `42e6101143`.
+The immutable registry defaults to native cache derivation; only compatibility
+prevalidation/live builders opt out through `without_reconciler_caches()`.
+Normal native/createMacro builders retain root and element cache derivation.
+The external reconciler policy preserves explicit raw format/style writes rather
+than overwriting JS virtual-setter results. Policy remains in the portable model
+builder, with compatibility factory wiring; no transport or authorization changes.
+
+Independent all-feature library tests pass480 model and60 session-WASM cases,
+including the new external-versus-native cache control. Strict all-target,
+all-feature Clippy, wasm32 target checking, model no-default-feature checking and
+scoped `just check` pass. The actual prepublication JS
+cache producer, stage/lease handler and virtual-setter acknowledgements remain
+unproven activation gates. No hosted initializer, browser acceptance or artifact
+promotion is claimed. Evidence: `compat-cache-policy-integrated-{tests,clippy}.log`,
+`compat-cache-policy-{wasm-check,no-default-check,scoped-check}.log` and
+`compat-cache-policy-integration-audit.md`
+under the acceptance directory. The broad workspace/matrix remains paused.
+
 Dirty-child/decorator view checkpoint `f7a774700c` is integrated as `98d30917d4`.
 View-only ordered text aggregates and compressed clean-child runs avoid walking
 unrelated siblings while preserving DOM-hook and mutation ordering. Ordinary
