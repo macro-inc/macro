@@ -40,7 +40,7 @@ it('changes only microphone playback and retains the value when controls remount
     await screen.findAllByRole('slider', { name: /Volume for Guest/ })
   )[0];
   slider.focus();
-  fireEvent.keyDown(slider, { key: 'ArrowLeft' });
+  fireEvent.keyDown(slider, { key: 'ArrowDown' });
   expect(setVolume).toHaveBeenLastCalledWith(0.99, Track.Source.Microphone);
   expect(participant.getVolume(Track.Source.ScreenShareAudio)).toBeUndefined();
   fireEvent.keyDown(slider, { key: 'Escape' });

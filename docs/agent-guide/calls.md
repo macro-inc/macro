@@ -520,7 +520,8 @@ Hover or keyboard-focus a participant, your own view, or a shared screen to reve
 
 On supported desktop browsers, hover or focus a remote person's tile for Volume,
 beside Pin. The slider changes only that person's microphone playback for you,
-from 0–100%. The small avatar beside the slider is the viewer; its tooltip and
+from 0–100%. The narrow popover uses a vertical slider without a visible heading.
+The small avatar above the slider is the viewer; its tooltip and
 the slider label explain that only this device changes. The thumb uses the
 shared white switch appearance. It survives track resubscription and leaving the call view, but resets
 in the next call. Your own tile, agents, phones and native mobile apps do not show

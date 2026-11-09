@@ -54,11 +54,11 @@ export function CallParticipantVolume(props: {
         <Popover.Portal
           mount={button?.closest<HTMLElement>('.portal-scope') ?? undefined}
         >
-          <Popover.Content class="menu-surface z-action-menu w-64 max-w-[calc(100vw-2rem)] rounded-xl p-3 outline-none">
-            <Popover.Title class="mb-3 text-sm text-ink-muted">
-              {t('calls.volume')}
-            </Popover.Title>
+          <Popover.Content class="menu-surface z-action-menu w-14 rounded-xl p-3 outline-none">
+            <Popover.Title class="sr-only">{localLabel()}</Popover.Title>
             <Slider
+              orientation="vertical"
+              class="items-center"
               value={[volume()]}
               minValue={0}
               maxValue={100}
@@ -73,7 +73,7 @@ export function CallParticipantVolume(props: {
               getValueLabel={({ values }) => `${values[0]}%`}
             >
               <Slider.Label class="sr-only">{localLabel()}</Slider.Label>
-              <div class="flex items-center gap-3">
+              <div class="flex flex-col items-center gap-3">
                 <Tooltip label={localLabel()} tabIndex={0}>
                   <Show
                     when={viewerId()}
@@ -93,13 +93,15 @@ export function CallParticipantVolume(props: {
                     )}
                   </Show>
                 </Tooltip>
-                <Slider.Track class="flex-1">
-                  <Slider.Fill />
-                  <Slider.Thumb appearance="switch">
-                    <Slider.Input />
-                  </Slider.Thumb>
-                </Slider.Track>
-                <Slider.ValueLabel class="w-10 text-right text-sm tabular-nums" />
+                <div class="h-32">
+                  <Slider.Track>
+                    <Slider.Fill />
+                    <Slider.Thumb appearance="switch">
+                      <Slider.Input />
+                    </Slider.Thumb>
+                  </Slider.Track>
+                </div>
+                <Slider.ValueLabel class="text-center text-xs tabular-nums" />
               </div>
             </Slider>
           </Popover.Content>
