@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { fileURLToPath } from 'node:url';
-import { build, type Plugin } from 'vite';
+import { build, createServer, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { expect, test } from 'vitest';
 import { lexicalEngineSwitch } from '../../../../scripts/lexical-engine-switch';
 
-async function evaluateSwitch(enabled: boolean, complete = true) {
-  const fixture: Plugin = {
+function bindingFixture(enabled: boolean, complete: boolean): Plugin {
+  return {
     name: 'lexical-binding-fixture',
     resolveId(id) {
       if (id.endsWith('/fixture:entry')) return '\0fixture:entry';
@@ -57,12 +57,15 @@ async function evaluateSwitch(enabled: boolean, complete = true) {
         `;
     },
   };
+}
+
+async function evaluateSwitch(enabled: boolean, complete = true) {
   const result = await build({
     configFile: false,
     publicDir: false,
     logLevel: 'silent',
     plugins: [
-      fixture,
+      bindingFixture(enabled, complete),
       lexicalEngineSwitch({
         selectionModule: 'fixture:selection',
         compatPackage: 'fixture:compat',
@@ -103,6 +106,38 @@ test('OFF retains exact upstream classes, commands and factories across packages
   expect(bindings.classBeforeInitialization).toBe(true);
   expect(bindings.unchangedAfterFlagRefresh).toBe(true);
 });
+
+for (const enabled of [false, true]) {
+  test(`the test-runner module pipeline preserves selected identities with native=${enabled}`, async () => {
+    const server = await createServer({
+      configFile: false,
+      publicDir: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      optimizeDeps: { entries: [] },
+      server: { middlewareMode: true, hmr: false },
+      plugins: [
+        bindingFixture(enabled, true),
+        lexicalEngineSwitch({
+          selectionModule: 'fixture:selection',
+          compatPackage: 'fixture:compat',
+        }),
+      ],
+    });
+    try {
+      const bindings: Record<string, boolean> =
+        await server.ssrLoadModule('fixture:entry');
+      expect(bindings.originalClass).toBe(!enabled);
+      expect(bindings.originalCommand).toBe(!enabled);
+      expect(bindings.compatClass).toBe(enabled);
+      expect(bindings.richClassUsesSelectedCore).toBe(true);
+      expect(bindings.sameDefaultExport).toBe(true);
+      expect(bindings.unchangedAfterFlagRefresh).toBe(true);
+    } finally {
+      await server.close();
+    }
+  });
+}
 
 test('ON binds compat classes and commands before initialization without caller changes', async () => {
   const bindings = await evaluateSwitch(true);
