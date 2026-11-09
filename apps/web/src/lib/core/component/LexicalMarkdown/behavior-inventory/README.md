@@ -72,6 +72,15 @@ need manual review. The private custom-caret and element-event prototypes are
 explicitly inactive. Neither the source-site count nor plugin-summary count is
 a completed, deduplicated behavioral inventory.
 
+Reviewed existing comment mappings distinguish legacy draft wrappers from modern
+cursor-based ephemeral anchors. Their assertions cover filtering/reconciliation,
+mark removal, publication identity/cancellation and deferred navigation. Service,
+publication, flush and layout boundaries are supplied; they do not prove remote
+delivery, visible thread UI or native draft handoff. Private node-map injection
+and scroll-only focus-named tests are excluded. Mention search mappings likewise
+cover supplied query/cache snapshots, ranking, pagination forwarding and stable
+controller allocation, rather than remote search or service-backed menu UI.
+
 ## Static browser fixture
 
 ```sh
