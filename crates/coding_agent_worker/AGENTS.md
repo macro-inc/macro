@@ -33,6 +33,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
+- `src/outbound/stream.rs`: the owner, bound-agent and presence lookups and
+  the event stream's response head each get `ANSWER_TIMEOUT` (10 s), so a
+  stalled request fails instead of holding up trigger processing. A failed
+  bound-agent refresh keeps the open stream and tries again on the next one.
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
   (`hc`) by environment; both stay supported.
