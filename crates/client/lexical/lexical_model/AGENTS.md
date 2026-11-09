@@ -202,3 +202,5 @@ Install foreign_native_hooks on exact builtin registrations before flag computat
 Capture actual update dirty sets, intent and full-reconcile mode in ForeignReadSnapshot metadata for pure host callouts; preserve those facts through readonly peers, suspend/resume and authorized historical read contexts instead of inferring them from rendered records or the peer dirty sets. Composition remains the snapshot view fact.
 
 Read captured/retired root __cachedText through NodeRef::foreign_raw_root_cached_text without materializing text or resolving latest; retain the separate lazy StateRef cache API for callers that explicitly request computation.
+
+Apply ForeignBaseField assignments only to existing writable records, without virtual setter dispatch or another semantic clone; keep unknown u32 element formats raw while their exported/public alignment name is empty, matching the pinned numeric-property fallback.

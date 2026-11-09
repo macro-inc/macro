@@ -112,74 +112,33 @@ impl NativeCall {
                     return Err(BoundaryError::Invalid("captured field is not writable"));
                 }
                 let field = string(arg(0))?;
-                match field.as_str() {
-                    "__text" => {
-                        tx.text(key)?.set_text_content(&string(arg(1))?)?;
-                    }
-                    "__style" => {
-                        let style = string(arg(1))?;
-                        if tx.is_text(key) {
-                            tx.text(key)?.set_style(&style)?;
-                        } else {
-                            tx.element(key)?.set_style(&style)?;
-                        }
-                    }
-                    "__format" => {
-                        let value = integer(arg(1))?;
-                        if tx.is_text(key) {
-                            tx.text(key)?
-                                .set_format(TextFormat::from_bits_retain(value))?;
-                        } else {
-                            tx.element(key)?.set_format(match value {
-                                0 => ElementFormat::Unset,
-                                1 => ElementFormat::Left,
-                                2 => ElementFormat::Center,
-                                3 => ElementFormat::Right,
-                                4 => ElementFormat::Justify,
-                                5 => ElementFormat::Start,
-                                6 => ElementFormat::End,
-                                _ => return Err(BoundaryError::Invalid("element format")),
-                            })?;
-                        }
-                    }
-                    "__detail" => {
-                        tx.text(key)?
-                            .set_detail(TextDetail::from_bits_retain(integer(arg(1))?))?;
-                    }
-                    "__mode" => {
-                        let mode = match integer(arg(1))? {
-                            0 => TextMode::Normal,
-                            1 => TextMode::Token,
-                            2 => TextMode::Segmented,
-                            _ => return Err(BoundaryError::Invalid("text mode")),
-                        };
-                        tx.text(key)?.set_mode(mode)?;
-                    }
-                    "__indent" => {
-                        tx.set_indent(key, integer(arg(1))?)?;
-                    }
-                    "__textFormat" => {
-                        tx.element(key)?
-                            .set_text_format(TextFormat::from_bits_retain(integer(arg(1))?))?;
-                    }
-                    "__textStyle" => {
-                        tx.element(key)?.set_text_style(&string(arg(1))?)?;
-                    }
-                    "__dir" => {
-                        let direction = match arg(1) {
-                            Some(Value::ForeignOpaqueArgument {
-                                value: compat::ForeignOpaqueValue::ForeignNull {},
-                            }) => None,
-                            _ => Some(match string(arg(1))?.as_str() {
-                                "ltr" => TextDirection::Ltr,
-                                "rtl" => TextDirection::Rtl,
-                                _ => return Err(BoundaryError::Invalid("element direction")),
-                            }),
-                        };
-                        tx.element(key)?.set_direction(direction)?;
-                    }
+                let patch = match field.as_str() {
+                    "__text" => ForeignBaseField::Text(string(arg(1))?),
+                    "__style" => ForeignBaseField::Style(string(arg(1))?.into()),
+                    "__format" => ForeignBaseField::Format(integer(arg(1))?),
+                    "__detail" => ForeignBaseField::Detail(integer(arg(1))?),
+                    "__mode" => ForeignBaseField::Mode(match integer(arg(1))? {
+                        0 => TextMode::Normal,
+                        1 => TextMode::Token,
+                        2 => TextMode::Segmented,
+                        _ => return Err(BoundaryError::Invalid("text mode")),
+                    }),
+                    "__indent" => ForeignBaseField::Indent(integer(arg(1))?),
+                    "__textFormat" => ForeignBaseField::TextFormat(integer(arg(1))?),
+                    "__textStyle" => ForeignBaseField::TextStyle(string(arg(1))?.into()),
+                    "__dir" => ForeignBaseField::Direction(match arg(1) {
+                        Some(Value::ForeignOpaqueArgument {
+                            value: compat::ForeignOpaqueValue::ForeignNull {},
+                        }) => None,
+                        _ => Some(match string(arg(1))?.as_str() {
+                            "ltr" => TextDirection::Ltr,
+                            "rtl" => TextDirection::Rtl,
+                            _ => return Err(BoundaryError::Invalid("element direction")),
+                        }),
+                    }),
                     _ => return Err(BoundaryError::Invalid("unsupported native field patch")),
-                }
+                };
+                tx.patch_foreign_base(key, patch)?;
                 ResultValue::Node(Some(key))
             }
             Op::GetSelection => ResultValue::Selection,

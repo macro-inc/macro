@@ -260,7 +260,7 @@ impl Host {
         }
         if matches!(
             request.operation,
-            Op::GetWritable | Op::Append | Op::SetTextContent | Op::SetIndent | Op::SetNativeField
+            Op::GetWritable | Op::Append | Op::SetTextContent | Op::SetIndent
         ) {
             self.selection_values.invalidate_active_cache(self.update);
         }

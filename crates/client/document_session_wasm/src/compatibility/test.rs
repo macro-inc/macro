@@ -172,6 +172,52 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         .find(|record| record.record.node.key == p.key)
         .unwrap()
         .record;
+    let numeric_format = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SetNativeField,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: true,
+        receiver: paragraph,
+        args: vec![
+            Value::ForeignStringArgument {
+                value: "__format".encode_utf16().collect(),
+            },
+            Value::ForeignNumberArgument { value: 99.0 },
+        ],
+    })?)?;
+    let numeric_record = numeric_format
+        .records
+        .iter()
+        .find(|record| record.record.node.key == p.key)
+        .expect("raw format record")
+        .record;
+    let read_format = editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::GetNodeField,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: true,
+        receiver: numeric_record,
+        args: vec![Value::ForeignStringArgument {
+            value: "__format".encode_utf16().collect(),
+        }],
+    })?)?;
+    assert!(matches!(
+        read_format.value,
+        Value::ForeignNumberArgument { value: 99.0 }
+    ));
+    editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SetNativeField,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: true,
+        receiver: numeric_record,
+        args: vec![
+            Value::ForeignStringArgument {
+                value: "__format".encode_utf16().collect(),
+            },
+            Value::ForeignNumberArgument { value: 0.0 },
+        ],
+    })?)?;
     request.operation = Op::CreateText;
     request.args = vec![Value::ForeignStringArgument {
         value: "native text".encode_utf16().collect(),
@@ -180,6 +226,12 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     let Value::ForeignNodeArgument { value: text } = reply.value else {
         panic!("text");
     };
+    let writable_text = reply
+        .records
+        .iter()
+        .find(|record| record.record.node.key == text.key)
+        .expect("text capture")
+        .record;
     request.operation = Op::Append;
     request.has_receiver = true;
     request.receiver = paragraph;
@@ -247,6 +299,48 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         Value::ForeignBooleanArgument { value: true }
     ));
     assert!(selection_read.selections.is_empty());
+    let mut cached_active = selection_body.clone();
+    if let compat::CompatSelectionData::CompatRangeSelection {
+        has_cached_nodes,
+        cached_nodes,
+        ..
+    } = &mut cached_active
+    {
+        *has_cached_nodes = true;
+        *cached_nodes = vec![text];
+    }
+    editor.compat_set_selection_inner(&bytes(&compat::CompatSelectionPatch {
+        historical: false,
+        state_version: seeded_version,
+        activate: false,
+        selection: cached_active,
+    })?)?;
+    editor.compat_call_inner(&bytes(&compat::CompatRequest {
+        operation: Op::SetNativeField,
+        historical: false,
+        state_version: seeded_version,
+        has_receiver: true,
+        receiver: writable_text,
+        args: vec![
+            Value::ForeignStringArgument {
+                value: "__text".encode_utf16().collect(),
+            },
+            Value::ForeignStringArgument {
+                value: "native text".encode_utf16().collect(),
+            },
+        ],
+    })?)?;
+    assert_eq!(
+        editor
+            .compatibility
+            .as_ref()
+            .unwrap()
+            .selection_values
+            .get(selection_ref)?
+            .cached_nodes,
+        Some(vec![text])
+    );
+
     let memo = editor.compat_call_inner(&bytes(&compat::CompatRequest {
         operation: Op::CreateRangeSelection,
         historical: false,
@@ -942,73 +1036,4 @@ fn historical_leaf_reply_size_and_capture_count_are_independent_of_document_size
     Ok(())
 }
 
-#[test]
-fn reserved_tickets_construct_once_on_the_same_native_allocator() -> Result<(), BoundaryError> {
-    let config = wire::SessionConfigMsg {
-        doc: "compat-reserved-constructor".into(),
-        session: "00000000-0000-0000-0000-000000000001".into(),
-        user: "fixture-user".into(),
-        peers: vec![27, 28, 29],
-        access: wire::Access::Edit,
-        transport: wire::Transport::None,
-        durable: false,
-        chatter: false,
-        headless: false,
-        view_engine: 1,
-        view_os: 0,
-        token: String::new(),
-        traceparent: String::new(),
-        coalesce: 25,
-        snapshot_interval: 0,
-        observed: vec![],
-    };
-    let mut editor = EditorSession::create_compat_inner(
-        generated::ABI_MAJOR,
-        &bytes(&config)?,
-        0.0,
-        0.0,
-        &bytes(&compat::CompatConfig {
-            editor_id: 1,
-            classes: vec![],
-        })?,
-    )?;
-    let reply = editor.compat_begin_compact_inner(&bytes(&compat::CompatBeginRequest {
-        tags: vec![],
-        reserve_keys: 2,
-        class_mask_patches: vec![],
-    })?)?;
-    let (host, machine) = editor.compat_parts()?;
-    let (_, tickets) = host
-        .reservations
-        .get_mut(&reply.reservation.reservation_id)
-        .unwrap();
-    let key = NodeKey::from_parts(KeyParts {
-        index: reply.reservation.keys[0].index,
-        generation: reply.reservation.keys[0].generation,
-    });
-    let ticket = tickets.remove(&key).expect("issued capability");
-    assert!(tickets.remove(&key).is_none());
-    let allocated = host.keys.last_allocated();
-    let pending = host.pending.take().expect("pending update");
-    let machine::Session::Editor(session) = &mut machine.session else {
-        panic!("editor");
-    };
-    let (pending, created) = session.with_compat_update(pending, |tx| {
-        tx.create_reserved_with(ticket, Text::default(), BaseData::Text(TextData::default()))
-    })?;
-    host.pending = Some(pending);
-    assert_eq!(created?.key(), key);
-    assert_eq!(host.keys.last_allocated(), allocated);
-    editor.compat_discard().expect("discard update");
-    assert!(editor
-        .compatibility
-        .as_ref()
-        .unwrap()
-        .reservations
-        .is_empty());
-    editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
-    let next = editor.compat_reserve_keys_inner(1)?;
-    assert!(next.keys[0].index > reply.reservation.keys[1].index);
-    editor.compat_discard().expect("discard update");
-    Ok(())
-}
+mod reservations;
