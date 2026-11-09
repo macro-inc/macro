@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import FileIcon from '@icon/system/regular/file.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
@@ -14,7 +15,6 @@ import {
   Dialog,
   Dropdown,
   type ManagedDialogProps,
-  SingleSelectCheck,
 } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -177,7 +177,9 @@ function TemplateChoices(
         >
           <FileIcon class="size-4 shrink-0" />
           <span class="min-w-0 flex-1">{t('create.taskTemplateNone')}</span>
-          <SingleSelectCheck active={props.selectedKey === 'none'} />
+          <Show when={props.selectedKey === 'none'}>
+            <CheckIcon class="size-3.5 shrink-0 text-accent" />
+          </Show>
         </TemplateAction>
         <Switch>
           <Match when={props.error}>
@@ -253,9 +255,9 @@ function TemplateChoices(
                         >
                           <span class="size-1.5 shrink-0 rounded-full bg-accent" />
                         </Show>
-                        <SingleSelectCheck
-                          active={props.selectedKey === item.key}
-                        />
+                        <Show when={props.selectedKey === item.key}>
+                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                        </Show>
                       </TemplateAction>
                       <Show when={item.edit}>
                         {(edit) => (

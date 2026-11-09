@@ -47,6 +47,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Put No template after search, group templates under Personal and the team name, and put New template last.
 - Apply menu padding once around choices; keep grouped labels on the shared dropdown spacing.
 - Reuse `DropdownSearchInput` for flush, divided search matching the assignee selector.
+- Match trailing selection checks to `PropertyEntitySelector` using its check icon and classes.
 - Use a secondary selection trigger and the existing touch picker sheet; keep empty states brief.
 - Show an accent dot for changed template fields, not task title or description changes; keep property pills unchanged.
 - Follow saved-view actions with Reset and Update template for managers; reset or save fields without changing description text.
