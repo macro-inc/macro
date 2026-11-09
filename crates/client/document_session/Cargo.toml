@@ -14,6 +14,7 @@ lexical_markdown.workspace = true
 lexical_rich_nodes.workspace = true
 lexical_loro.workspace = true
 loro.workspace = true
+loro-internal.workspace = true
 imbl.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

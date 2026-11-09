@@ -72,6 +72,30 @@ impl LoroProjection {
         };
         Some(NodeCursor { node_id, cursor })
     }
+    /// Resolve a transformed history cursor through its current container owner.
+    /// Undo may recreate a node under another container, so stale node IDs from
+    /// metadata must not be paired with cursors transformed by Loro's undo loop.
+    pub fn history_point(
+        &self,
+        doc: &LoroDoc,
+        state: &EditorState,
+        cursor: &Cursor,
+    ) -> Option<Point> {
+        let (key, slot) = self.index.owner.get(&cursor.container)?;
+        if !matches!(slot, index::Slot::Text | index::Slot::Children) {
+            return None;
+        }
+        let node_id = self.index.nodes.get(key)?.id.clone()?;
+        self.point(
+            doc,
+            state,
+            &NodeCursor {
+                node_id,
+                cursor: cursor.clone(),
+            },
+        )
+    }
+
     /// Resolve a durable cursor into a clamped model point; deleted/unindexed nodes return None.
     pub fn point(&self, doc: &LoroDoc, state: &EditorState, cursor: &NodeCursor) -> Option<Point> {
         let key = *self.index.ids.get(&cursor.node_id)?;

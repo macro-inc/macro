@@ -3,9 +3,11 @@ use crate::{InitialView, SessionError, ViewEffect};
 use doc_sync_core::{Access, Now};
 use lexical_loro::{FIXUP_ORIGIN, LOCAL_ORIGIN, LoroProjection, PlainPolicy, SyncPolicy};
 use lexical_model::*;
-use loro::{InnerUndoManager as UndoManager, LoroDoc};
+use loro::LoroDoc;
+use loro_internal::undo::UndoManager;
 use std::sync::Arc;
 mod builder;
+mod history;
 pub use builder::{default_editor_builder, register_editor_commands, with_session_plugins};
 static PLAIN: PlainPolicy = PlainPolicy;
 
@@ -53,6 +55,7 @@ pub struct EditorSurface {
     pub(crate) projection: Option<LoroProjection>,
     undo: Option<UndoManager>,
     tracker: MergeTracker,
+    history_selection: history::HistorySelection,
     group_active: bool,
     history_ready: bool,
     pub(crate) focused: bool,
@@ -82,6 +85,7 @@ impl EditorSurface {
             undo: None,
             tracker: MergeTracker::new(config.delay_ms, HistoryTime(now.mono.0)),
             config,
+            history_selection: history::HistorySelection::default(),
             group_active: false,
             history_ready: false,
             focused: false,
@@ -147,6 +151,13 @@ impl EditorSurface {
     /// Collaborative undo/redo availability.
     pub fn history(&self) -> HistoryAvailability {
         self.availability
+    }
+    /// Actual native history stack depths for independent simulation lineage.
+    #[cfg(feature = "conformance")]
+    pub fn history_depths(&self) -> (usize, usize) {
+        self.undo
+            .as_ref()
+            .map_or((0, 0), |undo| (undo.undo_count(), undo.redo_count()))
     }
     /// Resolve the current selection to durable Loro cursors when both nodes have ids.
     pub fn selection_cursors(&self) -> Option<lexical_loro::SelectionCursors> {
@@ -222,10 +233,8 @@ impl EditorSurface {
         undo.set_max_undo_steps(100);
         undo.set_merge_interval(0);
         undo.add_exclude_origin_prefix("history-");
-        undo.set_on_push(Some(Box::new(|_, span, _| loro::UndoItemMeta {
-            value: loro::LoroValue::I64(i64::from(span.start)),
-            cursors: vec![],
-        })));
+        self.history_selection = history::HistorySelection::default();
+        self.history_selection.install(&undo);
         self.undo = Some(undo);
         self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
         self.group_active = false;
@@ -405,11 +414,11 @@ impl EditorSurface {
             } else {
                 undo.top_undo_meta()
             };
+            self.history_selection.begin(doc, meta.as_ref());
             let end = doc.oplog_vv().get(&doc.peer_id()).copied().unwrap_or(0);
             let ops = meta
-                .and_then(|meta| match meta.value {
-                    loro::LoroValue::I64(start) => Some(i64::from(end).saturating_sub(start)),
-                    _ => None,
+                .and_then(|meta| {
+                    history::start(&meta).map(|start| i64::from(end).saturating_sub(start))
                 })
                 .unwrap_or(0);
             let span = if redo || ops > 100 {
@@ -439,7 +448,13 @@ impl EditorSurface {
                     .as_ref()
                     .map(|_| tracing::info_span!("editor.history.loro"));
                 let _phase = phase.as_ref().map(tracing::Span::enter);
-                if redo { undo.redo()? } else { undo.undo()? }
+                let result = if redo { undo.redo() } else { undo.undo() };
+                if result.is_err() {
+                    self.history_selection.applied();
+                }
+                let changed = result?;
+                self.history_selection.finish(undo, redo);
+                changed
             };
             if let Some(span) = &span {
                 span.record("history.applied", changed);
@@ -459,6 +474,9 @@ impl EditorSurface {
                     .map(|_| tracing::info_span!("editor.history.apply"));
                 let _phase = phase.as_ref().map(tracing::Span::enter);
                 self.remote_pending(doc, now, access, view, true)?;
+            }
+            if !changed {
+                self.history_selection.applied();
             }
             if let Some(span) = &span {
                 span.record("outcome", "ok");
@@ -491,11 +509,23 @@ impl EditorSurface {
             self.history_changed(view);
             return Ok(false);
         }
+        self.history_selection.prepare(self.selection_cursors());
         let result = self.core.apply(input, HistoryTime(now.mono.0));
         let commits: &[Commit] = match &result {
             Ok(out) => &out.commits,
             Err(error) => &error.committed,
         };
+        if let Ok(output) = &result
+            && let Some(selection) = &output.installed_selection
+        {
+            self.history_selection
+                .prepare(selection.as_ref().and_then(|selection| {
+                    let previous = commits
+                        .first()
+                        .map_or(self.core.state(), |commit| &commit.prev);
+                    self.projection.as_ref()?.cursor(doc, previous, selection)
+                }));
+        }
         let count = self.group(commits, HistoryTime(now.mono.0))?;
         #[cfg(feature = "test-faults")]
         let fault = if std::mem::take(&mut self.wrong_next_type) {
@@ -560,6 +590,10 @@ impl EditorSurface {
             }
         }
         self.refresh_cursor(doc);
+        if changed && let Some(undo) = &self.undo {
+            self.history_selection
+                .record_after(undo, self.selection_cursors());
+        }
         self.history_changed(view);
         if let Some(span) = &cold_span {
             span.record("outcome", if failed { "error" } else { "ok" });
@@ -614,6 +648,9 @@ impl EditorSurface {
         view: &mut Vec<ViewEffect>,
         historic: bool,
     ) -> Result<bool, SessionError> {
+        let popped = historic
+            .then(|| self.history_selection.take_popped())
+            .flatten();
         #[cfg(test)]
         if std::mem::take(&mut self.fail_next_remote) {
             return Err(lexical_loro::ProjectionError::Diverged {
@@ -671,49 +708,89 @@ impl EditorSurface {
             false
         };
         Self::output(output, view);
-        if let Some(cursors) = cursors {
-            let anchor = projection.point(doc, self.core.state(), &cursors.anchor);
-            let focus = projection.point(doc, self.core.state(), &cursors.focus);
-            if let (Some(anchor), Some(focus)) = (anchor, focus) {
-                let input = if self.config.mode == EditorMode::Headless {
-                    Input::Command {
-                        command: Command::Extension(ExtensionCommand::new(
-                            &builder::RESTORE_MODEL_SELECTION,
-                            RangeSelection::new(anchor, focus),
-                        )),
-                        selection: ViewSelection::KeepModel,
-                    }
-                } else {
-                    Input::SelectionFromView {
-                        selection: ViewSelection::Range {
-                            anchor,
-                            focus,
-                            resolution_dirty: false,
-                        },
-                        change: None,
-                    }
-                };
-                let output = self
-                    .core
-                    .apply(input, HistoryTime(now.mono.0))
-                    .map_err(|error| SessionError::Model(error.error))?;
-                Self::output(output, view);
-                // SelectionFromView says the host already installed its input. Here it
-                // only restores the model, so explicitly deliver the final cursor to a focused view.
-                if self.focused {
-                    let range = self.core.state().selection().and_then(Selection::as_range);
-                    view.push(ViewEffect::Editor(Effect::SetViewSelection {
-                        selection: ViewSelection::Range {
-                            anchor,
-                            focus,
-                            resolution_dirty: false,
-                        },
-                        format: range.map_or(TextFormat::empty(), |range| range.format),
-                        style: range.map_or_else(|| Arc::from(""), |range| range.style.clone()),
-                    }));
+        if popped.as_ref().is_some_and(Vec::is_empty) {
+            let input = if self.config.mode == EditorMode::Headless {
+                Input::Command {
+                    command: Command::Extension(ExtensionCommand::new(
+                        &builder::RESTORE_MODEL_SELECTION,
+                        None,
+                    )),
+                    selection: ViewSelection::KeepModel,
                 }
+            } else {
+                Input::SelectionFromView {
+                    selection: ViewSelection::None,
+                    change: None,
+                }
+            };
+            let output = self
+                .core
+                .apply(input, HistoryTime(now.mono.0))
+                .map_err(|error| SessionError::Model(error.error))?;
+            Self::output(output, view);
+            if self.focused {
+                view.push(ViewEffect::Editor(Effect::SetViewSelection {
+                    selection: ViewSelection::None,
+                    format: TextFormat::empty(),
+                    style: Arc::from(""),
+                }));
             }
         }
+        let points = if let Some(cursors) = &popped {
+            cursors.first().zip(cursors.get(1)).map(|(anchor, focus)| {
+                (
+                    projection.history_point(doc, self.core.state(), anchor),
+                    projection.history_point(doc, self.core.state(), focus),
+                )
+            })
+        } else {
+            cursors.as_ref().map(|cursors| {
+                (
+                    projection.point(doc, self.core.state(), &cursors.anchor),
+                    projection.point(doc, self.core.state(), &cursors.focus),
+                )
+            })
+        };
+        if let Some((Some(anchor), Some(focus))) = points {
+            let input = if self.config.mode == EditorMode::Headless {
+                Input::Command {
+                    command: Command::Extension(ExtensionCommand::new(
+                        &builder::RESTORE_MODEL_SELECTION,
+                        Some(RangeSelection::new(anchor, focus)),
+                    )),
+                    selection: ViewSelection::KeepModel,
+                }
+            } else {
+                Input::SelectionFromView {
+                    selection: ViewSelection::Range {
+                        anchor,
+                        focus,
+                        resolution_dirty: false,
+                    },
+                    change: None,
+                }
+            };
+            let output = self
+                .core
+                .apply(input, HistoryTime(now.mono.0))
+                .map_err(|error| SessionError::Model(error.error))?;
+            Self::output(output, view);
+            // SelectionFromView says the host already installed its input. Here it
+            // only restores the model, so explicitly deliver the final cursor to a focused view.
+            if self.focused {
+                let range = self.core.state().selection().and_then(Selection::as_range);
+                view.push(ViewEffect::Editor(Effect::SetViewSelection {
+                    selection: ViewSelection::Range {
+                        anchor,
+                        focus,
+                        resolution_dirty: false,
+                    },
+                    format: range.map_or(TextFormat::empty(), |range| range.format),
+                    style: range.map_or_else(|| Arc::from(""), |range| range.style.clone()),
+                }));
+            }
+        }
+        self.history_selection.applied();
         self.refresh_cursor(doc);
         self.history_changed(view);
         Ok(changed)

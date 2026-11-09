@@ -588,3 +588,60 @@ fn event_only_command_is_published_without_advancing_history_merge_clock() {
     assert_eq!(core.history().unwrap().undo_depth(), 2);
     assert_eq!(core.state().view().text_content(text), "abc");
 }
+
+#[test]
+fn batch_selection_metadata_reports_only_actual_installation() {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .plugin(Typing)
+        .build()
+        .unwrap();
+    let (text, _) = editor
+        .update(|tx| {
+            let paragraph = tx.create(Paragraph::default())?;
+            let text = tx.create_text("a")?;
+            tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+            tx.append(paragraph, &[text.key()])?;
+            tx.set_selection(Some(Selection::Range(RangeSelection::new(
+                Point::text(text, Utf16Offset(1)),
+                Point::text(text, Utf16Offset(1)),
+            ))))?;
+            Ok(text.key())
+        })
+        .unwrap();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    let output = core
+        .apply(
+            Input::Batch(vec![
+                Input::ApplyRemote {
+                    changes: vec![],
+                    options: UpdateOptions::default(),
+                },
+                Input::Command {
+                    command: Command::InsertText("x".into()),
+                    selection: ViewSelection::None,
+                },
+            ]),
+            HistoryTime(0),
+        )
+        .unwrap();
+    assert!(output.installed_selection.is_none());
+    assert_eq!(core.state().view().text_content(text), "ax");
+    assert_eq!(
+        core.state()
+            .selection()
+            .unwrap()
+            .as_range()
+            .unwrap()
+            .anchor
+            .offset(),
+        2
+    );
+}

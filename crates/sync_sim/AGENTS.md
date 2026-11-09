@@ -292,3 +292,5 @@ Created/terminal AI cancellation has no flush preflight; Close joins its WAL bar
 Step::Create constructs without Start, so Init cancellation uses the same real core.
 
 Observe adoption issue and callback consumption by exact client/session/storage ID; enforce no_seed_over_unadopted_wal in ordinary and hostile runs. Keep the randomized startup ordering control (all seed sources, multiple owners, callback orders and timeouts) strict.
+
+Observe committed and redone model selections independently of UndoManager metadata; redo_restores_selection compares durable endpoint identities/kinds/offsets using actual undo/redo stack depths for entry lineage, the same observed committed tree and exact session, including hostile safety runs.

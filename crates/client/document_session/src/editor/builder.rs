@@ -179,7 +179,7 @@ impl Plugin for RichCommands {
 }
 
 // Remote cursor repair is a model operation; headless editors reject view inputs.
-pub(super) static RESTORE_MODEL_SELECTION: CommandKey<RangeSelection> =
+pub(super) static RESTORE_MODEL_SELECTION: CommandKey<Option<RangeSelection>> =
     CommandKey::new("session-restore-model-selection");
 pub(super) struct RestoreModelSelection;
 impl Plugin for RestoreModelSelection {
@@ -201,11 +201,13 @@ impl Plugin for RestoreModelSelection {
         let Some(range) = command.payload(&RESTORE_MODEL_SELECTION) else {
             return Ok(Handled::No);
         };
-        tx.selection_from_view(ViewSelection::Range {
-            anchor: range.anchor,
-            focus: range.focus,
-            resolution_dirty: false,
-        })?;
+        tx.selection_from_view(range.as_ref().map_or(ViewSelection::None, |range| {
+            ViewSelection::Range {
+                anchor: range.anchor,
+                focus: range.focus,
+                resolution_dirty: false,
+            }
+        }))?;
         Ok(Handled::Yes)
     }
 }

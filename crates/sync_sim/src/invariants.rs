@@ -1,6 +1,8 @@
 //! Invariant queries over raw core, storage and real editor observations.
 use crate::*;
+mod history;
 mod lifecycle;
+pub use history::*;
 pub use lifecycle::*;
 mod durability;
 pub use durability::*;
@@ -28,6 +30,7 @@ pub fn check_all(outcome: &Outcome) -> Result<(), Vec<Failure>> {
 pub type Invariant = fn(&Outcome) -> Result<(), Failure>;
 /// S8's hostile-network subset; liveness and quietness are intentionally not asserted.
 pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
+    "redo_restores_selection",
     "every_close_terminates",
     "no_seed_over_unadopted_wal",
     "no_acked_edit_lost",
@@ -40,6 +43,7 @@ pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
 /// Named query registry used by stories and generated scripts.
 pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("settled", settled),
+    ("redo_restores_selection", redo_restores_selection),
     ("every_close_terminates", every_close_terminates),
     ("no_seed_over_unadopted_wal", no_seed_over_unadopted_wal),
     ("all_docs_equal", all_docs_equal),
