@@ -49,6 +49,7 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -927,6 +928,7 @@ export function Channel(props: ChannelProps) {
                             triggerBehavior="spring-back"
                           >
                             <ThreadList
+                              preserveReflowGap={!!callPanel && !isMobile()}
                               keys={rowKeys}
                               targetId={
                                 targetMessageController.hasPendingElementScroll()

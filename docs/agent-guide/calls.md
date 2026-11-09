@@ -413,6 +413,8 @@ sender's tile is off screen it appears at the stage's bottom-left. Reduced motio
 fades in, holds, then fades out without movement or scale. Reactions have no sound and disappear when leaving.
 
 Desktop **More → Full screen**, including the rail popover, expands only the call area.
+The call chat panel stays attached while crossing the docked/overlay width
+threshold; its draft, active thread and reading gap survive reflow.
 The call provider owns a persistent fullscreen target so a popover action enters
 fullscreen during its click before the call route loads. The same item becomes
 **Exit full screen**; browser Escape also exits. Call menus and tooltips remain

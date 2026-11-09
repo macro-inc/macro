@@ -2,6 +2,7 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import XIcon from '@icon/system/regular/x.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Tabs } from '@ui';
 import {
   createEffect,
@@ -14,7 +15,7 @@ import {
 
 export type CallPanelTab = 'chat' | 'participants' | 'work';
 
-/** Share one mounted panel between the desktop sidebar and phone drawer. */
+/** Keep the desktop panel attached while its reserved column changes size. */
 export function CallChatPanel(props: {
   id: string;
   open: boolean;
@@ -33,6 +34,7 @@ export function CallChatPanel(props: {
   overlayMount?: HTMLElement;
   returnFocus?: HTMLButtonElement;
 }) {
+  const sidebarSize = createElementSize(() => props.sidebarMount);
   const [sidebarBody, setSidebarBody] = createSignal<HTMLDivElement>();
   const [sheetBody, setSheetBody] = createSignal<HTMLDivElement>();
   const sheetOpen = () => isMobile() && props.open;
@@ -48,15 +50,9 @@ export function CallChatPanel(props: {
 
   createEffect(
     on(
-      [
-        isMobile,
-        sidebarBody,
-        sheetBody,
-        () => props.sidebarMount,
-        () => props.overlayMount,
-      ],
-      ([mobile, sidebar, sheet, sidebarMount, overlayMount]) => {
-        const target = !mobile && sidebarMount ? sidebarMount : overlayMount;
+      [isMobile, sidebarBody, sheetBody, () => props.overlayMount],
+      ([mobile, sidebar, sheet, overlayMount]) => {
+        const target = overlayMount;
         if (target && aside.parentElement !== target) target.appendChild(aside);
         const content = mobile ? sheet : sidebar;
         if (content && body.parentElement !== content)
@@ -85,7 +81,18 @@ export function CallChatPanel(props: {
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
-        class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:w-full"
+        class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none"
+        style={
+          props.sidebarMount
+            ? {
+                left: 'auto',
+                right: '0px',
+                top: '8px',
+                bottom: '8px',
+                width: `${sidebarSize.width ?? 0}px`,
+              }
+            : undefined
+        }
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,

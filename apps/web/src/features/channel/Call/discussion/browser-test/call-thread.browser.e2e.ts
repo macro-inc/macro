@@ -807,6 +807,9 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
     .poll(() => scroll.evaluate((el) => el.scrollTop))
     .toBeCloseTo(previous, 0);
   await checkGeometry();
+  const readingAnchor = await latest.evaluate(
+    (el) => el.getBoundingClientRect().top
+  );
   if (testInfo.project.name === 'phone') await page.keyboard.press('Escape');
   else
     await page
@@ -817,9 +820,10 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
     .getByRole('button', { name: 'Open chat and participants' })
     .click();
   await expect(editor).toHaveText('A preserved call draft');
+  // Virtualized older rows can change estimates; preserve the actual reading anchor.
   await expect
-    .poll(() => scroll.evaluate((el) => el.scrollTop))
-    .toBeCloseTo(previous, 0);
+    .poll(() => latest.evaluate((el) => el.getBoundingClientRect().top))
+    .toBeCloseTo(readingAnchor, 0);
   await checkGeometry();
   if (process.env.CALL_REPRO_DIR)
     await page.screenshot({
@@ -908,5 +912,87 @@ test('call duration pill follows header width, not viewport width', async ({
       page.getByRole('button', { name: 'Open chat and participants' })
     ).toBeVisible();
     await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('call thread survives crossing the docked width threshold', async ({
+  page,
+}, info) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || info.project.name !== 'desktop'
+  );
+  for (const theme of ['dark', 'light']) {
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await open(page, 'panel', {
+      status: { state: 'live' },
+      fullOverlay: true,
+      theme,
+      historyCount: 40,
+      replies: Array.from({ length: 40 }, (_, index) =>
+        reply(
+          `00000000-0000-7000-8000-${(0xc000 + index).toString(16).padStart(12, '0')}`,
+          `Reply ${index + 1}: a deliberately long sentence that wraps at different panel widths and preserves its call-thread owner.`
+        )
+      ),
+    });
+    const latest = page.getByText(/^Reply 40:/);
+    await expect(latest).toBeInViewport();
+    const composer = page.locator('[data-input-id^="thread-reply-input"]');
+    const editor = composer.locator('[data-markdown-editable]');
+    await editor.click();
+    await editor.press('ControlOrMeta+a');
+    await editor.press('Backspace');
+    await editor.pressSequentially('Preserved across widths');
+    await expect(editor).toHaveText('Preserved across widths');
+    const original = await composer.elementHandle();
+    for (const width of [720, 480, 1280]) {
+      await page.setViewportSize({ width, height: 860 });
+      await expect(latest).toBeInViewport();
+      await expect(editor).toHaveText('Preserved across widths');
+      await expect(
+        page.getByText('Back to call thread', { exact: true })
+      ).toHaveCount(0);
+      expect(
+        await composer.evaluate((el, previous) => el === previous, original)
+      ).toBe(true);
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L115-${theme}-${width}.png`,
+        });
+    }
+
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {}))
+      )
+    );
+    const scroll = page.locator('[data-channel-scroll]');
+    await scroll.hover();
+    await Promise.all([
+      scroll.evaluate(
+        (el) =>
+          new Promise<void>((resolve) =>
+            el.addEventListener('scrollend', () => resolve(), { once: true })
+          )
+      ),
+      page.mouse.wheel(0, -350),
+    ]);
+    await expect(latest).not.toBeInViewport();
+    await expect(
+      page.getByText('Back to call thread', { exact: true })
+    ).toBeVisible();
+    const previous = await scroll.evaluate((el) => el.scrollTop);
+    await page.setViewportSize({ width: 720, height: 860 });
+    await expect(
+      page.getByRole('complementary', { name: 'Call sidebar' })
+    ).toHaveCSS('width', '696px');
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await expect
+      .poll(() => scroll.evaluate((el) => el.scrollTop))
+      .toBeCloseTo(previous, 0);
+    await expect(editor).toHaveText('Preserved across widths');
   }
 });
