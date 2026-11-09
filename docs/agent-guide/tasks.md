@@ -847,9 +847,10 @@ to that unchanged draft. An InputGroup strip above the task title contains the
 template icon and a real name input. A new template starts empty with Template
 name focused; editing does not focus the name. Long names truncate. Name edits
 persist as you type, including clearing the name, which disables Save. A new
-template's visibility dropdown offers Only me and the current team; editing a
-team template shows the fixed team avatar and name, while a personal template
-shows no ownership label. This visibility is separate from the footer's task
+template's Share with team switch chooses personal or current-team ownership;
+the switch is hidden without a team. Editing a team template shows the fixed
+team avatar and name, while a personal template shows no ownership label.
+This visibility is separate from the footer's task
 sharing switch. New template captures that switch, and editing changes the stored
 task-sharing default. The ordinary task title, description, and fields remain below
 the strip. Both hide Attach and Create More. Save template

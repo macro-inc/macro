@@ -33,7 +33,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Preserve existing task title, prose, and attachments after saving a template; fill title and description only when blank.
 - Put New template or Edit template on the header back action; keep Delete and the existing Close or sheet Save action unchanged.
 - Edit template names in an `InputGroup` strip above the task title; focus only new-template names and disable editing during saves.
-- Put immutable team ownership beside the name; use a two-choice visibility dropdown for new templates and omit personal ownership when editing.
+- Put immutable team ownership beside the name; use a Share with team switch for new templates and omit personal ownership when editing.
 - Stack visibility below the name inside the strip on phones; keep the task-title editor independent.
 - Keep attachments and Create More hidden in template mode.
 - Keep template visibility in the name strip separate from the footer's task-sharing switch.

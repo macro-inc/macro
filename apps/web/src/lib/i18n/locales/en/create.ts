@@ -337,8 +337,7 @@ export default {
   taskTemplateNone: 'No template',
   taskTemplateNew: 'New template',
   taskTemplateEdit: 'Edit template',
-  taskTemplateOnlyMe: 'Only me',
-  taskTemplateVisibility: 'Template visibility',
+  taskTemplateShareVisibility: 'Share with team',
   taskTemplateSelected: 'Template: {{name}}',
   taskTemplateSwitchTitle: 'Switch template?',
   taskTemplateSwitchBody:

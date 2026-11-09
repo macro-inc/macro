@@ -5,21 +5,19 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import FileIcon from '@icon/system/regular/file.svg';
-import LockIcon from '@icon/system/regular/lock.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import {
   Avatar,
   Button,
   ConfirmDialog,
-  Dropdown,
   InputGroup,
   type ManagedDialogProps,
   openDialog,
+  ToggleSwitch,
   Tooltip,
   useImperativeDialog,
 } from '@ui';
@@ -419,7 +417,15 @@ export function TaskTemplateControls(props: {
 
 /** Template identity and immutable ownership, separate from the task defaults. */
 export function TaskTemplateNameStrip(props: {
-  composer: TaskComposerController;
+  composer: Pick<
+    TaskComposerController,
+    | 'templateSelection'
+    | 'team'
+    | 'isTemplateMode'
+    | 'isSavingTemplate'
+    | 'setTemplateName'
+    | 'setTemplateTeamId'
+  >;
 }) {
   const selection = () => props.composer.templateSelection();
   const name = () => {
@@ -436,8 +442,6 @@ export function TaskTemplateNameStrip(props: {
   };
   const teamName = () =>
     props.composer.team()?.name ?? t('create.taskTemplateTeam');
-  const visibilityLabel = () =>
-    teamId() ? teamName() : t('create.taskTemplateOnlyMe');
   const teamIdentity = () => (
     <>
       <Avatar size="sm" shape="square">
@@ -474,7 +478,11 @@ export function TaskTemplateNameStrip(props: {
         <InputGroup.Addon>
           <CopyIcon class="size-4" />
         </InputGroup.Addon>
-        <Show when={selection().kind === 'new' || teamId()}>
+        <Show
+          when={
+            (selection().kind === 'new' && props.composer.team()) || teamId()
+          }
+        >
           <InputGroup.Addon
             align="inline-end"
             class="min-w-0 max-w-1/2 mobile:max-w-full mobile:basis-full mobile:justify-start mobile:pb-3 mobile:ps-4"
@@ -490,53 +498,21 @@ export function TaskTemplateNameStrip(props: {
                 </Tooltip>
               }
             >
-              <Dropdown>
-                <Dropdown.Trigger
-                  variant="secondary"
-                  size="xs"
-                  class="min-w-0 max-w-full"
-                  disabled={props.composer.isSavingTemplate()}
-                  aria-label={t('create.taskTemplateVisibility')}
-                  tooltip={visibilityLabel()}
-                >
-                  <Show
-                    when={teamId()}
-                    fallback={
-                      <>
-                        <LockIcon class="size-4 shrink-0" />
-                        <span>{t('create.taskTemplateOnlyMe')}</span>
-                      </>
+              <Show when={props.composer.team()}>
+                {(team) => (
+                  <ToggleSwitch
+                    checked={Boolean(teamId())}
+                    onChange={(checked) =>
+                      props.composer.setTemplateTeamId(
+                        checked ? team().id : null
+                      )
                     }
-                  >
-                    {teamIdentity()}
-                  </Show>
-                  <CaretDownIcon class="size-4 shrink-0" />
-                </Dropdown.Trigger>
-                <Dropdown.Content>
-                  <Dropdown.Group>
-                    <Dropdown.RadioGroup
-                      value={teamId() ?? ''}
-                      onChange={(id) =>
-                        props.composer.setTemplateTeamId(id || null)
-                      }
-                    >
-                      <Dropdown.RadioItem value="">
-                        <LockIcon class="size-4 shrink-0" />
-                        <span>{t('create.taskTemplateOnlyMe')}</span>
-                        <Dropdown.ItemIndicator />
-                      </Dropdown.RadioItem>
-                      <Show when={props.composer.team()}>
-                        {(team) => (
-                          <Dropdown.RadioItem value={team().id}>
-                            {teamIdentity()}
-                            <Dropdown.ItemIndicator />
-                          </Dropdown.RadioItem>
-                        )}
-                      </Show>
-                    </Dropdown.RadioGroup>
-                  </Dropdown.Group>
-                </Dropdown.Content>
-              </Dropdown>
+                    disabled={props.composer.isSavingTemplate()}
+                    label={t('create.taskTemplateShareVisibility')}
+                    labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                  />
+                )}
+              </Show>
             </Show>
           </InputGroup.Addon>
         </Show>
