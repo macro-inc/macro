@@ -30,9 +30,9 @@ struct ForeignTreeLinks { ForeignOptionalKey parent; ForeignOptionalKey previous
 
 // ctorKey is the key observed by static clone's constructor. The framework then
 // assigns destination.key before afterCloneFrom; a copy can have a fresh key.
-struct ForeignCloneStage { uint32 stageId; uint32 editorId; uint32 updateId; uint64 version; ForeignNodeRef source; ForeignKey ctorKey; ForeignNodeRef destination; ForeignBasePatch base; ForeignOpaqueValue ownFields; ForeignTreeLinks requiredLinks; }
+struct ForeignCloneStage { uint32 stageId; uint32 editorId; uint32 updateId; uint64 version; ForeignNodeRef source; ForeignKey ctorKey; ForeignNodeRef destination; ForeignBasePatch base; ForeignNativeProjection nativeProjection; ForeignOpaqueValue ownFields; ForeignTreeLinks requiredLinks; }
 // observedLinks are checked against requiredLinks; they never rewrite the graph.
-struct ForeignCloneAck { uint32 stageId; uint32 classId; uint32 instanceId; ForeignKey ctorKey; ForeignKey destinationKey; ForeignBasePatch basePatch; ForeignOpaqueValue ownFields; ForeignTreeLinks observedLinks; }
+struct ForeignCloneAck { uint32 stageId; uint32 classId; uint32 instanceId; ForeignKey ctorKey; ForeignKey destinationKey; ForeignBasePatch basePatch; ForeignNativeProjection nativeProjection; ForeignOpaqueValue ownFields; ForeignTreeLinks observedLinks; }
 
 // The explicit prototype class makes TextNode.prototype calls on a Tab instance
 // bypass Tab's override without changing the receiver's concrete identity.
@@ -52,6 +52,11 @@ union ForeignCallbackValue {
   5 -> struct ForeignRecordArgument { ForeignRecordRef value; }
   6 -> struct ForeignEditorArgument { ForeignEditorRef value; }
   7 -> struct ForeignNodeArrayArgument { ForeignNodeRef[] values; }
+  8 -> struct ForeignBooleanArgument { bool value; }
+  9 -> struct ForeignNumberArgument { float64 value; }
+  10 -> struct ForeignStringArgument { uint16[] value; }
+  11 -> struct ForeignNumberArrayArgument { float64[] values; }
+  12 -> struct ForeignStringArrayArgument { ForeignUtf16String[] values; }
 }
 struct ForeignHookCall { uint32 callbackId; byte hook; ForeignRecordRef receiver; uint32 prototypeClassId; ForeignCallbackValue[] args; }
 
@@ -62,3 +67,12 @@ union ForeignHookResult {
   2 -> struct ForeignInherited { }
   3 -> struct ForeignThrown { ForeignOpaqueValue error; }
 }
+
+// Rust-origin scalar arguments need no JS slot allocation or JSON conversion.
+// Strings carry UTF-16 units and float64 retains negative zero and NaN.
+struct ForeignUtf16String { uint16[] value; }
+struct ForeignNativeFieldValue { ForeignNativeField field; ForeignCallbackValue value; }
+// Only registered native-ancestor fields can appear here. JS subclass custom
+// properties remain ordinary own properties retained by ownFields/instance slots.
+struct ForeignNativeProjection { string nativeType; bool complete; ForeignNativeFieldValue[] fields; }
+struct ForeignRecordPatch { ForeignRecordRef record; ForeignBasePatch basePatch; ForeignNativeProjection nativeProjection; }

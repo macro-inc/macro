@@ -6,6 +6,9 @@ pub mod generated;
 #[rustfmt::skip]
 #[expect(missing_docs, reason = "Bebop owns generated foreign host declarations")]
 pub mod foreign_host_generated;
+/// Generated native-class field descriptors from the pinned upstream AST.
+#[rustfmt::skip]
+pub mod foreign_native_fields_generated;
 mod application_exports;
 mod codec;
 mod document;

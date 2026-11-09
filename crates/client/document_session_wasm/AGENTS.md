@@ -32,6 +32,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 
 ## Start here
 
+- Generate native payload field IDs and both descriptor tables from pinned class ASTs with generate-native-fields.ts; synchronize ordinary JS properties through explicit native projections, not replacement accessors.
 - `abi/foreign-host.bop`: production JS class/record/clone/opaque-value metadata; generate both languages with packages/collaboration/scripts/generate-foreign-host-schema.ts. Keep JS values editor-local in opaque slots and node/selection/state references typed. Clone acknowledgements verify tree links and apply only scalar base patches to the destination.
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
