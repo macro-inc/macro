@@ -171,7 +171,7 @@ struct CompatBatchReply {
   uint32 flags; bool published; bool changed; bool noop;
   uint64 version; uint64 mutationEpoch; ForeignOptionalKey composition;
   CompatSelectionData selection; string[] tags;
-  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
+  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements; byte dirtyType;
   CompatRecordDelta delta; CompatBatchResult[] results;
   CompatBatchOutcome outcome;
 }
@@ -212,7 +212,11 @@ union CompatHostCall {
 }
 // Apply the sparse acknowledged delta before reading nodes or dispatching JS.
 struct CompatHostRequest {
-  CompatHostContext context; CompatRecordDelta delta; CompatHostCall call;
+  CompatHostContext context; CompatRecordDelta delta;
+  // Pinned dirtyType: 0=no dirty nodes, 1=has dirty nodes, 2=full reconcile.
+  // Intentional flags and composition are native facts, not inferred from delta.
+  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
+  byte dirtyType; ForeignOptionalKey composition; CompatHostCall call;
 }
 struct CompatHookAck {
   uint32 callId; ForeignHookResult result;

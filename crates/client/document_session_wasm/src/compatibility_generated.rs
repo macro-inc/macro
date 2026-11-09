@@ -2333,6 +2333,7 @@ pub struct CompatBatchReply<'raw> {
     pub tags: ::std::vec::Vec<&'raw str>,
     pub dirty_leaves: ::bebop::SliceWrapper<'raw, ForeignKey>,
     pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
+    pub dirty_type: u8,
     pub delta: CompatRecordDelta<'raw>,
     pub results: ::std::vec::Vec<CompatBatchResult<'raw>>,
     pub outcome: CompatBatchOutcome<'raw>,
@@ -2351,6 +2352,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
+        <u8>::MIN_SERIALIZED_SIZE +
         <CompatRecordDelta<'raw>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<CompatBatchResult<'raw>>>::MIN_SERIALIZED_SIZE +
         <CompatBatchOutcome<'raw>>::MIN_SERIALIZED_SIZE;
@@ -2368,6 +2370,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         self.tags.serialized_size() +
         self.dirty_leaves.serialized_size() +
         self.dirty_elements.serialized_size() +
+        self.dirty_type.serialized_size() +
         self.delta.serialized_size() +
         self.results.serialized_size() +
         self.outcome.serialized_size()
@@ -2386,6 +2389,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             zelf.tags._serialize_chained(dest)? +
             zelf.dirty_leaves._serialize_chained(dest)? +
             zelf.dirty_elements._serialize_chained(dest)? +
+            zelf.dirty_type._serialize_chained(dest)? +
             zelf.delta._serialize_chained(dest)? +
             zelf.results._serialize_chained(dest)? +
             zelf.outcome._serialize_chained(dest)?
@@ -2427,6 +2431,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         i += read;
         let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             flags: v0,
@@ -2440,9 +2446,10 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             tags: v8,
             dirty_leaves: v9,
             dirty_elements: v10,
-            delta: v11,
-            results: v12,
-            outcome: v13,
+            dirty_type: v11,
+            delta: v12,
+            results: v13,
+            outcome: v14,
         }))
     }
 }
@@ -2969,6 +2976,10 @@ impl<'raw> ::bebop::Record<'raw> for CompatHostCall<'raw> {}
 pub struct CompatHostRequest<'raw> {
     pub context: CompatHostContext,
     pub delta: CompatRecordDelta<'raw>,
+    pub dirty_leaves: ::bebop::SliceWrapper<'raw, ForeignKey>,
+    pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
+    pub dirty_type: u8,
+    pub composition: ForeignOptionalKey,
     pub call: CompatHostCall<'raw>,
 }
 
@@ -2976,12 +2987,20 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <CompatHostContext>::MIN_SERIALIZED_SIZE +
         <CompatRecordDelta<'raw>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
+        <u8>::MIN_SERIALIZED_SIZE +
+        <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
         <CompatHostCall<'raw>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.context.serialized_size() +
         self.delta.serialized_size() +
+        self.dirty_leaves.serialized_size() +
+        self.dirty_elements.serialized_size() +
+        self.dirty_type.serialized_size() +
+        self.composition.serialized_size() +
         self.call.serialized_size()
     }
 
@@ -2989,6 +3008,10 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         Ok(
             zelf.context._serialize_chained(dest)? +
             zelf.delta._serialize_chained(dest)? +
+            zelf.dirty_leaves._serialize_chained(dest)? +
+            zelf.dirty_elements._serialize_chained(dest)? +
+            zelf.dirty_type._serialize_chained(dest)? +
+            zelf.composition._serialize_chained(dest)? +
             zelf.call._serialize_chained(dest)?
         )
     });
@@ -3006,11 +3029,23 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         i += read;
         let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             context: v0,
             delta: v1,
-            call: v2,
+            dirty_leaves: v2,
+            dirty_elements: v3,
+            dirty_type: v4,
+            composition: v5,
+            call: v6,
         }))
     }
 }
@@ -9001,6 +9036,7 @@ pub mod owned {
         pub tags: ::std::vec::Vec<String>,
         pub dirty_leaves: ::std::vec::Vec<ForeignKey>,
         pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
+        pub dirty_type: u8,
         pub delta: CompatRecordDelta,
         pub results: ::std::vec::Vec<CompatBatchResult>,
         pub outcome: CompatBatchOutcome,
@@ -9020,6 +9056,7 @@ pub mod owned {
                 tags: value.tags.into_iter().map(|value| value.into()).collect(),
                 dirty_leaves: value.dirty_leaves.iter().map(|value| value).collect(),
                 dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
+                dirty_type: value.dirty_type,
                 delta: value.delta.into(),
                 results: value.results.into_iter().map(|value| value.into()).collect(),
                 outcome: value.outcome.into(),
@@ -9040,6 +9077,7 @@ pub mod owned {
             <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
+            <u8>::MIN_SERIALIZED_SIZE +
             <CompatRecordDelta>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatBatchResult>>::MIN_SERIALIZED_SIZE +
             <CompatBatchOutcome>::MIN_SERIALIZED_SIZE;
@@ -9057,6 +9095,7 @@ pub mod owned {
             self.tags.serialized_size() +
             self.dirty_leaves.serialized_size() +
             self.dirty_elements.serialized_size() +
+            self.dirty_type.serialized_size() +
             self.delta.serialized_size() +
             self.results.serialized_size() +
             self.outcome.serialized_size()
@@ -9075,6 +9114,7 @@ pub mod owned {
                 zelf.tags._serialize_chained(dest)? +
                 zelf.dirty_leaves._serialize_chained(dest)? +
                 zelf.dirty_elements._serialize_chained(dest)? +
+                zelf.dirty_type._serialize_chained(dest)? +
                 zelf.delta._serialize_chained(dest)? +
                 zelf.results._serialize_chained(dest)? +
                 zelf.outcome._serialize_chained(dest)?
@@ -9116,6 +9156,8 @@ pub mod owned {
             i += read;
             let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 flags: v0,
@@ -9129,9 +9171,10 @@ pub mod owned {
                 tags: v8,
                 dirty_leaves: v9,
                 dirty_elements: v10,
-                delta: v11,
-                results: v12,
-                outcome: v13,
+                dirty_type: v11,
+                delta: v12,
+                results: v13,
+                outcome: v14,
             }))
         }
     }
@@ -9565,6 +9608,10 @@ pub mod owned {
     pub struct CompatHostRequest {
         pub context: CompatHostContext,
         pub delta: CompatRecordDelta,
+        pub dirty_leaves: ::std::vec::Vec<ForeignKey>,
+        pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
+        pub dirty_type: u8,
+        pub composition: ForeignOptionalKey,
         pub call: CompatHostCall,
     }
 
@@ -9573,6 +9620,10 @@ pub mod owned {
             Self {
                 context: value.context,
                 delta: value.delta.into(),
+                dirty_leaves: value.dirty_leaves.iter().map(|value| value).collect(),
+                dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
+                dirty_type: value.dirty_type,
+                composition: value.composition,
                 call: value.call.into(),
             }
         }
@@ -9582,12 +9633,20 @@ pub mod owned {
         const MIN_SERIALIZED_SIZE: usize =
             <CompatHostContext>::MIN_SERIALIZED_SIZE +
             <CompatRecordDelta>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
+            <u8>::MIN_SERIALIZED_SIZE +
+            <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
             <CompatHostCall>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.context.serialized_size() +
             self.delta.serialized_size() +
+            self.dirty_leaves.serialized_size() +
+            self.dirty_elements.serialized_size() +
+            self.dirty_type.serialized_size() +
+            self.composition.serialized_size() +
             self.call.serialized_size()
         }
 
@@ -9595,6 +9654,10 @@ pub mod owned {
             Ok(
                 zelf.context._serialize_chained(dest)? +
                 zelf.delta._serialize_chained(dest)? +
+                zelf.dirty_leaves._serialize_chained(dest)? +
+                zelf.dirty_elements._serialize_chained(dest)? +
+                zelf.dirty_type._serialize_chained(dest)? +
+                zelf.composition._serialize_chained(dest)? +
                 zelf.call._serialize_chained(dest)?
             )
         });
@@ -9612,11 +9675,23 @@ pub mod owned {
             i += read;
             let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 context: v0,
                 delta: v1,
-                call: v2,
+                dirty_leaves: v2,
+                dirty_elements: v3,
+                dirty_type: v4,
+                composition: v5,
+                call: v6,
             }))
         }
     }
@@ -13130,4 +13205,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "a9d0ecaa2d5e06b29a4dd855046750698c3c34a6b4255e35f10ebe17a39b2f40";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "5f316f2121a2d04941202ee924d6c70f974fdb19dbec490a2cb898d9eb4962bb";
