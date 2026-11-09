@@ -1,5 +1,5 @@
 import { cleanup, render } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal } from 'solid-js';
+import { batch, type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { MentionsMenu } from '../component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import type { NativeMentionPresentation } from '../component/LexicalMarkdown/component/menu/MentionsMenu/native-presentation';
@@ -298,3 +298,63 @@ test('a throwing error callback cannot strand a pending mention pick', async () 
   });
   expect(surface.menuCommit).not.toHaveBeenCalled();
 });
+
+test.each([true, false])(
+  'batched mention replacement retains the new presentation (query first: %s)',
+  (queryFirst) => {
+    const original = {
+      menuRows: vi.fn(async () => {}),
+      menuCommit: vi.fn(async () => {}),
+    };
+    const replacement = {
+      menuRows: vi.fn(async () => {}),
+      menuCommit: vi.fn(async () => {}),
+    };
+    const [surface, setSurface] = createSignal(original);
+    const [event, setEvent] = createSignal<MenuEvent>(query(1));
+    render(() => (
+      <NativeMentionSources
+        surface={surface()}
+        event={event}
+        anchor={document.createElement('div')}
+        handlers={{ blockId: 'fixture-document', blockName: 'md' }}
+        onError={vi.fn()}
+      />
+    ));
+    batch(() => {
+      if (queryFirst) {
+        setEvent(query(1));
+        setSurface(replacement);
+      } else {
+        setSurface(replacement);
+        setEvent(query(1));
+      }
+    });
+    source.presentation?.publish({
+      items: [person],
+      buckets: [
+        {
+          id: 'users',
+          label: 'People',
+          getData: () => [person],
+          getFullCount: () => 1,
+        },
+      ],
+      viewAll: null,
+      term: 'p',
+      status: () => ({ isLoading: false }),
+    });
+    expect(original.menuRows).toHaveBeenLastCalledWith({
+      identity: query(1).query.identity,
+      rows: [],
+      buckets: [],
+    });
+    expect(replacement.menuRows).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({ id: person.id }),
+        ]),
+      })
+    );
+  }
+);

@@ -56,6 +56,17 @@ export function NativeMentionSources(props: {
       );
   }
 
+  function synchronizeOwner() {
+    if (owner === props.surface) return;
+    closeOwned();
+    owner = props.surface;
+    latest = undefined;
+    setQuery(undefined);
+    setSelection(undefined);
+    setMore(undefined);
+    menu.closeMenu();
+  }
+
   function current(identity: MenuIdentity) {
     const active = query()?.identity;
     return (
@@ -69,6 +80,7 @@ export function NativeMentionSources(props: {
 
   createEffect(
     on(props.event, (event) => {
+      synchronizeOwner();
       if (
         !event ||
         event.query.kind !== 'mention' ||
@@ -107,20 +119,7 @@ export function NativeMentionSources(props: {
     setQuery(undefined);
     menu.closeMenu();
   });
-  createEffect(
-    on(
-      () => props.surface,
-      () => {
-        closeOwned();
-        latest = undefined;
-        setQuery(undefined);
-        setSelection(undefined);
-        setMore(undefined);
-        menu.closeMenu();
-      },
-      { defer: true }
-    )
-  );
+  createEffect(on(() => props.surface, synchronizeOwner, { defer: true }));
 
   async function pick(item: MentionItem) {
     const identity = query()?.identity;
