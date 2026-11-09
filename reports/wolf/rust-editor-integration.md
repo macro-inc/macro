@@ -9,9 +9,11 @@ The isolated browser passed sign-in, existing document, new document, typing and
 undo/redo. Both redo shortcuts restore exact raw JSON, durable subtree IDs and
 model/DOM caret positions. All four fetched WASM responses match SHA256
 `badfaa20badd88e28d7ccd17c3022b8d2eb1c8930e1528360e931ee4f26c2231`.
-No page errors occurred. Telemetry proxy requests still return 502; the raw
-network list also retains GitHub-link status 404 and navigation-aborted requests.
-These do not block the five exercised flows; telemetry connectivity is unverified.
+No page errors occurred. The subsequent infrastructure recovery restored the
+analytics proxy's network attachment, and the recovery check verified HTTP 200
+from `/i/otlp/v1/traces`. Earlier telemetry 502 responses remain in the raw browser
+network list, alongside GitHub-link status 404 and navigation-aborted requests.
+End-to-end trace connectivity has not been revalidated.
 
 This freeze integrates:
 
