@@ -96,6 +96,35 @@ impl CaptureLeases {
         &mut self,
         request: &compat::CompatCaptureLeases,
     ) -> Result<Vec<u64>, BoundaryError> {
+        let plan = self.plan(request)?;
+        for &(id, retain, retained, _) in &plan {
+            let entry = self.entries.get_mut(&id).expect("validated capture");
+            entry.explicit = retained;
+            if retain != 0 {
+                entry.graph = false;
+                entry.emission = false;
+                let version = entry.reference.node.version;
+                self.unindex_graph(version, id);
+            }
+        }
+        for &(id, _, _, explicit) in &plan {
+            self.entries
+                .get_mut(&id)
+                .expect("validated capture")
+                .explicit = explicit;
+        }
+        Ok(self.prune(plan.into_iter().map(|(id, _, _, _)| id)))
+    }
+
+    /// Preflight without transferring pins, reserving ownership or changing counts.
+    pub fn validate(&self, request: &compat::CompatCaptureLeases) -> Result<(), BoundaryError> {
+        self.plan(request).map(|_| ())
+    }
+
+    fn plan(
+        &self,
+        request: &compat::CompatCaptureLeases,
+    ) -> Result<Vec<(u64, u64, u64, u64)>, BoundaryError> {
         if request.editor_id != self.editor {
             return Err(BoundaryError::Invalid("capture editor"));
         }
@@ -124,23 +153,7 @@ impl CaptureLeases {
                 .ok_or(BoundaryError::Invalid("capture count underflow"))?;
             plan.push((id, retain, retained, explicit));
         }
-        for &(id, retain, retained, _) in &plan {
-            let entry = self.entries.get_mut(&id).expect("validated capture");
-            entry.explicit = retained;
-            if retain != 0 {
-                entry.graph = false;
-                entry.emission = false;
-                let version = entry.reference.node.version;
-                self.unindex_graph(version, id);
-            }
-        }
-        for &(id, _, _, explicit) in &plan {
-            self.entries
-                .get_mut(&id)
-                .expect("validated capture")
-                .explicit = explicit;
-        }
-        Ok(self.prune(plan.into_iter().map(|(id, _, _, _)| id)))
+        Ok(plan)
     }
 
     /// A native owner holds each capture at most once, even across repeated calls.
