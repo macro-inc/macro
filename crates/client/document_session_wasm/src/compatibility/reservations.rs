@@ -69,7 +69,7 @@ impl EditorSession {
         }
         let masks = host
             .class_masks
-            .prepare(&request.class_mask_patches, host.host_slot.is_some())?;
+            .prepare(&request.class_mask_patches, false)?;
         let epoch = host
             .mutation_epoch
             .checked_add(1)

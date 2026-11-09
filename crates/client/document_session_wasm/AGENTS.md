@@ -133,3 +133,23 @@ reject missing/zero-slot envelopes before creating the carried cause.
 
 Use only actually issued retired versions for explicit native retirement fences;
 reject never-issued, current and pending versions before any retirement effects.
+
+The hosted lifecycle slice supports explicit core/heading storage metadata and
+exact record hydration with semantic clone stages; constructor tokens and original
+instance namespaces never come from type names. Reject unsupported virtual hooks,
+class storage codecs and clone graph callbacks explicitly. These limited exports
+do not make the full production initializer usable. Keep native keys global across
+hosted editors and legacy diagnostic key allocation unchanged.
+
+Retain weak native-owner aliases across private session rebuilds within the same
+logical JS namespace; keep cross-editor transfer closed until its explicit
+constructor-token policy is installed. Claim each JS instance ID once per runtime
+(including discarded clone attempts), allow idempotent bind only on its original
+exact record, and hydrate only retained committed captures while no update is pending until
+the creation adapter preserves update writability (including historical pending
+captures that carry update ID zero).
+
+Run the raw lifecycle smoke with Bun and explicit source-matched wasm-bindgen
+JS/WASM paths: `bun crates/client/document_session_wasm/tests/hosted-lifecycle.mjs
+<module.js> <module_bg.wasm>`. It uses pinned upstream root clone methods and
+checks only the lifecycle boundary, not the full facade or browser parity.

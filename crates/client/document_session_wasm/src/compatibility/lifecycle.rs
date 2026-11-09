@@ -25,6 +25,7 @@ impl Host {
             .collect();
         if !self.owner.same_owner(&owner) || !commits.is_empty() {
             self.version = self.reserve_version()?;
+            self.owner_aliases.insert(owner.downgrade());
             self.owner = owner;
             self.states.insert(self.version, state.clone());
         }

@@ -7,9 +7,11 @@ use std::{
     sync::Arc,
 };
 mod audit_snapshot;
+mod bindings;
 mod calls;
 mod capture_index;
 mod class_masks;
+mod instance_runtime;
 mod lifecycle;
 mod native_calls;
 pub(crate) mod observer;
@@ -21,6 +23,12 @@ mod selection_execution;
 mod selection_ops;
 mod selection_values;
 mod selections;
+
+pub(crate) struct CompatFactory {
+    pub receipts: observer::Receipts,
+    pub keys: lexical_model::SharedKeyCounter,
+    pub instances: Option<Arc<dyn lexical_model::ForeignInstanceHooks>>,
+}
 
 pub(crate) struct Host {
     editor: u32,
@@ -47,8 +55,10 @@ pub(crate) struct Host {
     mutation_epoch: u64,
     class_masks: Arc<class_masks::ClassMasks>,
     host_slot: Option<u32>,
+    instance_runtime: Option<Arc<instance_runtime::InstanceRuntime>>,
     receipts: observer::Receipts,
     owner: lexical_model::ForeignEditorIdentity,
+    owner_aliases: std::collections::HashSet<lexical_model::ForeignWeakEditorIdentity>,
 }
 #[wasm_bindgen]
 impl EditorSession {
@@ -76,18 +86,41 @@ impl EditorSession {
             return Err(BoundaryError::AbiMismatch);
         }
         let registration = compat::CompatConfig::deserialize(registration)?;
+        Self::create_compat_config(abi, config, now, wall, registration, None)
+    }
+    fn create_compat_config(
+        abi: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+        registration: compat::CompatConfig,
+        runtime: Option<Arc<instance_runtime::InstanceRuntime>>,
+    ) -> Result<Self, BoundaryError> {
         if registration.editor_id == 0 {
             return Err(BoundaryError::Invalid("compatibility editor namespace"));
         }
         let class_masks = Arc::new(class_masks::ClassMasks::new(&registration)?);
         let receipts: observer::Receipts = Arc::default();
-        let keys = lexical_model::SharedKeyCounter::new();
+        let keys = if runtime.is_some() {
+            static HOSTED_KEYS: std::sync::OnceLock<lexical_model::SharedKeyCounter> =
+                std::sync::OnceLock::new();
+            HOSTED_KEYS
+                .get_or_init(lexical_model::SharedKeyCounter::new)
+                .clone()
+        } else {
+            lexical_model::SharedKeyCounter::new()
+        };
         let machine = machine::Machine::create_compat(
             abi,
             config,
             &registration,
-            receipts.clone(),
-            keys.clone(),
+            CompatFactory {
+                receipts: receipts.clone(),
+                keys: keys.clone(),
+                instances: runtime.as_ref().map(
+                    |runtime| -> Arc<dyn lexical_model::ForeignInstanceHooks> { runtime.clone() },
+                ),
+            },
             now,
             wall,
         )?;
@@ -114,8 +147,10 @@ impl EditorSession {
             next_reservation: 1,
             mutation_epoch: 0,
             class_masks,
-            host_slot: None,
+            host_slot: runtime.as_ref().map(|runtime| runtime.host_slot),
+            instance_runtime: runtime,
             receipts,
+            owner_aliases: [owner.downgrade()].into(),
             owner,
         };
         Ok(Self {

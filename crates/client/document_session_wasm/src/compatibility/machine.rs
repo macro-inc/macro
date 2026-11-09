@@ -8,11 +8,15 @@ impl Machine {
         abi: u32,
         config: &[u8],
         registration: &compat::CompatConfig,
-        receipts: crate::compatibility::observer::Receipts,
-        keys: lexical_model::SharedKeyCounter,
+        factory: crate::compatibility::CompatFactory,
         mono: f64,
         wall: f64,
     ) -> Result<Self, BoundaryError> {
+        let crate::compatibility::CompatFactory {
+            receipts,
+            keys,
+            instances,
+        } = factory;
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
         }
@@ -46,6 +50,9 @@ impl Machine {
         let mut prepared = compat_editor_builder(EditorMode::Headless, 0)
             .without_static_transforms()
             .without_reconciler_caches();
+        if let Some(instances) = &instances {
+            prepared = prepared.foreign_instance_hooks(instances.clone());
+        }
         for name in classes.keys() {
             prepared = macro_document_model::editor::register_supported_node(prepared, name)?;
         }
@@ -91,6 +98,9 @@ impl Machine {
                         .without_reconciler_caches()
                         .key_source(lexical_model::KeySource::Shared(keys.clone()))
                         .plugin(crate::compatibility::observer::Observer(receipts.clone()));
+                    if let Some(instances) = &instances {
+                        builder = builder.foreign_instance_hooks(instances.clone());
+                    }
                     for name in classes.keys() {
                         // The same immutable registration set was resolved above.
                         builder =

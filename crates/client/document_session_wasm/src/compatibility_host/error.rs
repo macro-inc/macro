@@ -45,7 +45,7 @@ impl HostThrown {
     }
 }
 
-pub(super) fn returned(reply: wire::CompatHostReply) -> Result<wire::CompatHostReply, Error> {
+pub(crate) fn returned(reply: wire::CompatHostReply) -> Result<wire::CompatHostReply, Error> {
     if let wire::CompatHostResult::CompatHostThrown { error } = reply.result {
         return Err(HostThrown::new(reply.host_slot, error)?.into_model_error());
     }

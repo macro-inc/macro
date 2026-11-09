@@ -205,6 +205,23 @@ pub fn invoke(
     error::returned(reply)
 }
 
+/// Require explicit JS host installation before constructing a hosted WASM session.
+pub fn require_dispatcher_installed() -> Result<(), Error> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if DISPATCHER.with(|cell| cell.borrow().is_some()) {
+            return Ok(());
+        }
+        Err(Error::Invariant(
+            "compatibility host dispatcher is not installed",
+        ))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Err(Error::Invariant("compatibility JS host requires WASM"))
+    }
+}
+
 /// Install the single module-stable dispatcher; editor slots remain weak in JS.
 #[wasm_bindgen(js_name = installCompatibilityHost)]
 pub fn install_compatibility_host(dispatcher: js_sys::Function) -> Result<(), JsError> {

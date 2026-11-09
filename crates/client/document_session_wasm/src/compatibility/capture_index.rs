@@ -68,6 +68,7 @@ impl Host {
             .checked_add(1)
             .ok_or(BoundaryError::Invalid("capture retirement epoch exhausted"))?;
         self.capture_index.retain(&self.captures);
+        self.owner_aliases.retain(|owner| owner.upgrade().is_some());
         // A completed valid no-op prune is an acknowledgement too. Observing
         // counts or requesting JS GC never calls this processing boundary.
         self.retirement_epoch = next;
