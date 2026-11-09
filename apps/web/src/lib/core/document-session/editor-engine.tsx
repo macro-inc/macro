@@ -1,3 +1,4 @@
+import { perfMark } from '@app/observability/perf-marks';
 import { Telemetry } from '@macro-inc/observability';
 import {
   createContext,
@@ -20,18 +21,26 @@ const EditorEngineContext = createContext<EditorEngine>();
 
 /** Preload in parallel with the shell; only editor boundaries observe readiness. */
 export function EditorEngineProvider(props: ParentProps) {
+  perfMark('editor.engine.selected', {
+    engine: RUST_EDITOR_ENGINE ? 'rust' : 'upstream',
+  });
+  if (!RUST_EDITOR_ENGINE)
+    perfMark('editor.engine.ready', { engine: 'upstream' });
   const engine = createEditorEngineState(
     () => RUST_EDITOR_ENGINE,
-    () =>
-      Telemetry.span(
+    () => {
+      perfMark('editor.engine.preload-start');
+      return Telemetry.span(
         'editor.engine.initialize',
         { sampling: 'perf' },
         async (span) => {
           const module = await loadDocumentSession(span);
           await prepareEditorEngine(module, span);
+          perfMark('editor.engine.ready', { engine: 'rust' });
           return module;
         }
-      )
+      );
+    }
   );
   return (
     <EditorEngineContext.Provider value={engine}>

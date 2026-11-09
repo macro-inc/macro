@@ -23,6 +23,17 @@ test('shell paints while native loading holds only the editor subtree', async ({
   }
   await expect(page.getByText('Editor subtree ready')).toBeVisible();
   await expect(page.getByText('Application shell ready')).toBeVisible();
+  const marks = await page.evaluate(() => ({
+    start: performance
+      .getEntriesByName('macro.editor.engine.preload-start')
+      .map((entry) => entry.startTime),
+    ready: performance
+      .getEntriesByName('macro.editor.engine.ready')
+      .map((entry) => entry.startTime),
+  }));
+  expect(marks.start).toHaveLength(1);
+  expect(marks.ready).toHaveLength(1);
+  expect(marks.ready[0]).toBeGreaterThanOrEqual(marks.start[0]);
 });
 
 test('flag off constructs the existing subtree without requesting native WASM', async ({
@@ -37,6 +48,17 @@ test('flag off constructs the existing subtree without requesting native WASM', 
   await expect(page.getByText('Application shell ready')).toBeVisible();
   await expect(page.getByText('Editor subtree ready')).toBeVisible();
   expect(binaries).toEqual([]);
+  expect(
+    await page.evaluate(
+      () =>
+        performance.getEntriesByName('macro.editor.engine.preload-start').length
+    )
+  ).toBe(0);
+  expect(
+    await page.evaluate(
+      () => performance.getEntriesByName('macro.editor.engine.ready').length
+    )
+  ).toBe(1);
 });
 
 test('a document factory receives the real durable session synchronously after preload', async ({

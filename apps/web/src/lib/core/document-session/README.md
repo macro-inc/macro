@@ -84,3 +84,10 @@ Use `--project=chromium` for a focused iteration. Host environments may supply
 `PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH`; use isolated headless browser processes.
 When an engine lacks Paint Timing entries, the preparation proof captures its
 compositor while idle is held before releasing preparation.
+
+Engine timing uses the normal User Timing API: `macro.editor.engine.selected`,
+`macro.editor.engine.preload-start`, and `macro.editor.engine.ready`. Readiness
+includes initialization and real paste preparation. Upstream emits ready without
+a preload mark; its engine-preload duration is not applicable. The existing boot
+flow emits `macro.boot.interactive` at its actual completion time with an outcome;
+only success is usable as an interactive timing.
