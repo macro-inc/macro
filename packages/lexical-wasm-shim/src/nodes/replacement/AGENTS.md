@@ -9,8 +9,10 @@ Do not register or authorize an unlisted withKlass class.
 
 `bindReplacement` captures a class-specific callback and checks the real class
 witness before invoking it. BoundNodeReplacement/InternalNodeConfig are internal
-invokers, not proof of the upstream public LexicalNodeReplacement.with signature.
-Do not narrow that public callback or return upstream nominal nodes.
+invokers. Preserve LexicalNodeReplacement through the upstream type-only reexport;
+do not narrow authored callbacks. Normalize public declaration inputs through
+actual class-prototype identity and callback-result instanceof checks before
+returning internal actual-core types; never return upstream nominal nodes.
 
 `runtime.ts` declares injection only. The actual editor supplies its active scope,
 registered map and readonly check; constructor authority stays in the runtime.

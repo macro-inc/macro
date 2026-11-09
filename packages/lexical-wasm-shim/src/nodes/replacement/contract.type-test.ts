@@ -1,8 +1,15 @@
+import type { LexicalNodeReplacement as UpstreamReplacement } from 'lexical';
 import type { LexicalNode } from '../base';
 import { TextNode } from '../text';
 import { bindReplacement } from './bind';
 import { $applyNodeReplacement, $create } from './helpers';
-import type { Klass, RegisteredNode } from './types';
+import type { Klass, LexicalNodeReplacement, RegisteredNode } from './index';
+
+declare const publicReplacement: LexicalNodeReplacement;
+declare const upstreamReplacement: UpstreamReplacement;
+export const publicToUpstream: UpstreamReplacement = publicReplacement;
+export const upstreamToPublic: LexicalNodeReplacement = upstreamReplacement;
+export const publicInvoker = bindReplacement(publicReplacement);
 
 class CustomText extends TextNode {
   customField = true;

@@ -12,6 +12,7 @@ export type {
   BoundNodeReplacement,
   InternalNodeConfig,
   Klass,
+  LexicalNodeReplacement,
   NodeClass,
   NodeDOMExport,
   RegisteredNode,
