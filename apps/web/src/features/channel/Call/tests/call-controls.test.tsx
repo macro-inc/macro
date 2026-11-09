@@ -6,6 +6,7 @@ import {
   loadRecentBackgroundImages,
   saveRecentBackgroundImage,
 } from '@core/media/recent-background-images';
+import { confirmDialog } from '@ui';
 
 vi.mock('@core/media/read-background-image', () => ({
   readBackgroundImage: vi.fn(),
@@ -24,6 +25,11 @@ import {
   CallMediaControls,
   type CallMediaControlsState,
 } from '../CallControls/CallMediaControls';
+
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: vi.fn(async () => false),
+}));
 
 afterEach(cleanup);
 
@@ -162,7 +168,7 @@ describe('call controls', () => {
     );
     expect(
       screen.getAllByRole('button', { name: 'Remove from recent' })
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     fireEvent.keyDown(first, { key: 'Delete' });
     expect(
       (await loadRecentBackgroundImages()).map((image) => image.path)
@@ -217,6 +223,42 @@ describe('call controls', () => {
     expect(
       (await loadRecentBackgroundImages()).map((image) => image.path)
     ).not.toContain('data:image/jpeg;base64,DDDD');
+  });
+
+  it('confirms before removing the active background and keeps cancellation unchanged', async () => {
+    await saveRecentBackgroundImage({
+      id: 'active',
+      path: 'data:image/jpeg;base64,ACTIVE',
+    });
+    const { media } = setup();
+    await media.setBackgroundEffect({
+      type: 'image',
+      id: 'active',
+      path: 'data:image/jpeg;base64,ACTIVE',
+    });
+    await openMenu('Video settings');
+    const selected = await screen.findByRole('menuitemradio', {
+      name: /Recent image/,
+      checked: true,
+    });
+    fireEvent.keyDown(selected, { key: 'Delete' });
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled());
+    expect(media.backgroundEffect().type).toBe('image');
+    expect(
+      (await loadRecentBackgroundImages()).some(
+        (image) => image.id === 'active'
+      )
+    ).toBe(true);
+    vi.mocked(confirmDialog).mockResolvedValueOnce(true);
+    fireEvent.keyDown(selected, { key: 'Delete' });
+    await waitFor(() => expect(media.backgroundEffect().type).toBe('none'));
+    await waitFor(async () =>
+      expect(
+        (await loadRecentBackgroundImages()).some(
+          (image) => image.id === 'active'
+        )
+      ).toBe(false)
+    );
   });
 
   it('keeps an uploaded background applied when recent storage fails', async () => {

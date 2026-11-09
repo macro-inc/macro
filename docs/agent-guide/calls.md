@@ -307,7 +307,8 @@ Backgrounds use a simple menu with None, Light blur, Strong blur, and image uplo
 illustration, with only the room blurred and the person kept sharp.
 Background pickers share five device-local recent uploaded images. Selecting one
 moves it first; hover/focus Remove or press Delete/Backspace to remove an inactive
-image. The current image cannot be removed. Uploads stay usable if optional
+image immediately. Removing the current image asks for confirmation, turns the
+background off, then removes it from recents. Cancelling preserves both. Uploads stay usable if optional
 IndexedDB storage fails. Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join

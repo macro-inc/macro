@@ -19,6 +19,7 @@ import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
+import { ImperativeDialogHost } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
@@ -76,6 +77,7 @@ function Fixture() {
                           >
                             Refresh discussion
                           </button>
+                          <ImperativeDialogHost />
                           <main class="h-screen bg-page text-ink">
                             <Show when={params.get('headerWidth')}>
                               {(width) => (

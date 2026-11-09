@@ -1,5 +1,6 @@
+import { t } from '@app/lib/i18n';
 import Upload from '@icon/system/regular/upload-simple.svg';
-import { Dropdown, Tooltip } from '@ui';
+import { confirmDialog, Dropdown, Tooltip } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { BackgroundEffect } from '../../media/background-effect';
@@ -47,10 +48,29 @@ export function RecentBackgroundImages(props: {
   });
   const current = (image: RecentBackgroundImage) =>
     props.effect.type === 'image' && props.effect.path === image.path;
+  const [removing, setRemoving] = createSignal(false);
   const remove = (image: RecentBackgroundImage) => {
-    if (current(image) || props.disabled) return;
+    if (props.disabled || removing()) return;
+    setRemoving(true);
     fireAndForget(
-      enqueue(() => removeRecentBackgroundImage(image.path)),
+      (async () => {
+        try {
+          if (current(image)) {
+            const confirmed = await confirmDialog(() => ({
+              title: t('calls.removeBackground'),
+              body: t('calls.removeBackgroundBody'),
+              confirmLabel: t('calls.removeBackgroundAction'),
+              tone: 'danger',
+            }));
+            if (!confirmed) return;
+            if (current(image) && !(await props.onSelect({ type: 'none' })))
+              return;
+          }
+          await enqueue(() => removeRecentBackgroundImage(image.path));
+        } finally {
+          setRemoving(false);
+        }
+      })(),
       'recent-background-images'
     );
   };
@@ -114,20 +134,18 @@ export function RecentBackgroundImages(props: {
                   <img src={image.path} alt="" class="size-full object-cover" />
                 </Dynamic>
               </Tooltip>
-              <Show when={!current(image)}>
-                <button
-                  type="button"
-                  aria-label="Remove from recent"
-                  disabled={props.disabled}
-                  class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-surface/80 text-ink opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    remove(image);
-                  }}
-                >
-                  ×
-                </button>
-              </Show>
+              <button
+                type="button"
+                aria-label="Remove from recent"
+                disabled={props.disabled || removing()}
+                class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-surface/80 text-ink opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  remove(image);
+                }}
+              >
+                ×
+              </button>
             </div>
           )}
         </For>
