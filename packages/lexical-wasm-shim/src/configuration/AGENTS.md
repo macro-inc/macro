@@ -18,3 +18,13 @@ the classes from actual registered rows, never hidden withKlass classes.
 Run package strict types/hooks, ordinary declarations, configuration/replacement
 tests and scoped just check. Pure metadata tests do not prove active editor
 inheritance, constructor authorization or native registration acceptance.
+
+## HTML conversions
+
+Use html-conversions.ts for pinned importDOM cache preparation: capture each
+class getter once, deduplicate function identity, call with the first class as
+receiver, preserve map key and registration order, and append configured imports.
+The HTMLElement selector preserves priority and last-registration ties without
+reading losing conversion getters. The full upstream Node/#text callback boundary
+remains open; do not widen these callbacks through assertions or fake DOM guards.
+This pure metadata module does not bind an editor/view or authorize constructors.
