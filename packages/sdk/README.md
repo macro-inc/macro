@@ -241,14 +241,18 @@ a duplicate; changed content or ownership conflicts.
 
 ```ts
 const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
-const template = await macro.taskTemplates.create({
+// Persist this key and input before sending; retries reuse both unchanged.
+const creation: Parameters<typeof macro.taskTemplates.create>[0] = {
+  idempotencyKey: crypto.randomUUID(),
   name: 'Bug report',
   title: 'Investigate issue',
   shareWithTeam: false, // create private tasks even from a team-owned template
   team: await macro.teams.current(), // omit for a personal template
   properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
   descriptionMarkdown: '## Details\n\n- [ ] Describe the task',
-});
+};
+const template = await macro.taskTemplates.create(creation);
+// After an uncertain response: await macro.taskTemplates.create(creation).
 const templates = await macro.taskTemplates.list({ team: await macro.teams.current() });
 await template.update({ name: 'Detailed bug report' });
 ```
