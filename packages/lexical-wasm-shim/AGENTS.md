@@ -113,3 +113,5 @@ Install this standalone package with its own frozen bun.lock before checking hoo
 Keep command reexports bound to commands.ts objects and expose only the pinned root constant subset.
 
 Development transform queue swaps do not yet preserve public dirty-collection identity across every callback phase; do not treat sampled native facts as proof of that compatibility gate.
+
+Keep arbitrary command payloads and listener queues in JS; use only the centralized commandBucket association, preserve priority deque snapshots and parent delegation, and let native model transactions run below listener bodies.

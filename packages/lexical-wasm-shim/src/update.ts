@@ -45,6 +45,20 @@ export class UpdateController {
       this.queued.push({ body, options });
       return;
     }
+    this.performUpdate(body, options, false);
+  }
+
+  /** Internal command updates bypass the ordinary enqueued-update boundary. */
+  updateSync(body: () => void, options: UpdateOptions = {}): void {
+    if (this.disposed) throw new Error('editor is disposed');
+    this.performUpdate(body, options, this.running);
+  }
+
+  private performUpdate(
+    body: () => void,
+    options: UpdateOptions,
+    restoreRunning: boolean
+  ): void {
     this.running = true;
     const opened = !this.pending;
     let failed = false;
@@ -84,16 +98,17 @@ export class UpdateController {
       failed = true;
       this.host.onError(error);
     } finally {
-      this.running = false;
-      if (this.disposed) this.release();
+      this.running = restoreRunning;
+      if (this.disposed && !restoreRunning) this.release();
     }
     if (this.disposed) return;
     if (failed) {
-      this.triggerQueued();
+      if (!restoreRunning) this.triggerQueued();
       return;
     }
-    if (this.sync) this.publish();
-    else this.schedule();
+    if (this.sync && !restoreRunning) this.publish();
+    else if (this.pending) this.schedule();
+    else if (!restoreRunning) this.triggerQueued();
   }
 
   /** Force pending work through publication, without publishing mid-callback. */
