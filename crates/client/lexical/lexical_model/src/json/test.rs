@@ -61,6 +61,7 @@ fn full_document_bytes_match_root_paragraph_text_order() -> Result<(), Error> {
         to_js_json_string(&value),
         r#"{"root":{"children":[{"children":[{"detail":0,"format":0,"mode":"normal","style":"","text":"hello","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"root","version":1}}"#
     );
+    assert_eq!(editor.state().to_json_string()?, to_js_json_string(&value));
     let before = editor.state().clone();
     let parsed = editor.parse_editor_state_str(&to_js_json_string(&value))?;
     assert_eq!(parsed.to_json()?, before.to_json()?);

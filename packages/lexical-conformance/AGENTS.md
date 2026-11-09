@@ -13,6 +13,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
 - `corpus/dev/README.md`: bounded dev collection, encrypted frozen sample, count-only scans and local source-versus-WASM replay.
+- `bench/docs`: synthetic S/M/L Markdown seeds for the native `document_session` bulk benchmark; its `benches/README.md` defines measurement scope and load guards.
 - `diff/listeners.test.ts`: real JS command priority snapshots, identity, truthiness, live registration and caught opaque exceptions.
 - `diff/host.test.ts`: real indexed EditorHandle lifecycle, native fields, packet decoding and JS transforms with current-hook reentry, identity and rollback.
 - `diff/host-packet.generated.ts`: Specta declaration; regenerate with the conformance_wasm export_host_types example.
