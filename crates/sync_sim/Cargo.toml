@@ -57,3 +57,7 @@ path = "tests/stories.rs"
 [[test]]
 name = "mixed_versions"
 path = "tests/mixed_versions.rs"
+
+[[test]]
+name = "known_failures"
+path = "tests/known_failures.rs"
