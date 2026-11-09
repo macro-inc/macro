@@ -48,7 +48,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
-- Use Input::TextDeltaFromView with a UTF-16 offset/deleted span and inserted text for ordinary DOM-first input; reserve full TextFromView for explicit resync. Validate edits before selection changes, preserve typing attributes, and acknowledge text only when post-transform content matches.
+- Use Input::TextDeltaFromView with a UTF-16 offset/deleted span and inserted text for ordinary DOM-first input; reserve full TextFromView for explicit resync. Validate edits before selection changes, preserve typing attributes, and acknowledge text only when post-transform content matches. Full resync shares unchanged-input and composition termination policy, including newline Enter dispatch.
 - Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
 - Use base parent splices for sibling insertion and replacement; element append retains virtual splice dispatch.
 - Clamp element offsets during caret reads while retaining the stored selection points.
