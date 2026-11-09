@@ -1,5 +1,6 @@
 import { getActiveEditor } from './editor';
 import { LineBreakNode, ParagraphNode, TextNode } from './nodes';
+import { $applyNodeReplacement } from './nodes/replacement/helpers';
 
 export type {
   CreateEditorArgs,
@@ -29,13 +30,13 @@ export {
 } from './nodes';
 
 export function $createTextNode(text = ''): TextNode {
-  return new TextNode(text);
+  return $applyNodeReplacement(new TextNode(text));
 }
 export function $createParagraphNode(): ParagraphNode {
-  return new ParagraphNode();
+  return $applyNodeReplacement(new ParagraphNode());
 }
 export function $createLineBreakNode(): LineBreakNode {
-  return new LineBreakNode();
+  return $applyNodeReplacement(new LineBreakNode());
 }
 export function $isTextNode(value: unknown): value is TextNode {
   return value instanceof TextNode;
