@@ -61,7 +61,7 @@ before/after/reentrant Start and cancellation without Start, actual MAX request
 reply, disposal, Close idempotency and unchanged DOM. No DOM view is allocated.
 Generate session/compatibility.generated.ts from document_session_wasm/abi/compatibility.bop with generate-compatibility-schema.ts; preserve compiler output verbatim and keep typed rendering separate from the flat Diff ABI.
 
-Compatibility generation concatenates the three schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
+Compatibility generation concatenates the four schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
 
 Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero owner/class/instance identifiers natively without changing graph state or invoking public serialization.
 
@@ -70,3 +70,5 @@ Deliver external native commits through CompatPublications with their actual dir
 Compact compatibility replies carry mutation epochs and sparse record deltas; retain/release exact capture leases in batches and distinguish native key reservations from captured records.
 
 Batch creation binds the already-constructed JS instance; COW uses clone acknowledgements. Preserve successful-prefix results and partial failure deltas, report an explicit operation or finalization failure, and never admit a failed batch.
+
+Derive exact native prototype IDs and ancestry from the checksum-pinned class AST with generate-compatibility-prototypes.ts before generating the compatibility schema; run both generators with --check. Hosted constructors use global weak JS function tokens independently of editor-local class IDs. Keep scoped callback dispatch, constructor staging and public versus serialized export acknowledgements typed; SourceRead never admits graph writes and NativeSuper targets the exact named prototype.
