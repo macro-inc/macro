@@ -2,6 +2,22 @@
 
 ## Current checkpoint: source compatibility and open runtime gates
 
+Static-config module `f5b6913051` is integrated as `2217287f82`, after the six-helper
+source prerequisite. Its four exports prepare actual-class getType/clone/JSON/DOM
+factories and inherited shared state, plus a consume-once pending clone source.
+Default cloning sets the real source before constructing the class; no cleanup
+absent from the pinned source was invented. Registry/constructNode authorization,
+runtime binding and successful authorized hosted cloning remain open; no editor,
+base-node, state or runtime wiring was changed by this module.
+
+Independent static/state/bucket18, focus8, full shim check41/489 and scoped checks
+pass. Ordinary full-config declaration emission with output-layout-only rootDir
+passes134 declarations, no diagnostics/projection/exclusions. Complete shim tests
+are **225 passed /1 failed of226**, still only the2,396-crossing assertion. The
+central SIX/hash7f094 remains unchanged. Evidence:
+`static-factory-{state-focused-tests,full-shim-check,full-shim-tests,ordinary-declarations,focus-scoped-check}.log`,
+`static-factory-source-proof.json` and `static-factory-focus-integration-audit.md`.
+
 Commands/constants `112dbf7cd4` are integrated as `869f53a49f`, followed by the
 authorized six-helper/state-core checkpoint `8faf05b48e` as `24d832a49e`.
 The central helper SHA256 is now
@@ -15,13 +31,15 @@ Typed per-config state storage preserves opaque values and live known-state read
 unsupported direct known-state mutation throws. Sparse/wrong-kind command buckets
 reject rather than accepting holes. Static preparation, createSharedNodeState,
 actual writable/capture/clone/rollback authority and native state acceptance remain
-blocked on the real runtime. Commands/constants cold evaluation uses the immutable
+blocked on the real runtime at that checkpoint. The static preparation source is
+now supplied above, while actual registry/runtime bindings remain pending.
+Commands/constants cold evaluation uses the immutable
 upstream source and requires no engine; public root namespace completeness and
 dispatch binding are separate gates.
 
 Independent checks pass12 state/bucket tests,4 command/constants tests, command
 payload types, full shim TypeScript6.0.3 and41 hooks/489 sources, and scoped
-`just check`. Complete shim tests are **219 passed /1 failed of220**: the same
+`just check`. At the six-helper checkpoint, shim tests were **219 passed /1 failed of220**: the same
 2,396-crossing assertion; broader transform-phase collection identity remains open.
 The first full declaration emit stopped on TS5011 output layout. Retrying the
 same full tsconfig with only an explicit repository `rootDir` for output emitted129
@@ -370,13 +388,13 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `d2df65c167` is integrated, including code,
+The OFF inventory continuation through `16efcecd73` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 788 selectors across nine explicit reports (full web22,440, media36,
+ledger has 796 selectors across ten explicit reports (full web22,440, media36,
 conversion11, TaskList19, checklist planning32, checklist collection5, iOS caret8,
-blame hover14, typed popup20), including527 new editor units; it is not a summed
+blame hover14, typed popup20, focus guards8), including535 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -475,6 +493,18 @@ disposable-root credit and no source/execution binding claim. Browser171 is
 unchanged. Evidence: `popup-selection-independent-tests.log`,
 `popup-selection-scoped-check.log`, `inventory-788-owner-selector-verification.json`
 and `popup-selection-integration-audit.md` under the acceptance directory.
+
+Focus guards `16efcecd73` are integrated as `a13e83e768`. Independent8/8 cases
+use real editor.focus, native DOM Selection/activeElement and a mounted TaskList
+unmanaged slot with a host-owned button. Mouse/pen next-timer, touch499/500 policy,
+embedded ownership, disposal and root replacement are covered. Supplied pointer
+types, cancelable focus events, fake timers and jsdom geometry do not prove native
+physical timing. No editor method is mocked. The scanner validates796 mappings;
+exact owner-path verification finds796 unique passing selectors across ten
+untouched reports, with zero disposable-root credit and no source/execution binding
+claim. Browser171 is unchanged. Evidence: `focus-guards-independent-tests.log`,
+`focus-guards-scoped-check.log`, `inventory-796-owner-selector-verification.json`
+and `static-factory-focus-integration-audit.md`.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
