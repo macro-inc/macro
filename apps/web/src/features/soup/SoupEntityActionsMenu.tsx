@@ -8,10 +8,16 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { children, For, type JSX, Show } from 'solid-js';
+import type { SoupEntityActionItem } from './createSoupEntityActions';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
 } from './createSoupEntityActions';
+
+export type SoupActionRenderer = (
+  action: SoupEntityActionItem,
+  defaultItem: JSX.Element
+) => JSX.Element;
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
@@ -22,6 +28,7 @@ interface SoupEntityActionsMenuProps {
   onSetProject?: () => void;
   /** Host-specific items shown after the entity actions. */
   extraItems?: JSX.Element;
+  renderAction?: SoupActionRenderer;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
   /** Where the view moves after an action that removes the row. */
@@ -70,17 +77,22 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
               <MenuSeparator />
             </Show>
             <For each={group.items}>
-              {(action) => (
-                <MenuItem
-                  text={action.label}
-                  icon={action.icon}
-                  hotkeyToken={action.hotkeyToken}
-                  shortcut={action.shortcut}
-                  disabled={action.disabled}
-                  onClick={() => handleAction(action.onClick)}
-                  class={action.destructive ? 'text-failure-ink' : undefined}
-                />
-              )}
+              {(action) => {
+                const item = (
+                  <MenuItem
+                    text={action.label}
+                    icon={action.icon}
+                    hotkeyToken={action.hotkeyToken}
+                    shortcut={action.shortcut}
+                    disabled={action.disabled}
+                    onClick={() => handleAction(action.onClick)}
+                    class={action.destructive ? 'text-failure-ink' : undefined}
+                  />
+                );
+                return props.renderAction
+                  ? props.renderAction(action, item)
+                  : item;
+              }}
             </For>
           </>
         )}

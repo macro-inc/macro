@@ -18,6 +18,7 @@ export function ResizableRailSection(props: {
   section: ChannelSectionKey;
   label: string;
   open: boolean;
+  showCollapsedRows?: boolean;
   maxHeight: number;
   itemCount: number;
   dropEdge?: 'top' | 'bottom';
@@ -45,6 +46,7 @@ export function ResizableRailSection(props: {
         : Math.max(1, props.itemCount) * CHANNEL_SECTION_ROW_HEIGHT
     );
   const resizable = () =>
+    props.open &&
     props.itemCount > CHANNEL_SECTION_MIN_ITEMS &&
     maximum() > CHANNEL_SECTION_MIN_HEIGHT;
   const defaultHeight = () => {
@@ -158,7 +160,7 @@ export function ResizableRailSection(props: {
         )}
       </Show>
       {props.header}
-      <Show when={props.open}>
+      <Show when={props.open || props.showCollapsedRows}>
         <div
           ref={(element) => {
             setViewport(element);

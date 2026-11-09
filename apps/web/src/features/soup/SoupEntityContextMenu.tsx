@@ -33,7 +33,10 @@ import {
 } from 'solid-js';
 import { getSoupMenuEntities } from './collection/rows';
 import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
-import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
+import {
+  type SoupActionRenderer,
+  SoupEntityActionsMenu,
+} from './SoupEntityActionsMenu';
 import {
   createSoupEntityMenuPickers,
   type SoupEntityMenuAnchor,
@@ -53,6 +56,7 @@ interface SoupEntityContextMenuProps {
    * them. Desktop only: the mobile long-press drawer shows the actions alone.
    */
   extraItems?: JSX.Element;
+  renderAction?: SoupActionRenderer;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
   /** Where the view moves after an action that removes the row (Mark Done). */
@@ -165,6 +169,7 @@ export const SoupEntityContextMenu: FlowComponent<
                   onSetProject={pickers.openProjectPicker}
                   onEditTags={pickers.openTagPicker()}
                   extraItems={props.extraItems}
+                  renderAction={props.renderAction}
                   markDoneDelegate={props.markDoneDelegate}
                   createActionNavigationHandler={
                     props.createActionNavigationHandler

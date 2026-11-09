@@ -92,7 +92,8 @@ export function useChannelSectionNotifications(
 
   const updateSectionNotifications = async (
     section: ChannelSectionKey,
-    action: 'mute' | 'unmute' | 'snooze'
+    action: 'mute' | 'unmute' | 'snooze',
+    until?: Date
   ) => {
     const actorId = userId();
     const owner = options.dialogOwner();
@@ -128,7 +129,7 @@ export function useChannelSectionNotifications(
         span.setAttr('channel.ids', channelIds);
         span.setAttr('notification.count', channelIds.length);
 
-        if (action === 'snooze') {
+        if (action === 'snooze' && !until) {
           openSnoozeNotifications(
             channelIds.map((id) => ({ item_type: 'channel', item_id: id })),
             { owner }
@@ -136,7 +137,7 @@ export function useChannelSectionNotifications(
           return;
         }
 
-        const muted = action === 'mute';
+        const muted = action !== 'unmute';
         const result = await notificationPreferences.mutateAsync({
           actorId,
           items: channelIds.map((id) => ({
@@ -144,6 +145,7 @@ export function useChannelSectionNotifications(
             item_id: id,
           })),
           muted,
+          snoozedUntil: until?.toISOString(),
         });
         const failed = result.failed.length;
         const succeeded = result.succeeded.length;
@@ -195,7 +197,7 @@ export function useChannelSectionNotifications(
     sectionNotificationsDisabled,
     muteSection: (section: ChannelSectionKey, muted: boolean) =>
       updateSectionNotifications(section, muted ? 'mute' : 'unmute'),
-    snoozeSection: (section: ChannelSectionKey) =>
-      updateSectionNotifications(section, 'snooze'),
+    snoozeSection: (section: ChannelSectionKey, until?: Date) =>
+      updateSectionNotifications(section, 'snooze', until),
   };
 }

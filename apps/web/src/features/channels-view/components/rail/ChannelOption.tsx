@@ -30,6 +30,8 @@ import {
 import { useChannelRailItemState } from './hooks/useChannelRailState';
 import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
 
+import { JoinChannelButton } from './next/JoinChannelButton';
+
 /**
  * Drag a channel between labels. Registered once per Channels-section row: a
  * row is the drag source, and also a drop target that means "into this row's
@@ -104,6 +106,8 @@ export function ChannelOption(props: {
   const rail = useChannelsRail();
   const rowId = () => props.rowId ?? rowKeyForChannel(props.channel.id);
   const item = useChannelRailItemState(() => props.channel.id, rowId);
+  const unjoined = () =>
+    rail.sectionsEnabled() && props.channel.isParticipant === false;
   const timestamp = () =>
     props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
   // Whether a row participates in drag and drop is fixed per mount.
@@ -187,19 +191,29 @@ export function ChannelOption(props: {
           <ViewSidebar.Icon>
             <ChannelAvatar channel={props.channel} />
           </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
+          <span
+            class={cn(
+              'min-w-0 flex-1 truncate',
+              unjoined() && 'text-ink-extra-muted'
+            )}
+          >
+            {props.channel.name}
+          </span>
+          <Show when={unjoined()}>
+            <JoinChannelButton channelId={props.channel.id} hoverOnly />
+          </Show>
           <span class="flex shrink-0 items-center gap-2">
             <ChannelMutedIndicator muted={item().muted} />
             <ChannelCallIndicator
               status={item().incomingCallId ? undefined : item().callStatus}
             />
-            <Show when={item().unread}>
+            <Show when={!unjoined() && item().unread}>
               <span
                 aria-label="Unread"
                 class="size-2 shrink-0 rounded-full bg-accent"
               />
             </Show>
-            <Show when={!item().incomingCallId && timestamp()}>
+            <Show when={!unjoined() && !item().incomingCallId && timestamp()}>
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
                   <span

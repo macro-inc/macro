@@ -55,7 +55,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 
-type SoupEntityActionItem = {
+export type SoupEntityActionItem = {
   id: string;
   label: string;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;

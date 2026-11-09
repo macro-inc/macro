@@ -67,6 +67,10 @@ vi.mock('@channel/ChannelAccessDenied', () => ({
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
 }));
+vi.mock('./components/rail/next/channel-discovery-source', () => ({
+  createSectionSearchSource: (options: { recent: () => ChannelsDataSource }) =>
+    options.recent(),
+}));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({
     favorites: mocks.favoriteIds().map((entityId) => ({

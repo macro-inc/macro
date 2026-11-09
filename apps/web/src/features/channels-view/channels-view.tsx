@@ -40,6 +40,7 @@ import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createSectionSearchSource } from './components/rail/next/channel-discovery-source';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
@@ -102,17 +103,27 @@ function DesktopChannelsRail(props: {
   onSearchOpenChange: (open: boolean) => void;
 }) {
   const listChannels = useChannelListSearchPool();
+  const { sectionsEnabled } = useChannelsView();
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
     text: searchQuery,
-    enabled: () => props.searchOpen,
+    enabled: () => props.searchOpen && !sectionsEnabled(),
     scope: () => 'search',
     source: () => props.sources.search,
   });
+  const sectionSearch = createSectionSearchSource({
+    enabled: () => props.searchOpen && sectionsEnabled(),
+    text: searchQuery,
+    recent: () => props.sources.search,
+    localChannels: listChannels,
+  });
   return (
     <ChannelsRail
-      sources={{ ...props.sources, search: searchSource }}
+      sources={{
+        ...props.sources,
+        search: sectionsEnabled() ? sectionSearch : searchSource,
+      }}
       searchQuery={searchQuery()}
       onSearchQueryChange={setSearchQuery}
       searchOpen={props.searchOpen}

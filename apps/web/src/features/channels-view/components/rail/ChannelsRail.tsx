@@ -481,7 +481,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         labelledChannels(),
       ]),
       channelsById: channelsById(),
-      isLabelOpen,
+      isLabelOpen: sectionsEnabled() ? () => true : isLabelOpen,
     });
   });
 
@@ -550,6 +550,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channelSectionRows(),
       {
         preferences: state.sectionPreferences,
+        isLabelOpen,
         order: state.sectionOrder,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),

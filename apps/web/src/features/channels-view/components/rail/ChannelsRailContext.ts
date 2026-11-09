@@ -192,7 +192,7 @@ export type ChannelsRailContext = {
   markLabelRead: (label: ChannelLabel) => void;
   /** Update the viewer's notifications for the section's current full membership. */
   muteSection: (section: ChannelSectionKey, muted: boolean) => Promise<void>;
-  snoozeSection: (section: ChannelSectionKey) => Promise<void>;
+  snoozeSection: (section: ChannelSectionKey, until?: Date) => Promise<void>;
   sectionNotificationsDisabled: (section: ChannelSectionKey) => boolean;
   sortBy: (group: ChannelsSortGroup) => ChannelListSort;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
