@@ -201,6 +201,16 @@ async fn a_reply_resolves_only_the_matching_reply_idea_of_that_user(pool: PgPool
             vec![target(EntityType::EmailThread, "another-thread", None)],
         )
         .await;
+    // About one message of the thread: a sent reply names no part, and
+    // still answers it.
+    let one_message = h
+        .idea(
+            OWNER,
+            "one-message",
+            reply(),
+            vec![target(EntityType::EmailThread, THREAD, Some("message-7"))],
+        )
+        .await;
 
     let outcome = h
         .resolution
@@ -216,11 +226,12 @@ async fn a_reply_resolves_only_the_matching_reply_idea_of_that_user(pool: PgPool
     assert_eq!(
         outcome,
         Resolved {
-            matched: 1,
-            resolved: 1
+            matched: 2,
+            resolved: 2
         }
     );
     assert_eq!(h.state(answer).await, resolved("replied"));
+    assert_eq!(h.state(one_message).await, resolved("replied"));
     for id in [review, prompt, others, elsewhere] {
         assert_eq!(h.state(id).await, open());
     }
