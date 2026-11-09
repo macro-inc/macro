@@ -1,9 +1,10 @@
 # Programs in HTML previews
 
 Status: on `dev/html-code-mode`. The server builds stored HTML documents
-and runs their programs by id, with live events, and the built page runs
-under a strict CSP. A separate execution pool is not built. The agent
-guide's "Program blocks in HTML previews" describes what ships.
+and runs their programs by id on their own pool, queued per viewer, with
+live events; the built page runs under a strict CSP; the SDK publishes
+pages; and the Agents view lists them. The agent guide's "Program blocks in
+HTML previews" describes what ships.
 
 ## Goal
 
