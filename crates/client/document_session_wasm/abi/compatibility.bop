@@ -165,7 +165,7 @@ union CompatBatchOutcome {
     CompatFailureLocation location; uint16[] errorText;
   }
   3 -> struct CompatBatchHostFailure {
-    CompatFailureLocation location; ForeignOpaqueValue error;
+    CompatFailureLocation location; uint32 hostSlot; ForeignOpaqueValue error;
   }
 }
 // Operation failure index equals the successful prefix results.length; finalize

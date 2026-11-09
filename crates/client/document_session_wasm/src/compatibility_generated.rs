@@ -2258,6 +2258,7 @@ pub enum CompatBatchOutcome<'raw> {
     /// Discriminator 3
     CompatBatchHostFailure {
         location: CompatFailureLocation,
+        host_slot: u32,
         error: ForeignOpaqueValue,
     },
 }
@@ -2286,10 +2287,12 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchOutcome<'raw> {
             }
             Self::CompatBatchHostFailure {
                 location: ref _location,
+                host_slot: ref _host_slot,
                 error: ref _error,
             }
             => {
                 _location.serialized_size() +
+                _host_slot.serialized_size() +
                 _error.serialized_size()
             }
         }
@@ -2318,11 +2321,13 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchOutcome<'raw> {
             }
             Self::CompatBatchHostFailure {
                 location: ref _location,
+                host_slot: ref _host_slot,
                 error: ref _error,
             }
             => {
                 3u8._serialize_chained(dest)?;
                 _location._serialize_chained(dest)?;
+                _host_slot._serialize_chained(dest)?;
                 _error._serialize_chained(dest)?;
             }
         }
@@ -2352,10 +2357,13 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchOutcome<'raw> {
                 i += read;
                 let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
                 i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
 
                 CompatBatchOutcome::CompatBatchHostFailure {
                     location: v0,
-                    error: v1,
+                    host_slot: v1,
+                    error: v2,
                 }
             }
             _ => {
@@ -9110,6 +9118,7 @@ pub mod owned {
         /// Discriminator 3
         CompatBatchHostFailure {
             location: CompatFailureLocation,
+            host_slot: u32,
             error: ForeignOpaqueValue,
         },
     }
@@ -9138,11 +9147,13 @@ pub mod owned {
                 }
                 super::CompatBatchOutcome::CompatBatchHostFailure {
                     location: _location,
+                    host_slot: _host_slot,
                     error: _error,
                 }
                 => {
                     Self::CompatBatchHostFailure {
                         location: _location,
+                        host_slot: _host_slot,
                         error: _error,
                     }
                 }
@@ -9174,10 +9185,12 @@ pub mod owned {
                 }
                 Self::CompatBatchHostFailure {
                     location: ref _location,
+                    host_slot: ref _host_slot,
                     error: ref _error,
                 }
                 => {
                     _location.serialized_size() +
+                    _host_slot.serialized_size() +
                     _error.serialized_size()
                 }
             }
@@ -9206,11 +9219,13 @@ pub mod owned {
                 }
                 Self::CompatBatchHostFailure {
                     location: ref _location,
+                    host_slot: ref _host_slot,
                     error: ref _error,
                 }
                 => {
                     3u8._serialize_chained(dest)?;
                     _location._serialize_chained(dest)?;
+                    _host_slot._serialize_chained(dest)?;
                     _error._serialize_chained(dest)?;
                 }
             }
@@ -9240,10 +9255,13 @@ pub mod owned {
                     i += read;
                     let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
                     i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
 
                     CompatBatchOutcome::CompatBatchHostFailure {
                         location: v0,
-                        error: v1,
+                        host_slot: v1,
+                        error: v2,
                     }
                 }
                 _ => {
@@ -13610,4 +13628,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "767306e64a6b74111330f49313e49dc061dc68b2c6bbce1c22b8d37cb55d3760";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "2b4d927cf4348931633b31c4d5884ab56832f661537e68fbc27ebdc81739baef";
