@@ -98,8 +98,9 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
-    const html = draftEditorHtml(draft);
-    if (html !== undefined) return html;
+    // Saved HTML is authoritative even when empty: stale plain text must not
+    // refill a reply the user cleared.
+    if (draft.body_html_sanitized != null) return draftEditorHtml(draft) ?? '';
     return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   };
   return (
