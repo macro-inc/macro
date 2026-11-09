@@ -205,6 +205,7 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_database_rows_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
+    data.insert(state.graphql_contacts_context.clone());
     data.insert(state.graphql_calendar_context.clone());
     data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_work_feed_context.clone());
