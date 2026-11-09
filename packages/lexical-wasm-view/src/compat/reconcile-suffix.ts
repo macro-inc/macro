@@ -25,20 +25,19 @@ export function $buildDirtyChildrenByParent(): Map<NodeKey, Set<NodeKey>> {
   const map = new Map<NodeKey, Set<NodeKey>>();
   const addKeysToMap = (keys: Iterable<NodeKey>): void => {
     for (const key of keys) {
-      const node = reconcilerState.activeNextNodeMap.get(key);
-      if (node === undefined) {
-        continue;
+      for (const node of [
+        reconcilerState.activePrevNodeMap.get(key),
+        reconcilerState.activeNextNodeMap.get(key),
+      ]) {
+        const parentKey = node?.__parent;
+        if (parentKey == null) continue;
+        let set = map.get(parentKey);
+        if (set === undefined) {
+          set = new Set();
+          map.set(parentKey, set);
+        }
+        set.add(key);
       }
-      const parentKey = node.__parent;
-      if (parentKey === null) {
-        continue;
-      }
-      let set = map.get(parentKey);
-      if (set === undefined) {
-        set = new Set();
-        map.set(parentKey, set);
-      }
-      set.add(key);
     }
   };
   addKeysToMap(reconcilerState.activeDirtyElements.keys());

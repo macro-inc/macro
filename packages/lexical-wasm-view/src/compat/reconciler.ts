@@ -4,6 +4,11 @@
  */
 import type { NodeKey } from 'lexical';
 import {
+  ChildTextIndex,
+  childTextIndexes,
+  renderedChildText,
+} from './child-text-index';
+import {
   DOUBLE_LINE_BREAK,
   IS_ALIGN_CENTER,
   IS_ALIGN_END,
@@ -40,6 +45,7 @@ import {
   $createChildrenArray,
   $getDOMSlot,
   $isRootOrShadowRoot,
+  removeDecorator,
   setMutatedNode,
 } from './utils';
 
@@ -254,6 +260,10 @@ export function $destroyNode(
     return;
   }
 
+  if ($isDecoratorNode(node)) {
+    removeDecorator(reconcilerState.activeEditor, key);
+  }
+
   // This logic is really important, otherwise we will leak DOM nodes
   // when their corresponding LexicalNodes are removed from the editor state.
   reconcilerState.activeEditor._keyToDOMMap.delete(key);
@@ -375,6 +385,28 @@ export function $createNode(
   key: NodeKey,
   slot: ElementDOMSlot | null
 ): HTMLElement {
+  const start = reconcilerState.subTreeTextContent.length;
+  const dom = createNode(key, slot);
+  $recordRenderedChild(key, dom, start);
+  return dom;
+}
+
+export function $recordRenderedChild(
+  key: NodeKey,
+  dom: HTMLElement,
+  start: number
+): void {
+  const node = reconcilerState.activeNextNodeMap.get(key);
+  invariant(node !== undefined, 'Missing rendered child %s', key);
+  const keyed: HTMLElement & LexicalPrivateDOM = dom;
+  renderedChildText.set(dom, {
+    key,
+    text: reconcilerState.subTreeTextContent.slice(start),
+    firstText: $isTextNode(node) ? key : (keyed.__lexicalFirstTextKey ?? null),
+  });
+}
+
+function createNode(key: NodeKey, slot: ElementDOMSlot | null): HTMLElement {
   const node = reconcilerState.activeNextNodeMap.get(key);
 
   if (node === undefined) {
@@ -428,6 +460,7 @@ export function $createNode(
       // (keyed-DOM) writes in $createChildren / $reconcileChildren.
       dom.__lexicalTextContent = '';
       dom.__lexicalFirstTextKey = null;
+      childTextIndexes.set(dom, new ChildTextIndex([]));
     } else {
       const endIndex = childrenSize - 1;
       const children = $createChildrenArray(
@@ -552,6 +585,35 @@ export function $createChildren(
   // captured, restore it. Otherwise leave this walk's first-text in the
   // module state so the caller's outer walk picks it up.
   $endCaptureGuard(outerSaved);
+  // The initial render already visits every child. Retain its ordered text
+  // aggregates so subsequent edits need not revisit untouched siblings.
+  if (_startIndex === 0 && endIndex === element.__size - 1) {
+    childTextIndexes.set(
+      cacheDom,
+      new ChildTextIndex(
+        children.map((key) => {
+          const child = reconcilerState.activeNextNodeMap.get(key);
+          const childDOM = reconcilerState.activeEditor._keyToDOMMap.get(key);
+          const value = childDOM && renderedChildText.get(childDOM);
+          invariant(
+            child !== undefined && value !== undefined,
+            'Missing child render %s',
+            key
+          );
+          return {
+            ...value,
+            text:
+              value.text +
+              ($isElementNode(child) &&
+              child.__next !== null &&
+              !child.isInline()
+                ? DOUBLE_LINE_BREAK
+                : ''),
+          };
+        })
+      )
+    );
+  }
 }
 
 export type LastChildState = 'line-break' | 'decorator' | 'empty';

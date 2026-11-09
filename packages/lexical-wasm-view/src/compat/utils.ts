@@ -204,6 +204,15 @@ export function cloneDecorators(
   return pendingDecorators;
 }
 
+/** Remove an authoritative destroyed key, without scanning unrelated entries. */
+export function removeDecorator(editor: LexicalEditor, key: NodeKey): void {
+  const decorators = editor._pendingDecorators ?? editor._decorators;
+  if (Object.hasOwn(decorators, key)) {
+    const pending = editor._pendingDecorators ?? cloneDecorators(editor);
+    delete pending[key];
+  }
+}
+
 export function internalGetRoot(editorState: EditorState): RootNode {
   return editorState._nodeMap.get('root') as RootNode;
 }
