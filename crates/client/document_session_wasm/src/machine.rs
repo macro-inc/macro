@@ -132,13 +132,29 @@ impl Machine {
             }
             _ => None,
         };
-        let submitted_selection = match &input {
+        let click = matches!(
+            &input,
+            SessionInput::Editor(Input::Command {
+                command: lexical_model::Command::Click,
+                ..
+            })
+        );
+        let selection_baseline = match &input {
             SessionInput::Editor(
                 Input::SelectionFromView { selection, .. } | Input::TextFromView { selection, .. },
             ) if *selection != lexical_model::ViewSelection::KeepModel => Some(selection.clone()),
+            SessionInput::Editor(Input::Command {
+                command: lexical_model::Command::Click,
+                ..
+            }) => match &self.session {
+                Session::Editor(session) => Some(lexical_model::view_selection(
+                    session.surface().state().selection(),
+                )),
+                Session::Doc(_) => None,
+            },
             _ => None,
         };
-        let previous_typing = if submitted_selection.is_some() {
+        let previous_typing = if selection_baseline.is_some() {
             match &self.session {
                 Session::Editor(session) => session
                     .surface()
@@ -183,10 +199,11 @@ impl Machine {
                         .text(*key)
                         .is_none_or(|text| text.text.as_str() != submitted)
                 });
-        // Only exact accepted selections may use the zero-output acknowledgement.
-        // Notifications, IO and rejected/normalized points need final model facts.
+        // DOM inputs need final model facts on nonzero output. Click also reports
+        // actual changes when a read-only core intentionally emits no DOM write;
+        // unchanged Clicks never gain unconditional selection feedback.
         let selection_feedback =
-            if let (Some(mut submitted), Some(surface)) = (submitted_selection, surface) {
+            if let (Some(mut submitted), Some(surface)) = (selection_baseline, surface) {
                 if let lexical_model::ViewSelection::Range {
                     resolution_dirty, ..
                 } = &mut submitted
@@ -205,7 +222,9 @@ impl Machine {
                 let typing = selection
                     .and_then(lexical_model::Selection::as_range)
                     .map(|range| (range.format, range.style.clone()));
-                if !authoritative && (submitted != actual || nonzero || typing != previous_typing) {
+                if !authoritative
+                    && (submitted != actual || (!click && nonzero) || typing != previous_typing)
+                {
                     let (format, style) = selection
                         .and_then(lexical_model::Selection::as_range)
                         .map_or(

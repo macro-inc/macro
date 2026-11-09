@@ -95,6 +95,7 @@ pub(crate) fn command(
             target: ModifyTarget::NoView,
             character_target: ModifyTarget::NoView,
         },
+        18 => Command::Click,
         _ => return Err(BoundaryError::Invalid("command")),
     })
 }

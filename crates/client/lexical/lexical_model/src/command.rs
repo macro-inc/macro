@@ -54,6 +54,8 @@ pub enum Command {
     SelectAll(Option<KeyEvent>),
     /// Upstream SelectionChange command.
     SelectionChange,
+    /// Upstream Click command; pointer geometry stays in the view.
+    Click,
     /// Upstream InsertClipboardNodes command.
     InsertClipboardNodes {
         /// Detached nodes to insert.
@@ -246,6 +248,8 @@ pub enum CommandKind {
     SelectAll,
     /// SelectionChange listener list.
     SelectionChange,
+    /// Click listener list.
+    Click,
     /// InsertClipboardNodes listener list.
     InsertClipboardNodes,
     /// KeyDown listener list.
@@ -303,6 +307,7 @@ impl Command {
             Self::FormatElement(..) => CommandKind::FormatElement,
             Self::SelectAll(..) => CommandKind::SelectAll,
             Self::SelectionChange => CommandKind::SelectionChange,
+            Self::Click => CommandKind::Click,
             Self::InsertClipboardNodes { .. } => CommandKind::InsertClipboardNodes,
             Self::KeyDown(..) => CommandKind::KeyDown,
             Self::Key { command, .. } => CommandKind::Key(*command),

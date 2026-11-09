@@ -130,6 +130,7 @@ impl Plugin for RichCommands {
     }
     fn commands(&self) -> &[CommandRegistration] {
         const KINDS: &[CommandKind] = &[
+            CommandKind::Click,
             CommandKind::InsertText,
             CommandKind::DeleteCharacter,
             CommandKind::DeleteWord,
@@ -185,6 +186,9 @@ impl Plugin for RichCommands {
             return Ok(Handled::Yes);
         }
         let handled = match command {
+            Command::Click => {
+                rich_text::click(tx, &rich_text::EscapeFormatTriggerConfig::default())
+            }
             Command::InsertText(text) => rich_text::controlled_text_insertion(tx, text),
             Command::DeleteCharacter { direction, target } => {
                 rich_text::delete_character(tx, *direction, target.clone())

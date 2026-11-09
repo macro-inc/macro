@@ -65,6 +65,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
+- Keep Click a normal indexed command; views supply DOM selection facts and registered rich-text listeners own selection clearing and format escaping.
 - Hooks share one follow-up transaction per round; conditional hooks then run isolated transactions and discard false results, including early flushes. Keep the shared 99-round guard and roll back extension state with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
