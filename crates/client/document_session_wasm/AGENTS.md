@@ -24,6 +24,9 @@ b=0 preserves composition. EditorKeyDown carries the layout target through
 normal KeyDown listener dispatch before the routed deletion. Primitive keyDown
 inputs dispatch recognized key-specific listeners after generic KeyDown without
 claiming the browser default unless a handler consumes it.
+Append Click as CommandCode 18 in the existing command envelope and dispatch its
+native rich-text listener; keep decorator selection policy out of generic view
+auto-selection. The enum alone does not install a handler or enable ownership.
 
 Application command envelopes carry the mirror generation and an optional
 keyboard event; reject stale generations before decoding typed surface commands.

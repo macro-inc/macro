@@ -5,7 +5,7 @@ enum DiffOpcode : uint32 { Remove = 1; CreateElement = 2; CreateText = 3; Create
 enum Access : byte { Read = 0; CommentOnly = 1; Edit = 2; }
 enum Transport : byte { None = 0; Direct = 1; Routed = 2; }
 enum Failure : byte { None = 0; Unavailable = 1; QuotaExceeded = 2; Corrupt = 3; Uncertain = 4; Other = 5; }
-enum CommandCode : uint32 { InsertText = 1; RemoveText = 2; InsertParagraph = 3; InsertLineBreak = 4; InsertTab = 5; Indent = 6; Outdent = 7; FormatText = 8; FormatElement = 9; SelectAll = 10; ClearEditor = 11; ClearHistory = 12; Undo = 13; Redo = 14; DeleteCharacter = 15; DeleteWord = 16; DeleteLine = 17; }
+enum CommandCode : uint32 { InsertText = 1; RemoveText = 2; InsertParagraph = 3; InsertLineBreak = 4; InsertTab = 5; Indent = 6; Outdent = 7; FormatText = 8; FormatElement = 9; SelectAll = 10; ClearEditor = 11; ClearHistory = 12; Undo = 13; Redo = 14; DeleteCharacter = 15; DeleteWord = 16; DeleteLine = 17; Click = 18; }
 struct SessionConfigMsg { string doc; string session; string user; uint64[] peers; Access access; Transport transport; bool durable; bool chatter; bool headless; byte viewEngine; byte viewOs; string token; string traceparent; uint32 coalesce; uint32 snapshotInterval; ContainerPathMsg[] observed; }
 struct PointMsg { uint32 key; uint32 offset; byte type; }
 struct SelectionMsg { byte kind; PointMsg anchor; PointMsg focus; uint32[] nodes; uint32 table; bool dirty; }
