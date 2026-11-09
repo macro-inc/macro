@@ -19,6 +19,7 @@ export default {
   muteForWeekend: 'For the weekend',
   muteForWeek: 'For a week',
   matchByName: 'Match by name',
+  matchedByName: 'Matched by name',
   visibleTo: 'Visible to',
   onlyMe: 'Only me',
   favorites: 'Favorites',

@@ -18,16 +18,25 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import { confirmDialog } from '@ui';
-import type { Accessor, Owner } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  getOwner,
+  type Owner,
+  on,
+} from 'solid-js';
 import {
   canAssignChannel,
   canLabelChannel,
+  channelSectionScopeChangeError,
   filterChannelLabelMembers,
 } from '../../../core/channel-label-eligibility';
 import type { ChannelsRailSection } from '../../../types';
 import { promptLabelName } from '../ChannelLabelNameDialog';
+import type { SectionDraft, SectionValue } from '../ChannelsRailContext';
 import { promptSectionChannels } from '../next/SectionChannelsDialog';
-import { promptSection, type SectionDialogValue } from '../next/SectionDialog';
+import type { SectionDialogValue } from '../next/SectionDialog';
 import { promptSmartTag } from '../SmartTagDialog';
 
 type ChannelLabelActionsOptions = {
@@ -36,6 +45,7 @@ type ChannelLabelActionsOptions = {
   labelsAvailable: Accessor<boolean>;
   labelsUnavailableReason: Accessor<string>;
   sharedLabels: Accessor<boolean>;
+  teamId?: Accessor<string | undefined>;
   labels: Accessor<readonly ChannelLabel[]>;
   channelsById: Accessor<ReadonlyMap<string, ChannelEntity>>;
   searchResults: Accessor<readonly ChannelEntity[]>;
@@ -47,6 +57,9 @@ type ChannelLabelActionsOptions = {
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
+  const [sectionDraft, setSectionDraft] = createSignal<SectionDraft>();
+  let draftActorId: ReturnType<typeof userId>;
+  const owner = getOwner();
 
   const {
     sectionsEnabled,
@@ -54,6 +67,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     labelsAvailable,
     labelsUnavailableReason,
     sharedLabels,
+    teamId,
     labels,
     channelsById,
     searchResults,
@@ -127,6 +141,101 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     );
   };
 
+  const cancelSectionDraft = () => setSectionDraft(undefined);
+  createEffect(
+    on([userId, sectionsEnabled, channelTagsEnabled], cancelSectionDraft, {
+      defer: true,
+    })
+  );
+
+  const saveSectionDraft = async (value: SectionValue) => {
+    const draft = sectionDraft();
+    const actorId = draftActorId;
+    if (!draft || actorId !== userId() || !sectionsEnabled()) {
+      throw new Error(t('channelSections.unavailable'));
+    }
+
+    if (draft.existing) {
+      const saved = await persistUpdate(
+        draft.existing,
+        value.name,
+        value.rule,
+        value.scope,
+        actorId,
+        true
+      );
+      if (!saved) return;
+    } else {
+      await persistCreate(draft.initialChannelIds, value, actorId, true);
+    }
+
+    if (
+      actorId !== userId() ||
+      !sectionsEnabled() ||
+      sectionDraft() !== draft
+    ) {
+      throw new Error(t('channelSections.unavailable'));
+    }
+
+    setSectionDraft(undefined);
+  };
+
+  const persistCreate = (
+    channelIds: string[],
+    { name, scope, rule }: SectionDialogValue,
+    actorId: ReturnType<typeof userId>,
+    sectionMode: boolean
+  ) =>
+    Telemetry.span('channels.section.create', async (span) => {
+      span.setAttr('section.scope', scope);
+      span.setAttr('section.smart', Boolean(rule));
+
+      if (
+        actorId !== userId() ||
+        sectionMode !== sectionsEnabled() ||
+        !channelTagsEnabled() ||
+        !labelsAvailable()
+      ) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      if (scope === 'team' && !sharedLabels()) {
+        throw new Error(t('channelSections.noAccess'));
+      }
+
+      const members = rule && !sectionMode ? [] : channelIds;
+      if (
+        !members.every(
+          (id) =>
+            canLabelChannelId(id) &&
+            (scope === 'personal' ||
+              labelChannelById(id)?.channelType === 'team')
+        )
+      ) {
+        throw new Error(t('channelSections.ineligibleChannel'));
+      }
+
+      const created = await mutationsForScope(scope).create.mutateAsync({
+        name,
+        rule,
+        channelIds: members,
+        actorId,
+        sectionMode,
+      });
+      span.setAttr('section.id', created.id);
+
+      if (actorId !== userId() || sectionMode !== sectionsEnabled()) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      if (!sectionMode) {
+        setGroupOpen('team_channels', true);
+      }
+
+      setLabelOpen(created.id, true);
+      toast.success(t('channelSections.created', { name }));
+    });
+
   const createLabel = async (
     channelIds: string[],
     scope: ChannelLabelScopeSelection = defaultScope(),
@@ -144,62 +253,16 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       return;
     }
 
-    const save = ({ name, scope, rule }: SectionDialogValue) =>
-      Telemetry.span('channels.section.create', async (span) => {
-        span.setAttr('section.scope', scope);
-        span.setAttr('section.smart', Boolean(rule));
-
-        if (
-          actorId !== userId() ||
-          sectionMode !== sectionsEnabled() ||
-          !channelTagsEnabled() ||
-          !labelsAvailable()
-        ) {
-          throw new Error(t('channelSections.unavailable'));
-        }
-
-        if (scope === 'team' && !sharedLabels()) {
-          throw new Error(t('channelSections.noAccess'));
-        }
-
-        const members = rule ? [] : channelIds;
-        if (
-          !members.every(
-            (id) =>
-              canLabelChannelId(id) &&
-              (scope === 'personal' ||
-                labelChannelById(id)?.channelType === 'team')
-          )
-        ) {
-          throw new Error(t('channelSections.ineligibleChannel'));
-        }
-
-        const created = await mutationsForScope(scope).create.mutateAsync({
-          name,
-          rule,
-          channelIds: members,
-          actorId,
-        });
-        span.setAttr('section.id', created.id);
-
-        if (actorId !== userId()) {
-          return;
-        }
-
-        if (!sectionMode) {
-          setGroupOpen('team_channels', true);
-        }
-
-        setLabelOpen(created.id, true);
-        toast.success(t('channelSections.created', { name }));
-      });
-
     if (sectionMode) {
-      await promptSection(
-        { scope, canShare: sharedLabels(), onConfirm: save },
-        { owner: labelDialogOwner() }
-      );
-    } else if (smart) {
+      draftActorId = actorId;
+      setSectionDraft({ initialChannelIds: [...channelIds], scope });
+      return;
+    }
+
+    const save = (value: SectionDialogValue) =>
+      persistCreate(channelIds, value, actorId, sectionMode);
+
+    if (smart) {
       await promptSmartTag(
         {
           scopeDescription: labelScopeDescription(scope),
@@ -222,74 +285,148 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
   const createSmartTag = () => createLabel([], defaultScope(), true);
 
+  const persistUpdate = (
+    label: ChannelLabel,
+    name: string,
+    rule: ChannelLabelRule | undefined,
+    targetScope: ChannelLabelScopeSelection | undefined,
+    actorId: ReturnType<typeof userId>,
+    sectionMode: boolean
+  ) =>
+    Telemetry.span('channels.section.update', async (span) => {
+      const scope = scopeForLabel(label);
+      const nextScope = targetScope ?? scope;
+      span.setAttr('section.id', label.id);
+      span.setAttr('section.scope', scope);
+      span.setAttr('section.smart', Boolean(rule ?? label.rule));
+      span.setAttr('section.target_scope', nextScope);
+
+      const current = labels().find((item) => item.id === label.id);
+      if (
+        actorId !== userId() ||
+        sectionMode !== sectionsEnabled() ||
+        !channelTagsEnabled() ||
+        !current ||
+        scopeForLabel(current) !== scope ||
+        !labelsAvailable()
+      ) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      if (nextScope !== scope) {
+        if (!sectionMode || (nextScope === 'team' && !sharedLabels())) {
+          throw new Error(t('channelSections.noAccess'));
+        }
+
+        const targetTeamId =
+          teamId?.() ?? labels().find((item) => item.teamId)?.teamId;
+        if (nextScope === 'team' && !targetTeamId) {
+          throw new Error(t('channelSections.noAccess'));
+        }
+
+        const scopeError = channelSectionScopeChangeError(
+          current,
+          channelsById(),
+          { teamId: nextScope === 'team' ? targetTeamId : undefined }
+        );
+        if (scopeError) {
+          throw new Error(
+            t(
+              scopeError === 'team-only'
+                ? 'channelSections.sharingIneligibleChannels'
+                : 'channelSections.sharingUnavailableChannels'
+            )
+          );
+        }
+
+        if (scope === 'team') {
+          const confirmed = await confirmDialog(
+            {
+              title: t('channelSections.makePersonalTitle'),
+              body: t('channelSections.makePersonalBody', {
+                name: current.name,
+              }),
+              confirmLabel: t('channelSections.makePersonal'),
+              cancelLabel: t('channelSections.cancel'),
+              tone: 'danger',
+            },
+            { owner }
+          );
+          if (!confirmed) return false;
+        }
+      }
+
+      if (
+        actorId !== userId() ||
+        sectionMode !== sectionsEnabled() ||
+        labels().find((item) => item.id === label.id) !== current
+      ) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      await mutationsForScope(scope).rename.mutateAsync({
+        labelId: label.id,
+        name,
+        rule: rule ?? current.rule ?? undefined,
+        targetScope: nextScope === scope ? undefined : nextScope,
+        actorId,
+        sectionMode,
+      });
+
+      if (actorId !== userId() || sectionMode !== sectionsEnabled()) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      toast.success(t('channelSections.updated', { name }));
+      return true;
+    });
+
+  const updateSection = async (
+    label: ChannelLabel,
+    name: string,
+    rule?: ChannelLabelRule,
+    targetScope?: ChannelLabelScopeSelection
+  ) => {
+    await persistUpdate(
+      label,
+      name,
+      rule,
+      targetScope,
+      userId(),
+      sectionsEnabled()
+    );
+  };
+
   const renameLabel = async (label: ChannelLabel) => {
     const actorId = userId();
     const sectionMode = sectionsEnabled();
+    if (!channelTagsEnabled()) return;
 
-    if (!channelTagsEnabled()) {
+    const scope = scopeForLabel(label);
+    if (sectionMode) {
+      draftActorId = actorId;
+      setSectionDraft({
+        initialChannelIds: [...label.channelIds],
+        scope,
+        existing: label,
+      });
       return;
     }
 
-    const scope = scopeForLabel(label);
-    const save = ({
+    const save = async ({
       name,
       rule,
-      scope: nextScope = scope,
-    }: {
-      name: string;
-      rule?: ChannelLabelRule;
-      scope?: ChannelLabelScopeSelection;
-    }) =>
-      Telemetry.span('channels.section.update', async (span) => {
-        span.setAttr('section.id', label.id);
-        span.setAttr('section.scope', scope);
-        span.setAttr('section.smart', Boolean(rule));
-        span.setAttr('section.target_scope', nextScope);
+      scope: nextScope,
+    }: SectionDialogValue) => {
+      await persistUpdate(label, name, rule, nextScope, actorId, sectionMode);
+    };
 
-        const current = labels().find((item) => item.id === label.id);
-
-        if (
-          actorId !== userId() ||
-          sectionMode !== sectionsEnabled() ||
-          !channelTagsEnabled() ||
-          !current ||
-          scopeForLabel(current) !== scope ||
-          !labelsAvailable()
-        ) {
-          throw new Error(t('channelSections.unavailable'));
-        }
-
-        await mutationsForScope(scope).rename.mutateAsync({
-          labelId: label.id,
-          name,
-          rule,
-          targetScope: nextScope === scope ? undefined : nextScope,
-          actorId,
-        });
-
-        if (actorId !== userId()) {
-          return;
-        }
-
-        toast.success(t('channelSections.updated', { name }));
-      });
-
-    if (sectionMode) {
-      await promptSection(
-        {
-          scope,
-          canShare: sharedLabels(),
-          initial: label,
-          onConfirm: save,
-        },
-        { owner: labelDialogOwner() }
-      );
-    } else if (label.rule) {
+    if (label.rule) {
       await promptSmartTag(
         {
           scopeDescription: labelScopeDescription(scope),
           initial: { name: label.name, rule: label.rule },
-          onConfirm: (name, rule) => save({ name, rule }),
+          onConfirm: (name, rule) => save({ name, rule, scope }),
         },
         { owner: labelDialogOwner() }
       );
@@ -300,7 +437,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
           body: labelScopeDescription(scope),
           confirmLabel: t('channelLabels.rename'),
           initialValue: label.name,
-          onConfirm: (name) => save({ name }),
+          onConfirm: (name) => save({ name, scope }),
         },
         { owner: labelDialogOwner() }
       );
@@ -357,6 +494,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         await mutationsForScope(scopeForLabel(label)).delete.mutateAsync({
           labelId: label.id,
           actorId,
+          sectionMode,
         });
       });
 
@@ -376,6 +514,65 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
   };
 
+  const addLabelChannels = (label: ChannelLabel, channelIds: string[]) => {
+    const actorId = userId();
+    const scope = scopeForLabel(label);
+
+    return Telemetry.span('channels.section.add_channels', async (span) => {
+      span.setAttr('section.id', label.id);
+      span.setAttr('section.scope', scope);
+      span.setAttr('channel.ids', channelIds.join(','));
+
+      const current = labels().find((item) => item.id === label.id);
+      if (
+        actorId !== userId() ||
+        !sectionsEnabled() ||
+        !channelTagsEnabled() ||
+        !labelsAvailable() ||
+        !current ||
+        scopeForLabel(current) !== scope
+      ) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      const additions = [...new Set(channelIds)].filter(
+        (id) => !current.channelIds.includes(id)
+      );
+      const results = await Promise.allSettled(
+        additions.map((channelId) =>
+          mutationsForScope(scope).assign.mutateAsync({
+            channelId,
+            labelId: label.id,
+            actorId,
+            sectionMode: true,
+          })
+        )
+      );
+
+      if (actorId !== userId() || !sectionsEnabled()) {
+        throw new Error(t('channelSections.unavailable'));
+      }
+
+      const failed = additions.filter(
+        (_, index) => results[index].status === 'rejected'
+      );
+      const added = additions.length - failed.length;
+      span.setAttr('channels.added', added);
+      span.setAttr('channels.failed', failed.length);
+
+      if (failed.length) {
+        span.error('Some channel assignments failed');
+      }
+
+      if (added > 0) {
+        setLabelOpen(label.id, true);
+        toast.success(t('channelSections.addedChannels', { count: added }));
+      }
+
+      return failed;
+    });
+  };
+
   const addChannelsToLabel = async (label: ChannelLabel) => {
     if (!sectionsEnabled() || !channelTagsEnabled() || label.rule) {
       return;
@@ -386,70 +583,8 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       return;
     }
 
-    const actorId = userId();
-    const scope = scopeForLabel(label);
-
     await promptSectionChannels(
-      {
-        label,
-        onConfirm: (channelIds) =>
-          Telemetry.span('channels.section.add_channels', async (span) => {
-            span.setAttr('section.id', label.id);
-            span.setAttr('section.scope', scope);
-            span.setAttr('channel.ids', channelIds.join(','));
-
-            const current = labels().find((item) => item.id === label.id);
-
-            if (
-              actorId !== userId() ||
-              !sectionsEnabled() ||
-              !channelTagsEnabled() ||
-              !labelsAvailable() ||
-              !current ||
-              current.rule ||
-              scopeForLabel(current) !== scope
-            ) {
-              throw new Error(t('channelSections.unavailable'));
-            }
-
-            const additions = [...new Set(channelIds)].filter(
-              (id) => !current.channelIds.includes(id)
-            );
-            const results = await Promise.allSettled(
-              additions.map((channelId) =>
-                mutationsForScope(scope).assign.mutateAsync({
-                  channelId,
-                  labelId: label.id,
-                  actorId,
-                })
-              )
-            );
-
-            if (actorId !== userId() || !sectionsEnabled()) {
-              throw new Error(t('channelSections.unavailable'));
-            }
-
-            const failed = additions.filter(
-              (_, index) => results[index].status === 'rejected'
-            );
-            const added = additions.length - failed.length;
-            span.setAttr('channels.added', added);
-            span.setAttr('channels.failed', failed.length);
-
-            if (failed.length) {
-              span.error('Some channel assignments failed');
-            }
-
-            if (added > 0) {
-              setLabelOpen(label.id, true);
-              toast.success(
-                t('channelSections.addedChannels', { count: added })
-              );
-            }
-
-            return failed;
-          }),
-      },
+      { label, onConfirm: (channelIds) => addLabelChannels(label, channelIds) },
       { owner: labelDialogOwner() }
     );
   };
@@ -460,6 +595,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     fromLabelId?: string
   ) => {
     const actorId = userId();
+    const sectionMode = sectionsEnabled();
 
     if (!channelTagsEnabled() || !canLabelChannelId(channelId)) {
       return;
@@ -491,12 +627,17 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
     const from = labels().find(
       (label) =>
-        !label.rule &&
-        scopeForLabel(label) === scope &&
-        label.channelIds.includes(channelId)
+        (sectionMode
+          ? (label.explicitChannelIds ?? label.channelIds).includes(channelId)
+          : !label.rule && label.channelIds.includes(channelId)) &&
+        scopeForLabel(label) === scope
     );
 
-    if (to?.rule || from?.id === labelId) {
+    if (
+      (!sectionMode && to?.rule) ||
+      from?.id === labelId ||
+      (!labelId && previous && from?.id !== previous.id)
+    ) {
       return;
     }
 
@@ -522,6 +663,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
             channelId,
             labelId,
             actorId,
+            sectionMode,
           });
 
           if (actorId !== userId()) {
@@ -590,9 +732,14 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
   return {
     createLabel,
+    sectionDraft,
+    saveSectionDraft,
+    cancelSectionDraft,
+    updateSection,
     createSmartTag,
     renameLabel,
     addChannelsToLabel,
+    addLabelChannels,
     deleteLabel,
     setChannelLabel,
     markLabelRead,

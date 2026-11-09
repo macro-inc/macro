@@ -99,6 +99,7 @@ import {
   buildChannelSectionRows,
   getChannelRailPaginationScope,
 } from './next/build-channel-rail-rows';
+import { useCollapsedUnreadChannels } from './next/collapsed-unread-channels';
 import { ExpandedChannelsRail as NextChannelsRail } from './next/ExpandedChannelsRail';
 
 export { buildChannelRailRows } from './next/build-channel-rail-rows';
@@ -444,8 +445,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return referencedChannels().filter((channel) => labelled.has(channel.id));
   });
 
+  const collapsedUnreadSource = useCollapsedUnreadChannels(
+    () =>
+      sectionsEnabled() &&
+      (['team_channels', 'channels', 'direct_messages'] as const).some(
+        (section) =>
+          !state.expandedGroups[section] &&
+          state.sectionPreferences[section]?.unreadWhenCollapsed !== false
+      )
+  );
+  const collapsedUnread = () =>
+    sectionsEnabled() ? collapsedUnreadSource() : [];
   const allChannels = createMemo(() =>
-    deduplicateChannels([channels(), labelledChannels()])
+    deduplicateChannels([channels(), labelledChannels(), collapsedUnread()])
   );
   const channelsById = createMemo(
     () => new Map(allChannels().map((channel) => [channel.id, channel]))
@@ -529,9 +541,24 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const items = {
       favorites: favorites(),
-      team_channels: props.sources.team_channels.items(),
-      channels: props.sources.channels.items(),
-      direct_messages: props.sources.direct_messages.items(),
+      team_channels: deduplicateChannels([
+        props.sources.team_channels.items(),
+        collapsedUnread().filter((channel) => channel.channelType === 'team'),
+      ]),
+      channels: deduplicateChannels([
+        props.sources.channels.items(),
+        collapsedUnread().filter(
+          (channel) =>
+            channel.channelType === 'public' ||
+            channel.channelType === 'private'
+        ),
+      ]),
+      direct_messages: deduplicateChannels([
+        props.sources.direct_messages.items(),
+        collapsedUnread().filter(
+          (channel) => channel.channelType === 'direct_message'
+        ),
+      ]),
       recents: props.sources.recents.items(),
       threads: props.sources.threads.items(),
     };
@@ -1034,11 +1061,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const {
     createLabel,
+    sectionDraft,
+    saveSectionDraft,
+    cancelSectionDraft,
+    updateSection,
     createSmartTag,
     renameLabel,
     deleteLabel,
     setChannelLabel,
     addChannelsToLabel,
+    addLabelChannels,
     markLabelRead,
     canLabelChannelId,
     labelChannelById,
@@ -1048,6 +1080,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labelsAvailable,
     labelsUnavailableReason,
     sharedLabels,
+    teamId: () =>
+      !labelsQuery.isPending
+        ? (labelsQuery.data?.teamId ?? undefined)
+        : undefined,
     labels,
     channelsById,
     searchResults,
@@ -1256,10 +1292,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelSectionRows,
     labelUnreadCount,
     createLabel,
+    sectionDraft,
+    saveSectionDraft,
+    cancelSectionDraft,
+    updateSection,
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
     addChannelsToLabel,
+    addLabelChannels,
     renameLabel,
     deleteLabel,
     setChannelLabel,

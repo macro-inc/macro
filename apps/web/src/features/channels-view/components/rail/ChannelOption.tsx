@@ -102,6 +102,8 @@ export function ChannelOption(props: {
   labelId?: string;
   /** Make an eligible named channel draggable between sections. */
   draggable?: boolean;
+  /** Team context for cross-team discovery results. */
+  teamName?: string;
 }) {
   const rail = useChannelsRail();
   const rowId = () => props.rowId ?? rowKeyForChannel(props.channel.id);
@@ -199,6 +201,16 @@ export function ChannelOption(props: {
           >
             {props.channel.name}
           </span>
+          <Show when={props.teamName}>
+            {(name) => (
+              <Tooltip
+                label={name()}
+                class="max-w-24 truncate text-xs text-ink-extra-muted"
+              >
+                {name()}
+              </Tooltip>
+            )}
+          </Show>
           <Show when={unjoined()}>
             <JoinChannelButton channelId={props.channel.id} hoverOnly />
           </Show>

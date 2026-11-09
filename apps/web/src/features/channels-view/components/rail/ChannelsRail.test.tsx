@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => ({
   favorites: [] as Favorite[],
   referencedChannels: [] as ChannelEntity[],
   sectionsEnabled: true,
+  unreadRows: [] as ChannelEntity[],
+  closedGroups: [] as string[],
+  actualRows: (): ChannelRailRow[] => [],
   activityChannels: (): readonly ChannelEntity[] => [],
   additionalActivityChannels: (): readonly ChannelEntity[] => [],
   fetchGroupIds:
@@ -73,6 +76,7 @@ vi.mock('@app/components/list', () => ({
       metadata: { event: MouseEvent };
     }) => void;
   }) => {
+    mocks.actualRows = options.items;
     mocks.activate = (event) =>
       options.onActivate({
         item: mocks.favoriteId
@@ -220,6 +224,11 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 }));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
   useChannelLabelsQuery: () => ({ isSuccess: false }),
+  useAvailableSectionChannelsQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: [],
+  }),
   useCreateChannelLabelMutation: () => ({}),
   useDeleteChannelLabelMutation: () => ({}),
   useRenameChannelLabelMutation: () => ({}),
@@ -242,9 +251,15 @@ vi.mock('../../channels-view-context', () => ({
     state: {
       tab: 'browse',
       expandedGroups: {
-        channels: true,
-        team_channels: true,
-        direct_messages: true,
+        get channels() {
+          return !mocks.closedGroups.includes('channels');
+        },
+        get team_channels() {
+          return !mocks.closedGroups.includes('team_channels');
+        },
+        get direct_messages() {
+          return !mocks.closedGroups.includes('direct_messages');
+        },
       },
       collapsedLabels: [],
       sectionPreferences: {},
@@ -298,8 +313,23 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
   ) => {
     mocks.activityChannels = channels;
     mocks.additionalActivityChannels = additionalChannels;
-    return { unreadChannelIds: () => new Set<string>() };
+    return {
+      unreadChannelIds: () =>
+        new Set(
+          channels()
+            .filter((channel) =>
+              channel.unreadNotifications?.some(
+                (notification) => notification.state === 'unseen'
+              )
+            )
+            .map((channel) => channel.id)
+        ),
+    };
   },
+}));
+vi.mock('./next/collapsed-unread-channels', () => ({
+  useCollapsedUnreadChannels: (enabled: () => boolean) => () =>
+    enabled() ? mocks.unreadRows : [],
 }));
 vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
@@ -324,7 +354,10 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   };
 });
 
-vi.mock('@queries/team/teams', () => ({ useCurrentTeamQuery: () => ({}) }));
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({}),
+  useUserTeamsQuery: () => ({}),
+}));
 vi.mock('@ui/components/Tour', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui/components/Tour')>()),
   tourTarget: () => () => {},
@@ -467,6 +500,8 @@ beforeEach(() => {
   mocks.favorites = [];
   mocks.referencedChannels = [];
   mocks.sectionsEnabled = true;
+  mocks.unreadRows = [];
+  mocks.closedGroups = [];
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
   mocks.userId = 'viewer';
@@ -533,6 +568,24 @@ it.each([false, true])(
     expect(
       mocks.activityChannels().some(({ id }) => id === 'outside-page')
     ).toBe(enabled);
+  }
+);
+
+it.each([false, true])(
+  'shows off-page unread channels in collapsed sections only with the flag enabled: %s',
+  (enabled) => {
+    mocks.sectionsEnabled = enabled;
+    mocks.closedGroups = ['team_channels'];
+    mocks.unreadRows = [
+      { ...channel, id: 'outside-page', channelType: 'team' },
+    ];
+    mount();
+    const conversations = mocks
+      .actualRows()
+      .filter((row) => row.kind === 'conversation');
+    expect(conversations.some((row) => row.channel.id === 'outside-page')).toBe(
+      enabled
+    );
   }
 );
 

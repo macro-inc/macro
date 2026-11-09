@@ -1,5 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { longPressActivated } from '@core/directive/touchHandler';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem } from '@entity/utils/notification';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -18,7 +19,7 @@ import { queryReadyGate } from '@queries/gate';
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { Button, Checkbox, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { ChannelSectionPreferences } from '../../../../types';
 
 import { presetTranslationKey } from '../ChannelMuteMenu';
@@ -40,6 +41,7 @@ export function MobileSectionOptions(props: {
   onSnooze: (until?: Date) => Promise<void>;
   disabled?: boolean;
   onClose: () => void;
+  editors?: JSX.Element;
 }) {
   const [page, setPage] = createSignal<OptionsPage>('main');
   const muted = useMutedEntitiesQuery();
@@ -58,6 +60,9 @@ export function MobileSectionOptions(props: {
   return (
     <MobileDrawer
       open
+      onOutsidePointer={(event) => {
+        if (longPressActivated()) event.preventDefault();
+      }}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -101,6 +106,8 @@ export function MobileSectionOptions(props: {
                 </MobileDrawer.Item>
                 <MobileDrawer.Item
                   disabled={props.disabled}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => fireAndForget(props.onAdd(), 'channels-view')}
                 >
                   <PlusIcon class="size-5" />
@@ -212,28 +219,20 @@ export function MobileSectionOptions(props: {
                 </For>
               </Match>
               <Match when={page() === 'display'}>
-                <div class="flex min-h-11 items-center gap-3 px-3">
-                  <span class="flex-1">{t('channelSections.unreadOnly')}</span>
-                  <ToggleSwitch
-                    checked={props.preferences.unreadOnly ?? false}
-                    onChange={(unreadOnly) =>
-                      props.onPreferences({ unreadOnly })
-                    }
-                    aria-label={t('channelSections.unreadOnly')}
-                  />
-                </div>
-                <div class="flex min-h-11 items-center gap-3 px-3">
-                  <span class="flex-1">
-                    {t('channelSections.unreadWhenCollapsed')}
-                  </span>
-                  <ToggleSwitch
-                    checked={props.preferences.unreadWhenCollapsed ?? true}
-                    onChange={(unreadWhenCollapsed) =>
-                      props.onPreferences({ unreadWhenCollapsed })
-                    }
-                    aria-label={t('channelSections.unreadWhenCollapsed')}
-                  />
-                </div>
+                <ToggleSwitch
+                  class="min-h-11 w-full flex-row-reverse justify-between px-3"
+                  label={t('channelSections.unreadOnly')}
+                  checked={props.preferences.unreadOnly ?? false}
+                  onChange={(unreadOnly) => props.onPreferences({ unreadOnly })}
+                />
+                <ToggleSwitch
+                  class="min-h-11 w-full flex-row-reverse justify-between px-3"
+                  label={t('channelSections.unreadWhenCollapsed')}
+                  checked={props.preferences.unreadWhenCollapsed ?? true}
+                  onChange={(unreadWhenCollapsed) =>
+                    props.onPreferences({ unreadWhenCollapsed })
+                  }
+                />
               </Match>
               <Match when={page() === 'mute'}>
                 <MobileDrawer.Item
@@ -275,6 +274,7 @@ export function MobileSectionOptions(props: {
               </Match>
             </Switch>
           </MobileDrawer.ScrollBody>
+          {props.editors}
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

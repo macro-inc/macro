@@ -5,14 +5,9 @@ import {
   ContextMenuTrigger,
   MENU_ITEM_CLASS,
   MenuGroup,
-  MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
-import { fireAndForget } from '@core/util/fireAndForget';
-import BellIcon from '@icon/system/regular/bell.svg';
-import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -23,11 +18,13 @@ import type {
   ChannelSectionPreferences,
 } from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
+import { SectionMuteMenu } from './ChannelMuteMenu';
 
 export function ChannelSectionDropdown(props: {
   section: ChannelSectionKey;
   label: string;
   children?: JSX.Element;
+  before?: JSX.Element;
 }) {
   const label = () => t('channelSections.optionsFor', { name: props.label });
 
@@ -44,8 +41,8 @@ export function ChannelSectionDropdown(props: {
         <SlidersIcon class="size-3.5" />
       </Dropdown.Trigger>
       <DropdownMenu.Portal>
+        {/* The shared menu content honors canceled focus restoration; DropdownMenu.Content always refocuses its trigger. */}
         <ContextMenuContent
-          contentComponent={DropdownMenu.Content}
           class="min-w-44"
           onCloseAutoFocus={(event) => {
             if (document.querySelector('[role="dialog"]')) {
@@ -53,6 +50,7 @@ export function ChannelSectionDropdown(props: {
             }
           }}
         >
+          {props.before}
           <ChannelSectionMenuItems section={props.section} />
           {props.children}
         </ContextMenuContent>
@@ -66,6 +64,7 @@ export function ChannelSectionContextMenu(props: {
   section: ChannelSectionKey;
   children: JSX.Element;
   actions?: JSX.Element;
+  before?: JSX.Element;
 }) {
   return (
     <ContextMenu>
@@ -81,6 +80,7 @@ export function ChannelSectionContextMenu(props: {
             }
           }}
         >
+          {props.before}
           <ChannelSectionMenuItems section={props.section} />
           {props.actions}
         </ContextMenuContent>
@@ -90,7 +90,7 @@ export function ChannelSectionContextMenu(props: {
 }
 
 /** Shared personal sort and unread controls for built-in and custom sections. */
-function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
+export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const preferences = () => rail.sectionPreferences(props.section);
   const options = () => {
@@ -156,7 +156,7 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
           </ContextMenuContent>
         </ContextMenu.Sub>
         <ContextMenu.Sub>
-          <SubTrigger text={t('channelSections.filter')} />
+          <SubTrigger text={t('channelSections.display')} />
           <ContextMenuContent submenu class="min-w-44">
             <ContextMenu.CheckboxItem
               class={MENU_ITEM_CLASS}
@@ -178,41 +178,36 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
                 />
               </span>
             </ContextMenu.CheckboxItem>
+            <ContextMenu.CheckboxItem
+              class={MENU_ITEM_CLASS}
+              closeOnSelect={false}
+              checked={preferences().unreadWhenCollapsed ?? true}
+              onChange={(unreadWhenCollapsed) =>
+                rail.setSectionPreferences(props.section, {
+                  unreadWhenCollapsed,
+                })
+              }
+            >
+              <span class="flex-1">
+                {t('channelSections.unreadWhenCollapsed')}
+              </span>
+              <span
+                inert
+                aria-hidden="true"
+                class="pointer-events-none flex shrink-0 items-center"
+              >
+                <ToggleSwitch
+                  checked={preferences().unreadWhenCollapsed ?? true}
+                  readOnly
+                />
+              </span>
+            </ContextMenu.CheckboxItem>
           </ContextMenuContent>
         </ContextMenu.Sub>
       </MenuGroup>
       <MenuSeparator />
       <MenuGroup>
-        <MenuItem
-          icon={BellSlashIcon}
-          text={t('channelSections.muteAllChannels')}
-          disabled={rail.sectionNotificationsDisabled(props.section)}
-          onClick={() =>
-            fireAndForget(
-              rail.muteSection(props.section, true),
-              'channels-view'
-            )
-          }
-        />
-        <MenuItem
-          icon={BellIcon}
-          text={t('channelSections.unmuteAllChannels')}
-          disabled={rail.sectionNotificationsDisabled(props.section)}
-          onClick={() =>
-            fireAndForget(
-              rail.muteSection(props.section, false),
-              'channels-view'
-            )
-          }
-        />
-        <MenuItem
-          icon={ClockIcon}
-          text={t('channelSections.snoozeAllChannels')}
-          disabled={rail.sectionNotificationsDisabled(props.section)}
-          onClick={() =>
-            fireAndForget(rail.snoozeSection(props.section), 'channels-view')
-          }
-        />
+        <SectionMuteMenu section={props.section} />
       </MenuGroup>
     </>
   );

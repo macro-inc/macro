@@ -1,6 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { queryReadyGate } from '@queries/gate';
+import { useCurrentTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { CHANNEL_SECTION_ROW_HEIGHT } from '../../../constants';
 import { ChannelOption } from '../ChannelOption';
@@ -14,6 +16,25 @@ import type { ChannelRailSearch } from './ExpandedChannelsRail';
 
 export function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
+  const currentTeam = useCurrentTeamQuery();
+  const teams = useUserTeamsQuery();
+  const teamNames = createMemo(
+    () =>
+      new Map(
+        queryReadyGate(teams)
+          ? (teams.data ?? []).map((team) => [team.id, team.name])
+          : []
+      )
+  );
+  const foreignTeamName = (teamId?: string) => {
+    if (
+      !teamId ||
+      !queryReadyGate(currentTeam) ||
+      teamId === currentTeam.data?.team.id
+    )
+      return;
+    return teamNames().get(teamId);
+  };
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   let virtualizer: ChannelRailVirtualizerHandle | undefined;
   let unregister: (() => void) | undefined;
@@ -103,7 +124,10 @@ export function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
                         )}
                   </div>
                 </Show>
-                <ChannelOption channel={channel()} />
+                <ChannelOption
+                  channel={channel()}
+                  teamName={foreignTeamName(channel().teamId)}
+                />
               </>
             )}
           </Show>

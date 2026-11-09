@@ -3,6 +3,8 @@ import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
+import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
@@ -131,6 +133,17 @@ export type ChannelRailActivationMetadata = {
   newSplit?: boolean;
 };
 
+export type SectionDraft = {
+  initialChannelIds: string[];
+  scope: ChannelLabelScopeSelection;
+  existing?: ChannelLabel;
+};
+
+export type SectionValue = {
+  name: string;
+  rule?: ChannelLabelRule;
+  scope: ChannelLabelScopeSelection;
+};
 export type ChannelsRailContext = {
   railId: string;
   list: ListController<ChannelRailRow, ChannelRailActivationMetadata>;
@@ -171,12 +184,26 @@ export type ChannelsRailContext = {
     channelIds: string[],
     scope?: 'personal' | 'team'
   ) => Promise<void>;
+  sectionDraft: Accessor<SectionDraft | undefined>;
+  saveSectionDraft: (value: SectionValue) => Promise<void>;
+  cancelSectionDraft: () => void;
+  updateSection: (
+    label: ChannelLabel,
+    name: string,
+    rule?: ChannelLabelRule,
+    targetScope?: ChannelLabelScopeSelection
+  ) => Promise<void>;
   /** Legacy menu actions retained while the section rollout is off. */
   createSmartTag: () => Promise<void>;
   editSmartTag: (label: ChannelLabel) => Promise<void>;
   canShareSections: Accessor<boolean>;
   /** Pick eligible channels to add to a manual section. */
   addChannelsToLabel: (label: ChannelLabel) => Promise<void>;
+  /** Assign additions without opening the channel picker; return IDs that failed. */
+  addLabelChannels: (
+    label: ChannelLabel,
+    channelIds: string[]
+  ) => Promise<string[]>;
   renameLabel: (label: ChannelLabel) => Promise<void>;
   /** Delete after the user confirms; applies to the whole team. */
   deleteLabel: (label: ChannelLabel) => Promise<void>;

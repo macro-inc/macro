@@ -66,6 +66,7 @@ import {
   ChannelSectionContextMenu,
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
+import { InlineSectionDraft } from './InlineSectionDraft';
 import { ResizableRailSection } from './ResizableRailSection';
 import { ExpandedSearchResults } from './SectionSearchResults';
 import { useFavoriteReorder } from './useFavoriteReorder';
@@ -852,6 +853,22 @@ function ExpandedBrowse() {
         class="scrollbar-hidden relative min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
+        <Show
+          when={
+            rail.sectionDraft() && !rail.sectionDraft()?.existing
+              ? rail.sectionDraft()
+              : undefined
+          }
+        >
+          {(draft) => (
+            <InlineSectionDraft
+              scope={draft().scope}
+              canShare={rail.canShareSections()}
+              onSave={rail.saveSectionDraft}
+              onCancel={rail.cancelSectionDraft}
+            />
+          )}
+        </Show>
         <div ref={setStackContent}>
           <ChannelRailVirtualizer
             scrollRoot={scrollRoot()}
