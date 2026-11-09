@@ -3,7 +3,7 @@ use std::sync::Arc;
 /// Cache writes happen after mutation reporting. Root reconciliation retains
 /// upstream's intentional dirty mark without adding a cache-only mutation.
 pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
-    if tx.editor.mode() != EditorMode::ViewAttached {
+    if tx.editor.mode() != EditorMode::ViewAttached || !tx.pending.registry.derive_view_caches {
         return Ok(());
     }
     // Reconciliation writes the root text cache through getWritable. Keep its

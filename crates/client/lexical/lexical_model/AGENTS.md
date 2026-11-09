@@ -125,7 +125,10 @@ upstream selection examples, including the §18.5 `remove_text` fixture, detache
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
 
 Root text-cache reconciliation clones its record after mutation reporting and retains
-the intentional root dirty mark; cache-only writes do not add mutations.
+the intentional root dirty mark; cache-only writes do not add mutations. Use
+EditorBuilder::without_reconciler_caches when an external JS reconciler owns root
+text and element text-format/style cache writes; normal native editors retain
+model-derived caches, and explicit writes remain subject to the normal pipeline.
 
 Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 

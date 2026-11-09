@@ -101,3 +101,8 @@ Use the scoped metadata frame for native node calls so authorization borrows end
 Return updated typed selection bodies beside ordinary scalar/node results; mutable current direction queries may acknowledge memo changes without dirtying the graph, while historical and frozen raw captures retain their metadata.
 
 Route SetNativeField through typed raw-base assignments after capture/update/writable checks; do not redispatch public setters or clear selection caches a second time. Preserve raw element-format numbers independently of their exported alignment names.
+
+Disable native reconciler cache derivation in compatibility factories so the JS
+reconciler owns root text and element text-format/style caches, including virtual
+setter calls. Keep createMacro cache behavior unchanged; prepublication derived
+acknowledgements still require their own validated reconciliation stage.
