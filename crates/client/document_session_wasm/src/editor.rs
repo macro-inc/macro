@@ -715,6 +715,7 @@ impl EditorSession {
         }
         query::clipboard(
             self.surface().state(),
+            self.surface().namespace(),
             kind == 2,
             query::export_flavor(self),
         )

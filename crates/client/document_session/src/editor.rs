@@ -20,6 +20,8 @@ pub type CommentNodeFactory = fn(&mut Transaction<'_>, Vec<String>) -> Result<No
 /// Rebuildable editor configuration shared by live editors and comment forks.
 #[derive(Clone)]
 pub struct EditorConfig {
+    /// Internal clipboard namespace shared by copy and rich paste.
+    pub namespace: String,
     /// Registry and plugins, built anew for every document instance.
     pub builder: Arc<dyn Fn(EditorMode, u64) -> EditorBuilder + Send + Sync>,
     /// Create an annotation wrapper inside the isolated staging transaction.
@@ -38,6 +40,7 @@ pub struct EditorConfig {
 impl Default for EditorConfig {
     fn default() -> Self {
         Self {
+            namespace: builder::DEFAULT_NAMESPACE.into(),
             builder: Arc::new(default_editor_builder),
             comment_node: lexical_rich_nodes::mark::create_mark_node,
             policy: &PLAIN,
@@ -112,6 +115,7 @@ impl EditorSurface {
     }
     pub(crate) fn builder(config: &EditorConfig, mode: EditorMode, peer: u64) -> EditorBuilder {
         let builder = (config.builder)(mode, peer)
+            .extension_state(builder::ClipboardNamespace(config.namespace.clone()))
             .view_host(config.view_host)
             .opaque_unknown_types(true);
         if mode == EditorMode::Headless {
@@ -134,6 +138,10 @@ impl EditorSurface {
     pub(crate) fn clear_binding(&mut self) {
         self.projection = None;
         self.undo = None;
+    }
+    /// The configured internal clipboard namespace, shared by all host exports.
+    pub fn namespace(&self) -> &str {
+        &self.config.namespace
     }
     /// Immutable model snapshot used by the view and synchronous queries.
     pub fn state(&self) -> &EditorState {
@@ -842,3 +850,6 @@ mod identity_test;
 
 #[cfg(test)]
 mod id_state_test;
+
+#[cfg(test)]
+mod namespace_test;

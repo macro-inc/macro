@@ -84,11 +84,12 @@ fn html_for_selection(
 }
 pub(crate) fn clipboard(
     state: &EditorState,
+    namespace: &str,
     blocks: bool,
     flavor: ExportFlavor,
 ) -> Result<wire::ClipboardMsg, BoundaryError> {
     if blocks {
-        return block_clipboard(state, flavor);
+        return block_clipboard(state, namespace, flavor);
     }
 
     let plain = state
@@ -98,7 +99,7 @@ pub(crate) fn clipboard(
         .unwrap_or_default();
     let lexical = lexical_rich_nodes::clipboard::get_lexical_content(
         state.view(),
-        "document-session",
+        namespace,
         state.selection(),
     )?
     .unwrap_or_default();
@@ -115,6 +116,7 @@ pub(crate) fn clipboard(
 /// Block dragging explicitly includes descendants without changing normal copy semantics.
 fn block_clipboard(
     state: &EditorState,
+    namespace: &str,
     flavor: ExportFlavor,
 ) -> Result<wire::ClipboardMsg, BoundaryError> {
     let Some(Selection::Node(roots)) = state.selection() else {
@@ -133,12 +135,9 @@ fn block_clipboard(
         }
     }
     let selection = Selection::Node(expanded);
-    let lexical = lexical_rich_nodes::clipboard::get_lexical_content(
-        view,
-        "document-session",
-        Some(&selection),
-    )?
-    .unwrap_or_default();
+    let lexical =
+        lexical_rich_nodes::clipboard::get_lexical_content(view, namespace, Some(&selection))?
+            .unwrap_or_default();
     Ok(wire::ClipboardMsg {
         plain: roots.text_content(view),
         lexical,
@@ -270,8 +269,18 @@ mod block_test {
             selection.add(list);
             tx.set_selection(Some(Selection::Node(selection)))
         })?;
-        let ordinary = clipboard(editor.state(), false, ExportFlavor::Macro)?;
-        let drag = clipboard(editor.state(), true, ExportFlavor::Macro)?;
+        let ordinary = clipboard(
+            editor.state(),
+            "document-session",
+            false,
+            ExportFlavor::Macro,
+        )?;
+        let drag = clipboard(
+            editor.state(),
+            "document-session",
+            true,
+            ExportFlavor::Macro,
+        )?;
         let normal: serde_json::Value = serde_json::from_str(&ordinary.lexical)?;
         let full: serde_json::Value = serde_json::from_str(&drag.lexical)?;
         assert_eq!(
@@ -292,7 +301,13 @@ mod block_test {
         assert!(drag.html.contains("first"));
         assert!(drag.html.contains("second"));
         assert_eq!(
-            clipboard(editor.state(), false, ExportFlavor::Macro)?.lexical,
+            clipboard(
+                editor.state(),
+                "document-session",
+                false,
+                ExportFlavor::Macro
+            )?
+            .lexical,
             ordinary.lexical
         );
         Ok(())
