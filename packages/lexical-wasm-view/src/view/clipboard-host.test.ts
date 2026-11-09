@@ -219,3 +219,151 @@ test.each(['copy', 'cut'] as const)(
     }
   }
 );
+test.each(['foreign', 'malformed', 'non-array'])(
+  '%s source clipboard payload uses HTML with the original import formats',
+  async (payloadKind) => {
+    const { readFileSync } = await import('node:fs');
+    const { URL: NodeURL } = await import('node:url');
+    const { createHeadlessEditor } = await import('@lexical/headless');
+    const { $generateNodesFromDOM } = await import('@lexical/html');
+    const { $getRoot } = await import('lexical');
+    const { SupportedNodeTypes, NodeReplacements } = await import(
+      '@macro-inc/lexical-core/node-list'
+    );
+    const html = readFileSync(
+      new NodeURL('./test/off-copy-bold.html', import.meta.url),
+      'utf8'
+    );
+    const original = createHeadlessEditor({
+      namespace: 'independent-off-import',
+      nodes: [...SupportedNodeTypes, ...NodeReplacements],
+      onError(error) {
+        throw error;
+      },
+    });
+    original.update(
+      () => {
+        $getRoot().append(
+          ...$generateNodesFromDOM(
+            original,
+            new DOMParser().parseFromString(html, 'text/html')
+          )
+        );
+      },
+      { discrete: true }
+    );
+    const expected = original.getEditorState().read(() =>
+      $getRoot()
+        .getAllTextNodes()
+        .map((node) => ({
+          text: node.getTextContent(),
+          format: node.getFormat(),
+        }))
+    );
+    expect(expected).toEqual([
+      { text: 'Alpha ', format: 0 },
+      { text: 'Bold', format: 1 },
+      { text: ' plain', format: 0 },
+      { text: 'Second', format: 0 },
+    ]);
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [{ type: 'paragraph', version: 1, children: [] }],
+          },
+        })
+      );
+      const paragraph = [...fixture.view.mirror.values()].find(
+        (node) => node.type === 'paragraph'
+      );
+      if (!paragraph) throw new Error('Missing actual paragraph');
+      const dom = fixture.view.getElementByKey(paragraph.key);
+      if (!dom) throw new Error('Missing actual paragraph DOM');
+      fixture.root.focus();
+      document.getSelection()?.setBaseAndExtent(dom, 0, dom, 0);
+      fixture.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: paragraph.key, type: 'element', offset: 0 },
+        focus: { key: paragraph.key, type: 'element', offset: 0 },
+      });
+      const clipboard = transfer('Alpha Bold plain\n\nSecond', html);
+      let serialized = '{invalid';
+      if (payloadKind === 'foreign') {
+        serialized = JSON.stringify({
+          namespace: 'block-md-main_foreign',
+          nodes: original.getEditorState().toJSON().root.children,
+        });
+      } else if (payloadKind === 'non-array') {
+        serialized = JSON.stringify({
+          namespace: fixture.view.options.namespace,
+          nodes: null,
+        });
+      }
+      clipboard.setData('application/x-lexical-editor', serialized);
+      expect(await fixture.view.clipboard.paste(clipboard)).toBe(true);
+      const actual = [...fixture.view.mirror.values()]
+        .filter((node) => node.kind === 'text')
+        .map((node) => ({ text: node.text, format: node.textProps?.format }));
+      expect(actual).toEqual(expected);
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
+test('matching instance clipboard JSON takes priority over conflicting HTML', async () => {
+  const fixture = nativeSurface();
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [{ type: 'paragraph', version: 1, children: [] }],
+        },
+      })
+    );
+    const paragraph = [...fixture.view.mirror.values()].find(
+      (node) => node.type === 'paragraph'
+    );
+    if (!paragraph) throw new Error('Missing paragraph');
+    const dom = fixture.view.getElementByKey(paragraph.key);
+    if (!dom) throw new Error('Missing paragraph DOM');
+    fixture.root.focus();
+    document.getSelection()?.setBaseAndExtent(dom, 0, dom, 0);
+    fixture.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: paragraph.key, type: 'element', offset: 0 },
+      focus: { key: paragraph.key, type: 'element', offset: 0 },
+    });
+    const clipboard = transfer('plain fallback', '<p>HTML fallback</p>');
+    clipboard.setData(
+      'application/x-lexical-editor',
+      JSON.stringify({
+        namespace: fixture.view.options.namespace,
+        nodes: [
+          {
+            type: 'text',
+            version: 1,
+            text: 'JSON chosen',
+            format: 1,
+            detail: 0,
+            mode: 'normal',
+            style: '',
+          },
+        ],
+      })
+    );
+    expect(await fixture.view.clipboard.paste(clipboard)).toBe(true);
+    expect(fixture.root.textContent).toBe('JSON chosen');
+    expect(fixture.root.querySelector('strong')?.textContent).toBe(
+      'JSON chosen'
+    );
+  } finally {
+    fixture.close();
+  }
+});
