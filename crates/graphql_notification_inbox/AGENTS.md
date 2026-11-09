@@ -3,8 +3,9 @@
 ## What it is
 
 Belongs to the unified notifications inbox. This crate is the GraphQL
-inbound adapter exposing `user.notificationInbox`, the done, undo and seen
-mutations, and the `notificationInboxUpdates` subscription. Its shapes mirror
+inbound adapter exposing `user.notificationInbox` and
+`user.notificationInboxClears`, the done, clear, undo and seen mutations, and
+the `notificationInboxUpdates` subscription. Its shapes mirror
 `graphql_work_feed`'s so the web's shared live feed client serves both.
 
 ## Start here
@@ -13,7 +14,10 @@ mutations, and the `notificationInboxUpdates` subscription. Its shapes mirror
 - `src/inputs.rs`: scope, row type and mutation inputs with their limits.
 - `src/subscriptions.rs`: realtime patches, batched by `attention_feed`'s
   `live::coalesce` with `FiledEntity` triggers.
-- `src/context.rs`: `NotificationInboxGraphqlContext`.
+- `src/context.rs`: `NotificationInboxGraphqlContext`. It also runs the
+  clears a request starts (`run_started_clear`: on a tracked task, replying
+  after a short wait) and resumes stalled ones (`recover_clears`, spawned
+  once by the composition root).
 
 ## Scope
 

@@ -14,8 +14,11 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   comments, noise hidden in its natural row.
 - `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
   stack), clear, seen and undo.
-- `src/domain/ports.rs` and `src/outbound/`: the clear log, in Redis (shared
-  by every server) and in memory (tests).
+- `src/domain/service.rs` (`start_clear`, `run_clear`, `undo_clear`,
+  `claim_stalled_clears`): a clear as a stored action applied in chunks. Its
+  storage is `notification::domain::bulk_action::BulkActionStore`.
+- `src/domain/ports.rs` and `src/outbound/`: clear updates to the viewer's
+  sessions over the connection gateway (feature `outbound`).
 - `src/domain/policy.rs`: which groups the inbox lists.
 
 ## Scope
@@ -28,8 +31,8 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Boundaries
 
-- Depends on: `attention_feed`, `item_filters`, `filter_ast`,
-  `model_notifications`, Redis (the clear log).
+- Depends on: `attention_feed`, `notification` (the bulk action store port),
+  `item_filters`, `filter_ast`, `model_notifications`.
 - Used by: `graphql_notification_inbox`, `document_storage_service`
   (composition).
 
@@ -45,8 +48,9 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Checks
 
-- `cargo test -p notification_inbox`; the Redis clear log tests need a Redis
-  at `REDIS_URL` (default `redis://127.0.0.1:6379`), which CI provides.
+- `cargo test -p notification_inbox --all-features`. The store's own
+  transactions are tested against Postgres in `notification`
+  (`cargo test -p notification bulk_action`).
 
 ## Gotchas
 
@@ -59,11 +63,20 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
-- A clear is one call: the service reads every batch, records each in the
-  clear log, and runs apart from the request (GraphQL spawns it), so a
-  dropped connection doesn't stop it. Undo takes the whole log; a server
-  restart mid-clear stops it partway, and undo still reverses what it
-  recorded.
+- A clear belongs to the server, not the request. `start_clear` stores it
+  with its scope and start time frozen; `run_clear` applies it a chunk at a
+  time, each chunk one transaction (state, ledger, cursor) under a lease. A
+  run that stops is claimed again by `claim_stalled_clears` and continues
+  from the cursor, so never keep clear progress in memory or outside that
+  transaction.
+- A clear names its row kinds. An `InboxScope` with no kinds lists every kind
+  for pages; for a clear it is refused, so hiding every kind clears nothing.
+- A clear covers the inbox as it was when it started: notifications newer
+  than `as_of` are filtered out before rows are cut. Groups that new activity
+  moves ahead of the walk are picked up by the recheck pass.
+- Undo restores each notification's earlier state from the ledger and skips
+  those whose state changed since (`user_notification.done_by`). It takes the
+  clear's lease, which is what stops a clear still running.
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.
