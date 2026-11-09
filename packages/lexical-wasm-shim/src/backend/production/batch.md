@@ -21,10 +21,20 @@ when to call each phase; this class does not combine normalization and admission
 The consumer applies every acknowledged delta and selection sidecar before
 surfacing an encoded failure. A typed failure consumes its successful prefix,
 partial failing operation and skipped suffix: none is automatically replayed.
-The same pending scope remains available for an explicit caught-error retry.
+The same pending scope remains available for an explicit caught-error retry
+until a receipt actually publishes or retires it. A finalization failure may
+accompany a real publication: apply that receipt before surfacing the failure,
+and never retry admission or claim rollback. Operation failures cannot publish.
+An actual no-op retirement returns the previously committed graph version,
+including version zero, rather than the burned pending version. Both terminal
+receipts block further sends until the backend calls `retire`.
 Invalid/missing acknowledgements reject further sends until the backend performs
 real native discard and then calls `retire`. Callback reentry must use the static
 scoped native transport, never recursively call this session driver.
+
+If applying an already validated terminal receipt throws, the native retirement
+is known and cannot be rolled back by discard. The driver requires disposal;
+it does not permit another begin, send or retirement reset on that instance.
 
 `retire` is an explicit backend acknowledgement of actual publication, no-op
 retirement or successful discard. In particular, a changed=false normalization

@@ -232,3 +232,134 @@ test('terminal success requires exactly publication or explicit no-op retirement
   response = receipt();
   expect(() => batch.send(true, leases)).toThrow('did not publish or retire');
 });
+
+test('actual publication is acknowledged before returning a finalization failure', () => {
+  let acknowledged: ICompatBatchReply | undefined;
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt({
+        published: true,
+        changed: true,
+        results: [result],
+        outcome: CompatBatchOutcome.fromCompatBatchNativeFailure({
+          location: CompatFailureLocation.fromCompatFinalizeFailure({}),
+          errorText: [118, 105, 101, 119],
+        }),
+      });
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge(reply) {
+      acknowledged = reply;
+    },
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  const reply = batch.send(true, leases);
+  expect(acknowledged).toBe(reply);
+  expect(reply.published).toBe(true);
+  expect(reply.outcome.data.discriminator).toBe(2);
+  expect(() => batch.send(true, leases)).toThrow('already retired');
+  expect(() => batch.enqueue(operation)).toThrow('already retired');
+  expect(calls).toBe(1);
+  batch.retire();
+});
+
+test('no-op retires the issued scope onto the actual committed version including zero', () => {
+  const replies = [
+    receipt(),
+    receipt({ noop: true, version: 0n, mutationEpoch: 3n }),
+  ];
+  let acknowledged: ICompatBatchReply | undefined;
+  const batch = new NativeBatch({
+    call() {
+      const reply = replies.shift();
+      if (reply === undefined) throw new Error('Missing protocol receipt');
+      return reply;
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge(reply) {
+      acknowledged = reply;
+    },
+  });
+  batch.begin(0n, begin);
+  batch.send(false, leases);
+  const reply = batch.send(true, leases);
+  expect(reply.version).toBe(0n);
+  expect(reply.updateId).toBe(4);
+  expect(acknowledged).toBe(reply);
+  expect(() => batch.send(false, leases)).toThrow('already retired');
+  batch.retire();
+  batch.begin(0n, begin);
+  expect(batch.hasNativeScope).toBe(false);
+});
+
+test('publication cannot disguise an operation failure or a different no-op graph', () => {
+  let response = receipt({
+    published: true,
+    outcome: CompatBatchOutcome.fromCompatBatchNativeFailure({
+      location: CompatFailureLocation.fromCompatOperationFailure({ index: 0 }),
+      errorText: [],
+    }),
+  });
+  const batch = new NativeBatch({
+    call: () => response,
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      throw new Error('Invalid receipt must not be applied');
+    },
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  expect(() => batch.send(true, leases)).toThrow('Only finalization failure');
+  batch.retire();
+  batch.begin(6n, begin);
+  response = receipt({ noop: true, version: 5n });
+  expect(() => batch.send(true, leases)).toThrow('committed graph version');
+});
+
+test('first normalization and publication receipts must issue a newer pending version', () => {
+  for (const version of [5n, 6n]) {
+    for (const finalize of [false, true]) {
+      const batch = new NativeBatch({
+        call: () => receipt({ version, published: finalize }),
+        now: () => 0,
+        wall: () => 0,
+        acknowledge() {
+          throw new Error('Stale receipt must not be applied');
+        },
+      });
+      batch.begin(6n, begin);
+      expect(() => batch.send(finalize, leases)).toThrow(
+        'newer pending version'
+      );
+    }
+  }
+});
+
+test('failed publication acknowledgement cannot be recovered by pretending to discard', () => {
+  const failure = {};
+  const batch = new NativeBatch({
+    call: () => receipt({ published: true }),
+    now: () => 0,
+    wall: () => 0,
+    acknowledge() {
+      throw failure;
+    },
+  });
+  batch.begin(6n, begin);
+  let observed: unknown;
+  try {
+    batch.send(true, leases);
+  } catch (error) {
+    observed = error;
+  }
+  expect(observed).toBe(failure);
+  expect(() => batch.send(true, leases)).toThrow('dispose the editor');
+  expect(() => batch.retire()).toThrow('dispose the editor');
+  expect(() => batch.begin(7n, begin)).toThrow('dispose the editor');
+});
