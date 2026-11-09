@@ -21,10 +21,11 @@ fn capture_preserves_raw_metadata_and_stable_reference_across_graphs() -> Result
         Some(true)
     );
     ledger.retain(reference)?;
-    ledger.release_graph(10);
-    ledger.release_graph(11);
-    assert!(ledger.get(reference).is_ok());
     ledger.release(reference)?;
+    assert!(ledger.get(reference).is_ok());
+    ledger.release_graph(10);
+    assert!(ledger.get(reference).is_ok());
+    ledger.release_graph(11);
     assert!(ledger.get(reference).is_err());
     Ok(())
 }
@@ -314,12 +315,35 @@ fn allocation_has_no_implicit_lease_and_decoder_retain_is_balanced() -> Result<(
     let reference = ledger.allocate(Selection::Range(RangeSelection::at_root()), 1, 1)?;
     assert!(ledger.release(reference).is_err());
     ledger.retain(reference)?;
-    ledger.release_graph(1);
     assert!(ledger.get(reference).is_ok());
     ledger.release(reference)?;
     assert!(ledger.get(reference).is_err());
     let unretained = ledger.allocate(Selection::Range(RangeSelection::at_root()), 2, 2)?;
     ledger.release_graph(2);
     assert!(ledger.get(unretained).is_err());
+    Ok(())
+}
+
+#[test]
+fn patch_reply_pin_survives_release_until_decoder_acknowledges() -> Result<(), BoundaryError> {
+    let mut ledger = SelectionValues::new(7);
+    let reference = ledger.allocate(Selection::Range(RangeSelection::at_root()), 1, 1)?;
+    ledger.retain(reference)?;
+    let data = encode(&ledger.get(reference)?);
+    ledger.patch(
+        reference,
+        data,
+        Scope {
+            historical: true,
+            state_version: 8,
+            update: 2,
+            activate: false,
+        },
+    )?;
+    ledger.release(reference)?;
+    assert!(ledger.get(reference).is_ok());
+    ledger.retain(reference)?;
+    ledger.release(reference)?;
+    assert!(ledger.get(reference).is_err());
     Ok(())
 }
