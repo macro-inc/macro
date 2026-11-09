@@ -114,6 +114,10 @@ export class EditorSession {
      */
     compatBeginCompact(request: Uint8Array): Uint8Array;
     /**
+     * Hydrate an issued exact record without cloning, dirtying or changing its graph.
+     */
+    compatBindInstance(bytes: Uint8Array): Uint8Array;
+    /**
      * Execute one typed operation in the live update or an exact historical read.
      */
     compatCall(request: Uint8Array): Uint8Array;
@@ -181,6 +185,10 @@ export class EditorSession {
      * Create the JS-configured core with no parallel native editing plugins.
      */
     static createCompat(abi: number, config: Uint8Array, now: number, wall: number, registration: Uint8Array): EditorSession;
+    /**
+     * Construct the same core with registered numeric JS class lifecycle metadata.
+     */
+    static createCompatHosted(abi: number, config: Uint8Array, now: number, wall: number, registration: Uint8Array, host_slot: number): EditorSession;
     /**
      * Construct the application's MarkdownSync registry and projection policy.
      */
@@ -431,6 +439,7 @@ export interface InitOutput {
     readonly editorsession_compatAuditSnapshot: (a: number) => [number, number, number, number];
     readonly editorsession_compatBegin: (a: number, b: number, c: number) => [number, number];
     readonly editorsession_compatBeginCompact: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_compatBindInstance: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCall: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCommit: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_compatCurrentVersion: (a: number) => [bigint, number, number];
@@ -448,6 +457,7 @@ export interface InitOutput {
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly editorsession_createCompat: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_createCompatHosted: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_createMacro: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
