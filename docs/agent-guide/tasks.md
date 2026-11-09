@@ -843,10 +843,11 @@ Customer / Contact row participates in defaults without duplicate property pills
 
 New template opens template mode over the preserved task draft, without a
 replacement confirmation. The New template or Edit template back button returns
-to that unchanged draft. An InputGroup strip above the task title contains the
-template icon and a real name input. A new template starts empty with Template
-name focused; editing does not focus the name. Long names truncate. Name edits
-persist as you type, including clearing the name, which disables Save. A new
+to that unchanged draft. An unframed row above the task title contains the
+template icon and a borderless name input with a visible keyboard-focus treatment.
+New templates start empty with Template name focused; editing does not focus the
+name. Long names truncate. Name edits persist as you type, including clearing the
+name, which disables Save. A new
 template's Share with team switch chooses personal or current-team ownership;
 the switch is hidden without a team. Editing a team template shows the fixed
 team avatar and name, while a personal template shows no ownership label.
@@ -861,6 +862,9 @@ replacing that text.
 Cancel restores the task draft, including rich text and attachments. Closing
 and reopening must not replace the task draft with template edits. Source links
 are never reusable defaults.
+Use a personal template's Edit action with saved Assignee or Project defaults.
+It must open the saved defaults without applying them to the task draft; Cancel
+must restore that draft unchanged.
 
 Changing an applied template's fields or task-sharing switch adds an accent dot
 to its button and selected picker row. Task title and description changes alone do not add the

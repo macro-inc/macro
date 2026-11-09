@@ -24,6 +24,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Include host-controlled fields in template defaults and pins without duplicating their controls.
 - Keep Source references contextual; capture the Source field without its current value.
 - Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
+- Unwrap reactive query defaults before decoding templates into cloneable draft values.
 - Preserve settings for unavailable fields when editing a template.
 - Keep No template as the default, and retain the selected template across Create More.
 - Label task submission Create another while Create More is enabled.
@@ -32,9 +33,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
 - Preserve existing task title, prose, and attachments after saving a template; fill title and description only when blank.
 - Put New template or Edit template on the header back action; keep Delete and the existing Close or sheet Save action unchanged.
-- Edit template names in an `InputGroup` strip above the task title; focus only new-template names and disable editing during saves.
+- Edit template names with a borderless shared `Input`; retain keyboard focus styling, focus only new names, and disable editing during saves.
 - Put immutable team ownership beside the name; use a Share with team switch for new templates and omit personal ownership when editing.
-- Stack visibility below the name inside the strip on phones; keep the task-title editor independent.
+- Stack visibility below the unframed name row on phones; keep the task-title editor independent.
 - Keep attachments and Create More hidden in template mode.
 - Keep template visibility in the name strip separate from the footer's task-sharing switch.
 - Capture and apply the optional task-sharing default; leave the switch unchanged when absent and ignore it without a team.
@@ -56,7 +57,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Apply menu padding once around choices; keep grouped labels on the shared dropdown spacing.
 - Reuse `DropdownSearchInput` for flush, divided search matching the assignee selector.
 - Match trailing selection checks to `PropertyEntitySelector` using its check icon and classes.
-- Overlay the edit action within the full-width row; reveal it on hover, keyboard focus, and touch.
+- Overlay the edit action within the full-width row using the shared icon-button recipe; reveal it on hover, keyboard focus, and touch.
 - Use a secondary trigger showing No template with the menu's blank-page icon when no template is applied.
 - Retain the compact touch trigger's accessible label and the existing touch picker sheet; keep empty states brief.
 - Show an accent dot for changed template fields, not task title or description changes; keep property pills unchanged.

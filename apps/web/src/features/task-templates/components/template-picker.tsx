@@ -56,13 +56,16 @@ function TemplateAction(props: {
   onSelect(): void;
 }) {
   const menuClass = () => {
-    if (props.variant)
+    if (props.variant || props.iconOnly)
       return buttonClasses({
-        variant: props.variant,
-        size: 'sm',
-        class: 'w-auto data-highlighted:overlay-hover',
+        variant: props.variant ?? 'ghost',
+        size: props.iconOnly ? 'icon-xs' : 'sm',
+        class: cn(
+          !props.iconOnly && 'w-auto',
+          'data-highlighted:overlay-hover'
+        ),
       });
-    return props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1';
+    return 'min-w-0 flex-1';
   };
   return (
     <Switch

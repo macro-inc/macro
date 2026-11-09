@@ -409,7 +409,7 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
-- Reuse `InlineTitleEditor` for borderless entity renames; use `InputGroup` for durable draft names with inline visibility controls.
+- Reuse `InlineTitleEditor` for borderless entity renames; use a bare shared `Input` with focus styling for borderless draft names.
 - Keep contact removal and restoration beside Copy contact link in both record
   headers; keep company actions on Overview. Reuse the hidden mutations and
   confirm company contact/email-sync effects.
