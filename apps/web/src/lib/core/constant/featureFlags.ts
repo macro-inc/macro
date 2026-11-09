@@ -945,6 +945,17 @@ export const enableRoutineCodeSteps = defineFlag({
   default: onInDev,
 });
 
+// Routines AI picks for the user from the catalog: sidebar cards, the
+// Routines page and onboarding's last step. The scheduler checks the same
+// PostHog flag before it reads mail or generates, so with it off there are
+// none to show. Suggestions are built on code-step routines and ship with
+// enable-routine-code-steps; both must be on.
+export const enableRoutineSuggestions = defineFlag({
+  key: 'enable-routine-suggestions',
+  env: 'ENABLE_ROUTINE_SUGGESTIONS',
+  default: onInDev,
+});
+
 // Templates are not ready for general use. Follow PostHog even in development
 // so the UI and the server's per-user rollout agree.
 export const enableRoutineSharing = defineFlag({

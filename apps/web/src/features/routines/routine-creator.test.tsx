@@ -113,7 +113,12 @@ vi.mock('./queries/schedules', async () => {
     useCreateScheduleMutation: (callbacks: {
       onSuccess: (schedule: ScheduledAction) => Promise<void>;
       onError: (error: Error) => void;
-    }) => useMutation(() => ({ mutationFn: host.create, ...callbacks })),
+    }) =>
+      useMutation(() => ({
+        mutationFn: (request: { body: ActionConfiguration }) =>
+          host.create(request.body),
+        ...callbacks,
+      })),
   };
 });
 

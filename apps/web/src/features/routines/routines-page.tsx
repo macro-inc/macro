@@ -12,6 +12,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
+import { RoutineSuggestionsSection } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
 import {
   featuredTemplates,
@@ -92,6 +93,7 @@ function RoutinesContent() {
               : []
           }
           onTemplate={startFrom}
+          footer={<RoutineSuggestionsSection />}
         />
       }
     >
