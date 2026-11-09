@@ -1029,6 +1029,31 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
     Ok(())
 }
 
+/// Who is asking, as control policy tells them apart. Only a person signed in
+/// to the app is `User`, the one principal that may name an app tab: an API
+/// key, an SDK token or an agent's program acts for a user but sits in no tab.
+pub(crate) fn control_principal(
+    caller: &UserBotOrHarnessAuthorization,
+    headers: &axum::http::HeaderMap,
+) -> crate::domain::control::ControlPrincipal {
+    use crate::domain::control::ControlPrincipal;
+
+    match caller {
+        UserBotOrHarnessAuthorization::User(user)
+            if user.origin == macro_authorization::CredentialOrigin::Session
+                && !macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+        {
+            ControlPrincipal::User
+        }
+        UserBotOrHarnessAuthorization::User(_) => ControlPrincipal::Program,
+        authorization => ControlPrincipal::Runtime(
+            authorization
+                .acting_user()
+                .map(|user| user.macro_user_id.clone()),
+        ),
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
@@ -1082,6 +1107,7 @@ pub async fn control_agent_session_handler<
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<ControlRequest>,
 ) -> Result<Json<ControlResponse>, AgentSessionApiError> {
     ensure_harness_serves_session(
@@ -1091,14 +1117,7 @@ pub async fn control_agent_session_handler<
     )
     .await?;
 
-    let principal = match &caller.authorization {
-        UserBotOrHarnessAuthorization::User(_) => crate::domain::control::ControlPrincipal::User,
-        authorization => crate::domain::control::ControlPrincipal::Runtime(
-            authorization
-                .acting_user()
-                .map(|user| user.macro_user_id.clone()),
-        ),
-    };
+    let principal = control_principal(&caller.authorization, &headers);
 
     let accepted = state
         .recipient

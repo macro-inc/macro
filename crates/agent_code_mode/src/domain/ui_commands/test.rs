@@ -326,6 +326,9 @@ async fn a_closed_or_foreign_route_is_refused_before_sending() {
         "/drive/md/x#fragment",
         "/drive/md/x/~/channels/y",
         "/drive/md/x\\..\\y",
+        "/drive/md/../../mail/new",
+        "/drive/md/%2e%2e/x",
+        "/drive/./md/x",
         "drive/md/x",
         "",
     ];
@@ -467,6 +470,8 @@ fn the_web_apps_table_opens_items_and_keeps_side_effects_closed() {
 
     for closed in [
         "/mail/new",
+        "/email/new",
+        "/companies/pipeline/../../mail/new",
         "/MAIL/New",
         "/meet/join/token",
         "/settings/api-keys",

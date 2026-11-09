@@ -273,7 +273,8 @@ const LEGACY_TYPES_OPEN_TO_AGENTS = [
   'channel',
   'project',
   'initiative',
-  'email',
+  // Not `email`: `/email/new` becomes the mail composer. Threads open at
+  // `/mail/<id>`, which is what links to them use.
   'contact',
   'company',
   'routine',

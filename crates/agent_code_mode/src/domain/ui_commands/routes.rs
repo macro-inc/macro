@@ -120,7 +120,12 @@ impl NavigableRoutes {
             .into_iter()
             .map(|segment| urlencoding::decode(segment).ok().map(|s| s.into_owned()))
             .collect::<Option<Vec<_>>>()?;
-        if segments.iter().any(|segment| segment == PANE_SEPARATOR) {
+        // `.` and `..` would resolve to another route once the tab's URL is
+        // normalised; `~` would start another pane.
+        if segments
+            .iter()
+            .any(|segment| matches!(segment.as_str(), PANE_SEPARATOR | "." | ".."))
+        {
             return None;
         }
 

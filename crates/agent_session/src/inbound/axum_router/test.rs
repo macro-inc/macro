@@ -1593,3 +1593,45 @@ async fn internal_notifications_use_the_session_mount_once() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+/// Only a person signed in to the app may name an app tab with a prompt: the
+/// same user's SDK token, API key or agent program is a `Program`.
+#[test]
+fn only_a_person_in_the_app_is_a_user_principal() {
+    use crate::domain::control::ControlPrincipal;
+    use macro_authorization::{CODE_EXECUTION_HEADER, CredentialOrigin};
+
+    let user = |origin: CredentialOrigin, agent: bool| {
+        UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+            origin,
+            agent_id: agent.then_some(BotId::TEST_A),
+            agent_via: None,
+            macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            user_context: model_user::UserContext {
+                user_id: "macro|owner@example.com".to_owned(),
+                fusion_user_id: "fusion-owner".to_owned(),
+                permissions: None,
+                organization_id: None,
+            },
+        })
+    };
+    let plain = axum::http::HeaderMap::new();
+    let mut program = axum::http::HeaderMap::new();
+    program.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+
+    assert!(matches!(
+        control_principal(&user(CredentialOrigin::Session, false), &plain),
+        ControlPrincipal::User
+    ));
+    for (caller, headers) in [
+        (user(CredentialOrigin::Session, false), &program),
+        (user(CredentialOrigin::Session, true), &plain),
+        (user(CredentialOrigin::MacroApiJwt, false), &plain),
+        (user(CredentialOrigin::UserApiKey, false), &plain),
+    ] {
+        assert!(matches!(
+            control_principal(&caller, headers),
+            ControlPrincipal::Program
+        ));
+    }
+}

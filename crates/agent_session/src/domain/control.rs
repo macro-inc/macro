@@ -13,6 +13,9 @@ use super::ports::ControlEvent;
 pub enum ControlPrincipal {
     /// A user authenticated directly, including a user API key.
     User,
+    /// A user's credential that is not a person in the app: an API key, an
+    /// SDK token or an agent's program. The user's authority, but no app tab.
+    Program,
     /// A bot, daemon, or internal service, possibly forwarding a user's request.
     Runtime(Option<MacroUserIdStr<'static>>),
 }
@@ -42,10 +45,13 @@ impl ControlEvent {
             return Err(AgentSessionError::Forbidden);
         }
         let actor = match principal {
-            ControlPrincipal::User if context.is_some() => {
+            ControlPrincipal::User | ControlPrincipal::Program if context.is_some() => {
                 return Err(AgentSessionError::Forbidden);
             }
-            ControlPrincipal::User => Some(
+            ControlPrincipal::Program if client.is_some() => {
+                return Err(AgentSessionError::Forbidden);
+            }
+            ControlPrincipal::User | ControlPrincipal::Program => Some(
                 access
                     .get_authenticated_user()
                     .map_err(|_| AgentSessionError::Forbidden)?

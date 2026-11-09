@@ -169,7 +169,6 @@
     {"route":"legacy-content","navigable":true,"segments":["channel",":"]},
     {"route":"legacy-content","navigable":true,"segments":["project",":"]},
     {"route":"legacy-content","navigable":true,"segments":["initiative",":"]},
-    {"route":"legacy-content","navigable":true,"segments":["email",":"]},
     {"route":"legacy-content","navigable":true,"segments":["contact",":"]},
     {"route":"legacy-content","navigable":true,"segments":["company",":"]},
     {"route":"legacy-content","navigable":true,"segments":["routine",":"]},
