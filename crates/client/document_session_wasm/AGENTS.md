@@ -91,3 +91,5 @@ Validate every compact-begin class-mask owner/class/duplicate/bit patch before a
 Generate compatibility-prototypes.bop and its source metadata with generate-compatibility-prototypes.ts before compatibility schema generation. Hosted callback requests carry exact scope authority and sparse deltas; creation binds the already-run constructor before native continuation, and explicit native-super dispatch never substitutes a nearer ancestor. Constructor tokens identify actual JS functions across editor-local IDs; these envelopes do not implement callback execution by themselves.
 
 Disable class static transforms in the compatibility factory so unchanged JS registrations own them once; keep createMacro defaults intact and retain core text normalization.
+
+Install one module-stable compatibility host dispatcher and use exact callback-only scope IDs through compatibilityCallbackCall; release all native store/dispatcher borrows before JS callouts and validate acknowledgement scope/kind/identity before applying patches. The transport boundary does not install class hooks or make the initializer usable by itself.

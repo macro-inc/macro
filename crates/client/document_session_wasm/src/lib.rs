@@ -75,3 +75,6 @@ mod test;
 pub mod compatibility_generated;
 #[cfg(feature = "compatibility")]
 mod compatibility;
+/// Typed synchronous host callbacks scoped to the active native operation.
+#[cfg(feature = "compatibility")]
+pub mod compatibility_host;
