@@ -118,6 +118,8 @@ pub struct UiCommandFrame {
     pub client_id: UiClientId,
     /// The session whose agent sent it.
     pub session_id: AgentSessionId,
+    /// The agent's display name, for the tab's "Opened by" notice.
+    pub agent_name: String,
     /// What to do. Only `open` exists.
     pub kind: UiCommandKind,
     /// The checked app path.
@@ -149,6 +151,8 @@ pub struct UiTurn {
     pub owner: MacroUserIdStr<'static>,
     /// Who prompted the turn the session runs or last ran.
     pub prompter: Option<TurnPrompter>,
+    /// The session agent's display name.
+    pub agent_name: String,
 }
 
 /// One budget a command spends from.
@@ -373,6 +377,7 @@ impl UiCommandService {
             user_id: user.clone(),
             client_id: client,
             session_id: admitted.session,
+            agent_name: admitted.turn_facts.agent_name.clone(),
             kind: UiCommandKind::Open,
             path: path.into_string(),
             placement: input.placement,

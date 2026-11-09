@@ -44,8 +44,18 @@ impl<Sessions: AgentSessionRepo> UiTurns for SessionUiTurns<Sessions> {
             .cloned()
             .ok_or(CodeModeError::Forbidden)?;
         let prompter = self.0.turn_prompter(session).await.map_err(storage)?;
+        let agent_name = self
+            .0
+            .session_bot(record.bot_id)
+            .await
+            .map_err(storage)?
+            .name;
 
-        Ok(UiTurn { owner, prompter })
+        Ok(UiTurn {
+            owner,
+            prompter,
+            agent_name,
+        })
     }
 }
 

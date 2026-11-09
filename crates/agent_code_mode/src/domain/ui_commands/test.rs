@@ -82,6 +82,7 @@ impl UiTurns for Turn {
         Ok(UiTurn {
             owner: owner(),
             prompter: self.0.clone(),
+            agent_name: "Research agent".into(),
         })
     }
 }
@@ -267,6 +268,7 @@ async fn a_prompt_typed_in_a_tab_opens_in_that_tab_only() {
     assert_eq!(frame.user_id, owner());
     assert_eq!(frame.client_id, tab());
     assert_eq!(frame.session_id, session());
+    assert_eq!(frame.agent_name, "Research agent");
     assert_eq!(frame.path, DOC);
     assert_eq!(frame.kind, UiCommandKind::Open);
 }
