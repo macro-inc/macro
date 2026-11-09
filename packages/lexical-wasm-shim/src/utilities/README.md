@@ -1,7 +1,8 @@
 # Pure public utility producers
 
 This module supplies 25 pinned public function bindings without an engine or a
-node/editor traversal subset. Root forwarding remains the surface owner's task.
+node/editor traversal subset. The root explicitly forwards the pinned public
+subset and retains these exact producer bindings.
 
 Existing view producers supply DOM node predicates, owner-document/selection/text
 readers, keyboard matching and class-name normalization. New source bodies provide

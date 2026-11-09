@@ -134,16 +134,6 @@
   "baseCommit": "970270d05ebcd93b72d175deebd00d21543647a9",
   "added": [
     {
-      "name": "CaretDirection",
-      "typeOnly": true,
-      "source": "lexical"
-    },
-    {
-      "name": "CaretType",
-      "typeOnly": true,
-      "source": "lexical"
-    },
-    {
       "name": "DOMExportOutput",
       "typeOnly": true,
       "source": "lexical"
@@ -174,11 +164,6 @@
       "source": "lexical"
     },
     {
-      "name": "FlipDirection",
-      "typeOnly": true,
-      "source": "lexical"
-    },
-    {
       "name": "KlassConstructor",
       "typeOnly": true,
       "source": "lexical"
@@ -195,11 +180,6 @@
     },
     {
       "name": "NodeMutation",
-      "typeOnly": true,
-      "source": "lexical"
-    },
-    {
-      "name": "RootMode",
       "typeOnly": true,
       "source": "lexical"
     },
@@ -240,11 +220,6 @@
     },
     {
       "name": "Spread",
-      "typeOnly": true,
-      "source": "lexical"
-    },
-    {
-      "name": "StepwiseIteratorConfig",
       "typeOnly": true,
       "source": "lexical"
     },
@@ -522,6 +497,571 @@
       "name": "SerializedLexicalNode",
       "typeOnly": true,
       "source": "./serialization"
+    },
+    {
+      "name": "BaseCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CaretDirection",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CaretRange",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CaretType",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "ChildCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CommonAncestorResult",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CommonAncestorResultAncestor",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CommonAncestorResultBranch",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CommonAncestorResultDescendant",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "CommonAncestorResultSame",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "FlipDirection",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "NodeCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "PointCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "RootMode",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "SiblingCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "StepwiseIteratorConfig",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "TextPointCaret",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "TextPointCaretSlice",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "TextPointCaretSliceTuple",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "$comparePointCaretNext",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$extendCaretToRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getAdjacentChildCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCaretRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getChildCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getChildCaretOrSelf",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCollapsedCaretRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCommonAncestor",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCommonAncestorResultBranchOrder",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getSiblingCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getTextNodeOffset",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getTextPointCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getTextPointCaretSlice",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isChildCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isNodeCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isSiblingCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isTextPointCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isTextPointCaretSlice",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "flipDirection",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "makeStepwiseIterator",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$caretFromPoint",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$caretRangeFromSelection",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getAdjacentSiblingOrParentSiblingCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCaretInDirection",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getCaretRangeInDirection",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$getChildCaretAtIndex",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$isExtendableTextPointCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$normalizeCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$removeTextFromCaretRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$rewindSiblingCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$setPointFromCaret",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$setSelectionFromCaretRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "$updateRangeSelectionFromCaretRange",
+      "typeOnly": false,
+      "source": "./caret"
+    },
+    {
+      "name": "SplitAtPointCaretNextOptions",
+      "typeOnly": true,
+      "source": "./caret"
+    },
+    {
+      "name": "AnyLexicalExtension",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "AnyLexicalExtensionArgument",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "AnyNormalizedLexicalExtensionArgument",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "configExtension",
+      "typeOnly": false,
+      "source": "./extension-core"
+    },
+    {
+      "name": "configTypeSymbol",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "declarePeerDependency",
+      "typeOnly": false,
+      "source": "./extension-core"
+    },
+    {
+      "name": "defineExtension",
+      "typeOnly": false,
+      "source": "./extension-core"
+    },
+    {
+      "name": "ExtensionBuildState",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "ExtensionConfigBase",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "ExtensionInitState",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "ExtensionRegisterState",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "InitialEditorConfig",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "InitialEditorStateType",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "initTypeSymbol",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalEditorWithDispose",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtension",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionArgument",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionConfig",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionDependency",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionInit",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionInternal",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionName",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "LexicalExtensionOutput",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "NormalizedLexicalExtensionArgument",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "NormalizedPeerDependency",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "OutputComponentExtension",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "OutputExtension",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "outputTypeSymbol",
+      "typeOnly": true,
+      "source": "./extension-core"
+    },
+    {
+      "name": "safeCast",
+      "typeOnly": false,
+      "source": "./extension-core"
+    },
+    {
+      "name": "shallowMergeConfig",
+      "typeOnly": false,
+      "source": "./extension-core"
+    },
+    {
+      "name": "addClassNamesToElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "removeClassNamesFromElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "normalizeClassNames",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "getDOMOwnerDocument",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "getDOMSelection",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "getDOMSelectionFromTarget",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "getDOMTextNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isDOMNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isDOMDocumentNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isDOMTextNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isDocumentFragment",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isHTMLElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isInlineDomNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isBlockDomNode",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isHTMLAnchorElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isHTMLTableCellElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isHTMLTableRowElement",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isDOMUnmanaged",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "setDOMUnmanaged",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "stopLexicalPropagation",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isModifierMatch",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "isExactShortcutMatch",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "mergeRegister",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "getTextDirection",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "toggleTextFormatType",
+      "typeOnly": false,
+      "source": "./utilities"
+    },
+    {
+      "name": "tokenizeRawText",
+      "typeOnly": false,
+      "source": "./selection/helpers"
+    },
+    {
+      "name": "RawTextVisitor",
+      "typeOnly": true,
+      "source": "./selection/helpers"
+    },
+    {
+      "name": "HTMLConfig",
+      "typeOnly": true,
+      "source": "./editor"
+    },
+    {
+      "name": "DOMExportOutputMap",
+      "typeOnly": true,
+      "source": "./editor"
+    },
+    {
+      "name": "EditableListener",
+      "typeOnly": true,
+      "source": "./editor"
     }
   ],
   "existingPublicSingletonGroups": [
@@ -531,19 +1071,13 @@
     "update tags"
   ],
   "deferredRecursiveOriginalAliases": [
-    "DOMExportOutputMap",
     "EditorStateReadOptions",
-    "HTMLConfig",
     "LexicalExportJSON",
     "NodeMap",
     "StaticNodeConfig"
   ],
-  "canonicalUtilityAliases": [
-    "KlassConstructor"
-  ],
-  "pinnedPackagePublicSubpaths": [
-    "."
-  ],
+  "canonicalUtilityAliases": ["KlassConstructor"],
+  "pinnedPackagePublicSubpaths": ["."],
   "unforwardedInternalRuntime": [
     "bindStateRuntime",
     "StateRecord",
@@ -555,8 +1089,11 @@
     "setPendingNodeToClone",
     "prepareEditorRegisteredNodes",
     "initializeConversionCache",
-    "getDOMNodeConversionFunction"
+    "getDOMNodeConversionFunction",
+    "$getAdjacentNodes",
+    "$splitTextPointCaret"
   ],
   "namespaceAcceptance": false,
-  "nativeAcceptance": false
+  "nativeAcceptance": false,
+  "pendingSourceProducers": ["$splitAtPointCaretNext"]
 }
