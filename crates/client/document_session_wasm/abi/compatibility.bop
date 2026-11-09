@@ -117,3 +117,57 @@ struct CompatRecordDelta {
   ForeignRenderRecord[] records; ForeignKey[] removedKeys;
   bool invalidateRootText;
 }
+
+// A creation seed names the JS instance whose constructor already ran once.
+// A COW clone uses the separate native clone-stage acknowledgement instead.
+// Reject seeds for noncreation/COW, reused IDs, or mismatched owner/class/kind;
+// validate reservations and capture leases before invoking any host callbacks.
+union CompatInstanceSeed {
+  1 -> struct CompatNoInstanceSeed { }
+  2 -> struct CompatCreatedInstance {
+    uint32 instanceOwnerId; uint32 classId; uint32 instanceId;
+    ForeignBasePatch base; ForeignNativeProjection nativeProjection;
+    ForeignOpaqueValue ownFields;
+  }
+}
+union CompatBatchArgument {
+  1 -> struct CompatValueArgument { ForeignCallbackValue value; }
+  2 -> struct CompatNodeArgument { CompatNodeOperand value; }
+  3 -> struct CompatNodeArrayArgument { CompatNodeOperand[] values; }
+}
+struct CompatBatchOperation {
+  CompatOperation operation; CompatNodeOperand receiver;
+  CompatBatchArgument[] args; CompatInstanceSeed initialInstance;
+}
+struct CompatBatchRequest {
+  uint32 updateId; uint64 expectedEpoch; CompatCaptureLeases leases;
+  CompatBatchOperation[] operations; bool finalize;
+  float64 now; float64 wall;
+}
+struct CompatBatchResult { ForeignCallbackValue value; CompatRecordDelta delta; }
+union CompatFailureLocation {
+  1 -> struct CompatOperationFailure { uint32 index; }
+  2 -> struct CompatFinalizeFailure { }
+}
+union CompatBatchOutcome {
+  1 -> struct CompatBatchSuccess { }
+  2 -> struct CompatBatchNativeFailure {
+    CompatFailureLocation location; uint16[] errorText;
+  }
+  3 -> struct CompatBatchHostFailure {
+    CompatFailureLocation location; ForeignOpaqueValue error;
+  }
+}
+// Operation failure index equals the successful prefix results.length; finalize
+// failure follows all operation results. Failure always has published=false and
+// invalidates admission. The final delta includes partial failing-operation effects
+// needed by captures/selection (or explicit discard), not just successful results.
+// Noop and composition are part of this single final crossing.
+struct CompatBatchReply {
+  uint32 flags; bool published; bool changed; bool noop;
+  uint64 version; uint64 mutationEpoch; ForeignOptionalKey composition;
+  CompatSelectionData selection; string[] tags;
+  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
+  CompatRecordDelta delta; CompatBatchResult[] results;
+  CompatBatchOutcome outcome;
+}
