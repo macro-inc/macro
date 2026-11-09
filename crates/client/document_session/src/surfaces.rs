@@ -220,7 +220,10 @@ fn local_only(input: &lexical_model::Input, allowed: &[lexical_model::CommandKin
         Input::Command { command, .. } => {
             matches!(
                 command,
-                Command::SelectAll(_) | Command::SelectionChange | Command::ClearHistory
+                Command::SelectAll(_)
+                    | Command::SelectionChange
+                    | Command::Click
+                    | Command::ClearHistory
             ) || allowed.contains(&command.kind())
         }
         Input::Batch(inputs) => inputs.iter().all(|input| local_only(input, allowed)),

@@ -1,3 +1,4 @@
+mod click;
 mod decorator_actions;
 mod session_bop;
 use super::*;
