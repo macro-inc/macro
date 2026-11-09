@@ -1,6 +1,110 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: held ABI3 validation
+## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
+
+Main source remains ABI2; the live preview is still the unchanged `9c21b03842`
+artifact. No production action, deployment, stack restart, live dependency write
+or live artifact promotion occurred. Integration3 and production compatibility
+remain unchecked; the broad matrix remains paused.
+
+The coherent public-config set is integrated: full type `1e32a1ee1a` as
+`8b5430123d`, normalization `10105706ec` as `7c85d12c1a`, node consumer
+`6f355a243a` as `07f699a581`, guarded view `c58014a9ae` as `644a04c948`,
+pure selection helpers `cf2ad6509d` as `756710781f`, exact config constraint
+`a234af30cc` as `ce891a4b13`, and generated hook evidence `781b9adfa9` as
+`0c60245bab`. The helpers were consumed independently before the later view
+checkpoint; the whole set was then validated together without rewriting history.
+The three central exceptions retain their budget; helper SHA256 is
+`05b42b9038f91bc1c17495e8c673d29fe6345bdfac9dbc365b098c9f38ce4d9b`.
+
+Independent whole-set results at that source epoch:
+
+- Full shim `bun run check`: **PASS**, including ordinary TypeScript and all
+  **41 hooks / 489 pinned sources**. This standalone package uses its committed
+  local frozen lock, TypeScript **6.0.3** and Vitest **4.1.5**. Root TypeScript
+  5.9.3 produced a different first caller; its diagnostic regeneration was
+  discarded, then the package-local frozen install was run only in the disposable
+  copy. No hook evidence was weakened or hand-edited.
+- Full view-package TypeScript: **PASS**, including fixtures/specs/setup, with
+  no exclusions, option changes, casts or private source projection. The earlier
+  full-view variance blocker is closed for this source set.
+- Complete real development-WASM shim suite: **195 passed / 1 failed** of 196.
+  The unchanged graph-read assertion observed **2,396 native crossings**, expecting
+  zero. This is a real open gate, not a waiver or production performance proof.
+- Guarded DOM unit suite: **59/59 PASS**, portDOM with the unchanged upstream
+  model; this is separate from native-engine evidence.
+- The 275-case node runner **blocks before collection** without a verified native
+  mapper. No Original/dev-Conformance fallback was supplied. The original seven
+  spec hashes are verified by the node owner; the fail-closed validator is
+  candidate-only and cannot certify engine identity.
+
+Evidence: `coherent-config-independent-validation.json`,
+`coherent-config-shim-pinned-full-{check,tests}.log`,
+`coherent-config-disposable-view-full-check.log`, and
+`coherent-node275-blocked.log` under the acceptance directory. Main's direct shim
+check initially found a stale ignored development artifact; the independent copy
+rebuilt actual conformance WASM instead of suppressing its missing exports.
+The mandatory full namespace oracle/CI hooks `d292edc20b` and `08f0238379` stay
+unmerged until the complete production compat package is available.
+
+The subsequent **source-only** metadata/root pair `58f046811e` / `af059c0e64`
+is integrated as `fe50966074` / `c935e5a2eb`, with observed-getter corrections
+`276f948e46`, Paragraph JSON correction `f1fba26c9b`, deferred selection operands
+`7b973f59cb`, and Text DOM-slot regression `4b24915123`. Together, full shim check
+and full view types pass. The complete suite is **197 passed / 4 failed** of 201,
+plus one unhandled error: three editor cases require the still-unmapped raw
+`__cachedText` capability, and the 2,396-crossing assertion remains. The development
+backend rejects unavailable update metadata explicitly; no empty sets/constants
+or fabricated references were substituted. Positive raw-cache/dirty metadata,
+codec/ref lifetime, NodeState/clone and actual backend acceptance stay open.
+Logs: `root-dirty-pair-{shim-full-check,shim-full-tests,view-full-check}.log`.
+
+Priority recovery fix `a112c98066` is integrated as `a0ae94baf8`. The production
+conflict retains `deferred_seeds.clear()` and the existing efficient
+`doc.oplog_frontiers()` path. Existing presence tests and the new seed-adoption
+modules are both retained. The missing parent seed-17 story was restored and
+registered explicitly; unrelated absent parent modules and their coverage claims
+were not invented. Combined checks pass **171 core / 50 session + 1 telemetry**,
+startup-adoption property/negative controls, and the seed-17 startup/replay story.
+These are targeted controls, not a fresh full integrated T0 clearance.
+
+The Android owner verified the real held-JNI regression **2/2**: zero Initialize
+before releasing actual adoption, exactly one after release with recovered
+`durable😀`, plus the snapshot control. This uses source `a112c98066`, owner
+adoption `7ae52784e8`, FFI source `e2b9430bc0` and fixture `c397b18f8f`.
+Its immutable JNI artifact was independently rehashed here: **223,553,488 bytes**,
+SHA256 `7028c5e3083d9ae437ef89dc2740c38a62a03288e9f357edb5c24ef246816b3a`.
+This records owner test execution and independent artifact integrity, not an
+independent JNI rerun or a WASM substitution. Evidence:
+`wal-adoption-priority-{core-session-tests,simulator-tests}.log`,
+`wal-adoption-jni-independent-rehash.json`, and the external
+`android-seed-adoption-jni-provenance.json`. No Android/Tauri implementation was
+merged into this worktree.
+
+Native source foundations include reserved-key capabilities `32f858079e`,
+compat-only static-transform ownership `58ca265de7`, retained tickets `fe8c4f71e5`,
+pre-import hooks `65beae563d`, owned-call extraction `2c87ba1d6a`, builtin overlays
+`2abc6f4727`, hosted schema `d9e425cd7d`, transport `cc95c4f0bc`, dirty schema and
+consumer `be54d30c31` / `a164526cbf`, and metadata borrow release `8094225421`.
+Schema fingerprint is `5f316f2121a2d04941202ee924d6c70f974fdb19dbec490a2cb898d9eb4962bb`.
+None installs a hosted factory or activates the resolver. Newer native execution,
+read-snapshot and cache-accessor checkpoints remain queued for a coherent pass;
+the older immutable WASM archives below do not represent these newer sources.
+
+The exact OFF behavior inventory chain through `e06da8c0b8` is integrated, keeping
+`331efdaea6` before registry expansions and the watcher fix before transform cases;
+`c12461e132` was excluded. The owner reports **22,440 full-web tests passed**, two
+optional cases, media **36** and rendered image **99/99** OFF. There was no duplicate
+broad OFF rerun here. Newer code/table/task/link inventory continuations remain
+queued. These are separate source-linked observations, not a summed test run,
+exhaustive behavior count, ON result, persistence or full AX acceptance.
+
+Scoped repository check passes (`coherent-source-final-scoped-check.log`).
+The incremental audit found no new source defect and accepts the WAL conflict
+resolution, exception budget and fail-closed oracle fix; acceptance failures
+remain explicit. Audit: `audit-coherent-config-wal-checkpoint.md`.
+
+## Earlier checkpoint: held ABI3 validation
 
 The main application-source checkpoint is `2e335cdcc5` and remains ABI2. The live preview remains on
 `9c21b03842`; no dependency directories, live artifacts or stack processes
