@@ -31,7 +31,7 @@ export interface ExecutionRecord {
   executionId: ExecutionId;
   /** JSON returned by the program, if successful. */
   result?: unknown;
-  /** The submitted JavaScript module. */
+  /** The submitted TypeScript module. */
   source: string;
   /** Overall execution state. */
   status: ExecutionStatus;
