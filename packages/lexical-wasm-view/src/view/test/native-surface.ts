@@ -32,7 +32,7 @@ export function initializeNativeSurfaceTests() {
 }
 /** A real Macro session with synchronous execution and a mounted Diff-driven view. */
 export function nativeSurface() {
-  const session = EditorSession.createMacro(
+  const session = EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
     SessionConfigMsg.encode({
       doc: 'group-b-view-fixture',
@@ -53,7 +53,8 @@ export function nativeSurface() {
       observed: [],
     }),
     0,
-    0
+    0,
+    'group-b-view'
   );
   let view: EditorView | undefined;
   const counters = { admissions: 0 };
@@ -143,7 +144,9 @@ export function transfer(
       clear() {},
       remove(_index: number) {},
     }),
-    types: [...data.keys()].filter((key) => data.get(key)),
+    get types() {
+      return [...data.keys()].filter((key) => data.get(key));
+    },
     getData: (mime) => data.get(mime) ?? '',
     setData: (mime, value) => {
       data.set(mime, value);

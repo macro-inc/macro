@@ -9,6 +9,26 @@ import { readSelection, sameSelection } from './selection';
 import { selectionMessage } from './session-port';
 import type { ViewSelection } from './types';
 
+/** Match the pinned source clipboard precheck before choosing its HTML fallback. */
+function matchesLexicalNamespace(
+  serialized: string,
+  namespace: string
+): boolean {
+  try {
+    const payload: unknown = JSON.parse(serialized);
+    return (
+      payload !== null &&
+      typeof payload === 'object' &&
+      'namespace' in payload &&
+      payload.namespace === namespace &&
+      'nodes' in payload &&
+      Array.isArray(payload.nodes)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Ephemeral host facts retained until the matching native admission completes. */
 export interface ClipboardFacts {
   readonly entries: readonly IClipboardEntryMsg[];
@@ -72,7 +92,7 @@ export class ClipboardAccess {
     let admitted = false;
     try {
       let htmlNodes: string[] = [];
-      if (html && !lexical) {
+      if (html && !matchesLexicalNamespace(lexical, view.options.namespace)) {
         const phase = span.span('html_import');
         phase.setAttr('bytes', new TextEncoder().encode(html).byteLength);
         try {
