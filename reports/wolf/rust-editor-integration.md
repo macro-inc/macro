@@ -104,6 +104,64 @@ The incremental audit found no new source defect and accepts the WAL conflict
 resolution, exception budget and fail-closed oracle fix; acceptance failures
 remain explicit. Audit: `audit-coherent-config-wal-checkpoint.md`.
 
+## Combined ABI2 native build and source continuation
+
+The next native batch is integrated through `533d924824`: owned selection
+execution and sidecars (`280eedbc74`, `e57639abe4` with immediate fixture
+consumer `30deb6487b`, `ec7bb64e81`), read-update facts (`d4ae8075b5`), exact
+captured root cache (`9086955a4d`), raw numeric alignments (`4318adbc18`) and
+raw writes without virtual redispatch (`6ba489b5f8`). The paired schema is
+`2b50fa92778c62e50c0a67cf891fd9405c51c34dc0efbcae6ee3da161cd079b2`.
+Combined all-feature tests pass **60 WASM / 479 model / 7 HTML plus one
+integration**; strict all-target/all-feature scoped clippy and scoped repository
+checks pass. Existing default Macro behavior is retained; actual hosted factory
+and class callback execution are still not ready.
+
+An independent branch in the disposable copy built exact ABI2 source
+`533d924824` with the normal shipping recipe, six opt3 callers, `-Oz --converge`,
+pinned tools and two Cargo jobs. Result: **9,038,468 raw / 2,035,592 Brotli bytes**,
+SHA256 `9954982f0c4797b3da050e8c3d869f30870186f9118945e7ca80d32129b7d2ba`.
+Immutable manifest: `wasm-attribution/abi2-native-combined-manifest.json` under
+acceptance. This exceeds the advisory ceiling and has no new speed/acceptance
+claim; it is not installed in the preview and does not replace the older ABI3
+comparison archives.
+
+The source-generated ABI2 declarations add 106 lines, retaining all existing
+member names, including the common compatibility API and scoped transport.
+They contain no held ABI3 `textDeltaFromView` / `textResyncFromView` primitives.
+Only those declarations were copied into main (`ed93772565`); no binary/glue
+was promoted. Proof: `abi2-native-generated-declarations-proof.json`.
+Matched artifact tests pass **86 session / 253 view**. Actual cold WASM reports
+schema `2b50…`, protocol1 and 41 hooks; module dispatcher installation succeeds,
+and a callback outside a live synchronous scope rejects without invoking the
+dispatcher. This tests transport boundaries, not class hooks or initialization.
+Logs: `native-read-metadata-integrated-{tests,clippy,check}.log`,
+`abi2-native-combined-{build,session-tests,view-tests}.log`, and
+`abi2-native-cold-smoke.json`.
+
+DOM predicate correction `877c9e9c54` and the source-only target probe
+`3e3cb3c818` are integrated (`c26237dfbe`, `5cc1715dde`). Guarded DOM tests pass
+59/59, full view types pass, and scoped checks pass. Target probing is not native
+deletion/behavior adoption. Positive root-derived JS cache population, raw cache,
+dirty metadata, native class hosting, zero-crossing and native275 gates stay open.
+The latest complete shim run is **198/202**, with the same four failures and
+one unhandled raw-cache error; full source/hook and full view checks pass.
+Evidence is in `dom-probe-*` logs. Source artifacts were rebuilt in the
+disposable tree without changing compiler options. The independent source audit
+(`audit-native-abi2-source-checkpoint.md`) found no new source defect and verified
+the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
+initializer, native oracle, positive cache/crossing and parity gates remain open.
+
+The OFF inventory continuation through `62601ac3c6` is integrated, including code,
+table picker, checkbox/task conversion and link fixtures. Owner browser evidence
+is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
+viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
+ledger has 679 selectors across three explicit reports (full web22,440, media36,
+conversion11); it is not a summed full-suite run, deduplicated behavior count or
+ON acceptance. No duplicate broad OFF run was launched here. Mounted TaskList
+continuation `16d9f311d3` is queued separately. Production declaration-oracle hooks
+and the resolver remain held.
+
 ## Earlier checkpoint: held ABI3 validation
 
 The main application-source checkpoint is `2e335cdcc5` and remains ABI2. The live preview remains on
