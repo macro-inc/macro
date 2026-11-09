@@ -1,7 +1,7 @@
 import { ThrownResultError } from '@core/util/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UserExecutionReceipt } from '../queries/document-programs';
-import { attachProgramHost, MAX_IN_FLIGHT_RUNS } from './preview-runner';
+import { attachProgramHost } from './preview-runner';
 
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
@@ -162,30 +162,6 @@ describe('attachProgramHost', () => {
 
     expect(run).not.toHaveBeenCalled();
     expect(posted).toEqual([]);
-  });
-
-  it('refuses a run beyond the in-flight cap before the server', async () => {
-    const { frame, posted, send } = fakeFrame();
-    let release: (() => void) | undefined;
-    const run = vi.fn(
-      () =>
-        new Promise<UserExecutionReceipt>((resolve) => {
-          release = () => resolve(succeeded(1));
-        })
-    );
-    detachers.push(attachProgramHost(frame, options(run)));
-
-    for (let id = 1; id <= MAX_IN_FLIGHT_RUNS + 1; id += 1)
-      send({ type: 'macro:run', token: 't', id, program: 'tasks' });
-    await flush();
-
-    expect(run).toHaveBeenCalledTimes(MAX_IN_FLIGHT_RUNS);
-    expect(posted).toHaveLength(1);
-    expect(posted[0]?.message).toMatchObject({
-      type: 'macro:error',
-      id: MAX_IN_FLIGHT_RUNS + 1,
-    });
-    release?.();
   });
 
   it('asks for a fresh build when the document changed', async () => {

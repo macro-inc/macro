@@ -3166,7 +3166,9 @@ after which the preview fetches the new build. A failed run rejects the
 page's call with the program's error, and the preview also shows the latest
 failed run's message in a notice above the page (role `alert`, with a
 Dismiss button), so a page that doesn't catch it still shows what went wrong. A run lasts at most 30 seconds,
-and its writes stand as the user's own, with no agent attribution. Neither
+counting any wait: a viewer runs two programs at once, and further calls wait
+on the server for one to finish rather than fail, failing only if their 30
+seconds pass first. Its writes stand as the user's own, with no agent attribution. Neither
 programs nor the client script can import packages (`npm:` or remote modules):
 write plain TypeScript against the DOM and the SDK.
 
@@ -3230,7 +3232,8 @@ a reload. Change `query: 'launch'` to `query: 42`, save, and reopen Render: it
 shows the type error against `client script` instead of the page. With the
 flag off the preview renders the file as plain sandboxed HTML. In traces,
 `document_programs.build` covers a build (with `cached`), `block_code.run_document_program`
-and `document_programs.run` each run, and `block_code.document_events.stream`
+and `document_programs.run` each run (with `queued_ms`, the wait for one of the
+viewer's two slots), and `block_code.document_events.stream`
 each stream connection, with the events it delivered.
 
 ## Large-document undo checks

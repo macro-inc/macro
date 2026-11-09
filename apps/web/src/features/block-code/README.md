@@ -21,7 +21,8 @@ A block for editing code files with syntax highlighting and formatting.
   supplies the frame's `window.macro`, which the build's `macro:programs` and
   `macro:client` imports compile onto: `frame-helper.ts` is the injected
   script and message protocol, `preview-runner.ts` the host side that runs
-  each named program of the shown build on the server as the viewer, unwraps
+  each named program of the shown build on the server as the viewer (with
+  no cap of its own: the server queues a viewer's runs past two), unwraps
   its value, reports each failed run through `onFailure` (the preview shows
   the latest one in a dismissible notice above the frame) and refetches the
   build when the server answers that the document changed, and `event-host.ts` the host side of `on`: one server

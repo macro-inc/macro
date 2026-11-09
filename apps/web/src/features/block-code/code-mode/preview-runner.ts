@@ -3,9 +3,6 @@ import { Telemetry } from '@macro-inc/observability';
 import { runDocumentProgram } from '../queries/document-programs';
 import { type RunReplyMessage, readRunRequest } from './frame-helper';
 
-/** Runs one frame may have waiting on the server at once. */
-export const MAX_IN_FLIGHT_RUNS = 2;
-
 export type ProgramHostOptions = {
   documentId: string;
   /** The build the frame shows; a run of a newer build is refused. */
@@ -30,7 +27,6 @@ export function attachProgramHost(
 ): () => void {
   const run = options.run ?? runDocumentProgram;
   const controller = new AbortController();
-  let inFlight = 0;
 
   const reply = (message: RunReplyMessage) => {
     frame.contentWindow?.postMessage(message, '*');
@@ -46,15 +42,6 @@ export function attachProgramHost(
     const request = readRunRequest(event.data, options.token);
     if (!request) return;
     const { id, token } = request;
-    if (inFlight >= MAX_IN_FLIGHT_RUNS) {
-      fail(
-        token,
-        id,
-        `At most ${MAX_IN_FLIGHT_RUNS} programs can run at once; wait for one to finish.`
-      );
-      return;
-    }
-    inFlight += 1;
     try {
       // The server run's request joins this span through fetchWithToken's
       // captured context, so one trace covers the frame's call to its result.
@@ -101,8 +88,6 @@ export function attachProgramHost(
         id,
         error instanceof Error ? error.message : 'The program could not run.'
       );
-    } finally {
-      inFlight -= 1;
     }
   };
 
