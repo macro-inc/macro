@@ -252,6 +252,9 @@ impl Transaction<'_> {
         Ok((commit, artifact))
     }
 
+    // Keep transition construction visible to ordinary commit callers so its
+    // large return value and absent prepared receipt can be optimized away.
+    #[inline(always)]
     pub(crate) fn prepare_transition(
         &mut self,
     ) -> Result<crate::prepared::PreparedTransition, Error> {
