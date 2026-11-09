@@ -18,6 +18,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - `selection-methods.ts`: view-owned RangeSelection applyDOMRange/modify callbacks with injected caret primitives.
 - `utils.ts`, `dom-utils.ts`, `block-cursor.ts`: ported DOM/keyboard helpers.
 - `*-state.ts`: shared upstream pass/event state after splitting the source modules.
+- `tests/upstream-selection-runtime.ts`: authentic upstream caret/point/selection producer for focused method comparisons.
 - `upstream-harness.ts`: test-only source swapping; this retains the real upstream model.
 - `types.ts` and `node-types.ts`: concrete recursive editor/state/node call subsets required by the DOM adapter; traversal is non-generic internally, while public core generics remain complete.
 - `internal-contract.type-test.ts`: exact DOMInternalCallSubset manifest for the oracle; product modules can only call the members declared here.
@@ -29,6 +30,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Bind the actual supplied root; null unbinds and later roots reuse the same core/session.
 - Supply a real empty-root EditorState from the core for the first full reconcile after each bind.
 - Run reconcile in withReconciliation with the published read-only next state associated with its editor; captured previous-node fields retain their previous values.
+- Keep root-string deltas bounded to invalidation; require an exact JS derived-cache path before freeze, and never substitute null/stale/memo writes to published raw fields. Native-finalized caches and the upstream-model DOM oracle do not establish this production obligation.
 - Call publish after finalizing the next state and before core update listeners; preserve the caller update phase for mutation callbacks and enqueue only decorator callbacks.
 - Clear core composition on every root change and keep its native composition field synchronized.
 - Pass a caller-owned parentSpan to root binding or reconciliation when available; the view ends only its own child span.

@@ -131,6 +131,13 @@ export type CompatRuntime = Pick<
   isLexicalEditor: (value: unknown) => value is LexicalEditor;
   $getNodeByKey: (key: string, state?: EditorState) => CompatNode | null;
   createEmptyEditorState: () => EditorState;
+  /**
+   * Associate this real state/editor in a read-only scope, including pending JS
+   * probes. Native-finalized caches alone do not establish JS derived fields:
+   * root-string deltas are bounded invalidations, so the production producer
+   * still owes an exact prefreeze derived-cache acknowledgement/path. Published
+   * raw fields must never be nulled, left stale or memo-written as a substitute.
+   */
   withReconciliation: <T>(
     editor: LexicalEditor,
     state: EditorState,

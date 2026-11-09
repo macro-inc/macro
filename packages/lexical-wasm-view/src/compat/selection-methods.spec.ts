@@ -1,6 +1,6 @@
 import * as Lexical from 'lexical';
 import { expect, test } from 'vitest';
-import { createUpstreamSelectionDOMMethods } from './upstream-selection-runtime';
+import { createUpstreamSelectionDOMMethods } from './tests/upstream-selection-runtime';
 
 test('applyDOMRange matches the original class over real source nodes and DOM', () => {
   const editor = Lexical.createEditor({

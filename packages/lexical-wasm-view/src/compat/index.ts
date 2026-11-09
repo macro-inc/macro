@@ -11,6 +11,7 @@ export {
 } from './selection';
 export {
   createSelectionDOMMethods,
+  type DOMSelectionTarget,
   type SelectionDOMRuntime,
 } from './selection-methods';
 export type {

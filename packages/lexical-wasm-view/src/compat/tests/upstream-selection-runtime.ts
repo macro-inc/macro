@@ -4,8 +4,8 @@ import {
   createSelectionDOMMethods,
   type PointCaret,
   type SelectionDOMRuntime,
-} from './selection-methods';
-import { getUpstreamRuntime } from './test-setup';
+} from '../selection-methods';
+import { getUpstreamRuntime } from '../test-setup';
 
 type Direction = 'next' | 'previous';
 
@@ -51,7 +51,7 @@ export function createUpstreamSelectionDOMMethods(model: typeof Lexical) {
     $isExtendableTextPointCaret: (
       caret
     ): caret is Extract<typeof caret, { type: 'text' }> & {
-      getNodeAtCaret(): import('./types').CompatTextNode;
+      getNodeAtCaret(): import('../types').CompatTextNode;
     } => model.$isExtendableTextPointCaret(requireCaret(caret)),
     $extendCaretToRange(caret) {
       return model.$extendCaretToRange(requireCaret(caret));
@@ -105,6 +105,14 @@ export function createUpstreamSelectionDOMMethods(model: typeof Lexical) {
     ) {
       remember(selection);
       methods.modifyDOMSelection(selection, alter, backward, granularity);
+    },
+    getDOMSelectionTarget(
+      selection: Lexical.RangeSelection,
+      backward: boolean,
+      granularity: 'character' | 'word' | 'lineboundary'
+    ) {
+      remember(selection);
+      return methods.getDOMSelectionTarget(selection, backward, granularity);
     },
   };
 }
