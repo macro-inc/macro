@@ -178,3 +178,5 @@ Bracket fallible development runtime reads with ForeignReadOperation. Its thread
 ForeignCloneContext exposes an owned source read only during payload cloning. Capture after materializing the persistent-map path but before borrowing its writable record; no transaction pointer enters TLS. Normal native/default-feature clones are unchanged.
 
 ForeignSelectionCapture owns an explicit ordinary argument and optional identity. StateRef.with_foreign_selection_argument carries provenance through native traversal; recognize exact objects, never infer identity from equal selection fields. Owned read snapshots hydrate captured arguments without granting graph write authority.
+
+Use EditorCore suspended host scopes to stage on the same editor, then adopt only through an admitted command transaction. Validate editor identity/publication and a pristine target before moving pending fields; reject read peers and previously published staged commits. The host still owns readiness/access admission.

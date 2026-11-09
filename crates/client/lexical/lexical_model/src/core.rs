@@ -531,3 +531,6 @@ fn run(
 }
 #[cfg(test)]
 mod test;
+
+#[cfg(feature = "foreign-nodes")]
+mod compatibility;

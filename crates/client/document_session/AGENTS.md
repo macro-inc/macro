@@ -73,3 +73,5 @@ Run the current TS stack differential from the repository root:
 `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`.
 Run `cargo test -p document_session --all-features -j4` for the native bridge too.
 `tests/telemetry.rs` isolates its tracing subscriber from parallel unit callsites.
+
+The compatibility feature exposes same-core unpublished host scopes and a single-consumption adoption command. Route it through normal handle readiness/access checks; never add the extension command to local_commands. compat_editor_builder installs only that admission handler, without native behavior plugins.
