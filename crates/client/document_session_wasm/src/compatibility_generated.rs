@@ -105,6 +105,62 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatConfig<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for CompatConfig<'raw> {}
 
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct CompatInstanceBind {
+    pub record: ForeignRecordRef,
+    pub instance_owner_id: u32,
+    pub class_id: u32,
+    pub instance_id: u32,
+}
+
+impl ::bebop::FixedSized for CompatInstanceBind {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatInstanceBind {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        Self::SERIALIZED_SIZE
+    }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        Ok(
+            ::bebop::packed_read!(zelf.record)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.instance_owner_id)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.class_id)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.instance_id)._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            record: v0,
+            instance_owner_id: v1,
+            class_id: v2,
+            instance_id: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatInstanceBind {}
+
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CompatOperation {
@@ -4286,6 +4342,8 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatConfig {}
 
+    pub use super::CompatInstanceBind;
+
     pub use super::CompatOperation;
 
     #[derive(Clone, Debug, PartialEq)]
@@ -7572,4 +7630,4 @@ pub mod owned {
     pub use super::ForeignNativeField;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "6fa1a5da990a2c205e8f3469ae21405fc223b24692d364389c45fe309048db09";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "8feac1f170dc0613b15934c07fa4f001add1fb0f07f3facd5b36b8b9cf7acddf";

@@ -3,6 +3,12 @@
 const uint32 COMPATIBILITY_PROTOCOL_MAJOR = 1;
 struct CompatBegin { string[] tags; }
 struct CompatConfig { uint32 editorId; ForeignClassRegistration[] classes; }
+// Bind the actual JS object to this exact owned capture without graph writes.
+// Zero identifiers are not hydrated instances; native code validates ownership.
+struct CompatInstanceBind {
+  ForeignRecordRef record;
+  uint32 instanceOwnerId; uint32 classId; uint32 instanceId;
+}
 enum CompatOperation : uint16 {
   Unknown = 0;
   GetRoot = 1; GetNodeByKey = 2;
