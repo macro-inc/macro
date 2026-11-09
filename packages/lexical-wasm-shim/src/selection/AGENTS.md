@@ -13,14 +13,15 @@ selection movement in the injected view callbacks.
 - Keep frozen published selections immutable; synchronize detached read-scope clones without granting model write authority.
 - Select the graph with getActiveStateVersion, independently from the leased raw selection reference's origin version.
 - Preserve pinned v0.45 fields, cache invalidation, owner links and clone semantics.
-- Keep the sole upstream declaration exception in $createPoint: upstream declares a non-null owner for an actual owner-less point. Never copy its suppression or add another assertion.
+- Delegate $createPoint to compatibility-exceptions.createPointWithUpstreamType; keep the owner-less upstream declaration gap in that centralized adapter without adding local assertions.
+- Keep RawTableSelectionValue transport-only and separate from public BaseSelection conformance until the table package is typed against the actual core.
 - Import runtime core and DOM operations through SelectionRuntime; never import upstream runtime code.
 - Export exact SelectionObservableExpected/SelectionObservableActual bundles for the strict emitted-declaration oracle; keep only the safe owner-gap assertions direct in contract.type-test.ts.
 
 ## Checks
 
 Run the package TypeScript check and unchanged upstream selection unit oracle.
-Constructor tests exercise real JS selection instances without a replacement model. Read tests compare the owned classes against real upstream nodes across point pairs and frozen read scopes; every native boundary function throws if called.
+Constructor tests exercise real JS selection instances without a replacement model. The legacy read-test harness uses upstream node classes and requires migration before it can validate the actual-core selection types; do not count it as runtime acceptance after retargeting.
 Native acceptance requires the actual injected bridge; source-model evidence is separate.
 
 Run the unchanged 65-case oracle with `LEXICAL_SELECTION_UPSTREAM_ROOT=/path/to/pinned/source bun src/selection/tests/run-oracle.ts` from the package. It preserves the original unit configuration, pins all four spec hashes and requires exactly 65 passing assertions. Results default to the temporary directory under lexical-selection-oracle.

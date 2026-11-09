@@ -2,8 +2,10 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * Licensed under the MIT license in the upstream Lexical source tree.
  */
-import type { BaseSelection, LexicalNode, NodeKey } from 'lexical';
+import type { NodeKey } from 'lexical';
+import type { LexicalNode } from '../nodes';
 import { $getPreviousSelection, $getSelection } from './helpers';
+import type { BaseSelection } from './runtime';
 import { getSelectionRuntime, isSelectionReadOnly } from './runtime';
 
 export class NodeSelection implements BaseSelection {

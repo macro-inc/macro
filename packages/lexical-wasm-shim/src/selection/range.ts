@@ -3,14 +3,8 @@
  * Licensed under the MIT license in the upstream Lexical source tree.
  */
 import { CompatOperation } from '@macro-inc/collaboration/session/compatibility.generated';
-import type {
-  BaseSelection,
-  ElementNode,
-  LexicalNode,
-  PointType,
-  TextFormatType,
-  TextNode,
-} from 'lexical';
+import type { TextFormatType } from 'lexical';
+import type { ElementNode, LexicalNode, TextNode } from '../nodes';
 import {
   booleanArgument,
   callSelection,
@@ -28,7 +22,9 @@ import {
   textFormats,
   toggleFormat,
 } from './helpers';
+import type { PointType } from './point';
 import { $createPoint } from './point';
+import type { BaseSelection } from './runtime';
 import { getSelectionRuntime, isSelectionReadOnly } from './runtime';
 
 export class RangeSelection implements BaseSelection {
