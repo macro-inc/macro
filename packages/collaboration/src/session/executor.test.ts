@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { NOOP_SPAN } from '@macro-inc/observability';
+import { LoroDoc } from 'loro-crdt';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import {
   DocSession,
@@ -8,8 +9,15 @@ import {
 } from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { FromPeer, FromRemote } from '../sync-service/generated/schema';
 import { intoFrames } from '../websocket/platform/framing/frames';
-import { ABI_MAJOR } from './abi.generated';
+import {
+  ABI_MAJOR,
+  Access,
+  SessionConfigMsg,
+  SessionInputMsg,
+  Transport,
+} from './abi.generated';
 import { SessionExecutor } from './executor';
+import { emptyInput } from './input';
 import { SessionTelemetry } from './telemetry';
 
 interface Call {
@@ -57,6 +65,7 @@ class FakeSocket extends EventTarget {
   onerror: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   readonly pending: Uint8Array[] = [];
+  readonly updates: Uint8Array[] = [];
   constructor(private readonly since: Uint8Array[]) {
     super();
   }
@@ -84,13 +93,17 @@ class FakeSocket extends EventTarget {
       if (!next) throw new Error('Unexpected since request');
       this.pending.push(next);
     }
-    if (message.isPeerUpdate())
+    if (message.isPeerUpdate()) {
+      this.updates.push(
+        ...message.value.updates.map((update) => update.slice())
+      );
       for (const frame of intoFrames(
         FromRemote.encode(
           FromRemote.fromRemoteUpdateAck({ id: message.value.id })
         )
       ))
         this.pending.push(frame);
+    }
   }
   close(code = 1000) {
     this.readyState = 3;
@@ -102,6 +115,151 @@ class FakeSocket extends EventTarget {
     this.onclose?.(event);
   }
 }
+
+test('an early fractional host tick rearms the unchanged native WAL deadline', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.setSystemTime(1_000_000);
+  const seed = new LoroDoc();
+  seed.setPeerId('42');
+  seed.setRecordTimestamp(false);
+  seed.getMap('fields').set('value', 'seed');
+  seed.commit();
+  const snapshot = seed.export({ mode: 'snapshot' });
+  const socket = new FakeSocket([
+    FromRemote.encode(
+      FromRemote.fromRemoteUpdateSince({
+        update: snapshot,
+        vv: seed.oplogVersion().encode(),
+      })
+    ),
+  ]);
+  const ticks: { now: number; flags: number; wake: number }[] = [];
+  let offset = 0;
+  const doc = `early-wake-${crypto.randomUUID()}`;
+  const owner = crypto.randomUUID();
+  const executor = new SessionExecutor({
+    doc,
+    owner,
+    user: 'fixture-user',
+    create: (now, wall) => {
+      const native = DocSession.create(
+        ABI_MAJOR,
+        SessionConfigMsg.encode({
+          doc,
+          session: owner,
+          user: 'fixture-user',
+          peers: [7n, 8n, 9n],
+          access: Access.Edit,
+          transport: Transport.Direct,
+          durable: true,
+          chatter: false,
+          headless: true,
+          viewEngine: 1,
+          viewOs: 0,
+          token: '',
+          traceparent: '',
+          coalesce: 25,
+          snapshotInterval: 0,
+          observed: [{ root: 'fields', steps: [] }],
+        }),
+        now,
+        wall
+      );
+      const tick = native.tick.bind(native);
+      native.tick = (mono, unix) => {
+        const flags = tick(mono, unix);
+        ticks.push({ now: mono, flags, wake: native.wakeAt() });
+        return flags;
+      };
+      return native;
+    },
+    auth: {
+      token: async () => ({ token: 'fixture-token', access: Access.Edit }),
+      subscribe: () => () => {},
+    },
+    view: {
+      apply: (_words, _strings, effects) => {
+        for (const effect of effects)
+          if (effect.kind === 2) throw new Error(effect.text);
+      },
+    },
+    socketUrl: () => 'ws://fixture.invalid',
+    sockets: () => socket,
+    telemetry: new SessionTelemetry(NOOP_SPAN),
+    clock: {
+      mono: () => Date.now() - 1_000_000 + offset,
+      wall: () => Date.now(),
+    },
+  });
+  const settle = async () => {
+    for (;;) {
+      await executor.idle();
+      const frame = socket.pending.shift();
+      if (!frame) return;
+      socket.frame(frame);
+    }
+  };
+  try {
+    executor.start();
+    await settle();
+    socket.open();
+    for (const frame of intoFrames(
+      FromRemote.encode(
+        FromRemote.fromRemoteInitialSync({
+          snapshot,
+          awareness: new Uint8Array(),
+        })
+      )
+    ))
+      socket.frame(frame);
+    await settle();
+    executor.run(() =>
+      executor.session.input(
+        SessionInputMsg.encode({
+          ...emptyInput(3),
+          operations: [
+            {
+              kind: 0,
+              path: { root: 'fields', steps: [] },
+              key: 'value',
+              index: 0,
+              len: 0,
+              value: [
+                {
+                  kind: 4,
+                  key: '',
+                  num: 0,
+                  int: 0n,
+                  str: 'typed😀',
+                  bytes: new Uint8Array(),
+                  children: 0,
+                },
+              ],
+            },
+          ],
+        }),
+        executor.now(),
+        Date.now()
+      )
+    );
+    const wake = executor.session.wakeAt();
+    expect(wake).toBe(25);
+    offset = -0.25;
+    await vi.advanceTimersByTimeAsync(25);
+    await settle();
+    expect(ticks).toEqual([{ now: 24.75, flags: 0, wake: 25 }]);
+    expect(socket.updates).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await settle();
+    expect(socket.updates).toHaveLength(1);
+    for (const update of socket.updates) seed.import(update);
+    expect(seed.getMap('fields').get('value')).toBe('typed😀');
+    expect(ticks[1].now).toBe(25.75);
+  } finally {
+    await executor.close();
+    seed.free();
+  }
+});
 function isTrace(value: unknown): value is Trace {
   return (
     typeof value === 'object' &&
