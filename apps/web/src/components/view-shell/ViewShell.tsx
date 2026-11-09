@@ -97,6 +97,7 @@ type ViewShellInternal = ViewShellLayout & {
 };
 
 const RESIZE_GUTTER = 1;
+const WIDE_TOUCH_ASIDE_SCALE = 1.5;
 
 const ViewShellContext = createContext<ViewShellInternal>();
 
@@ -243,15 +244,23 @@ function Root(props: ViewShellRootProps) {
     return key;
   };
 
+  const asideScale = () =>
+    isTouchDevice() && !atLayoutBreakpoint() ? WIDE_TOUCH_ASIDE_SCALE : 1;
   const asideLayout = (): AsideLayout => {
     const layout = { ...DEFAULT_ASIDE_LAYOUT, ...(local.aside || {}) };
     const chosen = chosenAsideWidth();
-    // A saved width from older bounds still fits the current ones.
-    if (chosen === undefined || !Number.isFinite(chosen)) return layout;
-
+    // Store widths in desktop units so fold/unfold and device changes don't compound scaling.
+    const preferred =
+      chosen !== undefined && Number.isFinite(chosen)
+        ? Math.min(layout.max, Math.max(layout.min, chosen))
+        : layout.width;
+    const scale = asideScale();
     return {
       ...layout,
-      width: Math.min(layout.max, Math.max(layout.min, chosen)),
+      width: preferred * scale,
+      min: layout.min * scale,
+      max: layout.max * scale,
+      preserveDuringResize: scale !== 1 ? true : layout.preserveDuringResize,
     };
   };
 
@@ -423,7 +432,7 @@ function Root(props: ViewShellRootProps) {
     asideHost,
     narrowList,
     returnToList: () => local.asideList?.onBack(),
-    chooseAsideWidth: setChosenAsideWidth,
+    chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
     aside: {
       layout: asideLayout,
       mode: asideMode,

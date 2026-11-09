@@ -12,6 +12,7 @@ test('collapses beside the view title and reopens before touch filters', async (
   });
   const collapse = page.getByRole('button', { name: 'Hide navigation' });
   await expect(navigation).toBeVisible();
+  await expect(navigation).toHaveCSS('width', '384px');
   await expect(collapse).toBeVisible();
   const title = await navigation
     .getByRole('heading', { name: 'Drive' })
@@ -152,6 +153,28 @@ for (const { width, nested } of [
     await expect(more).toBeVisible();
     await more.click();
     await expect(page.locator('[data-extra-controls]')).toBeVisible();
+    await scroller.evaluate(async (element) => {
+      const spacer = element.firstElementChild;
+      const header = element
+        .closest('[data-mobile-list-layout]')
+        ?.querySelector('[data-mobile-list-header]');
+      const first = element.querySelector('[data-collection-row="0"]');
+      if (!spacer || !header || !first)
+        throw new Error('List geometry is missing');
+      // Header height and scroll clearance settle through ResizeObserver delivery.
+      await new Promise<void>((resolve) => {
+        const observer = new ResizeObserver(() => {
+          if (
+            first.getBoundingClientRect().top >=
+            header.getBoundingClientRect().bottom
+          ) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(spacer);
+      });
+    });
     expect((await first.boundingBox())!.y).toBeGreaterThanOrEqual(
       (await header.boundingBox())!.y + (await header.boundingBox())!.height
     );

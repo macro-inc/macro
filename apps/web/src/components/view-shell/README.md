@@ -63,3 +63,8 @@ and paints the top fade only inside that list pane. Reserve its
 `touchInset`). Nested activity controls add their height to the parent inset;
 desktop headers stay in flow. Keep workspace metadata composable on touch when
 its chrome is local, so the legacy split-wide fade does not cover the sidebar.
+
+Docked touch sidebars above the layout breakpoint use 1.5 times the base width
+and bounds (384px initially), and preserve that width while space permits.
+Desktop and narrow overlays keep base sizing. Normalize manually resized touch
+widths before saving so switching layouts or devices does not compound scaling.

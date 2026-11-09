@@ -22,7 +22,12 @@ import {
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({
+  touch: (): boolean => false,
   width: (): number | undefined => 1200,
+}));
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => measurement.touch(),
 }));
 
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
@@ -64,6 +69,7 @@ beforeEach(() => {
     removeItem: (key: string) => values.delete(key),
   });
   measurement.width = () => 1000;
+  measurement.touch = () => false;
 });
 afterEach(() => {
   cleanup();
@@ -166,6 +172,42 @@ function setup(preserveDuringResize: boolean, app = 'tasks') {
 }
 
 describe('ViewShell aside resize preference', () => {
+  it('widens touch navigation while keeping phone overlays and desktop widths unchanged', () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(384);
+    view.setWidth(1000);
+    expect(view.asideWidth()).toBeCloseTo(384);
+    view.setWidth(600);
+    fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
+    const overlay = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!;
+    expect(Number.parseFloat(overlay.style.width)).toBeCloseTo(256);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(384);
+    setTouch(false);
+    expect(view.asideWidth()).toBeCloseTo(256);
+    expect(view.savedWidth()).toBeNull();
+  });
+
+  it('normalizes a wide touch resize so remounting does not compound its scale', async () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(404);
+    expect(Number(view.savedWidth())).toBeCloseTo(404 / 1.5);
+    view.unmount();
+    setTouch(false);
+    const restored = setup(false);
+    expect(restored.asideWidth()).toBeCloseTo(404 / 1.5);
+    setTouch(true);
+    expect(restored.asideWidth()).toBeCloseTo(404);
+    expect(Number(restored.savedWidth())).toBeCloseTo(404 / 1.5);
+  });
+
   it('keeps a pointer resize from the sidebar minimum stable as the split grows', () => {
     const view = setup(false);
     view.setWidth(800);

@@ -394,12 +394,14 @@ list viewport full height: the measured filter inset is inside the scroller, so
 rows start below the controls and scroll behind them. Drive folder paths and
 stacked CRM activity controls contribute to that measured inset.
 
-The app views are referred to as **workspaces**. Expanded workspace sidebars start
-at the shared 256px width; manual resizing and narrow layouts can change the
-displayed width. Navigation sidebars use the same container-width rule on desktop
-and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
+The app views are referred to as **workspaces**. Desktop navigation sidebars
+start at 256px. Expanded touch panes use 1.5 times the base width and bounds,
+starting at 384px; narrow touch overlays retain the base sizing. Manual resizing
+and available space can change the displayed width. Navigation sidebars use the
+same container-width rule on desktop and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
 below. Chat is the touch exception: at 720px or narrower it shows its full-frame
-conversation list without a sidebar or expand button. **Hide navigation** sits to the right of the sidebar title. After hiding,
+conversation list without a sidebar or expand button. **Hide navigation** sits to
+the right of the sidebar title. After hiding,
 **Show navigation** is the first control in the touch filter row, or the main
 header when that view has no filter row. Each workspace retains its wide-layout
 choice across reloads and fold/unfold transitions; closing a narrow overlay does
@@ -718,7 +720,8 @@ opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
-sidebar layout default to 256px. Each view type saves a manually resized width
+sidebar layout default to 256px on desktop and 384px on wide touch. Each view type
+saves a manually resized width
 (`asidePreferenceKey`) and restores it after reloads, view switches, and in
 other splits.
 
