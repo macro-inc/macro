@@ -45,8 +45,8 @@ import type {
   AppliedDiff,
   JsonValue,
   MutationKind,
-  NodeMutation,
   NodeKey,
+  NodeMutation,
   TypeFlags,
   ViewNode,
   ViewSelection,
@@ -443,27 +443,46 @@ export class EditorView implements ViewSink {
         }
       }
       for (const key of diff.children) this.reconcileChildren(key);
-      const dirtyTables = new Set<number>();
+      const dirtyTables = new Map<number, Set<number>>();
       for (const key of new Set([...diff.children, ...diff.properties])) {
-        if (this.node(key)?.kind === 'text') continue;
-        for (
-          let node = this.node(key);
-          node;
-          node = node.parent === null ? null : this.node(node.parent)
-        ) {
-          if (node.type === 'table') {
-            dirtyTables.add(node.key);
-            break;
-          }
+        const node = this.node(key);
+        if (!node) continue;
+        if (node.type === 'table') {
+          if (
+            diff.children.has(key) ||
+            this.tables.get(key)?.table !== this.dom.get(key)
+          )
+            dirtyTables.set(key, dirtyTables.get(key) ?? new Set());
+          continue;
         }
+        const row =
+          node.type === 'tablerow'
+            ? node
+            : node.type === 'tablecell' && node.parent !== null
+              ? this.node(node.parent)
+              : null;
+        if (row?.type !== 'tablerow' || row.parent === null) continue;
+        // Text/paragraph changes inside cells cannot alter the grid. Cell DOM
+        // replacements and span changes rebuild their row and affected carries.
+        if (node.type === 'tablecell' && !diff.properties.has(key)) continue;
+        const rows = dirtyTables.get(row.parent) ?? new Set<number>();
+        rows.add(row.key);
+        dirtyTables.set(row.parent, rows);
       }
-      for (const key of dirtyTables) {
+      for (const [key, rows] of dirtyTables) {
         const dom = this.dom.get(key);
         if (!(dom instanceof HTMLTableElement))
           throw new Error('Table view must mount a table');
         const observer = this.tables.get(key);
-        if (observer) observer.refresh();
-        else this.tables.set(key, new TableObserver(this, key, dom));
+        if (observer && observer.table === dom) observer.refresh(rows);
+        else {
+          observer?.dispose();
+          const next = new TableObserver(this, key, dom);
+          this.tables.set(key, next);
+          const selection = this.selectionInfo.selection;
+          if (observer && selection.kind === 'table' && selection.table === key)
+            next.select(selection.anchorCell, selection.focusCell);
+        }
       }
       let selectionChanged = false;
       const skipDomSelection = effects.some(
