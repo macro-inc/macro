@@ -18,7 +18,13 @@ import {
   isIOS,
   isSafari,
 } from '@solid-primitives/platform';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  getOwner,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createRustEditorSession } from '../primitives/create-rust-editor-session';
 import { createEditorAuthorization } from '../queries/editor-authorization';
@@ -37,6 +43,7 @@ export default function RustMarkdownEditor(props: {
   onError?: (error: Error) => void;
 }) {
   const flow = useFlow();
+  const owner = getOwner() ?? undefined;
   const { documentId, permissions, state } = useMarkdownDocument();
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const abort = new AbortController();
@@ -87,6 +94,7 @@ export default function RustMarkdownEditor(props: {
               registry: registerMacroElementViews(createBuiltinRegistry()),
               view: {
                 namespace: 'block-md-main',
+                owner,
                 parentSpan: flow.span,
                 editable: permissions.canEdit(),
                 preset: 'rich',
