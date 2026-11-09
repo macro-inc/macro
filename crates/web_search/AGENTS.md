@@ -37,7 +37,9 @@ agent tools (any model, any host) and cognition's `POST /web/search` and
 ## Gotchas
 
 - `TAVILY_API_KEY` is optional at startup so a missing secret cannot stop a
-  host; every call then fails with `web_search_not_configured`. Never log it.
+  host; every call then fails with `web_search_not_configured`, which the
+  routes return as 404 so an unset key does not count as a server error.
+  Never log the key.
 - Only the HTTP routes are rate limited; tool calls are bounded by agent turns.
 - Usage is recorded only when Tavily reports `usage.credits`; the service warns otherwise.
 - Code mode hides the tools (`agent_code_mode::domain::covered_by_code_sdk`);

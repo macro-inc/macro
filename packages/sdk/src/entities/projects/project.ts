@@ -128,6 +128,8 @@ export class Project extends PropertiedEntity<ProjectDetail> {
 
   /**
    * The items (documents, chats, subprojects) directly inside this project.
+   * Agent sessions are never project items; link one from a document in the
+   * project instead (see `ProjectNamespace`).
    *
    * @readonly
    */

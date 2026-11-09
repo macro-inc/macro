@@ -72,6 +72,31 @@ card sits above **Settings**, outside the scrolling list.
 
 `src/features/sidebar-promotion/browser-test/` renders all three cards.
 
+## Suggested routines
+
+With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
+Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
+sidebars start with a **Suggested routines** card while the scheduler has
+suggestions for that area: the top one's name and `+N`. It opens **Routines
+for <area>**, a list of rows: area icon, name, what it does with AI's values
+filled in, when it runs, and a byline, **For you · <reason>** for AI's picks or
+**Template from Macro** for Macro's templates. While AI's suggestions are
+still arriving (they come one by one), the footer says **Finding more for
+you…** and the list refreshes every 2 seconds.
+
+- **Enable** (`Enable <name>`) saves a catalog routine in one click, switched
+  on and pointing back at its suggestion; the row then shows **Enabled**, which
+  opens it. A routine AI drafted shows **Review** (`Review <name>`) instead and
+  opens New routine filled in, unsaved.
+- Clicking the row's name expands it to edit **Name**, **Instructions** (Ask AI
+  routines only) and **Show each run in Home** before enabling;
+  **More options** opens New routine filled in with those edits.
+- The row's **×** (`Not interested in <name>`) dismisses it at once in every
+  area's list and the Routines page; it isn't suggested again.
+- **All routines** opens the Routines page.
+- Closing the card hides it for that area on every device (prompt dismissal
+  `routine-suggestions:<area>`).
+
 ## Dismissing cards
 
 Every card (import, Slack, and setup) has a close button. Dismissing is

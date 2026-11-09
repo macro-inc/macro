@@ -1,9 +1,13 @@
 import type { UserName } from '../../../generated/auth/types.gen';
+import type { Activity } from '../../../generated/cognition/types.gen';
 import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { PropertiedEntity } from '../entity';
+
+/** A privacy-reviewed summary of a user's professional work over one period. */
+export type ActivityReport = Activity;
 
 /**
  * A Macro user. Identity lives in the auth service, so details like the
@@ -85,7 +89,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   }
 
   /**
-   * Open (or create) your direct-message channel with this user.
+   * Open (or create) your 1:1 direct-message channel with this user. For a
+   * group DM, use `macro.channels.private(users)`.
    *
    * @returns The DM `Channel`.
    *
@@ -94,6 +99,37 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
    */
   dm(): Promise<Channel> {
     return Channel.dm(this.client, this);
+  }
+
+  /**
+   * Privacy-reviewed summaries of this user's work in an inclusive UTC date
+   * range, for yourself or a current teammate; at most 366 days.
+   *
+   * Reports are daily, Monday-start weekly, monthly and a running summary.
+   * An empty list means nothing was summarized yet, not that no work happened.
+   * Anyone outside the caller's current teams fails with 403.
+   *
+   * @example
+   * const me = await macro.users.me();
+   * const reports = await me.activity({ start: '2026-10-01', end: '2026-10-31' });
+   * const weeks = reports.filter((report) => report.granularity === 'week');
+   *
+   * @readonly
+   */
+  async activity(range: {
+    start: Date | string;
+    end: Date | string;
+  }): Promise<ActivityReport[]> {
+    const { reports } = unwrap(
+      await this.client.cognition.getUserActivity({
+        query: {
+          user: this.id,
+          start: utcDate(range.start),
+          end: utcDate(range.end),
+        },
+      }),
+    );
+    return reports;
   }
 
   /**
@@ -107,4 +143,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
       mention: { entity_type: 'user', entity_id: this.id },
     };
   }
+}
+
+function utcDate(value: Date | string): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 }

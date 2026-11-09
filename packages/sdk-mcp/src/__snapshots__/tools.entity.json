@@ -1,5 +1,78 @@
 [
   {
+    "name": "activity_read",
+    "title": "activity: read",
+    "annotations": {
+      "title": "activity: read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "activity.mine"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "activity.mine",
+          "properties": {
+            "op": {
+              "const": "activity.mine"
+            },
+            "range": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "range"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  {
     "name": "agent_sessions_read",
     "title": "agent sessions: read",
     "annotations": {
@@ -25,6 +98,7 @@
             "AgentSession.foldedLog",
             "AgentSession.log",
             "AgentSession.origin",
+            "AgentSession.pendingApprovals",
             "AgentSession.pullRequests",
             "AgentSession.queue",
             "AgentSession.sharePermissions",
@@ -36,6 +110,7 @@
             "agentSessions.registeredWork",
             "agentSessions.repositories",
             "agentSessions.repositoryBranches",
+            "agentSessions.updates",
             "CodeExecution.refresh",
             "CodeExecution.result",
             "SessionReview.items",
@@ -252,6 +327,23 @@
         },
         {
           "type": "object",
+          "title": "AgentSession.pendingApprovals",
+          "properties": {
+            "op": {
+              "const": "AgentSession.pendingApprovals"
+            },
+            "agentSession": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "agentSession"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "AgentSession.pullRequests",
           "properties": {
             "op": {
@@ -414,6 +506,19 @@
           "required": [
             "op",
             "repoUrl"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "agentSessions.updates",
+          "properties": {
+            "op": {
+              "const": "agentSessions.updates"
+            }
+          },
+          "required": [
+            "op"
           ],
           "additionalProperties": false
         },
@@ -626,6 +731,7 @@
             "AgentSession.access.submit",
             "AgentSession.archive",
             "AgentSession.linkPullRequest",
+            "AgentSession.linkTask",
             "AgentSession.prompt",
             "AgentSession.refreshChanges",
             "AgentSession.registerAsWork",
@@ -733,6 +839,27 @@
             "op",
             "agentSession",
             "url"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "AgentSession.linkTask",
+          "properties": {
+            "op": {
+              "const": "AgentSession.linkTask"
+            },
+            "agentSession": {
+              "type": "string"
+            },
+            "task": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "agentSession",
+            "task"
           ],
           "additionalProperties": false
         },
@@ -1268,9 +1395,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -2404,7 +2531,8 @@
             "dictation",
             "image_generation",
             "email_focus",
-            "web_search"
+            "web_search",
+            "non_billable_agent_session"
           ]
         }
       }
@@ -3178,6 +3306,7 @@
             "calendar.booking.settings",
             "calendar.calendars",
             "calendar.occurrences",
+            "calendar.teamAvailability",
             "calendar.teamOutOfOffice",
             "calendar.teamPage",
             "calendar.teamSharing",
@@ -3378,6 +3507,42 @@
           "required": [
             "op",
             "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "calendar.teamAvailability",
+          "properties": {
+            "op": {
+              "const": "calendar.teamAvailability"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "string"
+                },
+                "end": {
+                  "type": "string"
+                },
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "opts"
           ],
           "additionalProperties": false
         },
@@ -5837,10 +6002,12 @@
             "CallRecord.editTranscript",
             "CallRecord.favorite",
             "CallRecord.meeting",
+            "CallRecord.muteNotifications",
             "CallRecord.rename",
             "CallRecord.setTeamShare",
             "CallRecord.toggleTeamShare",
             "CallRecord.unfavorite",
+            "CallRecord.unmuteNotifications",
             "CallRecord.updateSharePermissions"
           ]
         }
@@ -6016,6 +6183,33 @@
         },
         {
           "type": "object",
+          "title": "CallRecord.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "CallRecord.muteNotifications"
+            },
+            "callRecord": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "callRecord"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "CallRecord.rename",
           "properties": {
             "op": {
@@ -6086,6 +6280,23 @@
           "properties": {
             "op": {
               "const": "CallRecord.unfavorite"
+            },
+            "callRecord": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "callRecord"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CallRecord.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "CallRecord.unmuteNotifications"
             },
             "callRecord": {
               "type": "string"
@@ -6264,9 +6475,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -7212,6 +7423,7 @@
             "Channel.addParticipants",
             "Channel.favorite",
             "Channel.join",
+            "Channel.muteNotifications",
             "Channel.recordActivity",
             "Channel.rename",
             "Channel.requestAccess",
@@ -7220,6 +7432,7 @@
             "Channel.setProperty",
             "Channel.typing",
             "Channel.unfavorite",
+            "Channel.unmuteNotifications",
             "ChannelAccessRequest.approve",
             "channels.create",
             "channels.dm",
@@ -7230,9 +7443,11 @@
             "channels.labels.updateSmartTag",
             "channels.private",
             "Message.favorite",
+            "Message.muteNotifications",
             "Message.react",
             "Message.reply",
             "Message.unfavorite",
+            "Message.unmuteNotifications",
             "Message.unreact",
             "Thread.reply"
           ]
@@ -7292,6 +7507,33 @@
             },
             "channel": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "channel"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Channel.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Channel.muteNotifications"
+            },
+            "channel": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -7741,6 +7983,23 @@
         },
         {
           "type": "object",
+          "title": "Channel.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Channel.unmuteNotifications"
+            },
+            "channel": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "channel"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "ChannelAccessRequest.approve",
           "properties": {
             "op": {
@@ -7993,6 +8252,52 @@
         },
         {
           "type": "object",
+          "title": "Message.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Message.muteNotifications"
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "channelId": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "mentions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SimpleMention"
+                  }
+                }
+              },
+              "required": [
+                "channelId",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Message.react",
           "properties": {
             "op": {
@@ -8084,6 +8389,42 @@
           "properties": {
             "op": {
               "const": "Message.unfavorite"
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "channelId": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "mentions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SimpleMention"
+                  }
+                }
+              },
+              "required": [
+                "channelId",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Message.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Message.unmuteNotifications"
             },
             "message": {
               "type": "object",
@@ -9588,11 +9929,13 @@
             "Chat.access.submit",
             "Chat.copy",
             "Chat.favorite",
+            "Chat.muteNotifications",
             "Chat.rename",
             "Chat.restore",
             "Chat.send",
             "Chat.setProperty",
             "Chat.unfavorite",
+            "Chat.unmuteNotifications",
             "Chat.updateSharePermissions",
             "chats.create"
           ]
@@ -9677,6 +10020,33 @@
             },
             "chat": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "chat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Chat.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Chat.muteNotifications"
+            },
+            "chat": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -10041,6 +10411,23 @@
           "properties": {
             "op": {
               "const": "Chat.unfavorite"
+            },
+            "chat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "chat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Chat.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Chat.unmuteNotifications"
             },
             "chat": {
               "type": "string"
@@ -10637,9 +11024,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -12176,10 +12563,14 @@
             "Contact.timelinePage",
             "crm.blockedDomains",
             "crm.contactByEmail",
+            "crm.pipelines.entriesFor",
             "crm.pipelines.list",
+            "crm.pipelines.searchEntries",
             "crm.searchCompanies",
             "crm.searchContacts",
             "crm.settings",
+            "CrmPipeline.exportCsv",
+            "CrmPipeline.find",
             "CrmPipeline.queryRows",
             "CrmPipeline.rows",
             "CrmPipeline.sharePermissions",
@@ -12427,6 +12818,33 @@
         },
         {
           "type": "object",
+          "title": "crm.pipelines.entriesFor",
+          "properties": {
+            "op": {
+              "const": "crm.pipelines.entriesFor"
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "op",
+            "records"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "crm.pipelines.list",
           "properties": {
             "op": {
@@ -12435,6 +12853,32 @@
           },
           "required": [
             "op"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "crm.pipelines.searchEntries",
+          "properties": {
+            "op": {
+              "const": "crm.pipelines.searchEntries"
+            },
+            "search": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "search"
           ],
           "additionalProperties": false
         },
@@ -12496,6 +12940,74 @@
           },
           "required": [
             "op"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CrmPipeline.exportCsv",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.exportCsv"
+            },
+            "crmPipeline": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CrmPipeline.find",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.find"
+            },
+            "crmPipeline": {
+              "type": "string"
+            },
+            "query": {
+              "type": "object",
+              "properties": {
+                "where": {
+                  "$ref": "#/$defs/PipelineFieldInputs"
+                },
+                "records": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "search": {
+                  "type": "string"
+                },
+                "sortBy": {
+                  "type": "string"
+                },
+                "descending": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline"
           ],
           "additionalProperties": false
         },
@@ -12992,6 +13504,35 @@
             "lessThanOrEqual"
           ]
         },
+        "PipelineFieldInput": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "PipelineFieldInputs": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "$ref": "#/$defs/PipelineFieldInput"
+          }
+        },
         "PresenceOperator": {
           "enum": [
             "isEmpty",
@@ -13163,24 +13704,32 @@
             "Company.createContact",
             "Company.favorite",
             "Company.hide",
+            "Company.muteNotifications",
             "Company.rename",
             "Company.setEmailSync",
             "Company.setProperty",
             "Company.unfavorite",
             "Company.unhide",
+            "Company.unmuteNotifications",
             "Contact.comment",
             "Contact.favorite",
             "Contact.hide",
+            "Contact.muteNotifications",
             "Contact.rename",
             "Contact.setCompany",
             "Contact.setEmail",
             "Contact.unfavorite",
             "Contact.unhide",
+            "Contact.unmuteNotifications",
             "crm.createCompany",
             "crm.createContact",
+            "crm.importCompaniesCsv",
             "crm.pipelines.create",
             "crm.unblockDomain",
             "crm.updateSettings",
+            "CrmPipeline.addRecords",
+            "CrmPipeline.exportCsvFile",
+            "CrmPipeline.importCsv",
             "CrmPipeline.rename",
             "CrmPipeline.setSharing",
             "CrmPipeline.updateSharePermissions"
@@ -13287,6 +13836,33 @@
             },
             "company": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "company"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Company.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Company.muteNotifications"
+            },
+            "company": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -13583,6 +14159,23 @@
         },
         {
           "type": "object",
+          "title": "Company.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Company.unmuteNotifications"
+            },
+            "company": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "company"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Contact.comment",
           "properties": {
             "op": {
@@ -13644,6 +14237,33 @@
             },
             "contact": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "contact"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Contact.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Contact.muteNotifications"
+            },
+            "contact": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -13751,6 +14371,23 @@
         },
         {
           "type": "object",
+          "title": "Contact.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Contact.unmuteNotifications"
+            },
+            "contact": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "contact"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "crm.createCompany",
           "properties": {
             "op": {
@@ -13780,6 +14417,54 @@
           "required": [
             "op",
             "opts"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "crm.importCompaniesCsv",
+          "properties": {
+            "op": {
+              "const": "crm.importCompaniesCsv"
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "options": {
+              "type": "object",
+              "properties": {
+                "pipeline": {
+                  "type": "string"
+                },
+                "newPipeline": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "sharing": {
+                      "enum": [
+                        "team",
+                        "private"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "source"
           ],
           "additionalProperties": false
         },
@@ -13831,6 +14516,112 @@
           "required": [
             "op",
             "settings"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CrmPipeline.addRecords",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.addRecords"
+            },
+            "crmPipeline": {
+              "type": "string"
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "record": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "email": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "email"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "set": {
+                    "$ref": "#/$defs/PipelineFieldInputs"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "options": {
+              "type": "object",
+              "properties": {
+                "allowDuplicates": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline",
+            "entries"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CrmPipeline.exportCsvFile",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.exportCsvFile"
+            },
+            "crmPipeline": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "CrmPipeline.importCsv",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.importCsv"
+            },
+            "crmPipeline": {
+              "type": "string"
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline",
+            "source"
           ],
           "additionalProperties": false
         },
@@ -14036,6 +14827,35 @@
             "USER"
           ]
         },
+        "PipelineFieldInput": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "PipelineFieldInputs": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "$ref": "#/$defs/PipelineFieldInput"
+          }
+        },
         "RichMessage": {
           "type": "object",
           "properties": {
@@ -14235,9 +15055,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -14250,7 +15070,7 @@
       "title": "crm: delete, overwrite and send",
       "readOnlyHint": false,
       "destructiveHint": true,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {
@@ -14263,6 +15083,7 @@
             "crm.blockDomain",
             "crm.resetStages",
             "crm.setStages",
+            "CrmPipeline.edit",
             "CrmPipeline.setTrashed"
           ]
         }
@@ -14341,6 +15162,27 @@
         },
         {
           "type": "object",
+          "title": "CrmPipeline.edit",
+          "properties": {
+            "op": {
+              "const": "CrmPipeline.edit"
+            },
+            "crmPipeline": {
+              "type": "string"
+            },
+            "changes": {
+              "$ref": "#/$defs/EditPipelineRequest"
+            }
+          },
+          "required": [
+            "op",
+            "crmPipeline",
+            "changes"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "CrmPipeline.setTrashed",
           "properties": {
             "op": {
@@ -14412,6 +15254,71 @@
             "end",
             "start"
           ],
+          "additionalProperties": false
+        },
+        "EditPipelineRequest": {
+          "type": "object",
+          "properties": {
+            "addFields": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/NewFieldRequest"
+              }
+            },
+            "addOptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FieldOptions"
+              }
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "removeFields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "removeOptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OptionRemoval"
+              }
+            },
+            "renameFields": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FieldRename"
+              }
+            },
+            "renameOptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OptionRename"
+              }
+            },
+            "sharing": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "team",
+                    "private"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
           "additionalProperties": false
         },
         "EntityProperty": {
@@ -14665,6 +15572,116 @@
             "THREAD",
             "USER"
           ]
+        },
+        "FieldOptions": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "field",
+            "labels"
+          ],
+          "additionalProperties": false
+        },
+        "FieldRename": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        "NewFieldRequest": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/NewFieldType"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        "NewFieldType": {
+          "enum": [
+            "number",
+            "text",
+            "date",
+            "link",
+            "checkbox",
+            "select",
+            "multi_select",
+            "person",
+            "people"
+          ]
+        },
+        "OptionRemoval": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "OptionRename": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
         },
         "PropertyDefinition": {
           "type": "object",
@@ -18045,9 +19062,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         },
         "UpdateSharePermissionRequestV2": {
@@ -20524,6 +21541,7 @@
             "Document.canvas.webUrl",
             "Document.comments",
             "Document.content",
+            "Document.contentWithRevision",
             "Document.githubPullRequests",
             "Document.permission",
             "Document.permissionsToken",
@@ -20548,10 +21566,7 @@
             "documents.skills",
             "documents.systemSkills",
             "documents.validatePermissionsToken",
-            "DocumentVersion.read",
-            "Spreadsheet.calculate",
-            "Spreadsheet.read",
-            "Spreadsheet.webUrl"
+            "DocumentVersion.read"
           ]
         }
       },
@@ -20750,6 +21765,23 @@
           "properties": {
             "op": {
               "const": "Document.content"
+            },
+            "document": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "document"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Document.contentWithRevision",
+          "properties": {
+            "op": {
+              "const": "Document.contentWithRevision"
             },
             "document": {
               "type": "string"
@@ -21270,77 +22302,6 @@
             "documentVersion"
           ],
           "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Spreadsheet.calculate",
-          "properties": {
-            "op": {
-              "const": "Spreadsheet.calculate"
-            },
-            "spreadsheet": {
-              "type": "string"
-            },
-            "formulas": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "$ref": "#/$defs/SpreadsheetFormula"
-                  }
-                ]
-              }
-            },
-            "options": {
-              "$ref": "#/$defs/SpreadsheetCalculateOptions"
-            }
-          },
-          "required": [
-            "op",
-            "spreadsheet",
-            "formulas"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Spreadsheet.read",
-          "properties": {
-            "op": {
-              "const": "Spreadsheet.read"
-            },
-            "spreadsheet": {
-              "type": "string"
-            },
-            "options": {
-              "$ref": "#/$defs/SpreadsheetReadOptions"
-            }
-          },
-          "required": [
-            "op",
-            "spreadsheet"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Spreadsheet.webUrl",
-          "properties": {
-            "op": {
-              "const": "Spreadsheet.webUrl"
-            },
-            "spreadsheet": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "op",
-            "spreadsheet"
-          ],
-          "additionalProperties": false
         }
       ],
       "$defs": {
@@ -21392,255 +22353,6 @@
               "type": "number"
             }
           },
-          "additionalProperties": false
-        },
-        "SpreadsheetCalculateOptions": {
-          "type": "object",
-          "properties": {
-            "sheet": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/$defs/SpreadsheetSheetSummary"
-                }
-              ]
-            },
-            "overrides": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SpreadsheetOverride"
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        "SpreadsheetCellInput": {
-          "type": "object",
-          "properties": {
-            "address": {
-              "type": "string"
-            },
-            "value": {
-              "allOf": [
-                {
-                  "$ref": "#/$defs/SpreadsheetCellValue"
-                }
-              ]
-            }
-          },
-          "required": [
-            "address",
-            "value"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetCellValue": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "SpreadsheetColumnType": {
-          "enum": [
-            "number",
-            "text",
-            "date",
-            "time",
-            "checkbox",
-            "datetime",
-            "dropdown",
-            "percent",
-            "currency",
-            "person"
-          ]
-        },
-        "SpreadsheetFormula": {
-          "type": "object",
-          "properties": {
-            "formula": {
-              "type": "string"
-            },
-            "label": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "required": [
-            "formula"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetOverride": {
-          "type": "object",
-          "properties": {
-            "cells": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SpreadsheetCellInput"
-              }
-            },
-            "sheetId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "cells",
-            "sheetId"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetReadOptions": {
-          "type": "object",
-          "properties": {
-            "sheet": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/$defs/SpreadsheetSheetSummary"
-                }
-              ]
-            },
-            "ranges": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "includeStyles": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
-        },
-        "SpreadsheetSheetSummary": {
-          "type": "object",
-          "properties": {
-            "columnCount": {
-              "type": "number"
-            },
-            "errorCells": {
-              "type": "number"
-            },
-            "formulaCells": {
-              "type": "number"
-            },
-            "id": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "populatedCells": {
-              "type": "number"
-            },
-            "rowCount": {
-              "type": "number"
-            },
-            "tables": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SpreadsheetTableSummary"
-              }
-            },
-            "usedRange": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "required": [
-            "columnCount",
-            "errorCells",
-            "formulaCells",
-            "id",
-            "name",
-            "populatedCells",
-            "rowCount"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetTableColumnType": {
-          "type": "object",
-          "properties": {
-            "column": {
-              "type": "string"
-            },
-            "type": {
-              "allOf": [
-                {
-                  "$ref": "#/$defs/SpreadsheetColumnType"
-                }
-              ]
-            }
-          },
-          "required": [
-            "column",
-            "type"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetTableSummary": {
-          "type": "object",
-          "properties": {
-            "columnTypes": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SpreadsheetTableColumnType"
-              }
-            },
-            "columns": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "filteredColumns": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "name": {
-              "type": "string"
-            },
-            "range": {
-              "type": "string"
-            },
-            "totalsRow": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "columns",
-            "name",
-            "range",
-            "totalsRow"
-          ],
           "additionalProperties": false
         },
         "TimelineOptions_Comment": {
@@ -21742,6 +22454,7 @@
             "Document.canvas.edit",
             "Document.canvas.render",
             "Document.comment",
+            "Document.commentOnText",
             "Document.copy",
             "Document.copyPresentation",
             "Document.createHighlight",
@@ -21750,6 +22463,7 @@
             "Document.editWord",
             "Document.favorite",
             "Document.move",
+            "Document.muteNotifications",
             "Document.prepareSave",
             "Document.rename",
             "Document.restore",
@@ -21757,6 +22471,7 @@
             "Document.setSkillDescription",
             "Document.setTeamShare",
             "Document.unfavorite",
+            "Document.unmuteNotifications",
             "Document.updateSharePermissions",
             "DocumentAnchor.edit",
             "documents.create",
@@ -21765,9 +22480,7 @@
             "documents.createSnippet",
             "documents.createSpreadsheet",
             "documents.createUpload",
-            "documents.upload",
-            "Spreadsheet.applyEdits",
-            "Spreadsheet.edit"
+            "documents.upload"
           ]
         }
       },
@@ -22014,6 +22727,38 @@
         },
         {
           "type": "object",
+          "title": "Document.commentOnText",
+          "properties": {
+            "op": {
+              "const": "Document.commentOnText"
+            },
+            "document": {
+              "type": "string"
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/RichMessage"
+                }
+              ]
+            },
+            "options": {
+              "$ref": "#/$defs/TextCommentOptions"
+            }
+          },
+          "required": [
+            "op",
+            "document",
+            "body",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Document.copy",
           "properties": {
             "op": {
@@ -22219,6 +22964,33 @@
             "op",
             "document",
             "project"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Document.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Document.muteNotifications"
+            },
+            "document": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "document"
           ],
           "additionalProperties": false
         },
@@ -22555,6 +23327,23 @@
         },
         {
           "type": "object",
+          "title": "Document.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Document.unmuteNotifications"
+            },
+            "document": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "document"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Document.updateSharePermissions",
           "properties": {
             "op": {
@@ -22847,60 +23636,6 @@
           "required": [
             "op",
             "options"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Spreadsheet.applyEdits",
-          "properties": {
-            "op": {
-              "const": "Spreadsheet.applyEdits"
-            },
-            "spreadsheet": {
-              "type": "string"
-            },
-            "operations": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SpreadsheetOperation"
-              }
-            },
-            "options": {
-              "$ref": "#/$defs/SpreadsheetEditOptions"
-            }
-          },
-          "required": [
-            "op",
-            "spreadsheet",
-            "operations",
-            "options"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Spreadsheet.edit",
-          "properties": {
-            "op": {
-              "const": "Spreadsheet.edit"
-            },
-            "spreadsheet": {
-              "type": "string"
-            },
-            "instructions": {
-              "type": "string"
-            },
-            "options": {
-              "type": "object",
-              "properties": {},
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "op",
-            "spreadsheet",
-            "instructions"
           ],
           "additionalProperties": false
         }
@@ -28146,885 +28881,18 @@
             "shapes"
           ]
         },
-        "SpreadsheetCellInput": {
+        "TextCommentOptions": {
           "type": "object",
           "properties": {
-            "address": {
+            "quote": {
               "type": "string"
             },
-            "value": {
-              "allOf": [
-                {
-                  "$ref": "#/$defs/SpreadsheetCellValue"
-                }
-              ]
-            }
-          },
-          "required": [
-            "address",
-            "value"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetCellValue": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "SpreadsheetColumnType": {
-          "enum": [
-            "number",
-            "text",
-            "date",
-            "time",
-            "checkbox",
-            "datetime",
-            "dropdown",
-            "percent",
-            "currency",
-            "person"
-          ]
-        },
-        "SpreadsheetColumnWidth": {
-          "type": "object",
-          "properties": {
-            "column": {
-              "type": "string"
-            },
-            "width": {
+            "occurrence": {
               "type": "number"
             }
           },
           "required": [
-            "column",
-            "width"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetDropdownColor": {
-          "type": "object",
-          "properties": {
-            "color": {
-              "type": "string"
-            },
-            "item": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "color",
-            "item"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetEditOptions": {
-          "type": "object",
-          "properties": {
-            "expectedRevision": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "expectedRevision"
-          ],
-          "additionalProperties": false
-        },
-        "SpreadsheetOperation": {
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "cells": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/SpreadsheetCellInput"
-                  }
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "set_cells"
-                }
-              },
-              "required": [
-                "cells",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "range": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "style": {
-                  "allOf": [
-                    {
-                      "$ref": "#/$defs/SpreadsheetStyle"
-                    }
-                  ]
-                },
-                "type": {
-                  "const": "format_cells"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "style",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "clearFormatting": {
-                  "anyOf": [
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "range": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "clear_cells"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "sheetId": {
-                  "type": "string"
-                },
-                "sourceRange": {
-                  "type": "string"
-                },
-                "targetRange": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "fill_cells"
-                }
-              },
-              "required": [
-                "sheetId",
-                "sourceRange",
-                "targetRange",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "add_sheet"
-                }
-              },
-              "required": [
-                "name",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "rename_sheet"
-                }
-              },
-              "required": [
-                "name",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "duplicate_sheet"
-                }
-              },
-              "required": [
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "delete_sheet"
-                }
-              },
-              "required": [
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "count": {
-                  "type": "number"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "append_rows"
-                }
-              },
-              "required": [
-                "count",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "columns": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/SpreadsheetColumnWidth"
-                  }
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "resize_columns"
-                }
-              },
-              "required": [
-                "columns",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "colors": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/$defs/SpreadsheetDropdownColor"
-                      }
-                    }
-                  ]
-                },
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  ]
-                },
-                "range": {
-                  "type": "string"
-                },
-                "rejectInvalid": {
-                  "anyOf": [
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "source": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "type": {
-                  "const": "set_dropdown"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "range": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "clear_validation"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "range": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "type": {
-                  "const": "insert_checkboxes"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "columnTypes": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/$defs/SpreadsheetTableColumnType"
-                      }
-                    }
-                  ]
-                },
-                "name": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "range": {
-                  "type": "string"
-                },
-                "sheetId": {
-                  "type": "string"
-                },
-                "totalsRow": {
-                  "anyOf": [
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "type": {
-                  "const": "create_table"
-                }
-              },
-              "required": [
-                "range",
-                "sheetId",
-                "type"
-              ],
-              "additionalProperties": false
-            }
-          ]
-        },
-        "SpreadsheetStyle": {
-          "type": "object",
-          "properties": {
-            "bold": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderBottom": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderBottomColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "borderBottomStyle": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "medium",
-                    "reset",
-                    "thin",
-                    "thick",
-                    "double",
-                    "dotted",
-                    "dashed",
-                    "dashDot",
-                    "dashDotDot",
-                    "slantDashDot",
-                    "hair",
-                    "mediumDashed",
-                    "mediumDashDot",
-                    "mediumDashDotDot"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderLeft": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderLeftColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "borderLeftStyle": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "medium",
-                    "reset",
-                    "thin",
-                    "thick",
-                    "double",
-                    "dotted",
-                    "dashed",
-                    "dashDot",
-                    "dashDotDot",
-                    "slantDashDot",
-                    "hair",
-                    "mediumDashed",
-                    "mediumDashDot",
-                    "mediumDashDotDot"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderRight": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderRightColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "borderRightStyle": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "medium",
-                    "reset",
-                    "thin",
-                    "thick",
-                    "double",
-                    "dotted",
-                    "dashed",
-                    "dashDot",
-                    "dashDotDot",
-                    "slantDashDot",
-                    "hair",
-                    "mediumDashed",
-                    "mediumDashDot",
-                    "mediumDashDotDot"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderTop": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "borderTopColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "borderTopStyle": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "medium",
-                    "reset",
-                    "thin",
-                    "thick",
-                    "double",
-                    "dotted",
-                    "dashed",
-                    "dashDot",
-                    "dashDotDot",
-                    "slantDashDot",
-                    "hair",
-                    "mediumDashed",
-                    "mediumDashDot",
-                    "mediumDashDotDot"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "checkbox": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "decimals": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "fillColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "fontFamily": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "sans",
-                    "serif",
-                    "mono"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "fontName": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "fontSize": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "format": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "number",
-                    "text",
-                    "date",
-                    "time",
-                    "general",
-                    "percent",
-                    "currency",
-                    "accounting",
-                    "scientific"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "horizontalAlign": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "left",
-                    "right",
-                    "auto",
-                    "center"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "indent": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "italic": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "numberFormat": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "strikethrough": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "textColor": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "underline": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "verticalAlign": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "top",
-                    "bottom",
-                    "middle"
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "wrap": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "additionalProperties": false
-        },
-        "SpreadsheetTableColumnType": {
-          "type": "object",
-          "properties": {
-            "column": {
-              "type": "string"
-            },
-            "type": {
-              "allOf": [
-                {
-                  "$ref": "#/$defs/SpreadsheetColumnType"
-                }
-              ]
-            }
-          },
-          "required": [
-            "column",
-            "type"
+            "quote"
           ],
           "additionalProperties": false
         },
@@ -29062,9 +28930,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         },
         "WordDocumentOperation": {
@@ -29369,6 +29237,7 @@
             "Document.delete",
             "Document.deleteProperty",
             "Document.save",
+            "Document.setContent",
             "Document.simpleSave",
             "DocumentAnchor.delete"
           ]
@@ -29543,6 +29412,31 @@
           "required": [
             "op",
             "document",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Document.setContent",
+          "properties": {
+            "op": {
+              "const": "Document.setContent"
+            },
+            "document": {
+              "type": "string"
+            },
+            "markdown": {
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/SetContentOptions"
+            }
+          },
+          "required": [
+            "op",
+            "document",
+            "markdown",
             "options"
           ],
           "additionalProperties": false
@@ -30135,6 +30029,18 @@
             }
           },
           "additionalProperties": false
+        },
+        "SetContentOptions": {
+          "type": "object",
+          "properties": {
+            "expectedRevision": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "expectedRevision"
+          ],
+          "additionalProperties": false
         }
       }
     }
@@ -30302,6 +30208,16 @@
             "options": {
               "type": "object",
               "properties": {
+                "calendar": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "limit": {
                   "anyOf": [
                     {
@@ -30333,16 +30249,6 @@
                   ]
                 },
                 "read": {
-                  "anyOf": [
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "calendar": {
                   "anyOf": [
                     {
                       "type": "boolean"
@@ -30864,10 +30770,12 @@
             "EmailThread.favorite",
             "EmailThread.markSeen",
             "EmailThread.moveToProject",
+            "EmailThread.muteNotifications",
             "EmailThread.removeLabel",
             "EmailThread.setFollowup",
             "EmailThread.setProperty",
             "EmailThread.unfavorite",
+            "EmailThread.unmuteNotifications",
             "EmailThread.update"
           ]
         }
@@ -31508,6 +31416,33 @@
         },
         {
           "type": "object",
+          "title": "EmailThread.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "EmailThread.muteNotifications"
+            },
+            "emailThread": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "emailThread"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "EmailThread.removeLabel",
           "properties": {
             "op": {
@@ -31764,6 +31699,23 @@
           "properties": {
             "op": {
               "const": "EmailThread.unfavorite"
+            },
+            "emailThread": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "emailThread"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "EmailThread.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "EmailThread.unmuteNotifications"
             },
             "emailThread": {
               "type": "string"
@@ -32490,8 +32442,8 @@
         },
         "InvitationMethod": {
           "enum": [
-            "cancel",
             "unknown",
+            "cancel",
             "request",
             "reply",
             "counter",
@@ -32634,9 +32586,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -34784,7 +34736,7 @@
       "title": "external chat: create and change",
       "readOnlyHint": false,
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {
@@ -34795,7 +34747,9 @@
           "enum": [
             "ExternalChat.favorite",
             "ExternalChat.markRead",
+            "ExternalChat.muteNotifications",
             "ExternalChat.unfavorite",
+            "ExternalChat.unmuteNotifications",
             "ExternalChat.updatePermissions"
           ]
         }
@@ -34857,10 +34811,54 @@
         },
         {
           "type": "object",
+          "title": "ExternalChat.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "ExternalChat.muteNotifications"
+            },
+            "externalChat": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "externalChat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "ExternalChat.unfavorite",
           "properties": {
             "op": {
               "const": "ExternalChat.unfavorite"
+            },
+            "externalChat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "externalChat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "ExternalChat.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "ExternalChat.unmuteNotifications"
             },
             "externalChat": {
               "type": "string"
@@ -34932,9 +34930,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         },
         "UpdateSharePermissionRequestV2": {
@@ -35583,7 +35581,7 @@
       "title": "foreign: create and change",
       "readOnlyHint": false,
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {
@@ -35593,7 +35591,9 @@
           "type": "string",
           "enum": [
             "ForeignEntity.favorite",
-            "ForeignEntity.unfavorite"
+            "ForeignEntity.muteNotifications",
+            "ForeignEntity.unfavorite",
+            "ForeignEntity.unmuteNotifications"
           ]
         }
       },
@@ -35620,10 +35620,54 @@
         },
         {
           "type": "object",
+          "title": "ForeignEntity.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "ForeignEntity.muteNotifications"
+            },
+            "foreignEntity": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "foreignEntity"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "ForeignEntity.unfavorite",
           "properties": {
             "op": {
               "const": "ForeignEntity.unfavorite"
+            },
+            "foreignEntity": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "foreignEntity"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "ForeignEntity.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "ForeignEntity.unmuteNotifications"
             },
             "foreignEntity": {
               "type": "string"
@@ -37353,9 +37397,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         },
         "UpdateSharePermissionRequestV2": {
@@ -38817,6 +38861,7 @@
           "enum": [
             "Initiative.access.direct",
             "Initiative.access.state",
+            "Initiative.activity",
             "Initiative.comments",
             "Initiative.description",
             "Initiative.timelinePage",
@@ -38859,6 +38904,56 @@
             },
             "offset": {
               "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "initiative"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Initiative.activity",
+          "properties": {
+            "op": {
+              "const": "Initiative.activity"
+            },
+            "initiative": {
+              "type": "string"
+            },
+            "window": {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                },
+                "before": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "maxItems": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
             }
           },
           "required": [
@@ -39721,9 +39816,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -40270,6 +40365,156 @@
           "additionalProperties": false
         }
       ]
+    }
+  },
+  {
+    "name": "memory_read",
+    "title": "memory: read",
+    "annotations": {
+      "title": "memory: read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "memory.read"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "memory.read",
+          "properties": {
+            "op": {
+              "const": "memory.read"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "memory_delete",
+    "title": "memory: delete, overwrite and send",
+    "annotations": {
+      "title": "memory: delete, overwrite and send",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "memory.edit"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "memory.edit",
+          "properties": {
+            "op": {
+              "const": "memory.edit"
+            },
+            "edit": {
+              "$ref": "#/$defs/MemoryEdit"
+            },
+            "revision": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "edit",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$defs": {
+        "MemoryEdit": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "insert"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "action",
+                "content",
+                "line"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "replace"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "action",
+                "content",
+                "line"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "const": "delete"
+                },
+                "line": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "action",
+                "line"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
     }
   },
   {
@@ -41126,10 +41371,12 @@
             "Project.access.request",
             "Project.access.submit",
             "Project.favorite",
+            "Project.muteNotifications",
             "Project.rename",
             "Project.restore",
             "Project.setProperty",
             "Project.unfavorite",
+            "Project.unmuteNotifications",
             "Project.updateSharePermissions",
             "projects.create"
           ]
@@ -41197,6 +41444,33 @@
             },
             "project": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "project"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Project.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "Project.muteNotifications"
+            },
+            "project": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -41472,6 +41746,23 @@
         },
         {
           "type": "object",
+          "title": "Project.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "Project.unmuteNotifications"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "project"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "Project.updateSharePermissions",
           "properties": {
             "op": {
@@ -41674,9 +41965,9 @@
         },
         "UpdateOperation": {
           "enum": [
+            "replace",
             "add",
-            "remove",
-            "replace"
+            "remove"
           ]
         }
       }
@@ -42519,6 +42810,7 @@
           "type": "string",
           "enum": [
             "properties.create",
+            "properties.createTag",
             "PropertyDefinition.addOption"
           ]
         }
@@ -42551,6 +42843,41 @@
                 "displayName",
                 "scope",
                 "dataType"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "opts"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "properties.createTag",
+          "properties": {
+            "op": {
+              "const": "properties.createTag"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "scope": {
+                  "enum": [
+                    "user",
+                    "team"
+                  ]
+                }
+              },
+              "required": [
+                "label"
               ],
               "additionalProperties": false
             }
@@ -43016,6 +43343,7 @@
             "Routine.history",
             "Routine.template",
             "Routine.webUrl",
+            "routines.check",
             "routines.list"
           ]
         }
@@ -43077,6 +43405,35 @@
         },
         {
           "type": "object",
+          "title": "routines.check",
+          "properties": {
+            "op": {
+              "const": "routines.check"
+            },
+            "options": {
+              "$ref": "#/$defs/RoutineOptions"
+            },
+            "extra": {
+              "type": "object",
+              "properties": {
+                "created": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/CreatedEntity"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
           "title": "routines.list",
           "properties": {
             "op": {
@@ -43094,172 +43451,6 @@
           },
           "required": [
             "op"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    }
-  },
-  {
-    "name": "routines_write",
-    "title": "routines: create and change",
-    "annotations": {
-      "title": "routines: create and change",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": false,
-      "openWorldHint": false
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "op": {
-          "type": "string",
-          "enum": [
-            "Routine.activateTemplate",
-            "Routine.execute",
-            "Routine.setEnabled",
-            "Routine.shareAsTemplate",
-            "Routine.update",
-            "routines.create"
-          ]
-        }
-      },
-      "required": [
-        "op"
-      ],
-      "oneOf": [
-        {
-          "type": "object",
-          "title": "Routine.activateTemplate",
-          "properties": {
-            "op": {
-              "const": "Routine.activateTemplate"
-            },
-            "routine": {
-              "type": "string"
-            },
-            "options": {
-              "$ref": "#/$defs/RoutineOptions"
-            }
-          },
-          "required": [
-            "op",
-            "routine",
-            "options"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Routine.execute",
-          "properties": {
-            "op": {
-              "const": "Routine.execute"
-            },
-            "routine": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "op",
-            "routine"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Routine.setEnabled",
-          "properties": {
-            "op": {
-              "const": "Routine.setEnabled"
-            },
-            "routine": {
-              "type": "string"
-            },
-            "enabled": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "op",
-            "routine",
-            "enabled"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Routine.shareAsTemplate",
-          "properties": {
-            "op": {
-              "const": "Routine.shareAsTemplate"
-            },
-            "routine": {
-              "type": "string"
-            },
-            "options": {
-              "type": "object",
-              "properties": {
-                "description": {
-                  "type": "string"
-                },
-                "variables": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/TemplateVariable"
-                  }
-                }
-              },
-              "required": [
-                "description",
-                "variables"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "op",
-            "routine",
-            "options"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "Routine.update",
-          "properties": {
-            "op": {
-              "const": "Routine.update"
-            },
-            "routine": {
-              "type": "string"
-            },
-            "options": {
-              "$ref": "#/$defs/RoutineOptions"
-            }
-          },
-          "required": [
-            "op",
-            "routine",
-            "options"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "routines.create",
-          "properties": {
-            "op": {
-              "const": "routines.create"
-            },
-            "options": {
-              "$ref": "#/$defs/RoutineOptions"
-            }
-          },
-          "required": [
-            "op",
-            "options"
           ],
           "additionalProperties": false
         }
@@ -43305,6 +43496,47 @@
             "userPrompt",
             "name",
             "trigger"
+          ],
+          "additionalProperties": false
+        },
+        "CreatedEntity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "entityType": {
+              "enum": [
+                "user",
+                "team",
+                "document",
+                "chat",
+                "channel",
+                "channel_message",
+                "project",
+                "email_thread",
+                "calendar_event",
+                "call",
+                "foreign_entity",
+                "crm_company",
+                "crm_contact",
+                "crm_pipeline",
+                "agent_session",
+                "scheduled_action",
+                "initiative",
+                "database",
+                "database_row",
+                "form",
+                "static_file",
+                "reminder",
+                "skill",
+                "external_chat"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "entityType"
           ],
           "additionalProperties": false
         },
@@ -44319,6 +44551,1378 @@
             "trigger"
           ],
           "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "routines_write",
+    "title": "routines: create and change",
+    "annotations": {
+      "title": "routines: create and change",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "Routine.activateTemplate",
+            "Routine.execute",
+            "Routine.setEnabled",
+            "Routine.shareAsTemplate",
+            "Routine.update",
+            "routines.create",
+            "routines.suggest"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "Routine.activateTemplate",
+          "properties": {
+            "op": {
+              "const": "Routine.activateTemplate"
+            },
+            "routine": {
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/RoutineOptions"
+            }
+          },
+          "required": [
+            "op",
+            "routine",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Routine.execute",
+          "properties": {
+            "op": {
+              "const": "Routine.execute"
+            },
+            "routine": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "routine"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Routine.setEnabled",
+          "properties": {
+            "op": {
+              "const": "Routine.setEnabled"
+            },
+            "routine": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "routine",
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Routine.shareAsTemplate",
+          "properties": {
+            "op": {
+              "const": "Routine.shareAsTemplate"
+            },
+            "routine": {
+              "type": "string"
+            },
+            "options": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "variables": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/TemplateVariable"
+                  }
+                }
+              },
+              "required": [
+                "description",
+                "variables"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "routine",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Routine.update",
+          "properties": {
+            "op": {
+              "const": "Routine.update"
+            },
+            "routine": {
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/RoutineOptions"
+            }
+          },
+          "required": [
+            "op",
+            "routine",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "routines.create",
+          "properties": {
+            "op": {
+              "const": "routines.create"
+            },
+            "options": {
+              "$ref": "#/$defs/RoutineOptions"
+            }
+          },
+          "required": [
+            "op",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "routines.suggest",
+          "properties": {
+            "op": {
+              "const": "routines.suggest"
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "catalog"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "knobs": {
+                      "$ref": "#/$defs/Record_string_unknown"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "surfaces": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/Surface"
+                      }
+                    },
+                    "keepProbability": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "key",
+                    "reason",
+                    "surfaces",
+                    "keepProbability"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "routine"
+                    },
+                    "routine": {
+                      "$ref": "#/$defs/RoutineOptions"
+                    },
+                    "created": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/CreatedEntity"
+                      }
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "surfaces": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/Surface"
+                      }
+                    },
+                    "keepProbability": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "routine",
+                    "reason",
+                    "surfaces",
+                    "keepProbability"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "suggestion"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$defs": {
+        "AgentRoutineOptions": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string"
+            },
+            "userPrompt": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "trigger": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RoutineTriggerOptions"
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "runVisibility": {
+              "enum": [
+                "listed",
+                "unlisted"
+              ]
+            }
+          },
+          "required": [
+            "prompt",
+            "userPrompt",
+            "name",
+            "trigger"
+          ],
+          "additionalProperties": false
+        },
+        "CreatedEntity": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "entityType": {
+              "enum": [
+                "user",
+                "team",
+                "document",
+                "chat",
+                "channel",
+                "channel_message",
+                "project",
+                "email_thread",
+                "calendar_event",
+                "call",
+                "foreign_entity",
+                "crm_company",
+                "crm_contact",
+                "crm_pipeline",
+                "agent_session",
+                "scheduled_action",
+                "initiative",
+                "database",
+                "database_row",
+                "form",
+                "static_file",
+                "reminder",
+                "skill",
+                "external_chat"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "entityType"
+          ],
+          "additionalProperties": false
+        },
+        "EntityReference": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "user"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "team"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "document"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "chat"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "channel"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "channel_message"
+                },
+                "entity": {
+                  "type": "object",
+                  "properties": {
+                    "channelId": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "mentions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/SimpleMention"
+                      }
+                    }
+                  },
+                  "required": [
+                    "channelId",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "project"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "email_thread"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "calendar_event"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "call"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "foreign_entity"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "crm_company"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "crm_contact"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "crm_pipeline"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "agent_session"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "scheduled_action"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "initiative"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "database"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "database_row"
+                },
+                "entity": {
+                  "type": "object",
+                  "properties": {
+                    "table": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "database",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "table",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "form"
+                },
+                "entity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "entity"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "EventName": {
+          "enum": [
+            "github",
+            "document.created",
+            "document.updated",
+            "document.deleted",
+            "task.created",
+            "task.status_changed",
+            "task.priority_changed",
+            "task.property_changed",
+            "email.message_received",
+            "channel.created",
+            "channel.message_posted",
+            "channel.mentioned",
+            "channel.message_patched",
+            "channel.message_attachment_created",
+            "call.started",
+            "call.ended"
+          ]
+        },
+        "GithubSelector": {
+          "type": "object",
+          "properties": {
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "includeBots": {
+              "type": "boolean"
+            },
+            "repositories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "PayloadCondition": {
+          "type": "object",
+          "properties": {
+            "equals": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "exists": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "glob": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "in": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/PayloadScalar"
+                  }
+                }
+              ]
+            },
+            "notIn": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/PayloadScalar"
+                  }
+                }
+              ]
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "PayloadScalar": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "PropertySelector": {
+          "type": "object",
+          "properties": {
+            "definitionId": {
+              "type": "string"
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "definitionId"
+          ],
+          "additionalProperties": false
+        },
+        "Record_string_unknown": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {}
+        },
+        "RoutineEventFilter": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EventName"
+              }
+            },
+            "github": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/GithubSelector"
+                }
+              ]
+            },
+            "match": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/PayloadCondition"
+                  }
+                }
+              ]
+            },
+            "property": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/PropertySelector"
+                }
+              ]
+            },
+            "entities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EntityReference"
+              }
+            },
+            "condition": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "events"
+          ],
+          "additionalProperties": false
+        },
+        "RoutineKnob": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "text"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "max": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "min": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "number"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "boolean"
+                },
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "type": {
+                  "const": "choice"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "options",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "question"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "RoutineOptions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentRoutineOptions"
+            },
+            {
+              "$ref": "#/$defs/StepsRoutineOptions"
+            }
+          ]
+        },
+        "RoutineStepOptions": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "code"
+                },
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "knobs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/RoutineKnob"
+                  }
+                },
+                "sentence": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "source",
+                "title"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "agent"
+                },
+                "instructions": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "agent": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "instructions"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "RoutineTriggerOptions": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "schedule": {
+                  "type": "string"
+                },
+                "timezone": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "cron"
+                }
+              },
+              "required": [
+                "schedule",
+                "timezone",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "once"
+                }
+              },
+              "required": [
+                "at",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "events"
+                },
+                "filters": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/RoutineEventFilter"
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "filters"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "multiple"
+                },
+                "triggers": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SingleRoutineTrigger"
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "triggers"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "SimpleMention": {
+          "type": "object",
+          "properties": {
+            "entity_id": {
+              "type": "string"
+            },
+            "entity_type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entity_id",
+            "entity_type"
+          ],
+          "additionalProperties": false
+        },
+        "SingleRoutineTrigger": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "schedule": {
+                  "type": "string"
+                },
+                "timezone": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "cron"
+                }
+              },
+              "required": [
+                "schedule",
+                "timezone",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "once"
+                }
+              },
+              "required": [
+                "at",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "events"
+                },
+                "filters": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/RoutineEventFilter"
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "filters"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "StepsRoutineOptions": {
+          "type": "object",
+          "properties": {
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RoutineStepOptions"
+              }
+            },
+            "dangerouslyOperateAsUser": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "trigger": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RoutineTriggerOptions"
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "runVisibility": {
+              "enum": [
+                "listed",
+                "unlisted"
+              ]
+            }
+          },
+          "required": [
+            "steps",
+            "name",
+            "trigger"
+          ],
+          "additionalProperties": false
+        },
+        "Surface": {
+          "enum": [
+            "chat",
+            "email",
+            "calendar",
+            "tasks",
+            "files",
+            "crm",
+            "calls",
+            "reviews",
+            "agents"
+          ]
         },
         "TemplateVariable": {
           "anyOf": [
@@ -44662,8 +46266,8 @@
             "calendar_event",
             "call",
             "agent_session",
-            "company",
-            "email"
+            "email",
+            "company"
           ]
         },
         "TagFilter": {
@@ -44681,6 +46285,1323 @@
           },
           "required": [
             "label"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "spreadsheets_read",
+    "title": "spreadsheets: read",
+    "annotations": {
+      "title": "spreadsheets: read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "Spreadsheet.calculate",
+            "Spreadsheet.read",
+            "Spreadsheet.webUrl"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "Spreadsheet.calculate",
+          "properties": {
+            "op": {
+              "const": "Spreadsheet.calculate"
+            },
+            "spreadsheet": {
+              "type": "string"
+            },
+            "formulas": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/SpreadsheetFormula"
+                  }
+                ]
+              }
+            },
+            "options": {
+              "$ref": "#/$defs/SpreadsheetCalculateOptions"
+            }
+          },
+          "required": [
+            "op",
+            "spreadsheet",
+            "formulas"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Spreadsheet.read",
+          "properties": {
+            "op": {
+              "const": "Spreadsheet.read"
+            },
+            "spreadsheet": {
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/SpreadsheetReadOptions"
+            }
+          },
+          "required": [
+            "op",
+            "spreadsheet"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Spreadsheet.webUrl",
+          "properties": {
+            "op": {
+              "const": "Spreadsheet.webUrl"
+            },
+            "spreadsheet": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "spreadsheet"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$defs": {
+        "SpreadsheetCalculateOptions": {
+          "type": "object",
+          "properties": {
+            "sheet": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/SpreadsheetSheetSummary"
+                }
+              ]
+            },
+            "overrides": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpreadsheetOverride"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "SpreadsheetCellInput": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string"
+            },
+            "value": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/SpreadsheetCellValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "address",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetCellValue": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "SpreadsheetColumnType": {
+          "enum": [
+            "number",
+            "text",
+            "date",
+            "time",
+            "checkbox",
+            "person",
+            "datetime",
+            "dropdown",
+            "percent",
+            "currency"
+          ]
+        },
+        "SpreadsheetFormula": {
+          "type": "object",
+          "properties": {
+            "formula": {
+              "type": "string"
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": [
+            "formula"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetOverride": {
+          "type": "object",
+          "properties": {
+            "cells": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpreadsheetCellInput"
+              }
+            },
+            "sheetId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cells",
+            "sheetId"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetReadOptions": {
+          "type": "object",
+          "properties": {
+            "sheet": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/$defs/SpreadsheetSheetSummary"
+                }
+              ]
+            },
+            "ranges": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "includeStyles": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "SpreadsheetSheetSummary": {
+          "type": "object",
+          "properties": {
+            "columnCount": {
+              "type": "number"
+            },
+            "errorCells": {
+              "type": "number"
+            },
+            "formulaCells": {
+              "type": "number"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "populatedCells": {
+              "type": "number"
+            },
+            "rowCount": {
+              "type": "number"
+            },
+            "tables": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpreadsheetTableSummary"
+              }
+            },
+            "usedRange": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": [
+            "columnCount",
+            "errorCells",
+            "formulaCells",
+            "id",
+            "name",
+            "populatedCells",
+            "rowCount"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetTableColumnType": {
+          "type": "object",
+          "properties": {
+            "column": {
+              "type": "string"
+            },
+            "type": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/SpreadsheetColumnType"
+                }
+              ]
+            }
+          },
+          "required": [
+            "column",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetTableSummary": {
+          "type": "object",
+          "properties": {
+            "columnTypes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpreadsheetTableColumnType"
+              }
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "filteredColumns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "name": {
+              "type": "string"
+            },
+            "range": {
+              "type": "string"
+            },
+            "totalsRow": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "columns",
+            "name",
+            "range",
+            "totalsRow"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  {
+    "name": "spreadsheets_write",
+    "title": "spreadsheets: create and change",
+    "annotations": {
+      "title": "spreadsheets: create and change",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "Spreadsheet.applyEdits",
+            "Spreadsheet.edit"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "Spreadsheet.applyEdits",
+          "properties": {
+            "op": {
+              "const": "Spreadsheet.applyEdits"
+            },
+            "spreadsheet": {
+              "type": "string"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SpreadsheetOperation"
+              }
+            },
+            "options": {
+              "$ref": "#/$defs/SpreadsheetEditOptions"
+            }
+          },
+          "required": [
+            "op",
+            "spreadsheet",
+            "operations",
+            "options"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "Spreadsheet.edit",
+          "properties": {
+            "op": {
+              "const": "Spreadsheet.edit"
+            },
+            "spreadsheet": {
+              "type": "string"
+            },
+            "instructions": {
+              "type": "string"
+            },
+            "options": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "spreadsheet",
+            "instructions"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "$defs": {
+        "SpreadsheetCellInput": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string"
+            },
+            "value": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/SpreadsheetCellValue"
+                }
+              ]
+            }
+          },
+          "required": [
+            "address",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetCellValue": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "SpreadsheetColumnType": {
+          "enum": [
+            "number",
+            "text",
+            "date",
+            "time",
+            "checkbox",
+            "person",
+            "datetime",
+            "dropdown",
+            "percent",
+            "currency"
+          ]
+        },
+        "SpreadsheetColumnWidth": {
+          "type": "object",
+          "properties": {
+            "column": {
+              "type": "string"
+            },
+            "width": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "column",
+            "width"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetDropdownColor": {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "item": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "color",
+            "item"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetEditOptions": {
+          "type": "object",
+          "properties": {
+            "expectedRevision": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "expectedRevision"
+          ],
+          "additionalProperties": false
+        },
+        "SpreadsheetOperation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cells": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SpreadsheetCellInput"
+                  }
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "set_cells"
+                }
+              },
+              "required": [
+                "cells",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "range": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "style": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/SpreadsheetStyle"
+                    }
+                  ]
+                },
+                "type": {
+                  "const": "format_cells"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "style",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "clearFormatting": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "range": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "clear_cells"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sheetId": {
+                  "type": "string"
+                },
+                "sourceRange": {
+                  "type": "string"
+                },
+                "targetRange": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "fill_cells"
+                }
+              },
+              "required": [
+                "sheetId",
+                "sourceRange",
+                "targetRange",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "add_sheet"
+                }
+              },
+              "required": [
+                "name",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "rename_sheet"
+                }
+              },
+              "required": [
+                "name",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "duplicate_sheet"
+                }
+              },
+              "required": [
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "delete_sheet"
+                }
+              },
+              "required": [
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "number"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "append_rows"
+                }
+              },
+              "required": [
+                "count",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "columns": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/SpreadsheetColumnWidth"
+                  }
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "resize_columns"
+                }
+              },
+              "required": [
+                "columns",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "colors": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/SpreadsheetDropdownColor"
+                      }
+                    }
+                  ]
+                },
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                },
+                "range": {
+                  "type": "string"
+                },
+                "rejectInvalid": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "source": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": {
+                  "const": "set_dropdown"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "range": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "clear_validation"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "range": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "insert_checkboxes"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "columnTypes": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/SpreadsheetTableColumnType"
+                      }
+                    }
+                  ]
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "range": {
+                  "type": "string"
+                },
+                "sheetId": {
+                  "type": "string"
+                },
+                "totalsRow": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": {
+                  "const": "create_table"
+                }
+              },
+              "required": [
+                "range",
+                "sheetId",
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "SpreadsheetStyle": {
+          "type": "object",
+          "properties": {
+            "bold": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderBottom": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderBottomColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "borderBottomStyle": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "medium",
+                    "reset",
+                    "thin",
+                    "thick",
+                    "double",
+                    "dotted",
+                    "dashed",
+                    "dashDot",
+                    "dashDotDot",
+                    "slantDashDot",
+                    "hair",
+                    "mediumDashed",
+                    "mediumDashDot",
+                    "mediumDashDotDot"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderLeft": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderLeftColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "borderLeftStyle": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "medium",
+                    "reset",
+                    "thin",
+                    "thick",
+                    "double",
+                    "dotted",
+                    "dashed",
+                    "dashDot",
+                    "dashDotDot",
+                    "slantDashDot",
+                    "hair",
+                    "mediumDashed",
+                    "mediumDashDot",
+                    "mediumDashDotDot"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderRight": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderRightColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "borderRightStyle": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "medium",
+                    "reset",
+                    "thin",
+                    "thick",
+                    "double",
+                    "dotted",
+                    "dashed",
+                    "dashDot",
+                    "dashDotDot",
+                    "slantDashDot",
+                    "hair",
+                    "mediumDashed",
+                    "mediumDashDot",
+                    "mediumDashDotDot"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderTop": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "borderTopColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "borderTopStyle": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "medium",
+                    "reset",
+                    "thin",
+                    "thick",
+                    "double",
+                    "dotted",
+                    "dashed",
+                    "dashDot",
+                    "dashDotDot",
+                    "slantDashDot",
+                    "hair",
+                    "mediumDashed",
+                    "mediumDashDot",
+                    "mediumDashDotDot"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checkbox": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "decimals": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "fillColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "fontFamily": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "sans",
+                    "serif",
+                    "mono"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fontName": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "fontSize": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "format": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "number",
+                    "text",
+                    "date",
+                    "time",
+                    "general",
+                    "percent",
+                    "currency",
+                    "accounting",
+                    "scientific"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "horizontalAlign": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "left",
+                    "right",
+                    "auto",
+                    "center"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "indent": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "italic": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "numberFormat": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "strikethrough": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "textColor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "underline": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "verticalAlign": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "top",
+                    "bottom",
+                    "middle"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "wrap": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "SpreadsheetTableColumnType": {
+          "type": "object",
+          "properties": {
+            "column": {
+              "type": "string"
+            },
+            "type": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/SpreadsheetColumnType"
+                }
+              ]
+            }
+          },
+          "required": [
+            "column",
+            "type"
           ],
           "additionalProperties": false
         }
@@ -45196,6 +48117,7 @@
         "op": {
           "type": "string",
           "enum": [
+            "User.activity",
             "User.email",
             "User.isAgent",
             "User.name",
@@ -45212,6 +48134,56 @@
         "op"
       ],
       "oneOf": [
+        {
+          "type": "object",
+          "title": "User.activity",
+          "properties": {
+            "op": {
+              "const": "User.activity"
+            },
+            "user": {
+              "type": "string"
+            },
+            "range": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                },
+                "end": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "op",
+            "user",
+            "range"
+          ],
+          "additionalProperties": false
+        },
         {
           "type": "object",
           "title": "User.email",
@@ -45380,7 +48352,7 @@
       "title": "users: create and change",
       "readOnlyHint": false,
       "destructiveHint": false,
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {
@@ -45391,8 +48363,10 @@
           "enum": [
             "User.dm",
             "User.favorite",
+            "User.muteNotifications",
             "User.setProperty",
-            "User.unfavorite"
+            "User.unfavorite",
+            "User.unmuteNotifications"
           ]
         }
       },
@@ -45426,6 +48400,33 @@
             },
             "user": {
               "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "user"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "User.muteNotifications",
+          "properties": {
+            "op": {
+              "const": "User.muteNotifications"
+            },
+            "user": {
+              "type": "string"
+            },
+            "opts": {
+              "type": "object",
+              "properties": {
+                "until": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -45650,6 +48651,23 @@
           "properties": {
             "op": {
               "const": "User.unfavorite"
+            },
+            "user": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "user"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "User.unmuteNotifications",
+          "properties": {
+            "op": {
+              "const": "User.unmuteNotifications"
             },
             "user": {
               "type": "string"

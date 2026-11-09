@@ -48,6 +48,13 @@ import {
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import {
+  type DocumentMarkdown,
+  type DocumentMarkdownWritten,
+  readMarkdown,
+  type SetContentOptions,
+  writeMarkdown,
+} from './markdown';
 import type {
   PresentationCopy,
   PresentationEditOperation,
@@ -55,6 +62,11 @@ import type {
   WordEditOperation,
   WordEditOptions,
 } from './office-files';
+import {
+  commentOnText,
+  type TextComment,
+  type TextCommentOptions,
+} from './text-comment';
 import { DocumentVersion } from './version';
 
 type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
@@ -167,7 +179,7 @@ export class Document
   }
 
   /**
-   * Prepare a multipart file upload; to change a markdown document's text, use `edit`.
+   * Prepare a multipart file upload; to change a markdown document's text, use `edit` or `setContent`.
    *
    * @write
    */
@@ -181,7 +193,7 @@ export class Document
   }
 
   /**
-   * Commit an uploaded file; to change a markdown document's text, use `edit`. Does not retry uncertain writes.
+   * Commit an uploaded file; to change a markdown document's text, use `edit` or `setContent`. Does not retry uncertain writes.
    *
    * @destructive
    */
@@ -197,7 +209,7 @@ export class Document
   }
 
   /**
-   * Commit a simple file save; to change a markdown document's text, use `edit`.
+   * Commit a simple file save; to change a markdown document's text, use `edit` or `setContent`.
    *
    * @destructive
    */
@@ -406,6 +418,60 @@ export class Document
     );
     if (text !== null) return text;
     return (await this.download()).text();
+  }
+
+  /**
+   * A markdown document's or task body's Markdown together with the revision
+   * it was read at. Pass the revision to `setContent` to write the body back
+   * only if nobody has changed the document since.
+   *
+   * @readonly
+   */
+  contentWithRevision(): Promise<DocumentMarkdown> {
+    return readMarkdown(this.client, this);
+  }
+
+  /**
+   * Replace a markdown document's or task body's text with `markdown`, only
+   * if the document is still at `expectedRevision`, the revision from
+   * `contentWithRevision()`. Use it when you already have the exact new
+   * Markdown; to describe a change in words, use `edit`.
+   *
+   * Nobody's edits are overwritten: if anyone changed the document since your
+   * read, nothing is written and it throws `DocumentChangedError`; read again,
+   * reapply your change and write against the new revision. Top-level blocks
+   * whose Markdown is unchanged keep their comments and formatting; changed
+   * blocks are replaced. No AI runs and nothing is billed.
+   *
+   * Throws `EditOutcomeUnknownError` when the write was sent but its outcome
+   * is unknown: read before retrying.
+   *
+   * @example Append a line without overwriting a teammate's edits.
+   * ```js
+   * for (let attempt = 0; attempt < 3; attempt++) {
+   *   const { markdown, revision } = await document.contentWithRevision();
+   *   try {
+   *     const { changed } = await document.setContent(
+   *       `${markdown}\n\n- Shipped the beta.`,
+   *       { expectedRevision: revision },
+   *     );
+   *     return { data: { changed, url: document.webUrl() } };
+   *   } catch (error) {
+   *     if (error.name !== 'DocumentChangedError') throw error;
+   *   }
+   * }
+   * return { data: { error: 'The document kept changing; try again later.' } };
+   * ```
+   *
+   * @destructive
+   */
+  async setContent(
+    markdown: string,
+    options: SetContentOptions,
+  ): Promise<DocumentMarkdownWritten> {
+    const written = await writeMarkdown(this.client, this, markdown, options);
+    this.detail.clear();
+    return written;
   }
 
   /**
@@ -904,6 +970,45 @@ export class Document
       }),
     );
     return Comment.from(this.client, this.id, created);
+  }
+
+  /**
+   * Start an inline comment anchored to a quoted passage of a markdown or Word document; use `comment` for the document as a whole.
+   *
+   * Quote the passage exactly as `content()` reads it, as plain text without
+   * markdown syntax, within one paragraph, heading, list item or table cell.
+   * When it appears more than once this throws
+   * {@link CommentQuoteNotPlacedError} listing each appearance; pass the one
+   * you mean as `occurrence`, counting from 1. Nothing is posted until the
+   * quote is placed. Needs comment access. Reply in the thread with
+   * `comment.reply()`.
+   *
+   * Comments stay in Macro and are not written into a Word file.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   * @returns The comment and the text it is anchored to.
+   *
+   * @example
+   * try {
+   *   const { comment } = await doc.commentOnText('Is this date still right?', {
+   *     quote: 'ships on Friday',
+   *   });
+   * } catch (error) {
+   *   if (!(error instanceof CommentQuoteNotPlacedError)) throw error;
+   *   // error.reason lists each appearance: choose one with `occurrence`.
+   *   await doc.commentOnText('Is this date still right?', {
+   *     quote: 'ships on Friday',
+   *     occurrence: 2,
+   *   });
+   * }
+   *
+   * @write
+   */
+  async commentOnText(
+    body: string | RichMessage,
+    options: TextCommentOptions,
+  ): Promise<TextComment> {
+    return commentOnText(this.client, this, body, options);
   }
 
   /**

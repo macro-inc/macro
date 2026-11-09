@@ -150,6 +150,41 @@ export abstract class FavoritableEntity<Detail>
   }
 
   /**
+   * Mute notifications about this item for the user only, as Mute in the app
+   * does; with `until`, a snooze that ends then. Nobody else's notifications
+   * change. Returns this handle for chaining.
+   *
+   * @write
+   */
+  async muteNotifications(opts?: {
+    /** When notifications resume; must be in the future. Omit to mute until unmuted. */
+    until?: Date;
+  }): Promise<this> {
+    unwrap(
+      await this.client.notification.unsubscribeItem({
+        path: { item_type: this.entityType, item_id: this.id },
+        ...(opts?.until
+          ? { query: { snoozed_until: opts.until.toISOString() } }
+          : {}),
+      }),
+    );
+    return this;
+  }
+
+  /** Resume notifications about this item, ending a mute or snooze. Returns this handle for chaining.
+   *
+   * @write
+   */
+  async unmuteNotifications(): Promise<this> {
+    unwrap(
+      await this.client.notification.removeUnsubscribeItem({
+        path: { item_type: this.entityType, item_id: this.id },
+      }),
+    );
+    return this;
+  }
+
+  /**
    * Remove this entity from the user's favorites. Returns this handle for chaining.
    *
    * @write

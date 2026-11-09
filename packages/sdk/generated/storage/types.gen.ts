@@ -240,6 +240,38 @@ export type AddChannelBotRequest = {
 };
 
 /**
+ * Entries to add.
+ */
+export type AddEntriesRequest = {
+    /**
+     * Add a record again although it already has an entry here.
+     */
+    allowDuplicates?: boolean;
+    /**
+     * The records to add, each with its starting fields.
+     */
+    entries: Array<NewEntry>;
+};
+
+/**
+ * The entries added.
+ */
+export type AddEntriesResponse = {
+    /**
+     * The new entries, as saved.
+     */
+    added: Array<PipelineEntry>;
+    /**
+     * Existing entries of requested records that were not added again.
+     */
+    alreadyPresent: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
+
+/**
  * Request body for favoriting an entity.
  */
 export type AddFavoriteRequest = {
@@ -1385,6 +1417,30 @@ export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
+
+/**
+ * Whether missing busy blocks can safely be interpreted as free time.
+ */
+export type AvailabilityCoverage = 'complete' | 'unknown';
+
+/**
+ * An exact, half-open interval of UTC instants, without event metadata.
+ */
+export type AvailabilityInterval = {
+    /**
+     * Exclusive end.
+     */
+    end: string;
+    /**
+     * Inclusive start.
+     */
+    start: string;
+};
+
+/**
+ * Why a person's unoccupied intervals cannot establish availability.
+ */
+export type AvailabilityUnknownReason = 'hidden' | 'unavailable' | 'truncated' | 'missing_time_zone' | 'invalid_time_zone' | 'invalid_interval' | 'conflicting_copies';
 
 /**
  * Where one viewer is inside a database right now: ephemeral, relayed to
@@ -4485,6 +4541,65 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * The quote could not be anchored; nothing was posted.
+ */
+export type CommentOnTextRefused = {
+    /**
+     * Always `quote_not_placed`.
+     */
+    error: CommentOnTextRefusedCode;
+    /**
+     * Lists each appearance to choose from with `occurrence`, or says the
+     * text was not found.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of a quote the document cannot anchor to.
+ */
+export type CommentOnTextRefusedCode = 'quote_not_placed';
+
+/**
+ * A comment on a quoted passage.
+ */
+export type CommentOnTextRequest = {
+    /**
+     * Comment body in macro markdown.
+     */
+    content: string;
+    /**
+     * The people and items the body mentions, notified as in any comment.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Which appearance of the passage, counting from 1 in document order.
+     * Only needed when it appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * The passage to comment on, quoted exactly as the document reads: plain
+     * text without markdown syntax, within one paragraph, heading, list item
+     * or table cell.
+     */
+    quote: string;
+};
+
+/**
+ * The thread the comment started.
+ */
+export type CommentOnTextResponse = {
+    /**
+     * The posted comment, the root of its thread.
+     */
+    comment: Message;
+    /**
+     * The text the comment is anchored to, as the document reads.
+     */
+    markedText: string;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -4501,6 +4616,29 @@ export type CommittedChange = {
      * The version the batch produced.
      */
     version: TableVersion;
+};
+
+/**
+ * What a companies import did.
+ */
+export type CompanyImportResponse = {
+    /**
+     * Companies created.
+     */
+    created: number;
+    /**
+     * Companies the team already had.
+     */
+    existing: number;
+    /**
+     * Companies that could not be created.
+     */
+    failed: Array<SkippedImportRecord>;
+    pipeline?: null | PipelineImportResponse;
+    /**
+     * Rows without a domain like acme.com.
+     */
+    skippedRows: number;
 };
 
 /**
@@ -6654,6 +6792,54 @@ export type DocumentInteractionMetadata = {
     reason: InteractionReason;
 };
 
+/**
+ * A markdown document's body and the revision it was read at.
+ */
+export type DocumentMarkdown = {
+    /**
+     * The body as Markdown, in the format `text-content` returns.
+     */
+    markdown: string;
+    /**
+     * The document's version, as sync-service encodes it. Pass it back to
+     * write the body only if nobody has changed the document since.
+     */
+    revision: string;
+};
+
+/**
+ * Why a body read or write did not complete.
+ */
+export type DocumentMarkdownFailure = {
+    /**
+     * What went wrong.
+     */
+    error: DocumentMarkdownFailureCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a body read or write that did not complete.
+ */
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
+
+/**
+ * A body write that landed, or found the body already reading that way.
+ */
+export type DocumentMarkdownWritten = {
+    /**
+     * Whether the body changed; `false` when it already read that way.
+     */
+    changed: boolean;
+    /**
+     * The document's version after the write.
+     */
+    revision: string;
+};
+
 export type DocumentMetadata = {
     /**
      * The id of the document this document branched from
@@ -8581,6 +8767,42 @@ export type EditPdfPlaceableCommentAnchorRequest = {
 };
 
 /**
+ * Changes to a pipeline's name, sharing, fields and options, applied
+ * together.
+ */
+export type EditPipelineRequest = {
+    /**
+     * Fields to add.
+     */
+    addFields?: Array<NewFieldRequest>;
+    /**
+     * Labels to add to select fields; for Stage, new stages go last.
+     */
+    addOptions?: Array<FieldOptions>;
+    /**
+     * A new name.
+     */
+    name?: string | null;
+    /**
+     * Fields to delete with their values.
+     */
+    removeFields?: Array<string>;
+    /**
+     * Options to delete.
+     */
+    removeOptions?: Array<OptionRemoval>;
+    /**
+     * Fields to rename.
+     */
+    renameFields?: Array<FieldRename>;
+    /**
+     * Options to relabel.
+     */
+    renameOptions?: Array<OptionRename>;
+    sharing?: null | PipelineSharing;
+};
+
+/**
  * One atomic batch of operations against the revision it was planned on.
  */
 export type EditSpreadsheetRequest = {
@@ -9134,6 +9356,107 @@ export type EntityReference = {
  * Type of entity that can be referenced by entity properties.
  */
 export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+
+/**
+ * The changes to one entry: exactly one of `entryId` or `recordId`.
+ */
+export type EntryChanges = {
+    /**
+     * The entry.
+     */
+    entryId?: string | null;
+    /**
+     * The record whose single entry in the pipeline to change.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to set.
+     */
+    set: Array<FieldValueInput>;
+};
+
+/**
+ * One field's value before and after an update.
+ */
+export type EntryFieldChange = {
+    after?: null | EntryFieldValue;
+    before?: null | EntryFieldValue;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * A stored value in its field's own terms.
+ */
+export type EntryFieldValue = {
+    type: 'text';
+    /**
+     * Free text.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A number.
+     */
+    value: number;
+} | {
+    type: 'checkbox';
+    /**
+     * True or false.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'date_range';
+    /**
+     * A span of time, written start/end: 2026-10-12/2026-10-16.
+     */
+    value: string;
+} | {
+    type: 'labels';
+    /**
+     * Option labels, in the cell's order.
+     */
+    value: Array<string>;
+} | {
+    type: 'links';
+    /**
+     * URLs.
+     */
+    value: Array<string>;
+} | {
+    type: 'references';
+    /**
+     * Macro ids: people as macro| user ids, records or other items.
+     */
+    value: Array<string>;
+};
+
+/**
+ * The company or contact an entry tracks.
+ */
+export type EntryRecord = {
+    /**
+     * A company's domain or a contact's email.
+     */
+    detail?: string | null;
+    /**
+     * The CRM company or contact id.
+     */
+    id: string;
+    /**
+     * Its name; missing when the caller cannot see the record.
+     */
+    name?: string | null;
+};
 
 /**
  * A plain old json error response for use with axum.
@@ -10125,6 +10448,88 @@ export type FavoritesList = {
 };
 
 /**
+ * Matched entries per option of one single-select field, such as Stage.
+ */
+export type FieldOptionCounts = {
+    /**
+     * Every option in order, with its count.
+     */
+    counts: Array<OptionCount>;
+    /**
+     * Matched entries with the field empty.
+     */
+    empty: number;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * Labels to add to a select field.
+ */
+export type FieldOptions = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The labels.
+     */
+    labels: Array<string>;
+};
+
+/**
+ * A field to rename.
+ */
+export type FieldRename = {
+    /**
+     * Its current name.
+     */
+    from: string;
+    /**
+     * Its new name.
+     */
+    to: string;
+};
+
+/**
+ * The sum of a number field over the matched entries.
+ */
+export type FieldTotal = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The sum.
+     */
+    sum: number;
+};
+
+/**
+ * A field and the text to write into it or match it against. Leave out both
+ * `value` and `values` to empty the field, or in a filter to match an empty
+ * field.
+ */
+export type FieldValueInput = {
+    /**
+     * The field's name, ignoring case.
+     */
+    field: string;
+    /**
+     * One value: an option label, a person as "me", an email or a macro|
+     * user id, a number, true/false, or a date.
+     */
+    value?: string | null;
+    /**
+     * Several values, for a field holding several. A filter matches an entry
+     * holding any of them.
+     */
+    values?: Array<string> | null;
+};
+
+/**
  * What happened to a file, on the wire.
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
@@ -10311,6 +10716,38 @@ export type FilterTest = {
      * How the cell's references relate to these.
      */
     operator: SetOperator;
+};
+
+/**
+ * Which entries to read, and how to order them.
+ */
+export type FindEntriesRequest = {
+    /**
+     * Put the largest first.
+     */
+    descending?: boolean;
+    /**
+     * Every filter must match.
+     */
+    filters?: Array<FieldValueInput>;
+    /**
+     * Most entries to return, 1 to 5000; defaults to 50. Counts and totals
+     * cover every match regardless.
+     */
+    limit?: number | null;
+    /**
+     * Only entries tracking one of these companies or contacts.
+     */
+    recordIds?: Array<string>;
+    /**
+     * Text the record's name, domain or email must contain.
+     */
+    search?: string | null;
+    /**
+     * The field to order by; number, date and select fields order by value
+     * and stage order.
+     */
+    sortBy?: string | null;
 };
 
 export type FolderItem = {
@@ -10907,6 +11344,37 @@ export type Formula = {
      * The expression negated; a number.
      */
     operand: Formula;
+};
+
+/**
+ * The entries a query matched.
+ */
+export type FoundEntriesResponse = {
+    /**
+     * Whether every entry was read; a pipeline beyond 5000 entries is not,
+     * so counts and totals cover only the entries read.
+     */
+    complete: boolean;
+    /**
+     * Matched entries per option of each single-select field.
+     */
+    counts: Array<FieldOptionCounts>;
+    /**
+     * The first `limit` matches, in the requested order.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * How many entries matched in all.
+     */
+    matched: number;
+    /**
+     * The pipeline read, with its fields and version.
+     */
+    pipeline: PipelineFields;
+    /**
+     * The sum of each number field over the matched entries.
+     */
+    totals: Array<FieldTotal>;
 };
 
 export type GenericErrorResponse = {
@@ -12024,6 +12492,27 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * A companies CSV to import: exactly one of its text or a CSV file in
+ * Macro, and at most one of `pipelineId` or `newPipeline` for its Stage,
+ * Owner and Revenue values (a new private pipeline when neither is given).
+ */
+export type ImportCompaniesCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
+    newPipeline?: null | NewImportPipeline;
+    /**
+     * An existing company pipeline the caller can edit.
+     */
+    pipelineId?: string | null;
+};
+
+/**
  * Committed counters, never optimistic browser or uncommitted worker counts.
  */
 export type ImportCounters = {
@@ -12117,6 +12606,20 @@ export type ImportPage = {
      * Binding summary used by the picker confirmation.
      */
     sourceBinding: SourceBinding;
+};
+
+/**
+ * A CSV to import: exactly one of its text or a CSV file in Macro.
+ */
+export type ImportPipelineCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
 };
 
 /**
@@ -12266,6 +12769,61 @@ export type InitialPropertyValue = {
      * Value, validated by the properties service like any other property write.
      */
     value: SetPropertyValue;
+};
+
+/**
+ * Stable cursor for project history.
+ */
+export type InitiativeActivityCursor = {
+    /**
+     * Tie-breaker within the same timestamp.
+     */
+    id: string;
+    /**
+     * Time of the last scanned activity.
+     */
+    occurredAt: string;
+};
+
+/**
+ * History page. Access filtering can shorten records; follow nextCursor until exhausted.
+ */
+export type InitiativeActivityPage = {
+    nextCursor?: null | InitiativeActivityCursor;
+    /**
+     * Visible changes in newest-first order.
+     */
+    records: Array<InitiativeActivityRecord>;
+};
+
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export type InitiativeActivityRecord = {
+    /**
+     * Durable activity action tag.
+     */
+    action: string;
+    /**
+     * Typed payload for known actions. Absent for unknown actions.
+     */
+    actionPayload?: unknown;
+    /**
+     * Principal who acted.
+     */
+    actorId: string;
+    /**
+     * Stable record identifier, also used for realtime deduplication.
+     */
+    id: string;
+    /**
+     * Time of the change.
+     */
+    occurredAt: string;
+    /**
+     * Acting user's feed identity when a bot acted on their behalf.
+     */
+    subjectId: string;
 };
 
 /**
@@ -13866,6 +14424,62 @@ export type NewColumn = {
 };
 
 /**
+ * One entry to add: at most one of `recordId` or `email`. A tracked
+ * pipeline's entry names its record; a generic pipeline's names none.
+ */
+export type NewEntry = {
+    /**
+     * A contact's email: that contact, or in a company pipeline its company.
+     */
+    email?: string | null;
+    /**
+     * A CRM company or contact id.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to fill in.
+     */
+    set?: Array<FieldValueInput>;
+};
+
+/**
+ * A field to add.
+ */
+export type NewFieldRequest = {
+    /**
+     * Its name, unique in the pipeline ignoring case.
+     */
+    name: string;
+    /**
+     * A select field's labels, in order.
+     */
+    options?: Array<string>;
+    /**
+     * Its type.
+     */
+    type: NewFieldType;
+};
+
+/**
+ * The type of a field to add.
+ */
+export type NewFieldType = 'text' | 'number' | 'checkbox' | 'date' | 'link' | 'select' | 'multi_select' | 'person' | 'people';
+
+/**
+ * A new company pipeline for a companies import.
+ */
+export type NewImportPipeline = {
+    /**
+     * Its name; defaults to the file's name.
+     */
+    name?: string | null;
+    /**
+     * Whether the team may edit it; private by default.
+     */
+    sharing?: PipelineSharing;
+};
+
+/**
  * A select or tag option to create.
  */
 export type NewOption = {
@@ -14261,6 +14875,20 @@ export type OpResult = {
 export type Operator = 'add' | 'subtract' | 'multiply' | 'divide';
 
 /**
+ * How many matched entries hold one option.
+ */
+export type OptionCount = {
+    /**
+     * Matched entries holding it.
+     */
+    count: number;
+    /**
+     * The option's label.
+     */
+    label: string;
+};
+
+/**
  * Identifier of an option of a select or tag column.
  */
 export type OptionId = string;
@@ -14279,6 +14907,38 @@ export type OptionRef = {
      * is refused.
      */
     label: string;
+};
+
+/**
+ * An option to delete, emptying the entries holding it.
+ */
+export type OptionRemoval = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The label.
+     */
+    label: string;
+};
+
+/**
+ * An option to relabel.
+ */
+export type OptionRename = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The current label.
+     */
+    from: string;
+    /**
+     * The new label.
+     */
+    to: string;
 };
 
 /**
@@ -14761,6 +15421,182 @@ export type Pipeline = {
      * Owning user; sharing never changes ownership.
      */
     userId: string;
+};
+
+/**
+ * A pipeline's entries as CSV text: Company and Domain (or Contact and
+ * Email), then one column per field, people as emails.
+ */
+export type PipelineCsvResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV.
+     */
+    csv: string;
+    /**
+     * The pipeline's name.
+     */
+    name: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * A pipeline's entries among those asked for.
+ */
+export type PipelineEntries = {
+    /**
+     * Its matching entries.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * The pipeline.
+     */
+    pipeline: AccessiblePipeline;
+};
+
+/**
+ * One pipeline entry.
+ */
+export type PipelineEntry = {
+    /**
+     * The entry: a row of the pipeline's table.
+     */
+    entryId: string;
+    /**
+     * Its other fields that hold a value, by name.
+     */
+    fields: {
+        [key: string]: EntryFieldValue;
+    };
+    record?: null | EntryRecord;
+};
+
+/**
+ * A pipeline saved as a CSV file in the caller's files.
+ */
+export type PipelineExportResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV document.
+     */
+    documentId: string;
+    /**
+     * Its name.
+     */
+    fileName: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * One field of a pipeline, named as people see it.
+ */
+export type PipelineFieldSummary = {
+    /**
+     * Whether it holds several values.
+     */
+    multiple: boolean;
+    /**
+     * The name entries and filters use.
+     */
+    name: string;
+    /**
+     * A select or tags field's labels in order: for Stage, the stages from
+     * first to last.
+     */
+    options: Array<string>;
+    /**
+     * Whether the caller cannot write it.
+     */
+    readOnly: boolean;
+    /**
+     * Whether every entry must have a value.
+     */
+    required: boolean;
+    /**
+     * What it holds.
+     */
+    type: PipelineFieldType;
+};
+
+/**
+ * What a field holds.
+ */
+export type PipelineFieldType = 'company' | 'contact' | 'text' | 'number' | 'checkbox' | 'date' | 'date_range' | 'link' | 'select' | 'tags' | 'person' | 'item' | 'relation' | 'formula';
+
+/**
+ * A pipeline with its fields.
+ */
+export type PipelineFields = AccessiblePipeline & {
+    /**
+     * Its fields in column order; a tracked pipeline's first names its record.
+     */
+    fields: Array<PipelineFieldSummary>;
+    /**
+     * Its table's version when read.
+     */
+    version: number;
+};
+
+/**
+ * What a pipeline import did.
+ */
+export type PipelineImportResponse = {
+    /**
+     * Entries added.
+     */
+    added: number;
+    /**
+     * Labels added to select fields so the CSV's values fit.
+     */
+    addedOptions: Array<FieldOptions>;
+    /**
+     * Rows whose record the pipeline already had.
+     */
+    alreadyPresent: number;
+    /**
+     * Companies or contacts the import created.
+     */
+    createdRecords: number;
+    /**
+     * Pipeline fields the CSV filled.
+     */
+    filledFields: Array<string>;
+    /**
+     * CSV columns matching no field the import can fill.
+     */
+    ignoredColumns: Array<string>;
+    /**
+     * Rows refused for a value their field cannot hold.
+     */
+    invalid: Array<SkippedImportRecord>;
+    /**
+     * The pipeline filled.
+     */
+    pipelineId: string;
+    /**
+     * Its name.
+     */
+    pipelineName: string;
+    /**
+     * Rows without a domain or email.
+     */
+    skippedRows: number;
+    /**
+     * Records that could not be found or created.
+     */
+    unresolved: Array<SkippedImportRecord>;
 };
 
 /**
@@ -15432,6 +16268,16 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * The companies or contacts to find entries for, across pipelines.
+ */
+export type RecordEntriesRequest = {
+    /**
+     * CRM company or contact ids.
+     */
+    recordIds: Array<string>;
+};
+
+/**
  * OpenAPI representation of streamed recording bytes.
  */
 export type RecordingBytes = Blob | File;
@@ -15444,6 +16290,34 @@ export type RegisterUploads = {
      * At most 50 descriptors; no duplicate identities in a call.
      */
     descriptors: Array<UploadDescriptor>;
+};
+
+/**
+ * Entries to delete; their companies and contacts stay in the CRM.
+ */
+export type RemoveEntriesRequest = {
+    /**
+     * Entries to delete.
+     */
+    entryIds?: Array<string>;
+    /**
+     * Records whose every entry in the pipeline to delete.
+     */
+    recordIds?: Array<string>;
+};
+
+/**
+ * The entries deleted.
+ */
+export type RemoveEntriesResponse = {
+    /**
+     * Each entry as it was.
+     */
+    removed: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
 };
 
 /**
@@ -16562,6 +17436,20 @@ export type SkippedCell = {
      * The row.
      */
     row: string;
+};
+
+/**
+ * A record an import could not add, and why.
+ */
+export type SkippedImportRecord = {
+    /**
+     * The company's domain or the contact's email.
+     */
+    key: string;
+    /**
+     * What went wrong.
+     */
+    reason: string;
 };
 
 /**
@@ -19647,6 +20535,61 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * Availability for exactly the members selected by the domain service.
+ */
+export type TeamAvailability = {
+    /**
+     * True only when all requested people and source intervals were covered.
+     */
+    complete: boolean;
+    /**
+     * Exclusive requested end.
+     */
+    end: string;
+    /**
+     * Common calendar gaps for every included person, present only with
+     * complete coverage. These are not working-hours or booking guarantees.
+     */
+    freeWindows?: Array<AvailabilityInterval> | null;
+    /**
+     * Included people, always including the requester.
+     */
+    members: Array<TeamMemberAvailability>;
+    /**
+     * Inclusive requested start.
+     */
+    start: string;
+    /**
+     * A concise explanation that does not overstate incomplete results.
+     */
+    summary: string;
+    /**
+     * Requested identifiers without a current team relationship. No profile
+     * or calendar data about those identifiers is disclosed.
+     */
+    unknownUserIds: Array<string>;
+};
+
+/**
+ * A bounded window and the teammates whose busy time to merge.
+ */
+export type TeamAvailabilityRequest = {
+    /**
+     * Exclusive instant.
+     */
+    end: string;
+    /**
+     * Inclusive instant.
+     */
+    start: string;
+    /**
+     * At most 100 current teammates; the requester is always included.
+     * Omit for the whole team; an empty list checks only the requester.
+     */
+    userIds?: Array<string> | null;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -19765,6 +20708,28 @@ export type TeamCalendarPage = {
  * What a user exposes through their team membership.
  */
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
+ * Busy time and confidence for one explicitly included person.
+ */
+export type TeamMemberAvailability = {
+    /**
+     * Merged known busy intervals clipped to the requested range.
+     */
+    busy: Array<AvailabilityInterval>;
+    /**
+     * Whether the whole requested range was established.
+     */
+    coverage: AvailabilityCoverage;
+    /**
+     * Reasons gaps in the busy intervals cannot be called free.
+     */
+    unknownReasons: Array<AvailabilityUnknownReason>;
+    /**
+     * Macro identifier of the included person.
+     */
+    userId: string;
+};
 
 /**
  * One teammate's out-of-office occurrence.
@@ -20428,6 +21393,34 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
+ * Entries to change.
+ */
+export type UpdateEntriesRequest = {
+    /**
+     * Refuse the change if the pipeline's table moved past this version.
+     */
+    baseVersion?: number | null;
+    /**
+     * Each entry's changes.
+     */
+    updates: Array<EntryChanges>;
+};
+
+/**
+ * The entries an update wrote.
+ */
+export type UpdateEntriesResponse = {
+    /**
+     * Each entry, in request order.
+     */
+    updated: Array<UpdatedPipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
+
+/**
  * A change to a form's facts; what is left out stays. The description,
  * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
@@ -20528,6 +21521,21 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * An updated entry.
+ */
+export type UpdatedPipelineEntry = {
+    /**
+     * The fields set, as they were and are.
+     */
+    changes: Array<EntryFieldChange>;
+    /**
+     * The entry.
+     */
+    entryId: string;
+    record?: null | EntryRecord;
 };
 
 /**
@@ -21587,6 +22595,21 @@ export type WordDocumentResponse = {
 };
 
 /**
+ * The body to write and the revision it was written against.
+ */
+export type WriteDocumentMarkdownRequest = {
+    /**
+     * The `revision` from the read this body is based on. The write applies
+     * only if the document is still at this revision.
+     */
+    expectedRevision: string;
+    /**
+     * The whole new body, as Markdown.
+     */
+    markdown: string;
+};
+
+/**
  * Z-order moves.
  */
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
@@ -22409,6 +23432,30 @@ export type ListTeamOutOfOfficeResponses = {
 };
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
+
+export type GetTeamAvailabilityData = {
+    body: TeamAvailabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/team/availability';
+};
+
+export type GetTeamAvailabilityErrors = {
+    /**
+     * Invalid window or more than 100 teammates
+     */
+    400: unknown;
+    /**
+     * Team calendar sharing is disabled
+     */
+    404: unknown;
+};
+
+export type GetTeamAvailabilityResponses = {
+    200: TeamAvailability;
+};
+
+export type GetTeamAvailabilityResponse = GetTeamAvailabilityResponses[keyof GetTeamAvailabilityResponses];
 
 export type EventIcsData = {
     body?: never;
@@ -24810,6 +25857,25 @@ export type CreateCrmCompanyResponses = {
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
 
+export type ImportCrmCompaniesCsvData = {
+    body: ImportCompaniesCsvRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/companies/import';
+};
+
+export type ImportCrmCompaniesCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmCompaniesCsvError = ImportCrmCompaniesCsvErrors[keyof ImportCrmCompaniesCsvErrors];
+
+export type ImportCrmCompaniesCsvResponses = {
+    200: CompanyImportResponse;
+};
+
+export type ImportCrmCompaniesCsvResponse = ImportCrmCompaniesCsvResponses[keyof ImportCrmCompaniesCsvResponses];
+
 export type GetCompanyData = {
     body?: never;
     path: {
@@ -25248,6 +26314,53 @@ export type CreateCrmPipelineResponses = {
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
 
+export type SearchCrmPipelineEntriesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Text the record's name, domain or email must contain.
+         */
+        search: string;
+        /**
+         * Most entries per pipeline, 1 to 5000; defaults to 50.
+         */
+        limit?: number | null;
+    };
+    url: '/crm/pipelines/entry-search';
+};
+
+export type SearchCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type SearchCrmPipelineEntriesError = SearchCrmPipelineEntriesErrors[keyof SearchCrmPipelineEntriesErrors];
+
+export type SearchCrmPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type SearchCrmPipelineEntriesResponse = SearchCrmPipelineEntriesResponses[keyof SearchCrmPipelineEntriesResponses];
+
+export type ListCrmRecordPipelineEntriesData = {
+    body: RecordEntriesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/record-entries';
+};
+
+export type ListCrmRecordPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmRecordPipelineEntriesError = ListCrmRecordPipelineEntriesErrors[keyof ListCrmRecordPipelineEntriesErrors];
+
+export type ListCrmRecordPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type ListCrmRecordPipelineEntriesResponse = ListCrmRecordPipelineEntriesResponses[keyof ListCrmRecordPipelineEntriesResponses];
+
 export type GetCrmPipelineData = {
     body?: never;
     path: {
@@ -25262,6 +26375,175 @@ export type GetCrmPipelineResponses = {
 };
 
 export type GetCrmPipelineResponse = GetCrmPipelineResponses[keyof GetCrmPipelineResponses];
+
+export type GetCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/csv';
+};
+
+export type GetCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type GetCrmPipelineCsvError = GetCrmPipelineCsvErrors[keyof GetCrmPipelineCsvErrors];
+
+export type GetCrmPipelineCsvResponses = {
+    200: PipelineCsvResponse;
+};
+
+export type GetCrmPipelineCsvResponse = GetCrmPipelineCsvResponses[keyof GetCrmPipelineCsvResponses];
+
+export type EditCrmPipelineData = {
+    body: EditPipelineRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/edit';
+};
+
+export type EditCrmPipelineErrors = {
+    400: ErrorResponse;
+};
+
+export type EditCrmPipelineError = EditCrmPipelineErrors[keyof EditCrmPipelineErrors];
+
+export type EditCrmPipelineResponses = {
+    200: PipelineFields;
+};
+
+export type EditCrmPipelineResponse = EditCrmPipelineResponses[keyof EditCrmPipelineResponses];
+
+export type UpdateCrmPipelineEntriesData = {
+    body: UpdateEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type UpdateCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateCrmPipelineEntriesError = UpdateCrmPipelineEntriesErrors[keyof UpdateCrmPipelineEntriesErrors];
+
+export type UpdateCrmPipelineEntriesResponses = {
+    200: UpdateEntriesResponse;
+};
+
+export type UpdateCrmPipelineEntriesResponse = UpdateCrmPipelineEntriesResponses[keyof UpdateCrmPipelineEntriesResponses];
+
+export type AddCrmPipelineEntriesData = {
+    body: AddEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type AddCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type AddCrmPipelineEntriesError = AddCrmPipelineEntriesErrors[keyof AddCrmPipelineEntriesErrors];
+
+export type AddCrmPipelineEntriesResponses = {
+    200: AddEntriesResponse;
+};
+
+export type AddCrmPipelineEntriesResponse = AddCrmPipelineEntriesResponses[keyof AddCrmPipelineEntriesResponses];
+
+export type FindCrmPipelineEntriesData = {
+    body: FindEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/find';
+};
+
+export type FindCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type FindCrmPipelineEntriesError = FindCrmPipelineEntriesErrors[keyof FindCrmPipelineEntriesErrors];
+
+export type FindCrmPipelineEntriesResponses = {
+    200: FoundEntriesResponse;
+};
+
+export type FindCrmPipelineEntriesResponse = FindCrmPipelineEntriesResponses[keyof FindCrmPipelineEntriesResponses];
+
+export type RemoveCrmPipelineEntriesData = {
+    body: RemoveEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/remove';
+};
+
+export type RemoveCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type RemoveCrmPipelineEntriesError = RemoveCrmPipelineEntriesErrors[keyof RemoveCrmPipelineEntriesErrors];
+
+export type RemoveCrmPipelineEntriesResponses = {
+    200: RemoveEntriesResponse;
+};
+
+export type RemoveCrmPipelineEntriesResponse = RemoveCrmPipelineEntriesResponses[keyof RemoveCrmPipelineEntriesResponses];
+
+export type ExportCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/export';
+};
+
+export type ExportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ExportCrmPipelineCsvError = ExportCrmPipelineCsvErrors[keyof ExportCrmPipelineCsvErrors];
+
+export type ExportCrmPipelineCsvResponses = {
+    200: PipelineExportResponse;
+};
+
+export type ExportCrmPipelineCsvResponse = ExportCrmPipelineCsvResponses[keyof ExportCrmPipelineCsvResponses];
+
+export type ImportCrmPipelineCsvData = {
+    body: ImportPipelineCsvRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/import';
+};
+
+export type ImportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmPipelineCsvError = ImportCrmPipelineCsvErrors[keyof ImportCrmPipelineCsvErrors];
+
+export type ImportCrmPipelineCsvResponses = {
+    200: PipelineImportResponse;
+};
+
+export type ImportCrmPipelineCsvResponse = ImportCrmPipelineCsvResponses[keyof ImportCrmPipelineCsvResponses];
 
 export type RenameCrmPipelineData = {
     body: RenamePipeline;
@@ -27362,6 +28644,57 @@ export type ReadCanvasSceneResponses = {
 
 export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
+export type CommentOnDocumentTextData = {
+    body: CommentOnTextRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/comments/text';
+};
+
+export type CommentOnDocumentTextErrors = {
+    /**
+     * Not a markdown or Word document, or an invalid quote or occurrence
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document comment access denied
+     */
+    403: ErrorResponse;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The quote appears more than once or not at all; nothing was posted
+     */
+    422: CommentOnTextRefused;
+    /**
+     * The comment could not be posted
+     */
+    500: ErrorResponse;
+    /**
+     * The comment could not be anchored; nothing was posted
+     */
+    502: ErrorResponse;
+};
+
+export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
+
+export type CommentOnDocumentTextResponses = {
+    200: CommentOnTextResponse;
+};
+
+export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
+
 export type CopyDocumentData = {
     body: CopyDocumentRequest;
     path: {
@@ -27607,6 +28940,96 @@ export type GetDocumentLocationV3Responses = {
 };
 
 export type GetDocumentLocationV3Response = GetDocumentLocationV3Responses[keyof GetDocumentLocationV3Responses];
+
+export type GetDocumentMarkdownData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type GetDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The body could not be read
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type GetDocumentMarkdownError = GetDocumentMarkdownErrors[keyof GetDocumentMarkdownErrors];
+
+export type GetDocumentMarkdownResponses = {
+    200: DocumentMarkdown;
+};
+
+export type GetDocumentMarkdownResponse = GetDocumentMarkdownResponses[keyof GetDocumentMarkdownResponses];
+
+export type WriteDocumentMarkdownData = {
+    body: WriteDocumentMarkdownRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type WriteDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an empty revision
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document changed since the revision was read; nothing was written
+     */
+    409: DocumentMarkdownFailure;
+    /**
+     * The write failed and may have applied
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type WriteDocumentMarkdownError = WriteDocumentMarkdownErrors[keyof WriteDocumentMarkdownErrors];
+
+export type WriteDocumentMarkdownResponses = {
+    200: DocumentMarkdownWritten;
+};
+
+export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
 
 export type PermanentlyDeleteDocumentData = {
     body?: never;
@@ -30096,6 +31519,57 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type GetInitiativeActivityData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: {
+        /**
+         * Only changes at or after this time.
+         */
+        after?: string;
+        /**
+         * Only changes before this time.
+         */
+        before?: string;
+        /**
+         * `occurredAt` of the previous page's `nextCursor`; send with `cursorId`.
+         */
+        cursorOccurredAt?: string;
+        /**
+         * `id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.
+         */
+        cursorId?: string;
+        /**
+         * Events to scan, 1 through 100; defaults to 100.
+         */
+        limit?: number;
+    };
+    url: '/initiatives/{initiative_id}/activity';
+};
+
+export type GetInitiativeActivityErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeActivityError = GetInitiativeActivityErrors[keyof GetInitiativeActivityErrors];
+
+export type GetInitiativeActivityResponses = {
+    200: InitiativeActivityPage;
+};
+
+export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
 
 export type GetInitiativeDescriptionData = {
     body?: never;

@@ -302,6 +302,52 @@ export class CalendarNamespace {
   }
 
   /**
+   * When the user and their teammates are busy in a bounded UTC window (a day
+   * or a week is best, at most 370 days); `freeWindows` is present only when
+   * every person's data is complete, so never infer free time from missing
+   * busy blocks. Always includes the user; omit `members` for the whole team,
+   * or pass `[]` for only the user. Busy blocks carry no event titles, and
+   * working hours are not applied.
+   *
+   * @readonly
+   */
+  async teamAvailability(opts: {
+    /** Inclusive start, RFC 3339 UTC. */
+    start: string;
+    /** Exclusive end, RFC 3339 UTC; later than `start`. */
+    end: string;
+    /** At most 100 current teammates. */
+    members?: User[];
+  }) {
+    const availability = unwrap(
+      await this.client.storage.getTeamAvailability({
+        body: {
+          start: opts.start,
+          end: opts.end,
+          ...(opts.members
+            ? { userIds: opts.members.map((member) => member.id) }
+            : {}),
+        },
+      }),
+    );
+    return {
+      start: availability.start,
+      end: availability.end,
+      members: availability.members.map(({ userId, ...member }) => ({
+        ...member,
+        user: User.byId(this.client, userId),
+      })),
+      freeWindows: availability.freeWindows ?? undefined,
+      /** Requested people who are not current teammates; nothing about them is disclosed. */
+      unknownUsers: availability.unknownUserIds.map((id) =>
+        User.byId(this.client, id),
+      ),
+      complete: availability.complete,
+      summary: availability.summary,
+    };
+  }
+
+  /**
    * The calendars the caller can see, some possibly not theirs, primaries and writable first.
    *
    * @readonly

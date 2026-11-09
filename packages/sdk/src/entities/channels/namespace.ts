@@ -55,7 +55,8 @@ export class ChannelNamespace {
   }
 
   /**
-   * Open (creating if needed) the DM channel with a user.
+   * Open (creating if needed) the user's 1:1 direct message with one person.
+   * For several people, use {@link private}.
    *
    * @write
    * @idempotent
@@ -65,7 +66,8 @@ export class ChannelNamespace {
   }
 
   /**
-   * Open (creating if needed) the private group channel with a set of users.
+   * Open (creating if needed) the group direct message with exactly these
+   * people, excluding the user. For one person, use {@link dm}.
    *
    * @write
    * @idempotent
