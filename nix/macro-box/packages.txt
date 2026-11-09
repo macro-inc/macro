@@ -1,0 +1,70 @@
+# Ubuntu 24.04 packages in the macro-box rootfs, on top of every
+# Essential/Priority: required package. Installed without Recommends.
+# After editing, run ./lock.sh to re-resolve debs.lock.json.
+
+# Boot and system
+linux-image-virtual
+initramfs-tools
+systemd
+systemd-sysv
+systemd-resolved
+systemd-timesyncd
+udev
+dbus
+libpam-systemd
+dbus-user-session
+kmod
+cloud-guest-utils
+fdisk
+locales
+tzdata
+sudo
+fakeroot
+
+# Networking and basics
+iproute2
+iputils-ping
+ca-certificates
+curl
+wget
+openssh-client
+gnupg
+less
+nano
+vim-tiny
+procps
+psmisc
+lsof
+htop
+jq
+unzip
+zip
+xz-utils
+zstd
+file
+tmux
+rsync
+
+# Containers
+docker.io
+docker-buildx
+docker-compose-v2
+
+# Toolchains
+git
+build-essential
+pkg-config
+python3
+python3-venv
+python3-pip
+python3-dev
+libssl-dev
+
+# Display: Xvnc + Openbox for the browser
+tigervnc-standalone-server
+openbox
+xterm
+x11-xserver-utils
+fonts-dejavu-core
+fonts-liberation
+fonts-noto-color-emoji
