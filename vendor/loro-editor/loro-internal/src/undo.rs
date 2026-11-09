@@ -833,6 +833,55 @@ impl UndoManager {
             .push(prefix.into());
     }
 
+    /// Whether a known local projection may provide a metadata-only checkpoint.
+    /// Its on_push callback must accept None, as with record_new_checkpoint.
+    /// Paused, excluded and undo-generated edits still require their full diffs.
+    pub fn accepts_projected_checkpoint(&self, origin: &str) -> bool {
+        let lock = self.inner.lock();
+        let inner = lock.borrow();
+        !inner.paused
+            && !inner.processing_undo
+            && !inner
+                .exclude_origin_prefixes
+                .iter()
+                .any(|prefix| origin.starts_with(&**prefix))
+    }
+
+    /// Record a committed local projection without constructing document diffs.
+    /// Derive the group's touched containers from only the new local op span so
+    /// remote changes retain the same group-boundary and cursor semantics.
+    pub fn record_projected_checkpoint(&self) -> LoroResult<()> {
+        let peer = self.peer();
+        let counter = get_counter_end(&self.doc, peer);
+        let lock = self.inner.lock();
+        let (start, grouped) = {
+            let inner = lock.borrow();
+            (inner.next_counter.unwrap_or(counter), inner.group.is_some())
+        };
+        if counter > start && grouped {
+            let affected = {
+                let oplog = self.doc.oplog().lock();
+                let mut affected = FxHashSet::default();
+                for op in oplog.iter_ops(IdSpan::new(peer, start, counter)) {
+                    let id = self
+                        .doc
+                        .arena()
+                        .get_container_id(op.container())
+                        .ok_or_else(|| {
+                            LoroError::internal("projected checkpoint container missing")
+                        })?;
+                    affected.insert(id);
+                }
+                affected
+            };
+            if let Some(group) = &mut lock.borrow_mut().group {
+                group.affected_cids.extend(affected);
+            }
+        }
+        UndoManagerInner::record_checkpoint(&lock, counter, None);
+        Ok(())
+    }
+
     pub fn record_new_checkpoint(&self) -> LoroResult<()> {
         // Use implicit-style barrier to preserve next-commit options across
         // an empty commit before undo/redo processing.

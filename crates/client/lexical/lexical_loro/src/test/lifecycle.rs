@@ -238,3 +238,109 @@ fn explicit_reconstruction_and_reattach_recovers_an_injected_index_divergence() 
     projection.check(&doc, editor.state()).expect("recovered");
     Ok(())
 }
+
+#[test]
+fn event_free_local_commit_preserves_remote_undo_group_boundaries() -> Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("editor");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_end(text)?;
+        Ok(text)
+    })?;
+    let doc = new_doc(1)?;
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PlainPolicy, 0)?;
+    let peer = fork_doc(&doc, 2)?;
+    let baseline = peer.oplog_vv();
+    let text_id = projection.index.nodes[&text.key()]
+        .text
+        .clone()
+        .expect("text slot");
+    let undo = loro::InnerUndoManager::new(doc.inner());
+    undo.set_merge_interval(0);
+    undo.group_start()?;
+    let local_events = Arc::new(AtomicUsize::new(0));
+    let import_events = Arc::new(AtomicUsize::new(0));
+    let local = local_events.clone();
+    let imported = import_events.clone();
+    let _events = doc.subscribe_root(Arc::new(move |event| match event.triggered_by {
+        loro::EventTriggerKind::Local => {
+            local.fetch_add(1, Ordering::Relaxed);
+        }
+        loro::EventTriggerKind::Import => {
+            imported.fetch_add(1, Ordering::Relaxed);
+        }
+        _ => {}
+    }));
+    let (_, commit) = editor.update(|tx| tx.insert_text("1"))?;
+    let projected = projection.local_commit_without_events(&doc, &[commit], 1)?;
+    assert!(projected.changed && projected.events_suppressed);
+    undo.record_projected_checkpoint()?;
+    assert_eq!(undo.undo_count(), 1);
+    assert_eq!(local_events.load(Ordering::Relaxed), 0);
+    assert!(doc.with_state(|state| state.is_recording()));
+
+    peer.get_text(text_id.clone()).insert(0, "R")?;
+    peer.commit();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    let (_, changes) = projection.remote(
+        &doc,
+        core.state(),
+        &peer.export(ExportMode::updates(&baseline))?,
+    )?;
+    assert_eq!(import_events.load(Ordering::Relaxed), 1);
+    apply_remote(&mut projection, &doc, &mut core, changes, 2)?;
+    assert_eq!(doc.get_text(text_id.clone()).to_string(), "Ra1");
+    let output = core
+        .apply(
+            Input::TextFromView {
+                key: text.key(),
+                text: "Ra12".into(),
+                anchor: Some(Utf16Offset(4)),
+                focus: Some(Utf16Offset(4)),
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::Range {
+                    anchor: Point::text(text, Utf16Offset(4)),
+                    focus: Point::text(text, Utf16Offset(4)),
+                    resolution_dirty: false,
+                },
+            },
+            HistoryTime(3),
+        )
+        .expect("second local edit");
+    let projected = projection.local_commit_without_events(&doc, &output.commits, 3)?;
+    assert!(projected.changed && projected.events_suppressed);
+    undo.record_projected_checkpoint()?;
+    assert_eq!(doc.get_text(text_id.clone()).to_string(), "Ra12");
+    assert_eq!(
+        undo.undo_count(),
+        2,
+        "overlapping remote edit must end the local group"
+    );
+    assert_eq!(local_events.load(Ordering::Relaxed), 0);
+    assert!(undo.undo()?);
+    assert_eq!(doc.get_text(text_id).to_string(), "Ra1");
+    assert_eq!(
+        local_events.load(Ordering::Relaxed),
+        1,
+        "undo still emits its normal event"
+    );
+    Ok(())
+}

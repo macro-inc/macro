@@ -32,7 +32,7 @@ beforeAll(() => {
       'collab',
       '--features',
       'conformance',
-      '-j4',
+      '-j2',
     ],
     {
       cwd: root,

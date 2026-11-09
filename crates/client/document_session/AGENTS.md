@@ -28,6 +28,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping.
+- Checkpoint eligible local projections from their new oplog span instead of document events; retain full events for imports, fixups, paused/excluded edits and undo/redo.
 - Drain initial core output before accepting input; rebuild bindings and undo on reset.
 - Clean persisted transparent wrappers only during writable initialization; retain protected local fields and apply initial hooks once.
 - Never weaken either side of the collab differential or change oracle expectations.

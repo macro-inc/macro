@@ -3,7 +3,7 @@ use crate::{InitialView, SessionError, ViewEffect};
 use doc_sync_core::{Access, Now};
 use lexical_loro::{FIXUP_ORIGIN, LOCAL_ORIGIN, LoroProjection, PlainPolicy, SyncPolicy};
 use lexical_model::*;
-use loro::{LoroDoc, UndoManager};
+use loro::{InnerUndoManager as UndoManager, LoroDoc};
 use std::sync::Arc;
 mod builder;
 pub use builder::{default_editor_builder, register_editor_commands, with_session_plugins};
@@ -218,7 +218,7 @@ impl EditorSurface {
         }
         self.projection = Some(projection);
         self.refresh_cursor(doc);
-        let mut undo = UndoManager::new(doc);
+        let undo = UndoManager::new(doc.inner());
         undo.set_max_undo_steps(100);
         undo.set_merge_interval(0);
         undo.add_exclude_origin_prefix("history-");
@@ -504,11 +504,23 @@ impl EditorSurface {
         };
         let changed = if access == Access::Edit && !commits.is_empty() && self.projection.is_some()
         {
-            self.projection
-                .as_mut()
-                .ok_or(SessionError::NotReady)?
-                .local_commit(doc, commits, LOCAL_ORIGIN, now.wall.0 / 1000)?
-                .changed
+            let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
+            let projected = if self
+                .undo
+                .as_ref()
+                .is_some_and(|undo| undo.accepts_projected_checkpoint(LOCAL_ORIGIN))
+            {
+                projection.local_commit_without_events(doc, commits, now.wall.0 / 1000)?
+            } else {
+                projection.local_commit(doc, commits, LOCAL_ORIGIN, now.wall.0 / 1000)?
+            };
+            if projected.events_suppressed && projected.changed {
+                self.undo
+                    .as_ref()
+                    .ok_or(SessionError::NotReady)?
+                    .record_projected_checkpoint()?;
+            }
+            projected.changed
         } else {
             false
         };

@@ -559,6 +559,20 @@ impl DocState {
         self.event_recorder.diff_start_version = Some(self.frontiers.clone());
     }
 
+    /// Suspend event materialization for one known local commit only when no
+    /// earlier events are pending. Resume with start_recording after commit.
+    /// The caller owns observer delivery and undo checkpoint bookkeeping.
+    pub fn suspend_recording_for_local_commit(&mut self) -> bool {
+        if !self.is_recording()
+            || !self.event_recorder.diffs.is_empty()
+            || !self.event_recorder.events.is_empty()
+        {
+            return false;
+        }
+        self.event_recorder.recording_diff = false;
+        true
+    }
+
     #[inline(always)]
     pub fn stop_and_clear_recording(&mut self) {
         self.event_recorder = Default::default();
