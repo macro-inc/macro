@@ -75,7 +75,7 @@ Reserve a fresh pending publication version at compatBegin, publish that version
 
 Set TMPDIR for cargo. Never edit generated files by hand. Keep package registration,
 preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/justfile.
-Treat 1.6 MB Brotli as a soft ceiling: retain measured speed gains, preload without blocking paint, and gate startup/composer readiness against the upstream engine.
+Treat 1.6 MB Brotli as an advisory ceiling; retain nonblocking preload and strict startup/document-open latency gates, plus composer regression checks.
 
 Generate compatibility_generated.rs and collaboration/session/compatibility.generated.ts from abi/compatibility.bop plus the shared foreign-host schemas using generate-compatibility-schema.ts. Compatibility requests use exact captured record references and separate typed render metadata; preserve the session and flat Diff ABIs. These envelopes do not themselves provide a working production initializer.
 
@@ -83,3 +83,5 @@ Use editor/update-bound native key reservations for compact buffered writes; nev
 
 Use compatBeginCompact/compatReserveKeys for real native allocator tickets; blocks are bounded to 65,536 keys and belong to one editor/update. Retire unused tickets on commit/discard/no-op without rolling the allocator back. These additive reservation exports do not provide batch construction by themselves.
 Use document_session export helpers for upstream HTML/Markdown so native and WASM share the same renderer; keep Macro export policy in the application branch.
+
+Keep selection value identity separate from its allocation graph: exact leased references survive graph retirement/discard, while each call chooses its read graph. Rehydrate current raw detached values before querying a reused pending slot. Reconcile the actual active identity before publication so replaced values remain mutable; only the final published selection freezes. Historical getPreviousSelection reads the current editor publication. Retire dropped legacy-finalizer values/pins on rejection while preserving invalid-envelope staging; a failed compact batch remains a per-request failure, not a poisoned update.

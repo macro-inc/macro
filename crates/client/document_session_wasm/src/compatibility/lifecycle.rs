@@ -79,7 +79,15 @@ impl EditorSession {
             .pending
             .take()
             .ok_or(BoundaryError::Invalid("compatibility update required"))?;
-        let (pending, result) = session.with_compat_update(pending, |tx| tx.flush())?;
+        let (pending, result) = session.with_compat_update(pending, |tx| {
+            let result = tx.flush();
+            let active = tx
+                .selection()
+                .and_then(|_| tx.foreign_selection_identity(SelectionSlot::Active));
+            host.selection_values
+                .reconcile_active(active.as_ref(), host.update);
+            result
+        })?;
         host.pending = Some(pending);
         result?;
         Ok(())
@@ -99,8 +107,12 @@ impl EditorSession {
             host.pending = Some(pending);
             Ok(false)
         } else {
-            host.pending_version = None;
+            let dropped_version = host.pending_version.take();
             host.discard_reservations();
+            host.selection_values.finish_update(host.update, false);
+            if let Some(version) = dropped_version {
+                host.selection_values.release_graph(version);
+            }
             host.captures
                 .retain(|_, capture| capture.reference.update_id != host.update);
             host.prune_capture_index();
@@ -138,6 +150,37 @@ impl EditorSession {
         wall: f64,
     ) -> Result<compat::CompatCommit, BoundaryError> {
         codec::now(now, wall)?;
+        let dropped = self.compatibility.as_ref().and_then(|host| {
+            host.pending
+                .as_ref()
+                .map(|_| (host.update, host.pending_version))
+        });
+        let result = self.compat_commit_admitted_inner(now, wall);
+        if let (Err(_), Some((update, version))) = (&result, dropped) {
+            let host = self
+                .compatibility
+                .as_mut()
+                .ok_or(BoundaryError::Invalid("compatibility session required"))?;
+            // The legacy finalizer consumes this update even when admission is
+            // refused; retained owned values become detached, not stale Active.
+            host.pending = None;
+            host.pending_version = None;
+            host.discard_reservations();
+            host.selection_values.finish_update(update, false);
+            if let Some(version) = version {
+                host.selection_values.release_graph(version);
+            }
+            host.captures
+                .retain(|_, capture| capture.reference.update_id != update);
+            host.prune_capture_index();
+        }
+        result
+    }
+    fn compat_commit_admitted_inner(
+        &mut self,
+        now: f64,
+        wall: f64,
+    ) -> Result<compat::CompatCommit, BoundaryError> {
         let (host, machine) = self.compat_parts()?;
         let pending = host
             .pending
@@ -174,6 +217,14 @@ impl EditorSession {
             host.states.remove(&refreshed_version);
         }
         host.version = pending_version;
+        let publication = session
+            .surface()
+            .state()
+            .view()
+            .snapshot_for_foreign_read()?;
+        host.selection_values
+            .reconcile_active(publication.selection_identity(), host.update);
+        host.selection_values.finish_update(host.update, true);
         host.states
             .insert(pending_version, session.surface().state().clone());
         let mut leaves = vec![];
@@ -244,8 +295,12 @@ impl EditorSession {
     pub fn compat_discard(&mut self) -> Result<(), JsError> {
         let (host, _) = self.compat_parts().map_err(js)?;
         host.pending = None;
-        host.pending_version = None;
+        let dropped_version = host.pending_version.take();
         host.discard_reservations();
+        host.selection_values.finish_update(host.update, false);
+        if let Some(version) = dropped_version {
+            host.selection_values.release_graph(version);
+        }
         host.captures
             .retain(|_, capture| capture.reference.update_id != host.update);
         host.prune_capture_index();
@@ -278,6 +333,7 @@ impl EditorSession {
             )));
         }
         host.states.remove(&version);
+        host.selection_values.release_graph(version);
         host.captures
             .retain(|_, capture| capture.reference.node.version != version);
         host.prune_capture_index();

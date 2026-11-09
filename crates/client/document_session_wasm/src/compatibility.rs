@@ -12,6 +12,9 @@ mod lifecycle;
 pub(crate) mod observer;
 mod records;
 mod reservations;
+mod selection_ops;
+mod selection_values;
+mod selections;
 
 pub(crate) struct Host {
     editor: u32,
@@ -24,8 +27,7 @@ pub(crate) struct Host {
     pending: Option<PendingUpdate>,
     states: BTreeMap<u64, EditorState>,
     captures: HashMap<u64, records::Capture>,
-    selections: BTreeMap<u32, lexical_model::ForeignSelectionIdentity>,
-    next_selection: u32,
+    selection_values: selection_values::SelectionValues,
     keys: lexical_model::SharedKeyCounter,
     reservations: HashMap<u64, (u32, std::collections::HashSet<lexical_model::NodeKey>)>,
     next_reservation: u64,
@@ -89,8 +91,7 @@ impl EditorSession {
             pending: None,
             states: [(0, state)].into(),
             captures: HashMap::new(),
-            selections: BTreeMap::new(),
-            next_selection: 1,
+            selection_values: selection_values::SelectionValues::new(registration.editor_id),
             keys,
             reservations: HashMap::new(),
             next_reservation: 1,

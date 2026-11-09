@@ -20,16 +20,6 @@ fn optional(value: Option<NodeKey>) -> compat::ForeignOptionalKey {
         key: key(value.unwrap_or(NodeKey::ROOT)),
     }
 }
-pub(super) fn point(point: Point) -> compat::CompatPoint {
-    compat::CompatPoint {
-        key: key(point.key()),
-        offset: point.offset(),
-        kind: match point {
-            Point::Text { .. } => compat::CompatPointKind::Text,
-            Point::Element { .. } => compat::CompatPointKind::Element,
-        },
-    }
-}
 impl Host {
     pub(super) fn records(
         &mut self,
@@ -219,45 +209,17 @@ impl Host {
         let identity = source
             .selection_identity()
             .ok_or(BoundaryError::Invalid("selection identity"))?;
-        let id = if let Some((id, _)) = self.selections.iter().find(|(_, known)| *known == identity)
-        {
-            *id
-        } else {
-            let id = self.next_selection;
-            self.next_selection = id
-                .checked_add(1)
-                .ok_or(BoundaryError::Invalid("selection identity exhausted"))?;
-            self.selections.insert(id, identity.clone());
-            id
-        };
-        let reference = compat::ForeignSelectionRef {
-            editor_id: self.editor,
+        self.selection_values.capture(
+            selection,
+            identity.clone(),
             version,
-            selection_id: id,
-        };
-        Ok(match selection {
-            Selection::Range(range) => compat::CompatSelectionData::CompatRangeSelection {
-                reference,
-                anchor: point(range.anchor),
-                focus: point(range.focus),
-                format: range.format.bits(),
-                style: range.style.encode_utf16().collect(),
-                dirty: range.is_dirty(),
-                has_cached_backward: range.cached_is_backward().is_some(),
-                cached_backward: range.cached_is_backward().unwrap_or(false),
-                has_cached_nodes: false,
-                cached_nodes: vec![],
+            if self.pending_version == Some(version) {
+                selection_values::Origin::Active {
+                    update: self.update,
+                }
+            } else {
+                selection_values::Origin::Frozen
             },
-            Selection::Node(nodes) => compat::CompatSelectionData::CompatNodeSelection {
-                reference,
-                keys: nodes.keys().map(key).collect(),
-                dirty: selection.is_dirty(),
-                has_cached_nodes: false,
-                cached_nodes: vec![],
-            },
-            Selection::Table(_) => {
-                return Err(BoundaryError::Invalid("table selection schema unavailable"))
-            }
-        })
+        )
     }
 }
