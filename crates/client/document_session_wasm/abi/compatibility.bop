@@ -34,6 +34,7 @@ enum CompatOperation : uint16 {
   NodeSelectionAdd = 50; NodeSelectionDelete = 51; NodeSelectionClear = 52;
   NodeSelectionHas = 53; SelectionHasFormat = 54;
   SetCompositionKey = 55; CreateTableSelection = 56;
+  CreateRegisteredNode = 57;
 }
 struct CompatRequest {
   CompatOperation operation;
@@ -173,4 +174,85 @@ struct CompatBatchReply {
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
   CompatRecordDelta delta; CompatBatchResult[] results;
   CompatBatchOutcome outcome;
+}
+
+// Constructor tokens identify exact JS functions across editor-local class IDs.
+// Abstract native prototypes are metadata, never fake serializable node classes.
+struct CompatHostedClass {
+  uint32 classId; uint64 constructorToken; CompatNativePrototype nativePrototype;
+}
+struct CompatHostedConfig { CompatConfig registration; CompatHostedClass[] classes; }
+
+// Native code retains a numeric weak-host slot, not a JS editor or callback owner.
+// Scope IDs are nonzero, monotonic, and valid only during this synchronous call.
+enum CompatHostAccess : byte {
+  Unknown = 0; Mutable = 1; SourceRead = 2; Clone = 3; Creation = 4;
+}
+struct CompatHostContext {
+  uint32 hostSlot; uint64 scopeId; uint32 editorId; uint32 updateId;
+  uint64 version; uint64 mutationEpoch; CompatHostAccess access;
+}
+// Creation precedes the native continuation. The original constructor runs once
+// on this exact allocated record; configured replacement may return another node.
+// Creation acknowledgements and scoped binds require CreatedInstance, never NoInstanceSeed.
+// COW never reuses this event: it uses a validated clone stage instead.
+struct CompatCreationStage {
+  uint32 stageId; uint32 classId; uint64 constructorToken;
+  ForeignRenderRecord record; ForeignCallbackValue[] args;
+}
+union CompatHostCall {
+  1 -> struct CompatHostHook { ForeignHookCall call; }
+  2 -> struct CompatHostClone {
+    ForeignCloneStage stage; ForeignRenderRecord sourceRecord;
+  }
+  3 -> struct CompatHostState { uint32 callId; ForeignStateCall call; }
+  4 -> struct CompatHostPublicExport { ForeignHookCall call; }
+  5 -> struct CompatHostSerializedExport { ForeignHookCall call; }
+  6 -> struct CompatHostCreation { CompatCreationStage stage; }
+}
+// Apply the sparse acknowledged delta before reading nodes or dispatching JS.
+struct CompatHostRequest {
+  CompatHostContext context; CompatRecordDelta delta; CompatHostCall call;
+}
+struct CompatHookAck {
+  uint32 callId; ForeignHookResult result;
+  ForeignRecordPatch[] recordPatches; ForeignOpaqueValuePatch[] valuePatches;
+}
+struct CompatStateAck {
+  uint32 callId; uint32 configId; ForeignStateOperation operation;
+  ForeignHookResult result; ForeignOpaqueValuePatch[] valuePatches;
+}
+struct CompatCreationAck {
+  uint32 stageId; ForeignRecordRef original;
+  CompatInstanceSeed initialInstance; CompatNodeOperand result;
+  ForeignRecordPatch[] recordPatches; ForeignOpaqueValuePatch[] valuePatches;
+}
+union CompatHostResult {
+  1 -> struct CompatHostHookAck { CompatHookAck ack; }
+  2 -> struct CompatHostCloneAck { ForeignCloneAck ack; }
+  3 -> struct CompatHostStateAck { CompatStateAck ack; }
+  4 -> struct CompatHostPublicExportAck { ForeignPublicExportAck ack; }
+  5 -> struct CompatHostSerializedExportAck { ForeignSerializedExportAck ack; }
+  6 -> struct CompatHostCreationAck { CompatCreationAck ack; }
+  7 -> struct CompatHostThrown { ForeignOpaqueValue error; }
+}
+struct CompatHostReply { uint32 hostSlot; uint64 scopeId; CompatHostResult result; }
+
+// Callback operations use a scoped static export, never a recursively borrowed
+// EditorSession receiver. SourceRead forbids graph mutation; Clone admits only
+// destination stage patches. Nested virtual calls retain their normal dispatch.
+union CompatCallbackRequest {
+  1 -> struct CompatCallbackBatch { CompatBatchRequest request; }
+  2 -> struct CompatCallbackNativeSuper {
+    CompatNativePrototype targetPrototype; CompatBatchRequest request;
+  }
+  3 -> struct CompatCallbackReserveKeys { uint32 count; }
+  4 -> struct CompatCallbackBindCreation {
+    uint32 stageId; ForeignRecordRef original; CompatInstanceSeed instance;
+  }
+}
+union CompatCallbackReply {
+  1 -> struct CompatCallbackBatchReply { CompatBatchReply reply; }
+  2 -> struct CompatCallbackReservation { CompatKeyReservation reservation; }
+  3 -> struct CompatCallbackCreationBound { ForeignRenderRecord record; }
 }

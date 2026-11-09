@@ -88,4 +88,6 @@ Keep selection value identity separate from its allocation graph: exact leased r
 
 Validate every compact-begin class-mask owner/class/duplicate/bit patch before allocating keys or opening a scope; apply only the validated list to shared atomic cells. Reject advertised nonzero hooks without an installed host; mask transport alone does not implement hosted callbacks.
 
+Generate compatibility-prototypes.bop and its source metadata with generate-compatibility-prototypes.ts before compatibility schema generation. Hosted callback requests carry exact scope authority and sparse deltas; creation binds the already-run constructor before native continuation, and explicit native-super dispatch never substitutes a nearer ancestor. Constructor tokens identify actual JS functions across editor-local IDs; these envelopes do not implement callback execution by themselves.
+
 Disable class static transforms in the compatibility factory so unchanged JS registrations own them once; keep createMacro defaults intact and retain core text normalization.
