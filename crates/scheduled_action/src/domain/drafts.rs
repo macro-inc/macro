@@ -776,7 +776,7 @@ fn brief(
     let steps = if code {
         format!(
             "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
-            catalog_examples()
+            catalog_examples(context.conditions)
         )
     } else {
         format!(
@@ -816,9 +816,12 @@ For this draft:
 /// Macro's catalog routines that are code, as worked examples of whole
 /// routines: what someone asked for, and the trigger and step that do it.
 /// Their code type-checks against the SDK (the harness's real-Deno tests).
-fn catalog_examples() -> String {
+fn catalog_examples(conditions: bool) -> String {
     let examples: String = CATALOG
         .iter()
+        // A routine whose trigger asks a condition is no example where
+        // triggers can't.
+        .filter(|routine| conditions || !asks_condition(&routine.trigger))
         .filter_map(|routine| {
             let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
             let example = json!({ "trigger": routine.trigger, "steps": [step] });
@@ -831,6 +834,24 @@ fn catalog_examples() -> String {
     format!(
         "Macro's own routines that are code, as worked examples (a cron trigger here leaves out its `timezone`; yours needs one):\n{examples}"
     )
+}
+
+/// Whether a catalog trigger's filters ask AI a yes/no condition.
+fn asks_condition(trigger: &Value) -> bool {
+    let triggers = match trigger.get("triggers").and_then(Value::as_array) {
+        Some(triggers) => triggers.iter().collect(),
+        None => vec![trigger],
+    };
+    triggers.iter().any(|trigger| {
+        trigger
+            .get("filters")
+            .and_then(Value::as_array)
+            .is_some_and(|filters| {
+                filters
+                    .iter()
+                    .any(|filter| filter.get("condition").is_some())
+            })
+    })
 }
 
 /// The routine as the agent reads it: data, not instructions.
