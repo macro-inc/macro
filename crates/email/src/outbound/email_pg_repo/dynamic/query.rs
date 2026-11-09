@@ -1226,6 +1226,8 @@ pub(crate) async fn dynamic_email_thread_cursor(
     if can_short_circuit(email_filter, &resolved) {
         return Ok(Vec::new());
     }
+    let subject_subscans =
+        team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
     let mut qb = build_query(
         view,
@@ -1277,6 +1279,20 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 link_id: row.try_get("link_id")?,
             })
         });
+
+    if subject_subscans {
+        // Parallel workers on a subject subscan run ahead of its LIMIT: for
+        // a word in about 1% of a large inbox's threads they walked eight
+        // times the threads one page needs and read 15 times the buffers,
+        // so the page took 2.5 times as long warm, and far longer cold.
+        let mut transaction = pool.begin().await?;
+        sqlx::query!("SET LOCAL max_parallel_workers_per_gather = 0")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = query.fetch_all(&mut *transaction).await?;
+        transaction.commit().await?;
+        return Ok(rows);
+    }
 
     if team_id.is_none() {
         return query.fetch_all(pool).await;

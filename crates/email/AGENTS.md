@@ -64,7 +64,9 @@ tools — hexagonal, heavily feature-gated.
   binding the inbox gives it that inbox's statistics instead of the average
   one. Spam and Trash skip the subscan (it can't read their folder date), and
   a subscan never picks its preview in the candidate stage
-  (`uses_subject_subscans`). Other subject trees keep the
+  (`uses_subject_subscans`). Subscan queries run with parallel workers off
+  (`SET LOCAL max_parallel_workers_per_gather = 0`): workers ran far past the
+  page LIMIT and read 15 times the buffers. Other subject trees keep the
   `has_thread_literals` mirror, so a page's LIMIT never counts threads the
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
