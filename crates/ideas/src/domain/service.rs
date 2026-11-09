@@ -69,7 +69,6 @@ where
     Flags: FeatureFlags + 'static,
 {
     /// Without `flags`, ideas are off for everyone.
-    #[expect(clippy::too_many_arguments, reason = "each port is its own adapter")]
     pub fn new(
         repo: Arc<Repo>,
         access: Arc<Access>,
