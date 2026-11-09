@@ -275,7 +275,8 @@ opens the session. They are
 not retracted automatically yet: answering the question or starting the next turn leaves
 the earlier notification until you mark it done. The chip announcement post itself no
 longer notifies the thread. A chat agent's thread reply notifies the thread as a reply;
-its alert text reads the session's name, the steps the agent took, then its answer. Settings → notifications lists them under `AI`.
+its alert text reads the session's name (or `Agent session` when someone in the thread
+cannot open the session), the steps the agent took, then its answer. Settings → notifications lists them under `AI`.
 
 ## Home — `/app/component/home`
 

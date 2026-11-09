@@ -248,9 +248,29 @@ fn only_the_answer_and_a_question_notify_the_thread() {
     }
 }
 
-/// Grants the bot whatever the user it acts for may do: here, edit.
+/// Grants the bot whatever the user it acts for may do: here, edit. Reads
+/// the thread's and the session's audiences from its fields.
 #[derive(Clone)]
-struct EditingAccess;
+struct EditingAccess {
+    thread_public: bool,
+    thread_readers: Vec<MacroUserIdStr<'static>>,
+    session_readers: Vec<MacroUserIdStr<'static>>,
+}
+
+fn reader(email: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email(email).unwrap()
+}
+
+impl EditingAccess {
+    /// Everyone in the thread can open the session.
+    fn shared() -> Self {
+        Self {
+            thread_public: false,
+            thread_readers: vec![reader("user@example.com")],
+            session_readers: vec![reader("user@example.com"), reader("owner@example.com")],
+        }
+    }
+}
 
 impl EntityAccessService for EditingAccess {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
@@ -283,11 +303,13 @@ impl EntityAccessService for EditingAccess {
     }
     async fn get_access_level(
         &self,
-        _: Option<&MacroUserId<Lowercase<'_>>>,
+        user: Option<&MacroUserId<Lowercase<'_>>>,
         _: &str,
-        _: EntityType,
+        entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        unimplemented!("the announcer only mints bot receipts")
+        assert!(user.is_none(), "the announcer only asks for public access");
+        assert_ne!(entity_type, EntityType::AgentSession);
+        Ok(self.thread_public.then_some(AccessLevel::View))
     }
     async fn check_access(
         &self,
@@ -326,9 +348,13 @@ impl EntityAccessService for EditingAccess {
     async fn get_users_by_entity(
         &self,
         _: &str,
-        _: EntityType,
+        entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        unimplemented!("the announcer only mints bot receipts")
+        Ok(if entity_type == EntityType::AgentSession {
+            self.session_readers.clone()
+        } else {
+            self.thread_readers.clone()
+        })
     }
     async fn get_call_channel(&self, _: &Uuid) -> Result<Option<CallChannelInfo>, AccessError> {
         unimplemented!("the announcer only mints bot receipts")
@@ -416,7 +442,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         });
     let announcer = MessageAnnouncer::new(
         Arc::new(messages),
-        Arc::new(EditingAccess),
+        Arc::new(EditingAccess::shared()),
         LexicalClient::new("test-key".to_owned(), lexical.uri()),
     );
 
@@ -525,7 +551,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
             });
         let announcer = MessageAnnouncer::new(
             Arc::new(messages),
-            Arc::new(EditingAccess),
+            Arc::new(EditingAccess::shared()),
             LexicalClient::new("test-key".to_owned(), lexical.uri()),
         );
         announcer
@@ -601,4 +627,50 @@ fn a_stored_step_keeps_the_view_it_presented() {
     };
     assert_eq!(rows[0].card, Some(ActivityCard::View { view }));
     assert_eq!(rows[0].detail, None);
+}
+
+fn announcer_with(access: EditingAccess) -> MessageAnnouncer<EditingAccess> {
+    MessageAnnouncer::new(
+        Arc::new(messages::domain::api::MockMessageCommands::new()),
+        Arc::new(access),
+        LexicalClient::new("test-key".to_owned(), "http://127.0.0.1:9".to_owned()),
+    )
+}
+
+/// The link carries the session's name only when every thread reader can
+/// open the session: push and search text reach the whole thread.
+#[tokio::test]
+async fn a_thread_whose_readers_all_open_the_session_sees_its_name() {
+    let label = announcer_with(EditingAccess::shared())
+        .link_label(
+            SESSION,
+            Some("Fix login".to_owned()),
+            &MessageParent::Channel(Uuid::from_u128(1)),
+        )
+        .await;
+    assert_eq!(label.as_deref(), Some("Fix login"));
+}
+
+/// One reader who cannot open the session, or a thread anyone with the link
+/// can read, keeps the name out of the reply's text.
+#[tokio::test]
+async fn a_thread_with_readers_outside_the_session_sees_the_generic_label() {
+    let outsider = EditingAccess {
+        thread_readers: vec![reader("user@example.com"), reader("guest@example.com")],
+        ..EditingAccess::shared()
+    };
+    let public = EditingAccess {
+        thread_public: true,
+        ..EditingAccess::shared()
+    };
+    for access in [outsider, public] {
+        let label = announcer_with(access)
+            .link_label(
+                SESSION,
+                Some("Fix login".to_owned()),
+                &MessageParent::Channel(Uuid::from_u128(1)),
+            )
+            .await;
+        assert_eq!(label, None);
+    }
 }

@@ -882,8 +882,9 @@ pub struct ResolvedReply {
     /// The pending reply posted when the turn was announced.
     pub message_id: Uuid,
     /// The session's name, which the reply's link reads as wherever the
-    /// reply is shown as text - a notification, search. `None` while the
-    /// session has only its default name.
+    /// reply is shown as text - a notification, search - when everyone who
+    /// can read the thread can open the session; otherwise the link reads
+    /// generically. `None` while the session has only its default name.
     pub session_name: Option<String>,
     /// Channel or document the mention was posted in.
     pub origin_parent: messages::domain::models::MessageParent,
