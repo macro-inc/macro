@@ -2,7 +2,7 @@
 use super::*;
 use calls::ResultValue;
 use lexical_model::Transaction;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 
 trait Metadata {
     fn clone_request(
@@ -25,10 +25,7 @@ trait Metadata {
         &self,
         completion: selections::SelectionCompletion,
     ) -> Result<ResultValue, BoundaryError>;
-    fn prepare(
-        &self,
-        request: &compat::CompatRequest,
-    ) -> Result<native_calls::NativeCall, BoundaryError>;
+    fn host(&self) -> Result<RefMut<'_, Host>, BoundaryError>;
 }
 struct Frame<'a> {
     host: RefCell<&'a mut Host>,
@@ -179,14 +176,12 @@ impl Metadata for Frame<'_> {
             .map_err(|_| BoundaryError::Invalid("compatibility metadata is executing"))?
             .finish_selection(completion)
     }
-    fn prepare(
-        &self,
-        request: &compat::CompatRequest,
-    ) -> Result<native_calls::NativeCall, BoundaryError> {
-        self.host
+    fn host(&self) -> Result<RefMut<'_, Host>, BoundaryError> {
+        let host = self
+            .host
             .try_borrow_mut()
-            .map_err(|_| BoundaryError::Invalid("compatibility metadata is executing"))?
-            .prepare_node_call(request)
+            .map_err(|_| BoundaryError::Invalid("compatibility metadata is executing"))?;
+        Ok(RefMut::map(host, |host| &mut **host))
     }
 }
 scoped_tls_hkt::scoped_thread_local!(static CURRENT: for<'a> &'a (dyn Metadata + 'a));
@@ -196,11 +191,6 @@ pub(super) fn dispatch(
     tx: &mut Transaction<'_>,
     request: &compat::CompatRequest,
 ) -> Result<ResultValue, BoundaryError> {
-    // Preserve envelope validation even when a selection operation has no node
-    // receiver of its own. Selection plans execute outside their ledger borrow.
-    if request.has_receiver {
-        host.receiver(request)?;
-    }
     let version = if request.historical {
         request.state_version
     } else {
@@ -213,24 +203,53 @@ pub(super) fn dispatch(
         version,
         update,
     };
-    CURRENT.set(&frame, || {
-        if let Some(result) = CURRENT.with(|scope| scope.selection(tx, request))? {
-            return match result {
-                selections::PreparedSelection::Ready(value) => Ok(value),
-                selections::PreparedSelection::Previous { state, version } => {
-                    let source = state.view().snapshot_for_foreign_read()?;
-                    CURRENT.with(|scope| scope.previous(&source, version))
-                }
-                selections::PreparedSelection::Execute(plan) => {
-                    let completion = plan.execute(tx)?;
-                    CURRENT.with(|scope| scope.finish_selection(completion))
-                }
-            };
-        }
-        let prepared = CURRENT.with(|scope| scope.prepare(request))?;
-        // Both RefCell guards have been dropped before a model hook can run.
-        prepared.execute(tx)
+    CURRENT.set(&frame, || dispatch_current(tx, request))
+}
+
+/// Prepare metadata in short borrows; the closure must not execute model callbacks.
+pub(super) fn with_current_host<T>(
+    body: impl FnOnce(&mut Host) -> Result<T, BoundaryError>,
+) -> Result<T, BoundaryError> {
+    if !CURRENT.is_set() {
+        return Err(BoundaryError::Invalid(
+            "compatibility metadata scope required",
+        ));
+    }
+    CURRENT.with(|scope| {
+        let mut host = scope.host()?;
+        body(&mut host)
     })
+}
+
+/// Execute on a child transaction reborrow under the current exact metadata frame.
+pub(super) fn dispatch_current(
+    tx: &mut Transaction<'_>,
+    request: &compat::CompatRequest,
+) -> Result<ResultValue, BoundaryError> {
+    if !CURRENT.is_set() {
+        return Err(BoundaryError::Invalid(
+            "compatibility metadata scope required",
+        ));
+    }
+    if request.has_receiver {
+        with_current_host(|host| host.receiver(request).map(|_| ()))?;
+    }
+    if let Some(result) = CURRENT.with(|scope| scope.selection(tx, request))? {
+        return match result {
+            selections::PreparedSelection::Ready(value) => Ok(value),
+            selections::PreparedSelection::Previous { state, version } => {
+                let source = state.view().snapshot_for_foreign_read()?;
+                CURRENT.with(|scope| scope.previous(&source, version))
+            }
+            selections::PreparedSelection::Execute(plan) => {
+                let completion = plan.execute(tx)?;
+                CURRENT.with(|scope| scope.finish_selection(completion))
+            }
+        };
+    }
+    let prepared = with_current_host(|host| host.prepare_node_call(request))?;
+    // Both RefCell guards have been dropped before a model hook can run.
+    prepared.execute(tx)
 }
 
 #[cfg(test)]
@@ -273,6 +292,14 @@ pub(super) fn clone_instance(
 
 /// Keep metadata available to clone callbacks while the outer batch normalizes.
 pub(super) fn flush(host: &mut Host, tx: &mut Transaction<'_>) -> Result<(), BoundaryError> {
+    with_pending_frame(host, || tx.flush().map_err(BoundaryError::Model))
+}
+
+/// Bind a synchronous pending callback phase without retaining a metadata guard.
+pub(super) fn with_pending_frame<T>(
+    host: &mut Host,
+    body: impl FnOnce() -> Result<T, BoundaryError>,
+) -> Result<T, BoundaryError> {
     let version = host
         .pending_version
         .ok_or(BoundaryError::Invalid("pending publication version"))?;
@@ -282,5 +309,5 @@ pub(super) fn flush(host: &mut Host, tx: &mut Transaction<'_>) -> Result<(), Bou
         version,
         update,
     };
-    CURRENT.set(&frame, || tx.flush().map_err(BoundaryError::Model))
+    CURRENT.set(&frame, body)
 }

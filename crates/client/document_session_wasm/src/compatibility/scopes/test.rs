@@ -11,7 +11,7 @@ impl ForeignHooks for Probe {
             receiver: super::super::test::NO_RECORD,
             args: vec![],
         };
-        let available = CURRENT.with(|metadata| metadata.prepare(&request).is_ok());
+        let available = with_current_host(|host| host.prepare_node_call(&request)).is_ok();
         Override::Value(if available { 17 } else { 99 })
     }
 }
@@ -72,5 +72,25 @@ fn node_hook_can_reborrow_metadata_after_authorization() -> Result<(), BoundaryE
         ResultValue::Scalar(compat::ForeignCallbackValue::ForeignNumberArgument { value: 17.0 })
     ));
     assert!(!CURRENT.is_set());
+    let request = compat::CompatRequest {
+        operation: compat::CompatOperation::GetRoot,
+        historical: false,
+        state_version: 0,
+        has_receiver: false,
+        receiver: super::super::test::NO_RECORD,
+        args: vec![],
+    };
+    assert!(dispatch_current(&mut tx, &request).is_err());
+    assert!(with_current_host(|host| host.prepare_node_call(&request)).is_err());
+    with_pending_frame(session.compatibility.as_mut().expect("host"), || {
+        // Reject overlapping metadata access before touching the model; the
+        // rejected child leaves the outer scope available for the next call.
+        assert!(with_current_host(|_| dispatch_current(&mut tx, &request)).is_err());
+        assert!(matches!(
+            dispatch_current(&mut tx, &request)?,
+            ResultValue::Node(Some(NodeKey::ROOT))
+        ));
+        Ok(())
+    })?;
     Ok(())
 }
