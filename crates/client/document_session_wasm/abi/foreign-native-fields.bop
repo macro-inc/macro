@@ -1,0 +1,31 @@
+// Generated from checksum-pinned Lexical v0.45.0 native class property declarations.
+enum ForeignNativeField : uint32 {
+  Unknown = 0;
+  AutoLinkNodeIsUnlinked = 1;
+  CodeHighlightNodeHighlightType = 2;
+  CodeNodeIsSyntaxHighlightSupported = 3;
+  CodeNodeLanguage = 4;
+  CodeNodeTheme = 5;
+  HeadingNodeTag = 6;
+  LinkNodeRel = 7;
+  LinkNodeTarget = 8;
+  LinkNodeTitle = 9;
+  LinkNodeUrl = 10;
+  ListItemNodeChecked = 11;
+  ListItemNodeValue = 12;
+  ListNodeListType = 13;
+  ListNodeStart = 14;
+  ListNodeTag = 15;
+  MarkNodeIds = 16;
+  TableCellNodeBackgroundColor = 17;
+  TableCellNodeColSpan = 18;
+  TableCellNodeHeaderState = 19;
+  TableCellNodeRowSpan = 20;
+  TableCellNodeVerticalAlign = 21;
+  TableCellNodeWidth = 22;
+  TableNodeColWidths = 23;
+  TableNodeFrozenColumnCount = 24;
+  TableNodeFrozenRowCount = 25;
+  TableNodeRowStriping = 26;
+  TableRowNodeHeight = 27;
+}

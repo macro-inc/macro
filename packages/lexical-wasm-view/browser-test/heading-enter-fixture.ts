@@ -50,7 +50,12 @@ const native = await mountLocalSessionView(
     onError: (error) => errors.push(String(error)),
   },
   {
-    viewEngine: 1,
+    viewEngine: /Firefox/.test(navigator.userAgent)
+      ? 3
+      : /AppleWebKit/.test(navigator.userAgent) &&
+          !/Chrome/.test(navigator.userAgent)
+        ? 2
+        : 1,
     viewOs: 0,
     create: (config, now, wall) =>
       EditorSession.createMacro(ABI_MAJOR, config, now, wall),
