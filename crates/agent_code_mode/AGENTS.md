@@ -38,7 +38,12 @@ stacks. Process isolation belongs to
   runs refuse it, so a program cannot start another run. Runs are `ToolCaller::Document` with the
   inputs contract and a plain user token (no agent). `DocumentSources` reads
   the stored file (harness adapter `code_mode/document_sources.rs`); builds
-  are cached by source hash in memory, so a miss only rebuilds.
+  are cached by source hash in memory, so a miss only rebuilds. A viewer runs
+  `RUNS_PER_VIEWER` (2) programs at once (`document_programs/viewer_runs.rs`);
+  more wait, within their own deadline, and get `Busy` (503) past it. The
+  wait is `queued_ms` on `document_programs.run`, and the run gets what is
+  left of the deadline. The harness gives `DocumentPrograms` a runner on its
+  own executor.
 - `src/domain/document_programs/page_build.rs`: the build. `text/macro` blocks are
   programs (`export default (args, { macro }: ProgramContext)`, plain JSON
   out); the one `<script type="module" lang="ts">` imports them typed from

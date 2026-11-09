@@ -16,12 +16,15 @@ use macro_user_id::user_id::MacroUserIdStr;
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Mutex, PoisonError},
+    time::Duration,
 };
 use tokio_util::sync::CancellationToken;
 
 pub mod page_build;
+mod viewer_runs;
 
 pub use page_build::{BuildOutcome, ProgramId, SourceHash};
+pub use viewer_runs::RUNS_PER_VIEWER;
 
 /// The per-user rollout flag, shared with the web app's `defineFlag` key.
 pub const DOCUMENT_PROGRAMS_FLAG: &str = "enable-html-code-mode";
@@ -82,7 +85,7 @@ pub struct RunProgram {
     pub program: ProgramId,
     /// Its arguments.
     pub arguments: serde_json::Map<String, serde_json::Value>,
-    /// Total deadline in milliseconds.
+    /// Total deadline in milliseconds, including any wait for a run slot.
     pub timeout_ms: u64,
 }
 
@@ -101,8 +104,9 @@ pub enum DocumentProgramError {
     /// The document doesn't build, so none of its programs run.
     #[error("this document doesn't build")]
     BuildFailed,
-    /// Every build slot is busy.
-    #[error("building is busy; try again later")]
+    /// Every build slot is busy, or the viewer's other runs held their run
+    /// slots past this run's deadline.
+    #[error("the document's programs are busy; try again later")]
     Busy,
     /// The toolchain failed.
     #[error("building failed to run")]
@@ -119,10 +123,13 @@ pub struct DocumentPrograms {
     bundler: Arc<dyn ProgramBundler>,
     runner: Arc<dyn UserCodeMode>,
     builds: Mutex<lru::LruCache<SourceHash, Arc<BuildOutcome>>>,
+    viewers: viewer_runs::ViewerRuns,
 }
 
 impl DocumentPrograms {
     /// Bind the storage reader, the Deno toolchain and the user-scoped runner.
+    /// The runner should have a pool of its own, so documents can't take the
+    /// slots of other user-scoped runs.
     pub fn new(
         sources: Arc<dyn DocumentSources>,
         checker: Arc<dyn ProgramChecker>,
@@ -135,6 +142,7 @@ impl DocumentPrograms {
             bundler,
             runner,
             builds: Mutex::new(lru::LruCache::new(CACHED_BUILDS)),
+            viewers: viewer_runs::ViewerRuns::default(),
         }
     }
 
@@ -195,10 +203,16 @@ impl DocumentPrograms {
 
     /// Run a program of the build the page shows, as `user`. Refuses when the
     /// document has changed since, so a page never runs code it doesn't show.
+    /// A viewer runs [`RUNS_PER_VIEWER`] programs at once; another waits for
+    /// one of them to finish, within its own deadline, and is `Busy` past it.
     #[tracing::instrument(
         name = "document_programs.run",
         skip_all,
-        fields(document_id = %document.entity().entity_id, program = %request.program),
+        fields(
+            document_id = %document.entity().entity_id,
+            program = %request.program,
+            queued_ms = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn run(
@@ -218,16 +232,38 @@ impl DocumentPrograms {
         let bundle = programs
             .get(&request.program)
             .ok_or(DocumentProgramError::UnknownProgram)?;
+        let mut execution = ExecuteRequest {
+            source: bundle.clone(),
+            timeout_ms: request.timeout_ms,
+        };
+        // A run that could never start doesn't take a place in the queue.
+        super::service::validate_request(&execution)?;
+
+        let deadline = Duration::from_millis(request.timeout_ms);
+        let queued = tokio::time::Instant::now();
+        let turn = self.viewers.admit(user, deadline).await;
+        let waited = queued.elapsed();
+        tracing::Span::current().record(
+            "queued_ms",
+            u64::try_from(waited.as_millis()).unwrap_or(u64::MAX),
+        );
+        let remaining_ms =
+            u64::try_from(deadline.saturating_sub(waited).as_millis()).unwrap_or(u64::MAX);
+        let Some(_turn) = turn else {
+            return Err(DocumentProgramError::Busy);
+        };
+        if remaining_ms == 0 {
+            return Err(DocumentProgramError::Busy);
+        }
+        execution.timeout_ms = remaining_ms;
+
         let receipt = self
             .runner
             .execute(
                 user,
                 &ToolCaller::Document,
                 None,
-                ExecuteRequest {
-                    source: bundle.clone(),
-                    timeout_ms: request.timeout_ms,
-                },
+                execution,
                 Some(Unattended {
                     arguments: request.arguments,
                     dry_run: false,

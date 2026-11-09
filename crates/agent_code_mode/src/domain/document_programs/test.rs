@@ -239,3 +239,163 @@ async fn refuses_an_unknown_program_and_a_document_that_does_not_build() {
     );
     assert!(fixture.runs.0.lock().unwrap().is_empty());
 }
+
+/// Holds each run until the test releases it, reporting each start's deadline.
+struct HeldRuns {
+    started: tokio::sync::mpsc::UnboundedSender<u64>,
+    release: tokio::sync::Semaphore,
+}
+
+#[async_trait]
+impl UserCodeMode for HeldRuns {
+    async fn execute(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _caller: &ToolCaller,
+        _session: Option<uuid::Uuid>,
+        request: ExecuteRequest,
+        _inputs: Option<Unattended>,
+        _cancel: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError> {
+        self.started.send(request.timeout_ms).unwrap();
+        self.release.acquire().await.unwrap().forget();
+        Ok(UserExecutionReceipt {
+            status: ExecutionStatus::Succeeded,
+            activity: Vec::new(),
+            activity_truncated: false,
+            result: None,
+            error: None,
+        })
+    }
+}
+
+struct HeldFixture {
+    service: Arc<DocumentPrograms>,
+    runs: Arc<HeldRuns>,
+    starts: tokio::sync::mpsc::UnboundedReceiver<u64>,
+}
+
+fn held_fixture() -> HeldFixture {
+    let (started, starts) = tokio::sync::mpsc::unbounded_channel();
+    let runs = Arc::new(HeldRuns {
+        started,
+        release: tokio::sync::Semaphore::new(0),
+    });
+    let toolchain = Arc::new(Toolchain::default());
+    let service = Arc::new(DocumentPrograms::new(
+        Arc::new(Sources(Mutex::new(PAGE.to_owned()))),
+        toolchain.clone(),
+        toolchain,
+        runs.clone(),
+    ));
+    HeldFixture {
+        service,
+        runs,
+        starts,
+    }
+}
+
+fn other_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap()
+}
+
+/// Start a run for `user` in the background.
+fn spawn_run(
+    service: &Arc<DocumentPrograms>,
+    user: MacroUserIdStr<'static>,
+) -> tokio::task::JoinHandle<Result<UserExecutionReceipt, DocumentProgramError>> {
+    let service = Arc::clone(service);
+    tokio::spawn(async move {
+        service
+            .run(
+                &user,
+                &document(),
+                run_request(SourceHash::of(PAGE), "tasks"),
+                CancellationToken::new(),
+            )
+            .await
+    })
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_viewers_third_run_waits_for_a_slot_and_keeps_the_rest_of_its_deadline() {
+    let HeldFixture {
+        service,
+        runs,
+        mut starts,
+    } = held_fixture();
+    let first = spawn_run(&service, user());
+    let second = spawn_run(&service, user());
+    assert_eq!(starts.recv().await, Some(5_000));
+    assert_eq!(starts.recv().await, Some(5_000));
+
+    let (viewer, page) = (user(), document());
+    let third = service.run(
+        &viewer,
+        &page,
+        run_request(SourceHash::of(PAGE), "tasks"),
+        CancellationToken::new(),
+    );
+    tokio::pin!(third);
+    tokio::select! {
+        biased;
+        _ = &mut third => panic!("the third run must wait for a slot"),
+        () = std::future::ready(()) => {}
+    }
+
+    // Another viewer isn't held up by this one's runs.
+    let other = spawn_run(&service, other_user());
+    assert_eq!(starts.recv().await, Some(5_000));
+
+    tokio::time::advance(std::time::Duration::from_millis(1_000)).await;
+    // Held runs leave in arrival order: this one frees a slot of the viewer's.
+    runs.release.add_permits(1);
+    let (started, third) = tokio::join!(
+        async {
+            let started = starts.recv().await;
+            // The second run, the other viewer's and the third.
+            runs.release.add_permits(3);
+            started
+        },
+        &mut third,
+    );
+    assert_eq!(started, Some(4_000));
+    third.unwrap();
+
+    for run in [first, second, other] {
+        run.await.unwrap().unwrap();
+    }
+    assert_eq!(service.viewers.viewers(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_run_that_gets_no_slot_within_its_deadline_is_busy() {
+    let HeldFixture {
+        service,
+        runs,
+        mut starts,
+    } = held_fixture();
+    let first = spawn_run(&service, user());
+    let second = spawn_run(&service, user());
+    starts.recv().await.unwrap();
+    starts.recv().await.unwrap();
+
+    let Err(error) = service
+        .run(
+            &user(),
+            &document(),
+            run_request(SourceHash::of(PAGE), "tasks"),
+            CancellationToken::new(),
+        )
+        .await
+    else {
+        panic!("the run must be refused");
+    };
+
+    assert!(matches!(error, DocumentProgramError::Busy), "{error:?}");
+    runs.release.add_permits(2);
+    first.await.unwrap().unwrap();
+    second.await.unwrap().unwrap();
+    assert!(starts.try_recv().is_err());
+    assert_eq!(service.viewers.viewers(), 0);
+}

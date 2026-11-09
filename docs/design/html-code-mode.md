@@ -66,8 +66,10 @@ program up and get the outcome back.
   message, a document), or navigate the frame to carry it out. CSP closes the
   other network paths.
 - **Limits.** Enforced only on the server: a per-viewer queue in front of a
-  document-run pool, 2 running per viewer, 30 s each. The page waits in the
-  queue instead of failing.
+  document-run pool of its own (4 running, 16 queued), 2 running per viewer,
+  30 s each. The page waits in the queue instead of failing; the wait counts
+  against the run's deadline, and a run still waiting when it passes gets
+  `503`.
 - **Rollout.** `enable-html-code-mode`, the same key on web and the harness.
   On in local dev; the harness allows every run on a local stack, whose
   PostHog key is often a placeholder. Off leaves the preview a plain sandboxed
@@ -142,18 +144,20 @@ if the run is cancelled.
 - `agent_code_mode`: `document_programs/page_build.rs` (extract, check programs
   alone and with the client, bundle each, assemble the page; diagnostics by
   block), `DocumentPrograms` (source-hash cache, run by id, `Changed` on a
-  stale hash), and the two routes in `inbound/document_router.rs`, which mint
+  stale hash, 2 running per viewer in `document_programs/viewer_runs.rs`),
+  and the two routes in `inbound/document_router.rs`, which mint
   a view receipt in the handler.
 - `agent_harness_service`: `code_mode/document_sources.rs` reads the stored
   file (at most 2 MiB) through the in-process documents service Macro's tools
   use, under the viewer's receipt; storage's internal routes don't accept an
   internal principal for document content. The build uses the routine
-  checker, runs use public MCP's executor.
+  checker; runs use an executor of their own (4 running, 16 queued), not
+  public MCP's.
 - Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
   `run` by program id and `on`, and puts the strict CSP first in the built
   page's head. The latest failed run shows above the page until dismissed,
   whether or not the page catches its call's rejection. Spans: `document_programs.build`,
-  `document_programs.run`, `block_code.run_document_program`,
+  `document_programs.run` (with `queued_ms`), `block_code.run_document_program`,
   `block_code.document_events.stream`.
 - SDK: `documents.publishPage({ name, html, project })` uploads and builds;
   `Document.republishPage(html)` saves a new version through storage's
@@ -163,7 +167,5 @@ if the run is cancelled.
 
 ## Left to build
 
-1. A `Limits` profile with a per-viewer queue, instead of the shared public
-   MCP slots and the frame's cap.
-2. Optional: `program.live(args, render)`, which re-runs a program when a
+1. Optional: `program.live(args, render)`, which re-runs a program when a
    live event arrives for what it reads.

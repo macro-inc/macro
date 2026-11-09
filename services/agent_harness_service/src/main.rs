@@ -661,6 +661,17 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // Programs in HTML documents run for their viewers on a small pool
+            // of their own, so a busy document can't take public MCP's slots.
+            // Each viewer also waits for their own slots in `DocumentPrograms`.
+            let documents = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 4,
+                    max_queued: 16,
+                    ..Default::default()
+                },
+            )?;
             // Routines get their own budget too, below the host's priority and
             // with a CPU limit, so unattended code can't crowd out sessions.
             let routines = code_execution::domain::ExecutionService::new(
@@ -687,6 +698,7 @@ async fn run() -> anyhow::Result<()> {
                     code_execution::domain::Limits::default(),
                 )?,
                 public,
+                documents,
                 routines,
                 Arc::new(checker),
             ))
@@ -695,7 +707,7 @@ async fn run() -> anyhow::Result<()> {
     };
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, _, routines, checker)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -752,13 +764,11 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // User-scoped runs, shared by public MCP's ExecuteCode and the programs
-    // embedded in HTML documents the app previews.
-    let user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>> = match &code_runner
-    {
-        Some((_, public, _, _)) => {
-            Some(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
-                Arc::new(public.clone()),
+    // User-scoped runs: public MCP's ExecuteCode and the programs embedded in
+    // HTML documents the app previews, each on its own executor.
+    let user_code_mode = match &code_runner {
+        Some((_, public, documents, _, _)) => {
+            let credentials: Arc<dyn agent_code_mode::domain::UserExecutionCredentials> =
                 Arc::new(code_mode::UserRunCredentials {
                     correlations: agent_correlation::outbound::PgCorrelationRepository(
                         pool.clone(),
@@ -769,14 +779,26 @@ async fn run() -> anyhow::Result<()> {
                         config.macro_api_token_private_secret_key.as_ref(),
                     ),
                     endpoints: code_mode::sdk_endpoints()?,
-                }),
-            )))
+                });
+            let public: Arc<dyn agent_code_mode::domain::UserCodeMode> =
+                Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+                    Arc::new(public.clone()),
+                    Arc::clone(&credentials),
+                ));
+            let documents: Arc<dyn agent_code_mode::domain::UserCodeMode> =
+                Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+                    Arc::new(documents.clone()),
+                    credentials,
+                ));
+            Some((public, documents))
         }
         None => None,
     };
     let public_code_mode = user_code_mode
-        .clone()
-        .map(|service| public_mcp::PublicCodeMode { service });
+        .as_ref()
+        .map(|(service, _)| public_mcp::PublicCodeMode {
+            service: Arc::clone(service),
+        });
     let public_mcp_router = public_mcp::router(
         &config,
         &secrets,
@@ -808,7 +830,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&tool_approvals),
         ),
     );
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -1811,9 +1833,9 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     // HTML documents build with the Deno toolchain and run their programs as
-    // the viewer through the user-scoped runner.
+    // the viewer on the documents' own executor.
     let document_programs = match (&user_code_mode, &code_runner) {
-        (Some(runner), Some((_, _, _, toolchain))) => {
+        (Some((_, runner)), Some((_, _, _, _, toolchain))) => {
             let service = agent_code_mode::domain::DocumentPrograms::new(
                 Arc::new(
                     code_mode::document_sources::StoredDocumentSources::new(
@@ -2399,8 +2421,13 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
+    if let Some((sessions, public, documents, routines, _)) = &code_runner {
+        tokio::join!(
+            sessions.shutdown(),
+            public.shutdown(),
+            documents.shutdown(),
+            routines.shutdown()
+        );
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
