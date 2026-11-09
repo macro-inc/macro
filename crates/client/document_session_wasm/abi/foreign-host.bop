@@ -17,7 +17,8 @@ struct ForeignEditorRef { uint32 editorId; }
 struct ForeignStateRef { uint32 editorId; uint64 version; }
 struct ForeignNodeRef { uint32 editorId; uint64 version; ForeignKey key; uint32 instanceOwnerId; uint32 classId; uint32 instanceId; }
 struct ForeignSelectionRef { uint32 editorId; uint64 version; uint32 selectionId; }
-struct ForeignRecordRef { ForeignNodeRef node; uint32 updateId; ForeignAccess access; }
+// captureId names an exact host-scoped owned capture, never a pointer; zero is reserved.
+struct ForeignRecordRef { ForeignNodeRef node; uint32 updateId; ForeignAccess access; uint64 captureId; }
 
 // Derived hook bit order comes from lexical_model::ForeignHook, not a parallel enum.
 struct ForeignClassRegistration { uint32 ownerId; uint32 classId; string typeName; string className; ForeignNodeKind kind; uint32[] ancestry; string nativeType; uint64 hooks; }
@@ -89,3 +90,9 @@ struct ForeignSerializedExportAck { uint32 callId; ForeignRecordRef record; Fore
 // Ordered tree attachment/checking instructions refer to invocation results so
 // TS reuses each actual callback object and attaches/checks its children once.
 struct ForeignExportObjectTrace { ForeignRecordRef record; uint32 callId; bool hasParent; uint32 parentCallId; uint32[] childCallIds; }
+
+// Parallel typed render metadata; the existing flat eleven-op Diff ABI stays intact.
+// Unhydrated records have hasInstance=false and zero class/instance IDs. A host
+// hydrates the exact captured record before calling the unchanged JS renderer.
+struct ForeignRenderRecord { ForeignRecordRef record; bool hasInstance; uint32 typeIndex; string typeName; ForeignNodeKind kind; ForeignBasePatch base; ForeignTreeLinks links; ForeignNativeProjection nativeProjection; bool hasRootCachedText; uint16[] rootCachedText; }
+struct ForeignRenderBatch { uint32 editorId; uint32 updateId; uint64 version; bool fullReconcile; ForeignRenderRecord[] records; ForeignKey[] removedKeys; }

@@ -38,3 +38,6 @@ pub use instances::{
     ForeignCloneLinks, ForeignCloneMode, ForeignInstance, ForeignInstanceClone,
     ForeignInstanceCloneRequest, ForeignInstanceHooks, ForeignPayloadPatch,
 };
+
+mod render;
+pub use render::{ForeignRenderRecord, ForeignWeakEditorIdentity};
