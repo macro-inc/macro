@@ -100,7 +100,8 @@ program up and get the outcome back.
   returns the document with any diagnostics. Given an existing document, it
   saves a new version under the same id. A plain upload or an edit in Drive
   builds when first viewed. A failed build shows its diagnostics in the
-  preview chrome instead of the page.
+  preview chrome instead of the page, and a failed run shows its message in
+  a dismissible notice above the page.
 
 ## Flow
 
@@ -145,7 +146,8 @@ if the run is cancelled.
   checker, runs use public MCP's executor.
 - Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
   `run` by program id and `on`, and puts the strict CSP first in the built
-  page's head. Spans: `document_programs.build`,
+  page's head. The latest failed run shows above the page until dismissed,
+  whether or not the page catches its call's rejection. Spans: `document_programs.build`,
   `document_programs.run`, `block_code.run_document_program`,
   `block_code.document_events.stream`.
 - Both routes are app-internal in the SDK coverage list.
@@ -159,6 +161,5 @@ if the run is cancelled.
    document in place.
 4. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-5. Show a failed run in the preview chrome (a failed build already shows).
-6. Optional: `program.live(args, render)`, which re-runs a program when an
+5. Optional: `program.live(args, render)`, which re-runs a program when an
    event touches an entity type its operations read.

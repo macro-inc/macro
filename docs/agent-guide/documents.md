@@ -3162,7 +3162,10 @@ block (`program tasks`, `client script`) in place of the page. Program source
 never reaches the page, the frame never holds a credential and never sends
 code: a run names a program of the build the page shows, and the server
 refuses it with "this page changed" if the saved document has changed since,
-after which the preview fetches the new build. A run lasts at most 30 seconds,
+after which the preview fetches the new build. A failed run rejects the
+page's call with the program's error, and the preview also shows the latest
+failed run's message in a notice above the page (role `alert`, with a
+Dismiss button), so a page that doesn't catch it still shows what went wrong. A run lasts at most 30 seconds,
 and its writes stand as the user's own, with no agent attribution. Neither
 programs nor the client script can import packages (`npm:` or remote modules):
 write plain TypeScript against the DOM and the SDK.

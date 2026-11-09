@@ -46,8 +46,16 @@ const succeeded = (value: unknown): UserExecutionReceipt => ({
 
 const options = (
   run: Parameters<typeof attachProgramHost>[1]['run'],
-  onStale = () => {}
-) => ({ documentId: 'doc', sourceHash: 'hash', token: 't', run, onStale });
+  onStale = () => {},
+  onFailure = (_message: string) => {}
+) => ({
+  documentId: 'doc',
+  sourceHash: 'hash',
+  token: 't',
+  run,
+  onStale,
+  onFailure,
+});
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -91,8 +99,9 @@ describe('attachProgramHost', () => {
     ]);
   });
 
-  it('turns a failed receipt into an error reply', async () => {
+  it('turns a failed receipt into an error reply and reports it', async () => {
     const { frame, posted, send } = fakeFrame();
+    const onFailure = vi.fn();
     const run = vi.fn(
       async (): Promise<UserExecutionReceipt> => ({
         status: 'failed',
@@ -101,7 +110,12 @@ describe('attachProgramHost', () => {
         error: 'main must return JSON',
       })
     );
-    detachers.push(attachProgramHost(frame, options(run)));
+    detachers.push(
+      attachProgramHost(
+        frame,
+        options(run, () => {}, onFailure)
+      )
+    );
 
     send({ type: 'macro:run', token: 't', id: 7, program: 'tasks' });
     await flush();
@@ -112,6 +126,24 @@ describe('attachProgramHost', () => {
       id: 7,
       message: 'main must return JSON',
     });
+    expect(onFailure).toHaveBeenCalledWith('main must return JSON');
+  });
+
+  it('does not report a successful run', async () => {
+    const { frame, send } = fakeFrame();
+    const onFailure = vi.fn();
+    const run = vi.fn(async () => succeeded(1));
+    detachers.push(
+      attachProgramHost(
+        frame,
+        options(run, () => {}, onFailure)
+      )
+    );
+
+    send({ type: 'macro:run', token: 't', id: 1, program: 'tasks' });
+    await flush();
+
+    expect(onFailure).not.toHaveBeenCalled();
   });
 
   it('ignores messages without the token or from another window', async () => {
@@ -159,18 +191,20 @@ describe('attachProgramHost', () => {
   it('asks for a fresh build when the document changed', async () => {
     const { frame, posted, send } = fakeFrame();
     const onStale = vi.fn();
+    const onFailure = vi.fn();
     const run = vi.fn(async (): Promise<UserExecutionReceipt> => {
       throw new ThrownResultError([
         { code: 'DOCUMENT_CHANGED', message: 'This page changed.' },
       ]);
     });
-    detachers.push(attachProgramHost(frame, options(run, onStale)));
+    detachers.push(attachProgramHost(frame, options(run, onStale, onFailure)));
 
     send({ type: 'macro:run', token: 't', id: 1, program: 'tasks' });
     await flush();
 
     expect(onStale).toHaveBeenCalledTimes(1);
     expect(posted[0]?.message).toMatchObject({ type: 'macro:error', id: 1 });
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
   it('stops answering once detached', async () => {

@@ -13,6 +13,8 @@ export type ProgramHostOptions = {
   token: string;
   /** The document changed since this build; fetch the current one. */
   onStale: () => void;
+  /** A run failed; `message` is what the page's call rejects with. */
+  onFailure: (message: string) => void;
   /** Replaceable for tests; defaults to the server run. */
   run?: typeof runDocumentProgram;
 };
@@ -34,18 +36,22 @@ export function attachProgramHost(
     frame.contentWindow?.postMessage(message, '*');
   };
 
+  const fail = (token: string, id: number, message: string) => {
+    reply({ type: 'macro:error', token, id, message });
+    options.onFailure(message);
+  };
+
   const onMessage = async (event: MessageEvent) => {
     if (!frame.contentWindow || event.source !== frame.contentWindow) return;
     const request = readRunRequest(event.data, options.token);
     if (!request) return;
     const { id, token } = request;
     if (inFlight >= MAX_IN_FLIGHT_RUNS) {
-      reply({
-        type: 'macro:error',
+      fail(
         token,
         id,
-        message: `At most ${MAX_IN_FLIGHT_RUNS} programs can run at once; wait for one to finish.`,
-      });
+        `At most ${MAX_IN_FLIGHT_RUNS} programs can run at once; wait for one to finish.`
+      );
       return;
     }
     inFlight += 1;
@@ -84,24 +90,17 @@ export function attachProgramHost(
           result: programValue(receipt.result),
         });
       } else {
-        reply({
-          type: 'macro:error',
-          token,
-          id,
-          message: receipt.error ?? `The program ${receipt.status}.`,
-        });
+        fail(token, id, receipt.error ?? `The program ${receipt.status}.`);
       }
     } catch (error) {
       if (controller.signal.aborted) return;
       if (thrownResultErrorHasCode(error, 'DOCUMENT_CHANGED'))
         options.onStale();
-      reply({
-        type: 'macro:error',
+      fail(
         token,
         id,
-        message:
-          error instanceof Error ? error.message : 'The program could not run.',
-      });
+        error instanceof Error ? error.message : 'The program could not run.'
+      );
     } finally {
       inFlight -= 1;
     }

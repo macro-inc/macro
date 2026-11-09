@@ -1,12 +1,17 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableHtmlCodeMode } from '@core/constant/featureFlags';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
+  createSignal,
   For,
   Match,
   onCleanup,
+  Show,
   Switch,
 } from 'solid-js';
 import { attachEventHost } from '../code-mode/event-host';
@@ -90,8 +95,12 @@ function BuiltPreview(props: { documentId: string; fallbackHtml: string }) {
   );
 }
 
-/** One build's page, with its own token; a new build gets a new frame. */
-function ProgramFrame(props: {
+/**
+ * One build's page, with its own token; a new build gets a new frame. The
+ * latest failed run shows above it until dismissed, because a page that
+ * doesn't catch its call's rejection otherwise shows nothing.
+ */
+export function ProgramFrame(props: {
   documentId: string;
   html: string;
   sourceHash: string;
@@ -99,26 +108,67 @@ function ProgramFrame(props: {
 }) {
   const token = crypto.randomUUID();
   const srcdoc = createMemo(() => composeProgramDocument(props.html, token));
+  const [failure, setFailure] = createSignal<string>();
   let frame: HTMLIFrameElement | undefined;
 
   createEffect(() => {
     if (!frame) return;
     const { documentId, sourceHash, onStale } = props;
     onCleanup(
-      attachProgramHost(frame, { documentId, sourceHash, token, onStale })
+      attachProgramHost(frame, {
+        documentId,
+        sourceHash,
+        token,
+        onStale,
+        onFailure: (message) => setFailure(message),
+      })
     );
     onCleanup(attachEventHost(frame, { documentId, token }));
   });
 
   return (
-    <iframe
-      ref={frame}
-      title="HTML preview"
-      class="size-full border-0"
-      sandbox="allow-scripts"
-      referrerPolicy="no-referrer"
-      srcdoc={srcdoc()}
-    />
+    <div class="flex size-full flex-col">
+      <Show when={failure()}>
+        {(message) => (
+          <RunFailure
+            message={message()}
+            onDismiss={() => setFailure(undefined)}
+          />
+        )}
+      </Show>
+      <iframe
+        ref={frame}
+        title="HTML preview"
+        class="min-h-0 w-full flex-1 border-0"
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        srcdoc={srcdoc()}
+      />
+    </div>
+  );
+}
+
+/** The latest failed run's message, above the page. */
+function RunFailure(props: { message: string; onDismiss: () => void }) {
+  return (
+    <div
+      role="alert"
+      class="flex shrink-0 items-center gap-2 border-edge-muted border-b bg-inset py-1 pr-1 pl-3 text-ink text-xs touch:min-h-11"
+    >
+      <WarningCircle class="size-3.5 shrink-0 text-failure" />
+      <p class="max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap wrap-anywhere">
+        <span class="font-medium">A program failed: </span>
+        {props.message}
+      </p>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Dismiss"
+        onClick={() => props.onDismiss()}
+      >
+        <X class="size-3.5 touch:size-5" />
+      </Button>
+    </div>
   );
 }
 
