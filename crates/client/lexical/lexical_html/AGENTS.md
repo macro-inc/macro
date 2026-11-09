@@ -20,3 +20,5 @@ Portable export-only DOM builder, walker and linkedom 0.18.13 serializer.
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_html --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_html --all-targets -j4 -- -D warnings`
 - `cargo x deps --check`, `cargo shear`, `just check`
+
+Render unknown raw element-format numbers with no alignment style, matching getFormatType empty-name fallback while the model retains the raw number.
