@@ -195,6 +195,20 @@ use model::user::{
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_auto_join_domain::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::list::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::status::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::offers::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::quote::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::purchase::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::power::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::retry::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::cancel::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::undo_cancel::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::release::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::notify_me::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::internal_purchase::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::internal_quote::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                hosted_runtimes::inbound::axum_router::internal_status::<hosted_runtimes::outbound::pg::PgComputerRepo, crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>, hosted_runtimes::domain::service::SystemClock, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -368,6 +382,21 @@ use model::user::{
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,
                         ToggleAutoJoinDomainResponse,
+                        hosted_runtimes::domain::models::ComputerStatus,
+                        hosted_runtimes::domain::models::ComputerStatusKind,
+                        hosted_runtimes::domain::models::SetupProgress,
+                        hosted_runtimes::domain::models::SetupStep,
+                        hosted_runtimes::domain::models::SizeOffer,
+                        hosted_runtimes::domain::models::Quote,
+                        hosted_runtimes::domain::models::BillingInterval,
+                        hosted_runtimes::domain::models::SubscriptionItem,
+                        hosted_runtimes::domain::size::ComputerSize,
+                        hosted_runtimes::inbound::axum_router::PurchaseBody,
+                        hosted_runtimes::inbound::axum_router::Purchased,
+                        hosted_runtimes::inbound::axum_router::PowerBody,
+                        hosted_runtimes::inbound::axum_router::ReleaseBody,
+                        hosted_runtimes::inbound::axum_router::NotifyBody,
+                        hosted_runtimes::inbound::axum_router::InternalPurchaseBody,
                         SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
                         TeamInviteLinkResponse,
@@ -391,6 +420,10 @@ use model::user::{
         )
     )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;
+
 
 #[cfg(test)]
 mod tests {
