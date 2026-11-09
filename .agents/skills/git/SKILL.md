@@ -103,6 +103,13 @@ GitHub Actions workflows are generated from Rust: edit
 `tooling/xtask/crates/xtask_workflows`, never the YAML (see the
 [workflows rule](../../rules/infra/github-workflows.md)).
 
+Run the [`review`](../review/SKILL.md) skill on every PR pass, before the first
+push and again after changes that add or alter what it covers. It picks the
+reviews that apply to the diff; at least one always does. A diff that touches
+SQL, a query builder, a SQL function, or a migration always gets the database
+reviews (`query-review`, `migration-review`). Fix every `block` finding before
+pushing; fix or justify the rest in the PR body.
+
 Run the `audit` skill before handing off; it covers tests and area checks.
 
 ## PR description
@@ -126,6 +133,13 @@ machines, pipelines). Drop it for small or mechanical changes.
 
 - One bullet per meaningful change, in reading order. Name files or modules
   when it helps navigation. Call out decisions and alternatives rejected.
+
+## Database review
+
+Only when SQL or migrations changed: the `review` skill's table. One row per
+changed query or migration statement, with the rows it touches at production
+size, the index or lock it relies on, and how that was checked. Justify any
+finding left open.
 
 ## Follow-ups
 

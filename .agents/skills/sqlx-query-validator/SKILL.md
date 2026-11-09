@@ -1,6 +1,6 @@
 ---
 name: sqlx-query-validator
-description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for performance and security issues.
+description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for security issues. Query cost is the query-review skill.
 allowed-tools: Bash Read Edit Glob Grep
 ---
 
@@ -71,17 +71,11 @@ just prepare_db
 
 If it fails, inspect the error. Fix in-scope query/cache issues and rerun `just prepare_db`. If it still fails for environmental reasons, stop and report the failure clearly.
 
-## Performance Review Checklist
+## Performance Review
 
-For each changed query, inspect the SQL and surrounding code for likely performance problems:
-
-- Avoid unbounded result sets; prefer explicit `LIMIT`, pagination, or keyset pagination where applicable.
-- Ensure filters and joins are likely backed by appropriate indexes for high-cardinality or frequently queried columns.
-- Avoid `SELECT *` in production queries; select only needed columns.
-- Avoid N+1 query patterns in loops; prefer batching or joins.
-- Watch for leading-wildcard `LIKE` / `ILIKE` searches, broad JSON scans, or functions on indexed columns that may prevent index use.
-- Check joins for accidental cross joins or missing join predicates.
-- Prefer stable ordering for paginated queries.
+Run the [`query-review`](../query-review/SKILL.md) skill on the changed queries
+(through the [`review`](../review/SKILL.md) skill). It sizes each query against
+production tables and requires evidence; this skill does not repeat its checks.
 
 ## Security Review Checklist
 
@@ -101,4 +95,5 @@ Briefly summarize:
 - Which changed SQLx queries were reviewed.
 - Whether all changed queries use SQLx macros, or why any direct function call remains justified.
 - Whether `just prepare_db` passed, failed, or was skipped because no SQLx queries changed.
-- Any performance or security concerns found and fixed, or that none were found.
+- Any security concerns found and fixed, or that none were found.
+- The `query-review` result for the changed queries.

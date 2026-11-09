@@ -39,3 +39,6 @@ Rust database rules: ids, keys, migrations, and SQLx.
 - **CS-70** Migrations survive a rolling deploy: new `NOT NULL` columns get a
   default, and changes to large tables set `lock_timeout` and use `NOT VALID` +
   `VALIDATE` or `CREATE INDEX CONCURRENTLY` instead of a full rewrite.
+
+Check: the `review` skill ran on the change: `query-review` for changed queries
+and SQL functions, `migration-review` for migrations, with no open `block`.
