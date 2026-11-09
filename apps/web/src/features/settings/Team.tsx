@@ -34,6 +34,7 @@ import {
   For,
   Index,
   type JSX,
+  lazy,
   Match,
   on,
   Show,
@@ -41,13 +42,18 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
-import { InviteAgentDialog } from './components/invite-agent-dialog';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 import {
   CopyTeamInviteLinkButton,
   TeamInviteLinkSection,
 } from './TeamInviteLinkSection';
 import { isTeamAdminOrOwner } from './teamMemberPermissions';
+
+// Loaded on demand: the agent form pulls in the upload client and its
+// connection socket, which the team invite dialog doesn't need up front.
+const InviteAgentDialog = lazy(async () => ({
+  default: (await import('./components/invite-agent-dialog')).InviteAgentDialog,
+}));
 
 const emailSchema = z.string().email();
 
@@ -722,11 +728,13 @@ export function InviteToTeamDialog(props: {
         </Panel>
       </Dialog>
       <Show when={canInviteAgents()}>
-        <InviteAgentDialog
-          teamId={props.teamId}
-          open={props.open && agentOpen()}
-          onClose={close}
-        />
+        <Suspense>
+          <InviteAgentDialog
+            teamId={props.teamId}
+            open={props.open && agentOpen()}
+            onClose={close}
+          />
+        </Suspense>
       </Show>
     </>
   );
