@@ -27,7 +27,50 @@ pub enum MenuChoice {
     Block(BlockKind),
     /// Parsed snippet blocks, using the source placeholder replacement rules.
     Snippet(Vec<SerializedNode>),
+    /// Insert a real pending placeholder before the host fetches snippet content.
+    SnippetStart(SnippetStart),
 }
+
+/// Snippet identity from the same source menu rows as the web application.
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnippetStart {
+    /// Selected source document.
+    pub document_id: String,
+    /// Current document, for the source self-insertion guard.
+    pub source_document_id: Option<String>,
+}
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SnippetRequest {
+    key: u32,
+    generation: u32,
+    await_id: String,
+    document_id: String,
+}
+static SNIPPET_REQUEST: EventKey<SnippetRequest> = EventKey::new("group-a.snippet-request");
+
+/// Serialize the host request after the placeholder admission commits.
+pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    event
+        .payload(&SNIPPET_REQUEST)
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(Error::from)
+}
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SnippetResolution {
+    key: u32,
+    await_id: String,
+    nodes: Vec<SerializedNode>,
+}
+#[derive(Clone, Debug)]
+struct ResolveCommand {
+    resolution: SnippetResolution,
+    generation: u32,
+}
+static RESOLVE: CommandKey<ResolveCommand> = CommandKey::new("group-a.snippet-resolve");
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -46,6 +89,15 @@ static SELECT: CommandKey<MenuCommand> = CommandKey::new("group-a.menu-select");
 
 /// Decode a source menu answer; generation belongs to the receiving model.
 pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    if name == RESOLVE.name() {
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &RESOLVE,
+            ResolveCommand {
+                resolution: serde_json::from_str(json)?,
+                generation,
+            },
+        ))));
+    }
     if name != SELECT.name() {
         return Ok(None);
     }
@@ -66,21 +118,52 @@ impl Plugin for Menu {
         "group-a.menu"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
-            command: CommandKind::Extension(&SELECT),
-            priority: CommandPriority::Normal,
-            placement: Placement::After,
-        }];
+        static COMMANDS: [CommandRegistration; 2] = [
+            CommandRegistration {
+                command: CommandKind::Extension(&SELECT),
+                priority: CommandPriority::Normal,
+                placement: Placement::After,
+            },
+            CommandRegistration {
+                command: CommandKind::Extension(&RESOLVE),
+                priority: CommandPriority::Normal,
+                placement: Placement::After,
+            },
+        ];
         &COMMANDS
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         let Command::Extension(extension) = command else {
             return Ok(Handled::No);
         };
+        if let Some(command) = extension.payload(&RESOLVE) {
+            let answer = &command.resolution;
+            let key = NodeKey::from_parts(KeyParts {
+                index: answer.key,
+                generation: command.generation,
+            });
+            if !tx.is_attached(key) || !tx.is::<AwaitNode>(key) {
+                return Ok(Handled::No);
+            }
+            if tx
+                .get::<AwaitNode>(key)
+                .is_none_or(|node| node.await_id.as_deref() != Some(answer.await_id.as_str()))
+            {
+                return Ok(Handled::No);
+            }
+            tx.add_tag(UpdateTag::HistoryMerge);
+            replace_await(tx, key, &answer.nodes)?;
+            return Ok(Handled::Yes);
+        }
         let Some(command) = extension.payload(&SELECT) else {
             return Ok(Handled::No);
         };
         let answer = &command.answer;
+        if let MenuChoice::SnippetStart(start) = &answer.choice
+            && start.source_document_id.as_ref() == Some(&start.document_id)
+        {
+            return Ok(Handled::No);
+        }
         let key = NodeKey::from_parts(KeyParts {
             index: answer.key,
             generation: command.generation,
@@ -158,6 +241,26 @@ impl Plugin for Menu {
                 }
                 return Ok(Handled::Yes);
             }
+            MenuChoice::SnippetStart(start) => {
+                let placeholder =
+                    create_await_node(tx, None, Some("Inserting snippet...".into()), true)?.key();
+                let await_id = tx
+                    .get::<AwaitNode>(placeholder)
+                    .and_then(|node| node.await_id.as_deref())
+                    .ok_or(Error::Invariant("snippet await id"))?
+                    .to_owned();
+                tx.insert_nodes(&[placeholder])?;
+                tx.emit(
+                    &SNIPPET_REQUEST,
+                    SnippetRequest {
+                        key: placeholder.index(),
+                        generation: placeholder.generation(),
+                        await_id,
+                        document_id: start.document_id.clone(),
+                    },
+                );
+                return Ok(Handled::Yes);
+            }
             MenuChoice::Snippet(nodes) => {
                 insert_snippet(tx, nodes)?;
                 return Ok(Handled::Yes);
@@ -177,6 +280,24 @@ fn insert_snippet(tx: &mut Transaction<'_>, serialized: &[SerializedNode]) -> Re
         .collect::<Result<Vec<_>, _>>()?;
     let placeholder = tx.create(AwaitNode::default())?.key();
     tx.insert_nodes(&[placeholder])?;
+    replace_await_nodes(tx, placeholder, &nodes)
+}
+fn replace_await(
+    tx: &mut Transaction<'_>,
+    placeholder: NodeKey,
+    serialized: &[SerializedNode],
+) -> Result<(), Error> {
+    let nodes = serialized
+        .iter()
+        .map(|node| tx.import_node(node))
+        .collect::<Result<Vec<_>, _>>()?;
+    replace_await_nodes(tx, placeholder, &nodes)
+}
+fn replace_await_nodes(
+    tx: &mut Transaction<'_>,
+    placeholder: NodeKey,
+    nodes: &[NodeKey],
+) -> Result<(), Error> {
     let next = tx.next_sibling(placeholder);
     let previous = tx.prev_sibling(placeholder);
     if nodes.is_empty() {
@@ -193,7 +314,7 @@ fn insert_snippet(tx: &mut Transaction<'_>, serialized: &[SerializedNode]) -> Re
         .filter(|parent| tx.is::<Paragraph>(*parent))
         && tx.children_keys(parent)?.len() == 1
     {
-        replace(tx, parent, &nodes)?;
+        replace(tx, parent, nodes)?;
     } else if nodes.len() == 1
         && tx.is::<Paragraph>(nodes[0])
         && !tx.children_keys(nodes[0])?.is_empty()
@@ -204,12 +325,12 @@ fn insert_snippet(tx: &mut Transaction<'_>, serialized: &[SerializedNode]) -> Re
         let top = tx.top_level_element(placeholder)?;
         tx.remove(placeholder, false)?;
         if let Some(mut cursor) = top {
-            for node in &nodes {
+            for node in nodes {
                 tx.insert_after(cursor, *node, true)?;
                 cursor = *node;
             }
         } else {
-            tx.append(NodeKey::ROOT, &nodes)?;
+            tx.append(NodeKey::ROOT, nodes)?;
         }
         tx.select_end(*nodes.last().ok_or(Error::Invariant("snippet nodes"))?)?;
     }

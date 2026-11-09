@@ -193,3 +193,223 @@ fn snippet_blocks_replace_the_sole_paragraph_and_preserve_inline_or_root_placeme
     }
     Ok(())
 }
+
+#[test]
+fn async_snippet_resolves_only_the_live_placeholder_with_source_placement_and_history_merge()
+-> Result<(), Error> {
+    for (literal, offset, snippets, expected) in [
+        (
+            ";s",
+            0,
+            json!([{"type":"paragraph","children":[{"type":"text","text":"one"}]},{"type":"paragraph","children":[{"type":"text","text":"two"}]}]),
+            "one\n\ntwo",
+        ),
+        (
+            "before ;s after",
+            7,
+            json!([{"type":"paragraph","children":[{"type":"text","text":"inside"}]}]),
+            "before inside after",
+        ),
+        (
+            "before ;s after",
+            7,
+            json!([{"type":"paragraph","children":[{"type":"text","text":"one"}]},{"type":"paragraph","children":[{"type":"text","text":"two"}]}]),
+            "before  after\n\none\n\ntwo",
+        ),
+    ] {
+        let mut editor = crate::surface::preset_builder_with_mode(
+            crate::EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+            vec![1; length]
+        })))
+        .build()
+        .expect("surface");
+        let (key, _) = editor.update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text(literal)?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[text.key()])?;
+            let point = Point::text(text, Utf16Offset(offset + 2));
+            tx.selection_from_view(ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            })?;
+            Ok(text.key())
+        })?;
+        let before = editor.state().to_json()?;
+        let self_insert = super::menu::decode_command("group-a.menu-select", &json!({
+            "key":key.index(),"offset":offset,"expected":";s",
+            "choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture","sourceDocumentId":"snippet-fixture"}}
+        }).to_string(), key.generation())?.expect("self guard");
+        assert_eq!(editor.dispatch(&self_insert)?.0, Handled::No);
+        assert_eq!(editor.state().to_json()?, before);
+        let start = super::menu::decode_command("group-a.menu-select", &json!({
+            "key":key.index(),"offset":offset,"expected":";s",
+            "choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture","sourceDocumentId":"target-fixture"}}
+        }).to_string(), key.generation())?.expect("start");
+        let (handled, commit) = editor.dispatch(&start)?;
+        assert_eq!(handled, Handled::Yes);
+        assert_eq!(commit.events.len(), 1);
+        let request = crate::surface::event_payload(&commit.events[0])?.expect("host request");
+        assert_eq!(request["documentId"], "snippet-fixture");
+        let placeholder = editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+            .key();
+        assert_eq!(request["key"], placeholder.index());
+        assert_eq!(request["generation"], placeholder.generation());
+        let await_id = editor
+            .state()
+            .get::<crate::nodes::AwaitNode>(placeholder)
+            .expect("pending")
+            .await_id
+            .as_deref()
+            .expect("identity");
+        assert_eq!(await_id.len(), 21);
+        assert_eq!(request["awaitId"], await_id);
+        let resolve = super::menu::decode_command(
+            "group-a.snippet-resolve",
+            &json!({
+                "key":placeholder.index(),"awaitId":await_id,"nodes":snippets
+            })
+            .to_string(),
+            placeholder.generation(),
+        )?
+        .expect("resolve");
+        let (handled, commit) = editor.dispatch(&resolve)?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(commit.tags.contains(&UpdateTag::HistoryMerge));
+        assert_eq!(editor.state().root_text_content().as_ref(), expected);
+        assert!(
+            editor
+                .state()
+                .view()
+                .nodes_of_type::<crate::nodes::AwaitNode>()
+                .is_empty()
+        );
+        let completed = editor.state().to_json()?;
+        assert_eq!(editor.dispatch(&resolve)?.0, Handled::No);
+        assert_eq!(editor.state().to_json()?, completed);
+    }
+    Ok(())
+}
+
+#[test]
+fn async_snippet_rejects_wrong_identity_generation_and_deleted_placeholder() -> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+        vec![2; length]
+    })))
+    .build()
+    .expect("surface");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text(";s")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        tx.select_end(text)?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command(
+        "group-a.menu-select",
+        &json!({
+            "key":key.index(),"offset":0,"expected":";s",
+            "choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture"}}
+        })
+        .to_string(),
+        key.generation(),
+    )?
+    .expect("start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("host request");
+    let placeholder = editor
+        .state()
+        .view()
+        .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+        .key();
+    let pending = editor.state().to_json()?;
+    for (await_id, generation) in [
+        (json!("wrong"), placeholder.generation()),
+        (request["awaitId"].clone(), placeholder.generation() + 1),
+    ] {
+        let answer = super::menu::decode_command("group-a.snippet-resolve", &json!({
+            "key":placeholder.index(),"awaitId":await_id,"nodes":[{"type":"paragraph","children":[{"type":"text","text":"late"}]}]
+        }).to_string(), generation)?.expect("late answer");
+        assert_eq!(editor.dispatch(&answer)?.0, Handled::No);
+        assert_eq!(editor.state().to_json()?, pending);
+    }
+    editor.update(|tx| tx.remove(placeholder, false))?;
+    let removed = editor.state().to_json()?;
+    let answer = super::menu::decode_command("group-a.snippet-resolve", &json!({
+        "key":placeholder.index(),"awaitId":request["awaitId"],"nodes":[{"type":"paragraph","children":[{"type":"text","text":"late"}]}]
+    }).to_string(), placeholder.generation())?.expect("removed answer");
+    assert_eq!(editor.dispatch(&answer)?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, removed);
+    Ok(())
+}
+
+#[test]
+fn async_snippet_empty_or_failed_content_removes_pending_node_at_the_adjacent_caret()
+-> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+        vec![3; length]
+    })))
+    .build()
+    .expect("surface");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before ;s after")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        let point = Point::text(text, Utf16Offset(9));
+        tx.selection_from_view(ViewSelection::Range {
+            anchor: point,
+            focus: point,
+            resolution_dirty: false,
+        })?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command("group-a.menu-select", &json!({
+        "key":key.index(),"offset":7,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture"}}
+    }).to_string(), key.generation())?.expect("start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("host request");
+    let answer = super::menu::decode_command(
+        "group-a.snippet-resolve",
+        &json!({
+            "key":request["key"],"awaitId":request["awaitId"],"nodes":[]
+        })
+        .to_string(),
+        key.generation(),
+    )?
+    .expect("failed answer");
+    let (_, commit) = editor.dispatch(&answer)?;
+    assert!(commit.tags.contains(&UpdateTag::HistoryMerge));
+    assert!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::AwaitNode>()
+            .is_empty()
+    );
+    assert_eq!(editor.state().root_text_content().as_ref(), "before  after");
+    let caret = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("caret");
+    assert_eq!(caret.anchor, caret.focus);
+    assert_eq!(caret.anchor, Point::text(key, Utf16Offset(7)));
+    Ok(())
+}
