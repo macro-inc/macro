@@ -53,3 +53,6 @@ pub use update_facts::{ForeignDirtyType, ForeignUpdateFacts};
 
 mod base_patch;
 pub use base_patch::ForeignBaseField;
+
+mod reconcile;
+pub use reconcile::ForeignReconcileStage;
