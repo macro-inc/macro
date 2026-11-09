@@ -89,9 +89,12 @@ impl ResolutionEvent {
             Self::Replied {
                 user, thread, at, ..
             } => {
+                // An idea about one message's thread ends with a reply in
+                // that thread; an idea about the whole item, with any post.
                 let same_thread = match (&target.part_id, thread) {
                     (Some(part), Some(thread)) => part == thread,
-                    (None, _) | (_, None) => true,
+                    (Some(_), None) => false,
+                    (None, _) => true,
                 };
                 target.reply && target.user == *user && target.created_at < *at && same_thread
             }
