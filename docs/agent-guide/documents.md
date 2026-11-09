@@ -3193,7 +3193,9 @@ reconciled editor update commits.
 
 For a native session, type text and check Ctrl+Z with both Ctrl+Shift+Z and
 Ctrl+Y: content and caret must return together. KeyDown listeners retain
-precedence over the routed history command. Also check the caret and document: enter a newline,
+precedence over the routed history command. Undo and redo a newly created code
+subtree: compare complete model JSON, including text leaf IDs, as well as the
+DOM text and selection. Also check the caret and document: enter a newline,
 undo, then redo. Redo must return to the committed paragraph and offset even
 when that paragraph is recreated. Repeat after a remote insertion before the
 caret, and with two separate edit groups that revisit the same text. An Android

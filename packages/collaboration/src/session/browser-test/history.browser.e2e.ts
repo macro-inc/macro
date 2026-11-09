@@ -61,3 +61,33 @@ test('routed keyboard typing undo and both redo shortcuts restore content and ca
   await page.evaluate(() => window.historyRun.close());
   expect(errors).toEqual([]);
 });
+
+test('code subtree redo retains exact raw model identities and caret', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/session/browser-test/index.html');
+  await page.evaluate(async () => {
+    window.historyRun = await window.historyFixture(true);
+  });
+  await page.locator('#history-keyboard').focus();
+  await page.keyboard.type('x');
+  const typed = await page.evaluate(() => window.historyRun.snapshot());
+  expect(typed.content).toContain('const localValue = 1;x');
+  expect(typed.anchor.offset).toBe(22);
+  for (const redo of ['Control+Shift+z', 'Control+y']) {
+    await page.keyboard.press('Control+z');
+    const undone = await page.evaluate(() => window.historyRun.snapshot());
+    const children = JSON.parse(undone.content).root.children;
+    expect(children.map((node: { type: string }) => node.type)).toEqual([
+      'paragraph',
+    ]);
+    await page.keyboard.press(redo);
+    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
+      typed
+    );
+  }
+  await page.evaluate(() => window.historyRun.close());
+  expect(errors).toEqual([]);
+});

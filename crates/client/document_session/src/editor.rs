@@ -833,3 +833,6 @@ mod selection_test;
 
 #[cfg(test)]
 mod routed_history_test;
+
+#[cfg(test)]
+mod identity_test;
