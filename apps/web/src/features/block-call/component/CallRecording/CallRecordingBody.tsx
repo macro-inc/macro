@@ -1,3 +1,4 @@
+import './recording-layout.css';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
@@ -302,7 +303,7 @@ export function CallRecordingBody(props: {
                             </Button>
                           </Show>
                         </div>
-                        <div class="contents @[1028px]/call-column:relative @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:min-w-0 @[1028px]/call-column:flex-col">
+                        <div class="recording-player-column contents @[1028px]/call-column:relative @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:min-w-0 @[1028px]/call-column:flex-col">
                           <div
                             ref={setLeftScrollRef}
                             data-recording-scroll="content"
@@ -456,7 +457,7 @@ export function CallRecordingBody(props: {
                         <Layer offset={wideTranscript() ? 1 : 0}>
                           <aside
                             aria-label={t('calls.detailTranscript')}
-                            class="min-w-0 -mt-5 mobile:order-3 @[1028px]/call-column:sticky @[1028px]/call-column:top-0 @[1028px]/call-column:mt-0 @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:flex-col @[1028px]/call-column:overflow-hidden @[1028px]/call-column:rounded-2xl @[1028px]/call-column:bg-surface"
+                            class="recording-transcript-card min-w-0 -mt-5 mobile:order-3 @[1028px]/call-column:sticky @[1028px]/call-column:top-0 @[1028px]/call-column:mt-0 @[1028px]/call-column:flex @[1028px]/call-column:min-h-0 @[1028px]/call-column:flex-col @[1028px]/call-column:overflow-hidden @[1028px]/call-column:rounded-2xl @[1028px]/call-column:bg-surface"
                             classList={{
                               hidden:
                                 !wideTranscript() &&

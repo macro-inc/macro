@@ -62,7 +62,8 @@ the player, Summary and Call chat while the transcript stays in view and scrolls
 internally. The card uses the next Layer surface depth, the player's corner radius,
 no border or shadow, and an inset Sync surface in both themes. Details floats over
 the card without changing its scroll position or follow state. There is no separate
-Transcript header button.
+Transcript header button. The card fades and slides into wide layouts while the
+player settles over 240ms; reduced motion disables both entry animations.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
