@@ -29,7 +29,7 @@ export function CallRecordingSummarySection(props: {
 
   return (
     <Show when={shouldShow()}>
-      <section class="flex flex-col gap-5">
+      <section class="flex flex-col gap-2">
         <Show when={!props.hideHeading}>
           <h3 class="flex min-h-7 items-center text-base font-semibold text-ink">
             <Tooltip

@@ -86,3 +86,39 @@ for (const theme of ['light', 'dark']) {
       });
   });
 }
+
+for (const theme of ['light', 'dark']) {
+  for (const pane of [1400, 680]) {
+    test(`compact summary content gap (${theme}, ${pane})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1800, height: 900 });
+      await page.goto(`${fixture}?theme=${theme}&pane=${pane}`);
+      await expect(page.locator('video')).toHaveCSS('opacity', '1');
+      const section = page
+        .locator('section')
+        .filter({ hasText: 'Conversation recap' });
+      if (pane > 1108) {
+        const heading = await section
+          .getByRole('heading', { name: 'Summary', exact: true })
+          .boundingBox();
+        const content = await section.locator(':scope > div').boundingBox();
+        expect(content!.y - heading!.y - heading!.height).toBe(8);
+      } else {
+        const tabs = await page
+          .getByRole('radio', { name: 'Summary', exact: true })
+          .locator('..')
+          .locator('..')
+          .locator('..')
+          .boundingBox();
+        expect((await section.boundingBox())!.y - tabs!.y - tabs!.height).toBe(
+          4
+        );
+      }
+      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d68-${theme}-${pane}.png`,
+        });
+    });
+  }
+}
