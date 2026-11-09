@@ -9,6 +9,7 @@ import * as defaultDOM from '../editor-dom-config';
 import * as extensionCore from '../extension-core';
 import * as root from '../index';
 import * as artificial from '../nodes/artificial';
+import * as importMap from '../nodes/build-import-map';
 import * as css from '../nodes/dom-style';
 import * as replacement from '../nodes/replacement';
 import * as state from '../nodes/state';
@@ -25,6 +26,7 @@ const producers: Record<string, object> = {
   './selection/helpers': selectionHelpers,
   './editor-dom-config': defaultDOM,
   './nodes/artificial': artificial,
+  './nodes/build-import-map': importMap,
   './nodes/dom-style': css,
   './nodes/replacement': replacement,
   './nodes/state': state,

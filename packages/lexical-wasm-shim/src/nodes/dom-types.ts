@@ -27,3 +27,10 @@ export type DOMConversionOutput = {
   forChild?: DOMChildConversion;
   node: null | LexicalNode | LexicalNode[];
 };
+
+export type DOMConversionPropByTagName<K extends string> = DOMConversionProp<
+  K extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[K] : HTMLElement
+>;
+export type DOMConversionTagNameMap<K extends string> = {
+  [NodeName in K]?: DOMConversionPropByTagName<NodeName>;
+};

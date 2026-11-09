@@ -12,8 +12,8 @@ the exact pinned identity API, not a substitute for the constrained extension AP
 
 Four public wildcard aliases live only in compatibility-exceptions.ts. They have
 exact upstream right-hand sides and nine type-level any keywords (3+0+3+3).
-They constitute one approved type-only entry; the eight runtime assertions are
-unchanged. No implementation uses these aliases to cross a runtime boundary.
+They constitute one approved type-only entry; its eight pre-existing assertion
+helpers remain unchanged. No implementation uses these aliases to cross a runtime boundary.
 
 Canonical generic phantom fields and their public marker symbols are type-only
 forwards with no fixed core graph. The peer key is extracted from Original's

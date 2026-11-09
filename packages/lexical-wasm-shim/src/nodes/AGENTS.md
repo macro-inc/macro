@@ -26,7 +26,7 @@ Preserve the upstream public config-record alias and its constraints; the
 central exception's internal return shape uses the actual core config types.
 `runtime-primitives.ts` resolves nodes, writable captures and native-backed field
 writes through `runtime.ts`. `../compatibility-exceptions.ts` centralizes the
-eight approved upstream assertions, including caret numeric ordering, and the
+nine approved upstream assertions, including numeric ordering and tag-map widening, and the
 separate public extension wildcard type entry. Keep their sites in the type-contract
 manifest. The production backend must supply acknowledged local reads and batched
 writes; the legacy conformance backend still makes diagnostic native calls.
@@ -62,3 +62,7 @@ facade unit-test configuration. The runner checks original suite hashes before
 and after execution and requires all 275 assertions to pass without skips or
 incomplete results. Keep the report candidate-only with `nativeAcceptance:false`
 until external engine identity proof is bound.
+
+Keep buildImportMap as the pinned tag-specific identity API. Its sole runtime
+association calls central widenTagConversionMap (LexicalNode.ts:365–368); keep
+the public map callbacks typed to actual nodes and do not wrap their getters.

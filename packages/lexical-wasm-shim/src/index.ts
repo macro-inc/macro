@@ -277,6 +277,7 @@ export {
   shallowMergeConfig,
 } from './extension-core';
 export { ArtificialNode__DO_NOT_USE } from './nodes/artificial';
+export { buildImportMap } from './nodes/build-import-map';
 export type {
   BaseStaticNodeConfig,
   StaticNodeConfigRecord,
@@ -294,6 +295,8 @@ export type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMConversionProp,
+  DOMConversionPropByTagName,
+  DOMConversionTagNameMap,
 } from './nodes/dom-types';
 export type { DOMSlotForNode } from './nodes/editor-config';
 export {
