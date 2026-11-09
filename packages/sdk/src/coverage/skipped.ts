@@ -36,6 +36,11 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
+  'claudeSignOut', // Computer account credentials are managed in the app.
+  'completeClaudeSignIn', // Computer account credentials are managed in the app.
+  'getClaudeMode', // Computer account credentials are managed in the app.
+  'startClaudeSignIn', // Computer account credentials are managed in the app.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -149,7 +154,22 @@ export const authExcluded = [
   'verifyMergeRequest',
 ];
 
-export const authBacklog = [] as const satisfies readonly (keyof AuthSdk)[];
+export const authBacklog = [
+  'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'internalGetComputer', // Internal computer provisioning plumbing.
+  'internalPurchaseComputer', // Internal computer provisioning plumbing.
+  'internalQuoteComputer', // Internal computer provisioning plumbing.
+  'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
+  'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
+  'purchaseTeamComputer', // Computer checkout belongs to the app.
+  'quoteTeamComputer', // Computer checkout belongs to the app.
+  'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'retryTeamComputer', // Computer provisioning recovery belongs to the app.
+  'setTeamComputerPower', // Computer lifecycle controls belong to the app.
+  'undoCancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+] as const satisfies readonly (keyof AuthSdk)[];
 
 export const calendarExcluded = [
   // Health probe is infra, not SDK surface.
@@ -410,6 +430,7 @@ export const storageExcluded = [
   'whatsappPairing',
   'whatsappPasskey',
   'whatsappStartLookup',
+  'putSelfHarnessCapabilities', // Daemon capability reports are internal runtime registration plumbing.
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [

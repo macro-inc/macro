@@ -4139,6 +4139,11 @@ export type ClaimedPairing = {
     token: string;
 };
 
+/**
+ * How Claude Code on a Macro computer is paid for.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
 /**
@@ -4655,6 +4660,8 @@ export type CompleteUploads = {
      */
     uploads: Array<UploadId>;
 };
+
+export type ComputerId = string;
 
 /**
  * The conferencing system backing an event's join URL.
@@ -5852,7 +5859,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -12367,6 +12374,16 @@ export type Harness = {
      */
     allow_permission_bypass?: boolean;
     /**
+     * What the harness's machine can do, as macrod last reported it.
+     */
+    capabilities?: HarnessCapabilities;
+    /**
+     * How Claude Code on this machine is paid for. Only meaningful for
+     * Macro computers.
+     */
+    claude_mode?: ClaudeMode;
+    computer_id?: null | ComputerId;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -12429,6 +12446,19 @@ export type HarnessAgent = {
      * Display name.
      */
     name: string;
+};
+
+/**
+ * What a harness's machine can do beyond running agents.
+ *
+ * macrod reports this after it connects; every field defaults to off, so
+ * harnesses that never report stay plain.
+ */
+export type HarnessCapabilities = {
+    /**
+     * A display Macro can stream (Xvnc on `127.0.0.1:5900`).
+     */
+    screen?: boolean;
 };
 
 export type HarnessId = string;
@@ -14999,6 +15029,8 @@ export type PairingDetails = {
      */
     requested_name: string;
 };
+
+export type PairingId = string;
 
 /**
  * Paragraph formatting changes.
@@ -31082,7 +31114,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';
@@ -31205,6 +31237,27 @@ export type ListHarnessAgentsResponses = {
 };
 
 export type ListHarnessAgentsResponse = ListHarnessAgentsResponses[keyof ListHarnessAgentsResponses];
+
+export type PutSelfHarnessCapabilitiesData = {
+    body: HarnessCapabilities;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/capabilities';
+};
+
+export type PutSelfHarnessCapabilitiesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutSelfHarnessCapabilitiesError = PutSelfHarnessCapabilitiesErrors[keyof PutSelfHarnessCapabilitiesErrors];
+
+export type PutSelfHarnessCapabilitiesResponses = {
+    204: void;
+};
+
+export type PutSelfHarnessCapabilitiesResponse = PutSelfHarnessCapabilitiesResponses[keyof PutSelfHarnessCapabilitiesResponses];
 
 export type ListHarnessSessionsData = {
     body?: never;

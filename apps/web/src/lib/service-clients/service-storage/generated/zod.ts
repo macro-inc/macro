@@ -43268,6 +43268,8 @@ export const approveHarnessPairingBody = zod
   })
   .describe('Request to approve a pairing and register the harness.');
 
+export const approveHarnessPairingResponseCapabilitiesScreenDefault = false;
+
 export const approveHarnessPairingResponse = zod
   .object({
     access: zod
@@ -43280,6 +43282,22 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43320,7 +43338,7 @@ code) addresses it.
  * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
  */
 export const claimHarnessPairingParams = zod.object({
-  pairing_id: zod.uuid().describe('Pairing ID'),
+  pairing_id: zod.string().describe('Pairing ID'),
 });
 
 export const claimHarnessPairingBody = zod
@@ -43332,6 +43350,8 @@ export const claimHarnessPairingBody = zod
   .describe(
     "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
   );
+
+export const claimHarnessPairingResponseHarnessCapabilitiesScreenDefault = false;
 
 export const claimHarnessPairingResponse = zod
   .object({
@@ -43347,6 +43367,24 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Whether agents may bypass ACP permission requests on this harness.'
           ),
+        capabilities: zod
+          .object({
+            screen: zod
+              .boolean()
+              .optional()
+              .describe(
+                'A display Macro can stream (Xvnc on `127.0.0.1:5900`).'
+              ),
+          })
+          .optional()
+          .describe(
+            "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+          ),
+        claude_mode: zod
+          .enum(['macro_credits', 'own_account'])
+          .optional()
+          .describe('How Claude Code on a Macro computer is paid for.'),
+        computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43390,6 +43428,8 @@ export const claimHarnessPairingResponse = zod
 /**
  * @summary Handler for `GET /harnesses`.
  */
+export const listHarnessesResponseCapabilitiesScreenDefault = false;
+
 export const listHarnessesResponseItem = zod
   .object({
     access: zod
@@ -43402,6 +43442,22 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43439,6 +43495,8 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 /**
  * @summary Handler for `GET /harnesses/directory`.
  */
+export const listHarnessDirectoryResponseCapabilitiesScreenDefault = false;
+
 export const listHarnessDirectoryResponseItem = zod
   .object({
     access: zod
@@ -43451,6 +43509,22 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43490,6 +43564,8 @@ export const listHarnessDirectoryResponse = zod.array(
 /**
  * @summary Handler for `GET /harnesses/me`.
  */
+export const getSelfHarnessResponseCapabilitiesScreenDefault = false;
+
 export const getSelfHarnessResponse = zod
   .object({
     access: zod
@@ -43502,6 +43578,22 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43548,6 +43640,24 @@ export const listHarnessAgentsResponseItem = zod
 export const listHarnessAgentsResponse = zod.array(
   listHarnessAgentsResponseItem
 );
+
+/**
+ * macrod reports what its machine can do after it connects; the body
+replaces the previous report.
+ * @summary Handler for `PUT /harnesses/me/capabilities`.
+ */
+export const putSelfHarnessCapabilitiesBodyScreenDefault = false;
+
+export const putSelfHarnessCapabilitiesBody = zod
+  .object({
+    screen: zod
+      .boolean()
+      .optional()
+      .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+  })
+  .describe(
+    "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+  );
 
 /**
  * @summary Handler for `GET /harnesses/me/sessions`.
@@ -43602,6 +43712,8 @@ export const patchHarnessBody = zod
     'Request to change a registered harness. Omitted fields stay as they are.'
   );
 
+export const patchHarnessResponseCapabilitiesScreenDefault = false;
+
 export const patchHarnessResponse = zod
   .object({
     access: zod
@@ -43614,6 +43726,22 @@ export const patchHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),

@@ -17,6 +17,7 @@ import type {
   CodexEnvironment,
   CodexLoginPoll,
   CodexLoginStart,
+  ComputerStatus,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreatedTeamInviteLinkResponse,
@@ -60,6 +61,9 @@ import type {
   InitGmailLinkResponse,
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
+  InternalGetComputerParams,
+  InternalPurchaseBody,
+  InternalQuoteComputerParams,
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
@@ -67,6 +71,7 @@ import type {
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
+  NotifyBody,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -81,16 +86,22 @@ import type {
   Permission,
   PlanCatalogResponse,
   PostGetNamesRequestBody,
+  PowerBody,
   ProfilePictures,
   ProfilePictureUpload,
   PublicGtmInviteLink,
+  PurchaseBody,
+  Purchased,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
+  Quote,
+  QuoteTeamComputerParams,
   RedeemGtmInviteLinkRequest,
+  ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
   SendDomainNoticeResponse,
   SendInviteBody,
@@ -100,6 +111,7 @@ import type {
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
+  SizeOffer,
   SsoLoginParams,
   SsoRequiredResponse,
   StatusUpdate,
@@ -2455,6 +2467,181 @@ export const healthHandler = async (
 };
 
 /**
+ * @summary Buy a computer for a team; one subscription update covers the computer
+and `extraItems`.
+ */
+export type internalPurchaseComputerResponse200 = {
+  data: Purchased;
+  status: 200;
+};
+
+export type internalPurchaseComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type internalPurchaseComputerResponseSuccess =
+  internalPurchaseComputerResponse200 & {
+    headers: Headers;
+  };
+export type internalPurchaseComputerResponseError =
+  internalPurchaseComputerResponse503 & {
+    headers: Headers;
+  };
+
+export type internalPurchaseComputerResponse =
+  | internalPurchaseComputerResponseSuccess
+  | internalPurchaseComputerResponseError;
+
+export const getInternalPurchaseComputerUrl = () => {
+  return `/internal/computers`;
+};
+
+export const internalPurchaseComputer = async (
+  internalPurchaseBody: InternalPurchaseBody,
+  options?: RequestInit
+): Promise<internalPurchaseComputerResponse> => {
+  const res = await fetch(getInternalPurchaseComputerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(internalPurchaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalPurchaseComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalPurchaseComputerResponse;
+};
+
+/**
+ * @summary Quote a computer for an authenticated internal caller.
+ */
+export type internalQuoteComputerResponse200 = {
+  data: Quote;
+  status: 200;
+};
+
+export type internalQuoteComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type internalQuoteComputerResponseSuccess =
+  internalQuoteComputerResponse200 & {
+    headers: Headers;
+  };
+export type internalQuoteComputerResponseError =
+  internalQuoteComputerResponse503 & {
+    headers: Headers;
+  };
+
+export type internalQuoteComputerResponse =
+  | internalQuoteComputerResponseSuccess
+  | internalQuoteComputerResponseError;
+
+export const getInternalQuoteComputerUrl = (
+  params: InternalQuoteComputerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/computers/quote?${stringifiedParams}`
+    : `/internal/computers/quote`;
+};
+
+export const internalQuoteComputer = async (
+  params: InternalQuoteComputerParams,
+  options?: RequestInit
+): Promise<internalQuoteComputerResponse> => {
+  const res = await fetch(getInternalQuoteComputerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalQuoteComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalQuoteComputerResponse;
+};
+
+/**
+ * @summary Read computer status for an authenticated internal caller.
+ */
+export type internalGetComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type internalGetComputerResponseSuccess =
+  internalGetComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type internalGetComputerResponse = internalGetComputerResponseSuccess;
+
+export const getInternalGetComputerUrl = (
+  computerId: string,
+  params: InternalGetComputerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/computers/${computerId}?${stringifiedParams}`
+    : `/internal/computers/${computerId}`;
+};
+
+export const internalGetComputer = async (
+  computerId: string,
+  params: InternalGetComputerParams,
+  options?: RequestInit
+): Promise<internalGetComputerResponse> => {
+  const res = await fetch(getInternalGetComputerUrl(computerId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalGetComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalGetComputerResponse;
+};
+
+/**
  * @summary Generates a macro-api-token using the user's macro-access-token
 You can either have your access token in the cookies or in the request
 headers
@@ -4790,6 +4977,556 @@ export const toggleTeamAutoJoinDomain = async (
     status: res.status,
     headers: res.headers,
   } as toggleTeamAutoJoinDomainResponse;
+};
+
+/**
+ * @summary The team's computers, oldest first.
+ */
+export type listTeamComputersResponse200 = {
+  data: ComputerStatus[];
+  status: 200;
+};
+
+export type listTeamComputersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputersResponseSuccess = listTeamComputersResponse200 & {
+  headers: Headers;
+};
+export type listTeamComputersResponseError = (
+  | listTeamComputersResponse401
+  | listTeamComputersResponse403
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputersResponse =
+  | listTeamComputersResponseSuccess
+  | listTeamComputersResponseError;
+
+export const getListTeamComputersUrl = () => {
+  return `/team/computers`;
+};
+
+export const listTeamComputers = async (
+  options?: RequestInit
+): Promise<listTeamComputersResponse> => {
+  const res = await fetch(getListTeamComputersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputersResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputersResponse;
+};
+
+/**
+ * @summary Buy a computer for the team, billed on the team subscription.
+ */
+export type purchaseTeamComputerResponse200 = {
+  data: Purchased;
+  status: 200;
+};
+
+export type purchaseTeamComputerResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type purchaseTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchaseTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchaseTeamComputerResponseSuccess =
+  purchaseTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type purchaseTeamComputerResponseError = (
+  | purchaseTeamComputerResponse402
+  | purchaseTeamComputerResponse409
+  | purchaseTeamComputerResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchaseTeamComputerResponse =
+  | purchaseTeamComputerResponseSuccess
+  | purchaseTeamComputerResponseError;
+
+export const getPurchaseTeamComputerUrl = () => {
+  return `/team/computers`;
+};
+
+export const purchaseTeamComputer = async (
+  purchaseBody: PurchaseBody,
+  options?: RequestInit
+): Promise<purchaseTeamComputerResponse> => {
+  const res = await fetch(getPurchaseTeamComputerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: purchaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as purchaseTeamComputerResponse;
+};
+
+/**
+ * @summary Ask to hear when a sold-out size is back.
+ */
+export type notifyTeamComputerAvailableResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type notifyTeamComputerAvailableResponseSuccess =
+  notifyTeamComputerAvailableResponse204 & {
+    headers: Headers;
+  };
+
+export type notifyTeamComputerAvailableResponse =
+  notifyTeamComputerAvailableResponseSuccess;
+
+export const getNotifyTeamComputerAvailableUrl = () => {
+  return `/team/computers/notify`;
+};
+
+export const notifyTeamComputerAvailable = async (
+  notifyBody: NotifyBody,
+  options?: RequestInit
+): Promise<notifyTeamComputerAvailableResponse> => {
+  const res = await fetch(getNotifyTeamComputerAvailableUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notifyBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: notifyTeamComputerAvailableResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as notifyTeamComputerAvailableResponse;
+};
+
+/**
+ * @summary Every size with its price and availability.
+ */
+export type listTeamComputerOffersResponse200 = {
+  data: SizeOffer[];
+  status: 200;
+};
+
+export type listTeamComputerOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listTeamComputerOffersResponseSuccess =
+  listTeamComputerOffersResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerOffersResponseError =
+  listTeamComputerOffersResponse503 & {
+    headers: Headers;
+  };
+
+export type listTeamComputerOffersResponse =
+  | listTeamComputerOffersResponseSuccess
+  | listTeamComputerOffersResponseError;
+
+export const getListTeamComputerOffersUrl = () => {
+  return `/team/computers/offers`;
+};
+
+export const listTeamComputerOffers = async (
+  options?: RequestInit
+): Promise<listTeamComputerOffersResponse> => {
+  const res = await fetch(getListTeamComputerOffersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerOffersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerOffersResponse;
+};
+
+/**
+ * @summary The price of one computer of a size for the team.
+ */
+export type quoteTeamComputerResponse200 = {
+  data: Quote;
+  status: 200;
+};
+
+export type quoteTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type quoteTeamComputerResponseSuccess = quoteTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type quoteTeamComputerResponseError = quoteTeamComputerResponse503 & {
+  headers: Headers;
+};
+
+export type quoteTeamComputerResponse =
+  | quoteTeamComputerResponseSuccess
+  | quoteTeamComputerResponseError;
+
+export const getQuoteTeamComputerUrl = (params: QuoteTeamComputerParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team/computers/quote?${stringifiedParams}`
+    : `/team/computers/quote`;
+};
+
+export const quoteTeamComputer = async (
+  params: QuoteTeamComputerParams,
+  options?: RequestInit
+): Promise<quoteTeamComputerResponse> => {
+  const res = await fetch(getQuoteTeamComputerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: quoteTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as quoteTeamComputerResponse;
+};
+
+/**
+ * @summary One computer, with setup progress until it first connects.
+ */
+export type getTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type getTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamComputerResponseSuccess = getTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type getTeamComputerResponseError = getTeamComputerResponse404 & {
+  headers: Headers;
+};
+
+export type getTeamComputerResponse =
+  | getTeamComputerResponseSuccess
+  | getTeamComputerResponseError;
+
+export const getGetTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}`;
+};
+
+export const getTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<getTeamComputerResponse> => {
+  const res = await fetch(getGetTeamComputerUrl(computerId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamComputerResponse;
+};
+
+/**
+ * @summary Stop billing at the end of the current period.
+ */
+export type cancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type cancelTeamComputerResponseSuccess =
+  cancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelTeamComputerResponse = cancelTeamComputerResponseSuccess;
+
+export const getCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const cancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<cancelTeamComputerResponse> => {
+  const res = await fetch(getCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelTeamComputerResponse;
+};
+
+/**
+ * @summary Keep a computer that was canceled at period end.
+ */
+export type undoCancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type undoCancelTeamComputerResponseSuccess =
+  undoCancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type undoCancelTeamComputerResponse =
+  undoCancelTeamComputerResponseSuccess;
+
+export const getUndoCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const undoCancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<undoCancelTeamComputerResponse> => {
+  const res = await fetch(getUndoCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: undoCancelTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as undoCancelTeamComputerResponse;
+};
+
+/**
+ * @summary Turn a computer on or off. A computer that is off keeps its disk and stays billed.
+ */
+export type setTeamComputerPowerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type setTeamComputerPowerResponseSuccess =
+  setTeamComputerPowerResponse200 & {
+    headers: Headers;
+  };
+
+export type setTeamComputerPowerResponse = setTeamComputerPowerResponseSuccess;
+
+export const getSetTeamComputerPowerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/power`;
+};
+
+export const setTeamComputerPower = async (
+  computerId: string,
+  powerBody: PowerBody,
+  options?: RequestInit
+): Promise<setTeamComputerPowerResponse> => {
+  const res = await fetch(getSetTeamComputerPowerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(powerBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamComputerPowerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamComputerPowerResponse;
+};
+
+/**
+ * @summary Stop billing and destroy the computer now, without a refund.
+ */
+export type releaseTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type releaseTeamComputerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type releaseTeamComputerResponseSuccess =
+  releaseTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type releaseTeamComputerResponseError =
+  releaseTeamComputerResponse400 & {
+    headers: Headers;
+  };
+
+export type releaseTeamComputerResponse =
+  | releaseTeamComputerResponseSuccess
+  | releaseTeamComputerResponseError;
+
+export const getReleaseTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/release`;
+};
+
+export const releaseTeamComputer = async (
+  computerId: string,
+  releaseBody: ReleaseBody,
+  options?: RequestInit
+): Promise<releaseTeamComputerResponse> => {
+  const res = await fetch(getReleaseTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(releaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: releaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as releaseTeamComputerResponse;
+};
+
+/**
+ * @summary Retry a failed computer without changing billing.
+ */
+export type retryTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type retryTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type retryTeamComputerResponseSuccess = retryTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type retryTeamComputerResponseError = (
+  | retryTeamComputerResponse404
+  | retryTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type retryTeamComputerResponse =
+  | retryTeamComputerResponseSuccess
+  | retryTeamComputerResponseError;
+
+export const getRetryTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/retry`;
+};
+
+export const retryTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<retryTeamComputerResponse> => {
+  const res = await fetch(getRetryTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamComputerResponse;
 };
 
 /**
