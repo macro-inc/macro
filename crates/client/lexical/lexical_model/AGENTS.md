@@ -240,3 +240,9 @@ ForeignBindings population markers, borrowing unchanged layouts and avoiding
 empty configuration lock/map clones. Never use foreign payload node presence as
 that guard: builtin text can carry registered JS NodeState and must preserve its
 codec behavior, lazy reads, flat serialization and previous snapshots.
+
+Seal delegated host reconciliation only after a flushed same-update phase and
+validated host acknowledgement; preserve staged publication denial. Derived
+cache writes must not replay transforms/GC on admission. Reopen only an actually
+sealed unpublished phase after policy refusal; stage tokens never grant commit
+authority or rollback a published transition.
