@@ -2,6 +2,26 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Bounded native draft-count fix `51c4fd12f0` is integrated alone as `7464135a8f`.
+No optional plugin moves or format-only perf-branch commits were consumed. The
+plugin counts direct mutations and attachment-changing subtrees, rebuilds full
+reconciles, and avoids extension copy-on-write when the count stays unchanged.
+The crate guide now records this bounded-work rule. The portable model boundary
+is unchanged: draft-mark policy remains in the Macro model plugin; no transport,
+authorization, foreign registry, transaction API or ABI changed.
+
+Independent combined-source validation in the disposable checkout passes all
+100 default Macro package tests, strict all-target Clippy, the wasm32 target
+check and scoped root `just check`. The new regression measures exactly two reads and zero comment
+visits for plain typing at 190 / 3,835 / 36,530 nodes; lifecycle and snapshot
+replacement cases also pass. The owner reports replay1,364 passed / zero failed /
+57 unchanged ledger entries (1,421 successful harness trials); that replay and
+the owner's separate TypeScript/source-export checks were not independently
+repeated here. No latency improvement is claimed and no shipping WASM rebuild
+or live asset promotion occurred. The broader workspace/matrix remains paused.
+Evidence: `draft-count-integrated-{tests,clippy,wasm-check,check}.log` and
+`draft-count-integration-audit.md` under the acceptance directory.
+
 Main source remains ABI2; the live preview is still the unchanged `9c21b03842`
 artifact. No production action, deployment, stack restart, live dependency write
 or live artifact promotion occurred. Integration3 and production compatibility
