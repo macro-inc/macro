@@ -22,10 +22,6 @@ vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
   AgentRuntime: () => null,
 }));
 
-vi.mock('@app/features/runtime-sharing/views/UserRuntimes', () => ({
-  UserRuntimes: () => null,
-}));
-
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({
     enabled: mocks.crmFlagEnabled,
