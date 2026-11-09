@@ -451,7 +451,11 @@ fn init_opentelemetry(
         }
     }
 
-    provider.build()
+    let provider = provider.build();
+    // Spans with recorded start/end times (durable waits) use the OpenTelemetry
+    // API directly; route them through the same exporters as tracing spans.
+    opentelemetry::global::set_tracer_provider(provider.clone());
+    provider
 }
 
 /// OTLP log export for the [`OpenTelemetryTracingBridge`]: tracing events
