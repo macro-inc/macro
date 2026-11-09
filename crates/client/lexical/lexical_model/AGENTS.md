@@ -192,3 +192,5 @@ Native boundaries reconstruct dense indices with `NodeTypeIndex::from_raw`; vali
 Restore owned selection metadata through with_foreign_value_metadata; synchronization preserves object identity and treats cached direction alone as a memo change without dirty/publication effects.
 
 Consume ForeignReservedKey capabilities for externally constructed native records; keys come from the exact allocator and are never reallocated or rolled back.
+
+Opt out of class static transforms with without_static_transforms only when an external runtime owns them; explicit transforms and core text normalization remain enabled.

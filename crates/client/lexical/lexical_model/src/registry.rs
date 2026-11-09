@@ -220,6 +220,7 @@ pub struct EditorBuilder {
     replacements: Vec<(TypeId, TypeId, Box<dyn Replacement>)>,
     projections: HashMap<(TypeId, TypeId), Box<dyn Any + Send + Sync>>,
     transforms: TransformRegistrations,
+    include_static_transforms: bool,
 }
 impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
@@ -240,6 +241,7 @@ impl EditorBuilder {
             replacements: vec![],
             projections: HashMap::default(),
             transforms: vec![],
+            include_static_transforms: true,
         }
         .node::<Root>()
         .node::<Text>()
@@ -262,6 +264,12 @@ impl EditorBuilder {
     /// Register a node type in builder order.
     pub fn node<Node: NodeType>(mut self) -> Self {
         self.vtables.push(Node::Kind::vtable());
+        self
+    }
+    /// Leave class static transforms to an external runtime while retaining
+    /// explicit registrations and the engine's core text normalization.
+    pub fn without_static_transforms(mut self) -> Self {
+        self.include_static_transforms = false;
         self
     }
     /// Run a typed transform for this type and its direct replacement.
@@ -346,6 +354,11 @@ impl EditorBuilder {
                 return Err(BuildError::DuplicatePlugin {
                     name: plugin.name(),
                 });
+            }
+        }
+        if !self.include_static_transforms {
+            for vtable in &mut self.vtables {
+                vtable.transforms.clear();
             }
         }
         let mut registry = Registry {
