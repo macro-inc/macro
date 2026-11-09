@@ -40,6 +40,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Emit preventDefault when native Enter policy consumes a key, including primitive key routing without a view adapter.
 - Stage NodeId/PeerId plugin entropy, mappings and owner state transactionally; reconcile mutations through after_commit.
 - Keep clipboard identity invalidation before insertion and restore draft wrappers within the same update.
+- Count draft marks from each commit’s mutations and attachment-changing subtrees; rebuild only for full reconciles and leave unrelated marks untouched during typing.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
 - Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
