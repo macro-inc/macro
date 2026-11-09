@@ -41,6 +41,10 @@ fn real_publications_ship_bounded_edits_and_every_removed_descendant() -> Result
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
     let (host, machine) = editor.compat_parts()?;
     let machine::Session::Editor(session) = &mut machine.session else {

@@ -67,6 +67,10 @@ fn leased_exact_capture_survives_retired_graph_and_prunes_after_final_release(
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let current = editor.compat_current_version_inner()?;
     assert!(current > 0);
     editor.compat_snapshot_inner(current)?;
@@ -147,6 +151,10 @@ fn invalid_lease_and_overflow_reject_before_begin_or_retirement() -> Result<(), 
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let version = editor.compat_current_version_inner()?;
     let record = editor.compat_snapshot_inner(version)?.batch.records[0].record;
     let request = compat::CompatBatchRequest {
@@ -205,6 +213,10 @@ fn batch_input_pin_survives_its_explicit_release() -> Result<(), BoundaryError> 
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let version = editor.compat_current_version_inner()?;
     let root = editor.compat_snapshot_inner(version)?.batch.records[0].record;
     editor.compat_capture_leases_inner(&bytes(&compat::CompatCaptureLeases {
@@ -306,6 +318,10 @@ fn compact_emission_survives_discard_until_decoder_ack() -> Result<(), BoundaryE
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let version = editor.compat_current_version_inner()?;
     let reply = editor.compat_batch_inner(&bytes(&compat::CompatBatchRequest {
         scope: compat::CompatBatchScope::CompatBatchBegin {
@@ -355,6 +371,10 @@ fn compact_emission_survives_discard_until_decoder_ack() -> Result<(), BoundaryE
         .expect("host")
         .captures
         .contains_key(&id));
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     assert!(editor.compat_current_version_inner()? == version);
     Ok(())
 }

@@ -126,6 +126,10 @@ fn hosted_core_hydration_is_exact_and_shared_keys_do_not_collide() -> Result<(),
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let rebuilt = editor.compat_current_version_inner()?;
     assert!(rebuilt > 0);
     let old = editor.compat_snapshot_inner(0)?;

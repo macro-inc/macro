@@ -80,6 +80,7 @@ impl EditorSession {
             .mutation_epoch
             .checked_add(1)
             .ok_or(BoundaryError::Invalid("mutation epoch exhausted"))?;
+        host.ensure_publications_drained()?;
         let keys = host.prepare_keys(request.reserve_keys)?;
         masks.apply();
         self.compat_begin_inner(&bytes(&compat::CompatBegin { tags: request.tags })?)?;

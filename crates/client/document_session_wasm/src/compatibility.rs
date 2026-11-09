@@ -21,6 +21,7 @@ mod lifecycle;
 mod native_calls;
 pub(crate) mod observer;
 mod publication_delta;
+mod publications;
 mod records;
 mod reservations;
 mod scopes;
@@ -64,6 +65,9 @@ pub(crate) struct Host {
     class_masks: Arc<class_masks::ClassMasks>,
     host_slot: Option<u32>,
     instance_runtime: Option<Arc<instance_runtime::InstanceRuntime>>,
+    publications: std::collections::VecDeque<publications::Publication>,
+    cold_bootstrap: bool,
+    bootstrap_fence_version: Option<u64>,
     receipts: observer::Receipts,
     owner: lexical_model::ForeignEditorIdentity,
     owner_aliases: std::collections::HashSet<lexical_model::ForeignWeakEditorIdentity>,
@@ -160,6 +164,9 @@ impl EditorSession {
             class_masks,
             host_slot: runtime.as_ref().map(|runtime| runtime.host_slot),
             instance_runtime: runtime,
+            publications: Default::default(),
+            cold_bootstrap: true,
+            bootstrap_fence_version: None,
             receipts,
             owner_aliases: [owner.downgrade()].into(),
             owner,

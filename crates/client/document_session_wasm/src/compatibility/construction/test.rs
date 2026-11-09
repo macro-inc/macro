@@ -77,6 +77,10 @@ fn hosted_seed_batch_consumes_exact_tickets_and_preserves_original_instances(
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let version = editor.compat_current_version_inner()?;
     let root = editor.compat_snapshot_inner(version)?.batch.records[0].record;
     let ready = editor.compat_batch_inner(&bytes(&compat::CompatBatchRequest {

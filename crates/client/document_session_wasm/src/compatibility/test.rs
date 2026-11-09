@@ -85,6 +85,10 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         1.0,
         None,
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let seeded_version = editor.compat_current_version_inner()?;
     assert!(seeded_version > 0);
     let initial_version = editor.compat_snapshot_inner(0)?.batch.records[0]
@@ -817,6 +821,10 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         .unwrap()
         .reservations
         .is_empty());
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     assert_eq!(editor.compat_current_version_inner()?, committed.version);
     request.has_receiver = true;
     request.receiver = frozen_text;
@@ -829,6 +837,10 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         4.0,
         Some(4.0),
     )?;
+    while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+        .commits
+        .is_empty()
+    {}
     let undo_version = editor.compat_current_version_inner()?;
     assert!(undo_version > committed.version);
     let machine::Session::Editor(session) = &editor.machine.session else {
@@ -903,6 +915,10 @@ fn admission_rejects_readonly_and_unseeded_sessions_without_publishing_staged_te
                 None,
             )?;
         }
+        while !compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?
+            .commits
+            .is_empty()
+        {}
         editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
         let request = compat::CompatRequest {
             operation: Op::CreateText,
