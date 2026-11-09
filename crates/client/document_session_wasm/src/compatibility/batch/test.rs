@@ -316,6 +316,17 @@ fn actual_session_batches_keep_pending_identity_and_acknowledge_failed_prefixes(
         editor.compatibility.as_ref().expect("host").mutation_epoch,
         detached_failure.mutation_epoch
     );
+    next.operations[0].args.pop();
+    next.operations[0]
+        .args
+        .push(compat::CompatBatchArgument::CompatSelectionIntentArgument {
+            intent: compat::CompatSelectionIntent::CompatNoSelectionIntent {},
+        });
+    assert!(editor.compat_batch_inner(&bytes(&next)?).is_err());
+    assert_eq!(
+        editor.compatibility.as_ref().expect("host").mutation_epoch,
+        detached_failure.mutation_epoch
+    );
     let final_commit = editor.compat_commit_inner(5.0, 5.0)?;
     let actual = final_commit
         .batch

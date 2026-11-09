@@ -185,3 +185,8 @@ Use with_pending_frame and dispatch_current for synchronous child callback
 execution. Keep metadata guards inside prepare/encode closures, release them
 before native model calls, and reject missing/overlapping frame access. Direct
 child dispatch must validate captured node receivers before selection effects.
+
+Acknowledge generated selectionBindings in batch and host envelopes before body
+decoding when a real resolver supplies them. Until intent resolution exists,
+reject selection-intent arguments before any constructor/mutation; empty binding
+sidecars alone do not implement New client values or authorize fabricated refs.

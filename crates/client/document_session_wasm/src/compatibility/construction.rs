@@ -79,6 +79,11 @@ impl Host {
                         self.validate_batch_operand(value)?;
                     }
                 }
+                compat::CompatBatchArgument::CompatSelectionIntentArgument { .. } => {
+                    return Err(BoundaryError::Invalid(
+                        "uninstalled selection intent adapter",
+                    ));
+                }
                 _ => return Err(BoundaryError::Invalid("unknown batch argument")),
             }
         }
