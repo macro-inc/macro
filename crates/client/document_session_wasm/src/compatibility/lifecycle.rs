@@ -112,9 +112,8 @@ impl EditorSession {
             host.selection_values.finish_update(host.update, false);
             if let Some(version) = dropped_version {
                 host.selection_values.release_graph(version);
+                host.abandon_capture_graph(version);
             }
-            host.captures
-                .retain(|_, capture| capture.reference.update_id != host.update);
             host.prune_capture_index()?;
             Ok(true)
         }
@@ -169,9 +168,8 @@ impl EditorSession {
             host.selection_values.finish_update(update, false);
             if let Some(version) = version {
                 host.selection_values.release_graph(version);
+                host.abandon_capture_graph(version);
             }
-            host.captures
-                .retain(|_, capture| capture.reference.update_id != update);
             host.prune_capture_index()?;
         }
         result
@@ -308,9 +306,8 @@ impl EditorSession {
         host.selection_values.finish_update(host.update, false);
         if let Some(version) = dropped_version {
             host.selection_values.release_graph(version);
+            host.abandon_capture_graph(version);
         }
-        host.captures
-            .retain(|_, capture| capture.reference.update_id != host.update);
         host.prune_capture_index().map_err(js)?;
         Ok(())
     }
@@ -352,11 +349,16 @@ impl EditorSession {
                 "cannot release unissued or active compatibility version",
             ));
         }
+        let epoch = host
+            .retirement_epoch
+            .checked_add(1)
+            .ok_or(BoundaryError::Invalid("capture retirement epoch exhausted"))?;
         host.states.remove(&version);
         host.selection_values.release_graph(version);
-        host.captures
-            .retain(|_, capture| capture.reference.node.version != version);
-        host.prune_capture_index()?;
+        let removed = host.capture_leases.retire_graph(version);
+        host.remove_captures(removed);
+        host.owner_aliases.retain(|owner| owner.upgrade().is_some());
+        host.retirement_epoch = epoch;
         Ok(())
     }
 }

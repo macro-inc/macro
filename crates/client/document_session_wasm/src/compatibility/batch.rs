@@ -182,14 +182,10 @@ impl EditorSession {
             .compatibility
             .as_ref()
             .ok_or(BoundaryError::Invalid("compatibility session required"))?;
-        if request.leases.editor_id != host.editor
-            || !request.leases.retain.is_empty()
-            || !request.leases.release.is_empty()
-        {
-            return Err(BoundaryError::Invalid(
-                "uninstalled compact capture lease adapter",
-            ));
-        }
+        host.capture_leases.validate(&request.leases)?;
+        host.retirement_epoch
+            .checked_add(1)
+            .ok_or(BoundaryError::Invalid("capture retirement epoch exhausted"))?;
         for operation in &request.operations {
             host.validate_batch_operation(operation)?;
         }
@@ -208,6 +204,8 @@ impl EditorSession {
         host.mutation_epoch
             .checked_add(epoch_steps)
             .ok_or(BoundaryError::Invalid("mutation epoch exhausted"))?;
+        let input_owner =
+            capture_leases::NativeOwner::Stage(crate::compatibility_host::next_scope_id()?);
         let mut reservations = Vec::new();
         match request.scope {
             compat::CompatBatchScope::CompatBatchBegin {
@@ -257,6 +255,34 @@ impl EditorSession {
             _ => return Err(BoundaryError::Invalid("unknown batch scope")),
         }
         let (host, machine) = self.compat_parts()?;
+        let mut input_captures = Vec::new();
+        for operation in &request.operations {
+            if let compat::CompatNodeOperand::CompatCapturedNode { record } = &operation.receiver {
+                input_captures.push(record.capture_id);
+            }
+            for argument in &operation.args {
+                match argument {
+                    compat::CompatBatchArgument::CompatNodeArgument {
+                        value: compat::CompatNodeOperand::CompatCapturedNode { record },
+                    } => input_captures.push(record.capture_id),
+                    compat::CompatBatchArgument::CompatNodeArrayArgument { values } => {
+                        for value in values {
+                            if let compat::CompatNodeOperand::CompatCapturedNode { record } = value
+                            {
+                                input_captures.push(record.capture_id);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        host.capture_leases.hold(input_owner, &input_captures)?;
+        if let Err(error) = host.apply_capture_leases(&request.leases) {
+            let removed = host.capture_leases.release_owner(input_owner);
+            host.remove_captures(removed);
+            return Err(error);
+        }
         let next_epoch = host
             .mutation_epoch
             .checked_add(1)
@@ -268,175 +294,174 @@ impl EditorSession {
             .pending
             .take()
             .ok_or(BoundaryError::Invalid("compatibility update required"))?;
-        let (pending, reply) =
-            session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
-                let mut results = Vec::new();
-                let mut selection_refs = BTreeMap::new();
-                let mut outcome = Outcome::CompatBatchSuccess {};
-                for (index, operation) in request.operations.iter().enumerate() {
-                    let mut call = None;
-                    let guard = ForeignReadOperation::begin()?;
-                    let result = if super::construction::creates(operation.operation) {
-                        host.prepare_reserved_creation(operation).and_then(
-                            |(construction, ticket)| {
-                                construction
-                                    .execute(tx, ticket)
-                                    .map(|key| ResultValue::Node(Some(key)))
-                                    .map_err(BoundaryError::Model)
-                            },
-                        )
-                    } else {
-                        host.batch_request(operation).and_then(|request| {
-                            let result = super::scopes::dispatch(host, tx, &request);
-                            call = Some(request);
-                            result
+        let execution = session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
+            let mut results = Vec::new();
+            let mut selection_refs = BTreeMap::new();
+            let mut outcome = Outcome::CompatBatchSuccess {};
+            for (index, operation) in request.operations.iter().enumerate() {
+                let mut call = None;
+                let guard = ForeignReadOperation::begin()?;
+                let result = if super::construction::creates(operation.operation) {
+                    host.prepare_reserved_creation(operation)
+                        .and_then(|(construction, ticket)| {
+                            construction
+                                .execute(tx, ticket)
+                                .map(|key| ResultValue::Node(Some(key)))
+                                .map_err(BoundaryError::Model)
                         })
-                    };
-                    let result = guard.finish(result);
-                    for arg in call.iter().flat_map(|call| &call.args) {
-                        if let compat::ForeignCallbackValue::ForeignSelectionArgument { value } =
-                            arg
-                        {
-                            selection_refs.insert(
-                                (value.editor_id, value.version, value.selection_id),
-                                *value,
-                            );
-                        }
-                    }
-                    match result {
-                        Ok(result) => {
-                            let receiver = match &call {
-                                Some(call) if call.has_receiver => Some(host.receiver(call)?),
-                                _ => None,
-                            };
-                            let (reply, delta) = host.batch_delta(tx, result, receiver)?;
-                            if super::construction::creates(operation.operation) {
-                                let (reservation, key) =
-                                    super::construction::reserved(&operation.receiver)?;
-                                let record = delta
-                                    .records
-                                    .iter()
-                                    .find(|record| record.record.node.key == records::key(key))
-                                    .ok_or(BoundaryError::Invalid(
-                                        "constructed result record missing",
-                                    ))?;
-                                host.constructed.insert((reservation, key), record.record);
-                            }
-                            for selection in reply.selections {
-                                match selection {
-                                    compat::CompatSelectionData::CompatRangeSelection {
-                                        reference,
-                                        ..
-                                    }
-                                    | compat::CompatSelectionData::CompatNodeSelection {
-                                        reference,
-                                        ..
-                                    }
-                                    | compat::CompatSelectionData::CompatTableSelection {
-                                        reference,
-                                        ..
-                                    } => {
-                                        selection_refs.insert(
-                                            (
-                                                reference.editor_id,
-                                                reference.version,
-                                                reference.selection_id,
-                                            ),
-                                            reference,
-                                        );
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            results.push(compat::CompatBatchResult {
-                                value: reply.value,
-                                delta,
-                            });
-                        }
-                        Err(error) => {
-                            outcome = failure(
-                                error,
-                                compat::CompatFailureLocation::CompatOperationFailure {
-                                    index: u32::try_from(index).map_err(|_| {
-                                        BoundaryError::Invalid("batch operation count")
-                                    })?,
-                                },
-                            );
-                            break;
-                        }
+                } else {
+                    host.batch_request(operation).and_then(|request| {
+                        let result = super::scopes::dispatch(host, tx, &request);
+                        call = Some(request);
+                        result
+                    })
+                };
+                let result = guard.finish(result);
+                for arg in call.iter().flat_map(|call| &call.args) {
+                    if let compat::ForeignCallbackValue::ForeignSelectionArgument { value } = arg {
+                        selection_refs
+                            .insert((value.editor_id, value.version, value.selection_id), *value);
                     }
                 }
-                if matches!(outcome, Outcome::CompatBatchSuccess {}) {
-                    let guard = ForeignReadOperation::begin()?;
-                    if let Err(error) = guard.finish(super::scopes::flush(host, tx)) {
+                match result {
+                    Ok(result) => {
+                        let receiver = match &call {
+                            Some(call) if call.has_receiver => Some(host.receiver(call)?),
+                            _ => None,
+                        };
+                        let (reply, delta) = host.batch_delta(tx, result, receiver)?;
+                        if super::construction::creates(operation.operation) {
+                            let (reservation, key) =
+                                super::construction::reserved(&operation.receiver)?;
+                            let record = delta
+                                .records
+                                .iter()
+                                .find(|record| record.record.node.key == records::key(key))
+                                .ok_or(BoundaryError::Invalid(
+                                    "constructed result record missing",
+                                ))?;
+                            host.capture_leases.hold(
+                                capture_leases::NativeOwner::Update(host.update),
+                                &[record.record.capture_id],
+                            )?;
+                            host.constructed.insert((reservation, key), record.record);
+                        }
+                        for selection in reply.selections {
+                            match selection {
+                                compat::CompatSelectionData::CompatRangeSelection {
+                                    reference,
+                                    ..
+                                }
+                                | compat::CompatSelectionData::CompatNodeSelection {
+                                    reference,
+                                    ..
+                                }
+                                | compat::CompatSelectionData::CompatTableSelection {
+                                    reference,
+                                    ..
+                                } => {
+                                    selection_refs.insert(
+                                        (
+                                            reference.editor_id,
+                                            reference.version,
+                                            reference.selection_id,
+                                        ),
+                                        reference,
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                        results.push(compat::CompatBatchResult {
+                            value: reply.value,
+                            delta,
+                        });
+                    }
+                    Err(error) => {
                         outcome = failure(
                             error,
-                            compat::CompatFailureLocation::CompatFinalizeFailure {},
+                            compat::CompatFailureLocation::CompatOperationFailure {
+                                index: u32::try_from(index)
+                                    .map_err(|_| BoundaryError::Invalid("batch operation count"))?,
+                            },
                         );
+                        break;
                     }
                 }
-                let active = tx
-                    .selection()
-                    .and_then(|_| tx.foreign_selection_identity(SelectionSlot::Active));
-                host.selection_values
-                    .reconcile_active(active.as_ref(), host.update);
-                let facts = tx.view().foreign_update_facts();
-                let source = tx.view().snapshot_for_foreign_read()?;
-                let selection = host.selection(
-                    &source,
-                    host.pending_version
-                        .ok_or(BoundaryError::Invalid("pending publication version"))?,
-                )?;
-                let selections = selection_refs
-                    .values()
-                    .map(|reference| {
-                        host.selection_values
-                            .get(*reference)
-                            .map(|value| value.encoded())
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                let (_, delta) =
-                    host.batch_delta(tx, ResultValue::Scalar(calls::undefined()), None)?;
-                Ok(compat::CompatBatchReply {
-                    update_id: host.update,
-                    reservations,
-                    flags: 0,
-                    published: false,
-                    changed: tx.has_foreign_effects(),
-                    noop: false,
-                    version: host
-                        .pending_version
-                        .ok_or(BoundaryError::Invalid("pending publication version"))?,
-                    mutation_epoch: next_epoch,
-                    composition: records::optional(tx.composition_key()),
-                    selection,
-                    selections,
-                    selection_bindings: vec![],
-                    tags: tx.tags().iter().map(ToString::to_string).collect(),
-                    dirty_leaves: facts
-                        .dirty_leaves
-                        .iter()
-                        .copied()
-                        .map(records::key)
-                        .collect(),
-                    dirty_elements: facts
-                        .dirty_elements
-                        .iter()
-                        .map(|(key, intent)| compat::CompatDirtyElement {
-                            key: records::key(*key),
-                            intentional: *intent == DirtyIntent::Intentional,
-                        })
-                        .collect(),
-                    dirty_type: match facts.dirty_type {
-                        ForeignDirtyType::Clean => 0,
-                        ForeignDirtyType::Nodes => 1,
-                        ForeignDirtyType::FullReconcile => 2,
-                    },
-                    delta,
-                    results,
-                    outcome,
+            }
+            if matches!(outcome, Outcome::CompatBatchSuccess {}) {
+                let guard = ForeignReadOperation::begin()?;
+                if let Err(error) = guard.finish(super::scopes::flush(host, tx)) {
+                    outcome = failure(
+                        error,
+                        compat::CompatFailureLocation::CompatFinalizeFailure {},
+                    );
+                }
+            }
+            let active = tx
+                .selection()
+                .and_then(|_| tx.foreign_selection_identity(SelectionSlot::Active));
+            host.selection_values
+                .reconcile_active(active.as_ref(), host.update);
+            let facts = tx.view().foreign_update_facts();
+            let source = tx.view().snapshot_for_foreign_read()?;
+            let selection = host.selection(
+                &source,
+                host.pending_version
+                    .ok_or(BoundaryError::Invalid("pending publication version"))?,
+            )?;
+            let selections = selection_refs
+                .values()
+                .map(|reference| {
+                    host.selection_values
+                        .get(*reference)
+                        .map(|value| value.encoded())
                 })
-            })?;
+                .collect::<Result<Vec<_>, _>>()?;
+            let (_, delta) = host.batch_delta(tx, ResultValue::Scalar(calls::undefined()), None)?;
+            Ok(compat::CompatBatchReply {
+                update_id: host.update,
+                reservations,
+                flags: 0,
+                published: false,
+                changed: tx.has_foreign_effects(),
+                noop: false,
+                version: host
+                    .pending_version
+                    .ok_or(BoundaryError::Invalid("pending publication version"))?,
+                mutation_epoch: next_epoch,
+                composition: records::optional(tx.composition_key()),
+                selection,
+                selections,
+                selection_bindings: vec![],
+                tags: tx.tags().iter().map(ToString::to_string).collect(),
+                dirty_leaves: facts
+                    .dirty_leaves
+                    .iter()
+                    .copied()
+                    .map(records::key)
+                    .collect(),
+                dirty_elements: facts
+                    .dirty_elements
+                    .iter()
+                    .map(|(key, intent)| compat::CompatDirtyElement {
+                        key: records::key(*key),
+                        intentional: *intent == DirtyIntent::Intentional,
+                    })
+                    .collect(),
+                dirty_type: match facts.dirty_type {
+                    ForeignDirtyType::Clean => 0,
+                    ForeignDirtyType::Nodes => 1,
+                    ForeignDirtyType::FullReconcile => 2,
+                },
+                delta,
+                results,
+                outcome,
+            })
+        });
+        let removed = host.capture_leases.release_owner(input_owner);
+        host.remove_captures(removed);
+        let (pending, reply) = execution?;
         host.pending = Some(pending);
         host.mutation_epoch = next_epoch;
         reply

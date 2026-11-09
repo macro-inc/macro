@@ -48,6 +48,10 @@ impl Host {
         })
     }
     pub(super) fn discard_reservations(&mut self) {
+        let removed = self
+            .capture_leases
+            .release_owner(capture_leases::NativeOwner::Update(self.update));
+        self.remove_captures(removed);
         self.constructed
             .retain(|_, record| record.update_id != self.update);
         self.reservations

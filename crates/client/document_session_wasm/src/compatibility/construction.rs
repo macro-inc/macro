@@ -66,6 +66,16 @@ impl Host {
         for argument in &operation.args {
             match argument {
                 compat::CompatBatchArgument::CompatValueArgument { value } => {
+                    if matches!(
+                        value,
+                        compat::ForeignCallbackValue::ForeignRecordArgument { .. }
+                            | compat::ForeignCallbackValue::ForeignNodeArgument { .. }
+                            | compat::ForeignCallbackValue::ForeignNodeArrayArgument { .. }
+                    ) {
+                        return Err(BoundaryError::Invalid(
+                            "compact nodes require typed operands",
+                        ));
+                    }
                     if let compat::ForeignCallbackValue::ForeignSelectionArgument { value } = value
                     {
                         self.selection_values.get(*value)?;

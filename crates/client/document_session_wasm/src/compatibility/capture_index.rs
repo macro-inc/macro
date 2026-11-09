@@ -53,6 +53,21 @@ impl CaptureIndex {
         *self.nodes.entry(key.node).or_default() += 1;
         self.exact.insert(key, id);
     }
+    pub fn remove(&mut self, capture: &records::Capture) {
+        let key = CaptureKey::new(
+            capture.reference,
+            capture.identity.clone(),
+            capture.output.has_root_cached_text,
+        );
+        let removed = self.exact.remove(&key);
+        debug_assert_eq!(removed, Some(capture.reference.capture_id));
+        if let Some(count) = self.nodes.get_mut(&key.node) {
+            *count -= 1;
+            if *count == 0 {
+                self.nodes.remove(&key.node);
+            }
+        }
+    }
     pub fn retain(&mut self, captures: &HashMap<u64, records::Capture>) {
         self.exact.retain(|_, id| captures.contains_key(id));
         self.nodes.clear();

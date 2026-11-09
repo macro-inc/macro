@@ -2,7 +2,9 @@
 use super::*;
 
 impl EditorSession {
-    fn compat_audit_snapshot_inner(&self) -> Result<compat::CompatAuditSnapshot, BoundaryError> {
+    pub(super) fn compat_audit_snapshot_inner(
+        &self,
+    ) -> Result<compat::CompatAuditSnapshot, BoundaryError> {
         let host = self
             .compatibility
             .as_ref()

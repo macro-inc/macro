@@ -165,7 +165,9 @@ outputs; a native declaration must not grow optional compatibility stubs.
 The first compact batch consumer synchronously flushes a single pending update,
 validates Begin/Continue authority, and acknowledges successful prefix plus caught
 failure effects before allowing a retry. It does not yet implement compact
-admission or capture leases; reject those envelopes before execution. Reserved
+admission; reject finalize envelopes before execution. Apply exact capture leases
+atomically before operations, retain input operands through execution and hold
+constructed operands until their update retires. Reserved
 construction supports exact core/heading instance seeds, with real key tickets
 and constructor-global instance IDs; generic classes/creation callbacks remain
 closed until their handlers land. Keep noop false while the pending update remains open. Normalize under
@@ -190,3 +192,11 @@ Acknowledge generated selectionBindings in batch and host envelopes before body
 decoding when a real resolver supplies them. Until intent resolution exists,
 reject selection-intent arguments before any constructor/mutation; empty binding
 sidecars alone do not implement New client values or authorize fabricated refs.
+
+Drain finalizer capture metadata through compatCaptureLeases without opening an
+update or publishing a graph. Explicit capture leases survive allocation-version
+retirement; emitted compact replies survive discard until decoder retention or an
+explicit graph retirement fence. Validate the full lease plan and epoch before
+opening a compact Begin, retain before release, and prune only touched capture
+indexes. Legacy diagnostic calls retain their original unleased discard policy
+until a compact batch or valid cold lease drain opts into emission retention.

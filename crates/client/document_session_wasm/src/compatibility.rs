@@ -11,6 +11,8 @@ mod batch;
 mod bindings;
 mod calls;
 mod capture_index;
+mod capture_leases;
+mod capture_retirement;
 mod class_masks;
 mod construction;
 mod instance_runtime;
@@ -41,6 +43,8 @@ pub(crate) struct Host {
     next_capture: u64,
     retirement_epoch: u64,
     capture_index: capture_index::CaptureIndex,
+    capture_leases: capture_leases::CaptureLeases,
+    preserve_capture_emissions: bool,
     pending: Option<PendingUpdate>,
     states: BTreeMap<u64, EditorState>,
     captures: HashMap<u64, records::Capture>,
@@ -141,6 +145,8 @@ impl EditorSession {
             next_capture: 1,
             retirement_epoch: 0,
             capture_index: Default::default(),
+            capture_leases: capture_leases::CaptureLeases::new(registration.editor_id),
+            preserve_capture_emissions: false,
             pending: None,
             states: [(0, state)].into(),
             captures: HashMap::new(),
