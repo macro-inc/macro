@@ -54,6 +54,7 @@ xtask_ports = { path = "../xtask_ports" }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }
+regex = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

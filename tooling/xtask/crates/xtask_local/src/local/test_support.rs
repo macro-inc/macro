@@ -1,4 +1,4 @@
-//! Helpers shared by this module's tests.
+//! Helpers shared by `xtask_local`'s tests.
 
 use std::fs;
 use std::path::{Path, PathBuf};

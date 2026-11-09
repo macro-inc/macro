@@ -755,6 +755,25 @@ async fn without_code_the_brief_has_no_code_examples() {
 }
 
 #[tokio::test]
+async fn without_conditions_no_example_trigger_asks_one() {
+    for (conditions, asked) in [(false, false), (true, true)] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+        let context = DraftContext {
+            conditions,
+            ..context()
+        };
+        drafts(&rows, &sessions)
+            .draft(owner(), routine("every morning sort my inbox"), context)
+            .await
+            .unwrap();
+        let prompt = sessions.prompts.lock().unwrap()[0].clone();
+        assert!(prompt.contains("<example>"), "{prompt}");
+        assert_eq!(prompt.contains("\"condition\":"), asked, "{prompt}");
+    }
+}
+
+#[tokio::test]
 async fn a_session_that_adds_the_wrong_kind_of_step_fails_the_draft() {
     let rows = Arc::new(Rows::default());
     let sessions = Arc::new(Sessions::new(
