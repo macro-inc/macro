@@ -29,3 +29,20 @@ for (const theme of ['light', 'dark']) {
     });
   }
 }
+
+for (const theme of ['light', 'dark']) {
+  test(`transcript item spacing (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}`);
+    const row = page.locator('[data-call-transcript-row] button').first();
+    const spacing = await row.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.columnGap, style.rowGap];
+    });
+    expect(spacing).toEqual(['16px', '2px']);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d64-${theme}.png`,
+      });
+  });
+}

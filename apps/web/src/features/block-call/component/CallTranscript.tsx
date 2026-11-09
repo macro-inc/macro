@@ -265,7 +265,7 @@ export function CallTranscript(props: {
                       message={item.message}
                       class="rounded-xl px-3 py-3"
                     >
-                      <div class="grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1">
+                      <div class="grid grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-0.5">
                         <div class="row-span-3">
                           <Message.SenderIcon />
                         </div>
@@ -326,7 +326,7 @@ export function CallTranscript(props: {
                         <Tooltip.Trigger
                           as="button"
                           type="button"
-                          class="grid w-full grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl px-3 py-3 text-left"
+                          class="grid w-full grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-0.5 rounded-xl px-3 py-3 text-left"
                           onClick={() => {
                             if (item.seconds !== null)
                               props.onSeekToSeconds?.(item.seconds);
