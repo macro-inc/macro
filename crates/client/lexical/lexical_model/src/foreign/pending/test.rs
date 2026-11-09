@@ -289,3 +289,81 @@ fn host_editor_identity_survives_resumption_and_distinguishes_shared_peers() -> 
     assert!(!identity.matches(&peer.transaction()));
     Ok(())
 }
+
+#[test]
+fn actual_update_identity_survives_suspend_capture_and_publication_without_debug_addresses()
+-> Result<(), Error> {
+    use std::collections::HashSet;
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    assert!(editor.noop_commit().foreign_update.is_none());
+    assert!(
+        editor
+            .state()
+            .view()
+            .snapshot_for_foreign_read()?
+            .origin_update_identity()
+            .is_none()
+    );
+    let mut tx = editor.transaction();
+    let identity = tx.foreign_update_identity();
+    let paragraph = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let source = tx.view().snapshot_for_foreign_read()?;
+    assert_eq!(source.origin_update_identity().as_ref(), Some(&identity));
+    let pending = tx.suspend();
+    let tx = editor.resume(pending)?;
+    assert_eq!(tx.foreign_update_identity(), identity);
+    let commit = tx.commit()?;
+    assert_eq!(commit.foreign_update.as_ref(), Some(&identity));
+    assert_eq!(commit.clone().foreign_update.as_ref(), Some(&identity));
+    let next = editor.transaction();
+    let next_identity = next.foreign_update_identity();
+    assert_ne!(next_identity, identity);
+    assert!(
+        next.committed_state()
+            .view()
+            .snapshot_for_foreign_read()?
+            .origin_update_identity()
+            .is_none()
+    );
+    let mut identities = HashSet::new();
+    assert!(identities.insert(identity.clone()));
+    assert!(!identities.insert(source.origin_update_identity().expect("real origin")));
+    assert!(identities.insert(next_identity));
+    assert_eq!(identities.len(), 2);
+    assert_eq!(format!("{identity:?}"), "ForeignUpdateIdentity");
+    Ok(())
+}
+
+#[test]
+fn early_publication_chain_retains_the_actual_update_identity() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let (key, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(text.key())
+    })?;
+    let mut tx = editor.transaction();
+    let identity = tx.foreign_update_identity();
+    let saved = tx.committed_state().clone();
+    tx.text(key)?.set_text_content("early")?;
+    let source = tx.view().snapshot_for_foreign_read()?;
+    tx.set_editor_state(saved, TagSet::default())?;
+    let commit = tx.commit()?;
+    let chain: Vec<_> = commit.chain().collect();
+    assert_eq!(chain.len(), 2);
+    assert!(
+        chain
+            .iter()
+            .all(|entry| entry.foreign_update.as_ref() == Some(&identity))
+    );
+    assert_ne!(chain[0].id, chain[1].id);
+    assert_eq!(source.origin_update_identity(), Some(identity));
+    Ok(())
+}

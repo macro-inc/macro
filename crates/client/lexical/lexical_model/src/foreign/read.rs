@@ -271,6 +271,14 @@ impl ForeignReadSnapshot {
             .is_some_and(|origin| origin.matches_lease(lease))
     }
 
+    /// Actual originating update, or None for an unowned editor-state capture.
+    /// Identity alone grants no active scope, mutation or publication authority.
+    pub fn origin_update_identity(&self) -> Option<ForeignUpdateIdentity> {
+        self.origin
+            .as_ref()
+            .map(|origin| super::pending::ForeignUpdateIdentity(origin.update.clone()))
+    }
+
     /// Whether this capture originated in the given editor and exact update.
     /// This proves provenance, not freshness or continued callback authorization;
     /// the host must also check that the matching update is still active.

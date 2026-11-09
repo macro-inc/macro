@@ -1,6 +1,10 @@
 //! Compatibility identities over the common unpublished update.
 use crate::*;
-use std::sync::Arc;
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 /// Opaque runtime host identity for an editor, independent of its state.
 /// Clones retain only an identity marker, never the editor or its callbacks.
 #[derive(Clone)]
@@ -17,6 +21,23 @@ impl ForeignEditorIdentity {
 /// Retaining this marker does not retain pending state or callbacks.
 #[derive(Clone)]
 pub struct ForeignUpdateIdentity(pub(super) Arc<()>);
+
+impl fmt::Debug for ForeignUpdateIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ForeignUpdateIdentity")
+    }
+}
+impl PartialEq for ForeignUpdateIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for ForeignUpdateIdentity {}
+impl Hash for ForeignUpdateIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::ptr::hash(Arc::as_ptr(&self.0), state);
+    }
+}
 
 impl ForeignUpdateIdentity {
     /// Whether the transaction is the same pending update, rather than a fresh
