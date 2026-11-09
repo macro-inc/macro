@@ -49,8 +49,6 @@ export type ChannelResolvedTarget =
 export type ChannelSurfaceApi = {
   /** Live timeline state while messages are mounted, else the last state seen. */
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
-  /** Focus the composer while messages are mounted. */
-  focusInput: () => void;
 };
 
 export type ChannelSurfaceProps = {
@@ -133,8 +131,7 @@ function resolveSync(
  * timeline snapshot; knows nothing about tabs, calls, or host chrome. Layers
  * above attach by passing state down (`targetRequest`) or mounting parts
  * (`ChannelMessages`) — the surface exposes no registration hooks beyond the
- * single `ref` escape hatch for the host's persistence captor and composer
- * focus.
+ * single `ref` escape hatch for the host's persistence captor.
  *
  * Hosts must remount the surface when `channelId` changes (key it).
  */
@@ -223,7 +220,6 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
   props.ref?.({
     getMessagesStateSnapshot: () =>
       messagesHandle()?.getMessagesStateSnapshot() ?? lastMessagesSnapshot,
-    focusInput: () => messagesHandle()?.focusInput(),
   });
 
   return (
@@ -253,6 +249,10 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
 export type ChannelMessagesProps = {
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
+  /** Focus the composer each time this changes after mount. */
+  composerFocusRequest?: number;
+  /** See {@link ChannelProps.onEscapeToList}. */
+  onEscapeToList?: () => boolean;
 };
 
 /**
@@ -305,6 +305,16 @@ function MountedChannelMessages(props: ChannelMessagesProps) {
     }
   });
 
+  createEffect(
+    on(
+      () => props.composerFocusRequest,
+      (request) => {
+        if (request) handle()?.focusInput();
+      },
+      { defer: true }
+    )
+  );
+
   onCleanup(() => surface.bindMessagesHandle(undefined));
 
   return (
@@ -315,6 +325,7 @@ function MountedChannelMessages(props: ChannelMessagesProps) {
         surface.bindMessagesHandle(channelHandle);
       }}
       autofocus={props.autofocus}
+      onEscapeToList={props.onEscapeToList}
       // A mount that load-arounds a target must not also restore old timeline
       // state — the same rule as the block host's hydration gate.
       initialMessagesStateSnapshot={

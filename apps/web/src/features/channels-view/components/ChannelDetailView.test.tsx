@@ -33,6 +33,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('../channels-view-context', () => ({
   useChannelsView: () => ({
     composerFocusRequest: () => mocks.composerFocusRequest(),
+    focusRailRow: () => false,
   }),
 }));
 vi.mock('@channel/Channel/ChannelDetail', () => ({
@@ -130,47 +131,48 @@ describe('Chat detail navigation', () => {
 describe('Chat detail composer focus', () => {
   const detail = () => screen.getByTestId('target').dataset;
 
+  afterEach(() => {
+    delete document.documentElement.dataset.modality;
+  });
+
   it('focuses the composer of a conversation opened from Cmd+K', () => {
     mocks.navigationSource = () => 'kommand-menu';
     render(() => <ChannelDetailView channel={channel} />);
     expect(detail().autofocus).toBe('true');
   });
 
-  it('leaves focus in the rail for a conversation reached by arrowing', () => {
+  it('focuses the composer of a conversation opened with a click', () => {
+    document.documentElement.dataset.modality = 'mouse';
     render(() => <ChannelDetailView channel={channel} />);
-    expect(detail().autofocus).toBe('false');
-    expect(detail().focusRequest).toBe('0');
+    expect(detail().autofocus).toBe('true');
   });
 
-  it('focuses the composer the rail asked for, and no other', () => {
-    mocks.composerFocusRequest = () => ({ channelId: 'channel', id: 1 });
-    const [shown, setShown] = createSignal(channel);
-    render(() => <ChannelDetailView channel={shown()} />);
-    expect(detail().autofocus).toBe('true');
-    expect(detail().focusRequest).toBe('1');
-
-    setShown({ ...channel, id: 'other' });
-
+  it('leaves focus in the rail for a conversation reached by arrowing', () => {
+    document.documentElement.dataset.modality = 'keyboard';
+    render(() => <ChannelDetailView channel={channel} />);
     expect(detail().autofocus).toBe('false');
-    expect(detail().focusRequest).toBe('0');
   });
 
   it('does not focus the composer on Back or Forward', () => {
-    mocks.composerFocusRequest = () => ({ channelId: 'channel', id: 1 });
+    document.documentElement.dataset.modality = 'mouse';
     mocks.navigationCause = () => 'history-back';
     render(() => <ChannelDetailView channel={channel} />);
     expect(detail().autofocus).toBe('false');
   });
 
-  it('passes each new request to the open conversation', () => {
+  it('passes each rail request only to the conversation it names', () => {
     const [request, setRequest] = createSignal<ComposerFocusRequest>();
     mocks.composerFocusRequest = request;
-    render(() => <ChannelDetailView channel={channel} />);
+    const [shown, setShown] = createSignal(channel);
+    render(() => <ChannelDetailView channel={shown()} />);
     expect(detail().focusRequest).toBe('0');
 
     setRequest({ channelId: 'channel', id: 1 });
     expect(detail().focusRequest).toBe('1');
     setRequest({ channelId: 'channel', id: 2 });
     expect(detail().focusRequest).toBe('2');
+
+    setShown({ ...channel, id: 'other' });
+    expect(detail().focusRequest).toBe('0');
   });
 });

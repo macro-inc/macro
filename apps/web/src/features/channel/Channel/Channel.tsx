@@ -171,6 +171,12 @@ export type ChannelProps = {
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
+  /**
+   * Esc on the message list, where the composer's Esc lands, hands focus back
+   * to the host's list (the one this conversation was opened from). Returns
+   * whether it did; without a list, Esc reaches the split as before.
+   */
+  onEscapeToList?: () => boolean;
   /** Shows the channel inside a call, opened on that call's thread. */
   callPanel?: {
     /** The root of the call's thread. */
@@ -737,22 +743,27 @@ export function Channel(props: ChannelProps) {
     finishLatestNavigation();
   };
 
-  const { messageListScopeId, attachMessageListRef, attachInputRef } =
-    createChannelHotkeys({
-      selection,
-      scrollToMessage: (id, options) => {
-        cancelLatestNavigation();
-        return threadListNavigation()?.scrollToMessage(id, options) ?? false;
-      },
-      messageById,
-      getMessageActions,
-      userId,
-      isEditing: () => !!messageEditor.state(),
-      isInputEmpty: () =>
-        (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
-      onOpenFindBar: findBar.open,
-      onGoToBottom: goToLatest,
-    });
+  const {
+    messageListScopeId,
+    focusMessageList,
+    attachMessageListRef,
+    attachInputRef,
+  } = createChannelHotkeys({
+    selection,
+    scrollToMessage: (id, options) => {
+      cancelLatestNavigation();
+      return threadListNavigation()?.scrollToMessage(id, options) ?? false;
+    },
+    messageById,
+    getMessageActions,
+    userId,
+    isEditing: () => !!messageEditor.state(),
+    isInputEmpty: () =>
+      (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
+    onOpenFindBar: findBar.open,
+    onGoToBottom: goToLatest,
+    onEscapeToList: () => props.onEscapeToList?.() ?? false,
+  });
 
   createChannelKeyboardHandler({
     scrollToLatest: () => threadListNavigation()?.scrollToLatest(),
@@ -1316,6 +1327,7 @@ export function Channel(props: ChannelProps) {
                             >
                               <ChannelInput
                                 autofocus={props.autofocus}
+                                onEscape={focusMessageList}
                                 collapsible
                                 input={{
                                   mode: 'channel',

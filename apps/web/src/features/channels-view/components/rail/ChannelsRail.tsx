@@ -149,6 +149,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
+    registerRailRowFocus,
   } = useChannelsView();
   const userId = useUserId();
 
@@ -996,6 +997,26 @@ export function ChannelsRail(props: ChannelsRailProps) {
     scrollHandle.scrollToIndex(result.index);
     return true;
   };
+
+  const rowChannelId = (row: ChannelRailRow | undefined) => {
+    if (row?.kind === 'conversation') return row.channel.id;
+    if (row?.kind === 'favorite' && row.favorite.entityType === 'channel')
+      return row.favorite.entityId;
+  };
+
+  // Esc from the open conversation returns to its row: the one it was opened
+  // from, or its first row when it arrived from elsewhere (Cmd+K, a link).
+  registerRailRowFocus((channelId) => {
+    const root = listRoot();
+    if (!root?.isConnected) return false;
+    if (rowChannelId(list.focus.item()) !== channelId) {
+      const row = visibleRows().find((row) => rowChannelId(row) === channelId);
+      const result = row && list.focus.set(row.id, { reason: 'keyboard' });
+      if (result) scrollHandle.scrollToIndex(result.index);
+    }
+    root.focus({ preventScroll: true });
+    return true;
+  });
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>

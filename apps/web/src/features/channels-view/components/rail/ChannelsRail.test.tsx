@@ -63,6 +63,7 @@ const mocks = vi.hoisted(() => ({
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
   onNavigate: (_event: { result?: { item: ChannelRailRow } }) => {},
+  focusRailRow: (_channelId: string) => false,
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
 }));
@@ -267,6 +268,9 @@ vi.mock('../../channels-view-context', () => ({
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
+    registerRailRowFocus: (focus: (channelId: string) => boolean) => {
+      mocks.focusRailRow = focus;
+    },
   }),
 }));
 vi.mock('../../queries', () => ({
