@@ -3191,7 +3191,9 @@ from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
 Loro's undo and the mirror read, and `editor.history.apply` lasts until the
 reconciled editor update commits.
 
-For a native session, check the caret as well as the document: enter a newline,
+For a native session, type text and check Ctrl+Z with both Ctrl+Shift+Z and
+Ctrl+Y: content and caret must return together. KeyDown listeners retain
+precedence over the routed history command. Also check the caret and document: enter a newline,
 undo, then redo. Redo must return to the committed paragraph and offset even
 when that paragraph is recreated. Repeat after a remote insertion before the
 caret, and with two separate edit groups that revisit the same text. An Android

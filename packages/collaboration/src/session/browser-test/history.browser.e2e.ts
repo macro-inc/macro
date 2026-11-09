@@ -30,3 +30,34 @@ declare global {
     historyRun: Awaited<ReturnType<typeof window.historyFixture>>;
   }
 }
+
+test('routed keyboard typing undo and both redo shortcuts restore content and caret', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/src/session/browser-test/index.html');
+  await page.evaluate(async () => {
+    window.historyRun = await window.historyFixture();
+  });
+  await page.locator('#history-keyboard').focus();
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => window.historyRun.clearHistory());
+  const before = await page.evaluate(() => window.historyRun.snapshot());
+  await page.keyboard.type('code');
+  const committed = await page.evaluate(() => window.historyRun.snapshot());
+  expect(committed.content).toContain('code');
+  expect(committed.anchor.offset).toBe(4);
+  for (const shortcut of ['Control+Shift+z', 'Control+y']) {
+    await page.keyboard.press('Control+z');
+    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
+      before
+    );
+    await page.keyboard.press(shortcut);
+    expect(await page.evaluate(() => window.historyRun.snapshot())).toEqual(
+      committed
+    );
+  }
+  await page.evaluate(() => window.historyRun.close());
+  expect(errors).toEqual([]);
+});
