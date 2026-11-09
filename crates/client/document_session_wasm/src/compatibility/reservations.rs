@@ -1,10 +1,9 @@
 //! Native key tickets reserve the actual editor allocator, without creating nodes.
 use super::*;
-use lexical_model::NodeKey;
-use std::collections::HashSet;
+use lexical_model::{ForeignReservedKey, NodeKey};
 const MAX_RESERVATION: u32 = 65_536;
 impl Host {
-    fn prepare_keys(&self, count: u32) -> Result<Vec<NodeKey>, BoundaryError> {
+    fn prepare_keys(&self, count: u32) -> Result<Vec<ForeignReservedKey>, BoundaryError> {
         if count > MAX_RESERVATION {
             return Err(BoundaryError::Invalid(
                 "compatibility key reservation limit",
@@ -17,21 +16,31 @@ impl Host {
         keys.try_reserve_exact(count as usize)
             .map_err(|_| BoundaryError::Invalid("compatibility key reservation capacity"))?;
         for _ in 0..count {
-            keys.push(self.keys.allocate_for_foreign_host()?);
+            keys.push(self.keys.reserve_for_foreign_host()?);
         }
         Ok(keys)
     }
     fn issue_keys(
         &mut self,
-        keys: Vec<NodeKey>,
+        keys: Vec<ForeignReservedKey>,
     ) -> Result<compat::CompatKeyReservation, BoundaryError> {
         let id = self.next_reservation;
         self.next_reservation = id
             .checked_add(1)
             .ok_or(BoundaryError::Invalid("reservation identity exhausted"))?;
-        let wire_keys = keys.iter().copied().map(records::key).collect();
-        self.reservations
-            .insert(id, (self.update, keys.into_iter().collect::<HashSet<_>>()));
+        let wire_keys = keys
+            .iter()
+            .map(|ticket| records::key(ticket.key()))
+            .collect();
+        self.reservations.insert(
+            id,
+            (
+                self.update,
+                keys.into_iter()
+                    .map(|ticket| (ticket.key(), ticket))
+                    .collect(),
+            ),
+        );
         Ok(compat::CompatKeyReservation {
             editor_id: self.editor,
             reservation_id: id,

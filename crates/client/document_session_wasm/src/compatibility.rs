@@ -30,7 +30,13 @@ pub(crate) struct Host {
     captures: HashMap<u64, records::Capture>,
     selection_values: selection_values::SelectionValues,
     keys: lexical_model::SharedKeyCounter,
-    reservations: HashMap<u64, (u32, std::collections::HashSet<lexical_model::NodeKey>)>,
+    reservations: HashMap<
+        u64,
+        (
+            u32,
+            HashMap<lexical_model::NodeKey, lexical_model::ForeignReservedKey>,
+        ),
+    >,
     next_reservation: u64,
     mutation_epoch: u64,
     class_masks: Arc<class_masks::ClassMasks>,
