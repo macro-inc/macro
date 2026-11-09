@@ -34,8 +34,12 @@ val mapper = jacksonObjectMapper().apply {
     convert(Preset::class,                   { Preset.fromValue(it.asText()) },                   { "\"${it.value}\"" })
     convert(Transport::class,                { Transport.fromValue(it.asText()) },                { "\"${it.value}\"" })
     convert(Signal::class,                   { Signal.fromValue(it.asText()) },                   { "\"${it.value}\"" })
+    convert(Block::class,                    { Block.fromValue(it.asText()) },                    { "\"${it.value}\"" })
+    convert(ChoiceKind::class,               { ChoiceKind.fromValue(it.asText()) },               { "\"${it.value}\"" })
     convert(QueryRequestKind::class,         { QueryRequestKind.fromValue(it.asText()) },         { "\"${it.value}\"" })
     convert(SurfaceEventKind::class,         { SurfaceEventKind.fromValue(it.asText()) },         { "\"${it.value}\"" })
+    convert(Action::class,                   { Action.fromValue(it.asText()) },                   { "\"${it.value}\"" })
+    convert(QueryKind::class,                { QueryKind.fromValue(it.asText()) },                { "\"${it.value}\"" })
     convert(TokenResultRequestAccess::class, { TokenResultRequestAccess.fromValue(it.asText()) }, { "\"${it.value}\"" })
 }
 
@@ -64,6 +68,12 @@ data class NativeBridgeTypes (
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val lifecycleRequest: LifecycleRequest,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val menuCommitRequest: MenuCommitRequest,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val menuRowsRequest: MenuRowsRequest,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val mountRequest: MountRequest,
@@ -376,6 +386,225 @@ enum class Signal(val value: String) {
     }
 }
 
+data class MenuCommitRequest (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val choice: MenuChoice,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val identity: MenuIdentity,
+
+    @get:JsonProperty("rowId", required=true)@field:JsonProperty("rowId", required=true)
+    val rowID: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val scope: SurfaceScope
+)
+
+data class MenuChoice (
+    val agentSession: MenuAgentSession? = null,
+    val block: Block? = null,
+    val bookingLink: MenuBookingLink? = null,
+    val date: MenuDate? = null,
+    val document: MenuDocument? = null,
+    val groupAlias: String? = null,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val kind: ChoiceKind,
+
+    @get:JsonProperty("snippetNodesJson")@field:JsonProperty("snippetNodesJson")
+    val snippetNodesJSON: String? = null,
+
+    val text: String? = null,
+    val user: MenuUser? = null
+)
+
+data class MenuAgentSession (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val id: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val label: String,
+
+    @get:JsonProperty("mentionUuid")@field:JsonProperty("mentionUuid")
+    val mentionUUID: String? = null
+)
+
+enum class Block(val value: String) {
+    Bullet("bullet"),
+    Check("check"),
+    Code("code"),
+    Heading1("heading1"),
+    Heading2("heading2"),
+    Heading3("heading3"),
+    Link("link"),
+    Number("number"),
+    Paragraph("paragraph"),
+    Quote("quote");
+
+    companion object {
+        fun fromValue(value: String): Block = when (value) {
+            "bullet"    -> Bullet
+            "check"     -> Check
+            "code"      -> Code
+            "heading1"  -> Heading1
+            "heading2"  -> Heading2
+            "heading3"  -> Heading3
+            "link"      -> Link
+            "number"    -> Number
+            "paragraph" -> Paragraph
+            "quote"     -> Quote
+            else        -> throw IllegalArgumentException()
+        }
+    }
+}
+
+data class MenuBookingLink (
+    val label: String? = null,
+
+    @get:JsonProperty("profileId")@field:JsonProperty("profileId")
+    val profileID: String? = null,
+
+    val slug: String? = null,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val url: String
+)
+
+data class MenuDate (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val date: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val displayFormat: String,
+
+    @get:JsonProperty("mentionUuid")@field:JsonProperty("mentionUuid")
+    val mentionUUID: String? = null
+)
+
+data class MenuDocument (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val blockName: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val blockParams: Map<String, String>,
+
+    val channelType: String? = null,
+    val collapsed: Boolean? = null,
+    val createdAt: Long? = null,
+
+    @get:JsonProperty("documentId", required=true)@field:JsonProperty("documentId", required=true)
+    val documentID: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val documentName: String,
+
+    @get:JsonProperty("mentionUuid")@field:JsonProperty("mentionUuid")
+    val mentionUUID: String? = null
+)
+
+enum class ChoiceKind(val value: String) {
+    AgentSession("agent-session"),
+    Block("block"),
+    BookingLink("booking-link"),
+    Date("date"),
+    Document("document"),
+    Group("group"),
+    Snippet("snippet"),
+    Text("text"),
+    User("user");
+
+    companion object {
+        fun fromValue(value: String): ChoiceKind = when (value) {
+            "agent-session" -> AgentSession
+            "block"         -> Block
+            "booking-link"  -> BookingLink
+            "date"          -> Date
+            "document"      -> Document
+            "group"         -> Group
+            "snippet"       -> Snippet
+            "text"          -> Text
+            "user"          -> User
+            else            -> throw IllegalArgumentException()
+        }
+    }
+}
+
+data class MenuUser (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val displayName: String,
+
+    val email: String? = null,
+
+    @get:JsonProperty("mentionUuid")@field:JsonProperty("mentionUuid")
+    val mentionUUID: String? = null,
+
+    @get:JsonProperty("userId", required=true)@field:JsonProperty("userId", required=true)
+    val userID: String
+)
+
+data class MenuIdentity (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val invocation: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val modelGeneration: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val mountGeneration: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val queryGeneration: Long
+)
+
+data class MenuRowsRequest (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val buckets: List<MenuBucket>,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val identity: MenuIdentity,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val rows: List<MenuRow>,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val scope: SurfaceScope
+)
+
+data class MenuBucket (
+    val error: String? = null,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val hasMore: Boolean,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val id: String,
+
+    @get:JsonProperty("isLoading", required=true)@field:JsonProperty("isLoading", required=true)
+    val isLoading: Boolean,
+
+    @get:JsonProperty("isLoadingMore", required=true)@field:JsonProperty("isLoadingMore", required=true)
+    val isLoadingMore: Boolean,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val label: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val loadedCount: Long
+)
+
+data class MenuRow (
+    @get:JsonProperty("bucketId", required=true)@field:JsonProperty("bucketId", required=true)
+    val bucketID: String,
+
+    val detail: String? = null,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val id: String,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val label: String
+)
+
 data class MountRequest (
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val ariaLabel: String,
@@ -464,6 +693,7 @@ data class SurfaceEvent (
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
     val kind: SurfaceEventKind,
 
+    val menu: MenuEvent? = null,
     val message: String? = null,
 
     @get:JsonProperty(required=true)@field:JsonProperty(required=true)
@@ -488,6 +718,7 @@ enum class SurfaceEventKind(val value: String) {
     Changed("changed"),
     Error("error"),
     History("history"),
+    Menu("menu"),
     Plugin("plugin"),
     Ready("ready"),
     Status("status"),
@@ -500,6 +731,7 @@ enum class SurfaceEventKind(val value: String) {
             "changed"   -> Changed
             "error"     -> Error
             "history"   -> History
+            "menu"      -> Menu
             "plugin"    -> Plugin
             "ready"     -> Ready
             "status"    -> Status
@@ -507,6 +739,71 @@ enum class SurfaceEventKind(val value: String) {
             "telemetry" -> Telemetry
             "token"     -> Token
             else        -> throw IllegalArgumentException()
+        }
+    }
+}
+
+data class MenuEvent (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val action: Action,
+
+    @get:JsonProperty("bucketId")@field:JsonProperty("bucketId")
+    val bucketID: String? = null,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val query: MenuQuery,
+
+    @get:JsonProperty("rowId")@field:JsonProperty("rowId")
+    val rowID: String? = null
+)
+
+enum class Action(val value: String) {
+    Closed("closed"),
+    More("more"),
+    Query("query"),
+    Select("select");
+
+    companion object {
+        fun fromValue(value: String): Action = when (value) {
+            "closed" -> Closed
+            "more"   -> More
+            "query"  -> Query
+            "select" -> Select
+            else     -> throw IllegalArgumentException()
+        }
+    }
+}
+
+data class MenuQuery (
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val identity: MenuIdentity,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val kind: QueryKind,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val nodeTypes: List<String>,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val selectedIndex: Long,
+
+    @get:JsonProperty(required=true)@field:JsonProperty(required=true)
+    val term: String
+)
+
+enum class QueryKind(val value: String) {
+    Action("action"),
+    Emoji("emoji"),
+    Mention("mention"),
+    Snippet("snippet");
+
+    companion object {
+        fun fromValue(value: String): QueryKind = when (value) {
+            "action"  -> Action
+            "emoji"   -> Emoji
+            "mention" -> Mention
+            "snippet" -> Snippet
+            else      -> throw IllegalArgumentException()
         }
     }
 }

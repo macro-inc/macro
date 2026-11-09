@@ -9,6 +9,9 @@ import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputConnectionWrapper
 import androidx.appcompat.widget.AppCompatEditText
 import com.macro.documentsession.*
+import com.macro.editor.bridge.MenuCommitRequest
+import com.macro.editor.bridge.MenuEvent
+import com.macro.editor.bridge.MenuRowsRequest
 
 /** Platform I/O runs after handle returns, and reports real completions back to admit. */
 interface NativeEditorHost {
@@ -44,6 +47,18 @@ class NativeEditorView(
     private var removedCount = 0
     private var replacedSelection: ViewSelection = ViewSelection.KeepModel
     private val spans = EditorSpans()
+    private var menu: NativeEditorMenu? = null
+    private var pendingMenuTrigger: Char? = null
+
+    internal fun connectMenu(mountGeneration: Long, emit: (MenuEvent) -> Unit) {
+        menu?.close()
+        menu = NativeEditorMenu(this, mountGeneration, emit)
+    }
+    internal fun menuRows(request: MenuRowsRequest) { menu?.rows(request) }
+    internal fun menuChoice(request: MenuCommitRequest): String? = menu?.commit(request)
+    private fun syncMenu(trigger: Char? = null) {
+        menu?.sync(projection, projectionLayout, composing, ready && canEditContent(), trigger)
+    }
 
     init {
         val types = session.query(FfiQuery.TypeTable)
@@ -77,6 +92,7 @@ class NativeEditorView(
                     return
                 }
                 val inserted = value.subSequence(changedStart, changedStart + changedCount).toString()
+                pendingMenuTrigger = if (!composing) inserted.singleOrNull() else null
                 val range = projectionLayout.ranges.firstOrNull {
                     changedStart >= it.start && changedStart + removedCount <= it.end
                 }
@@ -101,6 +117,7 @@ class NativeEditorView(
                     else -> FfiCommand.InsertText(inserted)
                 }
                 admit(FfiInput.Command(command, replacedSelection))
+                syncMenu(pendingMenuTrigger)
             }
         })
         setOnFocusChangeListener { _, focused ->
@@ -110,6 +127,7 @@ class NativeEditorView(
                 BaseInputConnectionCompat.finish(text)
                 if (applying) composing = false
             }
+            if (!focused) menu?.close()
             if (ready && !applying) admit(FfiInput.Focus(focused))
         }
     }
@@ -213,6 +231,7 @@ class NativeEditorView(
         } finally {
             applying = false
         }
+        syncMenu()
     }
 
     private fun render() {
@@ -244,6 +263,9 @@ class NativeEditorView(
             start <= projectionLayout.text.length && end <= projectionLayout.text.length &&
             text?.toString() == projectionLayout.text) {
             admit(FfiInput.SelectionFromView(projectionLayout.selection(start, end), null))
+            val trigger = pendingMenuTrigger
+            pendingMenuTrigger = null
+            syncMenu(trigger)
         }
     }
 
@@ -262,7 +284,7 @@ class NativeEditorView(
                 setSelection(anchor, focus)
             }
         } finally { applying = wasApplying }
-        if (!canEditContent()) finishComposition()
+        if (!canEditContent()) { menu?.close(); finishComposition() }
     }
 
     /** Content locks are independent of editor editability and comment-mark capability. */
@@ -287,6 +309,7 @@ class NativeEditorView(
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean {
+        if (ready && canEditContent() && !composing && menu?.key(event) == true) return true
         if (ready && canEditContent() && !composing &&
             (keyCode == android.view.KeyEvent.KEYCODE_ENTER || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             val facts = FfiKeyEvent("Enter", if (keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER) "NumpadEnter" else "Enter",
@@ -401,6 +424,9 @@ class NativeEditorView(
         var committing = false
         fun commit(value: CharSequence?, operation: (CharSequence?) -> Boolean): Boolean {
             if (committing) return operation(value)
+            if (!composing && value?.toString() == "\n" &&
+                menu?.key(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER)) == true) return true
+            val menuTrigger = if (!composing) value?.singleOrNull() else null
             val previousEnter = platformEnter
             var nativeText = value
             val newlineEnd = composing && value?.toString()?.endsWith("\n") == true
@@ -415,7 +441,11 @@ class NativeEditorView(
             committing = true
             try {
                 val committed = operation(nativeText)
-                if (committed) finishComposition(newlineEnd)
+                if (committed) {
+                    finishComposition(newlineEnd)
+                    pendingMenuTrigger = null
+                    syncMenu(menuTrigger)
+                }
                 return committed
             } finally {
                 committing = false

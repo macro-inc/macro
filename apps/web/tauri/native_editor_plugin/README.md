@@ -150,3 +150,14 @@ The check requires the Rust session and JNA loader in every packaged ABI, checks
 APK without the Rust library fails this check. See the
 [Android page-size guide](https://developer.android.com/guide/practices/page-sizes)
 and [JNA release changes](https://github.com/java-native-access/jna/blob/master/CHANGES.md).
+
+
+The native menu bridge carries typed query identities, registered node types,
+ordered rows, bucket loading/pagination state and authored selection payloads.
+Kotlin owns popup placement, touch rows, wrapping keyboard navigation and literal
+preservation on dismissal. Application providers answer only the matching
+account/surface/mount/model/invocation/query; a selected row remains pending until
+its typed choice arrives. The shared `group-a.menu-select` command verifies the
+exact UTF-16 span and current caret before applying it. Async answers cannot edit
+a replaced view or newer query. Search text and row labels never enter tracing.
+This bridge does not by itself admit a surface or wire its application providers.

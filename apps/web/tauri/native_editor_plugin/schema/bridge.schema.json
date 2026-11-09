@@ -472,7 +472,8 @@
             "token",
             "stopped",
             "error",
-            "telemetry"
+            "telemetry",
+            "menu"
           ]
         },
         "revision": {
@@ -504,6 +505,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "menu": {
+          "$ref": "#/definitions/MenuEvent"
         }
       },
       "required": [
@@ -555,6 +559,401 @@
       "required": [
         "scope",
         "mountGeneration"
+      ]
+    },
+    "MenuIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mountGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "modelGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "invocation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "queryGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "mountGeneration",
+        "modelGeneration",
+        "invocation",
+        "queryGeneration"
+      ]
+    },
+    "MenuQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "$ref": "#/definitions/MenuIdentity"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "mention",
+            "action",
+            "snippet",
+            "emoji"
+          ]
+        },
+        "term": {
+          "type": "string"
+        },
+        "selectedIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "nodeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "identity",
+        "kind",
+        "term",
+        "selectedIndex",
+        "nodeTypes"
+      ]
+    },
+    "MenuEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "query",
+            "select",
+            "more",
+            "closed"
+          ]
+        },
+        "query": {
+          "$ref": "#/definitions/MenuQuery"
+        },
+        "rowId": {
+          "type": "string"
+        },
+        "bucketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "query"
+      ]
+    },
+    "MenuRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "bucketId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "bucketId"
+      ]
+    },
+    "MenuBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "loadedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "isLoading": {
+          "type": "boolean"
+        },
+        "isLoadingMore": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "loadedCount",
+        "hasMore",
+        "isLoading",
+        "isLoadingMore"
+      ]
+    },
+    "MenuRowsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "identity": {
+          "$ref": "#/definitions/MenuIdentity"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MenuRow"
+          }
+        },
+        "buckets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MenuBucket"
+          }
+        }
+      },
+      "required": [
+        "scope",
+        "identity",
+        "rows",
+        "buckets"
+      ]
+    },
+    "MenuUser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "mentionUuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "userId",
+        "displayName"
+      ]
+    },
+    "MenuDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "documentId": {
+          "type": "string"
+        },
+        "documentName": {
+          "type": "string"
+        },
+        "blockName": {
+          "type": "string"
+        },
+        "blockParams": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "mentionUuid": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "channelType": {
+          "type": "string"
+        },
+        "collapsed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "documentId",
+        "documentName",
+        "blockName",
+        "blockParams"
+      ]
+    },
+    "MenuDate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "displayFormat": {
+          "type": "string"
+        },
+        "mentionUuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "displayFormat"
+      ]
+    },
+    "MenuAgentSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "mentionUuid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ]
+    },
+    "MenuBookingLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "MenuChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "text",
+            "user",
+            "document",
+            "date",
+            "group",
+            "agent-session",
+            "booking-link",
+            "block",
+            "snippet"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "user": {
+          "$ref": "#/definitions/MenuUser"
+        },
+        "document": {
+          "$ref": "#/definitions/MenuDocument"
+        },
+        "date": {
+          "$ref": "#/definitions/MenuDate"
+        },
+        "groupAlias": {
+          "type": "string"
+        },
+        "agentSession": {
+          "$ref": "#/definitions/MenuAgentSession"
+        },
+        "bookingLink": {
+          "$ref": "#/definitions/MenuBookingLink"
+        },
+        "block": {
+          "type": "string",
+          "enum": [
+            "paragraph",
+            "heading1",
+            "heading2",
+            "heading3",
+            "quote",
+            "code",
+            "link",
+            "bullet",
+            "number",
+            "check"
+          ]
+        },
+        "snippetNodesJson": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "MenuCommitRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "identity": {
+          "$ref": "#/definitions/MenuIdentity"
+        },
+        "rowId": {
+          "type": "string"
+        },
+        "choice": {
+          "$ref": "#/definitions/MenuChoice"
+        }
+      },
+      "required": [
+        "scope",
+        "identity",
+        "rowId",
+        "choice"
       ]
     }
   },
@@ -608,6 +1007,12 @@
     },
     "unmountRequest": {
       "$ref": "#/definitions/UnmountRequest"
+    },
+    "menuRowsRequest": {
+      "$ref": "#/definitions/MenuRowsRequest"
+    },
+    "menuCommitRequest": {
+      "$ref": "#/definitions/MenuCommitRequest"
     }
   },
   "required": [
@@ -626,6 +1031,8 @@
     "surfaceEvent",
     "accountRequest",
     "accountReply",
-    "unmountRequest"
+    "unmountRequest",
+    "menuRowsRequest",
+    "menuCommitRequest"
   ]
 }

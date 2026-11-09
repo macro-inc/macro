@@ -8,6 +8,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "permissions",
         "token_result",
         "action",
+        "menu_rows",
+        "menu_commit",
         "query",
         "lifecycle",
         "unmount",

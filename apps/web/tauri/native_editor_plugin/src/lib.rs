@@ -17,6 +17,8 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
         android::permissions,
         android::token_result,
         android::action,
+        android::menu_rows,
+        android::menu_commit,
         android::query,
         android::lifecycle,
         android::unmount,

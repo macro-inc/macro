@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import type { SessionAuthorization } from '@macro-inc/collaboration/session/executor';
+import { Telemetry } from '@macro-inc/observability';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { RUST_EDITOR_ENGINE } from './engine-selection';
 import type {
@@ -9,6 +10,9 @@ import type {
   CreateRequest,
   LayoutRequest,
   LifecycleRequest,
+  MenuCommitRequest,
+  MenuIdentity,
+  MenuRowsRequest,
   MountRequest,
   QueryReply,
   QueryRequest,
@@ -93,6 +97,7 @@ export async function beginAndroidEditorAccount(user: string) {
     let revision = 0;
     let nextMountGeneration = 0;
     let activeMountGeneration: number | undefined;
+    let activeMenu: MenuIdentity | undefined;
     let permissions = { ...options.request.permissions };
     const pendingPermissions: SurfacePermissions[] = [];
     let unsubscribe = () => {};
@@ -177,8 +182,43 @@ export async function beginAndroidEditorAccount(user: string) {
       }
       if (current()) await request<void>('token_result', packet);
     }
+    function currentMenu(identity: MenuIdentity) {
+      return (
+        current() &&
+        activeMenu?.invocation === identity.invocation &&
+        activeMenu.queryGeneration === identity.queryGeneration &&
+        activeMountGeneration === identity.mountGeneration &&
+        modelGeneration === identity.modelGeneration
+      );
+    }
+    async function menuOperation(
+      command: string,
+      identity: MenuIdentity,
+      payload: object
+    ) {
+      if (!currentMenu(identity)) return;
+      const stale = new Error('Native menu was replaced');
+      try {
+        await request<void>(command, { ...payload, identity, scope }, () => {
+          if (!currentMenu(identity)) throw stale;
+        });
+      } catch (error) {
+        if (error !== stale) throw error;
+      }
+    }
+
     const api = {
       scope,
+      menuRows(reply: Omit<MenuRowsRequest, 'scope'>) {
+        return menuOperation('menu_rows', reply.identity, reply);
+      },
+      menuCommit(reply: Omit<MenuCommitRequest, 'scope'>) {
+        return Telemetry.span('editor.native.menu.select', async (span) => {
+          span.setAttr('document.id', options.request.documentId);
+          span.setAttr('menu.kind', reply.choice.kind);
+          await menuOperation('menu_commit', reply.identity, reply);
+        });
+      },
       receive(event: SurfaceEvent) {
         if (
           event.scope.surfaceGeneration !== scope.surfaceGeneration ||
@@ -186,6 +226,25 @@ export async function beginAndroidEditorAccount(user: string) {
         )
           return;
         if (event.kind !== 'stopped' && !current()) return;
+        if (event.kind === 'menu') {
+          const menu = event.menu;
+          if (
+            !menu ||
+            menu.query.identity.mountGeneration !== activeMountGeneration
+          )
+            return;
+          const identity = menu.query.identity;
+          if (identity.modelGeneration !== event.modelGeneration) return;
+          if (
+            activeMenu &&
+            (identity.invocation < activeMenu.invocation ||
+              (identity.invocation === activeMenu.invocation &&
+                identity.queryGeneration < activeMenu.queryGeneration))
+          )
+            return;
+          if (menu.action !== 'query' && !currentMenu(identity)) return;
+          activeMenu = menu.action === 'closed' ? undefined : identity;
+        }
         revision = event.revision;
         if (event.kind === 'ready') modelGeneration = event.modelGeneration;
         else if (modelGeneration !== undefined)
@@ -409,6 +468,8 @@ export async function beginAndroidEditorAccount(user: string) {
       return {
         scope: api.scope,
         mount: api.mount,
+        menuRows: api.menuRows,
+        menuCommit: api.menuCommit,
         permissions: api.permissions,
         action: api.action,
         query: api.query,

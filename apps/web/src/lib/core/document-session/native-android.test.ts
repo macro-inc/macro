@@ -574,3 +574,148 @@ test('failed unmount can retry without losing its retained native lease', async 
   await mount.unmount();
   expect(unmounts).toBe(2);
 });
+
+test('menu replies and selections remain bound to the live invocation query and mount', async () => {
+  const { beginAndroidEditorAccount } = await import('./native-android');
+  const account = await beginAndroidEditorAccount('fixture-user');
+  const onEvent = vi.fn();
+  const surface = await account.create({
+    request,
+    surfaceId: 'fixture',
+    authorization: authorization(),
+    onEvent,
+    onError: vi.fn(),
+  });
+  const mount = await surface.mount(appearance);
+  const identity = {
+    invocation: 1,
+    modelGeneration: 42,
+    mountGeneration: 1,
+    queryGeneration: 1,
+  };
+  const query = {
+    identity,
+    kind: 'mention' as const,
+    term: 'p',
+    selectedIndex: 0,
+    nodeTypes: ['paragraph', 'user-mention'],
+  };
+  emit('menu', { menu: { action: 'query', query } });
+  const reply = {
+    identity,
+    rows: [{ id: 'person', bucketId: 'users', label: 'Person' }],
+    buckets: [
+      {
+        id: 'users',
+        label: 'People',
+        loadedCount: 1,
+        hasMore: false,
+        isLoading: false,
+        isLoadingMore: false,
+      },
+    ],
+  };
+  await surface.menuRows(reply);
+  expect(native.invoke).toHaveBeenCalledWith('plugin:native-editor|menu_rows', {
+    request: { ...reply, scope },
+  });
+  emit('menu', {
+    menu: {
+      action: 'query',
+      query: {
+        ...query,
+        identity: { ...identity, queryGeneration: 2 },
+        term: 'pe',
+      },
+    },
+  });
+  native.invoke.mockClear();
+  await surface.menuRows(reply);
+  await surface.menuCommit({
+    identity,
+    rowId: 'person',
+    choice: {
+      kind: 'user',
+      user: { userId: 'fixture-user', displayName: 'Person' },
+    },
+  });
+  expect(native.invoke).not.toHaveBeenCalled();
+  await mount.unmount();
+  const count = onEvent.mock.calls.length;
+  emit('menu', { menu: { action: 'query', query } });
+  expect(onEvent).toHaveBeenCalledTimes(count);
+});
+
+test('a menu answer queued before a query change is dropped before IPC', async () => {
+  const { beginAndroidEditorAccount } = await import('./native-android');
+  const account = await beginAndroidEditorAccount('fixture-user');
+  const surface = await account.create({
+    request,
+    surfaceId: 'fixture',
+    authorization: authorization(),
+    onEvent: vi.fn(),
+    onError: vi.fn(),
+  });
+  await surface.mount(appearance);
+  const identity = {
+    invocation: 1,
+    modelGeneration: 42,
+    mountGeneration: 1,
+    queryGeneration: 1,
+  };
+  const query = {
+    identity,
+    kind: 'mention' as const,
+    term: 'p',
+    selectedIndex: 0,
+    nodeTypes: ['user-mention'],
+  };
+  emit('menu', { menu: { action: 'query', query } });
+  let finish: ((result: { json: string }) => void) | undefined;
+  let start: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    start = resolve;
+  });
+  const blocked = new Promise<{ json: string }>((resolve) => {
+    finish = resolve;
+  });
+  native.invoke.mockImplementation(async (command) => {
+    if (command.endsWith('|query')) {
+      start?.();
+      return await blocked;
+    }
+    return null;
+  });
+  const running = surface.query({ kind: 'text' });
+  await started;
+  const late = surface.menuRows({ identity, rows: [], buckets: [] });
+  emit('menu', {
+    menu: {
+      action: 'query',
+      query: {
+        ...query,
+        identity: { ...identity, queryGeneration: 2 },
+        term: 'pe',
+      },
+    },
+  });
+  emit('menu', { menu: { action: 'closed', query } });
+  finish?.({ json: '"native text"' });
+  await running;
+  await late;
+  expect(
+    native.invoke.mock.calls.filter(([command]) =>
+      command.endsWith('|menu_rows')
+    )
+  ).toHaveLength(0);
+  await surface.menuRows({
+    identity: { ...identity, queryGeneration: 2 },
+    rows: [],
+    buckets: [],
+  });
+  expect(
+    native.invoke.mock.calls.filter(([command]) =>
+      command.endsWith('|menu_rows')
+    )
+  ).toHaveLength(1);
+});

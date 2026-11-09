@@ -156,6 +156,26 @@ internal class NativeEditorSurfaces(
         }
     }
 
+    fun menuRows(request: MenuRowsRequest) {
+        val surface = menuSurface(request.scope, request.identity) ?: return
+        surface.editor?.menuRows(request)
+    }
+
+    fun menuCommit(request: MenuCommitRequest) {
+        val surface = menuSurface(request.scope, request.identity) ?: return
+        if (!surface.permissions.current || !surface.permissions.editorEditable || !surface.permissions.contentInteractable) return
+        val payload = surface.editor?.menuChoice(request) ?: return
+        surface.host.applicationCommand("group-a.menu-select", BridgeJson.parse(payload), surface.modelGeneration)
+    }
+
+    private fun menuSurface(scope: SurfaceScope, identity: MenuIdentity): Surface? {
+        checkMain()
+        val surface = surfaces[scope.surfaceID] ?: return null
+        if (disposed || surface.closing || surface.request.scope != scope || scope.accountGeneration != accountGeneration ||
+            identity.mountGeneration != surface.mountGeneration || identity.modelGeneration != surface.modelGeneration.toLong()) return null
+        return surface
+    }
+
     fun query(request: QueryRequest): QueryReply {
         val surface = current(request.scope)
         require(request.modelGeneration == surface.modelGeneration.toLong()) { "Model generation changed" }
@@ -332,6 +352,9 @@ internal class NativeEditorSurfaces(
             val themed = ContextThemeWrapper(context.createConfigurationContext(configuration),
                 androidx.appcompat.R.style.Theme_AppCompat_DayNight)
             val view = NativeEditorView(themed, session, host, permissions.editorEditable, permissions.contentInteractable)
+            if (request.preset != Preset.PlainText && request.preset != Preset.Title) {
+                view.connectMenu(mountGeneration) { event -> emit(SurfaceEventKind.Menu, menu = event) }
+            }
             view.hint = appearance.placeholder
             view.setTextColor(appearance.textColorArgb.toInt())
             view.setHintTextColor(appearance.hintColorArgb.toInt())
@@ -393,9 +416,11 @@ internal class NativeEditorSurfaces(
         }
 
         private fun emit(kind: SurfaceEventKind, name: String? = null, payload: String? = null,
-            requestID: Long? = null, canUndo: Boolean? = null, canRedo: Boolean? = null, message: String? = null) {
+            requestID: Long? = null, canUndo: Boolean? = null, canRedo: Boolean? = null, message: String? = null, menu: MenuEvent? = null) {
             if (!disposed && (!closing || kind == SurfaceEventKind.Stopped)) publish(SurfaceEvent(
-                canRedo, canUndo, kind, message, modelGeneration.toLong(), name, payload, requestID, revision, request.scope))
+                canRedo = canRedo, canUndo = canUndo, kind = kind, menu = menu, message = message,
+                modelGeneration = modelGeneration.toLong(), name = name, payloadJSON = payload,
+                requestID = requestID, revision = revision, scope = request.scope))
         }
     }
 
