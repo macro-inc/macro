@@ -161,6 +161,7 @@ routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 ideas = { path = "../../crates/ideas" }
 suggestion_generation = { path = "../../crates/suggestion_generation" }
+trigger_context = { path = "../../crates/trigger_context" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

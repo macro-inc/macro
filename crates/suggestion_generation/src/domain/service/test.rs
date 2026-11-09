@@ -198,6 +198,10 @@ impl IdeaApi for FakeIdeas {
         unreachable!()
     }
 
+    async fn settle_runs(&self) -> Result<usize, IdeaError> {
+        unreachable!()
+    }
+
     fn brief(&self, trigger: GenerationTrigger, _: Tz) -> String {
         format!("ideas {}", trigger.as_ref())
     }

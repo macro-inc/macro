@@ -10,7 +10,7 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
+    IdeaState, IdeaWriteOutcome, Ideas, NewKind, RunProgress, RunSettled, StoredRun, OpenTarget, ResolveReason, RetireIdea,
     RewriteIdea, SuggestIdea, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
@@ -69,6 +69,34 @@ pub trait IdeaRepo: Send + Sync + 'static {
 
     /// How many changes session `session` logged.
     fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+
+    /// Start run `run` of the person's background prompt idea: one that is
+    /// proposed, or accepted with its last run failed. The idea becomes
+    /// accepted. False when it can't run now.
+    fn start_run(&self, run: &StoredRun) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Each of the person's background prompt ideas' latest run.
+    fn latest_runs(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
+
+    /// Runs not settled yet, oldest first, at most `limit`.
+    fn unsettled_runs(
+        &self,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
+
+    /// Settle run `session` as `settled`; a finished one makes its idea done,
+    /// if still accepted, and adds `produced` to it. False when it was
+    /// settled already.
+    fn settle_run(
+        &self,
+        session: Uuid,
+        settled: RunSettled,
+        produced: &[Target],
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Add a proposed idea `id` with `content` for the person, within
     /// `limits`, logging `change`.
@@ -184,6 +212,21 @@ pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
     ) -> Result<bool, rootcause::Report>;
 }
 
+/// The hidden agent sessions that run background prompt ideas. Object-safe:
+/// the harness hands in its session client.
+#[async_trait::async_trait]
+pub trait RunSessions: Send + Sync + 'static {
+    /// Open `run`'s hidden session as its person, billed as their agent
+    /// usage, and send it `prompt`.
+    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), rootcause::Report>;
+
+    /// How `run` is going.
+    async fn progress(&self, run: &StoredRun) -> Result<RunProgress, rootcause::Report>;
+
+    /// What `run`'s session made, besides the session itself.
+    async fn produced(&self, run: &StoredRun) -> Result<Vec<Target>, rootcause::Report>;
+}
+
 /// Ideas as the API serves them: the person's feed, and the tools hidden
 /// generation sessions manage it with.
 pub trait IdeaApi: Send + Sync + 'static {
@@ -196,7 +239,8 @@ pub trait IdeaApi: Send + Sync + 'static {
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<Ideas, IdeaError>> + Send;
 
-    /// The person acts on a proposed idea.
+    /// The person acts on a proposed idea; a background prompt idea starts
+    /// a run, and one whose last run failed runs again.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -216,6 +260,10 @@ pub trait IdeaApi: Send + Sync + 'static {
 
     /// How many changes ideas session `session` made.
     fn kept(&self, session: Uuid) -> impl Future<Output = Result<u32, IdeaError>> + Send;
+
+    /// Settle the runs whose sessions finished: a finished one makes its
+    /// idea done with what it produced. How many it settled.
+    fn settle_runs(&self) -> impl Future<Output = Result<usize, IdeaError>> + Send;
 
     /// Every idea of the person's, for the ideas session the request
     /// `correlation` names.
