@@ -1,12 +1,98 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: same-session bootstrap and measured speed profile
+## Current checkpoint: held ABI3 validation
+
+The main native-source checkpoint is `5fa2c3b2a0` and remains ABI2. The live preview remains on
+`9c21b03842`; no dependency directories, live artifacts or stack processes
+were changed during this validation. Integration3 and full compatibility
+acceptance remain unchecked.
+
+The independent validation repository at
+`/home/wolf/tmp/editor-parity-validation` contains ABI3 adapter `bbc9e61b48`
+and TierC `f1f35b6b01`, followed by production-policy replay `64a4524426`
+(cherry-picked as `08041388db`), with combined generated declarations
+committed separately as `ce944c041c`. Both full and delta view commands use
+production `EditorCore.apply`, recovering the same editor and allocator.
+Conversion errors retain unchanged comparison snapshots. The owner reports
+105 TierC cases, including three 10,000-step seeds and nine preserved tapes,
+passing; this supersedes the earlier raw-adapter coverage qualification for
+that source. Independent native conformance verification passes **29/29**
+on the combined staging source (`abi3-production-core-conformance-tests.log`);
+no independent optimized 105-case rerun is claimed yet.
+
+The immutable combined build at the preceding `08ade11a39` checkpoint is raw
+**8,946,448 bytes**, Brotli **2,014,120 bytes**, SHA256
+`4941015d3468997787e9d89919782b662806ace78bb788207f8d8636f27f74ad`.
+Compared with live this adds 647,642 raw / 128,305 Brotli bytes. Its source
+and artifact identities remain bound to that checkpoint, not the later replay
+follow-up. Attribution manifest:
+`/home/wolf/tmp/integration3-acceptance/wasm-attribution/live-vs-abi3-manifest.json`.
+Final artifacts have no name/DWARF sections; the candidate pre-bindgen sibling
+retains names. Size attribution and measured typing/paste improvements remain
+pending. The artifact is held and has not been installed in the preview.
+Preliminary parser/Twiggy attribution reports +636,436 code bytes, +8,899
+data bytes and 633 additional functions. Legacy text input and explicit
+resync share one WASM function body, so those exports are not duplicated
+implementations. Eighteen compatibility exports are newly present compared
+with the live build. A matched-feature ablation is pending; the full size
+difference cannot be assigned to the ABI3 delta adapter alone.
+
+Matched ABI3 session tests **91/91**, view tests **255/255** and collaboration
+type checking pass. Full view-package type checking **fails** on structural
+DOM contracts in fixtures/tests, including callback variance and recursive
+node interfaces. Focused DOM units/type checks do not close this failure.
+Evidence: `abi3-combined-view-types.log` under the acceptance directory.
+No cast, suppression or parity allowlist was added.
+
+Main-source corrected validation passed session **48 plus one telemetry**,
+FFI **4**, WASM **47** and model **465** tests. The corrected FFI source
+`7f14666e6c` / bindings `5f76c9ce8e` are integrated as `57e349f821` /
+`ae2e52324c`. Binding freshness also passes with conflicting Android target
+and task-local target-directory overrides: the generator explicitly builds
+and reads host-target output, leaving the override sentinel unused. This
+closes the earlier RequireView and inherited-target audit findings.
+Evidence: `compat-selection-ffi-correction-tests.log` and
+`ffi-correction-host-target-freshness.log`. Application-config extraction
+and Android-host changes remain separate, unconsumed work. Application
+extraction `18b19b53c5` and generated bindings `8e876692a7` are explicitly
+held pending the final owner audit/freshness note.
+
+Selection operations and validated class-mask admission are now integrated;
+hosted callbacks, complete compact-batch execution, remote-hold/rebase and
+external-publication delivery remain pending. No production initializer or
+resolver activation is claimed.
+
+The completed OFF diagnostic baseline has 60 fresh processes per stock
+Chromium/Firefox, zero failed rounds and no load interruption. Boot/composer/
+document-open p95 milliseconds are Chromium **974.7 / 1502.6 / 300.1**,
+Firefox **977 / 1654 / 714**. OFF engine-ready is unavailable because it does
+not preload WASM. This shared-host observation is not a strict performance
+acceptance or a paired ON comparison. Raw SHA256:
+`3328c726a7b1ba68818c877d2155c764264c2de0598f84ca4d5b566fe0e253ca`;
+full method and bounds are in the external `editor-boot-baseline.md` report.
+
+A current root check found three inherited test-format/import-order errors;
+mechanical corrections are committed as `a16cce48ca`. Formatter and diff checks
+pass; the full root `just check` rerun passes (existing warnings retained).
+Scoped held-source conformance clippy is still compiling dependencies; no
+completed clippy result for that follow-up is claimed yet. Delegated incremental audit could not run
+because its service authentication was invalidated. A limited direct audit is
+recorded in `audit-current-held-abi3.md`; no independent sign-off is claimed.
+Hexagonal boundaries were checked: replay delegates to existing core input
+policy, adding no I/O or authorization policy.
+
+The historical post-recovery T0 failure remains seed
+`9486392389341030173`: `final state changed during quiet window`.
+No new full T0 run has cleared it. The full matrix remains paused pending
+compatibility readiness.
+
+## Earlier checkpoint: same-session bootstrap and measured speed profile
 
 Integration3, production compatibility, UI parity and strict performance gates
 remain unchecked. The production resolver/document factory is held: the additive
-native bootstrap rejects callback hosts/nonzero class masks and does not yet
-implement selection mutations. Existing preview evidence is native, not full
-Lexical compatibility acceptance. No production services or deployments changed.
+native bootstrap at this earlier checkpoint rejected callback hosts/nonzero
+class masks and did not yet implement selection mutations. Existing preview
+evidence is native, not full Lexical compatibility acceptance. No production services or deployments changed.
 
 The live preview remains on source `9c21b03842`, built locally with the six hot
 paste caller crates at opt-level 3 (`1aa5b67c15`, integrated as `9c21b03842`).
