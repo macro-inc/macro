@@ -133,21 +133,8 @@ export default function RustMarkdownEditor(props: {
             }
             setRuntime(mounted);
             const reportEmpty = () => {
-              const root = mounted.view.node(0);
-              if (!root) return;
-              const empty = root.children.every((key) => {
-                const child = mounted.view.node(key);
-                if (
-                  child?.type !== 'paragraph' ||
-                  child.elementProps?.indent !== 0
-                )
-                  return false;
-                const first = child.children.at(0);
-                return (
-                  first === undefined ||
-                  mounted.view.node(first)?.type === 'watermark'
-                );
-              });
+              const empty = mounted.view.isEmpty();
+              if (empty === null) return;
               props.onEmptyChange?.(empty);
             };
             releaseEmpty = mounted.view.onCommit(reportEmpty);

@@ -839,6 +839,9 @@ export class EditorView implements ViewSink {
     this.commits.add(listener);
     return () => this.commits.delete(listener);
   }
+  isEmpty(): boolean | null {
+    return this.mirror.isEmpty;
+  }
   onMutations(
     type: string,
     listener: (mutations: ReadonlyMap<NodeKey, MutationKind>) => void

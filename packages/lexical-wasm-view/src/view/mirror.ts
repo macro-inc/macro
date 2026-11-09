@@ -46,7 +46,9 @@ function record(data: NodeData): ViewNode {
   let cached: JsonObject | undefined;
   return Object.freeze({
     ...data,
-    children: Object.freeze([...data.children]),
+    children: Object.isFrozen(data.children)
+      ? data.children
+      : Object.freeze([...data.children]),
     props() {
       cached ??= properties(data.propsJSON);
       return cached;
@@ -95,6 +97,7 @@ export class Mirror {
   private readonly records = new Map<NodeKey, ViewNode>();
   private readonly types: ReadonlyMap<number, TypeRow>;
   private generation: number | null = null;
+  private readonly nonemptyRootChildren = new Set<NodeKey>();
   constructor(types: readonly TypeRow[]) {
     const table = new Map<number, TypeRow>();
     for (const row of types) {
@@ -120,9 +123,41 @@ export class Mirror {
   get keyGeneration(): number | null {
     return this.generation;
   }
+  /** Same blank-paragraph/watermark predicate as the native editor consumer. */
+  get isEmpty(): boolean | null {
+    return this.records.has(0) ? this.nonemptyRootChildren.size === 0 : null;
+  }
+  private updateEmptiness(mutations: ReadonlyMap<NodeKey, NodeMutation>): void {
+    const changed = new Set<NodeKey>();
+    for (const [key, mutation] of mutations) {
+      if (mutation.before?.parent === 0 || mutation.after?.parent === 0)
+        changed.add(key);
+      for (const parent of [mutation.before?.parent, mutation.after?.parent]) {
+        if (
+          parent != null &&
+          (this.records.get(parent)?.parent === 0 ||
+            this.nonemptyRootChildren.has(parent))
+        )
+          changed.add(parent);
+      }
+    }
+    for (const key of changed) {
+      const node = this.records.get(key);
+      const first = node?.children[0];
+      const nonempty =
+        node?.parent === 0 &&
+        (node.type !== 'paragraph' ||
+          node.elementProps?.indent !== 0 ||
+          (first !== undefined &&
+            this.records.get(first)?.type !== 'watermark'));
+      if (nonempty) this.nonemptyRootChildren.add(key);
+      else this.nonemptyRootChildren.delete(key);
+    }
+  }
   /** Initialize is the only operation that may replace the key generation. */
   initialize(words: Uint32Array, strings: Uint8Array): AppliedDiff {
     this.records.clear();
+    this.nonemptyRootChildren.clear();
     this.generation = null;
     return this.apply(words, strings);
   }
@@ -130,7 +165,10 @@ export class Mirror {
     const generation = this.generation;
     const undo = new Map<NodeKey, ViewNode | undefined>();
     try {
-      return this.applyDiff(words, strings, undo);
+      const diff = this.applyDiff(words, strings, undo);
+      // Do not alter derived counts until all packet and graph validation passes.
+      this.updateEmptiness(diff.mutations);
+      return diff;
     } catch (error) {
       for (const [key, node] of undo) {
         if (node) this.records.set(key, node);
