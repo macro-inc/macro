@@ -157,6 +157,12 @@ test('replacing a surface cancels insertion even when its menu counters coincide
   source.pick?.(person);
   await entered;
   setSurface(newSurface);
+  expect(oldSurface.menuRows).toHaveBeenCalledWith({
+    identity: query(1).query.identity,
+    rows: [],
+    buckets: [],
+  });
+  expect(newSurface.menuRows).not.toHaveBeenCalled();
   setEvent(query(1));
   complete?.('old-reference');
   await Promise.all(source.tasks);
@@ -262,4 +268,33 @@ test('forwards loaded counts and actual source loading/error state to native buc
       ],
     })
   );
+});
+
+test('a throwing error callback cannot strand a pending mention pick', async () => {
+  source.track.mockRejectedValue(new Error('fixture reference failed'));
+  const callbackFailure = new Error('fixture error callback');
+  const surface = {
+    menuRows: vi.fn(async () => {}),
+    menuCommit: vi.fn(async () => {}),
+  };
+  const [event] = createSignal<MenuEvent>(query(1));
+  render(() => (
+    <NativeMentionSources
+      surface={surface}
+      event={event}
+      anchor={document.createElement('div')}
+      handlers={{ blockId: 'fixture-document', blockName: 'md' }}
+      onError={() => {
+        throw callbackFailure;
+      }}
+    />
+  ));
+  source.pick?.(person);
+  await expect(Promise.all(source.tasks)).rejects.toBe(callbackFailure);
+  expect(surface.menuRows).toHaveBeenCalledWith({
+    identity: query(1).query.identity,
+    rows: [],
+    buckets: [],
+  });
+  expect(surface.menuCommit).not.toHaveBeenCalled();
 });
