@@ -210,17 +210,20 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 97, 116, 101, 0, 255, 255, 255, 255, 0, 115, 101, 108,
 101, 99, 116, 105, 111, 110, 0, 16, 0, 0, 0, 0, 67, 111,
 109, 112, 97, 116, 65, 117, 100, 105, 116, 83, 110, 97,
-112, 115, 104, 111, 116, 0, 1, 0, 0, 16, 0, 0, 0, 1, 2,
-114, 101, 116, 97, 105, 110, 101, 100, 67, 97, 112, 116,
-117, 114, 101, 115, 0, 249, 255, 255, 255, 0, 108, 105,
-118, 101, 78, 111, 100, 101, 115, 0, 249, 255, 255, 255,
-0, 67, 111, 109, 112, 97, 116, 75, 101, 121, 82, 101, 115,
-101, 114, 118, 97, 116, 105, 111, 110, 0, 1, 0, 0, 16, 0,
-0, 0, 0, 3, 101, 100, 105, 116, 111, 114, 73, 100, 0, 251,
-255, 255, 255, 0, 114, 101, 115, 101, 114, 118, 97, 116,
-105, 111, 110, 73, 100, 0, 249, 255, 255, 255, 0, 107,
-101, 121, 115, 0, 242, 255, 255, 255, 0, 92, 0, 0, 0, 0,
-67, 111, 109, 112, 97, 116, 67, 108, 97, 115, 115, 77, 97,
+112, 115, 104, 111, 116, 0, 1, 0, 0, 32, 0, 0, 0, 1, 4,
+118, 101, 114, 115, 105, 111, 110, 0, 249, 255, 255, 255,
+0, 114, 101, 116, 105, 114, 101, 109, 101, 110, 116, 69,
+112, 111, 99, 104, 0, 249, 255, 255, 255, 0, 114, 101,
+116, 97, 105, 110, 101, 100, 67, 97, 112, 116, 117, 114,
+101, 115, 0, 249, 255, 255, 255, 0, 108, 105, 118, 101,
+78, 111, 100, 101, 115, 0, 249, 255, 255, 255, 0, 67, 111,
+109, 112, 97, 116, 75, 101, 121, 82, 101, 115, 101, 114,
+118, 97, 116, 105, 111, 110, 0, 1, 0, 0, 16, 0, 0, 0, 0,
+3, 101, 100, 105, 116, 111, 114, 73, 100, 0, 251, 255,
+255, 255, 0, 114, 101, 115, 101, 114, 118, 97, 116, 105,
+111, 110, 73, 100, 0, 249, 255, 255, 255, 0, 107, 101,
+121, 115, 0, 242, 255, 255, 255, 0, 92, 0, 0, 0, 0, 67,
+111, 109, 112, 97, 116, 67, 108, 97, 115, 115, 77, 97,
 115, 107, 80, 97, 116, 99, 104, 0, 1, 0, 0, 16, 0, 0, 0,
 1, 3, 111, 119, 110, 101, 114, 73, 100, 0, 251, 255, 255,
 255, 0, 99, 108, 97, 115, 115, 73, 100, 0, 251, 255, 255,
@@ -3273,16 +3276,24 @@ export class CompatSelectionPatch implements ICompatSelectionPatch {
 
 export interface ICompatAuditSnapshot extends BebopRecord {
 
+  readonly version: bigint;
+
+  readonly retirementEpoch: bigint;
+
   readonly retainedCaptures: bigint;
 
   readonly liveNodes: bigint;
 }
 
 export class CompatAuditSnapshot implements ICompatAuditSnapshot {
+  public readonly version: bigint;
+  public readonly retirementEpoch: bigint;
   public readonly retainedCaptures: bigint;
   public readonly liveNodes: bigint;
 
   constructor(record: ICompatAuditSnapshot) {
+    this.version = record.version;
+    this.retirementEpoch = record.retirementEpoch;
     this.retainedCaptures = record.retainedCaptures;
     this.liveNodes = record.liveNodes;
   }
@@ -3312,6 +3323,8 @@ export class CompatAuditSnapshot implements ICompatAuditSnapshot {
    * Validates that the specified dynamic object can become an instance of {@link CompatAuditSnapshot}.
    */
   public static validateCompatibility(record: ICompatAuditSnapshot): void {
+    BebopTypeGuard.ensureUint64(record.version)
+    BebopTypeGuard.ensureUint64(record.retirementEpoch)
     BebopTypeGuard.ensureUint64(record.retainedCaptures)
     BebopTypeGuard.ensureUint64(record.liveNodes)
   }
@@ -3347,6 +3360,8 @@ export class CompatAuditSnapshot implements ICompatAuditSnapshot {
 
   public static encodeInto(record: ICompatAuditSnapshot, view: BebopView): number {
     const before = view.length;
+    view.writeUint64(record.version);
+    view.writeUint64(record.retirementEpoch);
     view.writeUint64(record.retainedCaptures);
     view.writeUint64(record.liveNodes);
     const after = view.length;
@@ -3364,9 +3379,15 @@ export class CompatAuditSnapshot implements ICompatAuditSnapshot {
     field0 = view.readUint64();
     let field1: bigint;
     field1 = view.readUint64();
+    let field2: bigint;
+    field2 = view.readUint64();
+    let field3: bigint;
+    field3 = view.readUint64();
     let message: ICompatAuditSnapshot = {
-      retainedCaptures: field0,
-      liveNodes: field1,
+      version: field0,
+      retirementEpoch: field1,
+      retainedCaptures: field2,
+      liveNodes: field3,
     };
     return new CompatAuditSnapshot(message);
   }
@@ -18522,4 +18543,4 @@ export enum CompatNativePrototype {
 }
 
 
-export const COMPATIBILITY_SCHEMA_HASH = '24c38b2078bf718c3812f5e0c4d25ee9bbb288845648c291d0eb79df730174eb';
+export const COMPATIBILITY_SCHEMA_HASH = '767306e64a6b74111330f49313e49dc061dc68b2c6bbce1c22b8d37cb55d3760';
