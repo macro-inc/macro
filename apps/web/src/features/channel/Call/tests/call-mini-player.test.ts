@@ -143,8 +143,8 @@ describe('call mini player', () => {
       false,
       'bottom-right'
     );
-    expect(result.width).toBe(640);
-    expect(result.x).toBe(776);
+    expect(result.width).toBe(848);
+    expect(result.x).toBe(568);
     expect(result.x + result.width).toBe(1416);
     expect(result.y + result.mediaHeight + 130).toBeCloseTo(610);
   });
@@ -155,6 +155,20 @@ describe('call mini player', () => {
         y: 542,
       }
     );
+  });
+  it('caps large player resizes at 960px', () => {
+    const result = resizeCallPlayer(
+      'bottom-right',
+      { x: 20, y: 20, width: 336, height: 310 },
+      180,
+      1600,
+      1000,
+      1920,
+      1080,
+      false,
+      'top-left'
+    );
+    expect(result.width).toBe(960);
   });
   it('leaves free drops alone and engages only a nearby corner magnet', () => {
     expect(

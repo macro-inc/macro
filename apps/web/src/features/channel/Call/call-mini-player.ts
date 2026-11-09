@@ -1,3 +1,4 @@
+export const MAX_CALL_PLAYER_WIDTH = 960;
 export type CallPreviewParticipant = {
   id: string;
   speaking: boolean;
@@ -116,7 +117,7 @@ export function resizeCallPlayer(
   const maxWidth = Math.max(
     0,
     Math.min(
-      640,
+      MAX_CALL_PLAYER_WIDTH,
       viewportWidth - 24,
       audioOnly ? Infinity : ((viewportHeight - 180) * 16) / 9 + 16,
       left ? fixedX - 12 : viewportWidth - fixedX - 12,

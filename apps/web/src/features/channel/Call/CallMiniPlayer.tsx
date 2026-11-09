@@ -26,6 +26,7 @@ import {
   type CallPlayerResizeEdge,
   constrainCallPlayerPosition,
   getCallPlayerSnapTarget,
+  MAX_CALL_PLAYER_WIDTH,
   resizeCallPlayer,
   selectCallPreview,
 } from './call-mini-player';
@@ -168,7 +169,14 @@ export function CallMiniPlayer(props: {
       ? record.data.channelName || t('nav.returnToCall')
       : t('nav.returnToCall');
   const width = () => {
-    const maximum = Math.max(0, Math.min(640, viewport().width - 24));
+    const maximum = Math.max(
+      0,
+      Math.min(
+        MAX_CALL_PLAYER_WIDTH,
+        viewport().width - 24,
+        audioOnly() ? Infinity : ((viewport().height - 180) * 16) / 9 + 16
+      )
+    );
     return Math.max(
       Math.min(256, maximum),
       Math.min(previewSize()?.width ?? storedWidth(), maximum)

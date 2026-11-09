@@ -83,7 +83,8 @@ into that corner, or elsewhere to keep the dropped position. The indicator
 fades over 150ms; reduced motion shows/hides and snaps without animation. Collapse
 tucks it back into the rail.
 Resize from any edge or corner; video/screens remain 16:9 and audio retains its
-minimum height. Width and audio height persist as local preferences; the player
+minimum height. Width is capped at 960px, or the available window width/height
+when smaller. Width and audio height persist as local preferences; the player
 reclamps to the viewport when media or window size changes. Short windows cap
 the player's outer height and allow its contents to scroll; only the pointer
 that began a drag or resize can update or finish that gesture.
