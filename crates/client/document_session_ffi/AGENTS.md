@@ -46,3 +46,5 @@ Enable model-segmentation explicitly for a feature-stable exhaustive ModifyTarge
 Observe live authorization through effective_access on either session object; never treat the returned Access as a token for a later input or infer it from construction config or UI locks.
 
 Project every core Diff field exhaustively; omit native decorator policies and signatures explicitly, transport only invalidation keys, and append full-u64 SetDecoratorRevision after existing UniFFI tags. A projection or mutation return does not grant consuming-view observation authority.
+
+Read decorator model text and instance layout facts in bulk through generation-aware queries; keep application display lookups outside the FFI.

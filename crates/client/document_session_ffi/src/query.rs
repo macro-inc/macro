@@ -93,6 +93,11 @@ pub enum FfiQuery {
     ListenerTable,
     /// Read the durable relative selection cursor.
     SelectionCursors,
+    /// Read model-owned decorator text and instance layout facts in one call.
+    Decorators {
+        /// Generation-aware keys from the current structured view patch.
+        keys: Vec<NodeKey>,
+    },
 }
 /// A native query result, with only the requested payload.
 #[derive(uniffi::Enum)]
@@ -163,6 +168,23 @@ pub enum FfiQueryReply {
         /// Selection focus.
         focus: Option<NativeCursor>,
     },
+    /// Model-owned decorator facts, in requested key order.
+    Decorators {
+        /// Current attached decorators.
+        nodes: Vec<FfiDecorator>,
+    },
+}
+/// Immutable model facts for native decorator presentation.
+#[derive(uniffi::Record)]
+pub struct FfiDecorator {
+    /// Generation-aware model key.
+    pub key: NodeKey,
+    /// Model text content; application display lookups remain host-owned.
+    pub text: String,
+    /// Instance-specific inline layout.
+    pub is_inline: bool,
+    /// Instance-specific keyboard selection behavior.
+    pub is_keyboard_selectable: bool,
 }
 /// Registered native node type metadata.
 #[derive(uniffi::Record)]
@@ -210,6 +232,23 @@ pub(crate) fn query(
             keys: vec![key],
             nodes: vec![view.export_json(key).map_err(invalid)?],
         },
+        FfiQuery::Decorators { keys } => {
+            let mut nodes = Vec::with_capacity(keys.len());
+            for key in keys {
+                if view.kind(key) != Some(NodeKind::Decorator) || !view.is_attached(key) {
+                    return Err(invalid(
+                        "decorator query requires a current attached decorator",
+                    ));
+                }
+                nodes.push(FfiDecorator {
+                    key,
+                    text: view.text_content(key).into_owned(),
+                    is_inline: view.is_inline(key),
+                    is_keyboard_selectable: view.is_keyboard_selectable(key),
+                });
+            }
+            FfiQueryReply::Decorators { nodes }
+        }
         FfiQuery::ShouldInsertText { text } => FfiQueryReply::Boolean {
             value: match state.selection().and_then(Selection::as_range) {
                 Some(selection) => state

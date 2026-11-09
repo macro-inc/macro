@@ -174,6 +174,83 @@ fn native_application_surface_uses_shared_shortcuts_and_download_exports() {
             .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
     );
     assert_eq!(session.text_content().unwrap(), "a😀");
+    session
+        .handle(
+            FfiNow {
+                mono_ms: 8,
+                wall_ms: 1_000_008,
+            },
+            FfiInput::SetState {
+                root: serde_json::from_value(
+                    json!({"type":"root","children":[{"type":"paragraph","children":[
+                        {"type":"user-mention","userId":"fixture-user","displayName":"Person 😀"},
+                        {"type":"group-mention","groupAlias":"here"},
+                        {"type":"text","text":"tail"}
+                    ]}]}),
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap();
+    let FfiQueryReply::Nodes { keys: people, .. } = session
+        .query(FfiQuery::NodesOfType {
+            name: "user-mention".into(),
+        })
+        .unwrap()
+    else {
+        panic!("people")
+    };
+    let FfiQueryReply::Nodes { keys: groups, .. } = session
+        .query(FfiQuery::NodesOfType {
+            name: "group-mention".into(),
+        })
+        .unwrap()
+    else {
+        panic!("groups")
+    };
+    let before = session.query(FfiQuery::State).unwrap();
+    let FfiQueryReply::Decorators { nodes } = session
+        .query(FfiQuery::Decorators {
+            keys: vec![groups[0], people[0]],
+        })
+        .unwrap()
+    else {
+        panic!("decorators")
+    };
+    assert_eq!(nodes[0].key, groups[0]);
+    assert_eq!(nodes[0].text, "@here");
+    assert_eq!(nodes[1].key, people[0]);
+    assert_eq!(nodes[1].text, "@Person 😀");
+    assert!(
+        nodes
+            .iter()
+            .all(|node| node.is_inline && node.is_keyboard_selectable)
+    );
+    let stale = NodeKey::from_parts(KeyParts {
+        index: people[0].index(),
+        generation: people[0].generation() + 1,
+    });
+    assert!(
+        session
+            .query(FfiQuery::Decorators { keys: vec![stale] })
+            .is_err()
+    );
+    let FfiQueryReply::Nodes { keys: text, .. } = session
+        .query(FfiQuery::NodesOfType {
+            name: "text".into(),
+        })
+        .unwrap()
+    else {
+        panic!("text")
+    };
+    assert!(session.query(FfiQuery::Decorators { keys: text }).is_err());
+    let FfiQueryReply::State { root: before } = before else {
+        panic!("before state")
+    };
+    let FfiQueryReply::State { root: after } = session.query(FfiQuery::State).unwrap() else {
+        panic!("after state")
+    };
+    assert_eq!(after, before);
 }
 
 pub(super) fn application_config() -> FfiSessionConfig {

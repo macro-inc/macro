@@ -1941,6 +1941,95 @@ public func FfiConverterTypeFfiCreatedNode_lower(_ value: FfiCreatedNode) -> Rus
 
 
 /**
+ * Immutable model facts for native decorator presentation.
+ */
+public struct FfiDecorator: Equatable, Hashable {
+    /**
+     * Generation-aware model key.
+     */
+    public var key: NodeKey
+    /**
+     * Model text content; application display lookups remain host-owned.
+     */
+    public var text: String
+    /**
+     * Instance-specific inline layout.
+     */
+    public var isInline: Bool
+    /**
+     * Instance-specific keyboard selection behavior.
+     */
+    public var isKeyboardSelectable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Generation-aware model key.
+         */key: NodeKey, 
+        /**
+         * Model text content; application display lookups remain host-owned.
+         */text: String, 
+        /**
+         * Instance-specific inline layout.
+         */isInline: Bool, 
+        /**
+         * Instance-specific keyboard selection behavior.
+         */isKeyboardSelectable: Bool) {
+        self.key = key
+        self.text = text
+        self.isInline = isInline
+        self.isKeyboardSelectable = isKeyboardSelectable
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiDecorator: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiDecorator: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiDecorator {
+        return
+            try FfiDecorator(
+                key: FfiConverterTypeNodeKey.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                isInline: FfiConverterBool.read(from: &buf), 
+                isKeyboardSelectable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiDecorator, into buf: inout [UInt8]) {
+        FfiConverterTypeNodeKey.write(value.key, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterBool.write(value.isInline, into: &buf)
+        FfiConverterBool.write(value.isKeyboardSelectable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiDecorator_lift(_ buf: RustBuffer) throws -> FfiDecorator {
+    return try FfiConverterTypeFfiDecorator.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiDecorator_lower(_ value: FfiDecorator) -> RustBuffer {
+    return FfiConverterTypeFfiDecorator.lower(value)
+}
+
+
+/**
  * A remote editor cursor resolved against the current live document.
  */
 public struct FfiEditorPeerSelection: Equatable, Hashable {
@@ -8577,6 +8666,14 @@ public enum FfiQuery: Equatable, Hashable {
      * Read the durable relative selection cursor.
      */
     case selectionCursors
+    /**
+     * Read model-owned decorator text and instance layout facts in one call.
+     */
+    case decorators(
+        /**
+         * Generation-aware keys from the current structured view patch.
+         */keys: [NodeKey]
+    )
 
 
 
@@ -8634,6 +8731,9 @@ public struct FfiConverterTypeFfiQuery: FfiConverterRustBuffer {
         case 14: return .listenerTable
         
         case 15: return .selectionCursors
+        
+        case 16: return .decorators(keys: try FfiConverterSequenceTypeNodeKey.read(from: &buf)
+        )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -8710,6 +8810,11 @@ public struct FfiConverterTypeFfiQuery: FfiConverterRustBuffer {
         case .selectionCursors:
             writeInt(&buf, Int32(15))
         
+        
+        case let .decorators(keys):
+            writeInt(&buf, Int32(16))
+            FfiConverterSequenceTypeNodeKey.write(keys, into: &buf)
+            
         }
     }
 }
@@ -8842,6 +8947,14 @@ public enum FfiQueryReply: Equatable, Hashable {
          * Selection focus.
          */focus: NativeCursor?
     )
+    /**
+     * Model-owned decorator facts, in requested key order.
+     */
+    case decorators(
+        /**
+         * Current attached decorators.
+         */nodes: [FfiDecorator]
+    )
 
 
 
@@ -8897,6 +9010,9 @@ public struct FfiConverterTypeFfiQueryReply: FfiConverterRustBuffer {
         )
         
         case 12: return .cursors(anchor: try FfiConverterOptionTypeNativeCursor.read(from: &buf), focus: try FfiConverterOptionTypeNativeCursor.read(from: &buf)
+        )
+        
+        case 13: return .decorators(nodes: try FfiConverterSequenceTypeFfiDecorator.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -8968,6 +9084,11 @@ public struct FfiConverterTypeFfiQueryReply: FfiConverterRustBuffer {
             writeInt(&buf, Int32(12))
             FfiConverterOptionTypeNativeCursor.write(anchor, into: &buf)
             FfiConverterOptionTypeNativeCursor.write(focus, into: &buf)
+            
+        
+        case let .decorators(nodes):
+            writeInt(&buf, Int32(13))
+            FfiConverterSequenceTypeFfiDecorator.write(nodes, into: &buf)
             
         }
     }
@@ -13832,6 +13953,31 @@ fileprivate struct FfiConverterSequenceTypeFfiCreatedNode: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeFfiCreatedNode.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeFfiDecorator: FfiConverterRustBuffer {
+    typealias SwiftType = [FfiDecorator]
+
+    public static func write(_ value: [FfiDecorator], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeFfiDecorator.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [FfiDecorator] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [FfiDecorator]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeFfiDecorator.read(from: &buf))
         }
         return seq
     }

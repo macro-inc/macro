@@ -2692,6 +2692,69 @@ public object FfiConverterTypeFfiCreatedNode: FfiConverterRustBuffer<FfiCreatedN
 
 
 /**
+ * Immutable model facts for native decorator presentation.
+ */
+data class FfiDecorator (
+    /**
+     * Generation-aware model key.
+     */
+    var `key`: NodeKey
+    , 
+    /**
+     * Model text content; application display lookups remain host-owned.
+     */
+    var `text`: kotlin.String
+    , 
+    /**
+     * Instance-specific inline layout.
+     */
+    var `isInline`: kotlin.Boolean
+    , 
+    /**
+     * Instance-specific keyboard selection behavior.
+     */
+    var `isKeyboardSelectable`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiDecorator: FfiConverterRustBuffer<FfiDecorator> {
+    override fun read(buf: ByteBuffer): FfiDecorator {
+        return FfiDecorator(
+            FfiConverterTypeNodeKey.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiDecorator) = (
+            FfiConverterTypeNodeKey.allocationSize(value.`key`) +
+            FfiConverterString.allocationSize(value.`text`) +
+            FfiConverterBoolean.allocationSize(value.`isInline`) +
+            FfiConverterBoolean.allocationSize(value.`isKeyboardSelectable`)
+    )
+
+    override fun write(value: FfiDecorator, buf: ByteBuffer) {
+            FfiConverterTypeNodeKey.write(value.`key`, buf)
+            FfiConverterString.write(value.`text`, buf)
+            FfiConverterBoolean.write(value.`isInline`, buf)
+            FfiConverterBoolean.write(value.`isKeyboardSelectable`, buf)
+    }
+}
+
+
+
+/**
  * A remote editor cursor resolved against the current live document.
  */
 data class FfiEditorPeerSelection (
@@ -9143,6 +9206,21 @@ sealed class FfiQuery {
     object SelectionCursors : FfiQuery()
     
     
+    /**
+     * Read model-owned decorator text and instance layout facts in one call.
+     */
+    data class Decorators(
+        /**
+         * Generation-aware keys from the current structured view patch.
+         */
+        val `keys`: List<com.macro.documentsession.NodeKey>) : FfiQuery()
+        
+    {
+        
+
+        companion object
+    }
+    
 
     
 
@@ -9189,6 +9267,9 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
             13 -> FfiQuery.TypeTable
             14 -> FfiQuery.ListenerTable
             15 -> FfiQuery.SelectionCursors
+            16 -> FfiQuery.Decorators(
+                FfiConverterSequenceTypeNodeKey.read(buf),
+                )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
@@ -9292,6 +9373,13 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
                 4UL
             )
         }
+        is FfiQuery.Decorators -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceTypeNodeKey.allocationSize(value.`keys`)
+            )
+        }
     }
 
     override fun write(value: FfiQuery, buf: ByteBuffer) {
@@ -9362,6 +9450,11 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
             }
             is FfiQuery.SelectionCursors -> {
                 buf.putInt(15)
+                Unit
+            }
+            is FfiQuery.Decorators -> {
+                buf.putInt(16)
+                FfiConverterSequenceTypeNodeKey.write(value.`keys`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -9569,6 +9662,21 @@ sealed class FfiQueryReply {
         companion object
     }
     
+    /**
+     * Model-owned decorator facts, in requested key order.
+     */
+    data class Decorators(
+        /**
+         * Current attached decorators.
+         */
+        val `nodes`: List<com.macro.documentsession.FfiDecorator>) : FfiQueryReply()
+        
+    {
+        
+
+        companion object
+    }
+    
 
     
 
@@ -9623,6 +9731,9 @@ public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryRep
             12 -> FfiQueryReply.Cursors(
                 FfiConverterOptionalTypeNativeCursor.read(buf),
                 FfiConverterOptionalTypeNativeCursor.read(buf),
+                )
+            13 -> FfiQueryReply.Decorators(
+                FfiConverterSequenceTypeFfiDecorator.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -9716,6 +9827,13 @@ public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryRep
                 + FfiConverterOptionalTypeNativeCursor.allocationSize(value.`focus`)
             )
         }
+        is FfiQueryReply.Decorators -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceTypeFfiDecorator.allocationSize(value.`nodes`)
+            )
+        }
     }
 
     override fun write(value: FfiQueryReply, buf: ByteBuffer) {
@@ -9781,6 +9899,11 @@ public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryRep
                 buf.putInt(12)
                 FfiConverterOptionalTypeNativeCursor.write(value.`anchor`, buf)
                 FfiConverterOptionalTypeNativeCursor.write(value.`focus`, buf)
+                Unit
+            }
+            is FfiQueryReply.Decorators -> {
+                buf.putInt(13)
+                FfiConverterSequenceTypeFfiDecorator.write(value.`nodes`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -15017,6 +15140,34 @@ public object FfiConverterSequenceTypeFfiCreatedNode: FfiConverterRustBuffer<Lis
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiCreatedNode.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeFfiDecorator: FfiConverterRustBuffer<List<FfiDecorator>> {
+    override fun read(buf: ByteBuffer): List<FfiDecorator> {
+        val len = buf.getInt()
+        return List<FfiDecorator>(len) {
+            FfiConverterTypeFfiDecorator.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FfiDecorator>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFfiDecorator.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FfiDecorator>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFfiDecorator.write(it, buf)
         }
     }
 }
