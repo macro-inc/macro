@@ -145,6 +145,7 @@ pub(crate) fn action(task: Value) -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
     }
 }
@@ -561,6 +562,8 @@ pub(crate) struct CodeCall {
     pub context: Value,
     pub steps: Value,
     pub dry_run: bool,
+    pub acts_as: routine_program::CodeIdentity,
+    pub routine_id: Uuid,
 }
 
 /// Runs code steps from a script; succeeds with `null` once it runs out.
@@ -604,6 +607,8 @@ impl RoutineCode for Code {
             context: run.context.clone(),
             steps: run.steps.clone(),
             dry_run: run.dry_run,
+            acts_as: run.acts_as,
+            routine_id: run.routine_id,
         });
         self.outcomes
             .lock()
@@ -790,4 +795,50 @@ async fn hosts_without_a_code_executor_fail_code_steps() {
         .await
         .unwrap_err();
     assert!(error.to_string().contains("no code executor is configured"));
+}
+
+#[tokio::test]
+async fn code_steps_act_as_the_agent_unless_the_routine_operates_as_its_owner() {
+    for (task, identity) in [
+        (
+            json!({ "steps": [code_step("post", "Post it")] }),
+            routine_program::CodeIdentity::Agent,
+        ),
+        (
+            json!({ "steps": [code_step("post", "Post it")], "dangerously_operate_as_user": true }),
+            routine_program::CodeIdentity::Owner,
+        ),
+    ] {
+        let code = Arc::new(Code::default());
+        let runner = Fixture::new(Agents::default())
+            .runner
+            .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+        let action = action(task);
+        let mut handle = ExecutionHandle::default();
+
+        runner.run(&action, &mut handle, manual()).await.unwrap();
+
+        let runs = code.runs.lock().unwrap().clone();
+        assert_eq!(runs[0].acts_as, identity);
+        assert_eq!(Some(runs[0].routine_id), action.id);
+        assert_eq!(handle.run.unwrap().code_acts_as, Some(identity));
+    }
+}
+
+#[tokio::test]
+async fn a_run_without_code_steps_records_no_code_identity() {
+    let fixture = Fixture::new(Agents::default());
+    let action = action(json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "Summarize" }],
+        "dangerously_operate_as_user": true,
+    }));
+    let mut handle = ExecutionHandle::default();
+
+    fixture
+        .runner
+        .run(&action, &mut handle, manual())
+        .await
+        .unwrap();
+
+    assert_eq!(handle.run.unwrap().code_acts_as, None);
 }

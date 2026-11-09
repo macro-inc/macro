@@ -28,8 +28,23 @@ export default {
   docsTitle: 'Learn how to use Macro Docs',
   docsBlock: 'Macro Docs',
   docsSnippet:
-    'Mention anything, edit live with your team, and agents with a live cursor',
-  docsLength: '1:46',
+    '@mention anything, open it in a split, plain markdown, live agent cursors',
+  docsLength: '1:15',
+  spreadsheetsTitle: 'Learn how to use Macro Spreadsheets',
+  spreadsheetsBlock: 'Macro Spreadsheets',
+  spreadsheetsSnippet:
+    'Formulas, @mentions, charts, agents and comments, linked to everything else',
+  spreadsheetsLength: '0:56',
+  databasesTitle: 'Learn how to use Macro Databases',
+  databasesBlock: 'Macro Databases',
+  databasesSnippet:
+    'Track and sort by any property, @mention anything, link tables, ask an agent',
+  databasesLength: '1:05',
+  canvasTitle: 'Learn how to use Macro Canvas',
+  canvasBlock: 'Macro Canvas',
+  canvasSnippet:
+    'Shapes and sketches, @mention anything as live pills, agents edit it too',
+  canvasLength: '0:50',
   tasksTitle: 'Learn how to use Macro Tasks',
   tasksBlock: 'Macro Tasks',
   tasksSnippet:
@@ -70,6 +85,11 @@ export default {
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD and unified memory',
   agentsLength: '1:05',
+  macrodTitle: 'Learn how to use MacroD',
+  macrodBlock: 'MacroD',
+  macrodSnippet:
+    'Connect the coding agent you already use, then @mention it or assign it a task',
+  macrodLength: '1:17',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:

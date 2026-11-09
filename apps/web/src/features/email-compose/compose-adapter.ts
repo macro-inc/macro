@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
   createFilesReadyHandler,
@@ -23,7 +24,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
@@ -179,13 +179,22 @@ export function createEmailComposeContext(
   const removeForwarded = useRemoveForwardedAttachmentMutation();
   const unschedule = useUnscheduleMessageMutation();
   const { users } = useCombinedRecipients();
-  const notice = (options?: ComposeNoticeOptions) => ({
-    ...options,
-    actions: options?.actions?.map(({ kind, ...action }) => ({
-      ...action,
-      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
-    })),
-  });
+  const notice = (options?: ComposeNoticeOptions) => {
+    const hasUndo = options?.actions?.some(({ kind }) => kind === 'undo');
+    const hasNavigation = options?.actions?.some(({ kind }) => kind === 'open');
+    return {
+      ...options,
+      dismissStyle: hasUndo || hasNavigation ? ('icon' as const) : undefined,
+      actionLayout: hasUndo ? ('inline' as const) : undefined,
+      actions: options?.actions?.map(({ kind, ...action }) => {
+        if (kind === 'save' || kind === 'open') return action;
+        return {
+          ...action,
+          icon: ArrowCounterClockwise,
+        };
+      }),
+    };
+  };
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
   const requireSavedDraftForDelivery = async (
@@ -295,17 +304,26 @@ export function createEmailComposeContext(
       feedback: {
         success: (message, options) => toast.success(message, notice(options)),
         failure: (message, options) => {
-          if (options?.persistent)
+          if (options?.persistent) {
+            const isDraftRecovery = options.actions?.some(
+              ({ kind }) => kind === 'save'
+            );
             return toast.custom(
               {
                 title: message,
+                dismissLabel: t('common.maybeLater'),
                 content: () => options.subtext,
                 icon: ExclamationIcon,
                 color: 'var(--color-failure)',
+                titleColor: 'var(--color-failure)',
                 actions: notice(options).actions,
               },
-              { persistent: true }
+              {
+                persistent: true,
+                dismissStyle: isDraftRecovery ? 'icon' : undefined,
+              }
             );
+          }
           toast.failure(message, notice(options));
           return undefined;
         },

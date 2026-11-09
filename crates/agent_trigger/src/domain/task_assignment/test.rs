@@ -55,6 +55,7 @@ fn value(ids: &[&str]) -> Option<PropertyValue> {
 
 fn update() -> EntityPropertyUpdatedMetadata {
     EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: "task-1".to_owned(),
         entity_type: EntityType::Task,
@@ -474,4 +475,67 @@ fn assignment_response_ids_are_stable_distinct_uuid_v7s() {
     assert_ne!(root, discussion_id(Uuid::now_v7(), BotId::TEST_A));
     assert_eq!(root.get_version_num(), 7);
     assert_eq!(&root.as_bytes()[..6], &event.as_bytes()[..6]);
+}
+
+#[test]
+fn an_assignment_made_by_a_person_is_theirs() {
+    let assignment = TaskAssignment::from_update(Uuid::now_v7(), &update()).unwrap();
+
+    assert_eq!(
+        assignment.origin,
+        TriggerOrigin::TaskAssigned {
+            by: Caller::Person {
+                user: MacroUserIdStr::try_from_email("assigner@example.com").unwrap(),
+            },
+            task: "task-1".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn an_assignment_an_agent_made_for_a_person_names_the_agent() {
+    let user = MacroUserIdStr::try_from_email("assigner@example.com").unwrap();
+    let updated = EntityPropertyUpdatedMetadata {
+        actor_user_id: None,
+        actor: Some(channel_sender::ChannelSender::new_from_bot(BotId::TEST_B)),
+        on_behalf_of: Some(user.clone()),
+        ..update()
+    };
+
+    let assignment = TaskAssignment::from_update(Uuid::now_v7(), &updated).unwrap();
+
+    assert_eq!(assignment.actor, user);
+    assert_eq!(
+        assignment.origin,
+        TriggerOrigin::TaskAssigned {
+            by: Caller::Agent(AgentActor {
+                bot: BotId::TEST_B,
+                on_behalf_of: user,
+                lineage: Lineage::Unattributed,
+            }),
+            task: "task-1".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn agents_a_task_inherits_from_its_project_say_so() {
+    let project = Uuid::now_v7();
+    let updated = EntityPropertyUpdatedMetadata {
+        inherited_from_project: Some(project),
+        ..update()
+    };
+
+    let assignment = TaskAssignment::from_update(Uuid::now_v7(), &updated).unwrap();
+
+    assert_eq!(
+        assignment.origin,
+        TriggerOrigin::ProjectInherited {
+            by: Caller::Person {
+                user: MacroUserIdStr::try_from_email("assigner@example.com").unwrap(),
+            },
+            task: "task-1".to_owned(),
+            project,
+        }
+    );
 }
