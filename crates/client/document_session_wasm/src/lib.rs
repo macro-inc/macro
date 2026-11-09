@@ -3,6 +3,7 @@
 #[rustfmt::skip]
 #[expect(missing_docs, reason = "Bebop owns generated wire declarations")]
 pub mod generated;
+mod application_exports;
 mod codec;
 mod document;
 mod editor;
@@ -32,6 +33,8 @@ enum BoundaryError {
     Session(#[from] document_session::SessionError),
     #[error(transparent)]
     Markdown(#[from] lexical_markdown::Error),
+    #[error(transparent)]
+    Macro(#[from] macro_document_model::Error),
     #[error(transparent)]
     Html(#[from] lexical_html::Error),
     #[error(transparent)]
