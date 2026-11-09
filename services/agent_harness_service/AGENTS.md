@@ -89,7 +89,9 @@ Pulumi stacks; they do not host extra agent processes.
   `scheduling.rs` sweeps generation sessions a stopped process left open
   every minute and starts nightly generations every five minutes, once the
   process is ready.
-  The ideas routes are served here too, and `scheduling.rs` runs ideas'
+  Accepted background prompt ideas run in hidden, billable sessions of the
+  in-process Macro agent (`IdeaRunSessions` in `scheduling.rs`), settled
+  every 30 s. The ideas routes are served here too, and `scheduling.rs` runs ideas'
   resolution consumer (group `ideas-resolution`, `crates/ideas`) beside the
   event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's

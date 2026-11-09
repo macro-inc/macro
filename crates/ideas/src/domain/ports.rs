@@ -10,8 +10,8 @@ use model_owner::CreationPrincipal;
 
 use super::model::{
     Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, NewKind, RunProgress, RunSettled, StoredRun, OpenTarget, ResolveReason, RetireIdea,
-    RewriteIdea, SuggestIdea, Target,
+    IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
+    RewriteIdea, RunProgress, RunSettled, StoredRun, SuggestIdea, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 

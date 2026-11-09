@@ -387,7 +387,17 @@ impl IdeaRepo for PgIdeaRepo {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter()
-            .map(|row| run(row.session_id, row.idea_id, row.user_id, &row.agent_id, row.action_id, row.started_at, row.outcome))
+            .map(|row| {
+                run(
+                    row.session_id,
+                    row.idea_id,
+                    row.user_id,
+                    &row.agent_id,
+                    row.action_id,
+                    row.started_at,
+                    row.outcome,
+                )
+            })
             .collect()
     }
 
@@ -401,7 +411,17 @@ impl IdeaRepo for PgIdeaRepo {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter()
-            .map(|row| run(row.session_id, row.idea_id, row.user_id, &row.agent_id, row.action_id, row.started_at, row.outcome))
+            .map(|row| {
+                run(
+                    row.session_id,
+                    row.idea_id,
+                    row.user_id,
+                    &row.agent_id,
+                    row.action_id,
+                    row.started_at,
+                    row.outcome,
+                )
+            })
             .collect()
     }
 
