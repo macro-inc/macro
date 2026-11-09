@@ -2,6 +2,7 @@
 use crate::nodes::{CommentNode, CompletionNode};
 use lexical_loro::SyncPolicy;
 use lexical_model::*;
+mod draft_count;
 /// Synced Macro content excludes ephemeral completion and draft wrappers.
 pub struct MacroSyncPolicy;
 /// Shared projection policy for all collaborative Macro documents.
@@ -198,15 +199,7 @@ impl Plugin for DraftCommentPlugin {
         }
         Ok(Handled::No)
     }
-    fn after_commit(&self, tx: &mut Transaction<'_>, _: &Commit) -> crate::ModelResult<()> {
-        tx.extension_mut::<DraftCommentMarks>()?.count =
-            lexical_rich_nodes::utils::dfs(tx.view(), None, None)
-                .iter()
-                .filter(|entry| {
-                    tx.get::<CommentNode>(entry.node)
-                        .is_some_and(|mark| mark.is_draft)
-                })
-                .count();
-        Ok(())
+    fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> crate::ModelResult<()> {
+        draft_count::update(tx, commit)
     }
 }
