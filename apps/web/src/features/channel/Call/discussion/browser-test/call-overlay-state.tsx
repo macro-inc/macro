@@ -13,7 +13,7 @@ const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
 const [audioMuted, setAudioMuted] = createSignal(true);
 const [videoMuted, setVideoMuted] = createSignal(params.get('media') !== 'on');
 const [screenSharing, setScreenSharing] = createSignal(
-  params.get('share') === 'local'
+  ['local', 'both'].includes(params.get('share') ?? '')
 );
 const [shareAudio, setShareAudio] = createSignal(false);
 const [noiseSuppressed, setNoiseSuppressed] = createSignal(false);
@@ -61,7 +61,7 @@ const participants = Array.from(
       name,
       params.get('portrait') === 'true' && index === 0
     );
-    const screen = videoTrack('Shared screen');
+    const screen = videoTrack(`Shared screen ${index + 1}`);
     let volume = 1;
     return {
       identity,
@@ -72,8 +72,9 @@ const participants = Array.from(
           return { track: camera, isMuted: false, isSubscribed: true };
         if (
           source === 'screen_share' &&
-          params.get('share') === 'remote' &&
-          index === 0
+          ((['remote', 'both'].includes(params.get('share') ?? '') &&
+            index === 0) ||
+            (params.get('share') === 'remote-pair' && index < 2))
         )
           return { track: screen, isMuted: false, isSubscribed: true };
         return undefined;

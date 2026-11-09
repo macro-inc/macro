@@ -564,6 +564,11 @@ export function CallOverlay(props: {
                     >
                       <Show when={callCtx.isScreenSharing()}>
                         <div
+                          hidden={
+                            staged() &&
+                            hideParticipants() &&
+                            !isStage('local-share')
+                          }
                           class={cn(
                             'min-h-0 min-w-0 size-full',
                             staged() &&
@@ -588,6 +593,11 @@ export function CallOverlay(props: {
                       <For each={remoteScreenShares()}>
                         {(participant) => (
                           <div
+                            hidden={
+                              staged() &&
+                              hideParticipants() &&
+                              !isStage({ share: participant })
+                            }
                             class={cn(
                               'min-w-0 min-h-0',
                               !staged() && 'flex-1',
@@ -815,7 +825,7 @@ export function CallOverlay(props: {
                       <LocalTile
                         class={
                           staged() && !localOnStage()
-                            ? 'w-full h-auto aspect-video min-h-0 self-center'
+                            ? 'w-full h-auto max-h-full aspect-video min-h-0 self-center'
                             : 'size-full min-h-0'
                         }
                         avatarSize="sm"

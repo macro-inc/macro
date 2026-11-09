@@ -51,6 +51,10 @@ for (const count of [3, 4, 5, 6]) {
         const alreadyStaged =
           (await tile.getAttribute('data-call-stage')) !== null;
         const originalStage = await tile.boundingBox();
+        const camera = tile.locator('canvas');
+        const originalFit = await camera.evaluate(
+          (element) => element.style.objectFit
+        );
         await tile.hover();
         await tile.getByRole('button', { name: /^Pin / }).last().click();
         await expect(
@@ -59,6 +63,7 @@ for (const count of [3, 4, 5, 6]) {
         const stage = await tile.boundingBox();
         expect(stage!.width).toBeGreaterThan(500);
         expect(stage!.width / stage!.height).toBeCloseTo(16 / 9, 1);
+        await expect(camera).toHaveCSS('object-fit', 'contain');
         if (alreadyStaged) expect(stage).toEqual(originalStage);
         for (const track of tracks)
           expect(await track.evaluate((element) => element.isConnected)).toBe(
@@ -74,6 +79,7 @@ for (const count of [3, 4, 5, 6]) {
           .last()
           .click();
         await expect.poll(arrangement).toEqual(previous);
+        await expect(camera).toHaveCSS('object-fit', originalFit);
         for (const track of tracks)
           expect(await track.evaluate((element) => element.isConnected)).toBe(
             true
@@ -181,5 +187,94 @@ test('pinning matrix hides and restores participants without detaching tracks', 
     if (layout === 'sidebar')
       expect(edge!.x + edge!.width).toBeLessThanOrEqual(strip!.x);
     else expect(edge!.y + edge!.height).toBeLessThanOrEqual(strip!.y);
+  }
+});
+
+test('pinning matrix hides only strip shares while keeping their tracks mounted', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  test.setTimeout(180_000);
+  for (const layout of ['auto', 'speaker', 'sidebar']) {
+    for (const share of ['remote-pair', 'both']) {
+      await page.goto(
+        `/src/features/channel/Call/discussion/browser-test/call-overlay.html?count=4&layout=${layout}&media=on&share=${share}&view=messages&work=off`,
+        { waitUntil: 'domcontentloaded' }
+      );
+      const screens = page.locator(
+        'canvas[data-fixture-track^="Shared screen"]'
+      );
+      await expect(screens).toHaveCount(share === 'both' ? 1 : 2);
+      const tracks = await screens.elementHandles();
+      await page.getByRole('button', { name: 'More', exact: true }).click();
+      const toggle = page.getByRole('menuitemcheckbox', {
+        name: 'Hide participants',
+        exact: true,
+      });
+      await toggle.click();
+      await expect(screens.locator('visible=true')).toHaveCount(
+        share === 'both' ? 0 : 1
+      );
+      const stage = page.locator('[data-call-stage]');
+      await expect(stage).toBeVisible();
+      const box = await stage.boundingBox();
+      expect(box!.width).toBeGreaterThan(500);
+      const hiddenTracks = await page
+        .locator('[data-call-participant-stage]')
+        .evaluate((element) => {
+          const style = getComputedStyle(element);
+          return [
+            style.gridTemplateColumns.split(' ').length,
+            style.gridTemplateRows.split(' ').length,
+          ];
+        });
+      expect(hiddenTracks).toEqual([1, 1]);
+      for (const track of tracks)
+        expect(await track.evaluate((element) => element.isConnected)).toBe(
+          true
+        );
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/review-hidden-${layout}-${share}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+        });
+      await toggle.click();
+      await expect(screens.locator('visible=true')).toHaveCount(
+        share === 'both' ? 1 : 2
+      );
+      for (const track of tracks)
+        expect(await track.evaluate((element) => element.isConnected)).toBe(
+          true
+        );
+    }
+  }
+});
+
+test('pinning matrix keeps every sidebar tile inside a short stage', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  await page.setViewportSize({ width: 1280, height: 400 });
+  await page.goto(
+    '/src/features/channel/Call/discussion/browser-test/call-overlay.html?count=10&layout=sidebar&media=on&view=messages&work=off'
+  );
+  const stage = page.locator('[data-call-participant-stage]');
+  const last = page.locator('[data-call-participant="macro|me@example.com"]');
+  await expect(last).toBeAttached();
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/review-short-sidebar-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+    });
+  const bounds = await stage.boundingBox();
+  for (const tile of await stage.locator('[data-call-tile]').all()) {
+    const box = await tile.boundingBox();
+    expect(box!.height).toBeGreaterThan(10);
+    expect(box!.y).toBeGreaterThanOrEqual(bounds!.y);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(
+      bounds!.y + bounds!.height + 1
+    );
   }
 });

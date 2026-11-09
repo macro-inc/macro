@@ -1,5 +1,5 @@
 import type { Track } from 'livekit-client';
-import { createEffect, on, onCleanup } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 
 /**
  * Generic track view that attaches/detaches a LiveKit track's media element.
@@ -12,7 +12,8 @@ export function TrackView(props: {
 }) {
   let ref!: HTMLDivElement;
   let attachedTrack: Track | undefined;
-  let attachedElement: Element | undefined;
+  const [attachedElement, setAttachedElement] =
+    createSignal<HTMLMediaElement>();
 
   createEffect(
     on(
@@ -22,20 +23,29 @@ export function TrackView(props: {
 
         prev?.detach().forEach((el) => el.remove());
         attachedTrack = undefined;
-        attachedElement = undefined;
+        setAttachedElement(undefined);
 
         if (!track) return;
 
         const el = track.attach();
         attachedTrack = track;
-        attachedElement = el;
-        Object.assign(el.style, {
+        setAttachedElement(el);
+        ref.appendChild(el);
+      }
+    )
+  );
+
+  createEffect(
+    on(
+      () => [attachedElement(), props.fit, props.mirror] as const,
+      ([element, fit, mirror]) => {
+        if (!element) return;
+        Object.assign(element.style, {
           width: '100%',
           height: '100%',
-          objectFit: props.fit ?? 'cover',
-          transform: props.mirror ? 'scaleX(-1)' : '',
+          objectFit: fit ?? 'cover',
+          transform: mirror ? 'scaleX(-1)' : '',
         });
-        ref.appendChild(el);
       }
     )
   );
@@ -44,7 +54,7 @@ export function TrackView(props: {
     if (attachedTrack) {
       attachedTrack.detach().forEach((el) => el.remove());
     } else {
-      attachedElement?.remove();
+      attachedElement()?.remove();
     }
   });
 

@@ -386,8 +386,9 @@ export function ParticipantTile(props: {
       hidden={props.hidden}
       class={cn(
         'min-w-0',
-        props.filmstrip && 'max-w-36 h-auto aspect-video self-center',
-        props.sidebar && 'h-auto aspect-video shrink-0',
+        props.filmstrip &&
+          'max-w-36 h-auto max-h-full aspect-video self-center',
+        props.sidebar && 'h-auto max-h-full aspect-video shrink-0',
         props.hidden && 'hidden'
       )}
     >
@@ -449,7 +450,9 @@ export function ScreenShareTile(props: {
     <ParticipantTileWrapper
       isSpeaking={false}
       stage={!props.inStrip}
-      class={props.inStrip ? 'h-auto aspect-video self-center' : undefined}
+      class={
+        props.inStrip ? 'h-auto max-h-full aspect-video self-center' : undefined
+      }
       aspectRatio={trackAspectRatio(screenTrack())}
       participantId={props.participant.identity}
       isPinned={props.isPinned}
@@ -499,7 +502,9 @@ export function LocalScreenShareTile(props: {
     <ParticipantTileWrapper
       isSpeaking={false}
       stage={!props.inStrip}
-      class={props.inStrip ? 'h-auto aspect-video self-center' : undefined}
+      class={
+        props.inStrip ? 'h-auto max-h-full aspect-video self-center' : undefined
+      }
       isPinned={props.isPinned}
       pinName={t('calls.yourScreen')}
       pinEnabled={props.pinEnabled}

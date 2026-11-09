@@ -284,7 +284,9 @@ The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
 In-call grid tiles fill their cell but are never wider than 16:9. A staged camera
 or screen retains its track's aspect ratio; pinning uses the same fixed-size
-strip as Speaker or Sidebar, without remounting tracks. Unpin restores the
+strip as Speaker or Sidebar, without remounting tracks. Short Sidebar stages
+shrink strip tiles to keep every participant accessible. Hiding the strip also
+hides non-stage screen shares without stopping their tracks. Unpin restores the
 selected layout. Check landscape and portrait cameras, shares, and 3–6 people.
 Participants with the LiveKit `macro.program` attribute show an **Agent** badge
 beside their name on video tiles, screen shares, and in the Participants list,

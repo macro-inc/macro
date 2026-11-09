@@ -69,7 +69,7 @@ export function callStageGridStyle(
   if (sidebar)
     return {
       'grid-template-columns': 'minmax(0,1fr) minmax(0,9rem)',
-      'grid-template-rows': `repeat(${Math.max(1, count)}, 5.0625rem) minmax(0,1fr)`,
+      'grid-template-rows': `repeat(${Math.max(1, count)}, minmax(0,5.0625rem)) minmax(0,1fr)`,
     };
   return {
     'grid-template-columns': `minmax(0,1fr) repeat(${Math.max(1, count)},minmax(0,9rem)) minmax(0,1fr)`,
