@@ -352,7 +352,10 @@ Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
 retains theme search, editing, copying, custom theme creation, and importing
-themes from the clipboard.
+themes from the clipboard. The pencil beside a theme pill opens the inline theme
+editor under that row: a custom theme is edited in place, a default theme opens
+as a `<name> copy` fork. `features/settings/Appearance.test.tsx` covers opening
+it for both default themes, whose hex grays once crashed the editor's color pickers.
 
 The default Macro Dark theme uses a neutral `#0E0E0E` outer background and
 `#121212` inset content panels. The app rail follows the outer background;
