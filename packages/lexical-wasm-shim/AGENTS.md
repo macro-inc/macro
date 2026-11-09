@@ -115,3 +115,5 @@ Keep command reexports bound to commands.ts objects and expose only the pinned r
 Development transform queue swaps do not yet preserve public dirty-collection identity across every callback phase; do not treat sampled native facts as proof of that compatibility gate.
 
 Keep arbitrary command payloads and listener queues in JS; use only the centralized commandBucket association, preserve priority deque snapshots and parent delegation, and let native model transactions run below listener bodies.
+
+Keep _updating true through update listeners and deferred callbacks without granting them an active dollar-function scope; preserve queued ordinary updates and synchronous internal command dispatch.

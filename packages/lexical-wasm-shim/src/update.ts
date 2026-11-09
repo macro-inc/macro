@@ -13,6 +13,7 @@ interface Host {
   readonly backend: ShimBackend;
   readonly scope: <T>(body: () => T) => T;
   readonly apply: (packet: CommitPacket) => void;
+  readonly notificationScope: (body: () => void) => void;
   readonly onError: (error: unknown) => void;
 }
 
@@ -198,16 +199,18 @@ export class UpdateController {
     const deferred = this.deferred.splice(0);
     try {
       this.host.apply(packet);
-      if (packet.changed || deferred.length > 0) {
-        for (const listener of [...this.listeners]) {
-          if (this.disposed) break;
-          listener(packet);
+      this.host.notificationScope(() => {
+        if (packet.changed || deferred.length > 0) {
+          for (const listener of [...this.listeners]) {
+            if (this.disposed) break;
+            listener(packet);
+          }
         }
-      }
-      for (const callback of deferred) {
-        if (this.disposed) break;
-        callback();
-      }
+        for (const callback of deferred) {
+          if (this.disposed) break;
+          callback();
+        }
+      });
     } catch (error) {
       this.host.onError(error);
     } finally {

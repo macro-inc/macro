@@ -148,17 +148,19 @@ export class LexicalEditor {
     const backend = createBackend(config, this._config);
     this.runtime = new NodeRuntime(backend, nativeNode);
     this.state = new EditorState(this, backend.initialVersion);
+    const withUpdating = <T>(body: () => T): T => {
+      const previous = this._updating;
+      this._updating = true;
+      try {
+        return body();
+      } finally {
+        this._updating = previous;
+      }
+    };
     this.updates = new UpdateController({
       backend,
-      scope: (body) => {
-        const previous = this._updating;
-        this._updating = true;
-        try {
-          return this.scope(body);
-        } finally {
-          this._updating = previous;
-        }
-      },
+      scope: (body) => withUpdating(() => this.scope(body)),
+      notificationScope: withUpdating,
       apply: (packet) => {
         const metadata: unknown = JSON.parse(packet.metadata_json);
         if (
