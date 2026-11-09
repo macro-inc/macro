@@ -8,7 +8,6 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
-import CopyIcon from '@icon/system/regular/copy.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Property } from '@property';
@@ -180,11 +179,6 @@ function Title() {
   const pickers = useContext(TaskComposerPickersContext);
   return (
     <EntityComposer.Title {...{ [TASK_COMPOSER_TITLE_ATTRIBUTE]: '' }}>
-      <Show when={composer.isTemplateMode()}>
-        <TaskTitleAccessory>
-          <CopyIcon class="size-5 text-ink-muted" />
-        </TaskTitleAccessory>
-      </Show>
       <Show
         when={
           !composer.isTemplateMode() && composer.tagLayoutMode() === 'title'

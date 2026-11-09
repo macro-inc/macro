@@ -841,8 +841,8 @@ Customer / Contact row participates in defaults without duplicate property pills
 
 New template opens template mode over the preserved task draft, without a
 replacement confirmation. Its whole Back button, including the New template
-label, returns to that unchanged draft. The template icon and name replace the
-task title line. Draft fields and description become initial defaults, without
+label, returns to that unchanged draft. The template name replaces the task
+title on the same line, without a leading icon. Draft fields and description become initial defaults, without
 the task title or attachments. The footer's Share with team switch controls new
 template ownership. Edit opens the same mode with the saved name and defaults;
 team ownership reads Shared with the owning team, while personal templates have

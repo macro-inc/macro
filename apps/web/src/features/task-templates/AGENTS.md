@@ -30,7 +30,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Open New template and Edit as a separate template editing session; keep the underlying task draft unchanged until saving.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
 - Preserve existing task prose and attachments when applying a saved editing session; fill description only when the task is blank.
-- Use the title editor for template name with a leading template icon; hide attachments and Create More in template mode.
+- Use the task title editor for the template name without a leading icon; hide attachments and Create More.
 - Keep new-template ownership on the footer's team switch.
 - Show Shared with the owning team when editing team templates; show no ownership label for personal templates.
 
