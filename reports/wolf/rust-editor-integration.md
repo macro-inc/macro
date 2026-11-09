@@ -61,8 +61,11 @@ passes; its subsequent hook-inventory check fails with `stale generated hook
 inventory`. Diagnostic regeneration isolates one metadata line:
 `selectionTransform` caller line 2986 -> 2991, with the same 41 hooks from 489
 source files. The full shim check passes on that diagnostic generated file;
-the committed inventory remains unchanged pending the owner checkpoint.
-Generator freshness and committed hook inventory remain unresolved, not waived. New WASM
+the owner then authorized committing this actual generator output. The
+integration inventory is refreshed from the generated file, with no manual
+field edit and no names/order/masks change. The full shim check passes on
+this source-matched output. Compatibility schema freshness remains unresolved
+pending the ordered-input generator checkpoint; no bootstrap gate is waived. New WASM
 exports have not been promoted into live glue/declarations or activated.
 Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
 

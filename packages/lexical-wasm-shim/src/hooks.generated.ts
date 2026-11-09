@@ -217,7 +217,7 @@ export const foreignHooks = [
   {
     name: 'selectionTransform',
     static: false,
-    caller: 'packages/lexical/src/LexicalSelection.ts:2986',
+    caller: 'packages/lexical/src/LexicalSelection.ts:2991',
     override: null,
   },
   {
