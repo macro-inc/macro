@@ -23241,15 +23241,6 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
-name = "xtask_cache_wasm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "xtask_paths",
-]
-
-[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
@@ -23334,6 +23325,7 @@ dependencies = [
  "macro_event_topics",
  "macro_queues",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
