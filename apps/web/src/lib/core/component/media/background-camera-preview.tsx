@@ -4,6 +4,7 @@ import {
 } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Blur from '@icon/system/regular/drop-half.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -115,11 +116,16 @@ export function BackgroundCameraPreview(props: {
         class="size-full object-cover -scale-x-100"
         classList={{ invisible: !ready() }}
       />
-      <Show when={!ready()}>
-        <span class="absolute inset-0 grid place-items-center text-ink-muted">
-          <Blur class="size-5" />
+      <span
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 grid place-items-center"
+      >
+        <span class="grid size-10 place-items-center rounded-full bg-surface-2/90 text-ink shadow-sm">
+          <Show when={props.blur} fallback={<Prohibit class="size-5" />}>
+            <Blur class={props.blur === 'heavy' ? 'size-7' : 'size-5'} />
+          </Show>
         </span>
-      </Show>
+      </span>
     </span>
   );
 }
