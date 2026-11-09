@@ -145,3 +145,5 @@ The indexed lexical.$copyNode entry delegates to Transaction.copy_node, preservi
 Node and markdown selection-export APIs pass ForeignSelectionCapture values through StateRef metadata so native extractWithChild callbacks reuse their original ordinary selection handles.
 
 Namespace handle/version owners and record identities by editor, including saved snapshot metadata. Historical reads and node-map materialization carry the saved owner without replacing the active editor; releasing one editor's version must preserve other editors' equal version numbers.
+
+Resolve the notification node getText/getSource/getAttributes methods against the captured instance: the pinned JS methods read own fields directly. Keep getLatest-based graph methods on the active graph.
