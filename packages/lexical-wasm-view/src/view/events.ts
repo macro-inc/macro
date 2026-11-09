@@ -727,6 +727,7 @@ export function registerEvents(view: EditorView): {
         !sameSelection(selected, current)
       ) {
         view.port.selectionFromView(selected);
+        lastSubmittedSelection = readSelection(view);
       }
       const data = view.clipboard.formats(name === 'cut' ? 1 : 0);
       event.clipboardData.setData('text/html', data.html);
