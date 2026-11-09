@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-unmount"
+description = "Enables the unmount command without any pre-configured scope."
+commands.allow = ["unmount"]
+
+[[permission]]
+identifier = "deny-unmount"
+description = "Denies the unmount command without any pre-configured scope."
+commands.deny = ["unmount"]

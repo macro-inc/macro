@@ -19,7 +19,7 @@ interface NativeTokenSource : AutoCloseable {
 
 /** Platform executors only: protocol, retry, authorization and WAL policy stay in Rust. */
 class NativeSessionAdapters(
-    private val storage: NativeSessionStorage,
+    private val storage: NativeSessionStorage?,
     private val tokens: NativeTokenSource,
     private val client: OkHttpClient,
     private val socketRequest: (FfiIoEffect.SocketConnect) -> Request,
@@ -102,7 +102,15 @@ class NativeSessionAdapters(
     override fun storage(effect: FfiIoEffect.Storage, complete: (FfiStorageResult) -> Unit) {
         check(active.get())
         storageQueue.execute {
-            val result = storage.execute(effect.opBody)
+            val result = try {
+                requireNotNull(storage) { "Durable storage is not configured" }.execute(effect.opBody)
+            } catch (error: Exception) {
+                when (effect.opBody) {
+                    is StorageOp.Load, is StorageOp.LoadOrphans -> FfiStorageResult.LoadFailed(StorageFailure.UNAVAILABLE)
+                    is StorageOp.WalAdopt -> FfiStorageResult.AdoptFailed(StorageFailure.UNCERTAIN)
+                    else -> FfiStorageResult.WriteFailed(StorageFailure.UNCERTAIN)
+                }
+            }
             if (active.get()) complete(result)
         }
     }
@@ -116,7 +124,7 @@ class NativeSessionAdapters(
             connections.values.forEach { it.socket?.cancel() }
             connections.clear()
             // Drain already accepted transactions before releasing the database and owner lease.
-            storageQueue.execute { storage.close() }
+            storageQueue.execute { storage?.close() }
             storageQueue.shutdown()
         }
     }

@@ -3,6 +3,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Standalone checks include the pinned Tauri project under the same SDK floor.
+if (rootProject == project) {
+    subprojects {
+        plugins.withId("com.android.library") {
+            extensions.configure<com.android.build.gradle.LibraryExtension> {
+                buildToolsVersion = "36.0.0"
+                ndkVersion = "30.0.16248370"
+            }
+        }
+    }
+}
+
 val rustHostVersion = providers.exec { commandLine("cargo", "-vV") }.standardOutput.asText
 val rustHost = rustHostVersion.map { text ->
     text.lineSequence().first { it.startsWith("host: ") }.removePrefix("host: ")
@@ -41,9 +53,11 @@ android {
 }
 
 dependencies {
+    implementation(project(":tauri-android"))
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.3")
     testImplementation("junit:junit:4.13.2")
     testImplementation("net.java.dev.jna:jna:5.14.0")
     testImplementation("org.robolectric:robolectric:4.14.1")
@@ -53,26 +67,51 @@ dependencies {
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
 
-// Without a target, tests compile the native API without packaging a device library.
-// Device runs select their Rust target explicitly, including emulator x86_64.
-providers.gradleProperty("nativeSessionTarget").orNull?.let { target ->
-    val abi = when (target) {
-        "aarch64-linux-android" -> "arm64-v8a"
-        "x86_64-linux-android" -> "x86_64"
-        "armv7-linux-androideabi" -> "armeabi-v7a"
-        "i686-linux-android" -> "x86"
-        else -> throw GradleException("Unsupported native session target")
+// Standalone tests compile without device libraries unless a target is selected.
+// App builds inherit the same target set that the generated Tauri Rust tasks use.
+val nativeTargets = providers.gradleProperty("nativeSessionTarget").orNull?.split(',')
+    ?: if (rootProject != project) {
+        providers.gradleProperty("targetList").orElse("aarch64,armv7,i686,x86_64").get().split(',').map {
+            when (it) {
+                "aarch64" -> "aarch64-linux-android"
+                "armv7" -> "armv7-linux-androideabi"
+                "i686" -> "i686-linux-android"
+                "x86_64" -> "x86_64-linux-android"
+                else -> throw GradleException("Unsupported Tauri native session target")
+            }
+        }
+    } else emptyList()
+val repository = projectDir.resolve("../../../../..").canonicalFile
+for (profile in listOf("debug", "release")) {
+    val profileName = profile.replaceFirstChar { it.uppercase() }
+    if (nativeTargets.isNotEmpty()) {
+        android.sourceSets[profile].jniLibs.srcDir(layout.buildDirectory.dir("generated/nativeSession/$profile"))
     }
-    val repository = projectDir.resolve("../../../../..").canonicalFile
-    val buildNativeSession = tasks.register<Exec>("buildNativeSession") {
-        workingDir(repository)
-        commandLine("bun", "crates/client/document_session_ffi/scripts/build-android.ts", target)
+    var previousBuild: org.gradle.api.tasks.TaskProvider<Exec>? = null
+    for (target in nativeTargets) {
+        val abi = when (target) {
+            "aarch64-linux-android" -> "arm64-v8a"
+            "x86_64-linux-android" -> "x86_64"
+            "armv7-linux-androideabi" -> "armeabi-v7a"
+            "i686-linux-android" -> "x86"
+            else -> throw GradleException("Unsupported native session target")
+        }
+        val suffix = target.replace('-', '_')
+        val preceding = previousBuild
+        val buildNativeSession = tasks.register<Exec>("buildNativeSession$profileName$suffix") {
+            preceding?.let { mustRunAfter(it) }
+            workingDir(repository)
+            commandLine(listOf("bun", "crates/client/document_session_ffi/scripts/build-android.ts", target) +
+                if (profile == "release") listOf("--release") else emptyList())
+        }
+        previousBuild = buildNativeSession
+        val packageNativeSession = tasks.register<Copy>("packageNativeSession$profileName$suffix") {
+            dependsOn(buildNativeSession)
+            from(repository.resolve("target/$target/$profile/libdocument_session_ffi.so"))
+            into(layout.buildDirectory.dir("generated/nativeSession/$profile/$abi"))
+        }
+        tasks.matching { it.name == "merge${profileName}JniLibFolders" }.configureEach {
+            dependsOn(packageNativeSession)
+        }
     }
-    val packageNativeSession = tasks.register<Copy>("packageNativeSession") {
-        dependsOn(buildNativeSession)
-        from(repository.resolve("target/$target/debug/libdocument_session_ffi.so"))
-        into(layout.buildDirectory.dir("generated/nativeSession/$abi"))
-    }
-    android.sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("generated/nativeSession"))
-    tasks.named("preBuild").configure { dependsOn(packageNativeSession) }
 }

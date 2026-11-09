@@ -10,3 +10,8 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "macro-native-editor"
+val tauriAndroidPath = providers.gradleProperty("tauriAndroidPath")
+    .orElse(providers.environmentVariable("TAURI_ANDROID_PROJECT_PATH")).orNull
+    ?: throw GradleException("Use scripts/android-check.ts to locate the pinned Tauri Android project")
+include(":tauri-android")
+project(":tauri-android").projectDir = file(tauriAndroidPath)

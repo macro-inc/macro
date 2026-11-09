@@ -1,0 +1,19 @@
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tauri_plugin::Builder::new(&[
+        "begin_account",
+        "create",
+        "mount",
+        "layout",
+        "focus",
+        "permissions",
+        "token_result",
+        "action",
+        "query",
+        "lifecycle",
+        "unmount",
+        "stop",
+    ])
+    .android_path("android")
+    .try_build()?;
+    Ok(())
+}
