@@ -294,3 +294,187 @@ fn imported_text_format_names_and_undefined_style_reach_paragraph_export() -> Re
     );
     Ok(())
 }
+
+#[test]
+fn raw_remote_updates_retain_unchanged_typed_state_and_parse_real_changes() -> Result<(), Error> {
+    use std::sync::Arc;
+    static METADATA: StateKey<Arc<serde_json::Value>> = StateKey::new("metadata", |value| {
+        Arc::new(match value {
+            Some(value) if value.is_object() => serde_json::json!({
+                "version": value.get("version").cloned().unwrap_or(serde_json::json!(-1)),
+                "tags": value.get("tags").cloned().unwrap_or(serde_json::Value::Null),
+            }),
+            _ => serde_json::json!({"version": -1}),
+        })
+    });
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    editor.update(|tx| {
+        let value = Arc::new(serde_json::json!({"version":10}));
+        tx.set_state(NodeKey::ROOT, &METADATA, value.clone())?;
+        let original = tx.export_json(NodeKey::ROOT)?;
+        let mut update = original.clone();
+        update.insert("format".into(), serde_json::json!("right"));
+        update
+            .get_mut("$")
+            .expect("state")
+            .as_object_mut()
+            .expect("object")
+            .insert("future".into(), serde_json::json!({"keep":true}));
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert!(Arc::ptr_eq(
+            &tx.get_state(NodeKey::ROOT, &METADATA)?,
+            &value
+        ));
+        assert_eq!(tx.export_json(NodeKey::ROOT)?, update);
+        assert_eq!(tx.element_data(NodeKey::ROOT)?.format, ElementFormat::Right);
+        update
+            .get_mut("$")
+            .expect("state")
+            .as_object_mut()
+            .expect("object")
+            .insert("metadata".into(), serde_json::json!({"version":11}));
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &METADATA)?.as_ref(),
+            &serde_json::json!({"version":11,"tags":null})
+        );
+        assert_eq!(
+            tx.export_json(NodeKey::ROOT)?["$"]["future"],
+            serde_json::json!({"keep":true})
+        );
+        update
+            .get_mut("$")
+            .expect("state")
+            .as_object_mut()
+            .expect("object")
+            .insert("metadata".into(), serde_json::Value::Null);
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &METADATA)?.as_ref(),
+            &serde_json::json!({"version":-1})
+        );
+        tx.set_state(NodeKey::ROOT, &METADATA, value.clone())?;
+        update
+            .get_mut("$")
+            .expect("state")
+            .as_object_mut()
+            .expect("object")
+            .remove("metadata");
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert!(Arc::ptr_eq(
+            &tx.get_state(NodeKey::ROOT, &METADATA)?,
+            METADATA.default_value()
+        ));
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert!(Arc::ptr_eq(
+            &tx.get_state(NodeKey::ROOT, &METADATA)?,
+            METADATA.default_value()
+        ));
+        // The default is omitted by export. An explicitly supplied default-shaped
+        // object is new input, even though it equals the default's serialization.
+        update
+            .get_mut("$")
+            .expect("state")
+            .as_object_mut()
+            .expect("object")
+            .insert("metadata".into(), serde_json::json!({"version":-1}));
+        tx.apply_remote_fields(NodeKey::ROOT, &update)?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &METADATA)?.as_ref(),
+            &serde_json::json!({"version":-1,"tags":null})
+        );
+        tx.set_state(NodeKey::ROOT, &METADATA, value)?;
+        // Ordinary JSON import must still invoke the source parser even for identical JSON.
+        tx.update_from_json(NodeKey::ROOT, &original)?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &METADATA)?.as_ref(),
+            &serde_json::json!({"version":10,"tags":null})
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn raw_remote_state_import_keeps_flat_precedence_and_removal() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Stateful>()
+        .build()
+        .expect("builder");
+    editor.update(|tx| {
+        let node = tx.create(Stateful::default())?;
+        tx.set_state(node, &NOTE, "flat".into())?;
+        let array: std::sync::Arc<[String]> = vec!["nested".to_owned()].into();
+        tx.set_state(node, &ARRAY, array.clone())?;
+        tx.apply_remote_fields(node, serde_json::json!({"type":"stateful","note":"flat","$":{"note":"shadowed","array":["nested"],"future":7}}).as_object().expect("object"))?;
+        assert_eq!(tx.get_state(node, &NOTE)?, "flat");
+        assert!(std::sync::Arc::ptr_eq(&tx.get_state(node, &ARRAY)?, &array));
+        assert_eq!(tx.export_json(node)?["$"], serde_json::json!({"array":["nested"],"future":7}));
+        tx.apply_remote_fields(node, serde_json::json!({"type":"stateful","$":{"note":"nested","array":["changed"]}}).as_object().expect("object"))?;
+        assert_eq!(tx.get_state(node, &NOTE)?, "nested");
+        assert_eq!(tx.get_state(node, &ARRAY)?.as_ref(), &["changed".to_owned()]);
+        tx.apply_remote_fields(node, serde_json::json!({"type":"stateful"}).as_object().expect("object"))?;
+        assert_eq!(tx.get_state(node, &NOTE)?, "");
+        assert!(std::sync::Arc::ptr_eq(&tx.get_state(node, &ARRAY)?, ARRAY.default_value()));
+        assert!(!tx.export_json(node)?.contains_key("$"));
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn raw_remote_state_distinguishes_signed_zero_inside_objects_and_arrays() -> Result<(), Error> {
+    use std::sync::Arc;
+    static JSON: StateKey<Arc<serde_json::Value>> = StateKey::new("json", |value| {
+        Arc::new(value.cloned().unwrap_or(serde_json::Value::Null))
+    });
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    editor.update(|tx| {
+        tx.set_state(NodeKey::ROOT, &JSON, Arc::new(serde_json::json!(-0.0)))?;
+        tx.apply_remote_fields(
+            NodeKey::ROOT,
+            serde_json::json!({"type":"root","$":{"json":0.0}})
+                .as_object()
+                .expect("object"),
+        )?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &JSON)?
+                .as_f64()
+                .expect("number")
+                .to_bits(),
+            0.0_f64.to_bits()
+        );
+        tx.set_state(
+            NodeKey::ROOT,
+            &JSON,
+            Arc::new(serde_json::json!({"values":[-0.0],"keep":true})),
+        )?;
+        tx.apply_remote_fields(
+            NodeKey::ROOT,
+            serde_json::json!({"type":"root","$":{"json":{"values":[0.0],"keep":true}}})
+                .as_object()
+                .expect("object"),
+        )?;
+        assert_eq!(
+            tx.get_state(NodeKey::ROOT, &JSON)?["values"][0]
+                .as_f64()
+                .expect("number")
+                .to_bits(),
+            0.0_f64.to_bits()
+        );
+        let stored = tx.get_state(NodeKey::ROOT, &JSON)?;
+        tx.apply_remote_fields(
+            NodeKey::ROOT,
+            serde_json::json!({"type":"root","$":{"json":{"keep":true,"values":[0.0]}}})
+                .as_object()
+                .expect("object"),
+        )?;
+        assert!(Arc::ptr_eq(&stored, &tx.get_state(NodeKey::ROOT, &JSON)?));
+        Ok(())
+    })?;
+    Ok(())
+}

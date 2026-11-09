@@ -720,7 +720,7 @@ impl<'editor> Transaction<'editor> {
     ) -> Result<(), Error> {
         self.import_fields(key.into(), json, import, false)
     }
-    /// Apply values already validated by a remote peer without running virtual setters.
+    /// Apply remote values without virtual setters, retaining unchanged typed state.
     pub fn apply_remote_fields(
         &mut self,
         key: impl Into<NodeKey>,
@@ -768,7 +768,7 @@ impl<'editor> Transaction<'editor> {
             }
         }
         let shared = self.pending.shared_state_configs.for_type(index)?;
-        let state = NodeState::import(&filtered, &layout, existing.as_deref(), Some(&shared));
+        let state = NodeState::import(&filtered, &layout, existing.as_deref(), Some(&shared), raw);
         self.writable(key)?.state = state.map(Arc::new);
         if import.base_fields {
             let number = |name: &str| {
