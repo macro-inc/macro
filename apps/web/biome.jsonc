@@ -12,6 +12,9 @@
       "**/*.{ts,tsx,js,jsx}",
       "**/openapi.json",
       "!**/*.d.ts",
+      // just check passes collaboration compiler outputs through this config.
+      "!!**/foreign-host.generated.ts",
+      "!!**/foreign-native-fields.generated.ts",
       "!chrome-extension-vite",
       "!infra/web-app/output",
       "!scripts",
