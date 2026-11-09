@@ -228,6 +228,7 @@ pub fn relaunch(
         });
     };
     applied("restarting".to_owned());
+    tracing::info!(to = tag, method = ?method, "restarting into the updated macrod");
     let error = command.exec();
     applied(format!("restart failed: {error}"));
     drop(agent);
