@@ -212,8 +212,11 @@ export class ConformanceBackend implements ShimBackend {
     try {
       return this.enter(body);
     } finally {
-      if (this.pending && this.metadataObserved) this.getUpdateMetadata();
+      this.refreshObservedMetadata();
     }
+  }
+  private refreshObservedMetadata(): void {
+    if (this.pending && this.metadataObserved) this.getUpdateMetadata();
   }
   installForeign(
     type: string,
@@ -260,7 +263,7 @@ export class ConformanceBackend implements ShimBackend {
     return this.enter((handle) => handle.read_state(version, body));
   }
   flush(): void {
-    this.enter((handle) => handle.flush());
+    this.execute((handle) => handle.flush());
   }
   finishNoop(): boolean {
     const finished = this.enter((handle) => handle.finish_noop());
@@ -345,7 +348,7 @@ export class ConformanceBackend implements ShimBackend {
     type: string,
     dispatch: (node: unknown) => unknown
   ): number {
-    const id = this.enter((handle) =>
+    const id = this.execute((handle) =>
       handle.register_transform(type, this.bridge(dispatch))
     );
     this.callbacks.set(id, dispatch);
@@ -369,7 +372,7 @@ export class ConformanceBackend implements ShimBackend {
     return id;
   }
   dispatchCommand(command: object, payload: unknown): boolean {
-    return this.enter((handle) =>
+    return this.execute((handle) =>
       handle.dispatch_command(commandIdentity(command), payload)
     );
   }
