@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest';
 import { ConformanceBackend } from '../../backend/conformance';
-import { nativeNode, ParagraphNode, TextNode } from '../index';
+import { nativeNode, ParagraphNode, RootNode, TextNode } from '../index';
 import { NodeRuntime, withNodeRuntime } from '../runtime';
 
 test('text DOM preserves nested formatting, theme combinations and styles across updates', () => {
@@ -25,6 +25,10 @@ test('text DOM preserves nested formatting, theme combinations and styles across
       const text = new TextNode('before')
         .setFormat('bold')
         .setStyle('color: red');
+      const paragraph = new ParagraphNode().append(text);
+      const root = runtime.call('lexical.$getRoot', []);
+      if (!(root instanceof RootNode)) throw new Error('expected root');
+      root.append(paragraph);
       const dom = text.createDOM(config);
       expect(dom.outerHTML).toBe(
         '<strong class="bold" style="color: red;">before</strong>'
