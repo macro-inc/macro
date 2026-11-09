@@ -27,6 +27,7 @@ import { type DOMConversionMap, textImportDOM } from './dom-import';
 import type { EditorConfig } from './editor-config';
 import { textFormats, toggleTextFormat } from './format';
 import { ElementNode } from './index';
+import { $applyNodeReplacement } from './replacement/helpers';
 import { modeResult, nodeResult, nodesResult } from './results';
 import { nodeCall, nodeIsComposing, nodeSelect } from './runtime';
 import { createTextDOM, updateTextDOM } from './text-dom';
@@ -65,7 +66,7 @@ export class TextNode extends LexicalNode {
     this.__detail = prevNode.__detail;
   }
   static importJSON(node: SerializedTextNode): TextNode {
-    return new TextNode().updateFromJSON(node);
+    return $applyNodeReplacement(new TextNode()).updateFromJSON(node);
   }
   getTopLevelElement(): ElementNode | null {
     const node = super.getTopLevelElement();
