@@ -62,9 +62,23 @@ impl Plugin for NodeIds {
         "session-node-id"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        &[]
+        const COMMANDS: &[CommandRegistration] = &[CommandRegistration {
+            command: CommandKind::InsertClipboardNodes,
+            priority: CommandPriority::Critical,
+            placement: Placement::Before,
+        }];
+        COMMANDS
     }
-    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        if let Command::InsertClipboardNodes { nodes, .. } = command {
+            // Clipboard copies lose durable identities even across documents.
+            // Yield so selection/table handlers still own actual insertion.
+            for node in nodes {
+                for record in lexical_rich_nodes::utils::dfs(tx.view(), Some(*node), None) {
+                    tx.set_state(record.node, self.id_state, None)?;
+                }
+            }
+        }
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {

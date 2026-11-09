@@ -853,3 +853,6 @@ mod id_state_test;
 
 #[cfg(test)]
 mod namespace_test;
+
+#[cfg(test)]
+mod clipboard_id_test;
