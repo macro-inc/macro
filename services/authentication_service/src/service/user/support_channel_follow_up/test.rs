@@ -12,10 +12,12 @@ fn finished() -> Signals {
         opened_checkout: false,
         on_phone: false,
         gmail_attempted: false,
+        mid_attempt: false,
         inbox_connected: true,
         domain: "acme.com".to_owned(),
         work_domain: true,
         mail_provider: MailProvider::Other,
+        outlook_offered: true,
         team: None,
         tools: Vec::new(),
     }
@@ -37,12 +39,38 @@ fn looks_30_seconds_after_setup_or_at_five_minutes() {
 }
 
 #[test]
+fn something_the_user_started_is_under_way_for_five_minutes() {
+    assert!(!under_way(None, at(0)));
+    assert!(under_way(Some(at(0)), at(299)));
+    assert!(!under_way(Some(at(0)), at(300)));
+}
+
+#[test]
+fn any_post_besides_the_welcome_starts_the_conversation() {
+    let welcome = Uuid::from_u128(1);
+    let follow_up = Uuid::from_u128(2);
+    let reply = Uuid::from_u128(3);
+
+    assert!(!conversation_started([(welcome, 0)], follow_up));
+    assert!(!conversation_started(
+        [(follow_up, 0), (welcome, 0)],
+        follow_up
+    ));
+    assert!(conversation_started([(welcome, 1)], follow_up));
+    assert!(conversation_started([(reply, 0), (welcome, 0)], follow_up));
+    assert!(conversation_started(
+        [(reply, 0), (follow_up, 0), (welcome, 0)],
+        follow_up
+    ));
+}
+
+#[test]
 fn sends_the_first_message_that_fits() {
     let in_setup = Signals {
         finished_setup: false,
         inbox_connected: false,
         mail_provider: MailProvider::Microsoft,
-        team: Some("Acme".to_owned()),
+        team: Some(TeamTie::Brought("Acme".to_owned())),
         ..finished()
     };
     let no_inbox = Signals {
@@ -79,9 +107,28 @@ fn sends_the_first_message_that_fits() {
             Signals {
                 paid: true,
                 gmail_attempted: true,
+                ..in_setup.clone()
+            },
+            Some(Path::Paid),
+        ),
+        // In the middle of connecting Gmail or checking out, it waits.
+        (
+            Signals {
+                gmail_attempted: true,
+                opened_checkout: true,
+                on_phone: true,
+                mid_attempt: true,
                 ..in_setup
             },
-            Some(Path::Pro),
+            None,
+        ),
+        (
+            Signals {
+                opened_checkout: true,
+                mid_attempt: true,
+                ..finished()
+            },
+            None,
         ),
         // Finished, without an inbox.
         (
@@ -90,6 +137,14 @@ fn sends_the_first_message_that_fits() {
                 ..no_inbox.clone()
             },
             Some(Path::Outlook),
+        ),
+        (
+            Signals {
+                mail_provider: MailProvider::Microsoft,
+                outlook_offered: false,
+                ..no_inbox.clone()
+            },
+            Some(Path::SoloWork),
         ),
         (
             Signals {
@@ -116,11 +171,27 @@ fn sends_the_first_message_that_fits() {
         ),
         (
             Signals {
-                team: Some("Acme".to_owned()),
+                team: Some(TeamTie::Brought("Acme".to_owned())),
                 tools: vec![tool("notion", "Notion")],
                 ..finished()
             },
             Some(Path::Team("Acme")),
+        ),
+        // Someone who joined a team is never asked whether they are alone.
+        (
+            Signals {
+                team: Some(TeamTie::Joined("Acme".to_owned())),
+                ..finished()
+            },
+            Some(Path::Teammate("Acme")),
+        ),
+        (
+            Signals {
+                team: Some(TeamTie::Joined("Acme".to_owned())),
+                tools: vec![tool("notion", "Notion")],
+                ..finished()
+            },
+            Some(Path::Notion),
         ),
         (
             Signals {

@@ -33,7 +33,7 @@ impl Default for DnsMailExchanges {
 
 impl DnsMailExchanges {
     /// Mail server host names for `domain`; empty when none are found.
-    #[tracing::instrument(name = "support_follow_up.mail_exchanges", skip(self))]
+    #[tracing::instrument(name = "support_follow_up.mail_exchanges", skip_all)]
     pub async fn exchanges(&self, domain: &str) -> Vec<String> {
         let Some(resolver) = &self.resolver else {
             return Vec::new();

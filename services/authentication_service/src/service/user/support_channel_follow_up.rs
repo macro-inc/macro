@@ -3,8 +3,9 @@
 //! A support team member sends one message chosen from what the user did at
 //! signup. It goes out 30 seconds after setup finishes; someone still in setup
 //! at five minutes only gets one when the reason they are stuck is known, and
-//! nothing if they don't finish within the hour. It never goes out once anyone
-//! has posted. The PostHog flag `support-channel-follow-up` splits new users
+//! nothing if they don't finish within the hour. It waits while the user is in
+//! the middle of connecting Gmail or checking out, and never goes out once
+//! anyone has posted. The PostHog flag `support-channel-follow-up` splits new users
 //! into `control` and `test`; only `test` gets the message.
 
 use std::{sync::Arc, time::Duration};
@@ -16,14 +17,12 @@ use feature_flags::{FeatureFlags, outbound::posthog::PostHogFeatureFlags};
 use futures::{StreamExt, stream};
 use generic_email_domains::is_generic_email_domain;
 use github::domain::{models::GithubLinkStatus, ports::GithubLinkService};
+use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::serialize::user_mention;
 use messages::domain::{
     api::MessageServiceApi,
-    models::{
-        MessageAttribution, MessageListItem, PostMessage, PostMessageNotificationPolicy,
-        SimpleMention,
-    },
+    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy, SimpleMention},
     ports::MessageTimelineQuery,
     service::{MessageView, MessageWrite},
 };
@@ -39,7 +38,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    api::context::GtmInviteServiceType,
+    domain::microsoft::MicrosoftAuth,
     outbound::{
         mail_exchanges::DnsMailExchanges,
         subscription_checkout::StripeCheckoutGateway,
@@ -52,11 +51,14 @@ mod test;
 
 const FLAG: &str = "support-channel-follow-up";
 const SEND_VARIANT: &str = "test";
-const SENDER_EMAIL: &str = "chaitanya@macro.com";
+pub(crate) const SENDER_EMAIL: &str = "chaitanya@macro.com";
 
 const AFTER_SETUP: TimeDelta = TimeDelta::seconds(30);
 const STUCK_CHECK: TimeDelta = TimeDelta::minutes(5);
 const EXPIRY: TimeDelta = TimeDelta::hours(1);
+/// How long a Gmail connection or checkout the user started may still be
+/// under way.
+const UNDER_WAY: TimeDelta = TimeDelta::minutes(5);
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 const DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -141,7 +143,7 @@ impl SupportFollowUpScheduler {
 
 /// Sends queued follow-ups when they come due. Every replica runs one; a
 /// one-minute row claim keeps two from sending the same follow-up.
-pub(crate) struct SupportFollowUpWorker<A, T, O, C, G> {
+pub(crate) struct SupportFollowUpWorker<A, T, O, C, G, I> {
     pub(crate) queue: PgSupportFollowUps,
     pub(crate) db: PgPool,
     pub(crate) messages: Arc<dyn MessageServiceApi>,
@@ -150,18 +152,22 @@ pub(crate) struct SupportFollowUpWorker<A, T, O, C, G> {
     pub(crate) onboarding: O,
     pub(crate) connections: C,
     pub(crate) github: Arc<G>,
-    pub(crate) billing: StripeCheckoutGateway<GtmInviteServiceType>,
+    pub(crate) billing: StripeCheckoutGateway<I>,
     pub(crate) mail: DnsMailExchanges,
+    /// Decides whether a user can connect Outlook; `None` when Outlook is not
+    /// configured.
+    pub(crate) microsoft: Option<Arc<dyn MicrosoftAuth>>,
     pub(crate) analytics: Arc<AnalyticsClient>,
 }
 
-impl<A, T, O, C, G> SupportFollowUpWorker<A, T, O, C, G>
+impl<A, T, O, C, G, I> SupportFollowUpWorker<A, T, O, C, G, I>
 where
     A: EntityAccessService,
     T: TeamRepository,
     O: OnboardingRepo,
     C: ConnectionStore<Err = anyhow::Error> + Sync,
     G: GithubLinkService,
+    I: GtmInviteService,
 {
     /// Poll until `stop` is cancelled. An interrupted delivery is retried,
     /// with the same message id, once its claim lapses.
@@ -187,11 +193,12 @@ where
         };
         stream::iter(pending)
             .for_each_concurrent(CONCURRENT_DELIVERIES, |pending| async move {
+                let channel_id = pending.channel_id;
                 if tokio::time::timeout(DELIVERY_TIMEOUT, self.deliver_if_due(pending))
                     .await
                     .is_err()
                 {
-                    tracing::warn!("support follow-up timed out; it will be retried");
+                    tracing::warn!(%channel_id, "support follow-up timed out; it will be retried");
                 }
             })
             .await;
@@ -244,6 +251,8 @@ where
             return self.skip(&pending, "expired").await;
         }
 
+        let signals = self.signals(&pending, finished_setup, now).await?;
+
         let sender = MacroUserIdStr::try_from_email(SENDER_EMAIL)
             .context("invalid support follow-up sender")?;
         let channel_id = pending.channel_id.to_string();
@@ -257,6 +266,19 @@ where
             )
             .await
             .context("support follow-up sender must be a channel member")?;
+        let write = self
+            .access
+            .generate_entity_access_receipt::<MessageWrite>(
+                &sender,
+                None,
+                &channel_id,
+                EntityType::Channel,
+            )
+            .await
+            .context("support follow-up sender must be a channel member")?;
+
+        // Read the channel last, so nothing slow sits between this check and
+        // the post.
         let roots = self
             .messages
             .timeline(
@@ -269,14 +291,17 @@ where
             .await
             .context("failed to read the support channel")?
             .items;
-        if conversation_started(&roots, message_id) {
+        let roots = roots
+            .iter()
+            .map(|root| (root.message.id, root.thread.reply_count));
+        if conversation_started(roots, message_id) {
             return self.skip(&pending, "conversation_started").await;
         }
 
-        let signals = self.signals(&pending, finished_setup).await?;
         let Some(path) = choose(&signals) else {
-            // Still in setup with no known reason; the claim lapses in a
-            // minute and it is looked at again.
+            // Still in setup with no known reason, or in the middle of
+            // connecting Gmail or checking out; the claim lapses in a minute
+            // and it is looked at again.
             span.record("outcome", "waiting");
             return Ok(());
         };
@@ -284,16 +309,6 @@ where
         span.record("path", path_name);
         let mention = user_mention(user).context("failed to mention the user")?;
 
-        let write = self
-            .access
-            .generate_entity_access_receipt::<MessageWrite>(
-                &sender,
-                None,
-                &channel_id,
-                EntityType::Channel,
-            )
-            .await
-            .context("support follow-up sender must be a channel member")?;
         // Posting with the queued id makes a retry return the first post.
         self.messages
             .post_from_event(
@@ -353,9 +368,12 @@ where
         &self,
         pending: &PendingFollowUp,
         finished_setup: bool,
+        now: DateTime<Utc>,
     ) -> Result<Signals, Report> {
         let user = &pending.user_id;
         let domain = user.0.email_part().domain_part().to_ascii_lowercase();
+        let checkout_opened = pending.checkout_opened_at.is_some();
+        let checkout_under_way = under_way(pending.checkout_opened_at, now);
         let (inbox, paid, devices) = tokio::try_join!(
             async {
                 email_db_client::links::get::fetch_link_by_macro_id(&self.db, user.as_ref())
@@ -364,9 +382,10 @@ where
                     .context("failed to read the user's inbox")
             },
             // Only someone who opened a checkout can have paid, so Stripe is
-            // asked once, for them alone.
+            // asked once, for them alone, when the checkout has had time to
+            // finish.
             async {
-                if pending.checkout_opened {
+                if checkout_opened && !checkout_under_way {
                     self.billing
                         .has_subscription(user)
                         .await
@@ -385,12 +404,15 @@ where
         let mut signals = Signals {
             finished_setup,
             paid,
-            opened_checkout: pending.checkout_opened && !paid,
+            opened_checkout: checkout_opened && !paid,
             on_phone: !devices.is_empty(),
-            gmail_attempted: pending.gmail_attempted,
+            gmail_attempted: pending.gmail_attempted_at.is_some(),
+            mid_attempt: checkout_under_way
+                || (inbox.is_none() && under_way(pending.gmail_attempted_at, now)),
             inbox_connected: inbox.is_some(),
             work_domain: !is_generic_email_domain(&domain),
             mail_provider: MailProvider::Other,
+            outlook_offered: false,
             domain,
             team: None,
             tools: Vec::new(),
@@ -410,29 +432,40 @@ where
             signals.mail_provider = mail_provider;
             signals.team = team?;
             signals.tools = tools?;
+
+            // Settings only shows the Outlook row to users who may connect it.
+            if let (MailProvider::Microsoft, Some(microsoft)) = (mail_provider, &self.microsoft) {
+                signals.outlook_offered = microsoft.new_connections_enabled(user).await;
+            }
         }
         Ok(signals)
     }
 
-    /// The name of a team the user created and brought people into.
-    async fn team(&self, user: &MacroUserIdStr<'static>) -> Result<Option<String>, Report> {
+    /// A team the user created and brought people into, else one they joined.
+    async fn team(&self, user: &MacroUserIdStr<'static>) -> Result<Option<TeamTie>, Report> {
         let teams = self
             .teams
             .get_user_teams(user)
             .await
             .context("failed to read the user's teams")?;
-        for team in teams.iter().filter(|team| team.owner_id() == user.as_ref()) {
+        let mut joined = None;
+        for team in &teams {
+            let name = plain_name(team.name()).unwrap_or("your team").to_owned();
+            if team.owner_id() != user.as_ref() {
+                joined.get_or_insert(TeamTie::Joined(name));
+                continue;
+            }
+
             let (members, invites) = tokio::try_join!(
                 self.teams.get_team_members(team.id()),
                 self.teams.get_team_invites(team.id()),
             )
             .context("failed to read the user's team")?;
             if members.len() > 1 || !invites.is_empty() {
-                let name = plain_name(team.name()).unwrap_or("your team");
-                return Ok(Some(name.to_owned()));
+                return Ok(Some(TeamTie::Brought(name)));
             }
         }
-        Ok(None)
+        Ok(joined)
     }
 
     /// Connected apps, plus GitHub, which Macro links itself. A failed GitHub
@@ -491,12 +524,18 @@ fn due(
     }
 }
 
-/// Whether anyone has posted besides the welcome. The follow-up's own message
-/// is ignored so a retry after a lost response can still finish.
-fn conversation_started(roots: &[MessageListItem], follow_up: Uuid) -> bool {
-    let mut others = roots.iter().filter(|root| root.message.id != follow_up);
+/// Whether something the user started is recent enough to still be under way.
+fn under_way(started_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+    started_at.is_some_and(|started_at| now < started_at + UNDER_WAY)
+}
+
+/// Whether anyone has posted besides the welcome, from each root message's id
+/// and reply count. The follow-up's own message is ignored so a retry after a
+/// lost response can still finish.
+fn conversation_started(roots: impl IntoIterator<Item = (Uuid, i64)>, follow_up: Uuid) -> bool {
+    let mut others = roots.into_iter().filter(|(id, _)| *id != follow_up);
     let welcome = others.next();
-    others.next().is_some() || welcome.is_some_and(|welcome| welcome.thread.reply_count > 0)
+    others.next().is_some() || welcome.is_some_and(|(_, replies)| replies > 0)
 }
 
 /// Who hosts a domain's mail, from its mail servers.
@@ -532,6 +571,15 @@ struct Tool {
     name: String,
 }
 
+/// How the user is tied to a team, with the team's name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TeamTie {
+    /// They created it and brought people in.
+    Brought(String),
+    /// They joined one somebody else created.
+    Joined(String),
+}
+
 #[derive(Debug, Clone)]
 struct Signals {
     finished_setup: bool,
@@ -539,18 +587,23 @@ struct Signals {
     opened_checkout: bool,
     on_phone: bool,
     gmail_attempted: bool,
+    /// They started connecting Gmail or a checkout in the last five minutes
+    /// and it has not landed yet.
+    mid_attempt: bool,
     inbox_connected: bool,
     domain: String,
     work_domain: bool,
     mail_provider: MailProvider,
-    team: Option<String>,
+    /// Settings offers this user an Outlook connection.
+    outlook_offered: bool,
+    team: Option<TeamTie>,
     tools: Vec<Tool>,
 }
 
 #[derive(Debug, PartialEq, Eq, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum Path<'a> {
-    Pro,
+    Paid,
     GmailTrouble,
     Outlook,
     GoogleWorkInbox(&'a str),
@@ -562,25 +615,30 @@ enum Path<'a> {
     Slack,
     Github,
     OtherTools(Vec<&'a str>),
+    Teammate(&'a str),
     SoloWork,
     Personal,
 }
 
-/// The first message that fits, or `None` while the user is still in setup
-/// for no known reason. Someone in setup only hears about what is holding
-/// them: paying, Gmail, pricing, or being on the phone.
+/// The first message that fits, or `None` to look again in a minute: while
+/// the user is in the middle of connecting Gmail or checking out, or still in
+/// setup for no known reason. Someone in setup only hears about what is
+/// holding them: paying, Gmail, pricing, or being on the phone.
 fn choose(s: &Signals) -> Option<Path<'_>> {
     if s.paid {
-        return Some(Path::Pro);
+        return Some(Path::Paid);
+    }
+    if s.mid_attempt {
+        return None;
     }
     if s.gmail_attempted && !s.inbox_connected {
         return Some(Path::GmailTrouble);
     }
     if s.finished_setup && !s.inbox_connected {
         match s.mail_provider {
-            MailProvider::Microsoft => return Some(Path::Outlook),
+            MailProvider::Microsoft if s.outlook_offered => return Some(Path::Outlook),
             MailProvider::Google if s.work_domain => return Some(Path::GoogleWorkInbox(&s.domain)),
-            MailProvider::Google | MailProvider::Other => {}
+            MailProvider::Microsoft | MailProvider::Google | MailProvider::Other => {}
         }
     }
     if s.opened_checkout {
@@ -589,11 +647,14 @@ fn choose(s: &Signals) -> Option<Path<'_>> {
     if !s.finished_setup {
         return s.on_phone.then_some(Path::Phone);
     }
-    if let Some(team) = &s.team {
+    if let Some(TeamTie::Brought(team)) = &s.team {
         return Some(Path::Team(team));
     }
     if let Some(path) = tool_path(&s.tools) {
         return Some(path);
+    }
+    if let Some(TeamTie::Joined(team)) = &s.team {
+        return Some(Path::Teammate(team));
     }
     Some(if s.work_domain {
         Path::SoloWork
@@ -626,9 +687,9 @@ fn tool_path(tools: &[Tool]) -> Option<Path<'_>> {
 /// The follow-up text. `user` is the mention that opens it.
 fn message(user: &str, path: &Path<'_>) -> String {
     let body = match path {
-        Path::Pro => {
-            "Excited to have you on Pro. If you need any help getting set up I'm happy to \
-             hop on a call with you."
+        Path::Paid => {
+            "Thanks for subscribing! If you need any help getting set up I'm happy to hop on \
+             a call with you."
                 .to_owned()
         }
         Path::GmailTrouble => "Did connecting Gmail give you any trouble? If it was the \
@@ -670,6 +731,10 @@ fn message(user: &str, path: &Path<'_>) -> String {
                 names.join(" and ")
             )
         }
+        Path::Teammate(team) => format!(
+            "Glad you've joined {team} on Macro. Is there anything I can help you get set up \
+             with?"
+        ),
         Path::SoloWork => {
             "Are you trying Macro just for yourself, or for the rest of your team too?".to_owned()
         }

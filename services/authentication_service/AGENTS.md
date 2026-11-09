@@ -93,13 +93,19 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   setup, who only gets a message when the reason is known (paid, Gmail never
   connected, an open checkout, the phone app); otherwise the row is looked at
   again when its one-minute claim lapses and dropped after an hour. A channel
-  where anyone has posted is skipped. `choose` picks the first message that
-  fits; the sender must stay a member of every support channel.
+  where anyone has posted is skipped; the channel is read last, right before
+  the post. `choose` picks the first message that fits; the sender must stay a
+  member of every support channel.
 - Signals: `/link/gmail` and checkout creation set `gmail_attempted_at` and
-  `checkout_opened_at`; Stripe is read only for someone who opened a checkout,
-  never creating a customer. The mail provider comes from the domain's MX
-  records (`outbound/mail_exchanges.rs`), the phone app from push device
-  registrations, and GitHub from Macro's own link.
+  `checkout_opened_at` to the latest attempt. For five minutes after either,
+  the user may still be on Google's or Stripe's page, so the row waits; Stripe
+  is read once after that, only for someone who opened a checkout, never
+  creating a customer. The mail provider comes from the domain's MX records
+  (`outbound/mail_exchanges.rs`), the phone app from push device
+  registrations, and GitHub from Macro's own link. The Outlook message goes
+  only to users Settings offers Outlook to (`new_connections_enabled`), and
+  someone who joined another person's team gets the teammate message, never
+  the solo ones.
 - The post reuses the row's message id through `post_from_event`, so a retry
   never posts twice. Events: `support_follow_up_sent` (`path`,
   `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).

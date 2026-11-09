@@ -742,6 +742,7 @@ async fn run_server() -> anyhow::Result<()> {
                 stripe_prices.seat_prices(),
             ),
             mail: crate::outbound::mail_exchanges::DnsMailExchanges::default(),
+            microsoft: microsoft_auth.clone(),
             analytics: analytics_client.clone(),
         }
         .run(invite_reminders_stop.clone()),
