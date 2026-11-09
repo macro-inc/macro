@@ -40,7 +40,7 @@ links still work. A failed load shows Retry.
 ### Saved call detail
 
 On desktop the header keeps the breadcrumb, the call's More menu, Ask Macro,
-combined Share/copy-link control, Transcript, and the details toggle. Calls and Drive use the
+combined Share/copy-link control, and the details toggle. Calls and Drive use the
 same More menu for call actions, including rename, recording download and delete.
 The channel appears above the title, with the
 participant avatars before the start/end time range, and Call again on the right.
@@ -51,16 +51,15 @@ stored Markdown, not generated client-side sections.
 The full-width top bar stays above the content, with the standard details toggle.
 Details opens in the existing floating popover below the header, without
 Transcript/Details tabs. On touch it uses the standard details drawer.
-The separate Transcript button directly after Share toggles a 360px floating card
-and stays pressed while open. The card has rounded corners, an edge and shadow,
-12px insets from the content pane's top/right/bottom, and padded transcript rows.
-It uses the next Layer surface depth, with an inset Sync surface, in both themes.
-The recording leaves room on the right so the card covers no content. Details can
-float above Transcript without closing it; closing Details restores the same
-transcript scroll position, follow state and pressed button. Opening Transcript
-changes an active Transcript reading tab to Summary; choosing the Transcript tab
-again remains possible. The button and card are hidden on touch and below 960px
-of call-pane width; use the reading tab there.
+At call-column widths of 948px or more, a 320–360px Transcript card sits beside
+the player. This container threshold leaves at least 520px for the player after
+the existing insets and section gap; split panes switch independently of the window.
+The full-width identity sits above both columns. The left column scrolls through
+the player, Summary and Call chat while the transcript stays in view and scrolls
+internally. The card uses the next Layer surface depth, the player's corner radius,
+no border or shadow, and an inset Sync surface in both themes. Details floats over
+the card without changing its scroll position or follow state. There is no separate
+Transcript header button.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
@@ -76,13 +75,14 @@ Until a display name is available, the explanation says only the person who
 started the call can change sharing; it never substitutes their email.
 An editable switch stays disabled while its change is pending.
 
-Medium-size Summary/Transcript tabs always sit below the recording, whether a
-panel is open or closed. Stored summary attribution sits below the reading tabs,
-above the summary text. Details starts closed and floats over the content without
-moving the recording or its reading tabs.
-Playback remains reachable in a pinned bar after the recording scrolls above the
-viewport. On wide panes its width follows the centered content column; only
-narrow panes use the available width. Show video returns to the recording; all controls drive one media
+Below that threshold, medium-size Summary/Transcript tabs sit below the recording.
+The tab selection and one mounted video/transcript survive resizing in either
+direction. On wide panes, Summary has its own heading with attribution on the
+right; narrow panes keep attribution below the tabs. Details starts closed and
+floats over content without moving it. Playback remains reachable in a pinned bar
+after the recording scrolls above the viewport. Its width follows the left column
+on wide panes and the centered content column on narrow panes. Show video returns
+to the recording; all controls drive one media
 element. Chat jump chips use message time relative to recording start and appear
 only within the known recording duration. Attachments retain their usual cards.
 There is no caption control without a caption track or synthetic speaker video
@@ -111,8 +111,10 @@ call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
 `call_message_id=<messageId>` opens the phone Chat tab and highlights the message.
 
 Check a saved call with recording, transcript, summary, chat and attachments at
-1440x900, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
-details open/closed, reading tabs, pause/seek/skip/speed/fullscreen, scroll-follow
+1440x900, 1280x800 and 1024x768, in splits on both sides of the 948px call-column
+threshold, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
+Details over the Transcript card, both themes, independent scrolling, retained tab
+and playback state after resizing, pause/seek/skip/speed/fullscreen, scroll-follow
 and Sync to video, pinned playback, phone scroll direction, Details dismissal,
 and switching away while playback chrome is mounted. Also check calls without a
 recording, standalone guests, private channel access, owner/non-owner sharing,

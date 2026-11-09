@@ -11,7 +11,7 @@ import { CallRecordingBody as RecordingBody } from './CallRecordingBody';
 
 function CallRecordingBody(props: ComponentProps<typeof RecordingBody>) {
   return (
-    <RecordingViewProvider callId={props.callId}>
+    <RecordingViewProvider>
       <RecordingBody {...props} />
     </RecordingViewProvider>
   );
@@ -64,6 +64,7 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@ui', () => ({
+  Layer: (props: { children: JSX.Element }) => props.children,
   Tabs: () => null,
   Button: (props: { onClick: () => void; children: JSX.Element }) => (
     <button onClick={() => props.onClick()}>{props.children}</button>
@@ -72,6 +73,7 @@ vi.mock('@ui', () => ({
 vi.mock('./CallRecordingParticipants', () => ({
   CallRecordingAvatars: () => null,
 }));
+vi.mock('../CallTranscript', () => ({ CallTranscript: () => null }));
 vi.mock('./CallRecordingSummary', () => ({
   CallRecordingSummarySection: () => <p>Summary content</p>,
 }));

@@ -42,9 +42,10 @@ export function CallTranscript(props: {
   activeSequenceNum?: number | null;
   videoSeekGeneration?: number;
   onSeekToSeconds?: (seconds: number) => void;
+  active?: boolean;
   hideHeader?: boolean;
   messages?: MessageData[];
-  /** Column transcripts share the page scroller; docked transcripts own one. */
+  /** Inline transcripts share the page scroller; cards own one. */
   scrollElement?: HTMLElement;
   /** Changes only when the enclosing page's custom scrollbar is dragged. */
   manualScrollGeneration?: number;
@@ -53,7 +54,8 @@ export function CallTranscript(props: {
   syncSurface?: 'surface' | 'inset';
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
-  const viewport = () => props.scrollElement ?? scrollRef();
+  const viewport = () =>
+    props.active === false ? undefined : (props.scrollElement ?? scrollRef());
   const [following, setFollowing] = createSignal(true);
   const [activeVisible, setActiveVisible] = createSignal(true);
   const rows = new Map<number, HTMLDivElement>();
@@ -372,7 +374,10 @@ export function CallTranscript(props: {
       </Show>
       <Show
         when={
-          !following() && !activeVisible() && props.activeSequenceNum != null
+          props.active !== false &&
+          !following() &&
+          !activeVisible() &&
+          props.activeSequenceNum != null
         }
       >
         <Show

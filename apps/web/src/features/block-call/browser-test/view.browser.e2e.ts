@@ -1,243 +1,254 @@
 import { expect, test } from '@playwright/test';
 
-test('opens a separate transcript, preserves reading navigation, and hides the panel in narrow panes', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/src/features/block-call/browser-test/view.html');
-  const toggle = page.getByRole('button', { name: 'Transcript', exact: true });
-  const summary = page.getByRole('radio', { name: 'Summary', exact: true });
-  const transcript = page.getByRole('radio', {
-    name: 'Transcript',
-    exact: true,
-  });
-  await expect(toggle).toBeVisible();
-  await expect(summary).toBeChecked();
-  await page
-    .locator('label')
-    .filter({ hasText: /^Transcript$/ })
-    .click();
-  await expect(transcript).toBeChecked();
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(summary).toBeChecked();
-  const panel = page.getByRole('complementary', { name: 'Transcript' });
-  await expect(panel).toBeVisible();
-  await expect(page.getByText('Playback has one transcript line.')).toHaveCount(
-    1
-  );
-  await panel
-    .getByRole('button', { name: /Playback has one transcript line/ })
-    .click();
-  await expect
-    .poll(() =>
-      page
-        .locator('video')
-        .evaluate((element: HTMLVideoElement) => element.currentTime)
-    )
-    .toBeCloseTo(1);
-  await page
-    .locator('label')
-    .filter({ hasText: /^Transcript$/ })
-    .click();
-  await expect(transcript).toBeChecked();
-  await expect(page.getByText('Playback has one transcript line.')).toHaveCount(
-    2
-  );
-  await page
-    .locator('label')
-    .filter({ hasText: /^Summary$/ })
-    .click();
-  if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d46-transcript-wide.png`,
-    });
-  await toggle.click();
-  await expect(panel).toHaveCount(0);
-  await expect(summary).toBeChecked();
-  await toggle.click();
-  await page.setViewportSize({ width: 680, height: 900 });
-  await expect(toggle).toHaveCount(0);
-  await expect(panel).toHaveCount(0);
-  await page
-    .locator('label')
-    .filter({ hasText: /^Transcript$/ })
-    .click();
-  await expect(page.getByText('Playback has one transcript line.')).toHaveCount(
-    1
-  );
-  if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d46-transcript-narrow.png`,
-    });
-});
+const fixture = '/src/features/block-call/browser-test/view.html';
 
-for (const width of [390, 1280]) {
-  test(`touch panes use the reading tabs without a transcript header action (${width}px)`, async ({
-    browser,
-  }) => {
-    const context = await browser.newContext({
-      viewport: { width, height: 844 },
-      hasTouch: true,
-    });
-    try {
-      const page = await context.newPage();
-      await page.goto('/src/features/block-call/browser-test/view.html');
-      await expect(
-        page.getByRole('button', { name: 'Transcript', exact: true })
-      ).toHaveCount(0);
-      await page
-        .locator('label')
-        .filter({ hasText: /^Transcript$/ })
-        .click();
-      await expect(
-        page.getByRole('radio', { name: 'Transcript', exact: true })
-      ).toBeChecked();
+for (const theme of ['light', 'dark']) {
+  for (const { width, height } of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 800 },
+    { width: 1024, height: 768 },
+  ]) {
+    test(`saved call uses the pane width and keeps its transcript (${theme}, ${width}px)`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${fixture}?theme=${theme}`);
+      const card = page.getByRole('complementary', { name: 'Transcript' });
+      const tabs = page.getByRole('radio', { name: 'Transcript' });
+      const pane = page.locator('#fixture-pane');
+      const column = pane.locator('.\\@container\\/call-column');
+      const columnWidth = await column.evaluate(
+        (element) => element.clientWidth
+      );
+      expect(columnWidth).toBe(width - 330);
+      await expect(page.locator('video')).toHaveCount(1);
       await expect(
         page.getByText('Playback has one transcript line.')
       ).toHaveCount(1);
-    } finally {
-      await context.close();
-    }
-  });
-}
-
-for (const theme of ['light', 'dark']) {
-  for (const width of [1440, 960]) {
-    test(`floating cards reserve content space and keep transcript state under details (${theme}, ${width}px)`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(
-        `/src/features/block-call/browser-test/view.html?theme=${theme}`
-      );
-      const transcript = page.getByRole('complementary', {
-        name: 'Transcript',
-      });
-      const details = page.getByRole('complementary', {
-        name: 'Block details',
-      });
-      const toggle = page.getByRole('button', {
-        name: 'Transcript',
-        exact: true,
-      });
-      await page
-        .getByRole('button', { name: 'Show details', exact: true })
-        .click();
-      await expect(details).toBeVisible();
-      await expect(details).toHaveCSS('opacity', '1');
-      await toggle.click();
-      await expect(details).toBeVisible();
-      await expect(transcript).toBeVisible();
-      const overlap = await details.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        return element.contains(
-          document.elementFromPoint(rect.x + 20, rect.y + 20)
-        );
-      });
-      expect(overlap).toBe(true);
+      await expect(page.getByText('Conversation recap')).toBeVisible();
+      if (width >= 1280) {
+        await expect(card).toBeVisible();
+        await expect(tabs).toBeHidden();
+        const geometry = await card.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const player = document
+            .querySelector('video')!
+            .getBoundingClientRect();
+          const column = element
+            .closest('.\\@container\\/call-column')!
+            .getBoundingClientRect();
+          return {
+            width: rect.width,
+            topDifference: Math.abs(rect.top - player.top),
+            rightPadding: column.right - rect.right,
+            background: getComputedStyle(element).backgroundColor,
+            pageBackground: getComputedStyle(document.body).backgroundColor,
+            border: getComputedStyle(element).borderTopWidth,
+            shadow: getComputedStyle(element).boxShadow,
+            radius: getComputedStyle(element).borderRadius,
+            playerRadius: getComputedStyle(
+              document.querySelector('video')!.parentElement!
+            ).borderRadius,
+            bottomGap: column.bottom - rect.bottom,
+            playerWidth: player.width,
+          };
+        });
+        expect(geometry.width).toBeGreaterThanOrEqual(320);
+        expect(geometry.width).toBeLessThanOrEqual(360);
+        expect(geometry.topDifference).toBeLessThan(3);
+        expect(geometry.rightPadding).toBe(40);
+        expect(geometry.background).not.toBe(geometry.pageBackground);
+        expect(geometry.border).toBe('0px');
+        expect(geometry.shadow).toBe('none');
+        expect(geometry.radius).toBe(geometry.playerRadius);
+        expect(geometry.bottomGap).toBe(16);
+        expect(geometry.playerWidth).toBeGreaterThanOrEqual(520);
+      } else {
+        await expect(card).toBeHidden();
+        await expect(tabs).toBeVisible();
+        await expect(
+          page.getByRole('radio', { name: 'Summary' })
+        ).toBeChecked();
+      }
+      if (width === 1024) {
+        await page
+          .locator('label')
+          .filter({ hasText: /^Transcript$/ })
+          .click();
+        await expect(tabs).toBeChecked();
+        await expect(card).toBeVisible();
+      }
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d49-${theme}-${width}-both.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-${width}.png`,
         });
-      await page
-        .getByRole('button', { name: 'Hide details', exact: true })
-        .click();
-      await expect(details).toHaveCount(0);
-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      const geometry = await transcript.evaluate((element: HTMLElement) => {
-        const card = element.getBoundingClientRect();
-        const parent = element.offsetParent!;
-        const pane = parent.getBoundingClientRect();
-        const content = parent
-          .querySelector('[data-channel-scroll]')!
-          .getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return {
-          width: card.width,
-          top: card.top - pane.top,
-          right: pane.right - card.right,
-          bottom: pane.bottom - card.bottom,
-          contentGap: card.left - content.right,
-          radius: style.borderRadius,
-          background: style.backgroundColor,
-          pageBackground: getComputedStyle(document.body).backgroundColor,
-          shadow: style.boxShadow,
-          headingInset:
-            element.querySelector('h3')!.getBoundingClientRect().left -
-            card.left -
-            parseFloat(style.borderLeftWidth) +
-            parseFloat(
-              getComputedStyle(element.querySelector('h3')!).paddingLeft
-            ),
-        };
-      });
-      expect(geometry.width).toBe(360);
-      expect(geometry.top).toBe(12);
-      expect(geometry.right).toBe(12);
-      expect(geometry.bottom).toBe(12);
-      expect(geometry.contentGap).toBe(12);
-      expect(geometry.radius).not.toBe('0px');
-      expect(geometry.background).not.toBe('rgba(0, 0, 0, 0)');
-      expect(geometry.background).not.toBe(geometry.pageBackground);
-      expect(geometry.shadow).not.toBe('none');
-      expect(geometry.headingInset).toBe(12);
-      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
-        await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d49-${theme}-${width}-transcript.png`,
-        });
-
-      // Seek first so the fixture has an active row, then scroll away from it.
-      const activeRow = transcript.getByRole('button', {
-        name: /Playback has one transcript line/,
-      });
-      await activeRow.click();
-      await expect
-        .poll(() =>
-          page
-            .locator('video')
-            .evaluate((video: HTMLVideoElement) => video.currentTime)
-        )
-        .toBeCloseTo(1);
-      await transcript.hover();
-      const sync = transcript.getByRole('button', {
-        name: 'Sync to video',
-        exact: true,
-      });
-      await page.mouse.wheel(0, 600);
-      await expect(sync).toBeVisible();
-      const scroller = transcript.locator('.overflow-y-auto');
-      await expect
-        .poll(() => scroller.evaluate((element) => element.scrollTop))
-        .toBe(600);
-      const scrollTop = await scroller.evaluate((element) => {
-        element.setAttribute('data-preserved-scroll', 'true');
-        return element.scrollTop;
-      });
-      await page
-        .getByRole('button', { name: 'Show details', exact: true })
-        .click();
-      await expect(details).toBeVisible();
-      await expect(transcript).toBeVisible();
-      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
-        await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-scrolled-both.png`,
-        });
-      await page
-        .getByRole('button', { name: 'Hide details', exact: true })
-        .click();
-      await expect(details).toHaveCount(0);
-      await expect(scroller).toHaveAttribute('data-preserved-scroll', 'true');
-      expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
-        scrollTop
-      );
-      await expect(sync).toBeVisible();
-      await sync.click();
-      await expect(activeRow).toBeInViewport();
-      await page.setViewportSize({ width: 959, height: 900 });
-      await expect(toggle).toHaveCount(0);
-      await expect(transcript).toHaveCount(0);
     });
   }
+
+  test(`split pane switches at 948px without remounting playback or losing the selected tab (${theme})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}&pane=948`);
+    const pane = page.locator('#fixture-pane');
+    const video = page.locator('video');
+    const card = page.getByRole('complementary', { name: 'Transcript' });
+    const transcript = page.getByRole('radio', { name: 'Transcript' });
+    await expect(card).toBeVisible();
+    await expect(video).toHaveJSProperty('readyState', 4);
+    await card
+      .getByRole('button', { name: /Playback has one transcript line/ })
+      .click();
+    await expect
+      .poll(() =>
+        video.evaluate((element: HTMLVideoElement) => element.currentTime)
+      )
+      .toBeCloseTo(1);
+    await video.evaluate(async (element: HTMLVideoElement) => {
+      element.playbackRate = 0.1;
+      await element.play();
+    });
+    await expect(video).toHaveJSProperty('paused', false);
+    await video.evaluate((element: HTMLVideoElement) => {
+      element.dataset.mount = 'original';
+    });
+    await card
+      .locator('[data-call-transcript-row]')
+      .first()
+      .evaluate((element) => {
+        element.setAttribute('data-mount', 'original');
+      });
+    await pane.evaluate((element: HTMLElement) => {
+      element.style.maxWidth = '947px';
+    });
+    await expect(transcript).toBeVisible();
+    await expect(card).toBeHidden();
+    await expect(page.getByRole('radio', { name: 'Summary' })).toBeChecked();
+    await page
+      .locator('label')
+      .filter({ hasText: /^Transcript$/ })
+      .click();
+    await expect(transcript).toBeChecked();
+    await expect(
+      page.getByText('Playback has one transcript line.')
+    ).toHaveCount(1);
+    await expect(video).toHaveCount(1);
+    await expect(video).toHaveAttribute('data-mount', 'original');
+    await expect(
+      card.locator('[data-call-transcript-row]').first()
+    ).toHaveAttribute('data-mount', 'original');
+    await expect(video).toHaveJSProperty('paused', false);
+    await expect
+      .poll(() =>
+        video.evaluate((element: HTMLVideoElement) => element.currentTime)
+      )
+      .toBeGreaterThanOrEqual(1);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-pane-947.png`,
+      });
+    await pane.evaluate((element: HTMLElement) => {
+      element.style.maxWidth = '948px';
+    });
+    await expect(transcript).toBeHidden();
+    await expect(card).toBeVisible();
+    await expect(video).toHaveAttribute('data-mount', 'original');
+    await expect(
+      card.locator('[data-call-transcript-row]').first()
+    ).toHaveAttribute('data-mount', 'original');
+    await expect(
+      page.getByText('Playback has one transcript line.')
+    ).toHaveCount(1);
+    await expect(video).toHaveCount(1);
+    await expect(video).toHaveJSProperty('paused', false);
+    await expect
+      .poll(() =>
+        video.evaluate((element: HTMLVideoElement) => element.currentTime)
+      )
+      .toBeGreaterThanOrEqual(1);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-pane-948.png`,
+      });
+    await pane.evaluate((element: HTMLElement) => {
+      element.style.maxWidth = '947px';
+    });
+    await expect(transcript).toBeChecked();
+    await expect(video).toHaveCount(1);
+    await expect(video).toHaveJSProperty('paused', false);
+  });
+
+  test(`transcript card syncs, stays visible while summary scrolls, and survives details (${theme})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}`);
+    const card = page.getByRole('complementary', { name: 'Transcript' });
+    const details = page.getByRole('complementary', { name: 'Block details' });
+    const video = page.locator('video');
+    const row = card.getByRole('button', {
+      name: /Playback has one transcript line/,
+    });
+    await row.click();
+    await expect
+      .poll(() =>
+        video.evaluate((element: HTMLVideoElement) => element.currentTime)
+      )
+      .toBeCloseTo(1);
+    const scroller = card.locator('.overflow-y-auto');
+    await scroller.hover();
+    await page.mouse.wheel(0, 700);
+    const sync = card.getByRole('button', { name: 'Sync to video' });
+    await expect(sync).toBeVisible();
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(300);
+    const scrollTop = await scroller.evaluate((element) => element.scrollTop);
+    await page.getByRole('button', { name: 'Show details' }).click();
+    await expect(details).toBeVisible();
+    await expect(details).toHaveCSS('opacity', '1');
+    await expect(card).toBeVisible();
+    const overlap = await details.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const transcript = document
+        .querySelector('aside[aria-label="Transcript"]')!
+        .getBoundingClientRect();
+      const left = Math.max(rect.left, transcript.left);
+      const top = Math.max(rect.top, transcript.top);
+      const right = Math.min(rect.right, transcript.right);
+      const bottom = Math.min(rect.bottom, transcript.bottom);
+      return (
+        right > left &&
+        bottom > top &&
+        element.contains(
+          document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
+        )
+      );
+    });
+    expect(overlap).toBe(true);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-details.png`,
+      });
+    await page.getByRole('button', { name: 'Hide details' }).click();
+    await expect(details).toHaveCount(0);
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+      scrollTop
+    );
+    await expect(sync).toBeVisible();
+    await sync.click();
+    await expect(row).toBeInViewport();
+    await expect(sync).toBeHidden();
+    const left = page.locator('[data-recording-scroll="content"]');
+    await left.hover();
+    await page.mouse.wheel(0, 650);
+    await expect
+      .poll(() => left.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(300);
+    await expect(card).toBeInViewport();
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d53-${theme}-left-scrolled.png`,
+      });
+  });
 }

@@ -5,14 +5,15 @@ import {
 } from '@app/features/theme/constants';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SidePanel } from '@components/app/side-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
 import { render } from 'solid-js/web';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot';
-import { CallTranscriptButton } from '../component/CallRecording/CallTranscriptButton';
 import clip from './clip.webm?url';
 
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 applyTheme(
   new URLSearchParams(location.search).get('theme') === 'light'
     ? DEFAULT_LIGHT_THEME
@@ -27,6 +28,14 @@ const RECORD: CallRecord = {
   recordingUrl: clip,
   isActive: false,
   shareWithTeam: false,
+  summary: [
+    '## Conversation recap',
+    ...Array.from(
+      { length: 18 },
+      (_, index) =>
+        `### Topic ${index + 1}\nThe team reviewed the recording and discussed next steps, owners, and open questions. This summary has enough content to scroll the left column independently of the transcript.`
+    ),
+  ].join('\n\n'),
   participants: [],
   guests: [],
   discussion: { kind: 'call_chat', call_id: 'fixture-call' },
@@ -59,17 +68,39 @@ RECORD.transcript.push(
 render(
   () => (
     <CallRecordingRoot callId={RECORD.callId}>
-      <main class="flex h-screen flex-col">
-        <SidePanel.Section id="fixture-details" title="Properties" defaultOpen>
-          <p>Recording details fixture</p>
-        </SidePanel.Section>
-        <header class="flex shrink-0 items-center gap-2 p-4">
-          <span class="mr-auto">Recording fixture</span>
-          <Button size="sm">Share</Button>
-          <CallTranscriptButton />
-          <SidePanel.Toggle />
-        </header>
-        <CallRecordingBody callId={RECORD.callId} record={RECORD} />
+      <main class="flex h-screen min-w-0">
+        <aside
+          aria-label="App sidebar"
+          class="w-[330px] shrink-0 bg-surface max-[600px]:hidden"
+        />
+        <div
+          id="fixture-pane"
+          class="flex h-full min-w-0 flex-1 flex-col"
+          style={{
+            'max-width': new URLSearchParams(location.search).get('pane')
+              ? `${new URLSearchParams(location.search).get('pane')}px`
+              : undefined,
+          }}
+        >
+          <SidePanel.Section
+            id="fixture-details"
+            title="Properties"
+            defaultOpen
+          >
+            <div class="space-y-3">
+              <p>Recording details fixture</p>
+              <p>Stored call metadata</p>
+              <p>Permission-scoped properties</p>
+              <p>Recording references</p>
+            </div>
+          </SidePanel.Section>
+          <header class="flex shrink-0 items-center gap-2 p-4">
+            <span class="mr-auto">Recording fixture</span>
+            <Button size="sm">Share</Button>
+            <SidePanel.Toggle />
+          </header>
+          <CallRecordingBody callId={RECORD.callId} record={RECORD} />
+        </div>
       </main>
     </CallRecordingRoot>
   ),

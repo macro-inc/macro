@@ -40,7 +40,6 @@ export default defineConfig({
             '@channel/Call/chat/CallChatHistory',
             '@channel/Message',
             '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
-            './CallRecordingSummary',
             './CallRecordingChat',
             './CallRecordingMobileActions',
             './CallRecordingMobilePlayback',

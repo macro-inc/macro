@@ -12,6 +12,7 @@ import { createMemo, Show } from 'solid-js';
 export function CallRecordingSummarySection(props: {
   record: CallRecord;
   hideHeading?: boolean;
+  inlineAttribution?: boolean;
 }) {
   const summary = createMemo(() => {
     const value = props.record.summary;
@@ -30,7 +31,14 @@ export function CallRecordingSummarySection(props: {
   return (
     <Show when={shouldShow()}>
       <section class="flex flex-col gap-5">
-        <div class="flex flex-col gap-2">
+        <div
+          class="flex gap-2"
+          classList={{
+            'flex-col': !props.inlineAttribution,
+            'flex-row items-center justify-between flex-wrap':
+              props.inlineAttribution,
+          }}
+        >
           <Show when={!props.hideHeading}>
             <h3 class="flex min-h-7 items-center text-base font-semibold text-ink">
               {t('calls.detailSummary')}

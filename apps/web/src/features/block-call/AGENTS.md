@@ -27,12 +27,12 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Keep metadata and entity sections on SidePanel's standard floating detail rows and dividers; keep the team-sharing card always visible below metadata, outside collapsible sections.
 - Show read-only team visibility and the starter's resolved display name when sharing is not editable; use the generic starter reason instead of an email fallback, and reserve a disabled switch for pending writes.
 - Put the existing fetched entity-tag pill below title metadata; keep its property reads inside a local Suspense boundary.
-- Keep reading tabs visible and unframed at every width; share their state through CallRecordingRoot in both hosts.
+- Show Summary beside the raised Transcript card at call-column widths of 948px or more (520px player, 320px card, 28px gap, 80px insets); use reading tabs below that container threshold.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
-- Place the Transcript header action after Share, hide it on touch and below 960px, and switch the reading tab to Summary only when opening that panel.
-- Float the 360px Transcript card inside Layer offset={1}, with SidePanel's 12px insets, bg-surface content with one 12px inner inset and a bg-inset Sync surface; reserve its width plus both insets on the right.
-- Keep Transcript mounted when Details opens over it; closing Details must preserve transcript scrolling, follow state and its pressed button.
+- Keep one mounted transcript and video across the responsive threshold; retain the reading-tab selection, playback position and transcript follow state.
+- Keep the full-width identity above both columns; let the left column and transcript scroll independently, with the card aligned to the video and filling the remaining pane height.
+- Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player without a border or shadow; keep Details floating over it without resetting transcript state.
 
 ## Checks
 
@@ -41,7 +41,7 @@ From `apps/web`:
 - `bun run test -- src/features/block-call src/features/channel/Call/chat/CallChatHistory.test.tsx src/components/app/side-panel/SidePanel.test.tsx src/components/ui/components/ProgressPill.test.ts --maxWorkers=1`
 - `bun run type-check`
 - From the repository root: `just check full`
-- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging, control frame timing and floating-card geometry, themes, navigation and overlapping card state.
+- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging, control frame timing and responsive-card geometry, themes, navigation and overlapping card state.
 - Exercise desktop, 680px and 480px panes, and 390x844 touch with an authorized saved call; follow `docs/agent-guide/calls.md`.
 
 ## Related

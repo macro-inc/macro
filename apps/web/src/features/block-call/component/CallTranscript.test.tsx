@@ -76,6 +76,7 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
     }
   );
   const [active, setActive] = createSignal<number | null>(null);
+  const [visible, setVisible] = createSignal(true);
   render(() => (
     <CallTranscript
       transcript={[
@@ -89,6 +90,7 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
       ]}
       timelineStartMs={Date.parse('2026-01-01T00:00:00Z')}
       activeSequenceNum={active()}
+      active={visible()}
       onSeekToSeconds={seek}
       hideHeader
       scrollElement={viewport}
@@ -141,5 +143,14 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   rowTop = 200;
   fireEvent.scroll(viewport);
   expect(screen.getByRole('button', { name: 'Sync to video' })).toBeTruthy();
+  setVisible(false);
+  scroll.mockClear();
+  setActive(null);
+  setActive(1);
+  setSeekGeneration(3);
+  expect(scroll).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Sync to video' })).toBeNull();
+  setVisible(true);
+  expect(scroll).toHaveBeenCalled();
   syncTarget.remove();
 });

@@ -18,7 +18,6 @@ export const CallRecordingChat = () => null;
 export const CustomScrollbar = () => null;
 export const getDisplayName = () => 'Guest';
 export const tryMacroId = () => undefined;
-export const CallRecordingSummarySection = () => <p>Stored summary fixture</p>;
 export const useMaybeBlockAliasedName = () => undefined;
 export const usePreference = (_key: string, options: { default: boolean }) =>
   createSignal(options.default);
@@ -52,4 +51,7 @@ export const Message = {
   Content: () => null,
   Attachments: () => null,
 };
+export const StaticMarkdown = (props: { markdown: string }) => (
+  <div class="whitespace-pre-wrap">{props.markdown}</div>
+);
 export const StaticMarkdownContext = (props: ParentProps) => props.children;

@@ -46,7 +46,6 @@ import {
 import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot';
-import { CallTranscriptButton } from '../component/CallRecording/CallTranscriptButton';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
 import { callRecordingDownloadSource } from '../queries/recording-download';
@@ -178,7 +177,6 @@ export function CallDetailActions(props: {
         blockType="call"
         hotkeyScope={panel.splitHotkeyScope}
       />
-      <CallTranscriptButton />
       <SidePanel.Toggle />
     </div>
   );

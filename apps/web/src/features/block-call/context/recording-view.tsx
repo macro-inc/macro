@@ -1,36 +1,22 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createContext,
   createSignal,
   type ParentProps,
   useContext,
 } from 'solid-js';
-import { createRecordingView } from '../primitives/recording-view';
 
-const RecordingViewContext = createContext<
-  ReturnType<typeof createRecordingView> & {
-    callId: string;
-    setPane: (element: HTMLDivElement) => void;
-  }
->();
+type RecordingContentTab = 'summary' | 'transcript' | 'chat';
 
-export function RecordingViewProvider(props: ParentProps<{ callId: string }>) {
-  const [pane, setPane] = createSignal<HTMLDivElement>();
-  const size = createElementSize(pane);
-  const view = createRecordingView(
-    () => !isTouchDevice() && (size.width ?? 0) >= 960
-  );
+const RecordingViewContext = createContext<{
+  contentTab: () => RecordingContentTab;
+  setContentTab: (tab: RecordingContentTab) => void;
+}>();
+
+export function RecordingViewProvider(props: ParentProps) {
+  const [contentTab, setContentTab] =
+    createSignal<RecordingContentTab>('summary');
   return (
-    <RecordingViewContext.Provider
-      value={{
-        ...view,
-        get callId() {
-          return props.callId;
-        },
-        setPane,
-      }}
-    >
+    <RecordingViewContext.Provider value={{ contentTab, setContentTab }}>
       {props.children}
     </RecordingViewContext.Provider>
   );
