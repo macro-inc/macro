@@ -14,6 +14,7 @@ export default {
   tabCalendar: 'Calendar',
   tabAgents: 'Agents',
   tabRoutines: 'Routines',
+  tabArtifacts: 'Artifacts',
   tabCrm: 'CRM',
   tabAccount: 'Account',
   tabAppearance: 'Appearance',

@@ -11,6 +11,7 @@ import CreditCardIcon from '@icon/system/regular/credit-card.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
 import DeviceMobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
 import EmailIcon from '@icon/system/regular/envelope-simple.svg';
+import ArtifactIcon from '@icon/system/regular/file-html.svg';
 import GaugeIcon from '@icon/system/regular/gauge.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import KeyIcon from '@icon/system/regular/key.svg';
@@ -161,6 +162,11 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: RoutineIcon,
         keywords: ['automation', 'schedule', 'scheduled', 'recurring'],
       }),
+      tabItem('tabArtifacts', {
+        tab: 'Artifacts',
+        icon: ArtifactIcon,
+        keywords: ['html', 'pages', 'published', 'agent'],
+      }),
       tabItem('tabCrm', {
         tab: 'CRM',
         icon: BuildingsIcon,
@@ -307,6 +313,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Agent: 'mcp-server',
   Agents: 'agents',
   Routines: 'routines',
+  Artifacts: 'artifacts',
   Harness: 'runtimes',
   Bots: 'bots',
   Team: 'team',
@@ -404,9 +411,10 @@ export const useSettingsTabAvailable = () => {
         return isDesktopPlatform() || chatV3AgentsFlag().enabled;
       case 'Agents':
         return chatV3AgentsFlag().enabled;
-      // Touch hides the Agents sidebar that lists Routines on desktop, so
-      // phones and tablets reach the list here, beside Agents.
+      // Touch hides the Agents sidebar that lists Routines and Artifacts on
+      // desktop, so phones and tablets reach those lists here, beside Agents.
       case 'Routines':
+      case 'Artifacts':
         return chatV3AgentsFlag().enabled && isTouchDevice();
       case 'Bots':
         return botManagementFlag().enabled;

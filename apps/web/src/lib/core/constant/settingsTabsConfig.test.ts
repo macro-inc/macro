@@ -49,6 +49,7 @@ describe('settings navigation', () => {
       'Calendar',
       'Agents',
       'Routines',
+      'Artifacts',
       'CRM',
     ]);
     const workspace = SETTINGS_TAB_GROUPS.find(
