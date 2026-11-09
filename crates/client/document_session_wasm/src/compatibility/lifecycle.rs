@@ -333,17 +333,29 @@ impl EditorSession {
     /// Release a retained historical publication and its captured host references.
     #[wasm_bindgen(js_name=compatReleaseVersion)]
     pub fn compat_release_version(&mut self, version: u64) -> Result<(), JsError> {
-        let (host, _) = self.compat_parts().map_err(js)?;
-        if version == host.version || host.pending_version == Some(version) {
-            return Err(js(BoundaryError::Invalid(
-                "cannot release current compatibility version",
-            )));
+        self.compat_release_version_inner(version).map_err(js)
+    }
+}
+
+impl EditorSession {
+    pub(super) fn compat_release_version_inner(
+        &mut self,
+        version: u64,
+    ) -> Result<(), BoundaryError> {
+        let (host, _) = self.compat_parts()?;
+        if version >= host.next_version
+            || version == host.version
+            || host.pending_version == Some(version)
+        {
+            return Err(BoundaryError::Invalid(
+                "cannot release unissued or active compatibility version",
+            ));
         }
         host.states.remove(&version);
         host.selection_values.release_graph(version);
         host.captures
             .retain(|_, capture| capture.reference.node.version != version);
-        host.prune_capture_index().map_err(js)?;
+        host.prune_capture_index()?;
         Ok(())
     }
 }

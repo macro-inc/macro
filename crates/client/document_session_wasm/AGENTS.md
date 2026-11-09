@@ -130,3 +130,6 @@ Carry encoded host-thrown values through Error::Extension as HostThrown with the
 original host slot and opaque value; recover through ForeignReadFailed wrappers
 without stringification or replacement. Preserve explicit undefined/null, and
 reject missing/zero-slot envelopes before creating the carried cause.
+
+Use only actually issued retired versions for explicit native retirement fences;
+reject never-issued, current and pending versions before any retirement effects.
