@@ -845,7 +845,8 @@ label, returns to that unchanged draft. The template icon and name replace the
 task title line. Draft fields and description become initial defaults, without
 the task title or attachments. The footer's Share with team switch controls new
 template ownership. Edit opens the same mode with the saved name and defaults;
-ownership is a fixed label. Both hide Attach and Create More. Save template
+team ownership reads Shared with the owning team, while personal templates have
+no ownership label. Both hide Attach and Create More. Save template
 saves only the template, then returns with its fields applied. Existing task
 prose and attachments stay intact; a blank task description takes the saved
 description. Later template switches still confirm before replacing that prose.

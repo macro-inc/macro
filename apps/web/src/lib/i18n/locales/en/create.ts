@@ -363,6 +363,7 @@ export default {
   taskTemplateMarkdownHint:
     'Supports Markdown, including headings and checklists.',
   taskTemplateShareWithTeam: 'Share with {{name}}',
+  taskTemplateSharedWithTeam: 'Shared with {{name}}',
   taskTemplateNamePlaceholder: 'Template name',
   taskTemplateSave: 'Save template',
   taskTemplateSaving: 'Saving…',

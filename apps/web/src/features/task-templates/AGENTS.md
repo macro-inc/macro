@@ -31,7 +31,8 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
 - Preserve existing task prose and attachments when applying a saved editing session; fill description only when the task is blank.
 - Use the title editor for template name with a leading template icon; hide attachments and Create More in template mode.
-- Keep new-template ownership on the footer's team switch and existing-template ownership on a fixed label; confirm deletion.
+- Keep new-template ownership on the footer's team switch.
+- Show Shared with the owning team when editing team templates; show no ownership label for personal templates.
 
 ## Boundaries
 

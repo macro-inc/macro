@@ -407,12 +407,15 @@ function ShareToggle() {
   const composer = useTaskComposer();
   const ownership = () => {
     const selection = composer.templateSelection();
-    if (selection.kind !== 'editing') return undefined;
-    if (!selection.template.teamId) return t('create.taskTemplatePersonal');
+    if (selection.kind !== 'editing' || !selection.template.teamId)
+      return undefined;
     const team = composer.team();
-    return selection.template.teamId === team?.id
-      ? team.name
-      : t('create.taskTemplateTeam');
+    return t('create.taskTemplateSharedWithTeam', {
+      name:
+        selection.template.teamId === team?.id
+          ? team.name
+          : t('create.taskTemplateTeam'),
+    });
   };
   const checked = () => {
     const selection = composer.templateSelection();
@@ -422,11 +425,15 @@ function ShareToggle() {
   };
   return (
     <Show
-      when={!ownership()}
+      when={composer.templateSelection().kind !== 'editing'}
       fallback={
-        <span class="min-w-0 truncate text-xs text-ink-muted">
-          {ownership()}
-        </span>
+        <Show when={ownership()}>
+          {(label) => (
+            <span class="min-w-0 truncate text-xs text-ink-muted">
+              {label()}
+            </span>
+          )}
+        </Show>
       }
     >
       <Show when={composer.team()}>
