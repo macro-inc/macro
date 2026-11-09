@@ -12,7 +12,11 @@ fn write_executable(path: &Path, contents: &str) {
 }
 
 fn path_with(dir: &Path) -> String {
-    format!("{}:{}", dir.display(), std::env::var("PATH").unwrap())
+    let inherited = std::env::var_os("PATH")
+        .expect("inherited tool path")
+        .into_string()
+        .expect("UTF-8 tool path");
+    format!("{}:{inherited}", dir.display())
 }
 
 /// Runs a script from `.github/scripts` so the fakes on `path` win: CI's Nix dev
