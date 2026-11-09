@@ -92,7 +92,10 @@ async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
         }
     });
     let written = futures::future::join_all(writes).await;
-    assert_eq!(written.iter().filter(|w| **w == Written::Applied).count(), 3);
+    assert_eq!(
+        written.iter().filter(|w| **w == Written::Applied).count(),
+        3
+    );
     assert_eq!(repo.added_in(generation).await.unwrap(), 3);
     assert_eq!(repo.ideas(&user).await.unwrap().len(), 3);
 }

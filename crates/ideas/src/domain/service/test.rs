@@ -234,15 +234,34 @@ async fn only_the_persons_open_ideas_session_may_write(pool: PgPool) {
     let routines = h.session(OWNER, "routines").await;
     let others = h.session(OTHER, "ideas").await;
     let refused = |result: Result<IdeaWriteOutcome, IdeaError>| {
-        assert!(matches!(result, Err(IdeaError::NotGenerating)), "{result:?}");
+        assert!(
+            matches!(result, Err(IdeaError::NotGenerating)),
+            "{result:?}"
+        );
     };
     let request = || prompt_idea("quotes:compare", "Compare the supplier quotes");
     refused(h.service.suggest(&principal(OWNER), None, request()).await);
-    refused(h.service.suggest(&principal(OWNER), Some(routines), request()).await);
-    refused(h.service.suggest(&principal(OWNER), Some(others), request()).await);
-    refused(h.service.suggest(&principal(OWNER), Some(Uuid::now_v7()), request()).await);
+    refused(
+        h.service
+            .suggest(&principal(OWNER), Some(routines), request())
+            .await,
+    );
+    refused(
+        h.service
+            .suggest(&principal(OWNER), Some(others), request())
+            .await,
+    );
+    refused(
+        h.service
+            .suggest(&principal(OWNER), Some(Uuid::now_v7()), request())
+            .await,
+    );
     h.close(ideas).await;
-    refused(h.service.suggest(&principal(OWNER), Some(ideas), request()).await);
+    refused(
+        h.service
+            .suggest(&principal(OWNER), Some(ideas), request())
+            .await,
+    );
     assert!(matches!(
         h.service.review(&principal(OWNER), Some(ideas)).await,
         Err(IdeaError::NotGenerating)
@@ -255,7 +274,11 @@ async fn ideas_are_off_without_the_flag(pool: PgPool) {
     let session = h.session(OWNER, "ideas").await;
     assert!(matches!(
         h.service
-            .suggest(&principal(OWNER), Some(session), prompt_idea("a", "Compare quotes"))
+            .suggest(
+                &principal(OWNER),
+                Some(session),
+                prompt_idea("a", "Compare quotes")
+            )
             .await,
         Err(IdeaError::NotFound)
     ));
@@ -270,12 +293,18 @@ async fn the_same_dedup_key_updates_the_idea_and_its_kind_never_changes(pool: Pg
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "ideas").await;
     let first = h
-        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
         .await
         .idea
         .unwrap();
     let second = h
-        .suggest(session, prompt_idea("quotes:compare", "Pick the cheapest supplier"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Pick the cheapest supplier"),
+        )
         .await;
     assert!(second.ok, "{:?}", second.problems);
     let second = second.idea.unwrap();
@@ -284,11 +313,20 @@ async fn the_same_dedup_key_updates_the_idea_and_its_kind_never_changes(pool: Pg
     assert_eq!(h.service.feed(&user(OWNER)).await.unwrap().ideas.len(), 1);
     let as_entity = h.suggest(session, entity_idea("quotes:compare")).await;
     assert!(!as_entity.ok);
-    assert!(as_entity.problems[0].contains("kind never changes"), "{:?}", as_entity.problems);
+    assert!(
+        as_entity.problems[0].contains("kind never changes"),
+        "{:?}",
+        as_entity.problems
+    );
     let mut composer = prompt_idea("quotes:compare", "Compare quotes");
     composer.run_mode = Some(RunMode::Composer);
     assert!(!h.suggest(session, composer).await.ok);
-    let actions: Vec<String> = h.changes(first.id).await.into_iter().map(|(a, _)| a).collect();
+    let actions: Vec<String> = h
+        .changes(first.id)
+        .await
+        .into_iter()
+        .map(|(a, _)| a)
+        .collect();
     assert_eq!(actions, vec!["created", "rewritten"]);
 }
 
@@ -296,16 +334,28 @@ async fn the_same_dedup_key_updates_the_idea_and_its_kind_never_changes(pool: Pg
 async fn a_dismissed_idea_comes_back_only_with_a_reason(pool: PgPool) {
     let h = harness(pool, true).await;
     let night = h.session(OWNER, "ideas").await;
-    let idea = h.suggest(night, entity_idea("venue:headcount")).await.idea.unwrap();
+    let idea = h
+        .suggest(night, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
     h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
     assert!(h.service.feed(&user(OWNER)).await.unwrap().ideas.is_empty());
     h.close(night).await;
     let next = h.session(OWNER, "ideas").await;
-    let review = h.service.review(&principal(OWNER), Some(next)).await.unwrap();
+    let review = h
+        .service
+        .review(&principal(OWNER), Some(next))
+        .await
+        .unwrap();
     assert_eq!(review.ideas[0].state, IdeaState::Dismissed);
     let again = h.suggest(next, entity_idea("venue:headcount")).await;
     assert!(!again.ok);
-    assert!(again.problems[0].contains("dismissed"), "{:?}", again.problems);
+    assert!(
+        again.problems[0].contains("dismissed"),
+        "{:?}",
+        again.problems
+    );
     let mut with_reason = entity_idea("venue:headcount");
     with_reason.reason = Some("The venue wrote again with a new deadline".to_owned());
     let back = h.suggest(next, with_reason).await;
@@ -325,7 +375,10 @@ async fn a_session_rewrites_and_retires_open_ideas_and_a_retired_one_comes_back(
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "ideas").await;
     let idea = h
-        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
         .await
         .idea
         .unwrap();
@@ -378,10 +431,18 @@ async fn a_session_rewrites_and_retires_open_ideas_and_a_retired_one_comes_back(
         .unwrap();
     assert!(!again.ok);
     let back = h
-        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
         .await;
     assert_eq!(back.idea.unwrap().state, IdeaState::Proposed);
-    let actions: Vec<String> = h.changes(idea.id).await.into_iter().map(|(a, _)| a).collect();
+    let actions: Vec<String> = h
+        .changes(idea.id)
+        .await
+        .into_iter()
+        .map(|(a, _)| a)
+        .collect();
     assert_eq!(actions, vec!["created", "rewritten", "retired", "restored"]);
 }
 
@@ -394,13 +455,24 @@ async fn a_generation_adds_at_most_ten_and_a_person_has_at_most_thirty_open(pool
         let mut tonight = 0;
         for n in 0..11 {
             let outcome = h
-                .suggest(session, prompt_idea(&format!("idea:{night}:{n}"), "Compare quotes"))
+                .suggest(
+                    session,
+                    prompt_idea(&format!("idea:{night}:{n}"), "Compare quotes"),
+                )
                 .await;
             if outcome.ok {
                 tonight += 1;
             } else {
-                let limit = if night < 2 && n == 10 { "most for one night" } else { "30 open ideas" };
-                assert!(outcome.problems[0].contains(limit), "{:?}", outcome.problems);
+                let limit = if night < 2 && n == 10 {
+                    "most for one night"
+                } else {
+                    "30 open ideas"
+                };
+                assert!(
+                    outcome.problems[0].contains(limit),
+                    "{:?}",
+                    outcome.problems
+                );
             }
         }
         kept.push(tonight);
@@ -410,7 +482,10 @@ async fn a_generation_adds_at_most_ten_and_a_person_has_at_most_thirty_open(pool
     // Rewriting an open idea at the limit still works.
     let session = h.session(OWNER, "ideas").await;
     let rewrite = h
-        .suggest(session, prompt_idea("idea:0:0", "Compare the supplier quotes"))
+        .suggest(
+            session,
+            prompt_idea("idea:0:0", "Compare the supplier quotes"),
+        )
         .await;
     assert!(rewrite.ok, "{:?}", rewrite.problems);
 }
@@ -432,11 +507,19 @@ async fn writes_are_checked_before_they_are_kept(pool: PgPool) {
         assert!(!outcome.ok);
         assert!(!outcome.problems.is_empty());
     }
-    h.access.denied.lock().unwrap().insert("thread-1".to_owned());
+    h.access
+        .denied
+        .lock()
+        .unwrap()
+        .insert("thread-1".to_owned());
     let hidden = h
         .suggest(session, prompt_idea("quotes:compare", "Compare quotes"))
         .await;
-    assert!(hidden.problems[0].contains("can't open"), "{:?}", hidden.problems);
+    assert!(
+        hidden.problems[0].contains("can't open"),
+        "{:?}",
+        hidden.problems
+    );
     assert!(
         h.service
             .review(&principal(OWNER), Some(session))
@@ -451,12 +534,17 @@ async fn writes_are_checked_before_they_are_kept(pool: PgPool) {
 async fn the_feed_hides_ideas_about_items_the_person_lost(pool: PgPool) {
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "ideas").await;
-    h.suggest(session, prompt_idea("quotes:compare", "Compare quotes")).await;
+    h.suggest(session, prompt_idea("quotes:compare", "Compare quotes"))
+        .await;
     h.suggest(session, entity_idea("venue:headcount")).await;
     let feed = h.service.feed(&user(OWNER)).await.unwrap();
     // Best first.
     assert_eq!(feed.ideas[0].dedup_key, "venue:headcount");
-    h.access.denied.lock().unwrap().insert("thread-2".to_owned());
+    h.access
+        .denied
+        .lock()
+        .unwrap()
+        .insert("thread-2".to_owned());
     let feed = h.service.feed(&user(OWNER)).await.unwrap();
     assert_eq!(feed.ideas.len(), 1);
     assert_eq!(feed.ideas[0].dedup_key, "quotes:compare");
@@ -466,7 +554,11 @@ async fn the_feed_hides_ideas_about_items_the_person_lost(pool: PgPool) {
 async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
     let h = harness(pool, true).await;
     let session = h.session(OWNER, "ideas").await;
-    let idea = h.suggest(session, entity_idea("venue:headcount")).await.idea.unwrap();
+    let idea = h
+        .suggest(session, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
     assert!(matches!(
         h.service.accept(&user(OTHER), idea.id).await,
         Err(IdeaError::NotFound)

@@ -14,7 +14,11 @@ pub struct EntityIdeaAccess<S>(pub S);
 impl<S: EntityAccessService> IdeaAccess for EntityIdeaAccess<S> {
     type Err = AccessError;
 
-    async fn can_view(&self, user: &MacroUserIdStr<'_>, target: &Target) -> Result<bool, Self::Err> {
+    async fn can_view(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        target: &Target,
+    ) -> Result<bool, Self::Err> {
         match self
             .0
             .get_access_level(Some(user), &target.entity_id, target.entity_type)

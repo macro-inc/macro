@@ -11,7 +11,10 @@ fn a_dedup_key_is_a_short_lowercase_slug_naming_no_one() {
     );
     assert!(problems.is_empty());
     assert_eq!(dedup_key("Reply To Sam", &mut problems), None);
-    assert_eq!(dedup_key(&"a".repeat(MAX_DEDUP_KEY_CHARS + 1), &mut problems), None);
+    assert_eq!(
+        dedup_key(&"a".repeat(MAX_DEDUP_KEY_CHARS + 1), &mut problems),
+        None
+    );
     let address = format!("reply:{}@{}.com", "sam", "example");
     assert_eq!(dedup_key(&address, &mut problems), None);
     assert_eq!(problems.len(), 3);
@@ -40,7 +43,13 @@ fn targets_are_bounded_and_named_by_id() {
         Some(vec![target("a"), target("b")])
     );
     assert!(targets(vec![target("a b\n")], &mut problems).is_none());
-    assert!(targets((0..6).map(|n| target(&n.to_string())).collect(), &mut problems).is_none());
+    assert!(
+        targets(
+            (0..6).map(|n| target(&n.to_string())).collect(),
+            &mut problems
+        )
+        .is_none()
+    );
     assert_eq!(problems.len(), 2);
 }
 

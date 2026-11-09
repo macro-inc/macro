@@ -160,8 +160,17 @@ where
     }
 
     /// The idea as stored after a write.
-    async fn reread(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<IdeaWriteOutcome, IdeaError> {
-        match self.repo.idea(user, id).await.map_err(IdeaError::internal)? {
+    async fn reread(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        match self
+            .repo
+            .idea(user, id)
+            .await
+            .map_err(IdeaError::internal)?
+        {
             Some(idea) => Ok(IdeaWriteOutcome::applied(idea)),
             None => Err(IdeaError::NotFound),
         }
@@ -216,7 +225,11 @@ where
                 ideas.push(idea);
             }
         }
-        ideas.sort_by(|a, b| b.importance.cmp(&a.importance).then(b.updated_at.cmp(&a.updated_at)));
+        ideas.sort_by(|a, b| {
+            b.importance
+                .cmp(&a.importance)
+                .then(b.updated_at.cmp(&a.updated_at))
+        });
         let span = tracing::Span::current();
         span.record("ideas.open", ideas.len());
         span.record("ideas.hidden", before - ideas.len());
@@ -228,7 +241,14 @@ where
         self.require_flag(user).await?;
         let moved = self
             .repo
-            .set_state(user, id, &[IdeaState::Proposed], IdeaState::Accepted, None, Utc::now())
+            .set_state(
+                user,
+                id,
+                &[IdeaState::Proposed],
+                IdeaState::Accepted,
+                None,
+                Utc::now(),
+            )
             .await
             .map_err(IdeaError::internal)?;
         if !moved {
@@ -272,7 +292,12 @@ where
     ) -> Result<IdeaReview, IdeaError> {
         let session = self.session(principal, correlation).await?;
         let (ideas, added) = tokio::try_join!(
-            async { self.repo.ideas(&session.user).await.map_err(IdeaError::internal) },
+            async {
+                self.repo
+                    .ideas(&session.user)
+                    .await
+                    .map_err(IdeaError::internal)
+            },
             async {
                 self.repo
                     .added_in(session.generation)
@@ -316,18 +341,32 @@ where
         let kind = check::new_kind(&request, &mut problems);
         let content = (
             check::dedup_key(&request.dedup_key, &mut problems),
-            check::text(&request.title, "`title`", check::MAX_TITLE_CHARS, &mut problems),
-            check::text(&request.summary, "`summary`", check::MAX_SUMMARY_CHARS, &mut problems),
+            check::text(
+                &request.title,
+                "`title`",
+                check::MAX_TITLE_CHARS,
+                &mut problems,
+            ),
+            check::text(
+                &request.summary,
+                "`summary`",
+                check::MAX_SUMMARY_CHARS,
+                &mut problems,
+            ),
             check::importance(request.importance, &mut problems),
             check::targets(request.about, &mut problems),
-            request.prompt.as_deref().map(|prompt| check::prompt(prompt, &mut problems)),
+            request
+                .prompt
+                .as_deref()
+                .map(|prompt| check::prompt(prompt, &mut problems)),
         );
-        let reason = request
-            .reason
-            .as_deref()
-            .and_then(|reason| check::text(reason, "`reason`", check::MAX_REASON_CHARS, &mut problems));
-        let (Some(kind), (Some(dedup_key), Some(title), Some(summary), Some(importance), Some(about), prompt)) =
-            (kind, content)
+        let reason = request.reason.as_deref().and_then(|reason| {
+            check::text(reason, "`reason`", check::MAX_REASON_CHARS, &mut problems)
+        });
+        let (
+            Some(kind),
+            (Some(dedup_key), Some(title), Some(summary), Some(importance), Some(about), prompt),
+        ) = (kind, content)
         else {
             return Ok(rejected(&span, problems));
         };
@@ -394,10 +433,9 @@ where
                 IdeaKind::Prompt { run_mode, .. },
                 super::model::NewKind::Prompt { run_mode: asked },
             ) => run_mode == asked,
-            (
-                IdeaKind::Entity { action, .. },
-                super::model::NewKind::Entity { action: asked },
-            ) => action == asked,
+            (IdeaKind::Entity { action, .. }, super::model::NewKind::Entity { action: asked }) => {
+                action == asked
+            }
             _ => false,
         };
         if !same_kind_data {
@@ -440,7 +478,15 @@ where
         };
         let written = self
             .repo
-            .replace(&user, existing.id, &content, existing.state, to, LIMITS, &change)
+            .replace(
+                &user,
+                existing.id,
+                &content,
+                existing.state,
+                to,
+                LIMITS,
+                &change,
+            )
             .await
             .map_err(IdeaError::internal)?;
         if let Some(problem) = written_problem(written) {
@@ -467,7 +513,12 @@ where
         let session = self.session(principal, correlation).await?;
         let span = tracing::Span::current();
         let user = session.user.clone();
-        let Some(existing) = self.repo.idea(&user, id).await.map_err(IdeaError::internal)? else {
+        let Some(existing) = self
+            .repo
+            .idea(&user, id)
+            .await
+            .map_err(IdeaError::internal)?
+        else {
             return Err(IdeaError::NotFound);
         };
         let mut problems = Vec::new();
@@ -480,22 +531,32 @@ where
         }
         if existing.kind.name() == KindName::Routine {
             problems.push(
-                "routine ideas follow their routine suggestion, which is never rewritten".to_owned(),
+                "routine ideas follow their routine suggestion, which is never rewritten"
+                    .to_owned(),
             );
         }
         if request.prompt.is_some() && existing.kind.name() != KindName::Prompt {
             problems.push("`prompt` is only for prompt ideas".to_owned());
         }
-        let reason = check::text(&request.reason, "`reason`", check::MAX_REASON_CHARS, &mut problems);
+        let reason = check::text(
+            &request.reason,
+            "`reason`",
+            check::MAX_REASON_CHARS,
+            &mut problems,
+        );
         let mut content = IdeaContent::of(&existing);
         if let Some(title) = request.title {
             content.title = check::text(&title, "`title`", check::MAX_TITLE_CHARS, &mut problems)
                 .unwrap_or_default();
         }
         if let Some(summary) = request.summary {
-            content.summary =
-                check::text(&summary, "`summary`", check::MAX_SUMMARY_CHARS, &mut problems)
-                    .unwrap_or_default();
+            content.summary = check::text(
+                &summary,
+                "`summary`",
+                check::MAX_SUMMARY_CHARS,
+                &mut problems,
+            )
+            .unwrap_or_default();
         }
         if let Some(importance) = request.importance {
             content.importance = check::importance(importance, &mut problems).unwrap_or_default();
@@ -529,7 +590,15 @@ where
         };
         let written = self
             .repo
-            .replace(&user, id, &content, existing.state, existing.state, LIMITS, &change)
+            .replace(
+                &user,
+                id,
+                &content,
+                existing.state,
+                existing.state,
+                LIMITS,
+                &change,
+            )
             .await
             .map_err(IdeaError::internal)?;
         if let Some(problem) = written_problem(written) {
@@ -556,13 +625,26 @@ where
         let session = self.session(principal, correlation).await?;
         let span = tracing::Span::current();
         let user = session.user.clone();
-        let Some(existing) = self.repo.idea(&user, id).await.map_err(IdeaError::internal)? else {
+        let Some(existing) = self
+            .repo
+            .idea(&user, id)
+            .await
+            .map_err(IdeaError::internal)?
+        else {
             return Err(IdeaError::NotFound);
         };
         let mut problems = Vec::new();
-        let reason = check::text(&request.reason, "`reason`", check::MAX_REASON_CHARS, &mut problems);
+        let reason = check::text(
+            &request.reason,
+            "`reason`",
+            check::MAX_REASON_CHARS,
+            &mut problems,
+        );
         if !existing.state.is_open() {
-            problems.push(format!("this idea is {} already, not open", existing.state.as_ref()));
+            problems.push(format!(
+                "this idea is {} already, not open",
+                existing.state.as_ref()
+            ));
         }
         if existing.kind.name() == KindName::Routine {
             problems.push(
@@ -577,8 +659,12 @@ where
             session: session.session,
             generation: session.generation,
             action: ChangeAction::Retired,
-            old: Some(serde_json::Value::String(existing.state.as_ref().to_owned())),
-            new: Some(serde_json::Value::String(IdeaState::Retired.as_ref().to_owned())),
+            old: Some(serde_json::Value::String(
+                existing.state.as_ref().to_owned(),
+            )),
+            new: Some(serde_json::Value::String(
+                IdeaState::Retired.as_ref().to_owned(),
+            )),
             reason,
             at: Utc::now(),
         };
@@ -595,7 +681,10 @@ where
             .await
             .map_err(IdeaError::internal)?;
         if !moved {
-            return Ok(rejected(&span, written_problem(Written::Conflict).into_iter().collect()));
+            return Ok(rejected(
+                &span,
+                written_problem(Written::Conflict).into_iter().collect(),
+            ));
         }
         span.record("idea.outcome", "retired");
         self.reread(&user, id).await

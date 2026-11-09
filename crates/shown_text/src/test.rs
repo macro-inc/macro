@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn a_line_is_trimmed_bounded_and_plain() {
-    assert_eq!(line("  Reply to the quote  ", 40).as_deref(), Some("Reply to the quote"));
+    assert_eq!(
+        line("  Reply to the quote  ", 40).as_deref(),
+        Some("Reply to the quote")
+    );
     assert_eq!(line("two\nlines", 40), None);
     assert_eq!(line("hidden\u{202E}text", 40), None);
     assert_eq!(line("   ", 40), None);

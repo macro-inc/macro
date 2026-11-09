@@ -159,7 +159,9 @@ pub fn targets(targets: Vec<Target>, problems: &mut Vec<String>) -> Option<Vec<T
     for target in targets {
         let id_fits = |id: &str| line(id, MAX_ID_CHARS).is_some_and(|line| line == id);
         if !id_fits(&target.entity_id) || !target.part_id.as_deref().is_none_or(id_fits) {
-            problems.push("an item's `entityId` and `partId` are its ids, as the SDK returns them".to_owned());
+            problems.push(
+                "an item's `entityId` and `partId` are its ids, as the SDK returns them".to_owned(),
+            );
             return None;
         }
         if seen.insert(target.clone()) {

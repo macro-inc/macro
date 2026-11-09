@@ -59,7 +59,10 @@ where
     St: Send + Sync,
 {
     Router::new()
-        .route("/ideas", get(list_ideas::<S, Auth>).post(suggest_idea::<S, Auth>))
+        .route(
+            "/ideas",
+            get(list_ideas::<S, Auth>).post(suggest_idea::<S, Auth>),
+        )
         .route("/ideas/review", get(review_ideas::<S, Auth>))
         .route("/ideas/{id}", axum::routing::patch(rewrite_idea::<S, Auth>))
         .route("/ideas/{id}/retire", post(retire_idea::<S, Auth>))
@@ -124,7 +127,12 @@ where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
-    Ok(Json(state.service.feed(&user.authorization.macro_user_id).await?))
+    Ok(Json(
+        state
+            .service
+            .feed(&user.authorization.macro_user_id)
+            .await?,
+    ))
 }
 
 #[utoipa::path(

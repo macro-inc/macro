@@ -68,8 +68,7 @@ pub trait IdeaRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<Idea>, Self::Err>> + Send;
 
     /// How many ideas generation `generation` added or brought back.
-    fn added_in(&self, generation: Uuid)
-    -> impl Future<Output = Result<u32, Self::Err>> + Send;
+    fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Add a proposed idea `id` with `content` for the person, within
     /// `limits`, logging `change`.
