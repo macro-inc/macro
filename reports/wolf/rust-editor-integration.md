@@ -54,8 +54,8 @@ shortcuts preserve exact raw JSON, durable IDs and model/DOM caret. All four fet
 WASM responses match the installed hash and no page errors occurred. The first run
 used an expired saved access token and failed with API 401s and refresh HTTP 500s;
 that run is retained separately. Fresh real UI sign-in restored access on the same
-installed artifact. The refresh failure remains an authentication recovery issue,
-not a passing check or an artifact regression attribution.
+installed artifact. The refresh failure was subsequently traced to stale database network state and
+repaired as described below; the original failed run remains preserved.
 
 Evidence uses `/home/wolf/tmp/integration3-acceptance/next-union-*` and
 `next-batch-*`. The workspace, web and main tree-equality receipts remain separate;
@@ -63,6 +63,29 @@ Evidence uses `/home/wolf/tmp/integration3-acceptance/next-union-*` and
 `next-union-live-hash-proof.json` binds the successful fresh-authentication run.
 End-to-end trace connectivity and the earlier comment-button/table-picker parity
 gaps remain open. Integration3 is not accepted by this checkpoint.
+
+### Expired-session refresh recovery
+
+Read-only authentication and FusionAuth logs correlate the four refresh failures
+with FusionAuth HTTP 500s during tenant lookup. The nested cause is PostgreSQL
+`NoRouteToHostException`, followed by Hikari connection-pool timeouts. This occurs
+before refresh-token lookup; the logs do not establish token invalidation.
+
+The FusionAuth `db` hostname resolved to both the healthy renamed database and a
+dangling endpoint whose container no longer existed. Removing only that dead
+endpoint restored a single healthy DNS answer. Independently, FusionAuth was
+recreated with the database's unique container hostname and a fresh connection
+pool. Both stack repairs preceded validation; no product code, database contents
+or volumes were changed by the endpoint repair.
+
+The exact previously expired saved state now refreshes through the real app:
+both restored-context refresh requests return HTTP 200. All five isolated live
+flows pass again, with no page errors or 500/502 responses and every fetched WASM
+matching the installed native hash. Initial 401 responses before successful
+refresh remain in the raw network list. The earlier failure is not removed or
+relabeled. Evidence is `auth-refresh-investigation/receipt.json` and
+`auth-repair-live-*` under the existing external evidence directory; raw service
+logs remain private and contain no committed credentials or account data.
 
 ### Native wake regression
 
