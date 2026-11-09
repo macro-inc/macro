@@ -136,10 +136,19 @@ impl EditorCore {
             for item in inputs {
                 // An unchanged DOM input ignores its reported selection upstream.
                 // Validate the span before any pending selection or model write.
-                if let Input::TextDeltaFromView(delta) = item
-                    && !delta.composition_end
-                    && delta.is_unchanged(tx.view())?
-                {
+                let unchanged = match item {
+                    Input::TextDeltaFromView(delta) if !delta.composition_end => {
+                        delta.is_unchanged(tx.view())?
+                    }
+                    Input::TextFromView {
+                        key,
+                        text,
+                        composition_end: false,
+                        ..
+                    } => tx.view().text_data(*key)?.text.as_str() == text,
+                    _ => false,
+                };
+                if unchanged {
                     continue;
                 }
                 let command_empty = matches!(item,Input::Command {command,..} if tx.editor.listener_table.levels(command.kind()).is_none() && !(self.history.is_some() && matches!(command,Command::Undo|Command::Redo|Command::ClearHistory|Command::ClearEditor)));
@@ -147,8 +156,16 @@ impl EditorCore {
                     && !command_empty
                     && let Some(selection) = item.selection()
                 {
-                    let typing = if matches!(item, Input::TextDeltaFromView(delta) if !delta.composition_end)
-                    {
+                    let typing = if matches!(
+                        item,
+                        Input::TextDeltaFromView(ViewTextDelta {
+                            composition_end: false,
+                            ..
+                        }) | Input::TextFromView {
+                            composition_end: false,
+                            ..
+                        }
+                    ) {
                         tx.selection()
                             .and_then(Selection::as_range)
                             .map(|range| (range.format, range.style.clone()))
@@ -488,15 +505,29 @@ fn run(
             composition_data,
             ..
         } => {
-            text::from_view(
-                tx,
-                *key,
-                text,
-                (*anchor, *focus),
-                *composition_end,
-                composition_data.as_deref(),
-                effects,
-            )?;
+            if *composition_end {
+                text::composition(
+                    tx,
+                    &CompositionEvent::End {
+                        key: *key,
+                        text: text.clone(),
+                        anchor: *anchor,
+                        focus: *focus,
+                        data: composition_data.clone().unwrap_or_default(),
+                    },
+                    effects,
+                )?;
+            } else {
+                text::from_view(
+                    tx,
+                    *key,
+                    text,
+                    (*anchor, *focus),
+                    false,
+                    composition_data.as_deref(),
+                    effects,
+                )?;
+            }
             Ok(Handled::No)
         }
         Input::Command { command, .. } => dispatch(tx, history, command, effects),
