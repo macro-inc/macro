@@ -232,3 +232,9 @@ accessibility equality belong to the document parity harness in
 The source ledger, these tests, the existing editor suites and the document
 parity scenarios are complementary. Unpinned interactive behaviors still need
 sufficient regression tests; none of these artifacts alone closes that gap.
+
+Decorator action cases exercise the actual equation and mention command handlers.
+They pin expression-only updates, exact display-name IDs, truthy whitespace,
+attached-node traversal, history/selection/scroll tags and legacy missing/null
+property lookup. These are model command oracles; component rendering and native
+interaction acceptance require the separate browser fixtures.

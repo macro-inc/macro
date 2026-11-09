@@ -1,3 +1,4 @@
+mod decorator_actions;
 mod session_bop;
 use super::*;
 use doc_sync_core::*;

@@ -61,6 +61,8 @@ checked in the sync policy, matching source exportJSON. Preserve backgroundColor
 nested array nulls, unknown nulls and every nonnull value; never erase the underlying
 Loro fields.
 
+- Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags.
+
 ## Checks
 
 - `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.
