@@ -26,7 +26,9 @@ import {
   taskTemplateContents,
 } from '@app/features/task-templates/queries/template-mapping';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { TaskTemplateConfiguration } from '@service-storage/generated/schemas/taskTemplateConfiguration';
 import { createRoot, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearTaskComposerDraft,
@@ -991,3 +993,54 @@ it.each([true, false, undefined])(
     ).toBe(false);
   }
 );
+
+it('opens a personal template with entity defaults from the reactive query cache', () => {
+  const [configuration] = createStore<TaskTemplateConfiguration>({
+    propertyIds: ['assignee'],
+    defaults: [
+      {
+        propertyId: 'assignee',
+        value: {
+          type: 'entity_reference',
+          reference: { entity_type: 'USER', entity_id: 'template-assignee' },
+        },
+      },
+    ],
+    descriptionMarkdown: 'Saved description',
+  });
+  const saved: SavedTaskTemplate = {
+    id: 'personal-template',
+    name: 'Personal checklist',
+    teamId: null,
+    revision: 1,
+    contents: taskTemplateContents(configuration, [
+      {
+        id: 'assignee',
+        displayName: 'Assignee',
+        valueType: 'ENTITY',
+        isMultiSelect: false,
+        isMetadata: false,
+        isSystem: true,
+        owner: { scope: 'system' },
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ]),
+  };
+  const session = createTemplateSession();
+  try {
+    session.workflow.open(
+      { kind: 'editing', template: saved, name: saved.name },
+      saved.contents
+    );
+    expect(session.selection().kind).toBe('editing');
+    expect(session.contents().propertyDefaults.assignee).toEqual({
+      valueType: 'ENTITY',
+      refs: [{ entity_type: 'USER', entity_id: 'template-assignee' }],
+    });
+    session.workflow.cancelTemplateEdit();
+    expect(session.contents().title).toBe('Keep this task title');
+  } finally {
+    session.dispose();
+  }
+});

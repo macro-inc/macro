@@ -9,6 +9,7 @@ import { toPropertyApiValue } from '@property/utils/typeGuards';
 import type { SetPropertyValue } from '@service-storage/generated/schemas/setPropertyValue';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import type { TaskTemplateConfiguration } from '@service-storage/generated/schemas/taskTemplateConfiguration';
+import { unwrap } from 'solid-js/store';
 import type { TaskTemplateContents } from '../core/template';
 
 function decodeDefault(
@@ -57,7 +58,7 @@ export function taskTemplateContents(
   for (const item of configuration.defaults ?? []) {
     const definition = available.get(item.propertyId);
     if (!definition) continue;
-    const value = decodeDefault(item.value, definition);
+    const value = decodeDefault(unwrap(item.value), definition);
     if (value) propertyDefaults[item.propertyId] = value;
   }
   return {
