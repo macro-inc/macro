@@ -24,6 +24,7 @@ acceptance requirement before changing the feature-flag admission.
 - Use a non-destructive SQLite corruption handler and preserve the original database files.
 - Preserve composing spans when applying text patches and Android selection handles.
 - Do not enable reduced node rendering as a substitute for application parity.
+- Keep editor editability, content-interaction permission and comment capability distinct; recheck permission when committing gestures or asynchronous results.
 
 ## Checks
 

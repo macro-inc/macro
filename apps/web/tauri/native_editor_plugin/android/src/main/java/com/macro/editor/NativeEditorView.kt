@@ -24,6 +24,7 @@ class NativeEditorView(
     private val session: NativeEditorSessionInterface,
     private val host: NativeEditorHost,
     initiallyEditable: Boolean,
+    initiallyInteractable: Boolean,
 ) : AppCompatEditText(context) {
     private val clipboard = EditorClipboard(context)
     private val projection = EditorProjection()
@@ -33,6 +34,7 @@ class NativeEditorView(
     private var ready = false
     private var composing = false
     private var editable = initiallyEditable
+    private var interactable = initiallyInteractable
     private var editingKeyListener: android.text.method.KeyListener? = null
     private var changedStart = 0
     private var changedCount = 0
@@ -66,7 +68,7 @@ class NativeEditorView(
 
             override fun afterTextChanged(value: Editable?) {
                 if (applying || value == null) return
-                if (!ready || !editable) {
+                if (!ready || !canEditContent()) {
                     applying = true
                     try { render() } finally { applying = false }
                     return
@@ -229,18 +231,26 @@ class NativeEditorView(
         val focus = selectionEnd
         applying = true
         try {
-            keyListener = if (value && ready) editingKeyListener else null
-            isCursorVisible = value && ready
+            keyListener = if (canEditContent() && ready) editingKeyListener else null
+            isCursorVisible = canEditContent() && ready
             setTextIsSelectable(true)
             if (anchor >= 0 && focus >= 0 && anchor <= length() && focus <= length()) {
                 setSelection(anchor, focus)
             }
         } finally { applying = wasApplying }
-        if (!value) finishComposition()
+        if (!canEditContent()) finishComposition()
     }
 
+    /** Content locks are independent of editor editability and comment-mark capability. */
+    fun setContentInteractable(value: Boolean) {
+        interactable = value
+        setEditable(editable)
+    }
+
+    private fun canEditContent() = editable && interactable
+
     override fun onKeyShortcut(keyCode: Int, event: android.view.KeyEvent): Boolean {
-        if (editable && (event.isCtrlPressed || event.isMetaPressed)) {
+        if (canEditContent() && (event.isCtrlPressed || event.isMetaPressed)) {
             val command = when (keyCode) {
                 android.view.KeyEvent.KEYCODE_Z -> if (event.isShiftPressed) FfiCommand.Redo else FfiCommand.Undo
                 android.view.KeyEvent.KEYCODE_Y -> FfiCommand.Redo
@@ -260,7 +270,7 @@ class NativeEditorView(
     override fun onTextContextMenuItem(id: Int): Boolean {
         when (id) {
             android.R.id.paste, android.R.id.pasteAsPlainText -> {
-                if (!editable) return false
+                if (!canEditContent()) return false
                 val payload = clipboard.read() ?: return false
                 val data = if (id == android.R.id.pasteAsPlainText) {
                     payload.copy(data = payload.data.filter { it.mime == "text/plain" })
@@ -269,7 +279,7 @@ class NativeEditorView(
                 return true
             }
             android.R.id.copy, android.R.id.cut -> {
-                if (id == android.R.id.cut && !editable) return false
+                if (id == android.R.id.cut && !canEditContent()) return false
                 admit(FfiInput.SelectionFromView(
                     projectionLayout.selection(selectionStart, selectionEnd), null))
                 val reply = session.query(FfiQuery.Clipboard) as FfiQueryReply.Clipboard
@@ -279,8 +289,8 @@ class NativeEditorView(
                 }
                 return true
             }
-            android.R.id.undo -> { if (!editable) return false; admit(FfiInput.Undo); return true }
-            android.R.id.redo -> { if (!editable) return false; admit(FfiInput.Redo); return true }
+            android.R.id.undo -> { if (!canEditContent()) return false; admit(FfiInput.Undo); return true }
+            android.R.id.redo -> { if (!canEditContent()) return false; admit(FfiInput.Redo); return true }
         }
         return super.onTextContextMenuItem(id)
     }
@@ -302,11 +312,11 @@ class NativeEditorView(
     }
 
     override fun onCreateInputConnection(info: EditorInfo): InputConnection? {
-        if (!ready || !editable) return null
+        if (!ready || !canEditContent()) return null
         val connection = super.onCreateInputConnection(info) ?: return null
         return object : InputConnectionWrapper(connection, false) {
             override fun setComposingText(value: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!ready || !editable) return false
+                if (!ready || !canEditContent()) return false
                 if (!composing) {
                     composing = true
                     admit(FfiInput.Composition(CompositionEvent.Start(value?.toString() ?: ""),
@@ -316,7 +326,7 @@ class NativeEditorView(
             }
 
             override fun setComposingRegion(start: Int, end: Int): Boolean {
-                if (!ready || !editable) return false
+                if (!ready || !canEditContent()) return false
                 if (!composing) {
                     composing = true
                     admit(FfiInput.Composition(CompositionEvent.Start(""),
@@ -326,14 +336,14 @@ class NativeEditorView(
             }
 
             override fun commitText(value: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!ready || !editable) return false
+                if (!ready || !canEditContent()) return false
                 val committed = super.commitText(value, newCursorPosition)
                 finishComposition()
                 return committed
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-                if (!ready || !editable || beforeLength < 0 || afterLength < 0) return false
+                if (!ready || !canEditContent() || beforeLength < 0 || afterLength < 0) return false
                 val value = text ?: return false
                 var start = minOf(selectionStart, selectionEnd)
                 var end = maxOf(selectionStart, selectionEnd)
@@ -352,7 +362,7 @@ class NativeEditorView(
             }
 
             override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
-                if (!ready || !editable) return false
+                if (!ready || !canEditContent()) return false
                 return super.deleteSurroundingTextInCodePoints(beforeLength, afterLength)
             }
 
