@@ -1,6 +1,7 @@
 // Production compatibility calls use typed native references and UTF-16 values.
 // This envelope does not alter the flat model Diff or session transport ABI.
 const uint32 COMPATIBILITY_PROTOCOL_MAJOR = 1;
+struct CompatBegin { string[] tags; }
 struct CompatConfig { uint32 editorId; ForeignClassRegistration[] classes; }
 enum CompatOperation : uint16 {
   Unknown = 0;
@@ -17,6 +18,15 @@ enum CompatOperation : uint16 {
   GetCompositionKey = 27; AddUpdateTag = 28;
   GetNodeField = 29; SetNativeField = 30;
   ExportNodeJson = 31; ExportStateJson = 32;
+  CreateRangeSelection = 33; CreateNodeSelection = 34; SetSelection = 35;
+  SelectionClone = 36; SelectionGetNodes = 37; SelectionGetTextContent = 38;
+  SelectionInsertText = 39; SelectionInsertNodes = 40;
+  SelectionFormatText = 41; SelectionDeleteCharacter = 42;
+  SelectionDeleteWord = 43; SelectionDeleteLine = 44;
+  SelectionInsertParagraph = 45; SelectionInsertLineBreak = 46;
+  SelectionExtract = 47; SelectionIsCollapsed = 48; SelectionIsBackward = 49;
+  NodeSelectionAdd = 50; NodeSelectionDelete = 51; NodeSelectionClear = 52;
+  NodeSelectionHas = 53; SelectionHasFormat = 54;
 }
 struct CompatRequest {
   CompatOperation operation;
@@ -26,21 +36,42 @@ struct CompatRequest {
   ForeignRecordRef receiver;
   ForeignCallbackValue[] args;
 }
-struct CompatReply { ForeignCallbackValue value; ForeignRenderRecord[] records; }
+struct CompatReply { ForeignCallbackValue value; ForeignRenderRecord[] records; CompatSelectionData[] selections; }
 struct CompatDirtyElement { ForeignKey key; bool intentional; }
 struct CompatSnapshot {
   uint64 version;
   ForeignRenderBatch batch;
-  bool hasSelection;
-  ForeignSelectionRef selection;
+  CompatSelectionData selection;
 }
 struct CompatCommit {
+  uint32 flags;
   uint64 version;
   bool changed;
   ForeignKey[] dirtyLeaves;
   CompatDirtyElement[] dirtyElements;
   string[] tags;
   ForeignRenderBatch batch;
-  bool hasSelection;
-  ForeignSelectionRef selection;
+  CompatSelectionData selection;
+}
+
+// Ordinary JS selections retain their objects; these are typed native snapshots
+// and explicit writes, never a JSON encoding of arbitrary own properties.
+enum CompatPointKind : byte { Unknown = 0; Text = 1; Element = 2; }
+struct CompatPoint { ForeignKey key; uint32 offset; CompatPointKind kind; }
+union CompatSelectionData {
+  1 -> struct CompatNoSelection { }
+  2 -> struct CompatRangeSelection {
+    ForeignSelectionRef reference; CompatPoint anchor; CompatPoint focus;
+    uint32 format; uint16[] style; bool dirty;
+    bool hasCachedBackward; bool cachedBackward;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+  3 -> struct CompatNodeSelection {
+    ForeignSelectionRef reference; ForeignKey[] keys; bool dirty;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+}
+struct CompatSelectionPatch {
+  bool historical; uint64 stateVersion;
+  bool activate; CompatSelectionData selection;
 }
