@@ -19,8 +19,8 @@ Its legacy hideFiltered setting is ignored rather than hiding rows. Planning
 cases pin calendar-day due boundaries, marker priority, task-data precedence,
 filter OR/AND semantics, completion counts and wrapper-row order. DOM cases
 apply and clear dimming on real mounted rows without changing saved state,
-including stale plans after deletion. Task facts are supplied; dropdown UI,
-real task queries and native hosting remain unverified. TaskList DOM cases use the mounted jsdom host to check
+including stale plans after deletion. Unit task facts are supplied; those cases
+do not establish dropdown UI, real task queries or native hosting. TaskList DOM cases use the mounted jsdom host to check
 unmanaged toolbar identity through committed child edits, HTML export and
 removal, list-kind DOM replacement and ordered-start updates that preserve
 managed item identity. These exercise the inherited ListNode DOM hooks in the
@@ -164,7 +164,18 @@ reopening restores JSON, not Markdown. Keyboard activation of Read only avoids
 outside-pointer dismissal masking the editability reset. Remote unfurl traffic
 is blocked, so hover uses the real fallback card rather than service metadata.
 Icon-action order does not establish toolbar accessibility. Shared hooks retain
-network isolation, page-error checks and diagnostic captures for both files.
+network isolation, page-error checks and diagnostic captures for every spec.
+The opt-in `/?controls` route mounts the actual checklist collector/store and
+TaskListControlsRenderer with production query and user providers. Its cases
+exercise plain/task progress, task-only filter availability, status selection
+and clearing, AND across dimensions, filter JSON restoration after a fresh
+list replacement, and progress updates from native checkbox toggles with a
+read-only guard. Task requests remain blocked, so task rows use inline fallback
+facts; no service-backed properties are accepted. On touch profiles, filter
+selection uses keyboard activation with an explicit focus precondition. A
+separate hit-test case records that the current hover-only filter target is
+unavailable after a native row tap ends. These cases do not establish a working
+native-touch filter flow, filter permission enforcement or task-query behavior.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing

@@ -1,5 +1,6 @@
 // Collector cases use real nodes; planner cases use supplied task facts.
-// No controls-menu, task-query or native hosting acceptance is established.
+// These unit mappings do not establish controls-menu, query or native hosting
+// acceptance. The separate browser fixture records its own controls evidence.
 export const EDITOR_CHECKLIST_BEHAVIOR_MAP = [
   {
     source:
