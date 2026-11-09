@@ -70,4 +70,25 @@ class EditorProjectionTest {
         assertEquals(4, projection.layout().offset(Point.Element(replacement, 1u)))
         assertFalse(projection.nodes.containsKey(old))
     }
+    @Test fun decoratorCacheInvalidatesPropertiesAndNeverQueriesDetachedDescendants() {
+        val projection = EditorProjection()
+        val root = KeyParts(0u, 0u)
+        val parent = KeyParts(0u, 1u)
+        val mention = KeyParts(0u, 2u)
+        projection.apply(Diff(0u, true, null, listOf(
+            DiffOp.CreateElement(parent, 1u, FfiElementProps(ElementFormat.UNSET, 0u, null, 0u, "", ""), emptyList()),
+            DiffOp.CreateDecorator(mention, 2u, emptyList()),
+            DiffOp.Children(parent, listOf(mention)), DiffOp.Children(root, listOf(parent)),
+        )))
+        assertEquals(listOf(mention), projection.pendingDecorators())
+        projection.installDecorators(listOf(FfiDecorator(mention, "@Person", true, true)))
+        assertTrue(projection.pendingDecorators().isEmpty())
+        assertEquals("\uFFFC", projection.layout().text)
+        projection.apply(Diff(0u, false, null, listOf(DiffOp.NodeProps(mention, emptyList()))))
+        assertEquals(listOf(mention), projection.pendingDecorators())
+        projection.apply(Diff(0u, false, null, listOf(DiffOp.Remove(parent, true), DiffOp.Children(root, emptyList()))))
+        assertTrue(projection.pendingDecorators().isEmpty())
+        assertEquals("", projection.layout().text)
+    }
+
 }

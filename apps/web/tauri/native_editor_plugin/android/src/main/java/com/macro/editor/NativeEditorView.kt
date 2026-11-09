@@ -205,6 +205,11 @@ class NativeEditorView(
                         repaint = true
                     }
                     is FfiViewEffect.Diff -> { projection.apply(effect.diff, displayedText); repaint = true }
+                    is FfiViewEffect.Decorators -> {
+                        projection.invalidateDecorators(effect.keys)
+                        repaint = true
+                        host.viewEffect(effect)
+                    }
                     is FfiViewEffect.SetSelection -> selection = effect.selection
                     FfiViewEffect.EndComposition -> {
                         BaseInputConnectionCompat.finish(text)
@@ -236,6 +241,13 @@ class NativeEditorView(
     }
 
     private fun render() {
+        val dirty = projection.pendingDecorators()
+        if (dirty.isNotEmpty()) {
+            val facts = session.query(FfiQuery.Decorators(dirty))
+            require(facts is FfiQueryReply.Decorators)
+            require(facts.nodes.map { it.key } == dirty)
+            projection.installDecorators(facts.nodes)
+        }
         projectionLayout = projection.layout()
         val editable = requireNotNull(text)
         if (editable.toString() != projectionLayout.text) {

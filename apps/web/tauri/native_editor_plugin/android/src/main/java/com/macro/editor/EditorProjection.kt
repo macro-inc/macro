@@ -14,6 +14,7 @@ internal class EditorProjection {
         var props: SerializedNode? = null,
         var state: SerializedNode? = null,
         var children: List<NodeKey> = emptyList(),
+        var decorator: FfiDecorator? = null,
     )
 
     data class Range(val key: NodeKey, val start: Int, val end: Int)
@@ -22,6 +23,7 @@ internal class EditorProjection {
         val ranges: List<Range>,
         val elements: List<Range>,
         val boundaries: Map<NodeKey, List<Int>>,
+        val decorators: List<Range>,
     ) {
         fun point(offset: Int): Point {
             require(offset in 0..text.length)
@@ -49,6 +51,25 @@ internal class EditorProjection {
     private val root = KeyParts(0u, 0u)
     val nodes = linkedMapOf<NodeKey, Node>()
     private val types = mutableMapOf<UShort, String>()
+    private val dirtyDecorators = linkedSetOf<NodeKey>()
+
+    fun invalidateDecorators(keys: List<NodeKey>) {
+        keys.filterTo(dirtyDecorators) { nodes[it]?.kind == NodeKind.DECORATOR }
+    }
+
+    fun pendingDecorators(): List<NodeKey> {
+        if (dirtyDecorators.isEmpty()) return emptyList()
+        val attached = layout().decorators.map { it.key }.toSet()
+        return dirtyDecorators.filter { it in attached }
+    }
+
+    fun installDecorators(facts: List<FfiDecorator>) {
+        require(facts.all { nodes[it.key]?.kind == NodeKind.DECORATOR })
+        facts.forEach {
+            requireNotNull(nodes[it.key]).decorator = it
+            dirtyDecorators.remove(it.key)
+        }
+    }
 
     fun registerTypes(rows: List<FfiTypeRow>) {
         types.clear()
@@ -59,7 +80,10 @@ internal class EditorProjection {
     fun registeredTypeNames(): List<String> = types.values.toList()
 
     fun apply(diff: Diff, displayedText: Pair<NodeKey, String>? = null) {
-        if (diff.fullReconcile) nodes.clear()
+        if (diff.fullReconcile) {
+            nodes.clear()
+            dirtyDecorators.clear()
+        }
         for (op in diff.ops) {
             when (op) {
                 is DiffOp.CreateElement -> nodes[op.key] = Node(
@@ -68,13 +92,17 @@ internal class EditorProjection {
                 is DiffOp.CreateText -> nodes[op.key] = Node(
                     op.key, NodeKind.TEXT, op.typeIndex, op.text, op.base, props = op.props,
                 )
-                is DiffOp.CreateDecorator -> nodes[op.key] = Node(
-                    op.key, NodeKind.DECORATOR, op.typeIndex, props = op.props,
-                )
+                is DiffOp.CreateDecorator -> {
+                    nodes[op.key] = Node(op.key, NodeKind.DECORATOR, op.typeIndex, props = op.props)
+                    dirtyDecorators += op.key
+                }
                 is DiffOp.CreateLineBreak -> nodes[op.key] = Node(
                     op.key, NodeKind.LINE_BREAK, op.typeIndex, "\n",
                 )
-                is DiffOp.Remove -> nodes.remove(op.key)
+                is DiffOp.Remove -> {
+                    nodes.remove(op.key)
+                    dirtyDecorators.remove(op.key)
+                }
                 is DiffOp.Children -> {
                     // Root may be implicit in the initial patch.
                     if (op.parent == root && root !in nodes) {
@@ -85,8 +113,14 @@ internal class EditorProjection {
                 is DiffOp.Text -> requireNotNull(nodes[op.key]).text = op.text
                 is DiffOp.TextProps -> requireNotNull(nodes[op.key]).textProps = op.props
                 is DiffOp.ElementProps -> requireNotNull(nodes[op.key]).elementProps = op.props
-                is DiffOp.NodeProps -> requireNotNull(nodes[op.key]).props = op.props
-                is DiffOp.State -> requireNotNull(nodes[op.key]).state = op.state
+                is DiffOp.NodeProps -> {
+                    requireNotNull(nodes[op.key]).props = op.props
+                    invalidateDecorators(listOf(op.key))
+                }
+                is DiffOp.State -> {
+                    requireNotNull(nodes[op.key]).state = op.state
+                    invalidateDecorators(listOf(op.key))
+                }
             }
         }
         diff.viewTextMatches?.let { key ->
@@ -104,6 +138,7 @@ internal class EditorProjection {
         val ranges = mutableListOf<Range>()
         val elements = mutableListOf<Range>()
         val boundaries = linkedMapOf<NodeKey, List<Int>>()
+        val decorators = mutableListOf<Range>()
         fun append(key: NodeKey) {
             val node = requireNotNull(nodes[key])
             val start = text.length
@@ -113,7 +148,10 @@ internal class EditorProjection {
                     ranges += Range(key, start, text.length)
                 }
                 NodeKind.LINE_BREAK -> text.append('\n')
-                NodeKind.DECORATOR -> text.append('\uFFFC')
+                NodeKind.DECORATOR -> {
+                    text.append('\uFFFC')
+                    decorators += Range(key, start, text.length)
+                }
                 NodeKind.ELEMENT -> {
                     val childOffsets = mutableListOf<Int>()
                     node.children.forEachIndexed { index, child ->
@@ -134,6 +172,6 @@ internal class EditorProjection {
             }
         }
         if (root in nodes) append(root)
-        return Layout(text.toString(), ranges, elements, boundaries)
+        return Layout(text.toString(), ranges, elements, boundaries, decorators)
     }
 }
