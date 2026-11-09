@@ -42,7 +42,18 @@ program up and get the outcome back.
   runs: 2 concurrent per viewer, 30 s. The frame enforces the concurrency cap
   today; the server still shares the public MCP executor.
 - **Rollout.** `enable-html-code-mode`, the same key on web and the harness.
-  On in local dev. Off leaves the preview a plain sandboxed frame.
+  On in local dev; the harness allows every run on a local stack, whose
+  PostHog key is often a placeholder. Off leaves the preview a plain sandboxed
+  frame.
+- **Live updates.** `macro.on(events, handler, { ids })` pushes the viewer's
+  entity events into the frame. The host opens the existing per-user event
+  stream (`GET /webhook/events/stream`, the one the SDK's `macro.events`
+  reads), filtered and access-checked on the server, one per frame with the
+  union of its subscriptions. Only the event name and entity id cross into
+  the frame, so every read still goes through `macro.run` as the viewer.
+  Delivery is best-effort: a reconnect sends `macro.resync` and the page
+  refetches. The app's GraphQL live queries were the alternative; the stream
+  was chosen because agents already know its event names from the SDK.
 - **Build.** Deno for everything, no Vite. An artifact is a TypeScript
   project: client code plus server programs in `src/server/`, with npm
   dependencies. `deno check` type-checks both sides against the SDK
@@ -91,6 +102,10 @@ if the run is cancelled.
 - Web: `features/block-code/code-mode/` injects `window.macro` and posts
   results back. Calls go through `queries/document-programs.ts`. Span
   `block_code.run_document_program` carries the document id.
+- Web: `code-mode/event-host.ts` answers `macro.on` from one stream per frame
+  (`queries/document-events.ts` over `service-storage/event-stream.ts`), capped
+  at 16 subscriptions. Span `block_code.document_events.stream` covers each
+  connection and counts the events it delivered.
 - The endpoint is app-internal in the SDK coverage list. An SDK user runs code
   directly.
 
