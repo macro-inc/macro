@@ -1512,17 +1512,6 @@ where
             .map_err(|e| TeamError::StorageLayerError(e.into()))
     }
 
-    async fn offer_harnesses_with_invites(
-        &self,
-        invite_ids: &[uuid::Uuid],
-        invited_by: &MacroUserIdStr<'_>,
-        harness_ids: &[uuid::Uuid],
-    ) -> Result<(), InviteUsersToTeamError> {
-        self.team_repository
-            .offer_harnesses_with_invites(invite_ids, invited_by, harness_ids)
-            .await
-    }
-
     #[tracing::instrument(skip(self), fields(invitee_plan = tracing::field::Empty), err)]
     async fn invite_users_to_team(
         &self,
