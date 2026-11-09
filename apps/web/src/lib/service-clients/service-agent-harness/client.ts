@@ -26,7 +26,9 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  ExecutionActivity,
   ExecutionRecord,
+  ExecutionStatus,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -53,6 +55,30 @@ export type {
 };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
+
+// Wire shapes of `run_document_program` (`agent_code_mode::inbound::document_router`).
+// Hand-written until `bun run gen-api agent-harness` adds them to `generated/`.
+
+/** Body of `POST /documents/{documentId}/code-executions`. */
+export type RunDocumentProgramRequest = {
+  /** TypeScript module exporting `async function main({macro, ...arguments})`. */
+  source: string;
+  /** Spread into `main`'s argument beside `macro`. */
+  arguments?: Record<string, unknown>;
+  /** Total deadline in milliseconds, from 1 to 30000. */
+  timeoutMs?: number;
+  /** Send no writes; each is reported as skipped so the run shows what it would change. */
+  dryRun?: boolean;
+};
+
+/** Outcome of a document program: `UserExecutionReceipt` on the server. */
+export type DocumentProgramReceipt = {
+  status: ExecutionStatus;
+  activity: ExecutionActivity[];
+  activityTruncated: boolean;
+  result?: unknown;
+  error?: string | null;
+};
 
 /** Session endpoints return safe, user-facing errors as plain text. */
 const sessionError: ErrorResponseHandler<never> = async (response) => {
@@ -394,6 +420,27 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<ExecutionRecord>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
       { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /**
+   * Run a program taken from a document the user has open, as the user, and
+   * wait for its outcome. The server never returns the credential it ran with.
+   */
+  runDocumentProgram(
+    documentId: string,
+    request: RunDocumentProgramRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DocumentProgramReceipt>(
+      `${agentHarnessHost}/documents/${documentId}/code-executions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+        errorResponseHandler: sessionError,
+      }
     );
   },
 

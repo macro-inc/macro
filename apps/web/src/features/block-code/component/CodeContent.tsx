@@ -7,6 +7,8 @@ export type CodeBlockMode = 'code' | 'render';
 
 export type CodeContentProps = {
   text: string;
+  /** Lets an HTML preview run the file's program blocks as the viewer. */
+  documentId?: string;
   fileType?: string | null;
   readOnly: boolean;
   mode: CodeBlockMode;
@@ -35,7 +37,7 @@ export function CodeContent(props: CodeContentProps) {
         />
       }
     >
-      <HtmlPreview text={props.text} />
+      <HtmlPreview text={props.text} documentId={props.documentId} />
     </Show>
   );
 }

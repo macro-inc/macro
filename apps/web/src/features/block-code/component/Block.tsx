@@ -71,6 +71,7 @@ export default function BlockCode() {
                   fallback={
                     <CodeContent
                       text={blockText() ?? ''}
+                      documentId={documentId}
                       fileType={blockMetadata()?.fileType}
                       readOnly={readOnly()}
                       mode={mode()}

@@ -22,6 +22,16 @@ stacks. Process isolation belongs to
   receipts include observed SDK activity for inline conversation snapshots.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
+  `execute` takes the program's input shape: `None` is ExecuteCode's JavaScript
+  contract, `Some(Unattended)` the TypeScript `main({...arguments, macro})`
+  contract with optional dry run.
+- `src/domain/document_programs.rs` + `src/inbound/document_router.rs`:
+  `POST /documents/{document_id}/code-executions` runs a program embedded in
+  an HTML document the user has open (the web's `HtmlPreview` posts the file's
+  `text/macro` blocks), as `ToolCaller::Document` with the inputs contract and
+  a plain user token (no agent), gated per user by `DocumentProgramGate`
+  (`enable-html-code-mode`; the harness adapter is `FlaggedDocumentPrograms`).
+  Only directly signed-in users; a token minted for an agent's run is refused.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their

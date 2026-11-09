@@ -3140,6 +3140,44 @@ standalone desktop blocks and Drive detail views. Switch to Code to inspect or
 edit the source, then back to Render to see the current preview. Other code file
 types do not show these tabs.
 
+### Program blocks in HTML previews
+
+With the `enable-html-code-mode` flag on (on by default in dev), the rendered
+frame of an HTML document gets `window.macro`. `macro.run(idOrSource, args)`
+runs a `<script type="text/macro" id="…">` block, or the string itself, as a
+TypeScript module on the server as the viewer, and resolves to what its
+`main` returned; a failed run rejects with the server's error text. The
+program's `main({macro, ...args})` receives the Macro SDK already signed in;
+the frame never sees a credential, and the file never reaches the API
+directly (its origin is opaque, so CORS refuses it). At most two runs per
+frame wait at once; a run lasts at most 30 seconds. The program's writes stand
+as the user's own, with no agent attribution.
+
+```html
+<script type="text/macro" id="my-tasks">
+  export async function main({ macro, query }) {
+    const tasks = [];
+    for await (const task of macro.tasks.search(query, { pageSize: 5 })) {
+      tasks.push(task);
+      if (tasks.length === 5) break;
+    }
+    const summaries = await macro.tasks.summaries(tasks);
+    return summaries.map((summary) => summary.name);
+  }
+</script>
+<ul id="out"></ul>
+<script>
+  macro.run('my-tasks', { query: 'launch' }).then((names) => {
+    out.replaceChildren(...names.map((name) => Object.assign(document.createElement('li'), { textContent: name })));
+  });
+</script>
+```
+
+To check it, upload such a file, open it, and confirm the list fills in Render;
+with the flag off, `macro` is undefined and the preview is a plain sandboxed
+frame. A program whose `main` throws shows nothing: inspect the rejection in
+the frame's own `catch`.
+
 ## Large-document undo checks
 
 In a disposable Markdown document, change several paragraphs in one edit, then
