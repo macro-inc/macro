@@ -221,3 +221,23 @@ test('ten thousand live captures produce only changed-id sparse drains and exact
   leases.acknowledge(retry);
   expect(leases.beginDrain()).toBeUndefined();
 });
+
+test('owner lookup reflects local ownership independently of native-held and in-flight state', () => {
+  const leases = new CaptureLeases(1),
+    a = record(10n);
+  expect(leases.hasOwners(10n)).toBe(false);
+  leases.retain(a);
+  expect(leases.hasOwners(10n)).toBe(true);
+  const retain = leases.beginDrain();
+  if (!retain) throw new Error('Expected retain');
+  leases.release(a);
+  expect(leases.hasOwners(10n)).toBe(false);
+  leases.acknowledge(retain);
+  expect(leases.hasOwners(10n)).toBe(false);
+  const release = leases.beginDrain();
+  if (!release) throw new Error('Expected release');
+  leases.retain(a);
+  expect(leases.hasOwners(10n)).toBe(true);
+  leases.acknowledge(release);
+  expect(leases.hasOwners(10n)).toBe(true);
+});

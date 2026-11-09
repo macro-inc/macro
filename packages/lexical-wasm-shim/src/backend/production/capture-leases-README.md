@@ -16,6 +16,9 @@ const drain = leases.beginDrain();
 // drain?.leases is the generated ICompatCaptureLeases payload.
 ```
 
+`hasOwners(captureId)` is an O(1) local-owner query. It ignores acknowledged
+native holds and in-flight requests; it does not report graph/version ownership.
+
 Each raw wrapper and each mirror-owned exact reference independently retains and
 releases its ownership. Duplicate decoded refs with identical authority share the
 capture ID count. The helper checks the complete node tuple, version, update ID

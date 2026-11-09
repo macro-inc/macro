@@ -31,6 +31,10 @@ export class CaptureLeases {
       throw new Error('Capture leases require a valid native editor id');
   }
 
+  hasOwners(captureId: bigint): boolean {
+    return (this.captures.get(captureId)?.owners ?? 0) > 0;
+  }
+
   retain(record: IForeignRecordRef): void {
     this.validate(record);
     let capture = this.captures.get(record.captureId);
