@@ -98,61 +98,63 @@ test('clipboard facts release once when a lazy HTML paste is cancelled by view d
   }
 });
 
-test.each([
-  false,
-  true,
-])('plain-only=%s changes only Markdown parsing through the real native session', async (plainOnly) => {
-  const fixture = nativeSurface();
-  let released = 0;
-  const releaseFacts = fixture.view.clipboard.registerFacts(() => ({
-    entries: [
-      {
-        mime: 'application/x-macro-paste-facts',
-        value: JSON.stringify({
-          request: 0,
-          plainOnly,
-          hasFileEntries: false,
-          mobileImageRecovery: false,
-        }),
-      },
-    ],
-    release: () => {
-      released++;
-    },
-  }));
-  try {
-    fixture.port.setState(
-      JSON.stringify({
-        root: {
-          type: 'root',
-          version: 1,
-          children: [{ type: 'paragraph', version: 1, children: [] }],
+test.each([false, true])(
+  'plain-only=%s changes only Markdown parsing through the real native session',
+  async (plainOnly) => {
+    const fixture = nativeSurface();
+    let released = 0;
+    const releaseFacts = fixture.view.clipboard.registerFacts(() => ({
+      entries: [
+        {
+          mime: 'application/x-macro-paste-facts',
+          value: JSON.stringify({
+            request: 0,
+            plainOnly,
+            hasFileEntries: false,
+            mobileImageRecovery: false,
+          }),
         },
-      })
-    );
-    const paragraph = [...fixture.view.mirror.values()].find(
-      (node) => node.type === 'paragraph'
-    );
-    if (!paragraph) throw new Error('Missing paragraph');
-    const element = fixture.view.getElementByKey(paragraph.key);
-    if (!element) throw new Error('Missing paragraph element');
-    fixture.root.focus();
-    document.getSelection()?.setBaseAndExtent(element, 0, element, 0);
-    fixture.port.selectionFromView({
-      kind: 'range',
-      anchor: { key: paragraph.key, offset: 0, type: 'element' },
-      focus: { key: paragraph.key, offset: 0, type: 'element' },
-    });
-    fixture.counters.admissions = 0;
-    expect(await fixture.view.clipboard.paste(transfer('**bold**'))).toBe(true);
-    expect(fixture.root.textContent).toBe(plainOnly ? '**bold**' : 'bold');
-    expect(fixture.root.querySelectorAll('strong')).toHaveLength(
-      plainOnly ? 0 : 1
-    );
-    expect(fixture.counters.admissions).toBe(1);
-    expect(released).toBe(1);
-  } finally {
-    releaseFacts();
-    fixture.close();
+      ],
+      release: () => {
+        released++;
+      },
+    }));
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [{ type: 'paragraph', version: 1, children: [] }],
+          },
+        })
+      );
+      const paragraph = [...fixture.view.mirror.values()].find(
+        (node) => node.type === 'paragraph'
+      );
+      if (!paragraph) throw new Error('Missing paragraph');
+      const element = fixture.view.getElementByKey(paragraph.key);
+      if (!element) throw new Error('Missing paragraph element');
+      fixture.root.focus();
+      document.getSelection()?.setBaseAndExtent(element, 0, element, 0);
+      fixture.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: paragraph.key, offset: 0, type: 'element' },
+        focus: { key: paragraph.key, offset: 0, type: 'element' },
+      });
+      fixture.counters.admissions = 0;
+      expect(await fixture.view.clipboard.paste(transfer('**bold**'))).toBe(
+        true
+      );
+      expect(fixture.root.textContent).toBe(plainOnly ? '**bold**' : 'bold');
+      expect(fixture.root.querySelectorAll('strong')).toHaveLength(
+        plainOnly ? 0 : 1
+      );
+      expect(fixture.counters.admissions).toBe(1);
+      expect(released).toBe(1);
+    } finally {
+      releaseFacts();
+      fixture.close();
+    }
   }
-});
+);
