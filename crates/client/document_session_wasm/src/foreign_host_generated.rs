@@ -51,6 +51,7 @@ pub enum ForeignNativeField {
     TableNodeFrozenRowCount = 25,
     TableNodeRowStriping = 26,
     TableRowNodeHeight = 27,
+    RootNodeCachedText = 28,
 }
 
 impl ::core::convert::TryFrom<u32> for ForeignNativeField {
@@ -86,6 +87,7 @@ impl ::core::convert::TryFrom<u32> for ForeignNativeField {
             25 => Ok(ForeignNativeField::TableNodeFrozenRowCount),
             26 => Ok(ForeignNativeField::TableNodeRowStriping),
             27 => Ok(ForeignNativeField::TableRowNodeHeight),
+            28 => Ok(ForeignNativeField::RootNodeCachedText),
             d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
         }
     }
@@ -122,6 +124,7 @@ impl ::core::convert::From<ForeignNativeField> for u32 {
             ForeignNativeField::TableNodeFrozenRowCount => 25,
             ForeignNativeField::TableNodeRowStriping => 26,
             ForeignNativeField::TableRowNodeHeight => 27,
+            ForeignNativeField::RootNodeCachedText => 28,
         }
     }
 }
@@ -584,6 +587,7 @@ pub struct ForeignNodeRef {
     pub editor_id: u32,
     pub version: u64,
     pub key: ForeignKey,
+    pub instance_owner_id: u32,
     pub class_id: u32,
     pub instance_id: u32,
 }
@@ -604,6 +608,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignNodeRef {
             ::bebop::packed_read!(zelf.editor_id)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.version)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.key)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.instance_owner_id)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.class_id)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.instance_id)._serialize_chained(dest)?
         )
@@ -626,13 +631,16 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignNodeRef {
         i += read;
         let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             editor_id: v0,
             version: v1,
             key: v2,
-            class_id: v3,
-            instance_id: v4,
+            instance_owner_id: v3,
+            class_id: v4,
+            instance_id: v5,
         }))
     }
 }
@@ -743,6 +751,7 @@ impl<'raw> ::bebop::Record<'raw> for ForeignRecordRef {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForeignClassRegistration<'raw> {
+    pub owner_id: u32,
     pub class_id: u32,
     pub type_name: &'raw str,
     pub class_name: &'raw str,
@@ -755,6 +764,7 @@ pub struct ForeignClassRegistration<'raw> {
 impl<'raw> ::bebop::SubRecord<'raw> for ForeignClassRegistration<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u32>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <ForeignNodeKind>::MIN_SERIALIZED_SIZE +
@@ -764,6 +774,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignClassRegistration<'raw> {
 
     #[inline]
     fn serialized_size(&self) -> usize {
+        self.owner_id.serialized_size() +
         self.class_id.serialized_size() +
         self.type_name.serialized_size() +
         self.class_name.serialized_size() +
@@ -775,6 +786,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignClassRegistration<'raw> {
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
+            zelf.owner_id._serialize_chained(dest)? +
             zelf.class_id._serialize_chained(dest)? +
             zelf.type_name._serialize_chained(dest)? +
             zelf.class_name._serialize_chained(dest)? +
@@ -806,15 +818,18 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignClassRegistration<'raw> {
         i += read;
         let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
-            class_id: v0,
-            type_name: v1,
-            class_name: v2,
-            kind: v3,
-            ancestry: v4,
-            native_type: v5,
-            hooks: v6,
+            owner_id: v0,
+            class_id: v1,
+            type_name: v2,
+            class_name: v3,
+            kind: v4,
+            ancestry: v5,
+            native_type: v6,
+            hooks: v7,
         }))
     }
 }
@@ -1337,9 +1352,70 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignTreeLinks {
 
 impl<'raw> ::bebop::Record<'raw> for ForeignTreeLinks {}
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ForeignCloneMode {
+    Unknown = 0,
+    CopyOnWrite = 1,
+    Copy = 2,
+    Restore = 3,
+    Ephemeral = 4,
+}
+
+impl ::core::convert::TryFrom<u8> for ForeignCloneMode {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u8) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(ForeignCloneMode::Unknown),
+            1 => Ok(ForeignCloneMode::CopyOnWrite),
+            2 => Ok(ForeignCloneMode::Copy),
+            3 => Ok(ForeignCloneMode::Restore),
+            4 => Ok(ForeignCloneMode::Ephemeral),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<ForeignCloneMode> for u8 {
+    fn from(value: ForeignCloneMode) -> Self {
+        match value {
+            ForeignCloneMode::Unknown => 0,
+            ForeignCloneMode::CopyOnWrite => 1,
+            ForeignCloneMode::Copy => 2,
+            ForeignCloneMode::Restore => 3,
+            ForeignCloneMode::Ephemeral => 4,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for ForeignCloneMode {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u8>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u8>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u8::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u8::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for ForeignCloneMode {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+}
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForeignCloneStage<'raw> {
     pub stage_id: u32,
+    pub mode: ForeignCloneMode,
     pub editor_id: u32,
     pub update_id: u32,
     pub version: u64,
@@ -1355,6 +1431,7 @@ pub struct ForeignCloneStage<'raw> {
 impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u32>::MIN_SERIALIZED_SIZE +
+        <ForeignCloneMode>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
         <u64>::MIN_SERIALIZED_SIZE +
@@ -1369,6 +1446,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
     #[inline]
     fn serialized_size(&self) -> usize {
         self.stage_id.serialized_size() +
+        self.mode.serialized_size() +
         self.editor_id.serialized_size() +
         self.update_id.serialized_size() +
         self.version.serialized_size() +
@@ -1384,6 +1462,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.stage_id._serialize_chained(dest)? +
+            zelf.mode._serialize_chained(dest)? +
             zelf.editor_id._serialize_chained(dest)? +
             zelf.update_id._serialize_chained(dest)? +
             zelf.version._serialize_chained(dest)? +
@@ -1426,19 +1505,22 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage<'raw> {
         i += read;
         let (read, v10) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v11) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             stage_id: v0,
-            editor_id: v1,
-            update_id: v2,
-            version: v3,
-            source: v4,
-            ctor_key: v5,
-            destination: v6,
-            base: v7,
-            native_projection: v8,
-            own_fields: v9,
-            required_links: v10,
+            mode: v1,
+            editor_id: v2,
+            update_id: v3,
+            version: v4,
+            source: v5,
+            ctor_key: v6,
+            destination: v7,
+            base: v8,
+            native_projection: v9,
+            own_fields: v10,
+            required_links: v11,
         }))
     }
 }
@@ -1448,6 +1530,7 @@ impl<'raw> ::bebop::Record<'raw> for ForeignCloneStage<'raw> {}
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForeignCloneAck<'raw> {
     pub stage_id: u32,
+    pub instance_owner_id: u32,
     pub class_id: u32,
     pub instance_id: u32,
     pub ctor_key: ForeignKey,
@@ -1463,6 +1546,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
         <u32>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <ForeignKey>::MIN_SERIALIZED_SIZE +
         <ForeignKey>::MIN_SERIALIZED_SIZE +
         <ForeignBasePatch<'raw>>::MIN_SERIALIZED_SIZE +
@@ -1473,6 +1557,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
     #[inline]
     fn serialized_size(&self) -> usize {
         self.stage_id.serialized_size() +
+        self.instance_owner_id.serialized_size() +
         self.class_id.serialized_size() +
         self.instance_id.serialized_size() +
         self.ctor_key.serialized_size() +
@@ -1486,6 +1571,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.stage_id._serialize_chained(dest)? +
+            zelf.instance_owner_id._serialize_chained(dest)? +
             zelf.class_id._serialize_chained(dest)? +
             zelf.instance_id._serialize_chained(dest)? +
             zelf.ctor_key._serialize_chained(dest)? +
@@ -1522,17 +1608,20 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneAck<'raw> {
         i += read;
         let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             stage_id: v0,
-            class_id: v1,
-            instance_id: v2,
-            ctor_key: v3,
-            destination_key: v4,
-            base_patch: v5,
-            native_projection: v6,
-            own_fields: v7,
-            observed_links: v8,
+            instance_owner_id: v1,
+            class_id: v2,
+            instance_id: v3,
+            ctor_key: v4,
+            destination_key: v5,
+            base_patch: v6,
+            native_projection: v7,
+            own_fields: v8,
+            observed_links: v9,
         }))
     }
 }
@@ -1542,6 +1631,7 @@ impl<'raw> ::bebop::Record<'raw> for ForeignCloneAck<'raw> {}
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForeignFieldRead<'raw> {
     pub record: ForeignRecordRef,
+    pub prototype_owner_id: u32,
     pub prototype_class_id: u32,
     pub field: &'raw str,
 }
@@ -1550,11 +1640,13 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldRead<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.record.serialized_size() +
+        self.prototype_owner_id.serialized_size() +
         self.prototype_class_id.serialized_size() +
         self.field.serialized_size()
     }
@@ -1562,64 +1654,9 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldRead<'raw> {
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.record._serialize_chained(dest)? +
+            zelf.prototype_owner_id._serialize_chained(dest)? +
             zelf.prototype_class_id._serialize_chained(dest)? +
             zelf.field._serialize_chained(dest)?
-        )
-    });
-
-    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
-        let mut i = 0;
-        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
-            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
-            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
-        }
-
-        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-
-        Ok((i, Self {
-            record: v0,
-            prototype_class_id: v1,
-            field: v2,
-        }))
-    }
-}
-
-impl<'raw> ::bebop::Record<'raw> for ForeignFieldRead<'raw> {}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ForeignFieldWrite<'raw> {
-    pub record: ForeignRecordRef,
-    pub prototype_class_id: u32,
-    pub field: &'raw str,
-    pub value: ForeignOpaqueValue,
-}
-
-impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldWrite<'raw> {
-    const MIN_SERIALIZED_SIZE: usize =
-        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
-        <u32>::MIN_SERIALIZED_SIZE +
-        <&'raw str>::MIN_SERIALIZED_SIZE +
-        <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE;
-
-    #[inline]
-    fn serialized_size(&self) -> usize {
-        self.record.serialized_size() +
-        self.prototype_class_id.serialized_size() +
-        self.field.serialized_size() +
-        self.value.serialized_size()
-    }
-
-    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
-        Ok(
-            zelf.record._serialize_chained(dest)? +
-            zelf.prototype_class_id._serialize_chained(dest)? +
-            zelf.field._serialize_chained(dest)? +
-            zelf.value._serialize_chained(dest)?
         )
     });
 
@@ -1641,9 +1678,75 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldWrite<'raw> {
 
         Ok((i, Self {
             record: v0,
-            prototype_class_id: v1,
-            field: v2,
-            value: v3,
+            prototype_owner_id: v1,
+            prototype_class_id: v2,
+            field: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignFieldRead<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignFieldWrite<'raw> {
+    pub record: ForeignRecordRef,
+    pub prototype_owner_id: u32,
+    pub prototype_class_id: u32,
+    pub field: &'raw str,
+    pub value: ForeignOpaqueValue,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldWrite<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.record.serialized_size() +
+        self.prototype_owner_id.serialized_size() +
+        self.prototype_class_id.serialized_size() +
+        self.field.serialized_size() +
+        self.value.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.record._serialize_chained(dest)? +
+            zelf.prototype_owner_id._serialize_chained(dest)? +
+            zelf.prototype_class_id._serialize_chained(dest)? +
+            zelf.field._serialize_chained(dest)? +
+            zelf.value._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            record: v0,
+            prototype_owner_id: v1,
+            prototype_class_id: v2,
+            field: v3,
+            value: v4,
         }))
     }
 }
@@ -2186,9 +2289,11 @@ impl<'raw> ::bebop::Record<'raw> for ForeignCallbackValue<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForeignHookCall<'raw> {
+    pub call_id: u32,
     pub callback_id: u32,
     pub hook: u8,
     pub receiver: ForeignRecordRef,
+    pub prototype_owner_id: u32,
     pub prototype_class_id: u32,
     pub args: ::std::vec::Vec<ForeignCallbackValue<'raw>>,
 }
@@ -2196,25 +2301,31 @@ pub struct ForeignHookCall<'raw> {
 impl<'raw> ::bebop::SubRecord<'raw> for ForeignHookCall<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u32>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <u8>::MIN_SERIALIZED_SIZE +
         <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<ForeignCallbackValue<'raw>>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
+        self.call_id.serialized_size() +
         self.callback_id.serialized_size() +
         self.hook.serialized_size() +
         self.receiver.serialized_size() +
+        self.prototype_owner_id.serialized_size() +
         self.prototype_class_id.serialized_size() +
         self.args.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
+            zelf.call_id._serialize_chained(dest)? +
             zelf.callback_id._serialize_chained(dest)? +
             zelf.hook._serialize_chained(dest)? +
             zelf.receiver._serialize_chained(dest)? +
+            zelf.prototype_owner_id._serialize_chained(dest)? +
             zelf.prototype_class_id._serialize_chained(dest)? +
             zelf.args._serialize_chained(dest)?
         )
@@ -2237,13 +2348,19 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignHookCall<'raw> {
         i += read;
         let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
-            callback_id: v0,
-            hook: v1,
-            receiver: v2,
-            prototype_class_id: v3,
-            args: v4,
+            call_id: v0,
+            callback_id: v1,
+            hook: v2,
+            receiver: v3,
+            prototype_owner_id: v4,
+            prototype_class_id: v5,
+            args: v6,
         }))
     }
 }
@@ -2557,6 +2674,256 @@ impl<'raw> ::bebop::SubRecord<'raw> for ForeignRecordPatch<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for ForeignRecordPatch<'raw> {}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignOpaqueValuePatch<'raw> {
+    pub slot_id: u32,
+    pub value: ForeignCallbackValue<'raw>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignOpaqueValuePatch<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <ForeignCallbackValue<'raw>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.slot_id.serialized_size() +
+        self.value.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.slot_id._serialize_chained(dest)? +
+            zelf.value._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            slot_id: v0,
+            value: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignOpaqueValuePatch<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignPublicExportAck<'raw> {
+    pub call_id: u32,
+    pub record: ForeignRecordRef,
+    pub result: ForeignHookResult<'raw>,
+    pub record_patches: ::std::vec::Vec<ForeignRecordPatch<'raw>>,
+    pub value_patches: ::std::vec::Vec<ForeignOpaqueValuePatch<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignPublicExportAck<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <ForeignHookResult<'raw>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<ForeignRecordPatch<'raw>>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<ForeignOpaqueValuePatch<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.call_id.serialized_size() +
+        self.record.serialized_size() +
+        self.result.serialized_size() +
+        self.record_patches.serialized_size() +
+        self.value_patches.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.call_id._serialize_chained(dest)? +
+            zelf.record._serialize_chained(dest)? +
+            zelf.result._serialize_chained(dest)? +
+            zelf.record_patches._serialize_chained(dest)? +
+            zelf.value_patches._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            call_id: v0,
+            record: v1,
+            result: v2,
+            record_patches: v3,
+            value_patches: v4,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignPublicExportAck<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignSerializedExportAck<'raw> {
+    pub call_id: u32,
+    pub record: ForeignRecordRef,
+    pub result: ForeignHookResult<'raw>,
+    pub json: ::bebop::SliceWrapper<'raw, u16>,
+    pub record_patches: ::std::vec::Vec<ForeignRecordPatch<'raw>>,
+    pub value_patches: ::std::vec::Vec<ForeignOpaqueValuePatch<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignSerializedExportAck<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <ForeignHookResult<'raw>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, u16>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<ForeignRecordPatch<'raw>>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<ForeignOpaqueValuePatch<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.call_id.serialized_size() +
+        self.record.serialized_size() +
+        self.result.serialized_size() +
+        self.json.serialized_size() +
+        self.record_patches.serialized_size() +
+        self.value_patches.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.call_id._serialize_chained(dest)? +
+            zelf.record._serialize_chained(dest)? +
+            zelf.result._serialize_chained(dest)? +
+            zelf.json._serialize_chained(dest)? +
+            zelf.record_patches._serialize_chained(dest)? +
+            zelf.value_patches._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            call_id: v0,
+            record: v1,
+            result: v2,
+            json: v3,
+            record_patches: v4,
+            value_patches: v5,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignSerializedExportAck<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignExportObjectTrace<'raw> {
+    pub record: ForeignRecordRef,
+    pub call_id: u32,
+    pub has_parent: bool,
+    pub parent_call_id: u32,
+    pub child_call_ids: ::bebop::SliceWrapper<'raw, u32>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ForeignExportObjectTrace<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <bool>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, u32>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.record.serialized_size() +
+        self.call_id.serialized_size() +
+        self.has_parent.serialized_size() +
+        self.parent_call_id.serialized_size() +
+        self.child_call_ids.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.record._serialize_chained(dest)? +
+            zelf.call_id._serialize_chained(dest)? +
+            zelf.has_parent._serialize_chained(dest)? +
+            zelf.parent_call_id._serialize_chained(dest)? +
+            zelf.child_call_ids._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            record: v0,
+            call_id: v1,
+            has_parent: v2,
+            parent_call_id: v3,
+            child_call_ids: v4,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ForeignExportObjectTrace<'raw> {}
+
 #[cfg(feature = "bebop-owned-all")]
 pub mod owned {
     #![allow(warnings)]
@@ -2591,6 +2958,7 @@ pub mod owned {
 
     #[derive(Clone, Debug, PartialEq)]
     pub struct ForeignClassRegistration {
+        pub owner_id: u32,
         pub class_id: u32,
         pub type_name: String,
         pub class_name: String,
@@ -2603,6 +2971,7 @@ pub mod owned {
     impl<'raw> ::core::convert::From<super::ForeignClassRegistration<'raw>> for ForeignClassRegistration {
         fn from(value: super::ForeignClassRegistration) -> Self {
             Self {
+                owner_id: value.owner_id,
                 class_id: value.class_id,
                 type_name: value.type_name.into(),
                 class_name: value.class_name.into(),
@@ -2617,6 +2986,7 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for ForeignClassRegistration {
         const MIN_SERIALIZED_SIZE: usize =
             <u32>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
             <ForeignNodeKind>::MIN_SERIALIZED_SIZE +
@@ -2626,6 +2996,7 @@ pub mod owned {
 
         #[inline]
         fn serialized_size(&self) -> usize {
+            self.owner_id.serialized_size() +
             self.class_id.serialized_size() +
             self.type_name.serialized_size() +
             self.class_name.serialized_size() +
@@ -2637,6 +3008,7 @@ pub mod owned {
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
+                zelf.owner_id._serialize_chained(dest)? +
                 zelf.class_id._serialize_chained(dest)? +
                 zelf.type_name._serialize_chained(dest)? +
                 zelf.class_name._serialize_chained(dest)? +
@@ -2668,15 +3040,18 @@ pub mod owned {
             i += read;
             let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
-                class_id: v0,
-                type_name: v1,
-                class_name: v2,
-                kind: v3,
-                ancestry: v4,
-                native_type: v5,
-                hooks: v6,
+                owner_id: v0,
+                class_id: v1,
+                type_name: v2,
+                class_name: v3,
+                kind: v4,
+                ancestry: v5,
+                native_type: v6,
+                hooks: v7,
             }))
         }
     }
@@ -3169,9 +3544,12 @@ pub mod owned {
 
     pub use super::ForeignTreeLinks;
 
+    pub use super::ForeignCloneMode;
+
     #[derive(Clone, Debug, PartialEq)]
     pub struct ForeignCloneStage {
         pub stage_id: u32,
+        pub mode: ForeignCloneMode,
         pub editor_id: u32,
         pub update_id: u32,
         pub version: u64,
@@ -3188,6 +3566,7 @@ pub mod owned {
         fn from(value: super::ForeignCloneStage) -> Self {
             Self {
                 stage_id: value.stage_id,
+                mode: value.mode,
                 editor_id: value.editor_id,
                 update_id: value.update_id,
                 version: value.version,
@@ -3205,6 +3584,7 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for ForeignCloneStage {
         const MIN_SERIALIZED_SIZE: usize =
             <u32>::MIN_SERIALIZED_SIZE +
+            <ForeignCloneMode>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <u64>::MIN_SERIALIZED_SIZE +
@@ -3219,6 +3599,7 @@ pub mod owned {
         #[inline]
         fn serialized_size(&self) -> usize {
             self.stage_id.serialized_size() +
+            self.mode.serialized_size() +
             self.editor_id.serialized_size() +
             self.update_id.serialized_size() +
             self.version.serialized_size() +
@@ -3234,6 +3615,7 @@ pub mod owned {
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.stage_id._serialize_chained(dest)? +
+                zelf.mode._serialize_chained(dest)? +
                 zelf.editor_id._serialize_chained(dest)? +
                 zelf.update_id._serialize_chained(dest)? +
                 zelf.version._serialize_chained(dest)? +
@@ -3276,19 +3658,22 @@ pub mod owned {
             i += read;
             let (read, v10) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v11) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 stage_id: v0,
-                editor_id: v1,
-                update_id: v2,
-                version: v3,
-                source: v4,
-                ctor_key: v5,
-                destination: v6,
-                base: v7,
-                native_projection: v8,
-                own_fields: v9,
-                required_links: v10,
+                mode: v1,
+                editor_id: v2,
+                update_id: v3,
+                version: v4,
+                source: v5,
+                ctor_key: v6,
+                destination: v7,
+                base: v8,
+                native_projection: v9,
+                own_fields: v10,
+                required_links: v11,
             }))
         }
     }
@@ -3298,6 +3683,7 @@ pub mod owned {
     #[derive(Clone, Debug, PartialEq)]
     pub struct ForeignCloneAck {
         pub stage_id: u32,
+        pub instance_owner_id: u32,
         pub class_id: u32,
         pub instance_id: u32,
         pub ctor_key: ForeignKey,
@@ -3312,6 +3698,7 @@ pub mod owned {
         fn from(value: super::ForeignCloneAck) -> Self {
             Self {
                 stage_id: value.stage_id,
+                instance_owner_id: value.instance_owner_id,
                 class_id: value.class_id,
                 instance_id: value.instance_id,
                 ctor_key: value.ctor_key,
@@ -3329,6 +3716,7 @@ pub mod owned {
             <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <ForeignKey>::MIN_SERIALIZED_SIZE +
             <ForeignKey>::MIN_SERIALIZED_SIZE +
             <ForeignBasePatch>::MIN_SERIALIZED_SIZE +
@@ -3339,6 +3727,7 @@ pub mod owned {
         #[inline]
         fn serialized_size(&self) -> usize {
             self.stage_id.serialized_size() +
+            self.instance_owner_id.serialized_size() +
             self.class_id.serialized_size() +
             self.instance_id.serialized_size() +
             self.ctor_key.serialized_size() +
@@ -3352,6 +3741,7 @@ pub mod owned {
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.stage_id._serialize_chained(dest)? +
+                zelf.instance_owner_id._serialize_chained(dest)? +
                 zelf.class_id._serialize_chained(dest)? +
                 zelf.instance_id._serialize_chained(dest)? +
                 zelf.ctor_key._serialize_chained(dest)? +
@@ -3388,17 +3778,20 @@ pub mod owned {
             i += read;
             let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 stage_id: v0,
-                class_id: v1,
-                instance_id: v2,
-                ctor_key: v3,
-                destination_key: v4,
-                base_patch: v5,
-                native_projection: v6,
-                own_fields: v7,
-                observed_links: v8,
+                instance_owner_id: v1,
+                class_id: v2,
+                instance_id: v3,
+                ctor_key: v4,
+                destination_key: v5,
+                base_patch: v6,
+                native_projection: v7,
+                own_fields: v8,
+                observed_links: v9,
             }))
         }
     }
@@ -3408,6 +3801,7 @@ pub mod owned {
     #[derive(Clone, Debug, PartialEq)]
     pub struct ForeignFieldRead {
         pub record: ForeignRecordRef,
+        pub prototype_owner_id: u32,
         pub prototype_class_id: u32,
         pub field: String,
     }
@@ -3416,6 +3810,7 @@ pub mod owned {
         fn from(value: super::ForeignFieldRead) -> Self {
             Self {
                 record: value.record,
+                prototype_owner_id: value.prototype_owner_id,
                 prototype_class_id: value.prototype_class_id,
                 field: value.field.into(),
             }
@@ -3426,11 +3821,13 @@ pub mod owned {
         const MIN_SERIALIZED_SIZE: usize =
             <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.record.serialized_size() +
+            self.prototype_owner_id.serialized_size() +
             self.prototype_class_id.serialized_size() +
             self.field.serialized_size()
         }
@@ -3438,75 +3835,9 @@ pub mod owned {
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.record._serialize_chained(dest)? +
+                zelf.prototype_owner_id._serialize_chained(dest)? +
                 zelf.prototype_class_id._serialize_chained(dest)? +
                 zelf.field._serialize_chained(dest)?
-            )
-        });
-
-        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
-            let mut i = 0;
-            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
-                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
-                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
-            }
-
-            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-
-            Ok((i, Self {
-                record: v0,
-                prototype_class_id: v1,
-                field: v2,
-            }))
-        }
-    }
-
-    impl<'raw> ::bebop::Record<'raw> for ForeignFieldRead {}
-
-    #[derive(Clone, Debug, PartialEq)]
-    pub struct ForeignFieldWrite {
-        pub record: ForeignRecordRef,
-        pub prototype_class_id: u32,
-        pub field: String,
-        pub value: ForeignOpaqueValue,
-    }
-
-    impl<'raw> ::core::convert::From<super::ForeignFieldWrite<'raw>> for ForeignFieldWrite {
-        fn from(value: super::ForeignFieldWrite) -> Self {
-            Self {
-                record: value.record,
-                prototype_class_id: value.prototype_class_id,
-                field: value.field.into(),
-                value: value.value,
-            }
-        }
-    }
-
-    impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldWrite {
-        const MIN_SERIALIZED_SIZE: usize =
-            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
-            <u32>::MIN_SERIALIZED_SIZE +
-            <String>::MIN_SERIALIZED_SIZE +
-            <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE;
-
-        #[inline]
-        fn serialized_size(&self) -> usize {
-            self.record.serialized_size() +
-            self.prototype_class_id.serialized_size() +
-            self.field.serialized_size() +
-            self.value.serialized_size()
-        }
-
-        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
-            Ok(
-                zelf.record._serialize_chained(dest)? +
-                zelf.prototype_class_id._serialize_chained(dest)? +
-                zelf.field._serialize_chained(dest)? +
-                zelf.value._serialize_chained(dest)?
             )
         });
 
@@ -3528,9 +3859,87 @@ pub mod owned {
 
             Ok((i, Self {
                 record: v0,
-                prototype_class_id: v1,
-                field: v2,
-                value: v3,
+                prototype_owner_id: v1,
+                prototype_class_id: v2,
+                field: v3,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignFieldRead {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignFieldWrite {
+        pub record: ForeignRecordRef,
+        pub prototype_owner_id: u32,
+        pub prototype_class_id: u32,
+        pub field: String,
+        pub value: ForeignOpaqueValue,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignFieldWrite<'raw>> for ForeignFieldWrite {
+        fn from(value: super::ForeignFieldWrite) -> Self {
+            Self {
+                record: value.record,
+                prototype_owner_id: value.prototype_owner_id,
+                prototype_class_id: value.prototype_class_id,
+                field: value.field.into(),
+                value: value.value,
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignFieldWrite {
+        const MIN_SERIALIZED_SIZE: usize =
+            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE +
+            <ForeignOpaqueValue>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.record.serialized_size() +
+            self.prototype_owner_id.serialized_size() +
+            self.prototype_class_id.serialized_size() +
+            self.field.serialized_size() +
+            self.value.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.record._serialize_chained(dest)? +
+                zelf.prototype_owner_id._serialize_chained(dest)? +
+                zelf.prototype_class_id._serialize_chained(dest)? +
+                zelf.field._serialize_chained(dest)? +
+                zelf.value._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                record: v0,
+                prototype_owner_id: v1,
+                prototype_class_id: v2,
+                field: v3,
+                value: v4,
             }))
         }
     }
@@ -4074,9 +4483,11 @@ pub mod owned {
 
     #[derive(Clone, Debug, PartialEq)]
     pub struct ForeignHookCall {
+        pub call_id: u32,
         pub callback_id: u32,
         pub hook: u8,
         pub receiver: ForeignRecordRef,
+        pub prototype_owner_id: u32,
         pub prototype_class_id: u32,
         pub args: ::std::vec::Vec<ForeignCallbackValue>,
     }
@@ -4084,9 +4495,11 @@ pub mod owned {
     impl<'raw> ::core::convert::From<super::ForeignHookCall<'raw>> for ForeignHookCall {
         fn from(value: super::ForeignHookCall) -> Self {
             Self {
+                call_id: value.call_id,
                 callback_id: value.callback_id,
                 hook: value.hook,
                 receiver: value.receiver,
+                prototype_owner_id: value.prototype_owner_id,
                 prototype_class_id: value.prototype_class_id,
                 args: value.args.into_iter().map(|value| value.into()).collect(),
             }
@@ -4096,25 +4509,31 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for ForeignHookCall {
         const MIN_SERIALIZED_SIZE: usize =
             <u32>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <u8>::MIN_SERIALIZED_SIZE +
             <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<ForeignCallbackValue>>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
+            self.call_id.serialized_size() +
             self.callback_id.serialized_size() +
             self.hook.serialized_size() +
             self.receiver.serialized_size() +
+            self.prototype_owner_id.serialized_size() +
             self.prototype_class_id.serialized_size() +
             self.args.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
+                zelf.call_id._serialize_chained(dest)? +
                 zelf.callback_id._serialize_chained(dest)? +
                 zelf.hook._serialize_chained(dest)? +
                 zelf.receiver._serialize_chained(dest)? +
+                zelf.prototype_owner_id._serialize_chained(dest)? +
                 zelf.prototype_class_id._serialize_chained(dest)? +
                 zelf.args._serialize_chained(dest)?
             )
@@ -4137,13 +4556,19 @@ pub mod owned {
             i += read;
             let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
-                callback_id: v0,
-                hook: v1,
-                receiver: v2,
-                prototype_class_id: v3,
-                args: v4,
+                call_id: v0,
+                callback_id: v1,
+                hook: v2,
+                receiver: v3,
+                prototype_owner_id: v4,
+                prototype_class_id: v5,
+                args: v6,
             }))
         }
     }
@@ -4524,4 +4949,300 @@ pub mod owned {
         }
     }
 
-    impl<'raw> ::bebop::Record<'raw> for ForeignRecordPatch {}}
+    impl<'raw> ::bebop::Record<'raw> for ForeignRecordPatch {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignOpaqueValuePatch {
+        pub slot_id: u32,
+        pub value: ForeignCallbackValue,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignOpaqueValuePatch<'raw>> for ForeignOpaqueValuePatch {
+        fn from(value: super::ForeignOpaqueValuePatch) -> Self {
+            Self {
+                slot_id: value.slot_id,
+                value: value.value.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignOpaqueValuePatch {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
+            <ForeignCallbackValue>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.slot_id.serialized_size() +
+            self.value.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.slot_id._serialize_chained(dest)? +
+                zelf.value._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                slot_id: v0,
+                value: v1,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignOpaqueValuePatch {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignPublicExportAck {
+        pub call_id: u32,
+        pub record: ForeignRecordRef,
+        pub result: ForeignHookResult,
+        pub record_patches: ::std::vec::Vec<ForeignRecordPatch>,
+        pub value_patches: ::std::vec::Vec<ForeignOpaqueValuePatch>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignPublicExportAck<'raw>> for ForeignPublicExportAck {
+        fn from(value: super::ForeignPublicExportAck) -> Self {
+            Self {
+                call_id: value.call_id,
+                record: value.record,
+                result: value.result.into(),
+                record_patches: value.record_patches.into_iter().map(|value| value.into()).collect(),
+                value_patches: value.value_patches.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignPublicExportAck {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
+            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <ForeignHookResult>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignRecordPatch>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignOpaqueValuePatch>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.call_id.serialized_size() +
+            self.record.serialized_size() +
+            self.result.serialized_size() +
+            self.record_patches.serialized_size() +
+            self.value_patches.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.call_id._serialize_chained(dest)? +
+                zelf.record._serialize_chained(dest)? +
+                zelf.result._serialize_chained(dest)? +
+                zelf.record_patches._serialize_chained(dest)? +
+                zelf.value_patches._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                call_id: v0,
+                record: v1,
+                result: v2,
+                record_patches: v3,
+                value_patches: v4,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignPublicExportAck {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignSerializedExportAck {
+        pub call_id: u32,
+        pub record: ForeignRecordRef,
+        pub result: ForeignHookResult,
+        pub json: ::std::vec::Vec<u16>,
+        pub record_patches: ::std::vec::Vec<ForeignRecordPatch>,
+        pub value_patches: ::std::vec::Vec<ForeignOpaqueValuePatch>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignSerializedExportAck<'raw>> for ForeignSerializedExportAck {
+        fn from(value: super::ForeignSerializedExportAck) -> Self {
+            Self {
+                call_id: value.call_id,
+                record: value.record,
+                result: value.result.into(),
+                json: value.json.iter().map(|value| value).collect(),
+                record_patches: value.record_patches.into_iter().map(|value| value.into()).collect(),
+                value_patches: value.value_patches.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignSerializedExportAck {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
+            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <ForeignHookResult>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<u16>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignRecordPatch>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignOpaqueValuePatch>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.call_id.serialized_size() +
+            self.record.serialized_size() +
+            self.result.serialized_size() +
+            self.json.serialized_size() +
+            self.record_patches.serialized_size() +
+            self.value_patches.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.call_id._serialize_chained(dest)? +
+                zelf.record._serialize_chained(dest)? +
+                zelf.result._serialize_chained(dest)? +
+                zelf.json._serialize_chained(dest)? +
+                zelf.record_patches._serialize_chained(dest)? +
+                zelf.value_patches._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                call_id: v0,
+                record: v1,
+                result: v2,
+                json: v3,
+                record_patches: v4,
+                value_patches: v5,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignSerializedExportAck {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ForeignExportObjectTrace {
+        pub record: ForeignRecordRef,
+        pub call_id: u32,
+        pub has_parent: bool,
+        pub parent_call_id: u32,
+        pub child_call_ids: ::std::vec::Vec<u32>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ForeignExportObjectTrace<'raw>> for ForeignExportObjectTrace {
+        fn from(value: super::ForeignExportObjectTrace) -> Self {
+            Self {
+                record: value.record,
+                call_id: value.call_id,
+                has_parent: value.has_parent,
+                parent_call_id: value.parent_call_id,
+                child_call_ids: value.child_call_ids.iter().map(|value| value).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ForeignExportObjectTrace {
+        const MIN_SERIALIZED_SIZE: usize =
+            <ForeignRecordRef>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <bool>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<u32>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.record.serialized_size() +
+            self.call_id.serialized_size() +
+            self.has_parent.serialized_size() +
+            self.parent_call_id.serialized_size() +
+            self.child_call_ids.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.record._serialize_chained(dest)? +
+                zelf.call_id._serialize_chained(dest)? +
+                zelf.has_parent._serialize_chained(dest)? +
+                zelf.parent_call_id._serialize_chained(dest)? +
+                zelf.child_call_ids._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                record: v0,
+                call_id: v1,
+                has_parent: v2,
+                parent_call_id: v3,
+                child_call_ids: v4,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ForeignExportObjectTrace {}}
