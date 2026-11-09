@@ -49,11 +49,16 @@ supplied immutable source: TS
 `e5d9997b378d23c8f20c2431e8cf987e01c5544a5567f6364a66d8caa1025a73`, BOP
 `070be58ecfd9ff40f9827c76dd19c35c3415c510f600a917c3d64fcaf572f7da`.
 Own selection constructor tests 7/7, DOM units 59/59, DOM type checking and
-paired adapter browser cases 15/15 pass. These DOM cases use the upstream model.
+paired adapter browser cases 15/15 pass. The separate upstream focused unit
+rerun passes 56/56. These DOM cases use the upstream model.
 Native WASM unit tests pass 23/23 and model all-feature tests pass 455/455.
-Scoped `just check` passes with complexity warnings only. Generator freshness currently fails with
-reordered compiler output, and the full shim check needs source-matched
-conformance artifacts; both are unresolved rather than waived. New WASM
+Scoped `just check`, dependency validation, strict all-target/all-feature
+model/WASM clippy, and the WASM all-feature portability check pass.
+`just check` reports complexity warnings only. Generator freshness currently fails with
+reordered compiler output, and the full shim check initially lacked source-matched conformance artifacts.
+The fresh optimized conformance build now passes and shim TypeScript checking
+passes; its subsequent hook-inventory check fails with `stale generated hook
+inventory`. Generator freshness and hook inventory remain unresolved, not waived. New WASM
 exports have not been promoted into live glue/declarations or activated.
 Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
 
