@@ -1,6 +1,124 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: stable subtree identities and Android prerequisites
+## Current local-stack recovery status
+
+After the disk-full event and orchestrator recovery, a new isolated-browser check
+fails at authentication: fresh UI passwordless login returns HTTP 500 with
+"unable to lookup identity providers", and saved-session refresh returns 500.
+The existing document stays on skeleton-only Drive; creation fails. Typing and
+undo/redo are blocked by those prerequisites, not counted as passes. No page
+errors occurred, and both contexts fetched the expected native `1a8200` WASM.
+FusionAuth is unhealthy; read-only logs show PostgreSQL connection failures,
+SQLTransientConnectionException, timeouts and NoRouteToHostException. Auth handler
+source maps failed identity-provider lookup to the observed response. OTLP proxy
+requests also return 502. No service, credential or artifact changes were made
+for this diagnosis; the orchestrator received the failure details.
+
+The old private proxy socket was absent after restart, so this check used new
+per-run IPv4/IPv6 bridges for ports 24009/24010 with isolated DNS/network/PID state.
+The failed missing-socket harness attempt never opened a browser. Raw browser
+results are `preview-recovery-results.json`; the prerequisite classification is
+`preview-recovery-summary.json`, with `preview-recovery-auth-health.json` and
+failure screenshots alongside them in the external evidence directory.
+The earlier successful live history check below predates the infrastructure
+outage and remains historical acceptance evidence, not a post-recovery pass.
+
+Critical build/browser outputs completed before 14:20. A post-restart rehash
+verified all 11 archived native/compat files and five installed files unchanged;
+critical proof JSON parses correctly. The interrupted dependency-hash run has an
+unknown exit and is invalidated; its replacement is still pending. No partial
+output from the disk-full window is accepted. Four explicitly owned stale
+scratch paths were removed after sealing the archives (about 14 GiB), without
+changing source, live dependencies, stack volumes or other workers' targets.
+
+## Completed source/artifact checkpoint: native feature isolation
+
+The native compiled-feature 5% comparison is superseded. Production native,
+FFI, server/headless and current native web builds exclude compatibility and
+foreign nodes by construction. The compatibility web host still needs the real
+full-plugin user-facing gates against upstream: typing p95, paste, bulk JSON and
+Markdown, boot/document-open, crossings, bytes and captures. Earlier feature-on/off
+measurements remain diagnostic; they are not an acceptance gate or waiver.
+
+Clean source freeze `272ef7d989b500ac78a9965eb77eb886a07859f7` contains:
+
+- Codec `43606cfea0` / raw-alignment `ff007411a2` / raw consumer `fabd4f6816`,
+  integrated as `17b31962ca` / `be6697e3c7` / `081ab765f0`. Public serializedState
+  and cold query 7 use the canonical model writer; savedState, FFI and ABI/schema
+  are unchanged. Browser bulk ratios and JSON trace connectivity are unverified.
+- Cargo opt-in `ab0b9cc166` as `8330578a54` and FFI entries `10936f2727` as
+  `ae4133a0e6`. Defaults retain owned wire types only; `compat-web` is explicit.
+- Recipe/CI enforcement `272ef7d989`: eight actual production normal/build
+  dependency graphs reject session compatibility and model foreign nodes;
+  explicit compatibility-web is the positive control. Generated lexical/session
+  jobs run the guard before compilation. Native cached/desktop outputs also
+  validate actual exports. Native `wasm/` and compatibility `wasm-compat/` have
+  separate Cargo targets, feature-aware cache commands, glue and declarations.
+
+Local source checks pass: 498 model tests, 66 all-feature WASM tests, 22 native-only
+WASM tests, six guard tests, nine actual graph checks, workflow guard-order test,
+workflow generation freshness, dependency metadata, Nix expression parsing,
+scoped checks, TypeScript and strict model/WASM/workflow Clippy. An inherited
+workflow test PATH accessor was corrected without deployment-logic changes;
+its five mocked-script tests pass. No workflow dispatch or deploy occurred.
+
+The independent native-only source build from this freeze produced 8,411,202 raw /
+1,911,963 Brotli bytes, SHA256:
+`1a8200b918dd513a3f8977b6994d17308fc7b3cc6d06ca1491c76be0ee080156`.
+It has no compatibility exports, JS class methods or native declaration stubs.
+The previous actual `868826f5` compatibility artifact is rejected by the native
+export guard. Native output is 168,989 Brotli bytes smaller than that preceding
+installed build; this aggregate comparison includes codec and feature changes.
+The advisory ceiling is still exceeded by 311,963 bytes; no new speed/startup
+acceptance follows from size or feature isolation.
+
+The native artifact is installed in the local preview with its own matching glue
+and declarations. App/view types, 263 view tests and 18 three-engine keyboard
+cases pass. The isolated live browser fetched the exact new WASM and passed code
+input plus both redo shortcuts with exact raw JSON, durable IDs and model/DOM
+caret restoration, with no page errors. No dependency-cache writes or stack
+restart occurred. The separate producer rebuild reported the identical WASM and
+glue hashes; only this integration build was promoted.
+
+The explicit compatibility package also built and initialized successfully in
+its own output: 9,230,011 raw / 2,082,807 Brotli bytes, SHA256:
+`a0527f87643d7cd1d14eb18e154fc26c0c2ddb37f64f0ebb5f2b3f352cb90489`.
+It exposes the actual protocol-1 / schema-52e compatibility methods and remains
+unpromoted. Its exact generated declarations (SHA256 `222e711dac3d0af63317eedb8c8a4420c83187874f6ffd8361e231b1e5c50f85`)
+are type-only exported as `@macro-inc/collaboration/session/wasm-compat` in
+`6b5210e4fc`; native declarations are separately regenerated in `54e65da15f`.
+The isolated package-only handoff is `92d1eed740`, with no app recipe or readiness
+files. Neither output proves an initializer or the newer queued batch/lease API.
+
+Package type checking caught an older five-argument keyboard call in the portable
+history fixture. `3f4fa2db3d` passes its real latest native range through the
+current twelve-argument primitive; assertions and history policy are unchanged.
+Collaboration types and all three actual portable history browser cases pass.
+Actual package-export type proof confirms native has no compatibility methods,
+while the separate generated compatibility class does. The web production bundle
+passes with the same 12 GB build heap used previously; no optimization was relaxed.
+The Linux node-modules fixed-output verification was interrupted during the
+disk-full/restart window and has been restarted in an isolated Nix build after
+the type-only manifest export. Its completion is pending. Darwin verification is
+unavailable on this Linux host. Neither dependency-hash check is claimed green.
+
+Evidence under `/home/wolf/tmp/integration3-acceptance/` includes
+`native-profile-artifact-manifest.json`, `compat-profile-artifact-manifest.json`,
+`native-compat-module-shapes.json`, `native-profile-final-graphs.log`,
+`native-profile-three-engine.json`, `native-profile-preview-install.json`,
+`preview-native-profile-installed-results.json`,
+`preview-native-profile-snapshots.json`, `native-profile-web-build.log`,
+`native-profile-portable-history-browser.log` and
+`native-feature-isolation-source-audit.md`.
+
+Table-picker/comment-button gaps, full compatibility/initializer/parity and
+Android device/app-surface acceptance remain open. The separate full-preset root
+metadata missing-to-null redo issue remains owner-tracked pending the actual
+source/JNI follow-up. Generic staging, capture-consumer and metadata checkpoints
+are queued separately; none is folded into this frozen artifact proof.
+Integration 3 remains unchecked.
+
+## Prior checkpoint: stable subtree identities and Android prerequisites
 
 Stable-ID fix `67611c311e` is integrated as `4d18067f62`: default session and
 application identity plugins now treat only attached competing owners as
