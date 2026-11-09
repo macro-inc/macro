@@ -24,8 +24,8 @@ fn main() {
 /// the user picks a source in the app's own picker.
 #[cfg(target_os = "macos")]
 fn configure_window<'a>(
-    window: tauri::WebviewWindowBuilder<'a, app_lib::AppRuntime, tauri::App<app_lib::AppRuntime>>,
-) -> tauri::WebviewWindowBuilder<'a, app_lib::AppRuntime, tauri::App<app_lib::AppRuntime>> {
+    window: tauri::WebviewWindowBuilder<'a, app_lib::AppRuntime, tauri::AppHandle<app_lib::AppRuntime>>,
+) -> tauri::WebviewWindowBuilder<'a, app_lib::AppRuntime, tauri::AppHandle<app_lib::AppRuntime>> {
     use tauri_runtime_cef::WebviewWindowBuilderCefExt;
     window.on_desktop_capture_request(app_lib::screen_capture::take_screen_capture_grant)
 }
