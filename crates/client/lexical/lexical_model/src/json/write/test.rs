@@ -55,6 +55,24 @@ fn constructed_tab_exports_its_exact_builtin_text_fields() -> Result<(), Error> 
     Ok(())
 }
 
+#[test]
+fn raw_numeric_element_alignment_keeps_the_public_empty_name() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.element(paragraph)?
+            .set_format(ElementFormat::from_bits(93))?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(())
+    })?;
+    assert_eq!(editor.state().to_json_string()?, legacy(editor.state())?);
+    let json: Value = serde_json::from_str(&editor.state().to_json_string()?)?;
+    assert_eq!(json["root"]["children"][0]["format"], "");
+    Ok(())
+}
+
 thread_local! { static CALLS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) }; }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 struct Reordered {
