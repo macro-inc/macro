@@ -13,13 +13,12 @@ export interface CompatNode {
   __prev: null | NodeKey;
   __type: string;
   getIndexWithinParent(): number;
-  getTopLevelElementOrThrow(): CompatElementNode | CompatDecoratorNode<unknown>;
   getKey(): NodeKey;
   getLatest(): this;
-  getNextSibling<T extends CompatNode>(): T | null;
-  getParent<T extends CompatElementNode>(): T | null;
-  getParentOrThrow<T extends CompatElementNode>(): T;
-  getPreviousSibling<T extends CompatNode>(): T | null;
+  getNextSibling(): CompatNode | null;
+  getParent(): CompatElementNode | null;
+  getParentOrThrow(): CompatElementNode;
+  getPreviousSibling(): CompatNode | null;
   getTextContent(): string;
   getTextContentSize(): number;
   getType(): string;
@@ -30,7 +29,7 @@ export interface CompatNode {
   markDirty(): void;
   reconcileObservedMutation(dom: HTMLElement, editor: CompatEditor): void;
   remove(preserveEmptyParent?: boolean): void;
-  replace<N extends CompatNode>(replaceWith: N, includeChildren?: boolean): N;
+  replace(replaceWith: CompatNode, includeChildren?: boolean): CompatNode;
   selectEnd(): CompatRangeSelection;
 }
 
@@ -47,12 +46,12 @@ export interface CompatElementNode extends CompatNode {
   canBeEmpty(): boolean;
   canInsertTextAfter(): boolean;
   canInsertTextBefore(): boolean;
-  getChildAtIndex<T extends CompatNode>(index: number): null | T;
-  getChildren<T extends CompatNode>(): Array<T>;
+  getChildAtIndex(index: number): CompatNode | null;
+  getChildren(): CompatNode[];
   getChildrenSize(): number;
-  getFirstDescendant<T extends CompatNode>(): null | T;
+  getFirstDescendant(): CompatNode | null;
   getFormat(): number;
-  getLastDescendant<T extends CompatNode>(): null | T;
+  getLastDescendant(): CompatNode | null;
   getStyle(): string;
   getTextContent(): string;
   getTextContentSize(): number;
@@ -97,15 +96,5 @@ export interface CompatRootNode extends CompatElementNode {
 
 export interface CompatLineBreakNode extends CompatNode {
   getTextContent(): '\n';
-  isInline(): true;
 }
-export interface CompatTabNode extends CompatTextNode {
-  spliceText(
-    offset: number,
-    delCount: number,
-    newText: string,
-    moveSelection?: boolean
-  ): CompatTextNode;
-  setDetail(detail: 'directionless' | 'unmergable' | number): this;
-  setMode(type: import('lexical').TextModeType): this;
-}
+export type CompatTabNode = CompatTextNode;
