@@ -1122,8 +1122,9 @@ Project opens the native project composer; Folder remains the Files folder actio
 ## Mobile glass feedback
 
 In the native iOS app, glass presses animate the enclosing surface over 300ms.
-Round buttons grow by 28%; wide pills and grouped controls extend their glass
-fill and rim by up to 6px per edge, with 18% icon growth around each icon's center.
+Round buttons grow by 28%; horizontal and vertical pills and grouped controls
+extend their glass fill and rim by up to 6px per edge, with 18% icon growth around
+each icon's center. The Duo navigation pill keeps this bounded expansion when tall.
 Labels and layout stay fixed; icons remain visually aligned through release.
 Selecting or deselecting a pill updates its fill and text together, including
 during release or a rapid second tap. The fill changes with a radial spotlight

@@ -123,6 +123,22 @@ describe('mobile glass surface press', () => {
     expect(group.style.getPropertyValue('--press-y')).toBe('20px');
     expect(group.children).toHaveLength(2);
   });
+  it.each([300, 600])(
+    'caps a %ipx-tall navigation pill at 6px of press expansion',
+    (height) => {
+      const group = surface(46, height);
+      const button = group.querySelector('button')!;
+
+      pointer(button, 'pointerdown');
+
+      expect(group.dataset.glassPress).toBe('wide');
+      expect(group.style.getPropertyValue('--press-outset')).toBe('6px');
+      expect(button.hasAttribute('data-glass-press')).toBe(false);
+
+      pointer(button, 'pointerup');
+      expect(group.hasAttribute('data-glass-press')).toBe(false);
+    }
+  );
   it.each(['glass', 'touch:glass'])(
     'keeps %s group press feedback on the shared frame',
     (className) => {
