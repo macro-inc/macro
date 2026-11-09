@@ -89,3 +89,5 @@ Initialize the editor only after Seeded includes every startup WAL adoption; opt
 Record before/after selection cursors per Loro history group, using the model-accepted inline selection; restore transformed popped cursors after projection binding for undo/redo, headless and focused views. Use the pinned native UndoManager metadata setters to preserve each entry across Loro loop substitution. Keep history metadata local to the session, outside wire bytes.
 
 Run routed history keys through model KeyDown and command listeners first; only successful unhandled Undo/Redo routes fall through to Loro history after listener commits are projected.
+
+Detect duplicate durable IDs only against attached owners; subtree removal may leave stale descendant index entries, and undo/redo must preserve the restored identities.

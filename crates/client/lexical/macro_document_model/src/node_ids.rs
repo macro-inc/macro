@@ -142,13 +142,14 @@ pub fn prepare_clipboard_nodes(
 /// Assign missing ids and make the currently transformed duplicate lose.
 pub fn id_transform(tx: &mut Transaction<'_>, key: NodeKey) -> crate::ModelResult<()> {
     let previous = get_id(tx.view(), key)?;
-    let state = tx.extension_mut::<NodeIdState>()?;
+    let state = tx.extension::<NodeIdState>()?;
+    // Removed subtrees need not publish a mutation for each descendant.
     let duplicate = previous.as_ref().is_some_and(|id| {
         state
             .mappings
             .id_to_node_key
             .get(id)
-            .is_some_and(|known| *known != key)
+            .is_some_and(|owner| *owner != key && tx.is_attached(*owner))
     });
     // Stored highlight identity is preserved; highlighting remains a view concern.
     let id = if previous.is_none() || (duplicate && tx.type_name(key)? != "code-highlight") {

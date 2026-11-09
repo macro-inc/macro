@@ -55,13 +55,15 @@ impl Plugin for NodeIds {
             } else {
                 Some(tx.get_state(*key, &ID)?)
             };
+            // Subtree removal can leave stale descendant index entries. Only
+            // an attached owner can conflict with a restored durable identity.
             if let Some(value) = &mut id
                 && (value.is_empty()
                     || tx
                         .extension::<NodeIdIndex>()?
                         .ids
                         .get(value)
-                        .is_some_and(|owner| owner != key))
+                        .is_some_and(|owner| owner != key && tx.is_attached(*owner)))
             {
                 let base = format!("session-{}-{key}", self.0);
                 *value = base.clone();

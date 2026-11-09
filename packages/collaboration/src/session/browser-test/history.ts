@@ -16,7 +16,7 @@ import { emptyInput } from '../input';
 import { decodeOutput } from '../output';
 
 /** A keyboard host for the real production WASM; Rust owns history and selection. */
-export async function historyFixture() {
+export async function historyFixture(codeSubtree = false) {
   await init();
   const session = EditorSession.create(
     ABI_MAJOR,
@@ -67,7 +67,10 @@ export async function historyFixture() {
           root: {
             type: 'root',
             children: [
-              { type: 'paragraph', children: [{ type: 'text', text: 'か' }] },
+              {
+                type: 'paragraph',
+                children: codeSubtree ? [] : [{ type: 'text', text: 'か' }],
+              },
             ],
           },
         }),
@@ -81,11 +84,48 @@ export async function historyFixture() {
     QueryReplyMsg.decode(
       session.query(QueryMsg.encode({ kind, key: 0, text, flags: 0 }))
     );
-  const key = query(4, 'text').keys[0];
-  session.selectionFromView(key, 1, 0, key, 1, 0, ++tick);
+  const key = query(4, codeSubtree ? 'paragraph' : 'text').keys[0];
+  const offset = codeSubtree ? 0 : 1;
+  const pointType = codeSubtree ? 1 : 0;
+  session.selectionFromView(
+    key,
+    offset,
+    pointType,
+    key,
+    offset,
+    pointType,
+    ++tick
+  );
   drain();
   session.command(12, 0, 0, undefined, ++tick);
   drain();
+  if (codeSubtree) {
+    session.input(
+      SessionInputMsg.encode({
+        ...emptyInput(2),
+        editor: EditorInputMsg.fromEditorSetState({
+          json: JSON.stringify({
+            root: {
+              type: 'root',
+              children: [
+                {
+                  type: 'code',
+                  children: [{ type: 'text', text: 'const localValue = 1;' }],
+                },
+                { type: 'paragraph', children: [] },
+              ],
+            },
+          }),
+        }),
+      }),
+      ++tick,
+      tick
+    );
+    drain();
+    const leaf = query(4, 'text').keys[0];
+    session.selectionFromView(leaf, 21, 0, leaf, 21, 0, ++tick);
+    drain();
+  }
   const host = document.createElement('button');
   host.type = 'button';
   host.id = 'history-keyboard';
