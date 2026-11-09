@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import tailwind from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
@@ -24,6 +25,7 @@ export default defineConfig({
   root: DIRECTORY,
   cacheDir: `${WEB_DIRECTORY}/node_modules/.vite-editor-behavior`,
   plugins: [
+    tailwind(),
     tsconfigPaths({ projects: [`${WEB_DIRECTORY}/tsconfig.json`] }),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),

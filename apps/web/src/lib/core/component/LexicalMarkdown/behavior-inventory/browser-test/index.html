@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Editor behavior regression fixture</title>
     <style>
-      body { font: 16px system-ui; margin: 24px; }
+      body { margin: 0; padding: 24px; box-sizing: border-box; }
       [role="textbox"] { border: 1px solid #777; min-height: 40px; padding: 12px; margin-block: 16px; }
       button { min-height: 44px; margin: 4px; }
     </style>
@@ -19,7 +19,10 @@
       <button id="save">Save state</button>
       <button id="reopen">Reopen saved state</button>
       <output id="saved" aria-label="Saved state"></output>
+      <output id="pasted-files" aria-label="Pasted files"></output>
+      <output id="dropped-files" aria-label="Dropped files"></output>
+      <div id="menus"></div>
     </main>
-    <script type="module" src="./fixture.ts"></script>
+    <script type="module" src="./fixture.tsx"></script>
   </body>
 </html>

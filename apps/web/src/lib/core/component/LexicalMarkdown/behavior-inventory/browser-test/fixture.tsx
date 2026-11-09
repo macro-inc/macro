@@ -1,3 +1,5 @@
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { registerList } from '@lexical/list';
 import { $convertToMarkdownString, CODE } from '@lexical/markdown';
@@ -16,7 +18,13 @@ import {
   type LexicalEditor,
   type SerializedEditorState,
 } from 'lexical';
+import { render } from 'solid-js/web';
+import { ActionMenu } from '../../component/menu/ActionsMenu';
+import { actionsPlugin } from '../../plugins/actions/actionsPlugin';
+import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
+import { dragInsertPlugin } from '../../plugins/drag-insert/dragInsertPlugin';
+import { filePastePlugin } from '../../plugins/file-paste/filePastePlugin';
 import {
   DefaultShortcuts,
   keyboardShortcutsPlugin,
@@ -27,6 +35,8 @@ import { markdownShortcutsPlugin } from '../../plugins/markdown-shortcuts/markdo
 import { nodeTransformPlugin } from '../../plugins/node-transform/nodeTransformPlugin';
 import { singleLinePlugin } from '../../plugins/single-line/singleLinePlugin';
 import { tabIndentationPlugin } from '../../plugins/tab-indentation/tabIndentationPlugin';
+import { createMenuOperations } from '../../shared/inlineMenu';
+import { theme } from '../../theme';
 
 function element(id: string) {
   const found = document.getElementById(id);
@@ -37,6 +47,7 @@ function element(id: string) {
 function mount(id: string) {
   const editor = createEditor({
     namespace: `behavior-${id}`,
+    theme,
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
     onError(error) {
       throw error;
@@ -59,6 +70,7 @@ function mount(id: string) {
   return editor;
 }
 
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const TITLE = mount('title');
 singleLinePlugin()(TITLE);
 const BODY = mount('body');
@@ -74,6 +86,56 @@ keyboardShortcutsPlugin({
 markdownPastePlugin()(BODY);
 customDeletePlugin()(BODY);
 tabIndentationPlugin()(BODY);
+checklistPlugin()(BODY);
+const ACTION_MENU = createMenuOperations();
+actionsPlugin({ menu: ACTION_MENU })(BODY);
+filePastePlugin({
+  onPasteFilesAndDirs: (files, directories) => {
+    element('pasted-files').textContent = JSON.stringify({
+      files: files.map((entry) => entry.name),
+      directories: directories.map((entry) => entry.name),
+    });
+  },
+})(BODY);
+dragInsertPlugin({
+  onDrop: (_key, position, event) => {
+    element('dropped-files').textContent = JSON.stringify({
+      position,
+      files: Array.from(event.dataTransfer?.files ?? []).map(
+        (file) => file.name
+      ),
+    });
+  },
+})(BODY);
+render(
+  () => (
+    <AnalyticsContextProvider>
+      <PosthogProvider>
+        <ActionMenu
+          editor={BODY}
+          menu={ACTION_MENU}
+          anchor={element('body')}
+          portalScope="global"
+          ignoreActionIds={[
+            'task',
+            'document',
+            'image',
+            'gif',
+            'video',
+            'link',
+            'latex',
+            'table',
+            'hr',
+            'database-query',
+            'database',
+            'code',
+          ]}
+        />
+      </PosthogProvider>
+    </AnalyticsContextProvider>
+  ),
+  element('menus')
+);
 
 function toggleEditable(editor: LexicalEditor, editable: boolean) {
   editor.setEditable(editable);
@@ -96,3 +158,6 @@ element('reopen').addEventListener('click', () => {
   if (saved) BODY.setEditorState(BODY.parseEditorState(saved));
 });
 document.documentElement.dataset.ready = 'true';
+
+import '@app/index.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
