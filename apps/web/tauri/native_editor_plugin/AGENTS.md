@@ -12,6 +12,7 @@ acceptance requirement before changing the feature-flag admission.
 - `android/src/main/java/com/macro/editor/NativeEditorView.kt`: Android input and session effects.
 - `android/src/main/java/com/macro/editor/NativeSessionHost.kt`: serialized callbacks, timers and graceful lifetime.
 - `android/src/main/java/com/macro/editor/NativeSessionStorage.kt`: transactional SQLite and live-owner leases.
+- `android/src/main/java/com/macro/editor/NativeSessionAdapters.kt`: storage worker and direct WebSocket I/O.
 - `crates/client/document_session_ffi`: generated native API and binding regeneration.
 
 ## Boundaries

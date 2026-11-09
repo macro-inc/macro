@@ -38,6 +38,14 @@ Wait for initial durable loading before offering an empty optimistic seed, so
 first-wins initialization can prefer the local snapshot. Snapshot scheduling
 continues to use the shared session policy and supplied clock.
 
+`NativeSessionAdapters` runs storage on a serial worker and uses the application's
+OkHttp client, token source, socket request factory, peer supplier and telemetry
+sink. It forwards binary frames unchanged and sends the same application-level
+`ping` heartbeat as the web executor. Each callback retains its connection or
+session lifetime; closing cancels owned sockets/token requests and drains queued
+storage before releasing its lease. Reconnect, protocol and authorization policy
+remain in Rust. Runtime account/endpoint wiring is still required at adoption.
+
 Application adoption requires native menu/search adapters, complete decorators
 and block interactions, durable sync and old-draft handoff, and parity across all
 existing surfaces. Keep the application feature-flag admission unchanged until
