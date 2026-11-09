@@ -2022,9 +2022,127 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchOperation<'raw> {
 impl<'raw> ::bebop::Record<'raw> for CompatBatchOperation<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum CompatBatchScope<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    CompatBatchBegin {
+        expected_version: u64,
+        begin: CompatBeginRequest<'raw>,
+    },
+
+    /// Discriminator 2
+    CompatBatchContinue {
+        update_id: u32,
+        expected_epoch: u64,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchScope<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            CompatBatchScope::Unknown => {
+                0
+            }
+            Self::CompatBatchBegin {
+                expected_version: ref _expected_version,
+                begin: ref _begin,
+            }
+            => {
+                _expected_version.serialized_size() +
+                _begin.serialized_size()
+            }
+            Self::CompatBatchContinue {
+                update_id: ref _update_id,
+                expected_epoch: ref _expected_epoch,
+            }
+            => {
+                _update_id.serialized_size() +
+                _expected_epoch.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::CompatBatchBegin {
+                expected_version: ref _expected_version,
+                begin: ref _begin,
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+                _expected_version._serialize_chained(dest)?;
+                _begin._serialize_chained(dest)?;
+            }
+            Self::CompatBatchContinue {
+                update_id: ref _update_id,
+                expected_epoch: ref _expected_epoch,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _update_id._serialize_chained(dest)?;
+                _expected_epoch._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatBatchScope::CompatBatchBegin {
+                    expected_version: v0,
+                    begin: v1,
+                }
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatBatchScope::CompatBatchContinue {
+                    update_id: v0,
+                    expected_epoch: v1,
+                }
+            }
+            _ => {
+                i = len;
+                CompatBatchScope::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatBatchScope<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CompatBatchRequest<'raw> {
-    pub update_id: u32,
-    pub expected_epoch: u64,
+    pub scope: CompatBatchScope<'raw>,
     pub leases: CompatCaptureLeases<'raw>,
     pub operations: ::std::vec::Vec<CompatBatchOperation<'raw>>,
     pub finalize: bool,
@@ -2034,8 +2152,7 @@ pub struct CompatBatchRequest<'raw> {
 
 impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchRequest<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
-        <u32>::MIN_SERIALIZED_SIZE +
-        <u64>::MIN_SERIALIZED_SIZE +
+        <CompatBatchScope<'raw>>::MIN_SERIALIZED_SIZE +
         <CompatCaptureLeases<'raw>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<CompatBatchOperation<'raw>>>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
@@ -2044,8 +2161,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchRequest<'raw> {
 
     #[inline]
     fn serialized_size(&self) -> usize {
-        self.update_id.serialized_size() +
-        self.expected_epoch.serialized_size() +
+        self.scope.serialized_size() +
         self.leases.serialized_size() +
         self.operations.serialized_size() +
         self.finalize.serialized_size() +
@@ -2055,8 +2171,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchRequest<'raw> {
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
-            zelf.update_id._serialize_chained(dest)? +
-            zelf.expected_epoch._serialize_chained(dest)? +
+            zelf.scope._serialize_chained(dest)? +
             zelf.leases._serialize_chained(dest)? +
             zelf.operations._serialize_chained(dest)? +
             zelf.finalize._serialize_chained(dest)? +
@@ -2084,17 +2199,14 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchRequest<'raw> {
         i += read;
         let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
-        let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
 
         Ok((i, Self {
-            update_id: v0,
-            expected_epoch: v1,
-            leases: v2,
-            operations: v3,
-            finalize: v4,
-            now: v5,
-            wall: v6,
+            scope: v0,
+            leases: v1,
+            operations: v2,
+            finalize: v3,
+            now: v4,
+            wall: v5,
         }))
     }
 }
@@ -2386,6 +2498,8 @@ impl<'raw> ::bebop::Record<'raw> for CompatBatchOutcome<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompatBatchReply<'raw> {
+    pub update_id: u32,
+    pub reservations: ::std::vec::Vec<CompatKeyReservation<'raw>>,
     pub flags: u32,
     pub published: bool,
     pub changed: bool,
@@ -2407,6 +2521,8 @@ pub struct CompatBatchReply<'raw> {
 impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u32>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<CompatKeyReservation<'raw>>>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
@@ -2425,6 +2541,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
 
     #[inline]
     fn serialized_size(&self) -> usize {
+        self.update_id.serialized_size() +
+        self.reservations.serialized_size() +
         self.flags.serialized_size() +
         self.published.serialized_size() +
         self.changed.serialized_size() +
@@ -2445,6 +2563,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
+            zelf.update_id._serialize_chained(dest)? +
+            zelf.reservations._serialize_chained(dest)? +
             zelf.flags._serialize_chained(dest)? +
             zelf.published._serialize_chained(dest)? +
             zelf.changed._serialize_chained(dest)? +
@@ -2503,24 +2623,30 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         i += read;
         let (read, v15) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v16) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v17) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
-            flags: v0,
-            published: v1,
-            changed: v2,
-            noop: v3,
-            version: v4,
-            mutation_epoch: v5,
-            composition: v6,
-            selection: v7,
-            selections: v8,
-            tags: v9,
-            dirty_leaves: v10,
-            dirty_elements: v11,
-            dirty_type: v12,
-            delta: v13,
-            results: v14,
-            outcome: v15,
+            update_id: v0,
+            reservations: v1,
+            flags: v2,
+            published: v3,
+            changed: v4,
+            noop: v5,
+            version: v6,
+            mutation_epoch: v7,
+            composition: v8,
+            selection: v9,
+            selections: v10,
+            tags: v11,
+            dirty_leaves: v12,
+            dirty_elements: v13,
+            dirty_type: v14,
+            delta: v15,
+            results: v16,
+            outcome: v17,
         }))
     }
 }
@@ -8951,9 +9077,157 @@ pub mod owned {
     impl<'raw> ::bebop::Record<'raw> for CompatBatchOperation {}
 
     #[derive(Clone, Debug, PartialEq)]
+    pub enum CompatBatchScope {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        CompatBatchBegin {
+            expected_version: u64,
+            begin: CompatBeginRequest,
+        },
+
+        /// Discriminator 2
+        CompatBatchContinue {
+            update_id: u32,
+            expected_epoch: u64,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatBatchScope<'raw>> for CompatBatchScope {
+        fn from(value: super::CompatBatchScope) -> Self {
+            match value {
+                super::CompatBatchScope::Unknown => {
+                    Self::Unknown
+                }
+                super::CompatBatchScope::CompatBatchBegin {
+                    expected_version: _expected_version,
+                    begin: _begin,
+                }
+                => {
+                    Self::CompatBatchBegin {
+                        expected_version: _expected_version,
+                        begin: _begin.into(),
+                    }
+                }
+                super::CompatBatchScope::CompatBatchContinue {
+                    update_id: _update_id,
+                    expected_epoch: _expected_epoch,
+                }
+                => {
+                    Self::CompatBatchContinue {
+                        update_id: _update_id,
+                        expected_epoch: _expected_epoch,
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchScope {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                CompatBatchScope::Unknown => {
+                    0
+                }
+                Self::CompatBatchBegin {
+                    expected_version: ref _expected_version,
+                    begin: ref _begin,
+                }
+                => {
+                    _expected_version.serialized_size() +
+                    _begin.serialized_size()
+                }
+                Self::CompatBatchContinue {
+                    update_id: ref _update_id,
+                    expected_epoch: ref _expected_epoch,
+                }
+                => {
+                    _update_id.serialized_size() +
+                    _expected_epoch.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::CompatBatchBegin {
+                    expected_version: ref _expected_version,
+                    begin: ref _begin,
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                    _expected_version._serialize_chained(dest)?;
+                    _begin._serialize_chained(dest)?;
+                }
+                Self::CompatBatchContinue {
+                    update_id: ref _update_id,
+                    expected_epoch: ref _expected_epoch,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _update_id._serialize_chained(dest)?;
+                    _expected_epoch._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatBatchScope::CompatBatchBegin {
+                        expected_version: v0,
+                        begin: v1,
+                    }
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatBatchScope::CompatBatchContinue {
+                        update_id: v0,
+                        expected_epoch: v1,
+                    }
+                }
+                _ => {
+                    i = len;
+                    CompatBatchScope::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatBatchScope {}
+
+    #[derive(Clone, Debug, PartialEq)]
     pub struct CompatBatchRequest {
-        pub update_id: u32,
-        pub expected_epoch: u64,
+        pub scope: CompatBatchScope,
         pub leases: CompatCaptureLeases,
         pub operations: ::std::vec::Vec<CompatBatchOperation>,
         pub finalize: bool,
@@ -8964,8 +9238,7 @@ pub mod owned {
     impl<'raw> ::core::convert::From<super::CompatBatchRequest<'raw>> for CompatBatchRequest {
         fn from(value: super::CompatBatchRequest) -> Self {
             Self {
-                update_id: value.update_id,
-                expected_epoch: value.expected_epoch,
+                scope: value.scope.into(),
                 leases: value.leases.into(),
                 operations: value.operations.into_iter().map(|value| value.into()).collect(),
                 finalize: value.finalize,
@@ -8977,8 +9250,7 @@ pub mod owned {
 
     impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchRequest {
         const MIN_SERIALIZED_SIZE: usize =
-            <u32>::MIN_SERIALIZED_SIZE +
-            <u64>::MIN_SERIALIZED_SIZE +
+            <CompatBatchScope>::MIN_SERIALIZED_SIZE +
             <CompatCaptureLeases>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatBatchOperation>>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
@@ -8987,8 +9259,7 @@ pub mod owned {
 
         #[inline]
         fn serialized_size(&self) -> usize {
-            self.update_id.serialized_size() +
-            self.expected_epoch.serialized_size() +
+            self.scope.serialized_size() +
             self.leases.serialized_size() +
             self.operations.serialized_size() +
             self.finalize.serialized_size() +
@@ -8998,8 +9269,7 @@ pub mod owned {
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
-                zelf.update_id._serialize_chained(dest)? +
-                zelf.expected_epoch._serialize_chained(dest)? +
+                zelf.scope._serialize_chained(dest)? +
                 zelf.leases._serialize_chained(dest)? +
                 zelf.operations._serialize_chained(dest)? +
                 zelf.finalize._serialize_chained(dest)? +
@@ -9027,17 +9297,14 @@ pub mod owned {
             i += read;
             let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
-            let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
 
             Ok((i, Self {
-                update_id: v0,
-                expected_epoch: v1,
-                leases: v2,
-                operations: v3,
-                finalize: v4,
-                now: v5,
-                wall: v6,
+                scope: v0,
+                leases: v1,
+                operations: v2,
+                finalize: v3,
+                now: v4,
+                wall: v5,
             }))
         }
     }
@@ -9284,6 +9551,8 @@ pub mod owned {
 
     #[derive(Clone, Debug, PartialEq)]
     pub struct CompatBatchReply {
+        pub update_id: u32,
+        pub reservations: ::std::vec::Vec<CompatKeyReservation>,
         pub flags: u32,
         pub published: bool,
         pub changed: bool,
@@ -9305,6 +9574,8 @@ pub mod owned {
     impl<'raw> ::core::convert::From<super::CompatBatchReply<'raw>> for CompatBatchReply {
         fn from(value: super::CompatBatchReply) -> Self {
             Self {
+                update_id: value.update_id,
+                reservations: value.reservations.into_iter().map(|value| value.into()).collect(),
                 flags: value.flags,
                 published: value.published,
                 changed: value.changed,
@@ -9328,6 +9599,8 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply {
         const MIN_SERIALIZED_SIZE: usize =
             <u32>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatKeyReservation>>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
@@ -9346,6 +9619,8 @@ pub mod owned {
 
         #[inline]
         fn serialized_size(&self) -> usize {
+            self.update_id.serialized_size() +
+            self.reservations.serialized_size() +
             self.flags.serialized_size() +
             self.published.serialized_size() +
             self.changed.serialized_size() +
@@ -9366,6 +9641,8 @@ pub mod owned {
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
+                zelf.update_id._serialize_chained(dest)? +
+                zelf.reservations._serialize_chained(dest)? +
                 zelf.flags._serialize_chained(dest)? +
                 zelf.published._serialize_chained(dest)? +
                 zelf.changed._serialize_chained(dest)? +
@@ -9424,24 +9701,30 @@ pub mod owned {
             i += read;
             let (read, v15) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v16) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v17) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
-                flags: v0,
-                published: v1,
-                changed: v2,
-                noop: v3,
-                version: v4,
-                mutation_epoch: v5,
-                composition: v6,
-                selection: v7,
-                selections: v8,
-                tags: v9,
-                dirty_leaves: v10,
-                dirty_elements: v11,
-                dirty_type: v12,
-                delta: v13,
-                results: v14,
-                outcome: v15,
+                update_id: v0,
+                reservations: v1,
+                flags: v2,
+                published: v3,
+                changed: v4,
+                noop: v5,
+                version: v6,
+                mutation_epoch: v7,
+                composition: v8,
+                selection: v9,
+                selections: v10,
+                tags: v11,
+                dirty_leaves: v12,
+                dirty_elements: v13,
+                dirty_type: v14,
+                delta: v15,
+                results: v16,
+                outcome: v17,
             }))
         }
     }
@@ -13628,4 +13911,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "2b4d927cf4348931633b31c4d5884ab56832f661537e68fbc27ebdc81739baef";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "52e36902086d5bb9dd3a14607ce2cfad85e91bd89bdf546f42f35102003bb483";
