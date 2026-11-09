@@ -13,6 +13,14 @@ class NativeEditorViewTest {
         NativeInputScenario.consumedEnter(RuntimeEnvironment.getApplication())
     }
 
+    @Test fun newlineCommitAppliesFinalCharactersBeforeCompositionEnd() {
+        NativeInputScenario.newlineCommit(RuntimeEnvironment.getApplication(), listOf(true))
+    }
+
+    @Test fun newlineOnlyCommitUsesLiveElementBeforeCompositionEnd() {
+        NativeInputScenario.newlineCommit(RuntimeEnvironment.getApplication(), listOf(false))
+    }
+
     @Test fun realRustSessionReceivesInputConnectionCompositionAndHistory() {
         NativeInputScenario.run(RuntimeEnvironment.getApplication())
     }

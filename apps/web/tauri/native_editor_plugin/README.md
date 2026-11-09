@@ -25,7 +25,11 @@ running session with `attachRunningSession` to restore text and selection while
 retaining its existing history and synchronization lifecycle.
 Route ordinary native Enter and physical Shift+Enter through the shared model
 key command before applying Android defaults; heading splits and line breaks
-must use the application policy.
+must use the application policy. A final active-composition commit ending in a
+newline first applies the composed text without that terminal newline, then sends
+End with the actual committed data. End owns Enter; do not also insert a paragraph.
+Use returned keys and selection feedback between admissions, including a live
+element endpoint when removing the composed text empties its node.
 Pass editor editability and content-interaction permission separately. A content
 lock revokes input, paste, formatting and undo entry points without representing
 comment capability; the shared session continues to authorize comment commands.
