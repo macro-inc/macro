@@ -7,6 +7,7 @@ selection movement in the injected view callbacks.
 - Keep constructors pure JS and allocate native references lazily.
 - Keep captured selection identity separate for every editor, version and native selection id.
 - Keep frozen published selections immutable; synchronize detached read-scope clones without granting model write authority.
+- Select the graph with getActiveStateVersion, independently from the leased raw selection reference's origin version.
 - Preserve pinned v0.45 fields, cache invalidation, owner links and clone semantics.
 - Keep the sole upstream declaration exception in $createPoint: upstream declares a non-null owner for an actual owner-less point. Never copy its suppression or add another assertion.
 - Import runtime core and DOM operations through SelectionRuntime; never import upstream runtime code.

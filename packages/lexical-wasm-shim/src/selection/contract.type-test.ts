@@ -28,6 +28,7 @@ export type RangeSelectionContract = Matches<
   import('lexical').RangeSelection,
   RangeSelection
 >;
+export type PointContract = Matches<import('lexical').Point, Point>;
 export type NodeSelectionContract = Matches<
   import('lexical').NodeSelection,
   NodeSelection
