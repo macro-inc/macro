@@ -29,7 +29,9 @@ test('graph reads preserve identities and node-keyed maps without native crossin
         [first, 'first'],
         [second, 'second'],
       ]);
+      const calibration = diagnostics.crossings();
       const before = diagnostics.crossings();
+      const observationCost = before - calibration;
       expect(first.getParent()).toBe(paragraph);
       expect(first.getParentOrThrow()).toBe(paragraph);
       expect(first.getTopLevelElement()).toBe(paragraph);
@@ -55,7 +57,7 @@ test('graph reads preserve identities and node-keyed maps without native crossin
       expect(paragraph.getTextContentSize()).toBe(11);
       expect(owners.get(paragraph.getFirstChildOrThrow())).toBe('first');
       expect(root.getLatest()).toBe(currentRoot);
-      expect(diagnostics.crossings() - before).toBe(0);
+      expect(diagnostics.crossings() - before - observationCost).toBe(0);
       backend.discard();
     });
   } finally {

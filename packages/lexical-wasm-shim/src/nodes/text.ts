@@ -25,8 +25,8 @@ import { LexicalNode } from './base';
 import { type DOMConversionMap, textImportDOM } from './dom-import';
 import { textFormats, toggleTextFormat } from './format';
 import { ElementNode } from './index';
-import { booleanResult, modeResult, nodeResult, nodesResult } from './results';
-import { nodeCall, nodeSelect } from './runtime';
+import { modeResult, nodeResult, nodesResult } from './results';
+import { nodeCall, nodeIsComposing, nodeSelect } from './runtime';
 import { createTextDOM, updateTextDOM } from './text-dom';
 
 function textSlot(
@@ -122,7 +122,7 @@ export class TextNode extends LexicalNode {
     return this.__type === 'text' && this.__mode === 0;
   }
   isComposing(): boolean {
-    return booleanResult(nodeCall(this, 'isComposing', []));
+    return nodeIsComposing(this);
   }
   isInline(): true {
     return true;
