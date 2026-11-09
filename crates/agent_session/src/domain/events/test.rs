@@ -51,7 +51,7 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
             action_id: action_id(),
             actor: Some(owner()),
             announcement_message_id: Some(Uuid::from_u128(4)),
-            stop_reason: "end_turn".to_owned(),
+            stop_reason: model_notifications::AgentTurnStopReason::EndTurn,
             queued_remaining: 0,
         }),
         AgentSessionLifecycleEvent::CommandRejected(CommandRejectedMetadata {
@@ -72,7 +72,7 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
                 action_id: action_id(),
                 actor: Some(owner()),
                 announcement_message_id: Some(Uuid::from_u128(4)),
-                stop_reason: "end_turn".to_owned(),
+                stop_reason: model_notifications::AgentTurnStopReason::EndTurn,
                 excerpt: Some("Done.".to_owned()),
             }),
         }),

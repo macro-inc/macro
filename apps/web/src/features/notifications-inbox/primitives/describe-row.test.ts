@@ -361,6 +361,7 @@ describe('describeInboxCard', () => {
           content: {
             sessionName: 'Build the tracker',
             botName: 'Macro',
+            stopReason: 'end_turn',
             excerpt: `Update ${id}`,
           },
         },

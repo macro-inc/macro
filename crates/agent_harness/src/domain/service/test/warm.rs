@@ -507,7 +507,7 @@ async fn a_session_asked_for_out_of_sight_is_hidden_and_notifies_nobody() {
                             action_id: AgentActionId::mint(),
                             actor: Some(sender()),
                             announcement_message_id: None,
-                            stop_reason: "end_turn".into(),
+                            stop_reason: model_notifications::AgentTurnStopReason::EndTurn,
                             excerpt: Some("Done.".into()),
                         }),
                     },

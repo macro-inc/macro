@@ -1,4 +1,5 @@
 import {
+  agentTurnEnding,
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
@@ -259,7 +260,9 @@ const stackVerb = (notification: UnifiedNotification) =>
           .with('reply', () => 'replied')
           .otherwise(() => 'commented')
     )
-    .with({ tag: 'agent_session_settled' }, () => 'finished')
+    .with({ tag: 'agent_session_settled' }, ({ content }) =>
+      agentTurnEnding(content.stopReason)
+    )
     .with({ tag: 'agent_session_waiting_for_input' }, () => 'needs your answer')
     .with({ tag: 'ai_response' }, () => 'responded')
     .with({ tag: 'github_pr_status_changed' }, () => 'updated')

@@ -81,6 +81,7 @@ entity_registry = { path = "../entity_registry/entity_registry", default-feature
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 genai_telemetry = { path = "../genai_telemetry" }
 model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications" }
 model_owner = { path = "../model_owner" }
 models_permissions = { path = "../models_permissions" }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }

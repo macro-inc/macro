@@ -5,11 +5,13 @@ import {
   entityDiscussionVerb,
   isEntityDiscussionEvent,
 } from '@notifications/entity-discussion';
+import { agentTurnEnding } from '@notifications/notification-metadata';
 import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
 } from '@notifications/notification-sender';
 import { createMemo } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
 import {
   getActionVerb,
@@ -138,9 +140,12 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     if (isSingleNotification()) {
       const metadata = (props.notification ?? props.stack?.notifications[0])
         ?.notification_metadata;
-      const action = isEntityDiscussionEvent(metadata)
-        ? entityDiscussionVerb(metadata)
-        : getActionVerb(type);
+      const action = match(metadata)
+        .when(isEntityDiscussionEvent, entityDiscussionVerb)
+        .with({ tag: 'agent_session_settled' }, ({ content }) =>
+          agentTurnEnding(content.stopReason)
+        )
+        .otherwise(() => getActionVerb(type));
       if (sender && type !== 'ai_response') {
         return `${sender} ${action}`;
       }

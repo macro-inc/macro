@@ -262,6 +262,30 @@ impl<'de> XmlTaggedParsed<'de> for ParsedAgentSessionMention<'de> {
     const TAG_NAME: &'static str = "m-agent-session-mention";
 }
 
+/// The steps an agent took between passages of its reply, as a message
+/// carries them. Only what the steps say is read; their cards are left alone.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedAgentActivity<'a> {
+    #[serde(borrow, default)]
+    pub rows: Vec<ParsedAgentActivityRow<'a>>,
+}
+
+/// One step of a [`ParsedAgentActivity`].
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct ParsedAgentActivityRow<'a> {
+    /// What the step did, as the agent's activity row reads.
+    #[serde(borrow)]
+    pub label: Cow<'a, str>,
+}
+
+impl<'de> XmlTaggedParsed<'de> for ParsedAgentActivity<'de> {
+    const TAG_NAME: &'static str = "m-agent-activity";
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
@@ -343,6 +367,7 @@ pub enum XmlTag<'de> {
     Date(ParsedDateMention<'de>),
     Group(ParsedGroupMention<'de>),
     AgentSession(ParsedAgentSessionMention<'de>),
+    AgentActivity(ParsedAgentActivity<'de>),
     PullRequest(ParsedPullRequestMention<'de>),
     BookingLink(ParsedBookingLinkMention<'de>),
 }
@@ -356,6 +381,7 @@ fn parse_xml_tag(s: &str) -> IResult<&str, XmlTag<'_>> {
         ParsedDateMention::parse.map(XmlTag::Date),
         ParsedGroupMention::parse.map(XmlTag::Group),
         ParsedAgentSessionMention::parse.map(XmlTag::AgentSession),
+        ParsedAgentActivity::parse.map(XmlTag::AgentActivity),
         ParsedPullRequestMention::parse.map(XmlTag::PullRequest),
         ParsedBookingLinkMention::parse.map(XmlTag::BookingLink),
     ))
@@ -371,6 +397,7 @@ fn is_recognized_tag_name(name: &str) -> bool {
         ParsedDateMention::TAG_NAME,
         ParsedGroupMention::TAG_NAME,
         ParsedAgentSessionMention::TAG_NAME,
+        ParsedAgentActivity::TAG_NAME,
         ParsedPullRequestMention::TAG_NAME,
         ParsedBookingLinkMention::TAG_NAME,
     ]
@@ -487,6 +514,10 @@ pub trait XmlFormatter: Sized {
         session: &ParsedAgentSessionMention<'_>,
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result;
+    fn format_agent_activity(
+        activity: &ParsedAgentActivity<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result;
     fn format_pull_request(
         pr: &ParsedPullRequestMention<'_>,
         f: &mut Formatter<'_>,
@@ -555,6 +586,13 @@ pub trait XmlFormatter: Sized {
                         acc,
                         "{}",
                         Adapter(|f: &mut Formatter<'_>| Self::format_agent_session(&s, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::AgentActivity(a)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_agent_activity(&a, f))
                     )
                 }
                 TextSegment::Xml(XmlTag::PullRequest(p)) => {
@@ -646,6 +684,14 @@ impl XmlFormatter for PlainTextFormatter {
         )
     }
 
+    fn format_agent_activity(
+        activity: &ParsedAgentActivity<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        let labels: Vec<&str> = activity.rows.iter().map(|row| row.label.as_ref()).collect();
+        write!(f, "{}", labels.join("\n"))
+    }
+
     fn format_pull_request(
         pr: &ParsedPullRequestMention<'_>,
         f: &mut Formatter<'_>,
@@ -705,6 +751,13 @@ impl XmlFormatter for NullXmlFormatter {
 
     fn format_agent_session(
         _session: &ParsedAgentSessionMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "")
+    }
+
+    fn format_agent_activity(
+        _activity: &ParsedAgentActivity<'_>,
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result {
         write!(f, "")

@@ -50,6 +50,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { localDraftQueueLifecycle } from '@queries/email/local-drafts';
 import { getMacroApiToken } from '@service-auth/fetch';
+import type { AgentTurnStopReason } from '@service-notification/generated/schemas/agentTurnStopReason';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
 import type { ExternalChatProvider } from '@service-notification/generated/schemas/externalChatProvider';
@@ -100,6 +101,7 @@ import type { SoupProperty } from './generated/schemas/soupProperty';
 import {
   type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
+  type GraphqlAgentTurnStopReason,
   type GraphqlEmailView,
   type GroupedSoupInput,
   type GroupSoupQuery,
@@ -1120,6 +1122,24 @@ function toNotificationDocumentSubType(
     : null;
 }
 
+/**
+ * A turn's stop reason, from GraphQL's enum to the REST spelling. A reason
+ * a newer server adds reads as `other`, as the backend reads one ACP adds.
+ */
+function agentTurnStopReason(
+  stopReason: GraphqlAgentTurnStopReason
+): AgentTurnStopReason {
+  return match<GraphqlAgentTurnStopReason, AgentTurnStopReason>(stopReason)
+    .with('END_TURN', () => 'end_turn')
+    .with('MAX_TOKENS', () => 'max_tokens')
+    .with('MAX_TURN_REQUESTS', () => 'max_turn_requests')
+    .with('REFUSAL', () => 'refusal')
+    .with('CANCELLED', () => 'cancelled')
+    .with('ERROR', () => 'error')
+    .with('OTHER', () => 'other')
+    .exhaustive(() => 'other');
+}
+
 /** The flattened session block every agent-session kind carries. */
 function agentSessionContent(session: {
   sessionId: string;
@@ -1774,7 +1794,9 @@ function mapGraphqlNotificationMetadata(
             ...agentSessionContent(metadata.agentSessionSettledSession),
             turn: metadata.agentSessionSettledTurn,
             actor: metadata.agentSessionSettledActor ?? undefined,
-            stopReason: metadata.agentSessionSettledStopReason,
+            stopReason: agentTurnStopReason(
+              metadata.agentSessionSettledStopReason
+            ),
             excerpt: metadata.agentSessionSettledExcerpt ?? undefined,
           },
         }) satisfies NotifEventMember<'agent_session_settled'>

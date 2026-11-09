@@ -139,7 +139,11 @@ impl InFlightTurn {
 
     /// This turn as a settled session reports it.
     #[must_use]
-    pub fn ended(self, stop_reason: String, excerpt: Option<String>) -> TurnSummary {
+    pub fn ended(
+        self,
+        stop_reason: model_notifications::AgentTurnStopReason,
+        excerpt: Option<String>,
+    ) -> TurnSummary {
         TurnSummary {
             turn: self.turn,
             action_id: self.action_id,

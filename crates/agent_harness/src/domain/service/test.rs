@@ -4039,12 +4039,12 @@ mod lifecycle_events {
                     && started.turn == TurnId(0)
                     && started.announcement_message_id == Some(chip)
                     && ended.turn == TurnId(0)
-                    && ended.stop_reason == "end_turn"
+                    && ended.stop_reason == model_notifications::AgentTurnStopReason::EndTurn
                     && ended.queued_remaining == 0
                     && ended.announcement_message_id == Some(chip)
                     && settled.last_turn.as_ref().is_some_and(|turn| {
                         turn.turn == TurnId(0)
-                            && turn.stop_reason == "end_turn"
+                            && turn.stop_reason == model_notifications::AgentTurnStopReason::EndTurn
                             && turn.announcement_message_id == Some(chip)
                     })
             ),
@@ -4408,10 +4408,10 @@ mod lifecycle_events {
             matches!(
                 &events[5..7],
                 [Lifecycle::TurnEnded(ended), Lifecycle::Settled(settled)]
-                    if ended.stop_reason == "end_turn"
+                    if ended.stop_reason == model_notifications::AgentTurnStopReason::EndTurn
                         && settled.last_turn.as_ref().is_some_and(|turn| {
                             turn.excerpt.as_deref() == Some("Hello there.")
-                                && turn.stop_reason == "end_turn"
+                                && turn.stop_reason == model_notifications::AgentTurnStopReason::EndTurn
                         })
             ),
             "settled quotes the agent's last words: {events:#?}"

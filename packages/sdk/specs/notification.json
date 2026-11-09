@@ -1271,8 +1271,8 @@
                 "description": "The agent's last prose in the turn, whole; `None` when it wrote none."
               },
               "stopReason": {
-                "type": "string",
-                "description": "The ACP stop reason, or `error`."
+                "$ref": "#/components/schemas/AgentTurnStopReason",
+                "description": "Why the turn stopped."
               },
               "turn": {
                 "type": "integer",
@@ -1308,6 +1308,19 @@
           }
         ],
         "description": "An agent is blocked on a question only the session's owner can answer."
+      },
+      "AgentTurnStopReason": {
+        "type": "string",
+        "description": "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling.",
+        "enum": [
+          "end_turn",
+          "max_tokens",
+          "max_turn_requests",
+          "refusal",
+          "cancelled",
+          "error",
+          "other"
+        ]
       },
       "AiResponseMetadata": {
         "type": "object",

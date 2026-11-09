@@ -11,12 +11,12 @@ mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
-    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
-    CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
-    ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
-    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AgentTurnStopReason,
+    AiResponseMetadata, CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata,
+    CallStartedMetadata, ChannelAccessRequestedMetadata, ChannelInviteMetadata,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, ColleagueJoinedMacro, CommentedOnDocumentMetadata,
+    CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata,
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatMessageMetadata,
     GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
     GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,

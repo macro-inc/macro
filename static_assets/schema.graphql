@@ -2119,9 +2119,13 @@ type GraphqlAgentSessionSettledMetadata {
 	"""
 	actor: String
 	"""
-	ACP stop reason, or `error`.
+	ACP stop reason, or `error`, in ACP's spelling.
 	"""
-	stopReason: String!
+	stopReason: String! @deprecated(reason: "Use turnStopReason. Remove after 2026-12-09.")
+	"""
+	Why the turn stopped.
+	"""
+	turnStopReason: GraphqlAgentTurnStopReason!
 	"""
 	The agent's last prose in the turn.
 	"""
@@ -2182,6 +2186,40 @@ type GraphqlAgentSessionWaitingForInputMetadata {
 	The question, as the agent phrased it.
 	"""
 	question: String!
+}
+
+"""
+Why an agent's turn stopped.
+"""
+enum GraphqlAgentTurnStopReason {
+	"""
+	The agent finished its turn.
+	"""
+	END_TURN
+	"""
+	The model hit its token limit.
+	"""
+	MAX_TOKENS
+	"""
+	The agent hit its turn-request limit.
+	"""
+	MAX_TURN_REQUESTS
+	"""
+	The agent declined to continue.
+	"""
+	REFUSAL
+	"""
+	The turn was cancelled.
+	"""
+	CANCELLED
+	"""
+	The runtime answered the prompt with an error.
+	"""
+	ERROR
+	"""
+	A stop reason ACP added after this one was defined.
+	"""
+	OTHER
 }
 
 """

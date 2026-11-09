@@ -86,6 +86,7 @@ export * from './agentSessionLifecycleEventOneOfTwoone';
 export * from './agentSessionLifecycleEventOneOfTwooneEventType';
 export * from './agentSessionSource';
 export * from './agentSessionVisibility';
+export * from './agentTurnStopReason';
 export * from './agentTyping';
 export * from './agentTypingPhase';
 export * from './aiAdmissionErrorBody';

@@ -209,7 +209,7 @@ fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<Planne
             session: session_ref(&settled.identity, turn.announcement_message_id),
             turn: turn.turn.0,
             actor: turn.actor.clone(),
-            stop_reason: turn.stop_reason.clone(),
+            stop_reason: turn.stop_reason,
             excerpt: turn.excerpt.clone(),
         },
     })]

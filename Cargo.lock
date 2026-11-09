@@ -904,6 +904,7 @@ dependencies = [
  "messages",
  "mockall",
  "model-entity",
+ "model_notifications",
  "model_owner",
  "model_user",
  "models_permissions",

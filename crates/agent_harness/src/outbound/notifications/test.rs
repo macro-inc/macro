@@ -65,7 +65,7 @@ fn settled() -> AgentSessionLifecycleEvent {
             action_id: AgentActionId::mint(),
             actor: Some(owner()),
             announcement_message_id: None,
-            stop_reason: "end_turn".to_owned(),
+            stop_reason: model_notifications::AgentTurnStopReason::EndTurn,
             excerpt: Some("Done.".to_owned()),
         }),
     })

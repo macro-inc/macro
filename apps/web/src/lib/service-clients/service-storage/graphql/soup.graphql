@@ -795,7 +795,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		}
 		agentSessionSettledTurn: turn
 		agentSessionSettledActor: actor
-		agentSessionSettledStopReason: stopReason
+		agentSessionSettledStopReason: turnStopReason
 		agentSessionSettledExcerpt: excerpt
 	}
 	... on GraphqlAgentSessionWaitingForInputMetadata {

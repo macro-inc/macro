@@ -1820,7 +1820,7 @@ async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
                 action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
                 actor: None,
                 announcement_message_id: None,
-                stop_reason: "end_turn".to_owned(),
+                stop_reason: agent_session::domain::events::AgentTurnStopReason::EndTurn,
                 excerpt: Some("Done.".to_owned()),
             }),
         })
