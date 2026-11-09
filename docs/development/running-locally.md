@@ -240,9 +240,10 @@ just seed-scenario apply --file seed/scenarios/team-perms.json
 ```
 
 `apply` creates a FusionAuth account for each persona. It prints a login link per
-persona, for example `http://alice.localhost:3000/app/login?email=alice@seed.macro.local`.
+persona, for example `https://alice.localhost:8090/app/login?email=alice@seed.macro.local`.
 Open each link in a plain browser tab. Each persona hostname has its own cookie
-jar. You can drive several personas side by side against one stack.
+jar. You can drive several personas side by side against one stack, whether it
+is attached or headless.
 
 Useful commands:
 
@@ -336,6 +337,7 @@ just run_local --instance <name>                # returns once ready; nonzero na
 just run_local status --instance <name> --json  # phase, health, URLs, last job, containers
 just run_local wait --instance <name>           # block until a running bring-up or rebuild ends
 just run_local rebuild --instance <name>        # the `r` hotkey: rebuild changed services and reload them
+just run_local rebuild --services contacts_service --instance <name>  # rebuild and reload only these
 just run_local restart-frontend --instance <name>  # the `f` hotkey
 just run_local logs --instance <name>           # the last job's log
 just run_local logs --service frontend --instance <name>  # Vite; any compose service name works
@@ -409,15 +411,6 @@ allocator or with `--port-base`. Other commands find the window themselves, so
 repeat only `--instance`. Startup prints the window; `just status_local` and
 `just stack status --json` print the endpoints.
 
-Use a separate browser profile for each instance on the same hostname: cookies
-are shared across ports, even though databases are isolated. A private session
-isolates an instance from normal windows, but private windows in the same browser
-can share cookies with one another. A session from another instance can leave
-the app loading and make `/auth/user/legacy_user_permissions` return 500 when its
-account is absent from the selected database. Sign in to the intended instance
-in an isolated browser profile; do not reset its database or clear another
-instance's session.
-
 Local signup and onboarding screens provide **Bypass** for any account. Before
 signup it skips the opening slides, not authentication; after sign-in it records
 both onboarding and tutorial completion. See the
@@ -447,6 +440,31 @@ The generated files for an instance live here:
 ```text
 infra/local/generated/<instance>
 ```
+
+Instances on one machine do not share sessions, even though browsers ignore the
+port when they scope cookies. The HTTPS proxy stores each instance's cookies
+under its own prefix, after any `__Host-` or `__Secure-`
+(`macro-<instance>--local-macro-access-token`,
+`__Host-macro-<instance>--macro_mcp_oauth`). It forwards a service only that
+instance's cookies, under their real names, so services and the app behave as
+usual on `localhost`, the machine hostname, a tailnet name, or a tunnel. Every
+other cookie stays in the browser: other instances' cookies, and unprefixed ones
+such as tokens from older stacks or a service's own host port, which no instance
+can claim, and cookies the app's JavaScript sets, which no service reads. That
+includes the SSO callback on the auth service's own port, so SSO against a local
+stack hands the app a session code, which it redeems through the proxy. `run_dev`
+keeps hosted-style cookies and the usual SSO return.
+localStorage and IndexedDB were already separate, since they key on the port.
+
+An existing stack keeps its data. `just stack update` recreates its proxy with
+these rules; sign in once more afterwards. A client that calls the proxy with a
+hard-coded cookie name should send `Authorization: Bearer` instead or use the
+prefixed name. FusionAuth's own cookies stay unprefixed, as its port is published
+directly; they only hold its hosted-login session, not your Macro session.
+
+After changing the cookie rules (`cookie_rewrites` in `xtask_local`'s
+`proxy.rs`), also run them in a real Caddy, which CI doesn't have: from
+`tooling/xtask`, `nix shell nixpkgs#caddy -c cargo test -p xtask_local -- --ignored real_caddy`.
 
 ### Access a remote dev server through one URL
 
@@ -527,7 +545,7 @@ just status_local --instance test
 The default instance (no `--instance`) always uses the fixed ports. If one is
 taken, its start fails before the build and names the ports.
 
-The seeded persona login links embed the frontend port. If an instance's window
+The seeded persona login links embed the proxy port. If an instance's window
 moves, run `just seed-scenario apply` again to get links that match.
 
 ## What the Stack Rebuilds
@@ -541,6 +559,15 @@ A new worktree's first build reuses the registry dependencies another worktree o
 Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only services
 whose binary is newer than their container restart, so a build that failed partway
 still gets its finished services reloaded next time.
+
+To rebuild only the services you are working on, pass `--services` with compose or
+binary names, comma-separated: `just run_local rebuild --services contacts_service`
+or `just stack update --services contacts_service,email_service`. An edit to a crate
+most services share then rebuilds in seconds instead of minutes, but the other
+services keep running the code they were last built from. `status`, `status --json`
+(`stale_services`) and the rebuild output list every service whose crates changed
+since its own last build, with the command that rebuilds them all. A full rebuild
+(`r`, or either command without `--services`) clears the list.
 
 Three services have Docker-built images:
 
@@ -574,6 +601,7 @@ just stack up                  # wipe, bring everything up with a static fronten
 just stack status --json      # same as `just run_local status --json`
 just stack update             # same rebuild as `just run_local rebuild`, without the background job
 just stack update --frontend  # also rebuild the frontend bundle
+just stack update --services contacts_service  # rebuild and reload only these; status lists the rest if stale
 just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```

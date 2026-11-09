@@ -415,8 +415,11 @@ fully recoverable: click the dialog's `Home` button, then wait for the sidebar t
 
 ## Session persistence
 
-The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-token`). It
-survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
+The session lives in cookies. Services use `local-macro-access-token` and
+`local-macro-refresh-token`; the local proxy stores them in the browser as
+`macro-<instance>--local-macro-access-token`, so stacks on one machine don't share sessions
+([details](../development/running-locally.md#run-more-than-one-stack)). When copying cookies
+into a browser context, copy the names the proxy returned. The session survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
 

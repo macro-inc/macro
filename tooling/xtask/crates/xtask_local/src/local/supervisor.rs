@@ -104,6 +104,11 @@ pub struct RebuildArgs {
     /// Rebuild every repository-built local Docker service and recreate it.
     #[arg(long)]
     pub build_aux_services: bool,
+    /// Rebuild and restart only these Rust services (comma-separated compose or
+    /// binary names). The others keep running older code until a full rebuild;
+    /// `status` lists them.
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    pub services: Vec<String>,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
@@ -904,6 +909,7 @@ fn supervise_rebuild(args: &RebuildArgs) -> Result<()> {
             instance: args.instance.clone(),
             frontend: args.frontend,
             build_aux_services: args.build_aux_services,
+            services: args.services.clone(),
             verbose: args.verbose,
             ..Default::default()
         },

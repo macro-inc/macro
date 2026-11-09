@@ -111,7 +111,7 @@ just seed-scenario --instance 2508 apply --file seed/scenarios/team-perms.json
   can log in through the real passwordless flow. If FusionAuth is
   unreachable, apply seeds database rows only and says so.
 - To drive several personas at once in one browser window, open the links
-  apply prints (`http://alice.localhost:3000/app/login?email=…`) as plain
+  apply prints (`https://alice.localhost:8090/app/login?email=…`) as plain
   tabs. Hostnames get separate cookie jars (ports don't), the app follows the
   page hostname to the backend proxy, and locally the login completes itself
   (the local backend returns the one-time code and dev builds auto-submit
