@@ -1,4 +1,6 @@
 pub mod container_tree;
+#[cfg(test)]
+mod event_recording_test;
 
 use crate::sync::{AtomicU64, Mutex, RwLock};
 #[cfg(test)]
