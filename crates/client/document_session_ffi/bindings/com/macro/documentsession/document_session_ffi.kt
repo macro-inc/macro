@@ -11804,6 +11804,12 @@ sealed class ModifyTarget {
         companion object
     }
     
+    /**
+     * Explicit model-only Unicode segmentation, independent of host layout.
+     */
+    object ModelSegmentation : ModifyTarget()
+    
+    
 
     
 
@@ -11828,6 +11834,7 @@ public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget
                 FfiConverterBoolean.read(buf),
                 FfiConverterBoolean.read(buf),
                 )
+            4 -> ModifyTarget.ModelSegmentation
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
@@ -11855,6 +11862,12 @@ public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget
                 + FfiConverterBoolean.allocationSize(value.`isBackwardInDom`)
             )
         }
+        is ModifyTarget.ModelSegmentation -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
     }
 
     override fun write(value: ModifyTarget, buf: ByteBuffer) {
@@ -11873,6 +11886,10 @@ public object FfiConverterTypeModifyTarget : FfiConverterRustBuffer<ModifyTarget
                 FfiConverterTypePoint.write(value.`focus`, buf)
                 FfiConverterBoolean.write(value.`resolutionDirty`, buf)
                 FfiConverterBoolean.write(value.`isBackwardInDom`, buf)
+                Unit
+            }
+            is ModifyTarget.ModelSegmentation -> {
+                buf.putInt(4)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

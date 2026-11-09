@@ -15,7 +15,7 @@ conformance = ["dep:lexical_conformance"]
 document_session = { workspace = true, default-features = false, features = ["application"] }
 macro_document_model = { workspace = true, features = ["html"] }
 doc_sync_core.workspace = true
-lexical_model = { workspace = true, default-features = false }
+lexical_model = { workspace = true, default-features = false, features = ["model-segmentation"] }
 lexical_loro.workspace = true
 macro_user_id.workspace = true
 lexical_rich_nodes.workspace = true
