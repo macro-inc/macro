@@ -4,6 +4,11 @@ import type { EditorView } from '../src/view/editor-view';
 import type { EditorPort } from '../src/view/port';
 import { getTableObserverFromTableElement } from '../src/view/table/observer';
 
+// Resize readiness resolves during delivery; admit the next input in a new frame.
+function nextInputFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 export async function commitWork(
   view: EditorView,
   port: EditorPort,
@@ -219,6 +224,7 @@ export async function commitWork(
     if (!first) throw new Error('Missing marked block');
     first.style.height = '80px';
     await shiftReady;
+    await nextInputFrame();
     const movedLast = positions.get(`mark-${size - 1}`);
     const actualLast =
       bounds.call(marks[size - 1]).top - bounds.call(margin).top;
@@ -238,6 +244,7 @@ export async function commitWork(
       select('comment 0');
       port.command(CommandCode.FormatElement, 2);
       await replacementReady;
+      await nextInputFrame();
     } finally {
       view.registry.replace('paragraph', originalParagraph);
     }
@@ -250,6 +257,7 @@ export async function commitWork(
     });
     insert('comment 0');
     await nextReady;
+    await nextInputFrame();
     const reboundTop = positions.get('mark-0');
     const reboundActual = bounds.call(marks[0]).top - bounds.call(margin).top;
     return {
