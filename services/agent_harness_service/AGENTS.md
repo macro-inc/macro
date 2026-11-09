@@ -80,6 +80,12 @@ Pulumi stacks; they do not host extra agent processes.
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
   they never start routines.
+  Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
+  newest 100 messages (labels, 500-character snippets) through
+  email_service's internal recent-messages route and the person's connected
+  Pipedream apps; their hidden sessions run on the free tier's model, gated
+  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
+  sessions a stopped process left open every minute.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

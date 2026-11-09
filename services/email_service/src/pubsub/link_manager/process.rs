@@ -5,6 +5,7 @@ use crm::domain::service::CrmService;
 use email::domain::events::{
     EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
 };
+use email::domain::mailbox::MailboxError;
 #[cfg(test)]
 use email_api_client_core::models::AccessToken;
 #[cfg(test)]
@@ -18,6 +19,8 @@ use model_notifications::InboxReauthRequiredMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqs_worker::cleanup_message;
+use std::future::Future;
+use std::time::Duration;
 
 #[cfg(test)]
 mod test;
@@ -33,9 +36,11 @@ pub async fn process_message(
     let notification_data = extract_message(message)?;
 
     match notification_data {
-        LinkManagerMessage::Refresh { link_id } => ctx.inbox_health.probe(link_id, true).await?,
+        LinkManagerMessage::Refresh { link_id } => {
+            within_probe_timeout(ctx.inbox_health.probe(link_id, true)).await?
+        }
         LinkManagerMessage::HealthCheck { link_id } => {
-            ctx.inbox_health.probe(link_id, false).await?
+            within_probe_timeout(ctx.inbox_health.probe(link_id, false)).await?
         }
         LinkManagerMessage::NotifyReauthRequired { link_id } => {
             let link = get_link_or_skip(&ctx, message, link_id).await?;
@@ -66,6 +71,21 @@ pub async fn process_message(
     }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
+    Ok(())
+}
+
+/// The worker renews a message's visibility for as long as it is processed, so
+/// an unbounded probe that stalls would hold its message in flight instead of
+/// letting it be redelivered and, after the queue's retry limit, dead-lettered.
+/// Only link deletion needs to outlast the queue's visibility timeout.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(240);
+
+async fn within_probe_timeout(
+    probe: impl Future<Output = Result<(), MailboxError>>,
+) -> anyhow::Result<()> {
+    tokio::time::timeout(PROBE_TIMEOUT, probe)
+        .await
+        .context("inbox health probe timed out")??;
     Ok(())
 }
 

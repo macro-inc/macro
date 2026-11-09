@@ -475,3 +475,57 @@ async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn an_attachment_deleted_mid_run_is_skipped_without_a_retry(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let image = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0201")?;
+    let video = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0202")?;
+
+    let claimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    let uploads = claimed
+        .into_iter()
+        .map(|attachment_metadata| AttachmentUploadArgs {
+            recipient_emails: vec![],
+            attachment_metadata,
+            backfill: false,
+            upload_destination: AttachmentUploadDestination::Sfs,
+        })
+        .collect();
+    // The message revision is replaced after the claim, removing the image row.
+    sqlx::query("DELETE FROM email_attachments WHERE id = $1")
+        .bind(image)
+        .execute(&pool)
+        .await?;
+
+    let mut attempted = Vec::new();
+    let refused = upload_claimed_attachments(&pool, uploads, |args| {
+        let attachment_id = args.attachment_metadata.attachment_db_id;
+        attempted.push(attachment_id);
+        let result = if attachment_id == image {
+            Err(UploadAttachmentError::AttachmentDeleted)
+        } else {
+            Ok("sfs-video".to_string())
+        };
+        async move { result }
+    })
+    .await;
+
+    assert!(matches!(refused, Ok(None)));
+    assert_eq!(attempted, vec![image, video]);
+    assert!(
+        new_email_media_atts(&pool, link_id, "claim-test-media-msg")
+            .await?
+            .is_empty()
+    );
+
+    Ok(())
+}

@@ -23,7 +23,7 @@ use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
     parsers::{
         ai::parse_ai_text, fig::parse_fig_pages, markdown::parse_markdown_legacy,
-        psd::parse_psd_text,
+        psd::parse_psd_text, text::decode_text,
     },
     process::document::document_info::{DocumentInfo, get_document_info},
     process::properties::to_indexed_properties,
@@ -220,7 +220,8 @@ async fn read_design_text(file_type: FileType, content: Vec<u8>) -> anyhow::Resu
 }
 
 /// Indexes a file its parser cannot read (a password-protected or damaged
-/// PDF, or a design that is old, damaged, or too large to decode here) by
+/// PDF, a design that is old, damaged, or too large to decode here, or a
+/// text file whose bytes are binary or in an unrecognized encoding) by
 /// name only, dropping the text an earlier version left, so it stays
 /// findable. Reading it again would fail the same way, so this is not an
 /// error to retry.
@@ -479,8 +480,16 @@ pub async fn update_search_with_raw_document(
             // NOTE: this is legacy now. MD parsing mainly happens through sync service via
             // LexicalClient
             tracing::trace!("markdown parsing from DSS is deprecated");
-            let result = parse_markdown_legacy(&String::from_utf8(content)?)
-                .context("unable to parse markdown")?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing markdown that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
+            let result = parse_markdown_legacy(&content).context("unable to parse markdown")?;
             result
                 .into_iter()
                 .map(|result| UpsertDocumentArgs {
@@ -498,7 +507,15 @@ pub async fn update_search_with_raw_document(
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
         file_type => {
-            let content = String::from_utf8(content)?;
+            let Some(content) = decode_text(content, file_type) else {
+                tracing::warn!("indexing a file that is not text by name only");
+                return update_search_with_unreadable_file(
+                    opensearch_client,
+                    db,
+                    search_extractor_message,
+                )
+                .await;
+            };
             if content.is_empty() {
                 vec![]
             } else {

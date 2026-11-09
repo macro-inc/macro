@@ -48,6 +48,9 @@ pub struct TurnRequest {
     /// their identity and token usage is recorded against them. Both need a
     /// person, which the engine asks of this rather than assumes.
     pub owner: Owner,
+    /// What the turn's model calls, and its tools', are metered as: the
+    /// session's feature.
+    pub feature: ai_usage::AiFeature,
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,

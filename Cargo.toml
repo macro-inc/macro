@@ -968,6 +968,7 @@ whatsmeow_signal = { path = "crates/whatsapp/whatsmeow_signal" }
 work_feed = { path = "crates/search/work_feed" }
 worker_rs_otel = { path = "crates/platform/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
+xtask_local_telemetry = { path = "tooling/xtask/crates/xtask_local_telemetry" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
 xtask_ports = { path = "tooling/xtask/crates/xtask_ports" }
 

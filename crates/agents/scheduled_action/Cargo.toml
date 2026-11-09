@@ -55,6 +55,7 @@ sqlx = { workspace = true }
 macro_user_id = { workspace = true }
 cron = { workspace = true }
 anyhow = { workspace = true }
+lazy-regex = { workspace = true }
 macro_uuid = { workspace = true }
 chrono = { workspace = true}
 chrono-tz = { workspace = true }

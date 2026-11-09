@@ -5,6 +5,9 @@ use email_api_client_core::models::{AccessToken, TokenFreshness};
 use email_types::service::link::{Link, UserProvider};
 use macro_user_id::user_id::MacroUserIdStr;
 
+#[cfg(test)]
+mod test;
+
 pub struct InboxHealthBinding {
     pub link: Link,
     pub grant_generation: i64,
@@ -32,7 +35,15 @@ pub trait InboxHealthGateway: Send + Sync + 'static {
         binding: &InboxHealthBinding,
         freshness: TokenFreshness,
     ) -> impl Future<Output = Result<AccessToken, EmailApiError>> + Send;
-    fn refresh_gmail(&self, link: &Link) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    fn renew_gmail_watch(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
+    fn sync_gmail_contacts(
+        &self,
+        link: &Link,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 pub struct InboxHealthService<R, G> {
     repository: R,
@@ -69,29 +80,79 @@ impl<R: InboxHealthRepository, G: InboxHealthGateway> InboxHealthService<R, G> {
         } else {
             TokenFreshness::Fresh
         };
-        match self.gateway.acquire(&binding, freshness).await {
-            Ok(_) if refresh => match binding.link.provider {
-                UserProvider::Gmail => self.gateway.refresh_gmail(&binding.link).await,
-                UserProvider::Outlook => self.repository.wake_streams(&binding).await,
-            },
+        let result = match self.gateway.acquire(&binding, freshness).await {
+            Ok(_) if refresh => self.refresh(&binding).await,
             Ok(_) => Ok(()),
-            Err(EmailApiError::AuthRequired) => {
-                // The queue item is terminal only after the credential owner
-                // persisted its reconnect state. Infrastructure failures retry.
-                match self.repository.binding(link_id).await? {
-                    None => Ok(()),
-                    Some(current)
-                        if !current.link.is_sync_active
-                            || current.link.needs_reauth
-                            || current.grant_generation != binding.grant_generation
-                            || current.sync_generation != binding.sync_generation =>
-                    {
-                        Ok(())
-                    }
-                    _ => Err(MailboxError::Persistence),
-                }
-            }
             Err(error) => Err(error.into()),
+        };
+        // An error requeues the probe, so only failures that may succeed later
+        // are returned.
+        match result {
+            Err(MailboxError::Provider(EmailApiError::AuthRequired)) => {
+                self.settle_auth_required(&binding).await
+            }
+            Err(MailboxError::Provider(error)) if !error.is_transient() => {
+                tracing::warn!(%link_id, %error, "Inbox health probe failed permanently");
+                Ok(())
+            }
+            result => result,
+        }
+    }
+
+    async fn refresh(&self, binding: &InboxHealthBinding) -> Result<(), MailboxError> {
+        match binding.link.provider {
+            UserProvider::Gmail => {
+                self.renew_gmail_watch(&binding.link).await?;
+                self.gateway.sync_gmail_contacts(&binding.link).await
+            }
+            UserProvider::Outlook => self.repository.wake_streams(binding).await,
+        }
+    }
+
+    /// Renews the Gmail watch, then lets contacts sync even when Gmail rejects
+    /// the watch for good. Only a revoked grant or a transient failure stops
+    /// the refresh.
+    async fn renew_gmail_watch(&self, link: &Link) -> Result<(), EmailApiError> {
+        let result = match self
+            .gateway
+            .renew_gmail_watch(link, TokenFreshness::Cached)
+            .await
+        {
+            // A cached token can outlive its grant. Only a fresh fetch lets the
+            // token source mark the link for reauthorization.
+            Err(EmailApiError::AuthRequired) => {
+                self.gateway
+                    .renew_gmail_watch(link, TokenFreshness::Fresh)
+                    .await
+            }
+            result => result,
+        };
+        match result {
+            Err(error) if error != EmailApiError::AuthRequired && !error.is_transient() => {
+                tracing::warn!(link_id = %link.id, %error, "Gmail watch renewal was rejected");
+                Ok(())
+            }
+            result => result,
+        }
+    }
+
+    /// The probe is terminal only after the credential owner persisted the
+    /// link's reconnect state. Infrastructure failures retry.
+    async fn settle_auth_required(&self, probed: &InboxHealthBinding) -> Result<(), MailboxError> {
+        match self.repository.binding(probed.link.id).await? {
+            None => Ok(()),
+            Some(current)
+                if !current.link.is_sync_active
+                    || current.grant_generation != probed.grant_generation
+                    || current.sync_generation != probed.sync_generation =>
+            {
+                Ok(())
+            }
+            Some(current) if current.link.needs_reauth => {
+                tracing::info!(link_id = %probed.link.id, "Inbox needs reauthorization; skipping health probe");
+                Ok(())
+            }
+            Some(_) => Err(MailboxError::Persistence),
         }
     }
 }

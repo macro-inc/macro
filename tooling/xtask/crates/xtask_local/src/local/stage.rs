@@ -333,15 +333,24 @@ impl Stage {
         self.recording_job(label, || self.run_command(label, cmd))
     }
 
-    /// Run a step, telling the job it started and whether it failed.
+    /// The job this stage records on, if any.
+    pub fn job(&self) -> Option<&Arc<Job>> {
+        self.job.as_ref()
+    }
+
+    /// Run a step, telling the job it started, how long it took and whether it
+    /// failed.
     fn recording_job(&self, label: &str, step: impl FnOnce() -> Result<()>) -> Result<()> {
-        if let Some(job) = &self.job {
-            job.step_started(label);
-        }
+        let Some(job) = &self.job else {
+            return step();
+        };
+        job.step_started(label);
+        let start = Instant::now();
         let result = step();
-        if let (Some(job), Err(_)) = (&self.job, &result) {
+        if result.is_err() {
             job.step_failed(label);
         }
+        job.step_finished(label, start.elapsed(), result.is_ok());
         result
     }
 
@@ -392,6 +401,9 @@ impl Stage {
         let status = child.wait();
         let mut captured = out_handle.join().unwrap_or_default();
         captured.extend(err_handle.join().unwrap_or_default());
+        if let Some(job) = &self.job {
+            job.step_output(label, &captured);
+        }
         if self.quiet {
             self.record(label, start.elapsed());
             // Silent on success; on failure bubble the captured output up in the

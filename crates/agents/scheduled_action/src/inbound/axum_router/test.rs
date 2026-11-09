@@ -1075,3 +1075,42 @@ async fn code_steps_need_a_checker_and_the_owner_reads_their_upgrades() {
         (StatusCode::OK, json!([]))
     );
 }
+
+#[tokio::test]
+async fn the_catalog_is_served_in_the_zone_asked_for() {
+    let app = router(false);
+    let (status, catalog) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Asia/Tokyo",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let brief = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key"] == "brief")
+        .unwrap();
+    assert_eq!(brief["trigger"]["timezone"], "Asia/Tokyo");
+    // No code executor here, so every routine starts as Ask AI.
+    assert!(
+        catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["code"].is_null())
+    );
+
+    let (status, _) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Mars/Olympus",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}

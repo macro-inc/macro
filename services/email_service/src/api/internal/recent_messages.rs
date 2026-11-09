@@ -7,7 +7,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use email::domain::{mailbox::MailboxError, recent_inbox::MAX_RECENT_MESSAGES};
+use email::domain::{
+    mailbox::MailboxError,
+    recent_inbox::{DEFAULT_RECENT_MESSAGES, DEFAULT_SNIPPET_CHARS},
+};
 use email_types::email::service::message::RecentInboxMessagesResponse;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,8 +24,11 @@ mod test;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct RecentMessagesQuery {
-    /// 1 to 50; defaults to 50, and values outside the range are clamped.
+    /// 1 to 100; defaults to 50, and values outside the range are clamped.
     pub limit: Option<u16>,
+    /// Snippet length, 1 to 500; defaults to the provider's 300. Longer
+    /// snippets come from the body.
+    pub snippet_chars: Option<u16>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -49,13 +55,17 @@ impl IntoResponse for RecentMessagesError {
     }
 }
 
-/// The user and limit a request asks for.
+/// The user, limit and snippet length a request asks for.
 fn parse_request(
     user_id: String,
     query: RecentMessagesQuery,
-) -> Result<(MacroUserIdStr<'static>, u16), RecentMessagesError> {
+) -> Result<(MacroUserIdStr<'static>, u16, u16), RecentMessagesError> {
     let user = MacroUserIdStr::try_from(user_id).map_err(|_| RecentMessagesError::InvalidUser)?;
-    Ok((user, query.limit.unwrap_or(MAX_RECENT_MESSAGES)))
+    Ok((
+        user,
+        query.limit.unwrap_or(DEFAULT_RECENT_MESSAGES),
+        query.snippet_chars.unwrap_or(DEFAULT_SNIPPET_CHARS),
+    ))
 }
 
 /// Up to `limit` of the newest messages across the user's own inboxes, newest
@@ -67,8 +77,8 @@ pub(crate) async fn handler(
     Path(user_id): Path<String>,
     Query(query): Query<RecentMessagesQuery>,
 ) -> Result<Json<RecentInboxMessagesResponse>, RecentMessagesError> {
-    let (user, limit) = parse_request(user_id, query)?;
-    let messages = ctx.recent_inbox.read(&user, limit).await?;
+    let (user, limit, snippet_chars) = parse_request(user_id, query)?;
+    let messages = ctx.recent_inbox.read(&user, limit, snippet_chars).await?;
 
     Ok(Json(RecentInboxMessagesResponse { messages }))
 }

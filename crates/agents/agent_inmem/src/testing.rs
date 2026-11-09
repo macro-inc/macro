@@ -176,6 +176,8 @@ pub(crate) struct RecordedTurn {
     pub(crate) identity: Option<AgentIdentity>,
     /// The agent whose own key the turn ran on, if any.
     pub(crate) agent_key: Option<macro_uuid::Uuid>,
+    /// What the turn's usage is metered as.
+    pub(crate) feature: AiFeature,
 }
 
 impl ScriptedEngine {
@@ -202,6 +204,7 @@ impl TurnEngine for ScriptedEngine {
             .expect("requests lock")
             .push(RecordedTurn {
                 purpose: request.purpose,
+                feature: request.feature,
                 model: request.model.clone(),
                 reasoning_effort: request.reasoning_effort,
                 speed: request.speed,

@@ -64,6 +64,7 @@ chrono = { workspace = true }
 comms_db_client = { workspace = true }
 email = { workspace = true, optional = true }
 email_db_client = { workspace = true }
+encoding_rs = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { workspace = true, optional = true }

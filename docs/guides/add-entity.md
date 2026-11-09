@@ -395,7 +395,9 @@ the skill doesn't cover:
   `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
 - Gemini drops records (`additionalProperties`): use key/value pair lists. It
   rejects a `$ref` loop of required fields, and so does schema generation:
-  recurse through an optional field or a list that may be empty.
+  recurse through an optional field or a list that may be empty. It also
+  rejects an input schema nested more than 30 levels deep, counting each
+  object and array, and so does schema generation.
 
 ## 14. SDK
 

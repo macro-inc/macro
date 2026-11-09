@@ -2,6 +2,7 @@ use crate::outbound::email_api::GmailApi;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client_core::models::EmailApiError;
 use email_types::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
@@ -52,6 +53,11 @@ pub enum UploadAttachmentError {
 
     #[error("Failed to create document record in DSS: {0}")]
     DssCreateFailed(String),
+
+    /// The attachment row was deleted before DSS could link it, e.g. a
+    /// superseded draft revision. There is nothing left to import.
+    #[error("Attachment was deleted before it could be imported")]
+    AttachmentDeleted,
 
     #[error("DSS response did not include a presigned URL")]
     PresignedUrlMissing,
@@ -161,8 +167,23 @@ async fn upload_media_attachment(
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(skip(ctx, attachment_data))]
 async fn upload_document_attachment(
+    ctx: &AttachmentStorageContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> Result<String, UploadAttachmentError> {
+    // A deleted attachment is an expected outcome, not a failure.
+    store_document_attachment(ctx, args, attachment_data)
+        .await
+        .inspect_err(|error| {
+            if !matches!(error, UploadAttachmentError::AttachmentDeleted) {
+                tracing::error!(error = %error, "document attachment upload failed");
+            }
+        })
+}
+
+async fn store_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
@@ -317,7 +338,12 @@ async fn create_dss_document_record(
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .map_err(|e| UploadAttachmentError::DssCreateFailed(e.to_string()))
+        .map_err(|e| match e {
+            CreateDocumentInternalError::EmailAttachmentNotFound => {
+                UploadAttachmentError::AttachmentDeleted
+            }
+            e => UploadAttachmentError::DssCreateFailed(e.to_string()),
+        })
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.

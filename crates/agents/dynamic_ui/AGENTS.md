@@ -55,6 +55,8 @@ and the web's TypeScript through specta.
   clause there, while decoding takes any expression. A recursive field must
   stay optional or behind a list in the schema, or Gemini rejects every
   request carrying `DisplayResults`; `agent_tools` tests fail when one does not.
+  The inlined view schema also sits at Gemini's nesting limit of 30 levels, so a
+  type nested one level deeper fails the same tests.
 - Paths stop at an internally tagged widget: serde buffers a tagged variant's
   fields, so a problem inside one names the widget, not the field.
 - The browser never validates a view: every path decodes it on the server

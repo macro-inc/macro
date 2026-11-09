@@ -5,6 +5,8 @@ use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
+use email_service_client::EmailServiceClient;
+use email_service_url::EmailServiceUrl;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
@@ -20,6 +22,7 @@ use macro_authorization::{
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
+pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
@@ -33,6 +36,9 @@ use scheduled_action::domain::ports::{
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
+use scheduled_action::domain::suggestions::{
+    RoutineSuggestionService, StoredSuggestionOrigins, SuggestionAgent,
+};
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
@@ -40,6 +46,9 @@ use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, schedul
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::suggestion_router::{
+    RoutineSuggestionRouterState, routine_suggestion_router,
+};
 use scheduled_action::inbound::template_router::{
     RoutineTemplateRouterState, routine_template_router,
 };
@@ -56,6 +65,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -75,6 +85,8 @@ const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 /// How often drafts a stopped process left behind are cleaned up.
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often suggestion sessions a stopped process left behind are cleaned up.
+const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
 /// What a session's programs created, from the activity recorded for its
 /// code-mode invocations.
@@ -396,6 +408,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             }
         });
     }
+    let suggestion_code = Arc::clone(&code);
+    // Which agent session a code-mode request came from, for drafts' checks
+    // and suggestion sessions' suggestions.
+    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+        agent_correlation::outbound::PgCorrelationRepository(db.clone()),
+    ));
+    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -405,13 +424,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(sessions))
-        .with_draft_hand_backs(
-            hand_backs,
-            Arc::new(CorrelationSessions(
-                agent_correlation::outbound::PgCorrelationRepository(db.clone()),
-            )),
-        )
+        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
+            &suggestion_repo,
+        ))))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
@@ -430,6 +447,58 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         })
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Suggestions run once per person, when their inbox connects, in hidden
+    // sessions of the in-process Macro agent on the free tier's model, as
+    // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
+    // their usage is recorded, never billed; each session hands back its
+    // suggestions through `macro.routines.suggest`. They read the newest mail through
+    // email_service, which reads it from the provider.
+    let suggestions = Arc::new(RoutineSuggestionService::new(
+        Arc::clone(&service),
+        suggestion_repo,
+        Arc::new(routine_suggestions::HarnessSuggestionSources {
+            email: Arc::new(EmailServiceClient::new(
+                config.internal_api_key.to_string(),
+                EmailServiceUrl::new()?.to_string(),
+            )),
+            apps: crate::routine_sessions::PipedreamConnectedApps(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+            ),
+        }),
+        sessions,
+        suggestion_code,
+        request_sessions,
+        template_flags.clone(),
+        SuggestionAgent {
+            bot: bot_id::MACRO_NEW_BOT_ID,
+            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            model: ai_chat::domain::models::FREE_MODEL.to_owned(),
+        },
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Suggestion sessions a stopped process left behind lose their session.
+    {
+        let suggestions = Arc::clone(&suggestions);
+        let stop = lifecycle.stop_workers.clone();
+        lifecycle.workers.spawn(async move {
+            let mut every = tokio::time::interval(SUGGESTION_SWEEP_INTERVAL);
+            every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = stop.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                // Logged by the sweep's span.
+                let _ = suggestions.sweep().await;
+            }
+        });
+    }
+    let suggestion_state = RoutineSuggestionRouterState {
+        service: suggestions,
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -450,7 +519,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
-        .merge(routine_draft_router::<_, _, ()>(draft_state));
+        .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())

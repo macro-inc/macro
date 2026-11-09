@@ -129,6 +129,8 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// What the session's turns are admitted and metered as.
+    pub feature: ai_usage::AiFeature,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
     /// Runs the actual turns.
@@ -952,7 +954,7 @@ async fn run_turn(
         tokio::select! {
             biased;
             _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            result = admit_turn(state.admission.as_ref(), &state.owner, state.feature) => result.map_err(|error|
                 AcpError::new(-32603, error.to_string()).data(serde_json::json!({
                     "code": error.code(), "retryable": error.is_retryable(),
                 }))
@@ -1027,6 +1029,7 @@ async fn run_turn(
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
+        feature: state.feature,
         model,
         reasoning_effort,
         speed,
