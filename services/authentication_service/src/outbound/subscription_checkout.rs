@@ -10,8 +10,11 @@ use teams::domain::model::{CustomerError, SeatPlan, SeatPrices};
 use thiserror::Error;
 use tracing::Instrument;
 
-use crate::service::subscription_checkout::{
-    CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
+use crate::service::{
+    subscription_checkout::{
+        CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
+    },
+    user::support_channel_follow_up::{Billing, FollowUpBilling},
 };
 
 const TRIAL_SESSION_MARKER: &str = "onboarding_trial";
@@ -390,4 +393,42 @@ async fn subscription_history(
         );
     }
     Ok(history)
+}
+
+impl<I: GtmInviteService> FollowUpBilling for StripeCheckoutGateway<I> {
+    type Err = StripeCheckoutError;
+
+    /// Reads only: a user without a stored Stripe customer has never opened a
+    /// checkout, so no customer is created here.
+    #[tracing::instrument(name = "support_follow_up.billing", skip_all, fields(outcome = tracing::field::Empty), err)]
+    async fn billing(&self, user: &MacroUserIdStr<'_>) -> Result<Billing, Self::Err> {
+        let billing =
+            match self.customer(user).await? {
+                None => Billing::None,
+                Some(customer) => {
+                    if subscription_history(&self.stripe, &customer)
+                        .await?
+                        .has_existing_subscription
+                    {
+                        Billing::Subscribed
+                    } else {
+                        let mut params = stripe::ListCheckoutSessions::new();
+                        params.customer = Some(customer);
+                        params.limit = Some(10);
+                        let sessions = stripe::CheckoutSession::list(&self.stripe, &params)
+                            .instrument(tracing::info_span!("stripe.checkout.list"))
+                            .await?;
+                        if sessions.data.iter().any(|session| {
+                            session.mode == stripe::CheckoutSessionMode::Subscription
+                        }) {
+                            Billing::OpenedCheckout
+                        } else {
+                            Billing::None
+                        }
+                    }
+                }
+            };
+        tracing::Span::current().record("outcome", <&str>::from(billing));
+        Ok(billing)
+    }
 }

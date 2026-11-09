@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE support_follow_ups SET claimed_until = $2 WHERE channel_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40ffbca1f94f53bf930928b171fa29a6a2e3e3391fb3774d41c32f41df0e5748"
+}

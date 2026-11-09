@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE support_follow_ups\n            SET gmail_attempted_at = COALESCE(gmail_attempted_at, NOW())\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a4c19e7be31c9f0557fe8931969b0780b98d3320840ae8503569e432c4e0a5d"
+}

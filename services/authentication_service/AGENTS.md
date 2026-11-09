@@ -89,15 +89,26 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   records `$feature_flag_called` for either group, since server-side flag reads
   record no exposure, and queues a `support_follow_ups` row for `test`. Without
   `POSTHOG_API_KEY`, or with the flag off, nothing is queued.
-- Each replica's worker sends a queued follow-up 30 seconds after the user
-  finishes onboarding (`user_onboarding.completed_at`), or five minutes after
-  the welcome, from a support team member who must stay a channel member.
-  The question depends on what the user set up: inbox, a team they created,
-  or connected tools. Once anyone has posted in the channel it is skipped, and
-  after an hour it is dropped.
+- Each replica's worker looks at a queued follow-up 30 seconds after the user
+  finishes setup (`user_onboarding.completed_at`). Someone still in setup at
+  five minutes only gets a message when the reason is known (paid, a Gmail
+  connect that never landed, an open checkout, or the phone app); otherwise the
+  row is re-checked each minute and dropped after an hour. It is skipped once
+  anyone has posted in the channel. The sender, a support team member, must
+  stay a member of every support channel.
+- `choose` sends the first message that fits: Pro, Gmail trouble, Outlook or
+  Google work email without an inbox (from the domain's MX records,
+  `outbound/mail_exchanges.rs`), pricing, phone, a team the user brought people
+  into, connected tools (Notion, Linear and Slack first since Macro imports
+  them, then GitHub, which Macro links itself, then others by name), then solo
+  work or personal email.
+- `/link/gmail` sets `gmail_attempted_at` on the user's row, so a connect that
+  never landed can be told apart from one never tried. The phone app is known
+  from its push device registration (`notification_db_client`). Billing reads
+  the stored Stripe customer only and never creates one.
 - A claim leases the row for a minute, and the post reuses the row's message id
   through `post_from_event`, so a retried or interrupted send never posts twice.
-- PostHog events: `support_follow_up_sent` (`segment`, `trigger`,
+- PostHog events: `support_follow_up_sent` (`path`, `trigger`,
   `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).
 
 ## Agent accounts

@@ -720,6 +720,7 @@ async fn run_server() -> anyhow::Result<()> {
             invite_reminders_stop.clone().cancelled_owned(),
         ),
     );
+    let github_link_service = Arc::new(github_link_service_impl);
     // Sends the support channel follow-ups queued at signup. Every replica
     // polls; a row claim keeps two from sending the same one.
     invite_reminders.spawn(
@@ -733,6 +734,14 @@ async fn run_server() -> anyhow::Result<()> {
             connections: pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
                 db.clone(),
             ),
+            github: github_link_service.clone(),
+            billing: crate::outbound::subscription_checkout::StripeCheckoutGateway::new(
+                db.clone(),
+                stripe_client.clone(),
+                gtm_invite_service.clone(),
+                stripe_prices.seat_prices(),
+            ),
+            mail: crate::outbound::mail_exchanges::DnsMailExchanges::default(),
             analytics: analytics_client.clone(),
         }
         .run(invite_reminders_stop.clone()),
@@ -798,7 +807,7 @@ async fn run_server() -> anyhow::Result<()> {
                 email::outbound::EmailPgRepo::new(db.clone()),
             )),
             db,
-            github_link_service: Arc::new(github_link_service_impl),
+            github_link_service,
             auth_client: Arc::new(auth_client),
             microsoft_auth,
             cursor_api_key_cipher,

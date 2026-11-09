@@ -14,6 +14,8 @@ pub struct PendingFollowUp {
     pub channel_id: Uuid,
     pub user_id: MacroUserIdStr<'static>,
     pub scheduled_at: DateTime<Utc>,
+    /// The user started connecting a Gmail inbox after signing up.
+    pub gmail_attempted: bool,
 }
 
 /// The `support_follow_ups` table.
@@ -51,14 +53,35 @@ impl PgSupportFollowUps {
         Ok(())
     }
 
+    /// Note that the user started connecting a Gmail inbox. Does nothing for a
+    /// user with no follow-up waiting.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn note_gmail_attempt(&self, user_id: &MacroUserIdStr<'_>) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE support_follow_ups
+            SET gmail_attempted_at = COALESCE(gmail_attempted_at, NOW())
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
     /// Follow-ups without a live claim, oldest first. Rows only live for the
-    /// few minutes before they are sent, so this stays small.
+    /// hour before they are sent or dropped, so this stays small.
     #[tracing::instrument(skip(self), err)]
     pub async fn unclaimed(&self) -> sqlx::Result<Vec<PendingFollowUp>> {
         sqlx::query_as!(
             PendingFollowUp,
             r#"
-            SELECT channel_id, user_id AS "user_id: MacroUserIdStr<'static>", created_at AS scheduled_at
+            SELECT
+                channel_id,
+                user_id AS "user_id: MacroUserIdStr<'static>",
+                created_at AS scheduled_at,
+                gmail_attempted_at IS NOT NULL AS "gmail_attempted!"
             FROM support_follow_ups
             WHERE claimed_until IS NULL OR claimed_until < NOW()
             ORDER BY created_at
@@ -85,6 +108,20 @@ impl PgSupportFollowUps {
         )
         .fetch_optional(&self.db)
         .await
+    }
+
+    /// Keep a claimed follow-up out of polls until `until`, for one that has to
+    /// wait before its message is known.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn snooze(&self, channel_id: Uuid, until: DateTime<Utc>) -> sqlx::Result<()> {
+        sqlx::query!(
+            "UPDATE support_follow_ups SET claimed_until = $2 WHERE channel_id = $1",
+            channel_id,
+            until,
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
     }
 
     /// Remove a follow-up once it has been sent or skipped.

@@ -2545,6 +2545,7 @@
       "crates/native_app_service",
       "crates/non_empty",
       "crates/notification",
+      "crates/notification_db_client",
       "crates/notification_state",
       "crates/onboarding",
       "crates/pipedream_mcp",
