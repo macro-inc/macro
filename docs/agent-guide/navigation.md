@@ -1138,11 +1138,19 @@ the catalog's first four available template cards (icon, name, one line and its 
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on, **Suggested for you** follows the list, below
-the last row: every suggestion (AI's first, then templates from Macro) as the
-rows described in [setup cards](setup-cards.md#suggested-routines), with
-**All** and one tab per area that has any (`Suggestion area`) when there are
-two or more areas; under **All** each row carries its area's chip. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+`enable-routine-code-steps` on (not on touch devices), suggestions take the
+strip's place: **Suggested for you** above the rows on **All** shows the first
+three of them as compact cards (icon with a violet sparkle for AI's picks,
+name, trigger → first step, and **Turn on**, **Review** or **Use**), then
+**N more · In Discover**, which opens a third tab, **Discover**. Discover
+replaces the list with every suggestion (AI's first, then Macro's) followed by
+the templates no suggestion already offers, four cards to a row (the knob
+sentence in two lines, the chain and the action; **On** once turned on), with
+**All** and one tab per area that has any (`Suggestion area`) and the hint
+**picked for you, then Macro's templates**. The list's search narrows Discover
+too. Discover's tab carries a violet dot while it has AI picks this browser
+hasn't shown there; opening or leaving it marks them seen. The cards behave as
+in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,
