@@ -243,7 +243,7 @@ describe('host focus boundary navigation', () => {
     { command: KEY_TAB_COMMAND, side: 'start', offset: 0, shiftKey: true },
     { command: KEY_TAB_COMMAND, side: 'end', offset: 4, shiftKey: false },
   ]) {
-    it(`${command.type} leaves the ${side} boundary`, () => {
+    it(`${command.type} leaves the ${side} boundary with shift=${shiftKey}`, () => {
       const leave = vi.fn();
       const { editor } = behaviorEditor(
         keyboardFocusPlugin({
@@ -269,7 +269,7 @@ describe('host focus boundary navigation', () => {
       expect(leave).toHaveBeenCalledExactlyOnceWith(side);
     });
 
-    it(`${command.type} yields inside code`, () => {
+    it(`${command.type} yields inside code with shift=${shiftKey}`, () => {
       const leave = vi.fn();
       const { editor } = behaviorEditor(
         keyboardFocusPlugin({
@@ -295,7 +295,7 @@ describe('host focus boundary navigation', () => {
       expect(leave).not.toHaveBeenCalled();
     });
 
-    it(`${command.type} is captured while a typeahead owns the keys`, () => {
+    it(`${command.type} is captured while a typeahead owns the keys with shift=${shiftKey}`, () => {
       const leave = vi.fn();
       const { editor } = behaviorEditor(
         keyboardFocusPlugin({

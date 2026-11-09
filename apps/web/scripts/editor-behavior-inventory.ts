@@ -4,6 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { EDITOR_PLUGIN_BEHAVIORS } from './editor-plugin-behaviors';
+import { mappedBehaviors } from './editor-behavior-coverage';
 
 // This is a source ledger, not a coverage oracle. A test importing a module
 // does not prove that every branch or UI behavior in that module is covered.
@@ -184,6 +185,14 @@ async function main() {
       'Usage: bun scripts/editor-behavior-inventory.ts <output-directory>'
     );
   const all = await sources();
+  const resultsPath = process.argv[3];
+  const resultText = resultsPath
+    ? await readFile(resultsPath, 'utf8')
+    : undefined;
+  const behaviorRows = await mappedBehaviors(
+    ROOT,
+    resultText ? JSON.parse(resultText) : undefined
+  );
   const paths = new Set(all.map((source) => source.path));
   const imports = new Map<string, string[]>();
   for (const source of all.filter((source) => isTest(source.path))) {
@@ -313,6 +322,24 @@ async function main() {
   }
   const categories = [...new Set(sites.map((site) => site.category))].sort();
   await mkdir(output, { recursive: true });
+  await writeFile(
+    resolve(output, 'behaviors.md'),
+    [
+      '# Explicit behavior-to-test map',
+      '',
+      'Each row links a reviewed concrete case to its source anchor and exact test selector.',
+      'Only a unique passing result in the supplied OFF report establishes OFF pass.',
+      'These mapped cases do not establish completeness across all source sites.',
+      '',
+      '| Behavior | Source file:line | Exact test selector | Status |',
+      '| --- | --- | --- | --- |',
+      ...behaviorRows.map(
+        (row) =>
+          `| <code>${escapeCell(row.behavior)}</code> | ${row.source}:${row.line} | <code>${escapeCell(row.testFile)}: ${escapeCell(row.behavior)}</code> | ${row.status} |`
+      ),
+      '',
+    ].join('\n')
+  );
   const counts: Record<string, number> = {};
   for (const category of categories) {
     const rows = sites.filter((site) => site.category === category);
@@ -345,6 +372,17 @@ async function main() {
     totalSites: sites.length,
     relatedTestSites: sites.filter((site) => site.relatedTests.length).length,
     verifiedOn: 0,
+    mappedBehaviors: behaviorRows,
+    mappedOffPassing: behaviorRows.filter(
+      (row) => row.status === 'OFF pass; ON pending'
+    ).length,
+    offResults:
+      resultText && resultsPath
+        ? {
+            path: resolve(resultsPath),
+            sha256: createHash('sha256').update(resultText).digest('hex'),
+          }
+        : undefined,
     sites,
   };
   await writeFile(
@@ -357,6 +395,7 @@ async function main() {
     `Source fingerprint: ${manifest.sourceFingerprint}`,
     '',
     `${scanned.length} source files; ${sites.length} source sites; ${manifest.relatedTestSites} have a directly importing test; 0 verified ON.`,
+    `${behaviorRows.length} explicitly mapped concrete cases; ${manifest.mappedOffPassing} have unique passing results in the supplied OFF report. See [behaviors.md](behaviors.md).`,
     '',
     'A registration, a conditional guard and an event handler can describe the same behavior.',
     'Do not present site counts or direct-import links as proven behavioral coverage.',
