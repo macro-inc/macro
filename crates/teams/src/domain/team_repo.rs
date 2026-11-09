@@ -479,7 +479,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<TeamMember<'_>, JoinTeamError>> + Send;
 
     /// Revokes team permissions for all team members, and the owner's personal
-    /// Pro role unless another live subscription on their Stripe customer pays for it.
+    /// Pro role unless their Stripe customer still has a live subscription.
     /// This is used when a team subscription is canceled or frozen in some way.
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn revoke_permissions_for_team_members(

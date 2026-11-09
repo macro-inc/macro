@@ -1276,29 +1276,18 @@ where
         Ok(true)
     }
 
-    /// Whether the user's Stripe customer still has a live subscription other
-    /// than this team's.
-    async fn has_other_live_subscription(
-        &self,
-        team_id: &uuid::Uuid,
-        user_id: &MacroUserIdStr<'_>,
-    ) -> Result<bool, TeamError> {
+    /// Whether the user's Stripe customer still has an active or trialing
+    /// subscription.
+    async fn has_live_subscription(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
         let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
             return Ok(false);
         };
-        let Some(live) = self
+        let live = self
             .customer_repository
             .get_subscription_id_for_customer(&customer_id)
             .await
-            .map_err(|error| TeamError::StorageLayerError(error.into()))?
-        else {
-            return Ok(false);
-        };
-        let team_subscription = self
-            .team_repository
-            .get_team_subscription_id(team_id)
-            .await?;
-        Ok(team_subscription.as_ref() != Some(&live))
+            .map_err(|error| TeamError::StorageLayerError(error.into()))?;
+        Ok(live.is_some())
     }
 
     /// Best-effort rollback of a direct team add (from
@@ -2167,9 +2156,11 @@ where
 
         // Creating or linking a team moves the owner's personal subscription
         // onto the team, so the personal Pro role it granted lapses with the
-        // team unless another live subscription still pays for it.
+        // team. Keep it while any subscription on their customer is live:
+        // another one pays for it, or this team's is live again and the lapse
+        // event arrived late.
         let owner = self.team_repository.get_team_owner(team_id).await?;
-        if self.has_other_live_subscription(team_id, &owner).await? {
+        if self.has_live_subscription(&owner).await? {
             tracing::Span::current().record("owner_personal_role", "kept");
             return Ok(());
         }

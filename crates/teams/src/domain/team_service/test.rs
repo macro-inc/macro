@@ -2440,7 +2440,7 @@ fn team_on_owner_subscription(team_id: uuid::Uuid) -> MockTeamRepository {
 }
 
 #[tokio::test]
-async fn team_payment_revoke_removes_owner_personal_pro_role_without_other_subscription() {
+async fn team_payment_revoke_removes_owner_personal_pro_role_without_live_subscription() {
     let team_id = uuid::Uuid::from_u128(5002);
     let no_customer = MockTeamRepository {
         stripe_customer_id: None,
@@ -2452,14 +2452,6 @@ async fn team_payment_revoke_removes_owner_personal_pro_role_without_other_subsc
             team_on_owner_subscription(team_id),
             MockCustomerRepository {
                 no_active_subscription: true,
-                ..Default::default()
-            },
-        ),
-        // The only live subscription is the team's own, so it can't pay for Pro.
-        (
-            team_on_owner_subscription(team_id),
-            MockCustomerRepository {
-                subscription_id: "sub_team".parse().unwrap(),
                 ..Default::default()
             },
         ),
@@ -2491,28 +2483,33 @@ async fn team_payment_revoke_removes_owner_personal_pro_role_without_other_subsc
 }
 
 #[tokio::test]
-async fn team_payment_revoke_keeps_owner_personal_pro_role_paid_by_another_subscription() {
+async fn team_payment_revoke_keeps_owner_personal_pro_role_while_a_subscription_is_live() {
     let team_id = uuid::Uuid::from_u128(5003);
-    let customer = MockCustomerRepository {
-        subscription_id: "sub_personal".parse().unwrap(),
-        ..Default::default()
-    };
-    let roles = MockUserRolesAndPermissionsService::default();
-    let removals = roles.remove_calls.clone();
-    let service = build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
+    // Another subscription pays for Pro, or the team's own is live again and
+    // this lapse event arrived late.
+    for live in ["sub_personal", "sub_team"] {
+        let customer = MockCustomerRepository {
+            subscription_id: live.parse().unwrap(),
+            ..Default::default()
+        };
+        let roles = MockUserRolesAndPermissionsService::default();
+        let removals = roles.remove_calls.clone();
+        let service =
+            build_member_plan_service(team_on_owner_subscription(team_id), customer, roles);
 
-    service
-        .revoke_permissions_for_team_members(&team_id)
-        .await
-        .unwrap();
+        service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+            .unwrap();
 
-    let removals = removals.lock().unwrap();
-    assert_eq!(removals.len(), 2);
-    assert!(
-        removals
-            .iter()
-            .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
-    );
+        let removals = removals.lock().unwrap();
+        assert_eq!(removals.len(), 2);
+        assert!(
+            removals
+                .iter()
+                .all(|(_, roles)| !roles.contains(&RoleId::ProfessionalSubscriber))
+        );
+    }
 }
 
 #[tokio::test]

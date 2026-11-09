@@ -68,8 +68,9 @@ event contract (schema, sanitization, delivery semantics).
 - Creating or linking a team moves the owner's personal subscription onto the
   team, but the owner keeps the `professional_subscriber` role it granted. When
   the team subscription lapses, `revoke_permissions_for_team_members` removes
-  that role too, unless the owner's Stripe customer has another live
-  subscription.
+  that role too, unless the owner's Stripe customer still has an active or
+  trialing subscription (another one, or the team's own when the lapse event
+  is stale).
 - Team routes resolve the caller's current team from the principal. A client
   holding a team (the SDK's `Team` handle) passes it as `team_id` to
   `POST /team/invite` and `GET /team/invites`, and `is_expected_team` answers
