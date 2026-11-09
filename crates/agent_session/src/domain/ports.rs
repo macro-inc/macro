@@ -340,6 +340,10 @@ pub struct OpenManagedSession {
     pub visibility: SessionVisibility,
     /// What opened the session.
     pub origin: trigger_context::TriggerOrigin,
+    /// What the session's in-process turns are admitted and metered as.
+    /// Only an in-process session reads it; a session that sets anything but
+    /// the default never claims a warm session, whose row is already metered.
+    pub metering: crate::domain::model::SessionMetering,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -441,6 +445,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// What the session's in-process turns are admitted and metered as.
+    fn metering(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionMetering>> + Send;
 
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)

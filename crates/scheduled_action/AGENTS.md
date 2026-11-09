@@ -94,7 +94,10 @@ each run.
   Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
   dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
   (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
-  catalog picks AI rated likely kept. The sweep deletes sessions a stopped
+  catalog picks AI rated likely kept. Unlike a draft's, a suggestion session
+  is prepared with `SessionMetering::RoutineSuggestions`, so its turns are
+  metered as the non-billable `RoutineSuggestions`, never billed as agent
+  session usage. The sweep deletes sessions a stopped
   process left open. Spans: `routine.suggestions.generate`, `.session`,
   `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
   `.dismissed`, `.saved`.
