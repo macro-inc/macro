@@ -26,6 +26,10 @@ completion without submitting that consumed code again. Queued edits stay preser
 and the app opens only after cleanup succeeds. Changing the email, going back or
 requesting another code starts a new attempt that must verify with the server.
 
+The iOS picker includes **Continue with Apple**. Google and Apple glyphs scale
+into their 20px slots without cropping; the phone browser regression checks the
+Apple drawing stays within its viewport.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without

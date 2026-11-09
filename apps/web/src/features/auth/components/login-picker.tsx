@@ -24,7 +24,11 @@ export function LoginPicker(props: {
       </AuthButton>
       <Show when={props.showApple}>
         <AuthButton variant="secondary" onClick={props.onApple}>
-          <IconApple class="size-5 shrink-0" aria-hidden="true" />
+          <IconApple
+            viewBox="0 0 24 24"
+            class="size-5 shrink-0"
+            aria-hidden="true"
+          />
           Continue with Apple
         </AuthButton>
       </Show>
