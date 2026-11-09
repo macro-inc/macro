@@ -17684,6 +17684,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_db_client",
+ "encoding_rs",
  "ensure_exists",
  "entity_registry",
  "entity_registry_db_utils",
