@@ -93,3 +93,5 @@ Generate compatibility-prototypes.bop and its source metadata with generate-comp
 Disable class static transforms in the compatibility factory so unchanged JS registrations own them once; keep createMacro defaults intact and retain core text normalization.
 
 Install one module-stable compatibility host dispatcher and use exact callback-only scope IDs through compatibilityCallbackCall; release all native store/dispatcher borrows before JS callouts and validate acknowledgement scope/kind/identity before applying patches. The transport boundary does not install class hooks or make the initializer usable by itself.
+
+Resolve node capture/operand authority into an owned NativeCall before model execution when using callback frames; do not retain a mutable Host borrow across virtual model calls. Selection dispatch needs its own value/graph split before admitting hosted execution.
