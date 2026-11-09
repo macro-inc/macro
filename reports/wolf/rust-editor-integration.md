@@ -1,5 +1,84 @@
 # Rust editor integration: production compatibility checkpoint
 
+## Current checkpoint: same-session bootstrap and measured speed profile
+
+Integration3, production compatibility, UI parity and strict performance gates
+remain unchecked. The production resolver/document factory is held: the additive
+native bootstrap rejects callback hosts/nonzero class masks and does not yet
+implement selection mutations. Existing preview evidence is native, not full
+Lexical compatibility acceptance. No production services or deployments changed.
+
+The live preview remains on source `9c21b03842`, built locally with the six hot
+paste caller crates at opt-level 3 (`1aa5b67c15`, integrated as `9c21b03842`).
+Other dependencies retain their existing optimization. The integrated artifact
+is raw **8,298,806 bytes**, Brotli **1,885,815 bytes**, SHA256
+`a4e515765a4a9be69b592bdd1dd3444328d96a84c2d2b7d786b7658bb97db866`.
+The previous complete close/render/allocator build at `f3cec5ac8b` was raw
+6,925,286 / Brotli 1,585,355 bytes: this checkpoint adds 1,373,520 raw /
+300,460 Brotli bytes, including the shared-read/tail changes. This is not a
+single-crate size ablation. The 1.6 MB Brotli ceiling is advisory, and retaining
+this measured speed improvement above it was explicitly accepted. The existing
+policy is `8fc4648aaf`; no earlier hard cap was reapplied.
+
+The profile owner's 90 randomized paired native observations preserved exact
+text, Markdown, model and raw DOM. Paste medians before/after were stock Firefox
+55/45.5 ms (upper 95% ratio .8664), stock Chromium 54.35/41.55 ms (.7895), and
+Linux WPE 50/40 ms (.8530). These are native diagnostics, not compat, Safari,
+quiet-main-task, startup or document-open acceptance. The own source-matched live
+80-paragraph/160-link paste retained model/DOM content, produced no page errors
+or injected containment, and kept memory at 19,922,944 bytes. Evidence:
+`opt3-integrated-live-artifact.json`, `opt3-live-paste-result.json` and
+`opt3-live-paste.png` under `/home/wolf/tmp/integration3-acceptance/`.
+
+Since the earlier report, integrated the shared immutable selector/readiness
+and idle preparation (`58c98196e0`, `9eb170d10e`), allocator reserve
+(`bb8094bb64`), capture/instance ownership foundations, raw render metadata
+(`52229da0e7`), event-buffer/metadata-only undo optimizations, native terminal
+Close fix (`f3cec5ac8b`), and session-only JS host (`89ec1deded`). At the complete
+Close checkpoint, local tests passed: core 169, session 49 plus one integration,
+WASM 21, Loro 45 and model 452; view 253. Two focused close simulator stories
+passed; this is not a fresh full T0. The host owner verified all 27 real WASM
+host cases across three browsers against the exact integrated artifact SHA
+`e3f02481c7ea516ec16a01365ebff8c573f0e1eeed29587ae3687e4732f31857`.
+
+Latest source-only additions are schema `3f2c7e93f6`/`854a565978`, selection
+classes and active-graph distinction `3081a3894c`/`52e57aca16`, DOM public types
+and callbacks `fc0bcbb013`/`8f75100e8f`, capture authority `01cc15ee79`, and
+same-session WASM bootstrap `189c995d94`. Exact schema076 hashes match the
+supplied immutable source: TS
+`e5d9997b378d23c8f20c2431e8cf987e01c5544a5567f6364a66d8caa1025a73`, BOP
+`070be58ecfd9ff40f9827c76dd19c35c3415c510f600a917c3d64fcaf572f7da`.
+Own selection constructor tests 7/7, DOM units 59/59, DOM type checking and
+paired adapter browser cases 15/15 pass. These DOM cases use the upstream model.
+Native WASM unit tests pass 23/23 and model all-feature tests pass 455/455.
+Scoped `just check` passes with complexity warnings only. Generator freshness currently fails with
+reordered compiler output, and the full shim check needs source-matched
+conformance artifacts; both are unresolved rather than waived. New WASM
+exports have not been promoted into live glue/declarations or activated.
+Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
+
+A frozen flag-OFF build with real timing marks is served at local port 39870,
+source `751b62fbb1531d81a0cb4ac840c1346efb5648b3`; empty dirty-diff SHA is
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+Its full build/source/input manifest is `off-current-build-manifest.json`.
+A genuine Recent document row was verified via Drive -> My Files (no document
+root) -> Recent -> trusted title click -> editable body marker. File-location
+breadcrumbs are not result adapters. Fixture browser activity stopped before
+quiet sampling. The OFF owner stopped fail-closed after 11 Chromium samples
+when preparation timed out on round 12; no accepted baseline or sample trimming.
+Frozen OFF assets, authentication and runtime were not changed during sampling.
+
+Tempo evidence already found `wasm.init`, `state.load` and `view.reconcile`
+under `editor.open` in own exported traces, recorded in
+`cache-gate-tempo-proof.json`; this is not a latency gate. The historical
+post-owner-recovery T0 failure was seed **9486392389341030173**:
+`final state changed during quiet window`. It has not been freshly reproduced
+or cleared by a full T0 after the Close merge. The full matrix remains stopped
+for the compatibility pivot. No DOM allowlist or native-to-compat waiver exists.
+
+The sections below retain earlier checkpoint evidence and do not establish
+current-source production compatibility or full parity.
+
 Integration3 and UI parity remain unchecked. The full matrix is stopped for
 the production compatibility pivot. The selected architecture now runs existing
 Macro plugins, node classes and UI unchanged through the Lexical0.45 API over
