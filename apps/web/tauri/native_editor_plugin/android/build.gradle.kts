@@ -52,14 +52,16 @@ android {
     )
 }
 
+val jnaVersion = "5.19.1"
+
 dependencies {
     implementation(project(":tauri-android"))
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation("net.java.dev.jna:jna:$jnaVersion@aar")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.3")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("net.java.dev.jna:jna:5.14.0")
+    testImplementation("net.java.dev.jna:jna:$jnaVersion")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
@@ -81,6 +83,17 @@ val nativeTargets = providers.gradleProperty("nativeSessionTarget").orNull?.spli
             }
         }
     } else emptyList()
+if (nativeTargets.isNotEmpty()) {
+    android.defaultConfig.ndk.abiFilters.addAll(nativeTargets.map {
+        when (it) {
+            "aarch64-linux-android" -> "arm64-v8a"
+            "x86_64-linux-android" -> "x86_64"
+            "armv7-linux-androideabi" -> "armeabi-v7a"
+            "i686-linux-android" -> "x86"
+            else -> throw GradleException("Unsupported native session target")
+        }
+    })
+}
 val repository = projectDir.resolve("../../../../..").canonicalFile
 for (profile in listOf("debug", "release")) {
     val profileName = profile.replaceFirstChar { it.uppercase() }
