@@ -338,13 +338,13 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `2e1b512093` is integrated, including code,
+The OFF inventory continuation through `d2df65c167` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 768 selectors across eight explicit reports (full web22,440, media36,
+ledger has 788 selectors across nine explicit reports (full web22,440, media36,
 conversion11, TaskList19, checklist planning32, checklist collection5, iOS caret8,
-blame hover14), including507 new editor units; it is not a summed
+blame hover14, typed popup20), including527 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -429,6 +429,20 @@ no source/execution binding claim. Unit count507 and browser count171 are separa
 evidence, not a whole-suite sum or exhaustive denominator. Logs:
 `blame-hover-independent-tests.log`, `inventory-768-owner-selector-verification.json`
 and `fence-checklist-hover-scoped-check.log` under the acceptance directory.
+
+Popup controller `d2df65c167` is integrated as `b1ec8f67ab`. Independent20/20
+focused cases and scoped checks pass. Tests use real range/node/table selections
+and the Markdown parser, with only touch capability, jsdom geometry and timers
+supplied. Explicit numeric rectangles cover cache fallback after native range
+clearing, host rejection, table backoff, deletion yielding, full-block replacement,
+highlights, guards and disposal. Rendered popup, AI/service and native table-bar
+coverage remain open. Only the typed popup report contributes to the ninth report;
+obsolete opaque-rectangle/pretyped reports are excluded. Scanner788 mappings and
+exact owner-path788 unique passes are independently verified, with the same zero
+disposable-root credit and no source/execution binding claim. Browser171 is
+unchanged. Evidence: `popup-selection-independent-tests.log`,
+`popup-selection-scoped-check.log`, `inventory-788-owner-selector-verification.json`
+and `popup-selection-integration-audit.md` under the acceptance directory.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
