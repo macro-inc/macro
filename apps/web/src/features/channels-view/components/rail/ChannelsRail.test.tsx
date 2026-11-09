@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   focusedRow: undefined as ChannelRailRow | undefined,
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
+  onNavigate: (_event: { result?: { item: ChannelRailRow } }) => {},
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
 }));
@@ -118,8 +119,14 @@ vi.mock('@app/components/list', () => ({
     };
   },
   listOwnedSlotName: (name: string) => name,
-  useListInteractions: (options: { scrollHandle: () => ListScrollHandle }) => {
+  useListInteractions: (options: {
+    scrollHandle: () => ListScrollHandle;
+    navigation: {
+      onNavigate: (event: { result?: { item: ChannelRailRow } }) => void;
+    };
+  }) => {
     mocks.scroll = (index) => options.scrollHandle().scrollToIndex(index);
+    mocks.onNavigate = options.navigation.onNavigate;
   },
 }));
 vi.mock('@app/components/view-shell', () => ({
@@ -509,6 +516,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  delete document.documentElement.dataset.modality;
 });
 
 it.each([false, true])(
@@ -631,11 +639,10 @@ it.each(['team_channels', 'channels'] as const)(
     expect(container.contains(row)).toBe(true);
     fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
     fireEvent.click(row);
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'one',
-      target: undefined,
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'one', target: undefined },
+      { focusComposer: true }
+    );
   }
 );
 
@@ -784,10 +791,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'), { shiftKey: true });
     mocks.favoriteId = 'another';
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'another',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'another' },
+      { focusComposer: true }
+    );
     resolve({ ...hydrated, id: 'uncached' });
     await Promise.resolve();
     expect(mocks.openSplit).not.toHaveBeenCalled();
@@ -815,10 +822,10 @@ describe('explicit channel activation read marking', () => {
     mocks.selected = { type: 'channel', id: 'previous' };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
     expect(mocks.markRead).not.toHaveBeenCalled();
   });
@@ -840,11 +847,14 @@ describe('explicit channel activation read marking', () => {
     };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-      target: { messageId: 'reply', threadId: 'thread' },
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      {
+        type: 'channel',
+        id: channel.id,
+        target: { messageId: 'reply', threadId: 'thread' },
+      },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
   });
 
@@ -859,10 +869,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'));
     mocks.row = { ...channel, id: 'two' };
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'two',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'two' },
+      { focusComposer: true }
+    );
     resolve(hydrated);
     await Promise.resolve();
     expect(mocks.select).toHaveBeenCalledOnce();
@@ -985,6 +995,65 @@ describe('explicit channel activation read marking', () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe('composer focus on opening a conversation', () => {
+  beforeEach(() => {
+    mocks.selected = { type: 'channel', id: 'previous' };
+  });
+
+  it.each(['mouse', 'keyboard'])(
+    'asks a conversation opened by %s for its composer focus',
+    (modality) => {
+      document.documentElement.dataset.modality = modality;
+      mount();
+      fireEvent.click(screen.getByRole('button'));
+      expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+        { type: 'channel', id: channel.id },
+        { focusComposer: true }
+      );
+    }
+  );
+
+  it('asks the open conversation for its composer focus again', () => {
+    mocks.selected = { type: 'channel', id: channel.id };
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
+  });
+
+  it('leaves the on-screen keyboard down after a tap', () => {
+    document.documentElement.dataset.modality = 'touch';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: false }
+    );
+  });
+
+  it('previews a conversation reached by arrowing without asking for focus', () => {
+    vi.useFakeTimers();
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    mocks.onNavigate({
+      result: {
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel,
+        },
+      },
+    });
+    vi.advanceTimersByTime(150);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
   });
 });
 

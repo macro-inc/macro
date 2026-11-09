@@ -1385,6 +1385,14 @@ From a custom-section heading in the middle of the list, use both `[` and `]`;
 each shortcut must move to the adjacent heading rather than the Team channels
 heading.
 
+Clicking a conversation in the sidebar, or pressing Enter on one, focuses its
+composer, including Enter on the conversation already open. Arrow keys and
+`j` / `k` preview conversations and keep focus in the sidebar; Back/Forward
+leave focus where it is. A conversation opened from Cmd+K focuses its composer.
+A tap never focuses it, so the on-screen keyboard stays down. To check this,
+arrow through several conversations (focus stays in the sidebar), press Enter
+(the composer takes focus), then click another conversation and type.
+
 On touch layouts, Channels shows only the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
 rail, a 44px avatar, and a divider inset to the text column. The first six

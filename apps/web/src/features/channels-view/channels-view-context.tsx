@@ -22,7 +22,13 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import { channelsSearch, channelsSearchCodec } from './channels-route';
 import { CHANNELS_DEFAULT_SORT_BY } from './constants';
@@ -42,6 +48,14 @@ type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
 };
 
+/** A selection that asked for its conversation's composer to take focus. */
+export type ComposerFocusRequest = { channelId: string; id: number };
+
+export type SelectChannelOptions = {
+  /** Focus the composer once the conversation shows (a click or Enter). */
+  focusComposer?: boolean;
+};
+
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   /** The mobile list opens channels in the split; only desktop renders detail. */
@@ -50,6 +64,8 @@ export type ChannelsViewContext = {
   sectionsEnabled: Accessor<boolean>;
   sectionsLoading: Accessor<boolean>;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
+  /** Set by a selection that focuses the composer; any other selection clears it. */
+  composerFocusRequest: Accessor<ComposerFocusRequest | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
   /**
@@ -62,7 +78,10 @@ export type ChannelsViewContext = {
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
   setTab: (tab: ChannelsTab) => void;
-  setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
+  setSelectedChannel: (
+    channel: ChannelPreviewSelection | undefined,
+    options?: SelectChannelOptions
+  ) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   /** Per-user collapse state of a team channel label. */
   setLabelOpen: (labelId: string, open: boolean) => void;
@@ -186,10 +205,15 @@ export const [ChannelsViewProvider, useChannelsView] =
           'channels-view'
         );
       };
+      const [composerFocusRequest, setComposerFocusRequest] =
+        createSignal<ComposerFocusRequest>();
+      let lastComposerFocusRequestId = 0;
       const setSelectedChannel = (
-        channel: ChannelPreviewSelection | undefined
+        channel: ChannelPreviewSelection | undefined,
+        options: SelectChannelOptions = {}
       ) => {
         if (!channel) {
+          setComposerFocusRequest(undefined);
           fireAndForget(
             navigate(
               { route: channelsSplitRoute, params: {} },
@@ -200,6 +224,14 @@ export const [ChannelsViewProvider, useChannelsView] =
           return true;
         }
         if (mobileLayout() || !selectPreview.canSelect(channel)) return false;
+        setComposerFocusRequest(
+          options.focusComposer
+            ? {
+                channelId: channelIdForPreviewNavigation(channel),
+                id: ++lastComposerFocusRequestId,
+              }
+            : undefined
+        );
         navigateToChannel(channel);
         return true;
       };
@@ -227,6 +259,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
+        composerFocusRequest,
         sectionsEnabled,
         sectionsLoading: () => sectionsFlag().loading,
         threadsEnabled,
