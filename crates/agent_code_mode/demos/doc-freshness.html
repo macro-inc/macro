@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Document freshness</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --age1: #e67700; --age2: #d9480f; --ok: #2f9e44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27;
+      --age1: #ffc078; --age2: #ff8a5c; --ok: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  button, select { font: inherit; color: inherit; }
+  select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  button { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; white-space: nowrap; }
+  button.done { background: var(--chip); color: var(--ok); }
+  button:disabled { cursor: default; }
+  button:disabled:not(.done) { opacity: .5; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .summary { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 16px 12px; }
+  .summary div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; min-width: 130px; }
+  .summary b { display: block; font-size: 22px; font-weight: 600; }
+  .summary span { color: var(--muted); font-size: 12px; }
+  main { padding: 0 16px 16px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted);
+    padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+  td.name { font-weight: 550; word-break: break-word; }
+  .kind { display: inline-block; margin-left: 6px; background: var(--chip); border-radius: 999px;
+    padding: 0 7px; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .age { white-space: nowrap; }
+  .age i { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: var(--chip);
+    margin-right: 8px; vertical-align: middle; overflow: hidden; position: relative; }
+  .age i span { position: absolute; inset: 0 auto 0 0; background: var(--age1); }
+  .age.old i span { background: var(--age2); }
+  .owner { color: var(--muted); }
+  .right { text-align: right; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  @media (max-width: 560px) {
+    thead { display: none; }
+    tr { display: grid; grid-template-columns: 1fr auto; padding: 8px 4px; border-top: 1px solid var(--line); }
+    tr:first-child { border-top: 0; }
+    td { border: 0; padding: 2px 8px; }
+    td.name { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Document freshness</h1>
+  <select id="days" aria-label="Untouched for">
+    <option value="14">Untouched 14+ days</option>
+    <option value="30" selected>Untouched 30+ days</option>
+    <option value="60">Untouched 60+ days</option>
+    <option value="90">Untouched 90+ days</option>
+  </select>
+</header>
+<p class="status" id="status">Loading…</p>
+<section class="summary" id="summary"></section>
+<main id="list"></main>
+
+<script type="text/macro" id="staleDocuments" lang="ts">
+  export default async function ({ days }: { days: number }, { macro }: ProgramContext) {
+    const me = await macro.myPrincipalId();
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const [old, fresh] = await Promise.all([
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { ua: { lt: cutoff } } }, limit: 80 }),
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { ua: { gte: cutoff } } }, limit: 200 }),
+    ]);
+    const isDocument = (item: (typeof old.items)[number]) => item.type === 'document' && item.subType !== 'task';
+
+    const names = new Map<string, Promise<string>>();
+    const ownerName = (id: string) => {
+      if (!names.has(id)) {
+        const user = macro.users.byId(id);
+        const fallback = user.email()?.split('@')[0] ?? 'Someone';
+        names.set(id, user.name().then((name) => name ?? fallback, () => fallback));
+      }
+      return names.get(id)!;
+    };
+
+    const documents = await Promise.all(old.items.flatMap((item) => {
+      if (item.type !== 'document' || item.subType === 'task') return [];
+      const data = item.snapshot.data;
+      return [(async () => ({
+        id: item.id,
+        name: item.name,
+        kind: item.fileType ?? 'md',
+        updatedAt: data.updatedAt,
+        ageDays: Math.floor((Date.now() - new Date(data.updatedAt).getTime()) / 86_400_000),
+        owner: data.ownerId === me ? 'You' : await ownerName(data.ownerId),
+        mine: data.ownerId === me,
+      }))()];
+    }));
+    documents.sort((a, b) => b.ageDays - a.ageDays);
+    return {
+      documents,
+      fresh: fresh.items.filter(isDocument).length,
+      freshMore: fresh.hasMore,
+      owners: new Set(documents.map((doc) => doc.owner)).size,
+    };
+  }
+</script>
+
+<script type="text/macro" id="remind" lang="ts">
+  export default async function ({ documentId }: { documentId: string }, { macro }: ProgramContext) {
+    const me = await macro.myPrincipalId();
+    const document = macro.documents.byId(documentId);
+    const name = await document.name();
+    const owner = await document.owner();
+    const updatedAt = (await document.updatedAt()) ?? new Date().toISOString();
+    const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86_400_000);
+
+    if (owner.id === me) {
+      // Your own document: plan a review instead of messaging yourself.
+      const task = await macro.tasks.create({
+        name: `Review “${name}”`,
+        markdown: `Untouched for ${days} days. Update it, or archive it if it no longer holds.\n\n[Open the document](${document.webUrl()})`,
+        dueDate: new Date(Date.now() + 3 * 86_400_000),
+      });
+      return { kind: 'task' as const, id: task.id };
+    }
+
+    const link = document.toMention();
+    const channel = await owner.dm();
+    const message = await channel.send({
+      content: `Hi! ${link.tag} hasn't changed in ${days} days. Is it still current, or should it be archived?`,
+      mentions: [link.mention],
+    });
+    return { kind: 'message' as const, id: message.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { remind, staleDocuments } from 'macro:programs';
+
+  type Stale = Awaited<ReturnType<typeof staleDocuments>>;
+
+  const list = document.getElementById('list')!;
+  const summary = document.getElementById('summary')!;
+  const status = document.getElementById('status')!;
+  const daysSelect = document.getElementById('days') as HTMLSelectElement;
+  const reminded = new Map<string, string>();
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function render(data: Stale) {
+    const total = data.documents.length + data.fresh;
+    const share = total ? Math.round((data.fresh / total) * 100) : 100;
+    const stats = [
+      [String(data.documents.length), 'stale documents'],
+      [String(data.owners), 'owners to ask'],
+      [`${share}%${data.freshMore ? '+' : ''}`, 'of documents fresh'],
+    ];
+    summary.replaceChildren(...stats.map(([value, label]) => {
+      const box = el('div');
+      box.append(el('b', '', value), el('span', '', label));
+      return box;
+    }));
+
+    if (data.documents.length === 0) {
+      list.replaceChildren(el('p', 'empty', 'Everything has been touched recently.'));
+      return;
+    }
+    const oldest = Math.max(...data.documents.map((doc) => doc.ageDays));
+    const table = el('table');
+    const head = el('thead');
+    const headRow = el('tr');
+    for (const label of ['Document', 'Owner', 'Untouched', '']) headRow.append(el('th', '', label));
+    head.append(headRow);
+    const body = el('tbody');
+    for (const doc of data.documents) {
+      const row = el('tr');
+      const name = el('td', 'name', doc.name);
+      name.append(el('span', 'kind', doc.kind));
+      const age = el('td', doc.ageDays > 90 ? 'age old' : 'age');
+      const bar = el('i');
+      const fill = el('span');
+      fill.style.width = `${Math.round((doc.ageDays / oldest) * 100)}%`;
+      bar.append(fill);
+      age.append(bar, document.createTextNode(`${doc.ageDays} days`));
+
+      const action = el('td', 'right');
+      const label = doc.mine ? 'Plan review' : 'Ask owner';
+      const button = el('button', '', reminded.get(doc.id) ?? label);
+      if (reminded.has(doc.id)) {
+        button.className = 'done';
+        button.disabled = true;
+      }
+      button.setAttribute('aria-label', `${label}: ${doc.name}`);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const sent = await remind({ documentId: doc.id });
+          const done = sent.kind === 'task' ? '✓ Task added' : '✓ Asked';
+          reminded.set(doc.id, done);
+          button.textContent = done;
+          button.className = 'done';
+        } catch (error) {
+          button.disabled = false;
+          status.textContent = `Couldn't send the reminder: ${String(error)}`;
+        }
+      });
+      action.append(button);
+      row.append(name, el('td', 'owner', doc.owner), age, action);
+      body.append(row);
+    }
+    table.append(head, body);
+    list.replaceChildren(table);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      render(await staleDocuments({ days: Number(daysSelect.value) }));
+      status.textContent = 'Ask an owner by direct message, or plan a review task for your own documents.';
+    } catch (error) {
+      status.textContent = `Couldn't load documents: ${String(error)}`;
+    }
+  }
+
+  daysSelect.addEventListener('change', () => reload());
+  on(['document.updated', 'document.deleted'], reload);
+  await reload();
+</script>
+</body>
+</html>
