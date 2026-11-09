@@ -26,3 +26,10 @@ the recorder instead of cloning their MapDelta maps a second time. Borrowed
 events still become independent owned copies; ordering, undo, remote consumers
 and encoder bytes retain their existing semantics. Validate the owned/borrowed
 event unit tests and projection/session differential suites.
+
+Eligible editor-owned local commits can suspend event recording at the final
+commit boundary. Their undo manager checkpoints the new local op span and its
+container ids, preserving remote group conflicts without constructing duplicate
+document diffs. Pending event queues, paused/excluded edits, fixups, imports and
+undo/redo retain ordinary event delivery. Suppression is opt-in and recording
+resumes at the committed frontiers even on native unwinding.

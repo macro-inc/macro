@@ -47,6 +47,27 @@ impl LoroProjection {
         origin: &'static str,
         now: loro::Timestamp,
     ) -> Result<LocalProjected> {
+        self.local_commit_impl(doc, commits, origin, now, false)
+    }
+    /// Project a known local output without duplicating its changes as Loro events.
+    /// The owner must manually checkpoint undo when events_suppressed is true;
+    /// imports, history and callers with other local observers use local_commit.
+    pub fn local_commit_without_events(
+        &mut self,
+        doc: &LoroDoc,
+        commits: &[Commit],
+        now: loro::Timestamp,
+    ) -> Result<LocalProjected> {
+        self.local_commit_impl(doc, commits, LOCAL_ORIGIN, now, true)
+    }
+    fn local_commit_impl(
+        &mut self,
+        doc: &LoroDoc,
+        commits: &[Commit],
+        origin: &'static str,
+        now: loro::Timestamp,
+        suppress_events: bool,
+    ) -> Result<LocalProjected> {
         if !matches!(origin, LOCAL_ORIGIN | FIXUP_ORIGIN) {
             return Err(diverged("unsupported projection origin"));
         }
@@ -287,7 +308,16 @@ impl LoroProjection {
                 }
             }
         }
+        // Defer suppression until the infallible commit boundary: fallible
+        // projection writes retain their normal events and recovery behavior.
+        let events_suppressed =
+            suppress_events && doc.with_state(|state| state.suspend_recording_for_local_commit());
+        let recording = LocalEventRecording {
+            doc,
+            suspended: events_suppressed,
+        };
         doc.commit_with(loro::CommitOptions::new().origin(origin).timestamp(now));
+        drop(recording);
         let changed = before_vv != doc.oplog_vv();
         tracing::debug!(
             nodes_visited = stats.nodes_visited,
@@ -295,7 +325,11 @@ impl LoroProjection {
             changed,
             "projection complete"
         );
-        Ok(LocalProjected { changed, stats })
+        Ok(LocalProjected {
+            changed,
+            events_suppressed,
+            stats,
+        })
     }
     fn diff_children(
         &mut self,
@@ -439,6 +473,18 @@ impl LoroProjection {
             Ok(Some(doc.export(ExportMode::updates(&before))?))
         } else {
             Ok(None)
+        }
+    }
+}
+
+struct LocalEventRecording<'a> {
+    doc: &'a LoroDoc,
+    suspended: bool,
+}
+impl Drop for LocalEventRecording<'_> {
+    fn drop(&mut self) {
+        if self.suspended {
+            self.doc.with_state(|state| state.start_recording());
         }
     }
 }

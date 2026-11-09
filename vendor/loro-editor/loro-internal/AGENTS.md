@@ -12,6 +12,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Retain input order, every range check and overlapping/empty update behavior.
 - Move owned event buffers through Cow::into_owned; clone borrowed events so their source lifetime cannot escape.
 - Never refresh encoder or corpus bytes to accommodate a runtime change.
+- Suppress local event materialization only with empty recorder queues and explicit undo checkpoint ownership; retain remote, excluded and history event delivery.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
 
 ## Checks

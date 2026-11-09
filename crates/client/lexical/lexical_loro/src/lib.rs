@@ -68,6 +68,8 @@ pub struct ProjectionStats {
 pub struct LocalProjected {
     /// Whether the oplog version advanced.
     pub changed: bool,
+    /// Local event materialization was suppressed; the owner must checkpoint undo.
+    pub events_suppressed: bool,
     /// Incremental work performed.
     pub stats: ProjectionStats,
 }
