@@ -72,6 +72,8 @@ mod tests {
             ]}}))?,tags:TagSet::default()
         },2.0)?;
         let session = EditorSession {
+            #[cfg(feature = "compatibility")]
+            compatibility: None,
             machine,
             hostname: Some("app.example.com".into()),
         };

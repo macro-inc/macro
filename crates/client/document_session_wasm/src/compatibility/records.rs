@@ -1,0 +1,250 @@
+//! Typed captures never serialize public JS node objects or invoke their getters.
+use super::*;
+use lexical_model::*;
+
+pub(super) struct Capture {
+    pub reference: compat::ForeignRecordRef,
+    pub source: Arc<ForeignReadSnapshot>,
+    pub identity: ForeignRecordIdentity,
+}
+pub(super) fn key(key: NodeKey) -> compat::ForeignKey {
+    compat::ForeignKey {
+        index: key.index(),
+        generation: key.generation(),
+    }
+}
+fn optional(value: Option<NodeKey>) -> compat::ForeignOptionalKey {
+    compat::ForeignOptionalKey {
+        present: value.is_some(),
+        key: key(value.unwrap_or(NodeKey::ROOT)),
+    }
+}
+pub(super) fn point(point: Point) -> compat::CompatPoint {
+    compat::CompatPoint {
+        key: key(point.key()),
+        offset: point.offset(),
+        kind: match point {
+            Point::Text { .. } => compat::CompatPointKind::Text,
+            Point::Element { .. } => compat::CompatPointKind::Element,
+        },
+    }
+}
+impl Host {
+    pub(super) fn records(
+        &mut self,
+        source: Arc<ForeignReadSnapshot>,
+        keys: Vec<NodeKey>,
+        version: u64,
+        update: u32,
+        access: compat::ForeignAccess,
+        writable: &[NodeKey],
+    ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
+        source
+            .render_records(keys)?
+            .into_iter()
+            .map(|record| {
+                let node = record.record();
+                let instance = node.foreign_instance();
+                if instance
+                    .as_ref()
+                    .is_some_and(|instance| !instance.owner().same_owner(&self.owner))
+                {
+                    return Err(BoundaryError::Invalid(
+                        "unregistered foreign instance owner",
+                    ));
+                }
+                let reference = compat::ForeignRecordRef {
+                    node: compat::ForeignNodeRef {
+                        editor_id: self.editor,
+                        version,
+                        key: key(node.key()),
+                        instance_owner_id: instance.as_ref().map_or(0, |_| self.editor),
+                        class_id: instance.as_ref().map_or(0, ForeignInstance::class_id),
+                        instance_id: instance.as_ref().map_or(0, ForeignInstance::instance_id),
+                    },
+                    update_id: update,
+                    access: if access == compat::ForeignAccess::Writable
+                        && !writable.contains(&node.key())
+                    {
+                        compat::ForeignAccess::Frozen
+                    } else {
+                        access
+                    },
+                    capture_id: self.next_capture,
+                };
+                self.next_capture = self
+                    .next_capture
+                    .checked_add(1)
+                    .ok_or(BoundaryError::Invalid("capture identity exhausted"))?;
+                let base = match record.base() {
+                    BaseData::Text(data) => compat::ForeignBasePatch {
+                        text: Some(compat::ForeignTextBase {
+                            text: Some(data.text.as_str().encode_utf16().collect()),
+                            format: Some(data.format.bits()),
+                            detail: Some(data.detail.bits()),
+                            mode: Some(match data.mode {
+                                TextMode::Normal => 0,
+                                TextMode::Token => 1,
+                                TextMode::Segmented => 2,
+                            }),
+                            style: Some(data.style.to_string()),
+                        }),
+                        element: None,
+                    },
+                    BaseData::Element(data) => compat::ForeignBasePatch {
+                        text: None,
+                        element: Some(compat::ForeignElementBase {
+                            format: Some(data.format.bits()),
+                            indent: Some(data.indent),
+                            direction: Some(match data.direction {
+                                None => 0,
+                                Some(TextDirection::Ltr) => 1,
+                                Some(TextDirection::Rtl) => 2,
+                            }),
+                            text_format: Some(data.text_format.bits()),
+                            text_style: Some(data.text_style.to_string()),
+                            style: Some(data.style.to_string()),
+                        }),
+                    },
+                    _ => compat::ForeignBasePatch {
+                        text: None,
+                        element: None,
+                    },
+                };
+                let links = record.links();
+                let native_type = record.native_type().unwrap_or("").to_owned();
+                let mut projection = compat::ForeignNativeProjection {
+                    complete: matches!(
+                        native_type.as_str(),
+                        "root" | "text" | "paragraph" | "tab" | "linebreak"
+                    ),
+                    native_type,
+                    fields: vec![],
+                };
+                if let Some(heading) = record.native::<lexical_rich_nodes::heading::HeadingNode>() {
+                    let tag = match heading.tag {
+                        lexical_rich_nodes::heading::HeadingTagType::H1 => "h1",
+                        lexical_rich_nodes::heading::HeadingTagType::H2 => "h2",
+                        lexical_rich_nodes::heading::HeadingTagType::H3 => "h3",
+                        lexical_rich_nodes::heading::HeadingTagType::H4 => "h4",
+                        lexical_rich_nodes::heading::HeadingTagType::H5 => "h5",
+                        lexical_rich_nodes::heading::HeadingTagType::H6 => "h6",
+                    };
+                    projection.fields.push(compat::ForeignNativeFieldValue {
+                        field: compat::ForeignNativeField::HeadingNodeTag,
+                        value: compat::ForeignCallbackValue::ForeignStringArgument {
+                            value: tag.encode_utf16().collect(),
+                        },
+                    });
+                    projection.complete = true;
+                }
+                let output = compat::ForeignRenderRecord {
+                    record: reference,
+                    has_instance: instance.is_some(),
+                    type_index: u32::from(node.type_index().get()),
+                    type_name: node.type_name().into(),
+                    kind: match node.kind() {
+                        NodeKind::Element => compat::ForeignNodeKind::Element,
+                        NodeKind::Text => compat::ForeignNodeKind::Text,
+                        NodeKind::Decorator => compat::ForeignNodeKind::Decorator,
+                        NodeKind::LineBreak => compat::ForeignNodeKind::LineBreak,
+                    },
+                    base,
+                    links: compat::ForeignTreeLinks {
+                        parent: optional(links.parent),
+                        previous: optional(links.previous),
+                        next: optional(links.next),
+                        first: optional(links.first),
+                        last: optional(links.last),
+                        size: links.size,
+                    },
+                    native_projection: projection,
+                    has_root_cached_text: record.root_cached_text().is_some(),
+                    root_cached_text: record
+                        .root_cached_text()
+                        .unwrap_or("")
+                        .encode_utf16()
+                        .collect(),
+                };
+                self.captures.insert(
+                    reference.capture_id,
+                    Capture {
+                        reference,
+                        source: source.clone(),
+                        identity: record.identity().clone(),
+                    },
+                );
+                Ok(output)
+            })
+            .collect()
+    }
+    pub(super) fn batch(
+        &mut self,
+        state: &EditorState,
+        version: u64,
+    ) -> Result<compat::ForeignRenderBatch, BoundaryError> {
+        state.view().foreign_root_cached_text()?;
+        let source = Arc::new(state.view().snapshot_for_foreign_read()?);
+        let keys = source.record_keys();
+        Ok(compat::ForeignRenderBatch {
+            editor_id: self.editor,
+            update_id: 0,
+            version,
+            full_reconcile: true,
+            records: self.records(source, keys, version, 0, compat::ForeignAccess::Frozen, &[])?,
+            removed_keys: vec![],
+        })
+    }
+    pub(super) fn selection(
+        &mut self,
+        source: &ForeignReadSnapshot,
+        version: u64,
+    ) -> Result<compat::CompatSelectionData, BoundaryError> {
+        let Some(selection) = source.state().selection() else {
+            return Ok(compat::CompatSelectionData::CompatNoSelection {});
+        };
+        let identity = source
+            .selection_identity()
+            .ok_or(BoundaryError::Invalid("selection identity"))?;
+        let id = if let Some((id, _)) = self.selections.iter().find(|(_, known)| *known == identity)
+        {
+            *id
+        } else {
+            let id = self.next_selection;
+            self.next_selection = id
+                .checked_add(1)
+                .ok_or(BoundaryError::Invalid("selection identity exhausted"))?;
+            self.selections.insert(id, identity.clone());
+            id
+        };
+        let reference = compat::ForeignSelectionRef {
+            editor_id: self.editor,
+            version,
+            selection_id: id,
+        };
+        Ok(match selection {
+            Selection::Range(range) => compat::CompatSelectionData::CompatRangeSelection {
+                reference,
+                anchor: point(range.anchor),
+                focus: point(range.focus),
+                format: range.format.bits(),
+                style: range.style.encode_utf16().collect(),
+                dirty: range.is_dirty(),
+                has_cached_backward: range.cached_is_backward().is_some(),
+                cached_backward: range.cached_is_backward().unwrap_or(false),
+                has_cached_nodes: false,
+                cached_nodes: vec![],
+            },
+            Selection::Node(nodes) => compat::CompatSelectionData::CompatNodeSelection {
+                reference,
+                keys: nodes.keys().map(key).collect(),
+                dirty: selection.is_dirty(),
+                has_cached_nodes: false,
+                cached_nodes: vec![],
+            },
+            Selection::Table(_) => {
+                return Err(BoundaryError::Invalid("table selection schema unavailable"))
+            }
+        })
+    }
+}

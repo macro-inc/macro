@@ -7,6 +7,8 @@ use wasm_bindgen::prelude::*;
 pub struct EditorSession {
     pub(crate) machine: machine::Machine,
     pub(crate) hostname: Option<String>,
+    #[cfg(feature = "compatibility")]
+    pub(crate) compatibility: Option<crate::compatibility::Host>,
 }
 #[wasm_bindgen]
 impl EditorSession {
@@ -22,6 +24,8 @@ impl EditorSession {
         Ok(Self {
             machine: machine::Machine::create_macro(abi_major, config, now, wall).map_err(js)?,
             hostname,
+            #[cfg(feature = "compatibility")]
+            compatibility: None,
         })
     }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
@@ -29,6 +33,8 @@ impl EditorSession {
         Ok(Self {
             machine: machine::Machine::create(abi_major, config, now, wall, true).map_err(js)?,
             hostname: None,
+            #[cfg(feature = "compatibility")]
+            compatibility: None,
         })
     }
     /// Deliver a cold Bebop input.

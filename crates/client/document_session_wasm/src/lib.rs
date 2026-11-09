@@ -71,3 +71,5 @@ mod test;
 #[rustfmt::skip]
 #[expect(missing_docs, reason = "Bebop owns generated compatibility declarations")]
 pub mod compatibility_generated;
+#[cfg(feature = "compatibility")]
+mod compatibility;

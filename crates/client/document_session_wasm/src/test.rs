@@ -465,6 +465,8 @@ fn bulk_queries_export_markup_and_selected_clipboard_from_the_native_model() {
         .unwrap();
     machine.editor(Input::SetState{state:serde_json::from_value(serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"children":[{"type":"text","version":1,"text":"hello 😀","format":1,"detail":0,"mode":"normal","style":""}]}]}})).unwrap(),tags:TagSet::default()},2.0).unwrap();
     let session = EditorSession {
+        #[cfg(feature = "compatibility")]
+        compatibility: None,
         machine,
         hostname: None,
     };

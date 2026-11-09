@@ -8,8 +8,9 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["bebop-owned-all"]
+default = ["bebop-owned-all", "compatibility"]
 bebop-owned-all = []
+compatibility = ["document_session/compatibility"]
 
 [dependencies]
 document_session.workspace = true

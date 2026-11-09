@@ -1,0 +1,107 @@
+//! Production compatibility state belongs to the existing editor session.
+use crate::compatibility_generated::owned as compat;
+use crate::*;
+use lexical_model::{EditorState, ForeignReadSnapshot, PendingUpdate};
+use std::{collections::BTreeMap, sync::Arc};
+mod calls;
+mod lifecycle;
+pub(crate) mod observer;
+mod records;
+
+pub(crate) struct Host {
+    editor: u32,
+    version: u64,
+    next_version: u64,
+    pending_version: Option<u64>,
+    update: u32,
+    next_capture: u64,
+    pending: Option<PendingUpdate>,
+    states: BTreeMap<u64, EditorState>,
+    captures: BTreeMap<u64, records::Capture>,
+    selections: BTreeMap<u32, lexical_model::ForeignSelectionIdentity>,
+    next_selection: u32,
+    receipts: observer::Receipts,
+    owner: lexical_model::ForeignEditorIdentity,
+}
+#[wasm_bindgen]
+impl EditorSession {
+    /// Create the JS-configured core with no parallel native editing plugins.
+    #[wasm_bindgen(js_name = createCompat)]
+    pub fn create_compat(
+        abi: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+        registration: &[u8],
+    ) -> Result<Self, JsError> {
+        Self::create_compat_inner(abi, config, now, wall, registration).map_err(js)
+    }
+}
+impl EditorSession {
+    fn create_compat_inner(
+        abi: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+        registration: &[u8],
+    ) -> Result<Self, BoundaryError> {
+        if abi != generated::ABI_MAJOR {
+            return Err(BoundaryError::AbiMismatch);
+        }
+        let registration = compat::CompatConfig::deserialize(registration)?;
+        if registration.editor_id == 0 {
+            return Err(BoundaryError::Invalid("compatibility editor namespace"));
+        }
+        let receipts: observer::Receipts = Arc::default();
+        let machine = machine::Machine::create_compat(
+            abi,
+            config,
+            &registration,
+            receipts.clone(),
+            now,
+            wall,
+        )?;
+        let machine::Session::Editor(session) = &machine.session else {
+            return Err(BoundaryError::Invalid("compatibility editor surface"));
+        };
+        let state = session.surface().state().clone();
+        let owner = state.view().foreign_instance_owner();
+        let host = Host {
+            editor: registration.editor_id,
+            version: 0,
+            next_version: 1,
+            pending_version: None,
+            update: 0,
+            next_capture: 1,
+            pending: None,
+            states: [(0, state)].into(),
+            captures: BTreeMap::new(),
+            selections: BTreeMap::new(),
+            next_selection: 1,
+            receipts,
+            owner,
+        };
+        Ok(Self {
+            machine,
+            hostname: None,
+            compatibility: Some(host),
+        })
+    }
+}
+/// Exact compatibility envelope version required before editor construction.
+#[wasm_bindgen]
+pub fn compatibility_protocol_major() -> u32 {
+    compatibility_generated::COMPATIBILITY_PROTOCOL_MAJOR
+}
+
+#[cfg(test)]
+mod test;
+
+/// Hook names in the generated production class-mask order.
+#[wasm_bindgen]
+pub fn compatibility_hook_index() -> Vec<String> {
+    lexical_model::ForeignHook::ALL
+        .iter()
+        .map(|hook| hook.upstream_name().to_owned())
+        .collect()
+}
