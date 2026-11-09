@@ -1,6 +1,7 @@
 import { $createTableSelection, $isTableSelection } from '@lexical/table';
 import * as lexical from 'lexical';
 import { describe, expect, test } from 'vitest';
+import { $setSelection } from '../helpers';
 import { $createPoint } from '../point';
 import { RangeSelection } from '../range';
 import { type SelectionRuntime, withSelectionRuntime } from '../runtime';
@@ -23,8 +24,8 @@ function sourceRuntime(editor: lexical.LexicalEditor): SelectionRuntime {
     publicKey: unexpectedCrossing,
     nodeReference: unexpectedCrossing,
     resolveNode: unexpectedCrossing,
-    invoke: unexpectedCrossing,
-    writeSelection: unexpectedCrossing,
+    bufferSelection: unexpectedCrossing,
+    invokeSelection: unexpectedCrossing,
     selectionRef: unexpectedCrossing,
     bindSelection: unexpectedCrossing,
     getPreviousSelection: lexical.$getPreviousSelection,
@@ -150,6 +151,50 @@ describe('JS selection reads over the real upstream model', () => {
     editor.getEditorState().read(() =>
       withSelectionRuntime(runtime, () => {
         expect(selection.getTextContent()).toBe('fte');
+      })
+    );
+  });
+  test('buffers active selection changes on the actual source state without allocating native handles', () => {
+    const editor = lexical.createEditor({
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const intents: [lexical.BaseSelection | null, boolean][] = [];
+    const runtime: SelectionRuntime = {
+      ...sourceRuntime(editor),
+      bufferSelection: (selection, activate) => {
+        intents.push([selection, activate]);
+      },
+    };
+    editor.update(
+      () =>
+        withSelectionRuntime(runtime, () => {
+          const selection = new RangeSelection(
+            $createPoint('root', 0, 'element'),
+            $createPoint('root', 0, 'element'),
+            0,
+            ''
+          );
+          $setSelection(selection);
+          expect(lexical.$getSelection()).toBe(selection);
+          expect(selection.dirty).toBe(true);
+          expect(intents).toEqual([[selection, true]]);
+          $setSelection(null);
+          expect(lexical.$getSelection()).toBeNull();
+          expect(intents).toEqual([
+            [selection, true],
+            [null, true],
+          ]);
+        }),
+      { discrete: true }
+    );
+    editor.getEditorState().read(() =>
+      withSelectionRuntime(runtime, () => {
+        expect(() => $setSelection(null)).toThrow(
+          'Cannot use method in read-only mode.'
+        );
+        expect(intents).toHaveLength(2);
       })
     );
   });

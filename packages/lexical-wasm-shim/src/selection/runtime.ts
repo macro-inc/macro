@@ -1,7 +1,6 @@
 import type { TableSelection } from '@lexical/table';
 import type {
   CompatOperation,
-  CompatSelectionPatch,
   ICompatReply,
   IForeignCallbackValue,
   IForeignKey,
@@ -54,12 +53,18 @@ export interface SelectionRuntime {
   publicKey(key: IForeignKey): NodeKey;
   nodeReference(node: LexicalNode): IForeignNodeRef;
   resolveNode(reference: IForeignNodeRef): LexicalNode;
-  invoke(
+  /** Pure JS intent; allocating or patching a native reference is forbidden. */
+  bufferSelection(selection: BaseSelection | null, activate: boolean): void;
+  /**
+   * Flush prior writes and bind this exact JS value before returning snapshots.
+   * Prepublication also captures the live active JS value: direct raw field
+   * writes can bypass bufferSelection.
+   */
+  invokeSelection(
+    selection: BaseSelection,
     operation: CompatOperation,
-    args: readonly IForeignCallbackValue[],
-    receiver?: IForeignSelectionRef
+    args: readonly IForeignCallbackValue[]
   ): ICompatReply;
-  writeSelection(patch: CompatSelectionPatch): ICompatReply;
   selectionRef(selection: BaseSelection): IForeignSelectionRef | undefined;
   bindSelection(
     selection: BaseSelection,
