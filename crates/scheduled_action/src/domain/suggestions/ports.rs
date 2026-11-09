@@ -25,11 +25,14 @@ pub trait SuggestionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<StoredGeneration>>> + Send;
 
     /// Start the person's one generation at `now`; false when one started
-    /// before, whatever became of it.
+    /// before and finished, or is still running. A generation still marked
+    /// running that started before `stale_before` was interrupted (its
+    /// process stopped) and is started again.
     fn begin(
         &self,
         user: &MacroUserIdStr<'_>,
         now: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Record how the person's generation ended.

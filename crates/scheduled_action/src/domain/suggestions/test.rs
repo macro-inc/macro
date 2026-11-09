@@ -29,9 +29,16 @@ impl SuggestionRepo for FakeRepo {
         Ok(self.generation.lock().unwrap().clone())
     }
 
-    async fn begin(&self, _: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<bool> {
+    async fn begin(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
+    ) -> Result<bool> {
         let mut generation = self.generation.lock().unwrap();
-        if generation.is_some() {
+        if generation.as_ref().is_some_and(|stored| {
+            stored.status != GenerationStatus::Generating || stored.started_at >= stale_before
+        }) {
             return Ok(false);
         }
         *generation = Some(StoredGeneration {
@@ -1023,4 +1030,35 @@ fn a_pick_that_affects_others_never_starts_on() {
         Some(Surface::Chat),
     );
     assert!(!shown[0].on_by_default);
+}
+
+#[tokio::test]
+async fn an_interrupted_generation_starts_again_once_it_is_stale() {
+    let h = harness(first_of_each, false, true);
+    // A process stopped mid-generation, long enough ago.
+    *h.repo.generation.lock().unwrap() = Some(StoredGeneration {
+        status: GenerationStatus::Generating,
+        started_at: Utc::now()
+            - chrono::Duration::from_std(STALE_GENERATION).unwrap()
+            - chrono::Duration::minutes(1),
+        finished_at: None,
+    });
+    h.generate().await;
+    assert_eq!(
+        h.sessions.prepared.lock().unwrap().len(),
+        SuggestionLayout::default().sessions().len()
+    );
+    assert_eq!(h.read(None).await.status, GenerationStatus::Ready);
+}
+
+#[tokio::test]
+async fn a_running_generation_is_left_alone() {
+    let h = harness(first_of_each, false, true);
+    *h.repo.generation.lock().unwrap() = Some(StoredGeneration {
+        status: GenerationStatus::Generating,
+        started_at: Utc::now(),
+        finished_at: None,
+    });
+    h.generate().await;
+    assert!(h.sessions.prepared.lock().unwrap().is_empty());
 }
