@@ -17,7 +17,7 @@ enforced by the ordinary backend APIs.
   `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
   native file type's route and falls back to `/app/md/` before detail loads.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
-  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `Spreadsheet` (`src/entities/spreadsheets/spreadsheet.ts`, its own code-mode entity) whose `read`,
   `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
   `edit(instructions)` overrides `Document.edit` with the worker's spreadsheet
   writer model; code mode hides `ReadSpreadsheet`, `CalculateSpreadsheet` and
@@ -89,9 +89,14 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments, and
+  `Document` handles as `document` attachments (`{ documents }`).
   `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
+- `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
+  thread to quoted text (`POST /documents/{id}/comments/text`, the
+  `CommentOnText` tool's domain function); a 422 becomes
+  `CommentQuoteNotPlacedError` carrying the reason.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /

@@ -134,6 +134,7 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
     assert!(signals.lifecycle.published().is_empty());
     let claimed = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
@@ -190,6 +191,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     let action_id = AgentActionId::mint();
     service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
@@ -283,6 +285,7 @@ async fn a_missed_warm_claim_records_why_on_the_open_span() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
@@ -337,6 +340,7 @@ async fn an_open_without_a_client_id_records_that_no_warm_id_was_sent() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: None,
             owner: model_owner::Owner::User(sender()),
@@ -420,6 +424,7 @@ async fn a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
@@ -457,6 +462,7 @@ async fn a_session_asked_for_out_of_sight_is_hidden_and_notifies_nobody() {
     let ((service, repo, _containers, _, _), turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let open = |visibility| OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Requested { by: sender() },
         id: Some(AgentSessionId::new()),
         owner: model_owner::Owner::User(sender()),

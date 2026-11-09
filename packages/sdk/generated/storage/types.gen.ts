@@ -4548,6 +4548,65 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * The quote could not be anchored; nothing was posted.
+ */
+export type CommentOnTextRefused = {
+    /**
+     * Always `quote_not_placed`.
+     */
+    error: CommentOnTextRefusedCode;
+    /**
+     * Lists each appearance to choose from with `occurrence`, or says the
+     * text was not found.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of a quote the document cannot anchor to.
+ */
+export type CommentOnTextRefusedCode = 'quote_not_placed';
+
+/**
+ * A comment on a quoted passage.
+ */
+export type CommentOnTextRequest = {
+    /**
+     * Comment body in macro markdown.
+     */
+    content: string;
+    /**
+     * The people and items the body mentions, notified as in any comment.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Which appearance of the passage, counting from 1 in document order.
+     * Only needed when it appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * The passage to comment on, quoted exactly as the document reads: plain
+     * text without markdown syntax, within one paragraph, heading, list item
+     * or table cell.
+     */
+    quote: string;
+};
+
+/**
+ * The thread the comment started.
+ */
+export type CommentOnTextResponse = {
+    /**
+     * The posted comment, the root of its thread.
+     */
+    comment: Message;
+    /**
+     * The text the comment is anchored to, as the document reads.
+     */
+    markedText: string;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -6738,6 +6797,54 @@ export type DocumentInteractionMetadata = {
      * What triggered this interaction.
      */
     reason: InteractionReason;
+};
+
+/**
+ * A markdown document's body and the revision it was read at.
+ */
+export type DocumentMarkdown = {
+    /**
+     * The body as Markdown, in the format `text-content` returns.
+     */
+    markdown: string;
+    /**
+     * The document's version, as sync-service encodes it. Pass it back to
+     * write the body only if nobody has changed the document since.
+     */
+    revision: string;
+};
+
+/**
+ * Why a body read or write did not complete.
+ */
+export type DocumentMarkdownFailure = {
+    /**
+     * What went wrong.
+     */
+    error: DocumentMarkdownFailureCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a body read or write that did not complete.
+ */
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
+
+/**
+ * A body write that landed, or found the body already reading that way.
+ */
+export type DocumentMarkdownWritten = {
+    /**
+     * Whether the body changed; `false` when it already read that way.
+     */
+    changed: boolean;
+    /**
+     * The document's version after the write.
+     */
+    revision: string;
 };
 
 export type DocumentMetadata = {
@@ -22495,6 +22602,21 @@ export type WordDocumentResponse = {
 };
 
 /**
+ * The body to write and the revision it was written against.
+ */
+export type WriteDocumentMarkdownRequest = {
+    /**
+     * The `revision` from the read this body is based on. The write applies
+     * only if the document is still at this revision.
+     */
+    expectedRevision: string;
+    /**
+     * The whole new body, as Markdown.
+     */
+    markdown: string;
+};
+
+/**
  * Z-order moves.
  */
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
@@ -28529,6 +28651,57 @@ export type ReadCanvasSceneResponses = {
 
 export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
+export type CommentOnDocumentTextData = {
+    body: CommentOnTextRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/comments/text';
+};
+
+export type CommentOnDocumentTextErrors = {
+    /**
+     * Not a markdown or Word document, or an invalid quote or occurrence
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document comment access denied
+     */
+    403: ErrorResponse;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The quote appears more than once or not at all; nothing was posted
+     */
+    422: CommentOnTextRefused;
+    /**
+     * The comment could not be posted
+     */
+    500: ErrorResponse;
+    /**
+     * The comment could not be anchored; nothing was posted
+     */
+    502: ErrorResponse;
+};
+
+export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
+
+export type CommentOnDocumentTextResponses = {
+    200: CommentOnTextResponse;
+};
+
+export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
+
 export type CopyDocumentData = {
     body: CopyDocumentRequest;
     path: {
@@ -28774,6 +28947,96 @@ export type GetDocumentLocationV3Responses = {
 };
 
 export type GetDocumentLocationV3Response = GetDocumentLocationV3Responses[keyof GetDocumentLocationV3Responses];
+
+export type GetDocumentMarkdownData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type GetDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The body could not be read
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type GetDocumentMarkdownError = GetDocumentMarkdownErrors[keyof GetDocumentMarkdownErrors];
+
+export type GetDocumentMarkdownResponses = {
+    200: DocumentMarkdown;
+};
+
+export type GetDocumentMarkdownResponse = GetDocumentMarkdownResponses[keyof GetDocumentMarkdownResponses];
+
+export type WriteDocumentMarkdownData = {
+    body: WriteDocumentMarkdownRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type WriteDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an empty revision
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document changed since the revision was read; nothing was written
+     */
+    409: DocumentMarkdownFailure;
+    /**
+     * The write failed and may have applied
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type WriteDocumentMarkdownError = WriteDocumentMarkdownErrors[keyof WriteDocumentMarkdownErrors];
+
+export type WriteDocumentMarkdownResponses = {
+    200: DocumentMarkdownWritten;
+};
+
+export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
 
 export type PermanentlyDeleteDocumentData = {
     body?: never;

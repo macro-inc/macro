@@ -47,6 +47,7 @@ stop_local *ARGS:
 # Lower-level stack control for Cursor Cloud and bakes. Prefer run_local, which needs no terminal.
 #   just stack up                      # WIPES the instance; static frontend served by the proxy
 #   just stack update                  # adopt a new build; volumes stay
+#   just stack update --services contacts_service  # rebuild only these; status lists stale ones
 #   just stack status --json           # machine-readable state
 #   just stack down                    # reclaim everything
 stack *ARGS:
