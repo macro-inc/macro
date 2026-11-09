@@ -11,7 +11,10 @@
       "!**/*.d.ts",
       "!**/node_modules",
       "!src/sync-service/generated",
-      "!!**/abi.generated.ts"
+      "!!**/abi.generated.ts",
+      // Generated verbatim; validate through generate-foreign-host-schema.ts --check.
+      "!!src/session/foreign-host.generated.ts",
+      "!!src/session/foreign-native-fields.generated.ts"
     ]
   }
 }
