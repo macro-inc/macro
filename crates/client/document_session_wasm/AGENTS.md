@@ -125,3 +125,8 @@ update. Pair the acknowledgement with the current version; it does not prove JS 
 Reject cold audit snapshots until normal publication acknowledgement catches up
 to the actual session state; never refresh receipts inside the getter or pair a
 stale compatibility version with live-node counts from a newer graph.
+
+Carry encoded host-thrown values through Error::Extension as HostThrown with the
+original host slot and opaque value; recover through ForeignReadFailed wrappers
+without stringification or replacement. Preserve explicit undefined/null, and
+reject missing/zero-slot envelopes before creating the carried cause.
