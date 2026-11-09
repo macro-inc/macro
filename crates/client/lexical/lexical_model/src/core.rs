@@ -4,6 +4,7 @@ use smallvec::SmallVec;
 use std::sync::Arc;
 mod input;
 mod output;
+mod prepared;
 mod remote;
 mod staging;
 mod text;

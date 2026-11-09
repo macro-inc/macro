@@ -103,7 +103,7 @@ Preserve empty-splice dirty ordering and selection points when optimizing detach
 - `cargo check -p lexical_model --all-features --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p lexical_model --all-targets -j4 -- -D warnings`
 - `cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun for the independent decoder)
-- `cargo tree -p lexical_model --target wasm32-unknown-unknown -i workspace-hack`
+- Inspect `cargo tree -p lexical_model --target wasm32-unknown-unknown -e normal,build --format '{p} {f}'` and reject `workspace-hack` in the production closure.
 - `cargo x deps --check`, `cargo shear`, `just check`
 
 ## Gotchas
@@ -265,3 +265,12 @@ External publication adapters may associate a callback and its real commit using
 opaque markers grant no active scope or mutation authority; unowned state reads
 and synthetic no-op commits carry no origin. Never serialize or print marker
 addresses, or infer a new publication from a historical/read-only capture.
+
+
+Prepare owned main transitions with `Transaction::prepare` only after the real
+pipeline completes. `PreparedUpdate` contains an unpublished same-editor snapshot,
+not a public Commit or the drained after-commit chain; dropping it cancels the
+unpublished work. Preserve it through pre-adoption refusal, and use its job-owned
+publication receipt rather than adoption as evidence of actual installation.
+Ordinary commits share preparation without allocating that receipt. Notify
+publication observers only after real installation and receipt acknowledgement.

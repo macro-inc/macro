@@ -217,9 +217,47 @@ impl Transaction<'_> {
         caches: CacheReconciliation,
     ) -> Result<(Commit, T), E> {
         self.guard_staged_publication()?;
+        let transition = match self.prepared.take() {
+            Some(value) => {
+                self.check_prepared_publication(&value)?;
+                *value
+            }
+            None => self.prepare_transition()?,
+        };
+        let dirty = !transition.changes.is_empty();
+        let selection_changed = transition.selection_changed;
+        let (mut commit, next_id, receipt) = transition.into_publication();
+        normalize(&mut commit);
+        let artifact = prepare(&commit)?;
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        if dirty || selection_changed {
+            self.editor.state = self.pending.clone();
+        }
+        self.editor.carried_tags = if !dirty && selection_changed {
+            self.options.tags.clone()
+        } else {
+            TagSet::default()
+        };
+        self.editor.composition_key = self.composition_key;
+        self.editor.extensions = self.extensions.clone();
+        self.editor.suspend_version = next_id;
+        if let Some(receipt) = receipt {
+            receipt.publish();
+        }
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(observer) = &self.editor.foreign_publication_observer {
+            observer.published(&commit);
+        }
+        Ok((commit, artifact))
+    }
+
+    pub(crate) fn prepare_transition(
+        &mut self,
+    ) -> Result<crate::prepared::PreparedTransition, Error> {
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
-            return Err(Error::ForeignReadOnly.into());
+            return Err(Error::ForeignReadOnly);
         }
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
@@ -297,14 +335,13 @@ impl Transaction<'_> {
         } else {
             prev.clone()
         };
-        let mut commit = Commit {
+        Ok(crate::prepared::PreparedTransition {
+            receipt: None,
             #[cfg(feature = "foreign-nodes")]
             foreign_update: Some(self.foreign_update_identity()),
             default_prevented: self.default_prevented,
-            following: vec![],
-            follow_up_error: None,
             events: std::mem::take(&mut self.events),
-            id: next_id,
+            publication_id: next_id,
             prev,
             next,
             changes,
@@ -317,27 +354,7 @@ impl Transaction<'_> {
             preceding: self.preceding.take(),
             #[cfg(feature = "bench-counters")]
             work: std::mem::take(&mut self.work),
-        };
-        normalize(&mut commit);
-        let artifact = prepare(&commit)?;
-        #[cfg(feature = "foreign-nodes")]
-        ForeignReadOperation::check()?;
-        if dirty || selection_changed {
-            self.editor.state = self.pending.clone();
-        }
-        self.editor.carried_tags = if !dirty && selection_changed {
-            self.options.tags.clone()
-        } else {
-            TagSet::default()
-        };
-        self.editor.composition_key = self.composition_key;
-        self.editor.extensions = self.extensions.clone();
-        self.editor.suspend_version = next_id;
-        #[cfg(feature = "foreign-nodes")]
-        if let Some(observer) = &self.editor.foreign_publication_observer {
-            observer.published(&commit);
-        }
-        Ok((commit, artifact))
+        })
     }
 }
 

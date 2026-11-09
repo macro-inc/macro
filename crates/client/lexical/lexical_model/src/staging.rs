@@ -44,6 +44,7 @@ pub struct PendingUpdate {
     transform_iterations: u16,
     dirty_since_flush: bool,
     pipeline_continuation: Option<Box<crate::pipeline::continuation::PipelineContinuation>>,
+    pub(crate) prepared: Option<Box<crate::prepared::PreparedTransition>>,
     #[cfg(feature = "bench-counters")]
     work: WorkCounters,
     detached: Vec<Option<Selection>>,
@@ -52,6 +53,17 @@ pub struct PendingUpdate {
     foreign_selections: crate::foreign::selections::SelectionIdentities,
     #[cfg(feature = "foreign-nodes")]
     native_projection: Option<crate::foreign::projection::NativeProjection>,
+}
+
+impl PendingUpdate {
+    pub(crate) fn check_owner(&self, editor: &Editor) -> Result<(), Error> {
+        if !Arc::ptr_eq(editor.staging_owner(), &self.owner)
+            || editor.suspend_version != self.version
+        {
+            return Err(Error::StaleSuspendedUpdate);
+        }
+        Ok(())
+    }
 }
 
 impl Transaction<'_> {
@@ -129,6 +141,7 @@ impl Transaction<'_> {
             transform_iterations: self.transform_iterations,
             dirty_since_flush: self.dirty_since_flush,
             pipeline_continuation: self.pipeline_continuation,
+            prepared: self.prepared,
             #[cfg(feature = "bench-counters")]
             work: self.work,
             detached: self.detached,
@@ -142,10 +155,15 @@ impl Editor {
     /// Resume an update belonging to this editor at its original publication.
     /// A commit or state installation since suspension makes the update stale.
     pub fn resume(&mut self, update: PendingUpdate) -> Result<Transaction<'_>, Error> {
-        if !Arc::ptr_eq(self.staging_owner(), &update.owner)
-            || self.suspend_version != update.version
-        {
-            return Err(Error::StaleSuspendedUpdate);
+        self.resume_owned(update)
+            .map_err(|failure| failure.into_parts().0)
+    }
+    pub(crate) fn resume_owned(
+        &mut self,
+        update: PendingUpdate,
+    ) -> Result<Transaction<'_>, PreparationFailure> {
+        if let Err(error) = update.check_owner(self) {
+            return Err(PreparationFailure::new(error, update));
         }
         Ok(Transaction {
             #[cfg(feature = "foreign-nodes")]
@@ -190,6 +208,7 @@ impl Editor {
             transform_iterations: update.transform_iterations,
             dirty_since_flush: update.dirty_since_flush,
             pipeline_continuation: update.pipeline_continuation,
+            prepared: update.prepared,
             #[cfg(feature = "bench-counters")]
             work: update.work,
             detached: update.detached,
@@ -224,6 +243,11 @@ impl Transaction<'_> {
     /// The host must route the command through its ordinary authorization and
     /// readiness boundary; this method grants no independent edit authority.
     pub fn adopt_staged_update(&mut self, update: PendingUpdate) -> Result<(), Error> {
+        self.check_staged_update(&update)?;
+        self.install_staged_update(update);
+        Ok(())
+    }
+    pub(crate) fn check_staged_update(&self, update: &PendingUpdate) -> Result<(), Error> {
         self.guard_write()?;
         #[cfg(feature = "foreign-nodes")]
         if update.read_only {
@@ -249,6 +273,9 @@ impl Transaction<'_> {
                 "host update already published a preceding commit",
             ));
         }
+        Ok(())
+    }
+    pub(crate) fn install_staged_update(&mut self, update: PendingUpdate) {
         self.defer_publication = false;
         #[cfg(feature = "foreign-nodes")]
         {
@@ -312,6 +339,7 @@ impl Transaction<'_> {
         self.transform_iterations = update.transform_iterations;
         self.dirty_since_flush = update.dirty_since_flush;
         self.pipeline_continuation = update.pipeline_continuation;
+        self.prepared = update.prepared;
         #[cfg(feature = "bench-counters")]
         {
             self.work = update.work;
@@ -322,7 +350,6 @@ impl Transaction<'_> {
         {
             self.foreign_selections = update.foreign_selections;
         }
-        Ok(())
     }
 }
 
