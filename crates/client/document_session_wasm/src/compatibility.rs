@@ -8,6 +8,7 @@ use std::{
 };
 mod calls;
 mod capture_index;
+mod class_masks;
 mod lifecycle;
 pub(crate) mod observer;
 mod records;
@@ -32,6 +33,8 @@ pub(crate) struct Host {
     reservations: HashMap<u64, (u32, std::collections::HashSet<lexical_model::NodeKey>)>,
     next_reservation: u64,
     mutation_epoch: u64,
+    class_masks: Arc<class_masks::ClassMasks>,
+    host_slot: Option<u32>,
     receipts: observer::Receipts,
     owner: lexical_model::ForeignEditorIdentity,
 }
@@ -64,6 +67,7 @@ impl EditorSession {
         if registration.editor_id == 0 {
             return Err(BoundaryError::Invalid("compatibility editor namespace"));
         }
+        let class_masks = Arc::new(class_masks::ClassMasks::new(&registration)?);
         let receipts: observer::Receipts = Arc::default();
         let keys = lexical_model::SharedKeyCounter::new();
         let machine = machine::Machine::create_compat(
@@ -96,6 +100,8 @@ impl EditorSession {
             reservations: HashMap::new(),
             next_reservation: 1,
             mutation_epoch: 0,
+            class_masks,
+            host_slot: None,
             receipts,
             owner,
         };

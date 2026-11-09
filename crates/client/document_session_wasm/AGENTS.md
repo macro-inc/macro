@@ -85,3 +85,5 @@ Use compatBeginCompact/compatReserveKeys for real native allocator tickets; bloc
 Use document_session export helpers for upstream HTML/Markdown so native and WASM share the same renderer; keep Macro export policy in the application branch.
 
 Keep selection value identity separate from its allocation graph: exact leased references survive graph retirement/discard, while each call chooses its read graph. Rehydrate current raw detached values before querying a reused pending slot. Reconcile the actual active identity before publication so replaced values remain mutable; only the final published selection freezes. Historical getPreviousSelection reads the current editor publication. Retire dropped legacy-finalizer values/pins on rejection while preserving invalid-envelope staging; a failed compact batch remains a per-request failure, not a poisoned update.
+
+Validate every compact-begin class-mask owner/class/duplicate/bit patch before allocating keys or opening a scope; apply only the validated list to shared atomic cells. Reject advertised nonzero hooks without an installed host; mask transport alone does not implement hosted callbacks.

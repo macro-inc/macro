@@ -58,11 +58,15 @@ impl EditorSession {
                 "compatibility update already active",
             ));
         }
+        let masks = host
+            .class_masks
+            .prepare(&request.class_mask_patches, host.host_slot.is_some())?;
         let epoch = host
             .mutation_epoch
             .checked_add(1)
             .ok_or(BoundaryError::Invalid("mutation epoch exhausted"))?;
         let keys = host.prepare_keys(request.reserve_keys)?;
+        masks.apply();
         self.compat_begin_inner(&bytes(&compat::CompatBegin { tags: request.tags })?)?;
         let (host, machine) = self.compat_parts()?;
         host.mutation_epoch = epoch;
