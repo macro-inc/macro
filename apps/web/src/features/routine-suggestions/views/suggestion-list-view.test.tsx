@@ -119,6 +119,13 @@ describe('suggestion cards', () => {
       suggestionId: 'pick-1',
       description: 'Tag each new email Answer within 14 days.',
     });
+    // What was saved no longer changes from the card.
+    expect(
+      screen.queryByRole('button', { name: 'Reply tag: Answer. Change it' })
+    ).toBeNull();
+    expect(
+      screen.getByText('Tag each new email Answer within 14 days.')
+    ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Enabled' }));
     expect(host.onOpenRoutine).toHaveBeenCalledWith('routine-1');
   });

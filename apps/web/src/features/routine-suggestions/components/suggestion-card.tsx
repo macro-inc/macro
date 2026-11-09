@@ -15,7 +15,7 @@ import {
   RoutineChain,
   surfaceLook,
 } from '../../routines/components/routine-template-strip';
-import type { Knob } from '../../routines/core/knobs';
+import { type Knob, sentenceText } from '../../routines/core/knobs';
 import type {
   SuggestionAction,
   SuggestionChain,
@@ -124,7 +124,10 @@ function ActionButton(props: {
   );
 }
 
-/** What it does: the knob sentence, editable in place, else its summary. */
+/**
+ * What it does: the knob sentence, editable in place until it is turned on,
+ * else its summary.
+ */
 function SuggestionText(props: {
   model: SuggestionCardModel;
   size: SentenceSize;
@@ -132,9 +135,20 @@ function SuggestionText(props: {
   class?: string;
   onKnob: CardHandlers['onKnob'];
 }) {
+  // What was saved, or is being saved, no longer changes from the card.
+  const locked = () =>
+    props.model.status.kind === 'enabling' ||
+    props.model.status.kind === 'enabled';
+  const text = () => {
+    const sentence = props.model.sentence;
+    return (
+      (sentence && sentenceText(sentence.sentence, sentence.knobs)) ||
+      props.model.summary
+    );
+  };
   return (
     <Show
-      when={props.model.sentence}
+      when={!locked() && props.model.sentence}
       fallback={
         <p
           class={cn(
@@ -145,7 +159,7 @@ function SuggestionText(props: {
             props.class
           )}
         >
-          {props.model.summary}
+          {text()}
         </p>
       }
     >

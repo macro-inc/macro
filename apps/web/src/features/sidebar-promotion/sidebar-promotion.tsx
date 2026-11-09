@@ -8,7 +8,6 @@ import { createPromotionVisibility } from './primitives/promotion-visibility';
 export type { PromotionLogo } from './components/logo-stack';
 export type { PromoAction } from './components/promo-card';
 export { allOf, flagVerdict, type Verdict } from './core/verdict';
-export type { PendingDismissal } from './primitives/promotion';
 export { createPromotionVisibility } from './primitives/promotion-visibility';
 
 /**
