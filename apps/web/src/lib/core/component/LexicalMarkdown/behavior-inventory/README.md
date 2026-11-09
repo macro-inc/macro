@@ -13,7 +13,12 @@ replacement, partial failures and deleted targets, not remote task creation
 or host authorization. Checklist collector/planner mappings
 cover actual node metadata and supplied task facts. The current planner dims
 filtered rows and counts progress; row grouping/collapse is not implemented.
-Its legacy hideFiltered setting is ignored rather than hiding rows. TaskList DOM cases use the mounted jsdom host to check
+Its legacy hideFiltered setting is ignored rather than hiding rows. Planning
+cases pin calendar-day due boundaries, marker priority, task-data precedence,
+filter OR/AND semantics, completion counts and wrapper-row order. DOM cases
+apply and clear dimming on real mounted rows without changing saved state,
+including stale plans after deletion. Task facts are supplied; dropdown UI,
+real task queries and native hosting remain unverified. TaskList DOM cases use the mounted jsdom host to check
 unmanaged toolbar identity through committed child edits, HTML export and
 removal, list-kind DOM replacement and ordered-start updates that preserve
 managed item identity. These exercise the inherited ListNode DOM hooks in the
