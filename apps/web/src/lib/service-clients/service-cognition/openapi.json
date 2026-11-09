@@ -3337,6 +3337,16 @@
               }
             }
           },
+          "404": {
+            "description": "Web fetch is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "The page could not be read",
             "content": {
@@ -3361,7 +3371,7 @@
             }
           },
           "503": {
-            "description": "Web fetch unconfigured, busy, or usage validation unavailable",
+            "description": "Web fetch busy, or usage validation unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -3422,6 +3432,16 @@
               }
             }
           },
+          "404": {
+            "description": "Web search is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Per-user hourly rate limit exceeded"
           },
@@ -3436,7 +3456,7 @@
             }
           },
           "503": {
-            "description": "Web search unconfigured, busy, or usage validation unavailable",
+            "description": "Web search busy, or usage validation unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -3536,7 +3556,8 @@
           "dictation",
           "image_generation",
           "email_focus",
-          "web_search"
+          "web_search",
+          "non_billable_agent_session"
         ]
       },
       "AssistantMessagePart": {

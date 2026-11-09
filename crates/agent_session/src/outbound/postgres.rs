@@ -419,6 +419,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             mcp_servers,
             egress_token_hash,
             origin,
+            billing,
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
@@ -469,9 +470,10 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id
+                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id,
+                billing
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING
                 id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
@@ -510,6 +512,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             <&str>::from(purpose.source()),
             <&str>::from(visibility),
             source_id,
+            <&str>::from(billing),
         )
         .fetch_one(&mut *transaction)
         .await
@@ -602,6 +605,20 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        let billing = sqlx::query_scalar!(
+            "SELECT billing FROM agent_session WHERE id = $1",
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's billing")?
+        .ok_or(AgentSessionError::NotFound(id))?;
+        Ok(billing
+            .parse()
+            .map_err(|_| anyhow::anyhow!("unknown agent_session billing {billing:?}"))?)
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

@@ -933,6 +933,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
     };
     let expires_at = action
@@ -1001,6 +1002,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
     }
 }
