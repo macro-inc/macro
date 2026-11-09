@@ -120,9 +120,17 @@ To measure:
      chosen for a query that does not exist, and can flip in production;
    - `loops=` in the thousands on an inner node;
    - sorts or hashes that spill to disk.
-6. If the good plan depends on the planner's choice, say what forces it
-   (an `OFFSET 0` fence, a `MATERIALIZED` CTE, a rewritten join) or what would
-   happen if it chose otherwise.
+6. Measure again with wrong estimates. Production statistics lag behind
+   imports and backfills, and a large tenant is invisible in a sample of a
+   table a thousand times its size, so the planner often expects a handful of
+   rows where there are tens of thousands. To reproduce that, load a small
+   fixture, `ANALYZE`, turn autovacuum off on the tables
+   (`ALTER TABLE t SET (autovacuum_enabled = false)`), then seed to size
+   without analyzing, and run the same `EXPLAIN`.
+7. A query passes only if both runs are acceptable. When the two plans differ
+   in where a per-row function or subquery runs, the good plan is luck: force
+   the order (an `OFFSET 0` fence around the narrowed set, a `MATERIALIZED`
+   CTE, a rewritten join) and measure both again.
 
 ## 4. Report
 
@@ -130,7 +138,7 @@ One row per query, worst first:
 
 | Severity | Query | Fired by | Rows touched at size | Index or bound | Evidence | Finding |
 | --- | --- | --- | --- | --- | --- | --- |
-| block | `list_project_items`, team scope (`items_repo.rs:212`) | Project page, every open and refetch | every item of every team member (~40,000 each) × one `item_visible()` call (~10 ms) | none: the visibility check runs before the tag filter | measured: timed out at 30 s; `Filter: item_visible(...)`, 46,000 rows removed | Apply the tag filter first, fence it, then check visibility; add a statement timeout |
+| block | `list_project_items`, team scope (`items_repo.rs:212`) | Project page, every open and refetch | every item of every team member (~40,000 each) × one `item_visible()` call (~10 ms) | none: the visibility check runs before the tag filter | measured: 4 s with fresh statistics, timed out at 120 s with stale ones (`Filter: item_visible(...)` on the item scan) | Apply the tag filter first, fence it, then check visibility; add a statement timeout |
 | note | `get_project_settings` (`settings_repo.rs:41`) | settings page load | 1 | primary key `(team_id, user_id)` | index | Safe: single-row lookup |
 
 Severity:
