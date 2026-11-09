@@ -34,7 +34,10 @@ export const SURFACE_COPY: Record<RoutineSurface, SurfaceCopy> = {
   calendar: { label: 'Calendar', pitch: 'Prep for meetings before they start' },
   tasks: { label: 'Tasks', pitch: 'Keep tasks moving without the busywork' },
   files: { label: 'Files', pitch: 'Keep your documents organized and current' },
-  crm: { label: 'CRM', pitch: 'Keep every company and deal in the right place' },
+  crm: {
+    label: 'CRM',
+    pitch: 'Keep every company and deal in the right place',
+  },
   chat: { label: 'Chat', pitch: 'Never miss what matters in your channels' },
   calls: { label: 'Calls', pitch: 'Turn every call into next steps' },
   reviews: { label: 'Reviews', pitch: 'Stay on top of pull requests' },

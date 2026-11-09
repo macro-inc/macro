@@ -205,7 +205,8 @@ export function initialEdits(item: SuggestionItem): SuggestionEdits {
   return {
     title: item.draft.name,
     // Only a lone Ask AI routine keeps its instructions in `prompt`.
-    instructions: item.draft.steps === undefined ? item.draft.prompt : undefined,
+    instructions:
+      item.draft.steps === undefined ? item.draft.prompt : undefined,
     notify: item.draft.runVisibility === 'listed',
   };
 }

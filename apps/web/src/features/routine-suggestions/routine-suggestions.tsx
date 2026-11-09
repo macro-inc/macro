@@ -310,8 +310,8 @@ function SuggestedForYou() {
             Suggested for you
           </h2>
           <p class="text-xs text-ink-muted">
-            Routines picked for your workspace, and templates from Macro.
-            Enable one in a click, or open it to edit first.
+            Routines picked for your workspace, and templates from Macro. Enable
+            one in a click, or open it to edit first.
           </p>
         </div>
         <Show when={filterOptions().length > 2}>

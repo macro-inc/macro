@@ -1,11 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  context,
-  drafted,
-  forYou,
-  TAGS,
-  template,
-} from '../tests/fixtures';
+import { context, drafted, forYou, TAGS, template } from '../tests/fixtures';
 import {
   draftWithEdits,
   initialEdits,

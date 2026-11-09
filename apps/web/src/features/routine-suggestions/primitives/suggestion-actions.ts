@@ -57,9 +57,7 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
     Record<string, SuggestionStatus>
   >({});
   const [expandedId, setExpandedId] = createSignal<string>();
-  const [enabled, setEnabled] = createSignal<EnabledRow<SuggestionItem>[]>(
-    []
-  );
+  const [enabled, setEnabled] = createSignal<EnabledRow<SuggestionItem>[]>([]);
   // Plain sets: they only dedupe analytics, nothing renders from them.
   const shownIds = new Set<string>();
   const editedIds = new Set<string>();
@@ -77,7 +75,10 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
   };
   const track = (event: SuggestionEvent, item: SuggestionItem, extra = {}) =>
     analytics.track(event, { ...eventProps(item), ...extra });
-  const spanAttrs = (span: { setAttr(name: string, value: string): void }, item: SuggestionItem) => {
+  const spanAttrs = (
+    span: { setAttr(name: string, value: string): void },
+    item: SuggestionItem
+  ) => {
     const props = eventProps(item);
     span.setAttr('routine.suggestion.id', props.suggestionId);
     span.setAttr('routine.suggestion.surface', props.surface);

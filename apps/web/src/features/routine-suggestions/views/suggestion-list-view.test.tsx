@@ -88,7 +88,9 @@ describe('suggestion rows', () => {
       screen.getByText('For you · You answer most mail within a day.')
     ).toBeTruthy();
     expect(screen.getByText('Template from Macro')).toBeTruthy();
-    expect(screen.getByText('For you · Suppliers write every week.')).toBeTruthy();
+    expect(
+      screen.getByText('For you · Suppliers write every week.')
+    ).toBeTruthy();
   });
 
   it('enable a catalog routine in one click, then open it', async () => {
@@ -105,7 +107,9 @@ describe('suggestion rows', () => {
 
   it('send a drafted routine to the editor to review, never saving it from the row', () => {
     const host = renderRows();
-    fireEvent.click(screen.getByRole('button', { name: 'Review Supplier digest' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Review Supplier digest' })
+    );
     expect(host.created).toEqual([]);
     expect(host.customize).toHaveBeenCalledWith(
       expect.objectContaining({ suggestionId: 'drafted-1' })

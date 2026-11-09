@@ -99,4 +99,3 @@ export const drafted: RoutineSuggestion = {
     },
   } as never,
 };
-

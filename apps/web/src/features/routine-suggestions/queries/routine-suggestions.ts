@@ -74,7 +74,9 @@ export function useRoutineSuggestions(): RoutineSuggestionsSource {
     generating: () => current()?.status === 'generating',
     failed: () => query.isError && current() === undefined,
     retry: () => {
-      queryClient.refetchQueries({ queryKey: routineSuggestionKeys.all.queryKey });
+      queryClient.refetchQueries({
+        queryKey: routineSuggestionKeys.all.queryKey,
+      });
     },
   };
 }
