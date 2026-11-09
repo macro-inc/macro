@@ -23,21 +23,12 @@ pub enum ForeignBaseField {
     /// Element's default text style.
     TextStyle(Arc<str>),
 }
-impl Transaction<'_> {
-    /// Assign a core field only after getWritable authorized this update record.
-    /// Validation precedes installation; no virtual setter or extra semantic clone runs.
-    pub fn patch_foreign_base(
-        &mut self,
-        key: NodeKey,
-        field: ForeignBaseField,
-    ) -> Result<(), Error> {
-        self.guard_write()?;
-        if !self.foreign_is_writable(key) {
-            return Err(Error::Invariant("raw field requires a writable record"));
-        }
-        let mut base = self.node_or_err(key)?.base().clone();
+impl ForeignBaseField {
+    /// Apply one validated scalar assignment to an independently owned base.
+    /// Tree links and source records remain unchanged, including on kind errors.
+    pub fn apply_owned(self, mut base: BaseData) -> Result<BaseData, Error> {
         use crate::node::AbsentKeys;
-        match (&mut base, field) {
+        match (&mut base, self) {
             (BaseData::Text(data), ForeignBaseField::Text(text)) => {
                 data.text = TextBuffer::new(text);
                 data.absent.remove(AbsentKeys::TEXT);
@@ -84,6 +75,22 @@ impl Transaction<'_> {
             }
             _ => return Err(Error::Invariant("raw field does not match node kind")),
         }
+        Ok(base)
+    }
+}
+impl Transaction<'_> {
+    /// Assign a core field only after getWritable authorized this update record.
+    /// Validation precedes installation; no virtual setter or extra semantic clone runs.
+    pub fn patch_foreign_base(
+        &mut self,
+        key: NodeKey,
+        field: ForeignBaseField,
+    ) -> Result<(), Error> {
+        self.guard_write()?;
+        if !self.foreign_is_writable(key) {
+            return Err(Error::Invariant("raw field requires a writable record"));
+        }
+        let base = field.apply_owned(self.node_or_err(key)?.base().clone())?;
         let record = self
             .pending
             .nodes

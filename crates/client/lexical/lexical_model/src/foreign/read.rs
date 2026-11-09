@@ -1,4 +1,4 @@
-//! Independent inputs for development host read callouts.
+//! Independent inputs for native host read callouts.
 use crate::*;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
@@ -39,7 +39,7 @@ impl ReadOriginRef<'_> {
     }
 }
 
-/// Stable source identity for a development host's captured node object.
+/// Stable source identity for a native host's captured node object.
 /// Materialized native projections retain their source identity. The token
 /// retains no record or payload and does not make a live record need cloning.
 #[derive(Clone)]
@@ -145,6 +145,11 @@ impl Clone for ForeignReadSnapshot {
 }
 
 impl ForeignReadSnapshot {
+    /// Composition owner captured with this exact graph and update context.
+    pub fn composition_key(&self) -> Option<NodeKey> {
+        self.composition_key
+    }
+
     /// Captured node map and active selection, including pending writes.
     pub fn state(&self) -> &EditorState {
         &self.state
@@ -446,7 +451,7 @@ impl StateRef<'_> {
             source_records
                 .entry(projection.key)
                 .or_insert_with(|| slot.clone());
-            let mut record = slot.as_ref().clone();
+            let mut record = slot.clone_fields();
             record.data = Arc::new(payload);
             state.nodes.insert(projection.key, Arc::new(record));
         }

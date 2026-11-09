@@ -279,10 +279,12 @@ fn owned_read_keeps_pending_text_selection_composition_and_previous_selection() 
         .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))?;
     tx.set_composition_key(Some(text))?;
     let snapshot = tx.view().snapshot_for_foreign_read()?;
+    assert_eq!(snapshot.composition_key(), Some(text));
     assert_eq!(snapshot.state().root_text_content().as_ref(), "pending");
     tx.text(text)?.set_text_content("after")?;
     tx.set_selection(None)?;
     tx.set_composition_key(None)?;
+    assert_eq!(snapshot.composition_key(), Some(text));
     assert_eq!(snapshot.text_content(text), "pending");
     assert_eq!(
         snapshot

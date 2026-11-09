@@ -2,12 +2,25 @@
 use crate::*;
 use std::{
     any::TypeId,
+    hash::{Hash, Hasher},
     sync::{Arc, Weak},
 };
 
 /// Non-owning namespace key for host registries; never retains an editor or state.
 #[derive(Clone)]
 pub struct ForeignWeakEditorIdentity(Weak<()>);
+impl PartialEq for ForeignWeakEditorIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.same_owner(other)
+    }
+}
+impl Eq for ForeignWeakEditorIdentity {}
+impl Hash for ForeignWeakEditorIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Pointer identity is an internal hash key only, never a wire ID.
+        self.0.as_ptr().hash(state);
+    }
+}
 impl ForeignEditorIdentity {
     /// Compare namespaces without numeric-ID assumptions or editor retention.
     pub fn same_owner(&self, other: &Self) -> bool {
