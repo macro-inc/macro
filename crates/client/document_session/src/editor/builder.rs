@@ -22,8 +22,7 @@ pub fn register_editor_commands(builder: EditorBuilder) -> EditorBuilder {
 
 /// Install session commands and durable identity tracking over a supplied registry.
 pub fn with_session_plugins(builder: EditorBuilder, peer: u64) -> EditorBuilder {
-    register_editor_commands(builder.extension_state(NodeIdIndex::default()))
-        .plugin(NodeIds(peer))
+    register_editor_commands(builder.extension_state(NodeIdIndex::default())).plugin(NodeIds(peer))
 }
 
 pub(super) static ID: StateKey<String> = StateKey::new("id", |value| {
