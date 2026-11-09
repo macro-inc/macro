@@ -43,11 +43,13 @@ async fn a_follow_up_is_held_by_one_replica_until_its_claim_expires(db: PgPool) 
         .unwrap();
 
     queue.note_gmail_attempt(&user).await.unwrap();
+    queue.note_checkout(&user).await.unwrap();
     let pending = queue.unclaimed().await.unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].channel_id, channel_id);
     assert_eq!(pending[0].user_id, user);
     assert!(pending[0].gmail_attempted);
+    assert!(pending[0].checkout_opened);
 
     assert_eq!(queue.claim(channel_id).await.unwrap(), Some(message_id));
     assert_eq!(queue.claim(channel_id).await.unwrap(), None);

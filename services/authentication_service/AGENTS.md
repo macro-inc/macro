@@ -95,10 +95,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   again when its one-minute claim lapses and dropped after an hour. A channel
   where anyone has posted is skipped. `choose` picks the first message that
   fits; the sender must stay a member of every support channel.
-- Signals: `/link/gmail` sets `gmail_attempted_at`; the mail provider comes
-  from the domain's MX records (`outbound/mail_exchanges.rs`); the phone app
-  from push device registrations; billing from the stored Stripe customer,
-  read without creating one; GitHub from Macro's own link.
+- Signals: `/link/gmail` and checkout creation set `gmail_attempted_at` and
+  `checkout_opened_at`; Stripe is read only for someone who opened a checkout,
+  never creating a customer. The mail provider comes from the domain's MX
+  records (`outbound/mail_exchanges.rs`), the phone app from push device
+  registrations, and GitHub from Macro's own link.
 - The post reuses the row's message id through `post_from_event`, so a retry
   never posts twice. Events: `support_follow_up_sent` (`path`,
   `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).

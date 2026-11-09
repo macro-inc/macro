@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                channel_id,\n                user_id AS \"user_id: MacroUserIdStr<'static>\",\n                created_at AS scheduled_at,\n                gmail_attempted_at IS NOT NULL AS \"gmail_attempted!\",\n                checkout_opened_at IS NOT NULL AS \"checkout_opened!\"\n            FROM support_follow_ups\n            WHERE claimed_until IS NULL OR claimed_until < NOW()\n            ORDER BY created_at\n            LIMIT 100\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "scheduled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "gmail_attempted!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "checkout_opened!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b71b65c9506290fe28285564ab5825b4ccece9be6541de53850157bf23929bec"
+}

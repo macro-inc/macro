@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE support_follow_ups\n            SET checkout_opened_at = COALESCE(checkout_opened_at, NOW())\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "30a0ae30285e890edb436df1fd433b134f89828bc91477f4a3bb9ae56c656b59"
+}

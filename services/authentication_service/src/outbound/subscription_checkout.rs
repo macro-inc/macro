@@ -392,50 +392,21 @@ async fn subscription_history(
     Ok(history)
 }
 
-/// Whether a user has paid, or opened a checkout without paying.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
-#[strum(serialize_all = "snake_case")]
-pub enum Billing {
-    None,
-    OpenedCheckout,
-    Subscribed,
-}
-
 impl<I: GtmInviteService> StripeCheckoutGateway<I> {
-    /// Billing state for the support follow-up. Reads only: it never creates
-    /// a Stripe customer.
-    #[tracing::instrument(name = "support_follow_up.billing", skip_all, fields(outcome = tracing::field::Empty), err)]
-    pub async fn follow_up_billing(
+    /// Whether the user's stored Stripe customer has a live subscription.
+    /// Reads only: it never creates a customer.
+    #[tracing::instrument(name = "support_follow_up.subscribed", skip_all, err, ret)]
+    pub async fn has_subscription(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> Result<Billing, StripeCheckoutError> {
-        let billing =
-            match self.customer(user).await? {
-                None => Billing::None,
-                Some(customer) => {
-                    if subscription_history(&self.stripe, &customer)
-                        .await?
-                        .has_existing_subscription
-                    {
-                        Billing::Subscribed
-                    } else {
-                        let mut params = stripe::ListCheckoutSessions::new();
-                        params.customer = Some(customer);
-                        params.limit = Some(10);
-                        let sessions = stripe::CheckoutSession::list(&self.stripe, &params)
-                            .instrument(tracing::info_span!("stripe.checkout.list"))
-                            .await?;
-                        if sessions.data.iter().any(|session| {
-                            session.mode == stripe::CheckoutSessionMode::Subscription
-                        }) {
-                            Billing::OpenedCheckout
-                        } else {
-                            Billing::None
-                        }
-                    }
-                }
-            };
-        tracing::Span::current().record("outcome", <&str>::from(billing));
-        Ok(billing)
+    ) -> Result<bool, StripeCheckoutError> {
+        Ok(match self.customer(user).await? {
+            Some(customer) => {
+                subscription_history(&self.stripe, &customer)
+                    .await?
+                    .has_existing_subscription
+            }
+            None => false,
+        })
     }
 }

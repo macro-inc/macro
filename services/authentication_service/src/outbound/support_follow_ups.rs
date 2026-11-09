@@ -16,6 +16,8 @@ pub struct PendingFollowUp {
     pub scheduled_at: DateTime<Utc>,
     /// The user started connecting a Gmail inbox after signing up.
     pub gmail_attempted: bool,
+    /// The user opened a checkout after signing up.
+    pub checkout_opened: bool,
 }
 
 /// The `support_follow_ups` table.
@@ -70,6 +72,23 @@ impl PgSupportFollowUps {
         Ok(())
     }
 
+    /// Note that the user opened a checkout. Does nothing for a user with no
+    /// follow-up waiting.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn note_checkout(&self, user_id: &MacroUserIdStr<'_>) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE support_follow_ups
+            SET checkout_opened_at = COALESCE(checkout_opened_at, NOW())
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(())
+    }
+
     /// Follow-ups without a live claim, oldest first. Rows only live for the
     /// hour before they are sent or dropped, so this stays small.
     #[tracing::instrument(skip(self), err)]
@@ -81,7 +100,8 @@ impl PgSupportFollowUps {
                 channel_id,
                 user_id AS "user_id: MacroUserIdStr<'static>",
                 created_at AS scheduled_at,
-                gmail_attempted_at IS NOT NULL AS "gmail_attempted!"
+                gmail_attempted_at IS NOT NULL AS "gmail_attempted!",
+                checkout_opened_at IS NOT NULL AS "checkout_opened!"
             FROM support_follow_ups
             WHERE claimed_until IS NULL OR claimed_until < NOW()
             ORDER BY created_at

@@ -8,7 +8,8 @@ fn at(seconds: i64) -> DateTime<Utc> {
 fn finished() -> Signals {
     Signals {
         finished_setup: true,
-        billing: Billing::None,
+        paid: false,
+        opened_checkout: false,
         on_phone: false,
         gmail_attempted: false,
         inbox_connected: true,
@@ -60,7 +61,7 @@ fn sends_the_first_message_that_fits() {
         ),
         (
             Signals {
-                billing: Billing::OpenedCheckout,
+                opened_checkout: true,
                 on_phone: true,
                 ..in_setup.clone()
             },
@@ -69,14 +70,14 @@ fn sends_the_first_message_that_fits() {
         (
             Signals {
                 gmail_attempted: true,
-                billing: Billing::OpenedCheckout,
+                opened_checkout: true,
                 ..in_setup.clone()
             },
             Some(Path::GmailTrouble),
         ),
         (
             Signals {
-                billing: Billing::Subscribed,
+                paid: true,
                 gmail_attempted: true,
                 ..in_setup
             },

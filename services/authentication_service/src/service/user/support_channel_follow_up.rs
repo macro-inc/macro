@@ -42,7 +42,7 @@ use crate::{
     api::context::GtmInviteServiceType,
     outbound::{
         mail_exchanges::DnsMailExchanges,
-        subscription_checkout::{Billing, StripeCheckoutGateway},
+        subscription_checkout::StripeCheckoutGateway,
         support_follow_ups::{PendingFollowUp, PgSupportFollowUps},
     },
 };
@@ -131,6 +131,11 @@ impl SupportFollowUpScheduler {
     /// Call when the user starts connecting Gmail. The queue logs a failure.
     pub(crate) async fn note_gmail_attempt(&self, user: &MacroUserIdStr<'_>) {
         let _ = self.queue.note_gmail_attempt(user).await;
+    }
+
+    /// Call when the user opens a checkout. The queue logs a failure.
+    pub(crate) async fn note_checkout(&self, user: &MacroUserIdStr<'_>) {
+        let _ = self.queue.note_checkout(user).await;
     }
 }
 
@@ -351,18 +356,24 @@ where
     ) -> Result<Signals, Report> {
         let user = &pending.user_id;
         let domain = user.0.email_part().domain_part().to_ascii_lowercase();
-        let (inbox, billing, devices) = tokio::try_join!(
+        let (inbox, paid, devices) = tokio::try_join!(
             async {
                 email_db_client::links::get::fetch_link_by_macro_id(&self.db, user.as_ref())
                     .await
                     .into_rootcause()
                     .context("failed to read the user's inbox")
             },
+            // Only someone who opened a checkout can have paid, so Stripe is
+            // asked once, for them alone.
             async {
-                self.billing
-                    .follow_up_billing(user)
-                    .await
-                    .context("failed to read the user's billing")
+                if pending.checkout_opened {
+                    self.billing
+                        .has_subscription(user)
+                        .await
+                        .context("failed to read the user's subscription")
+                } else {
+                    Ok(false)
+                }
             },
             async {
                 notification_db_client::device::get_user_device_endpoints(&self.db, user.as_ref())
@@ -373,7 +384,8 @@ where
         )?;
         let mut signals = Signals {
             finished_setup,
-            billing,
+            paid,
+            opened_checkout: pending.checkout_opened && !paid,
             on_phone: !devices.is_empty(),
             gmail_attempted: pending.gmail_attempted,
             inbox_connected: inbox.is_some(),
@@ -523,7 +535,8 @@ struct Tool {
 #[derive(Debug, Clone)]
 struct Signals {
     finished_setup: bool,
-    billing: Billing,
+    paid: bool,
+    opened_checkout: bool,
     on_phone: bool,
     gmail_attempted: bool,
     inbox_connected: bool,
@@ -557,7 +570,7 @@ enum Path<'a> {
 /// for no known reason. Someone in setup only hears about what is holding
 /// them: paying, Gmail, pricing, or being on the phone.
 fn choose(s: &Signals) -> Option<Path<'_>> {
-    if s.billing == Billing::Subscribed {
+    if s.paid {
         return Some(Path::Pro);
     }
     if s.gmail_attempted && !s.inbox_connected {
@@ -570,7 +583,7 @@ fn choose(s: &Signals) -> Option<Path<'_>> {
             MailProvider::Google | MailProvider::Other => {}
         }
     }
-    if s.billing == Billing::OpenedCheckout {
+    if s.opened_checkout {
         return Some(Path::Pricing);
     }
     if !s.finished_setup {
