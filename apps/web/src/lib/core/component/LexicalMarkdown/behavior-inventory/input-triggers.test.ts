@@ -34,7 +34,7 @@ describe('desktop and Android inline menu input', () => {
       { inputType: 'insertFromPaste', data: symbol },
       { inputType: 'insertText', data: 'ordinary' },
     ])(
-      `${symbol}: leaves non-trigger/composition input $inputType alone`,
+      `${symbol}: leaves non-trigger/composition input $inputType alone (data=$data, composing=$isComposing)`,
       (input) => {
         const trigger = vi.fn();
         const { root } = behaviorEditor((editor) =>

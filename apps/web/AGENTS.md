@@ -4,6 +4,7 @@
 - `bun run test`: run tests 
 - Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.
 - Pin the disposable checkout path in build and validation wrappers before launching tools so a working-directory mistake cannot target the live preview.
+- Build missing document-session WASM from source in the isolated checkout with `just -f apps/web/justfile build-document-session-wasm` before treating web checks as blocked; preserve the task's Cargo job limit and keep the artifact stable while tests read it.
 - `bun run check`: check typescript changes 
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
