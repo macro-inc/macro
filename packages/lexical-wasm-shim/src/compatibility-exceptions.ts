@@ -9,6 +9,10 @@ import type {
 } from './extension-core/types';
 import { LexicalNode } from './nodes';
 import type { BaseStaticNodeConfig } from './nodes/config';
+import type {
+  DOMConversionMap,
+  DOMConversionPropByTagName,
+} from './nodes/dom-types';
 import { assertNodeIdentity } from './nodes/runtime';
 import type { NodeStateJSON, ValueOrUpdater } from './nodes/state/types';
 import type { PointType } from './selection';
@@ -120,3 +124,13 @@ export type AnyNormalizedLexicalExtensionArgument =
   NormalizedLexicalExtensionArgument<any, string, any, any>;
 
 export type OutputExtension<Output> = LexicalExtension<any, any, Output, any>;
+
+/** Upstream LexicalNode.ts:365–368 widens tag-specific factory maps by identity. */
+export function widenTagConversionMap<K extends string>(
+  importMap: {
+    [NodeName in K]: DOMConversionPropByTagName<NodeName>;
+  }
+): DOMConversionMap {
+  const value: unknown = importMap;
+  return value as DOMConversionMap;
+}

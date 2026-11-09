@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     include: [
       'src/__tests__/root-exports.test.ts',
+      'src/__tests__/build-import-map.test.ts',
       'src/caret/caret.test.ts',
       'src/caret/comparison.test.ts',
       'src/utilities/utilities.test.ts',

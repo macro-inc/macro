@@ -1062,6 +1062,21 @@
       "name": "EditableListener",
       "typeOnly": true,
       "source": "./editor"
+    },
+    {
+      "name": "buildImportMap",
+      "typeOnly": false,
+      "source": "./nodes/build-import-map"
+    },
+    {
+      "name": "DOMConversionPropByTagName",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversionTagNameMap",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
     }
   ],
   "existingPublicSingletonGroups": [
@@ -1091,7 +1106,8 @@
     "initializeConversionCache",
     "getDOMNodeConversionFunction",
     "$getAdjacentNodes",
-    "$splitTextPointCaret"
+    "$splitTextPointCaret",
+    "widenTagConversionMap"
   ],
   "namespaceAcceptance": false,
   "nativeAcceptance": false,
