@@ -987,14 +987,13 @@ boot without blocking first paint; gate only editor-building subtrees.
 Require startup p95 <50ms and document-open p95 no slower than the current app.
 Flag-off builds keep the Loro preload.
 
-Resolve `rust-editor-model` before constructing the document body owner in both
-block and Drive loaders; keep SessionExecutor/EditorView imports lazy and the
-flag-off CollabProvider path intact. Mount both body engines inside the same
-Notebook and MarkdownEditorChrome; keep document layout and status UI out of
-RustMarkdownEditor. Keep the selected model for that open
-session and reopen after a flag change. Reuse account/epoch-fenced metadata for
-flagged browser offline opens; fetch fresh reconnect credentials and invalidate
-that epoch before logout clearing.
+Use the cached boot engine selection for editor construction; require an app
+reload to change engines and do not reread a later flag value in document loaders.
+Keep the unchanged MarkdownEditor chrome, plugins and node classes over the
+selected Lexical API. Hold document session injection until the typed factory
+supports binding the actual supplied root on the same session. Reuse
+account/epoch-fenced metadata for offline opens; fetch fresh reconnect credentials
+and invalidate that epoch before logout clearing.
 
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
