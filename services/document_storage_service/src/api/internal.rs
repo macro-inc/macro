@@ -96,8 +96,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     EntityAccessService,
                     AuthorizationService,
                 >,
-            )
-            .layer(ensure_document_exists_middleware.clone()),
+            ),
         )
         .route(
             "/documents/{document_id}/permissions",
