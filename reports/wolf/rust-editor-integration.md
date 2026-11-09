@@ -1,6 +1,57 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
+## Current checkpoint: development metadata and open production compatibility gates
+
+Development metadata `8c894d25ef` / `3008613eb3` is integrated as `6b0c3bdb3a` /
+`b14e0ee091`, with compiler guard `ac179e8327` as `f583385cd7`. Actual dirty facts
+and raw root-cache reads now survive historical read scopes. Independent native
+tests pass115 core and27 conformance-WASM cases; generated host-packet freshness
+passes. An initial type check found stale ignored development declarations; only
+the disposable development WASM was rebuilt from source, then full shim check
+passed TypeScript6.0.3 and41 hooks/489 sources without regenerating hook evidence.
+
+Audit found retained dirty collections could stay stale after transform
+registration. The real-WASM diagnostic failed before `29b7a9a6b6` and passed after
+its integration as `9099dd64d9`. Registration, command dispatch and flush now use
+observed-only refresh. The diagnostic source/hash and red/green logs are preserved
+externally; the temporary test was removed before the final whole-suite run.
+That run is **207 passed /1 failed of208**, with only the unchanged2,396-versus-zero
+graph-read crossing assertion. The three raw-cache failures and unhandled error
+are gone at this epoch. Temporary Set/Map identity across native transform queue
+swaps remains an explicit development gap; no unconditional callback refresh or
+whole collection-identity parity is claimed. Production backend/initializer and
+the mandatory namespace CI hook remain held.
+
+Cold audit schema `b9c11f66c4` is integrated as `1c88853ec2`, with fingerprint
+`767306e64a6b74111330f49313e49dc061dc68b2c6bbce1c22b8d37cb55d3760`.
+Getter `7d25335051` is integrated as `790ea54abe`: it observes actual capture/node
+counts, current version and checked prune epoch without allocating captures or
+refreshing publications. Pending/unacknowledged graphs reject; no-pending discard
+preserves frozen captures. Native62 tests pass at that checkpoint. This closes
+cold native count production only; physical GC/collector and shipping declarations
+for the new export remain unvalidated, with no artifact promotion.
+
+Opaque exception transport `24e29fb8a0` is integrated as `b621d46204`. Original
+host slot and opaque undefined/null identity travel through the existing model
+extension/deferred-read error path; nested acknowledgement sidecars remain intact.
+This is typed native transport, not full JS exception/lifetime or hosted-factory
+acceptance. The combined consumer run passes50 session,63 session-WASM and46
+projection cases. Strict all-target/all-feature consumer Clippy and scoped checks
+pass. Logs: `dev-metadata-{native-tests,matched-shim-check,fixed-full-shim-check,fixed-full-shim-tests,host-packet-freshness}.log`,
+`dev-metadata-retained-transform-red-green.json`, `cold-audit-native-tests.log`,
+`loro-host-error-consumer-tests.log`, `metadata-loro-host-error-consumer-clippy.log`
+and `metadata-loro-host-error-final-scoped-check.log` under the acceptance directory.
+Audits: `dev-metadata-integration-audit.md` and `cold-retention-audit-integration-audit.md`.
+
+Standalone Loro undo fix `9fa83b060b` is integrated as `72dd7913c9`: an empty
+remote row short-circuits before scanning affected containers; nonempty remote
+conflict rules are unchanged. Independent vendor undo7/7 and the consumer checks
+above pass. Owner hot-loop measurements254.4ms versus Draft-only355.2ms and
+original42,380.9ms concern5,000 keys on exact live-source variants, not integration
+browser latency or overall performance acceptance. Caret/history and structural
+seed28 are not fixed by this change. Broader server/transcript/replay matrix work
+remains paused. Evidence: `loro-empty-remote-undo-tests.log` and
+`loro-ios-integration-audit.md`.
 
 Sparse native publication `e248a380bf` is integrated as `86382d8abb`, after cold
 audit schema `b57818fbaf` (equivalent producer `6f9798e030`) as `781a0e46fd`.
@@ -12,8 +63,8 @@ omit root strings. The real-session regression passes equal edit encodings withi
 4,096 bytes at10 and10,000 paragraphs (21 and20,001 records), not exact10/10,000
 nodes or full Macro physical typing. The descendant deletion control also passes.
 Independent61 native library tests, strict Clippy, wasm32 target check, schema freshness, session types
-and scoped checks pass. Audit count version/retirement-epoch production is a
-separate pending checkpoint; schema fields alone do not satisfy retention gates.
+and scoped checks pass. Audit count version/retirement-epoch production is the
+later cold-getter checkpoint above; schema fields alone do not satisfy retention gates.
 
 View scope prerequisite `db3b35c033` is integrated as `61b4c48bdb`, followed by
 derived-cache component `86ff3a10de` as `7f543bd319`. The optional third scope
@@ -173,7 +224,7 @@ The subsequent **source-only** metadata/root pair `58f046811e` / `af059c0e64`
 is integrated as `fe50966074` / `c935e5a2eb`, with observed-getter corrections
 `276f948e46`, Paragraph JSON correction `f1fba26c9b`, deferred selection operands
 `7b973f59cb`, and Text DOM-slot regression `4b24915123`. Together, full shim check
-and full view types pass. The complete suite is **197 passed / 4 failed** of 201,
+and full view types passed at that earlier source epoch. Its complete suite was **197 passed / 4 failed** of 201,
 plus one unhandled error: three editor cases require the still-unmapped raw
 `__cachedText` capability, and the 2,396-crossing assertion remains. The development
 backend rejects unavailable update metadata explicitly; no empty sets/constants
@@ -266,7 +317,7 @@ DOM predicate correction `877c9e9c54` and the source-only target probe
 59/59, full view types pass, and scoped checks pass. Target probing is not native
 deletion/behavior adoption. Positive root-derived JS cache population, raw cache,
 dirty metadata, native class hosting, zero-crossing and native275 gates stay open.
-The latest complete shim run is **198/202**, with the same four failures and
+That source epoch's complete shim run was **198/202**, with the same four failures and
 one unhandled raw-cache error; full source/hook and full view checks pass.
 Evidence is in `dom-probe-*` logs. Source artifacts were rebuilt in the
 disposable tree without changing compiler options. The independent source audit
@@ -274,13 +325,13 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `893d1a4cdf` is integrated, including code,
+The OFF inventory continuation through `647a597688` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 744 selectors across six explicit reports (full web22,440, media36,
-conversion11, TaskList19, checklist planning32, checklist collection5), including
-485 new editor units; it is not a summed
+ledger has 754 selectors across seven explicit reports (full web22,440, media36,
+conversion11, TaskList19, checklist planning32, checklist collection5, iOS caret8),
+including493 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -329,6 +380,18 @@ The scanner validates744 source mappings. Preserved owner paths again earn zero
 disposable-root OFF credit; exact owner-path verification finds744 unique passing
 selectors across six reports, with no raw report rewriting or source/execution
 binding claim (`inventory-744-owner-selector-verification.json`).
+
+iOS geometry increment `647a597688` is integrated as `d6e6deda2a`. Independent
+8/8 cases exercise the real caret-scroll plugin and model-selection fallback with
+supplied window geometry and timers. Two additional mappings refer to existing
+backspace cases; they do not add new tests. Physical keyboard, native iOS layout,
+deletion and animation acceptance remain unverified; module-import warnings are
+preserved. Browser153 still refers to `62601ac3c6`, not an unfinished extension run.
+The scanner validates754 mappings and exact owner-path verification finds754
+unique passing selectors across seven untouched reports, with zero disposable-root
+credit and no source/execution binding claim. Evidence:
+`ios-caret-independent-tests.log`, `inventory-754-owner-selector-verification.json`
+and `loro-ios-integration-audit.md` under the acceptance directory.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
