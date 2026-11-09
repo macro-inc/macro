@@ -109,71 +109,19 @@ export class RangeSelection implements BaseSelection {
   }
 
   getTextContent(): string {
-    const {
-      isElementNode: $isElementNode,
-      isTextNode: $isTextNode,
-      isDecoratorNode: $isDecoratorNode,
-      isLineBreakNode: $isLineBreakNode,
-    } = getSelectionRuntime();
     const nodes = this.getNodes();
-    if (nodes.length === 0) {
-      return '';
-    }
-    const firstNode = nodes[0];
-    const lastNode = nodes[nodes.length - 1];
-    const anchor = this.anchor;
-    const focus = this.focus;
-    const isBefore = anchor.isBefore(focus);
-    const [anchorOffset, focusOffset] = $getCharacterOffsets(this);
-    let textContent = '';
-    let prevWasElement = true;
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if ($isElementNode(node) && !node.isInline()) {
-        if (!prevWasElement) {
-          textContent += '\n';
-        }
-        if (node.isEmpty()) {
-          prevWasElement = false;
-        } else {
-          prevWasElement = true;
-        }
-      } else {
-        prevWasElement = false;
-        if ($isTextNode(node)) {
-          let text = node.getTextContent();
-          if (node === firstNode) {
-            if (node === lastNode) {
-              if (
-                anchor.type !== 'element' ||
-                focus.type !== 'element' ||
-                focus.offset === anchor.offset
-              ) {
-                text =
-                  anchorOffset < focusOffset
-                    ? text.slice(anchorOffset, focusOffset)
-                    : text.slice(focusOffset, anchorOffset);
-              }
-            } else {
-              text = isBefore
-                ? text.slice(anchorOffset)
-                : text.slice(focusOffset);
-            }
-          } else if (node === lastNode) {
-            text = isBefore
-              ? text.slice(0, focusOffset)
-              : text.slice(0, anchorOffset);
-          }
-          textContent += text;
-        } else if (
-          ($isDecoratorNode(node) || $isLineBreakNode(node)) &&
-          (node !== lastNode || !this.isCollapsed())
-        ) {
-          textContent += node.getTextContent();
-        }
-      }
-    }
-    return textContent;
+    if (nodes.length === 0) return '';
+    const isBefore = this.anchor.isBefore(this.focus);
+    const offsets = $getCharacterOffsets(this);
+    return getSelectionTextContent<LexicalNode, ElementNode, TextNode>(
+      nodes,
+      this.anchor,
+      this.focus,
+      isBefore,
+      offsets,
+      this.isCollapsed(),
+      getSelectionRuntime()
+    );
   }
 
   applyDOMRange(range: StaticRange): void {
@@ -364,4 +312,82 @@ export class RangeSelection implements BaseSelection {
   getStartEndPoints(): [PointType, PointType] {
     return [this.anchor, this.focus];
   }
+}
+
+/** Pure pinned text extraction, shared across independently typed node producers. */
+export function getSelectionTextContent<
+  N extends { getTextContent(): string },
+  E extends N & { isInline(): boolean; isEmpty(): boolean },
+  T extends N,
+>(
+  nodes: readonly N[],
+  anchor: import('./runtime').RawSelectionPoint,
+  focus: import('./runtime').RawSelectionPoint,
+  isBefore: boolean,
+  [anchorOffset, focusOffset]: readonly [number, number],
+  isCollapsed: boolean,
+  {
+    isElementNode: $isElementNode,
+    isTextNode: $isTextNode,
+    isDecoratorNode: $isDecoratorNode,
+    isLineBreakNode: $isLineBreakNode,
+  }: {
+    isElementNode(node: N): node is E;
+    isTextNode(node: N): node is T;
+    isDecoratorNode(node: N): boolean;
+    isLineBreakNode(node: N): boolean;
+  }
+): string {
+  if (nodes.length === 0) return '';
+  const firstNode = nodes[0];
+  const lastNode = nodes[nodes.length - 1];
+  let textContent = '';
+  let prevWasElement = true;
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if ($isElementNode(node) && !node.isInline()) {
+      if (!prevWasElement) {
+        textContent += '\n';
+      }
+      if (node.isEmpty()) {
+        prevWasElement = false;
+      } else {
+        prevWasElement = true;
+      }
+    } else {
+      prevWasElement = false;
+      if ($isTextNode(node)) {
+        let text = node.getTextContent();
+        if (node === firstNode) {
+          if (node === lastNode) {
+            if (
+              anchor.type !== 'element' ||
+              focus.type !== 'element' ||
+              focus.offset === anchor.offset
+            ) {
+              text =
+                anchorOffset < focusOffset
+                  ? text.slice(anchorOffset, focusOffset)
+                  : text.slice(focusOffset, anchorOffset);
+            }
+          } else {
+            text = isBefore
+              ? text.slice(anchorOffset)
+              : text.slice(focusOffset);
+          }
+        } else if (node === lastNode) {
+          text = isBefore
+            ? text.slice(0, focusOffset)
+            : text.slice(0, anchorOffset);
+        }
+        textContent += text;
+      } else if (
+        ($isDecoratorNode(node) || $isLineBreakNode(node)) &&
+        (node !== lastNode || !isCollapsed)
+      ) {
+        textContent += node.getTextContent();
+      }
+    }
+  }
+  return textContent;
 }

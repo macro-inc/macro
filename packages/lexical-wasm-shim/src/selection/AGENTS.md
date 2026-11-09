@@ -21,7 +21,7 @@ selection movement in the injected view callbacks.
 ## Checks
 
 Run the package TypeScript check and unchanged upstream selection unit oracle.
-Constructor tests exercise real JS selection instances without a replacement model. The legacy read-test harness uses upstream node classes and requires migration before it can validate the actual-core selection types; do not count it as runtime acceptance after retargeting.
+Constructor tests exercise real JS selection instances without a replacement model. Read tests exercise the same pure ordering, caret traversal, text extraction and intent-transition algorithms with real upstream nodes, carets and state; keep each producer in its own node type graph. These tests retain every source case but do not establish actual-wrapper caching or native zero-crossing acceptance; that requires the real acknowledged-mirror bridge.
 Native acceptance requires the actual injected bridge; source-model evidence is separate.
 
 Run the unchanged 65-case oracle with `LEXICAL_SELECTION_UPSTREAM_ROOT=/path/to/pinned/source bun src/selection/tests/run-oracle.ts` from the package. It preserves the original unit configuration, pins all four spec hashes and requires exactly 65 passing assertions. Results default to the temporary directory under lexical-selection-oracle.
