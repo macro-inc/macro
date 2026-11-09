@@ -2,6 +2,29 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Dirty-child/decorator view checkpoint `f7a774700c` is integrated as `98d30917d4`.
+View-only ordered text aggregates and compressed clean-child runs avoid walking
+unrelated siblings while preserving DOM-hook and mutation ordering. Ordinary
+decorator publication avoids a full scan; actual decorator changes retain the
+exact plain-record copy. Native commits must supply authoritative `removedNodes`
+for unmounted cleanup. The property remains optional and an omitted delta is
+treated as empty, so this contract is not enforced fail-closed; a missing producer
+delta can retain unmounted decorators. This is an explicit activation gate, with
+no scan fallback or native producer completion claimed. Logarithmic index work
+does not bound whole-root string flattening, DOM hooks or changed-decorator copies;
+no blanket end-to-end O(edit) or latency claim is made.
+
+Independent disposable checks pass all67 focused tests, full view-package types
+and scoped `just check`. Owner evidence reports2,765 immutable upstream unit
+passes with one pinned skip,33 browser cases in three engines, unchanged1,880
+source hashes and a byte-identical64-step/278-event trace. These are portDOM with
+the upstream model, not actual Rust compatibility. The owner unit/browser report
+hashes were independently rechecked against its provenance; those larger suites
+were not repeated here. Evidence: `dirty-child-integrated-{focused,full-types,check}.log`,
+`dirty-child-owner-evidence-rehash.json` and `dirty-child-integration-audit.md`.
+Actual root-derived pending-state production, native removal deltas, initializer
+and app activation remain open. No live dependency or artifact writes occurred.
+
 Reconciliation producer schema `aae5c5ab2c` is integrated as `577fe4a099`, with
 fingerprint `260b600ba0ab014808e9d2aaaafb03ce7c05aed5dcbb0f13b4751fe670163b83`.
 HostCall Reconcile uses tag7; ReconcileAck uses tag8, preserving Thrown tag7.
