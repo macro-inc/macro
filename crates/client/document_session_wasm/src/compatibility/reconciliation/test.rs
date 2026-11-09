@@ -79,7 +79,39 @@ fn fixture(transport: Transport) -> Result<EditorSession, BoundaryError> {
         1.0,
         None,
     )?;
-    editor.compat_current_version_inner()?;
+    loop {
+        let receipts =
+            compat::CompatPublications::deserialize(&editor.compat_take_publications_inner()?)?;
+        if receipts.commits.is_empty() {
+            break;
+        }
+        // This native fixture has no JS mirror holders for decoded bootstrap
+        // records. Acknowledge their actual delivery and release explicitly.
+        let ids: Vec<_> = receipts
+            .commits
+            .iter()
+            .flat_map(|commit| &commit.batch.records)
+            .map(|record| record.record.capture_id)
+            .collect();
+        editor.compat_capture_leases_inner(&bytes(&compat::CompatCaptureLeases {
+            editor_id: 1,
+            retain: ids.clone(),
+            release: ids,
+        })?)?;
+    }
+    let version = editor.compat_current_version_inner()?;
+    let snapshot = editor.compat_snapshot_inner(version)?;
+    let ids: Vec<_> = snapshot
+        .batch
+        .records
+        .iter()
+        .map(|record| record.record.capture_id)
+        .collect();
+    editor.compat_capture_leases_inner(&bytes(&compat::CompatCaptureLeases {
+        editor_id: 1,
+        retain: ids.clone(),
+        release: ids,
+    })?)?;
     editor.compat_begin_inner(&bytes(&compat::CompatBegin { tags: vec![] })?)?;
     Ok(editor)
 }
