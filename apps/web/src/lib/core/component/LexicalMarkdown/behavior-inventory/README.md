@@ -33,6 +33,12 @@ cover import/typing modes; direct mention commands do not establish menu UI
 coverage. Remote-label history tests establish grouping, not preservation of
 remote labels through undo/redo.
 
+Caret-scroll cases use actual model selection and the production caret utility,
+with supplied jsdom geometry, viewport facts and fake timers. They pin safe-zone
+arithmetic, missing selection and hidden-keyboard edits. Existing iOS Backspace
+mappings supply the platform constant and observe keydown cancellation/text;
+they do not establish glide deletion, native keyboard delivery or animation.
+
 From this worktree's `apps/web`, with its own dependencies:
 
 ```sh
@@ -70,7 +76,8 @@ bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor
 
 `scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts`,
 `editor-async-behavior-map.ts`, `editor-node-behavior-map.ts` and
-`editor-menu-behavior-map.ts` and `editor-checklist-behavior-map.ts` map
+`editor-menu-behavior-map.ts`, `editor-checklist-behavior-map.ts` and
+`editor-platform-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
