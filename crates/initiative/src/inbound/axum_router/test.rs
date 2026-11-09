@@ -780,6 +780,8 @@ async fn appearance_requires_edit_access() {
         assert_eq!(response.status(), expected);
     }
 }
+
+#[tokio::test]
 async fn page_passes_filters_and_returns_rows_with_progress() {
     let service = FakeInitiativeService::default();
     let status = Uuid::from_u128(7);
