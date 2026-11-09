@@ -660,3 +660,148 @@ test('image decorator controls open and close the real full-screen viewer', asyn
   await expect(dialog).toHaveCount(0);
   await expect(image).toHaveCount(1);
 });
+
+async function liveCodeLanguage(page: Page) {
+  const state = JSON.parse(
+    (await page.locator('#live-state').textContent()) ?? '{}'
+  );
+  return state.root?.children?.find(
+    (node: { type: string }) => node.type === 'custom-code'
+  )?.language;
+}
+async function loadCodeAccessory(page: Page) {
+  await page.getByRole('button', { name: 'Load code', exact: true }).click();
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  const header = page.locator('.md-code-box-header');
+  await expect(body.locator('code')).toHaveText('const value = 7;');
+  await expect(header).toHaveCount(1);
+  await expect.poll(() => liveCodeLanguage(page)).toBe('javascript');
+  return { body, header };
+}
+test('code accessory pointer language choice survives saved-state restoration', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, header } = await loadCodeAccessory(page);
+  const trigger = header.getByRole('button', {
+    name: 'JavaScript',
+    exact: true,
+  });
+  if (hasTouch) await trigger.tap();
+  else await trigger.click();
+  const python = page.getByRole('menuitem', { name: 'Python', exact: true });
+  if (hasTouch) await python.tap();
+  else await python.click();
+  await expect.poll(() => liveCodeLanguage(page)).toBe('python');
+  await expect(
+    header.getByRole('button', { name: 'Python', exact: true })
+  ).toBeVisible();
+  await expect(body.locator('code')).toHaveText('const value = 7;');
+  await page.getByRole('button', { name: 'Save state', exact: true }).click();
+  await loadCodeAccessory(page);
+  await page
+    .getByRole('button', { name: 'Reopen saved state', exact: true })
+    .click();
+  await expect.poll(() => liveCodeLanguage(page)).toBe('python');
+  await expect(
+    header.getByRole('button', { name: 'Python', exact: true })
+  ).toBeVisible();
+});
+test('code accessory language menu supports Home arrows Enter and Escape', async ({
+  page,
+  hasTouch,
+}) => {
+  const { header } = await loadCodeAccessory(page);
+  const trigger = header.getByRole('button', {
+    name: 'JavaScript',
+    exact: true,
+  });
+  if (hasTouch) await trigger.tap();
+  else await trigger.click();
+  await page.keyboard.press('Home');
+  await expect(
+    page.getByRole('menuitem', { name: 'Plain Text', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(
+    page.getByRole('menuitem', { name: 'TypeScript', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => liveCodeLanguage(page)).toBe('typescript');
+  const updated = header.getByRole('button', {
+    name: 'TypeScript',
+    exact: true,
+  });
+  if (hasTouch) await updated.tap();
+  else await updated.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect.poll(() => liveCodeLanguage(page)).toBe('typescript');
+});
+test('code accessory copies the actual code to the browser clipboard', async ({
+  page,
+  context,
+  hasTouch,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => navigator.clipboard.writeText('before code copy'));
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'before code copy'
+  );
+  const { header } = await loadCodeAccessory(page);
+  // Production icon-only Copy/Delete actions currently lack accessible names.
+  // Their order is used here; this is not toolbar accessibility acceptance.
+  const copy = header.locator('button').last();
+  if (hasTouch) await copy.tap();
+  else await copy.click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('const value = 7;');
+});
+test('code accessory deletion preserves following text and undo restores the block', async ({
+  page,
+  hasTouch,
+}) => {
+  const { body, header } = await loadCodeAccessory(page);
+  await expect(header.locator('button')).toHaveCount(3);
+  const remove = header.locator('button').nth(1);
+  if (hasTouch) await remove.tap();
+  else await remove.click();
+  await expect(body.locator('code')).toHaveCount(0);
+  await expect(header).toHaveCount(0);
+  await expect(body).toHaveText('after');
+  await expect(body).toBeFocused();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(body.locator('code')).toHaveText('const value = 7;');
+  await expect(
+    header.getByRole('button', { name: 'JavaScript', exact: true })
+  ).toBeVisible();
+});
+test('code accessory mounted read-only shows a static language and copy only', async ({
+  page,
+  context,
+  hasTouch,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(() => navigator.clipboard.writeText('before code copy'));
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'before code copy'
+  );
+  await page.getByRole('button', { name: 'Read only', exact: true }).click();
+  const { body, header } = await loadCodeAccessory(page);
+  await expect(header).toContainText('JavaScript');
+  await expect(
+    header.getByRole('button', { name: 'JavaScript', exact: true })
+  ).toHaveCount(0);
+  await expect(header.locator('button')).toHaveCount(1);
+  const before = await page.locator('#live-state').textContent();
+  if (hasTouch) await header.locator('button').tap();
+  else await header.locator('button').click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('const value = 7;');
+  expect(await page.locator('#live-state').textContent()).toBe(before);
+  await expect(body).toHaveAttribute('aria-readonly', 'true');
+});

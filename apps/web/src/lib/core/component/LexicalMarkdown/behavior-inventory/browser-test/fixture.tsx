@@ -5,6 +5,7 @@ import { registerList } from '@lexical/list';
 import { $convertToMarkdownString, CODE } from '@lexical/markdown';
 import { registerRichText } from '@lexical/rich-text';
 import {
+  $createCustomCodeNode,
   ALL_TRANSFORMERS,
   NodeReplacements,
   ORDERED_LIST_ENTER,
@@ -28,6 +29,7 @@ import {
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { DecoratorRenderer } from '../../component/core/DecoratorRenderer';
+import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRenderer';
 import { MarkdownImage } from '../../component/decorator/MarkdownImage';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
@@ -37,6 +39,7 @@ import {
 } from '../../context/LexicalWrapperContext';
 import { actionsPlugin } from '../../plugins/actions/actionsPlugin';
 import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
+import { codePlugin } from '../../plugins/code/codePlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
 import { dragInsertPlugin } from '../../plugins/drag-insert/dragInsertPlugin';
 import { emojisPlugin } from '../../plugins/emojis/emojisPlugin';
@@ -50,6 +53,7 @@ import {
 import { markdownPastePlugin } from '../../plugins/markdown-paste/markdownPastePlugin';
 import { markdownShortcutsPlugin } from '../../plugins/markdown-shortcuts/markdownShortcutsPlugin';
 import { mediaPlugin } from '../../plugins/media/mediaPlugin';
+import { createAccessoryStore } from '../../plugins/node-accessory/nodeAccessoryPlugin';
 import { nodeTransformPlugin } from '../../plugins/node-transform/nodeTransformPlugin';
 import { createPluginManager } from '../../plugins/pluginManager';
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
@@ -107,6 +111,8 @@ const BODY_WRAPPER: LexicalWrapperBase = {
 BODY_WRAPPER.plugins.use(selectionDataPlugin(BODY_WRAPPER));
 setDecorator(ImageNode, MarkdownImage);
 mediaPlugin()(BODY);
+const [ACCESSORIES, setAccessories] = createAccessoryStore();
+codePlugin({ accessories: ACCESSORIES, setAccessories })(BODY);
 BODY.registerUpdateListener(({ editorState }) => {
   element('live-state').textContent = JSON.stringify(editorState.toJSON());
 });
@@ -173,6 +179,7 @@ render(
           />
           <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
           <DecoratorRenderer editor={BODY} />
+          <NodeAccessoryRenderer editor={BODY} store={ACCESSORIES} />
         </LexicalWrapperContext.Provider>
       </PosthogProvider>
     </AnalyticsContextProvider>
@@ -206,6 +213,18 @@ element('load-image').addEventListener('click', () => {
           }),
           $createParagraphNode().append($createTextNode('after'))
         );
+    },
+    { discrete: true, tag: HISTORY_PUSH_TAG }
+  );
+});
+element('load-code').addEventListener('click', () => {
+  BODY.update(
+    () => {
+      const code = $createCustomCodeNode('javascript');
+      code.setCode('javascript', 'const value = 7;');
+      $getRoot()
+        .clear()
+        .append(code, $createParagraphNode().append($createTextNode('after')));
     },
     { discrete: true, tag: HISTORY_PUSH_TAG }
   );

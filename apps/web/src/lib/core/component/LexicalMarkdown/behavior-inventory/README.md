@@ -106,6 +106,12 @@ size, saved scale restoration, read-only controls, selection/deletion/undo and
 the full-screen viewer. Images use a local data URL; this does not test uploads,
 remote fetches or production toolbar accessibility. Save/reopen deliberately
 replaces the resized node with a fresh scale-1 fixture before restoration.
+Code cases mount the actual code plugin, accessory store and renderer. They
+exercise language selection with pointer/touch and Home/arrows/Enter/Escape,
+saved language restoration, native clipboard replacement, deletion/focus/undo,
+and controls mounted initially read-only. Clipboard cases seed a distinct value
+before copying. This does not establish virtual-keyboard, live permission
+transition or production icon-button accessibility behavior.
 Checklist tests target the measured pseudo-element, verify its actual hit target,
 and translate layout coordinates into the visual viewport for native touch.
 The fixture uses padding rather than outer body margins to avoid overflowing
