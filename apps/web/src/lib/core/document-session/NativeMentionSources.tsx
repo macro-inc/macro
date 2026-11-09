@@ -45,10 +45,21 @@ export function NativeMentionSources(props: {
   const [more, setMore] =
     createSignal<ReturnType<NativeMentionPresentation['more']>>();
   let sequence = 0;
+  let owner = props.surface;
+
+  function closeOwned() {
+    const identity = query()?.identity;
+    if (identity)
+      fireAndForget(
+        owner.menuRows({ identity, rows: [], buckets: [] }),
+        'native-mentions.close'
+      );
+  }
 
   function current(identity: MenuIdentity) {
     const active = query()?.identity;
     return (
+      owner === props.surface &&
       active?.mountGeneration === identity.mountGeneration &&
       active.modelGeneration === identity.modelGeneration &&
       active.invocation === identity.invocation &&
@@ -70,6 +81,7 @@ export function NativeMentionSources(props: {
         return;
       }
       if (event.action === 'query') {
+        owner = props.surface;
         latest = undefined;
         setSelection(undefined);
         setMore(undefined);
@@ -90,6 +102,7 @@ export function NativeMentionSources(props: {
   );
 
   onCleanup(() => {
+    closeOwned();
     latest = undefined;
     setQuery(undefined);
     menu.closeMenu();
@@ -98,6 +111,7 @@ export function NativeMentionSources(props: {
     on(
       () => props.surface,
       () => {
+        closeOwned();
         latest = undefined;
         setQuery(undefined);
         setSelection(undefined);
@@ -112,6 +126,7 @@ export function NativeMentionSources(props: {
     const identity = query()?.identity;
     if (!identity) return;
     const surface = props.surface;
+    if (owner !== surface) return;
     const attempt = selection();
     const admitted = () =>
       props.surface === surface && current(identity) && selection() === attempt;
@@ -147,8 +162,11 @@ export function NativeMentionSources(props: {
       await committed;
     } catch (error) {
       if (!admitted()) return;
-      props.onError(error);
-      await surface.menuRows({ identity, rows: [], buckets: [] });
+      try {
+        props.onError(error);
+      } finally {
+        await surface.menuRows({ identity, rows: [], buckets: [] });
+      }
     }
   }
 
@@ -158,7 +176,8 @@ export function NativeMentionSources(props: {
     more,
     rejected(rejected, reason) {
       const identity = query()?.identity;
-      if (!identity || selection() !== rejected) return;
+      if (!identity || selection() !== rejected || owner !== props.surface)
+        return;
       if (reason === 'missing') {
         fireAndForget(
           props.surface.menuRows({
@@ -183,7 +202,13 @@ export function NativeMentionSources(props: {
   ) {
     const active = query();
     const identity = active?.identity;
-    if (!identity || !menu.isOpen() || snapshot.term !== active.term) return;
+    if (
+      !identity ||
+      owner !== props.surface ||
+      !menu.isOpen() ||
+      snapshot.term !== active.term
+    )
+      return;
     const rows = snapshot.items.map((item) => {
       const bucketId =
         snapshot.viewAll ??
