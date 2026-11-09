@@ -484,14 +484,12 @@ export const homeCalendarRoute = defineRoute({
 });
 
 export const homeChannelRoute = defineRoute({
-  info: OPEN_TO_AGENTS,
   ...channelDetailRoute,
   id: 'home-channel',
   path: 'channel/:channelId',
 });
 
 export const homeDocumentRoute = defineRoute({
-  info: OPEN_TO_AGENTS,
   ...driveRootDocumentRoute,
   id: 'home-document',
   // Home previews databases and forms as blocks under `home-preview`.
