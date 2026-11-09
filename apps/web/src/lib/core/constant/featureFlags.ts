@@ -524,6 +524,14 @@ export const enableCrm = defineFlag({
   default: onInDev,
 });
 
+// Emergency stop for CRM contact results in @ mentions and Command K/mobile
+// name searches. Companies and Macro users remain searchable. Off until
+// PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.
+export const disableCrmContactSearch = defineFlag({
+  key: 'disable-crm-contact-search',
+  env: 'DISABLE_CRM_CONTACT_SEARCH',
+});
+
 /** CRM activity tabs and context-aware task composition. Off until opted in. */
 export const enableCrmActivity = defineFlag({
   key: 'enable-crm-activity',

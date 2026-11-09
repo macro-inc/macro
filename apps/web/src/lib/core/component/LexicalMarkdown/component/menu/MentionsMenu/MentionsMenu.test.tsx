@@ -58,13 +58,18 @@ vi.mock('@core/block', () => ({
   useMaybeBlockName: () => undefined,
 }));
 vi.mock('@core/constant/featureFlags', () => {
+  const disableCrmContactSearch = { name: 'disable-crm-contact-search' };
   const enableCrm = { name: 'crm' };
   const enableWhatsappLinked = { name: 'whatsapp' };
   return {
+    disableCrmContactSearch,
     enableCrm,
     enableWhatsappLinked,
-    isFeatureEnabled: (flag: unknown) =>
-      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    isFeatureEnabled: (flag: unknown) => {
+      if (flag === enableWhatsappLinked) return mocks.whatsappEnabled;
+      if (flag === disableCrmContactSearch) return false;
+      return mocks.crmEnabled;
+    },
     ENABLE_BEARER_TOKEN_AUTH: false,
   };
 });

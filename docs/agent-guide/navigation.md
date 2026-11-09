@@ -1532,6 +1532,12 @@ does not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only. Mobile keeps a single list, with
 only Macro users and groups pinned ahead of ranked entity results.
 
+The PostHog `disable-crm-contact-search` kill switch hides CRM contact results
+and disables their searches in `@` menus, Cmd+K, and mobile name search.
+Companies and Macro users remain searchable; existing contact mentions and
+record pages are unaffected. Override locally with
+`VITE_DISABLE_CRM_CONTACT_SEARCH=true`.
+
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens

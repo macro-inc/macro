@@ -9,6 +9,7 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import {
+  disableCrmContactSearch,
   enableCrm,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -231,7 +232,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const sourceEnabled = (source: MentionBucketId) =>
     !props.sources || props.sources.includes(source);
   const contactsEnabled = () =>
-    props.includeContacts !== false && sourceEnabled('crm');
+    props.includeContacts !== false &&
+    sourceEnabled('crm') &&
+    !isFeatureEnabled(disableCrmContactSearch);
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
       ? useEntityMentionFromList({
