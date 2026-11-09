@@ -328,7 +328,8 @@ Join-preview and in-call controls use the standard Macro icon buttons. In a
 call, one floating-menu surface with a hairline edge, soft shadow, 8px padding
 and 8px gaps contains mic, camera, screen sharing, Team, More and Leave. The chat toggle stays outside this panel. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
-toggles the device, with a failure-colored slashed icon when off, and the caret
+toggles the device; when muted or off, both segments use the subtle danger
+fill and failure ink. Connecting controls remain neutral and dimmed. The caret
 opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),
 and a noise suppression switch with its label on the left.

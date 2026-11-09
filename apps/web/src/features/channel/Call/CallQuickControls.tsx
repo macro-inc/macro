@@ -9,6 +9,7 @@ import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { callMediaButtonVariant } from './CallControls/CallControlBar';
 import { CallMediaControls } from './CallControls/CallMediaControls';
 import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
@@ -72,7 +73,10 @@ export function CallQuickControls(props: {
       fallback={
         <div class="flex items-center gap-1.5 p-2">
           <Button
-            variant="secondary"
+            variant={callMediaButtonVariant(
+              call.isAudioMuted(),
+              call.isConnecting()
+            )}
             size={props.size ?? 'icon-md'}
             aria-label={
               call.isAudioMuted()
@@ -88,12 +92,15 @@ export function CallQuickControls(props: {
               when={call.isAudioMuted()}
               fallback={<Microphone class="size-4" />}
             >
-              <MicrophoneSlash class="size-4 text-failure" />
+              <MicrophoneSlash class="size-4" />
             </Show>
           </Button>
           <Show when={props.controls.includes('camera')}>
             <Button
-              variant="secondary"
+              variant={callMediaButtonVariant(
+                call.isVideoMuted(),
+                call.isConnecting()
+              )}
               size={props.size ?? 'icon-md'}
               aria-label={
                 call.isVideoMuted() ? t('calls.cameraOn') : t('calls.cameraOff')
@@ -107,7 +114,7 @@ export function CallQuickControls(props: {
                 when={call.isVideoMuted()}
                 fallback={<VideoCamera class="size-4" />}
               >
-                <VideoCameraSlash class="size-4 text-failure" />
+                <VideoCameraSlash class="size-4" />
               </Show>
             </Button>
           </Show>

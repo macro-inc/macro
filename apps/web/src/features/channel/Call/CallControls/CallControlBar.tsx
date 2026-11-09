@@ -10,6 +10,9 @@ import { Button, ButtonGroup, cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { CallSettingsMenu } from './CallSettingsMenu';
 
+export function callMediaButtonVariant(off: boolean, disabled: boolean) {
+  return off && !disabled ? 'danger' : 'secondary';
+}
 /**
  * A media toggle split from its settings menu: the left half turns the device
  * on or off, the caret opens its menu on click. The toggle keeps one fill and
@@ -22,6 +25,7 @@ function MediaSplitButton(props: {
   menuLabel: string;
   disabled?: boolean;
   compact?: boolean;
+  off?: boolean;
   /** Set for a toggle whose icon stays the same in both states. */
   pressed?: boolean;
   onToggle: () => void;
@@ -43,13 +47,22 @@ function MediaSplitButton(props: {
       mobileContent={props.mobileContent}
       trigger={(triggerProps) => (
         <ButtonGroup
+          variant={
+            props.off
+              ? callMediaButtonVariant(true, !!props.disabled)
+              : 'secondary'
+          }
           size={props.compact ? 'icon-md' : 'icon-lg'}
           aria-label={props.label}
           class="shrink-0"
         >
           <ButtonGroup.Button
             aria-label={props.toggleLabel}
-            variant={props.pressed ? 'accent' : 'secondary'}
+            variant={
+              props.pressed
+                ? 'accent'
+                : callMediaButtonVariant(!!props.off, !!props.disabled)
+            }
             tooltip={{
               content: props.toggleLabel,
               placement: 'top',
@@ -66,7 +79,7 @@ function MediaSplitButton(props: {
             <ButtonGroup.Button
               {...triggerProps}
               disabled={props.disabled}
-              variant="ghost"
+              variant={callMediaButtonVariant(!!props.off, !!props.disabled)}
               size={props.compact ? 'icon-md' : 'icon-lg'}
               aria-label={props.menuLabel}
               tooltip={{
@@ -139,6 +152,7 @@ export function CallControlBar(props: {
       >
         <MediaSplitButton
           label="Microphone"
+          off={props.audioMuted}
           shortcut={props.showShortcuts && !isMobile() ? 'cmd+d' : undefined}
           compact={props.compact}
           onOpenChange={(open) => {
@@ -157,7 +171,7 @@ export function CallControlBar(props: {
               when={props.audioMuted}
               fallback={<Microphone class="size-5" />}
             >
-              <MicrophoneSlash class="size-5 text-failure" />
+              <MicrophoneSlash class="size-5" />
             </Show>
           }
         >
@@ -165,6 +179,7 @@ export function CallControlBar(props: {
         </MediaSplitButton>
         <MediaSplitButton
           label="Camera"
+          off={props.videoMuted}
           shortcut={
             props.showShortcuts && !isMobile() ? 'shift+cmd+e' : undefined
           }
@@ -183,7 +198,7 @@ export function CallControlBar(props: {
               when={props.videoMuted}
               fallback={<VideoCamera class="size-5" />}
             >
-              <VideoCameraSlash class="size-5 text-failure" />
+              <VideoCameraSlash class="size-5" />
             </Show>
           }
         >
