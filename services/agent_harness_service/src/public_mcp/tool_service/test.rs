@@ -462,7 +462,7 @@ mod code_mode {
         });
         let mut config =
             StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
-        config.stateful_mode = false;
+        config.legacy_session_mode = false;
         config.json_response = true;
         let service = StreamableHttpService::new(
             move || Ok(catalog_service().with_code_mode(surface.clone())),
