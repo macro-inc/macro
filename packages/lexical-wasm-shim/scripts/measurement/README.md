@@ -10,6 +10,7 @@ Vitest 4.1.5 dependencies:
 
 ```sh
 MEASUREMENT_ARTIFACT_ROOT=/absolute/source-matched/wasm-directory \
+MEASUREMENT_HOST_SOURCE_ROOT=/absolute/coherent/production-source-root \
 MEASUREMENT_WASM_DIS=/absolute/path/to/wasm-dis \
 TMPDIR=/home/wolf/tmp node node_modules/vitest/vitest.mjs run \
   --config tests/measurement/vitest.config.mts
@@ -36,6 +37,38 @@ module inventory. Unknown ABI types, payload helpers or transfer patterns fail.
 The disabled transform returns the exact original bytes without an audit import.
 Ordinary builds do not run this transform. The runtime import is explicit; it
 does not create a global product handle or editor.
+
+`instrumentCompatibilityHost(source, runtimeImport, enabled)` in `host.ts` is the
+separate diagnostic transform for `production/host.ts`. It does not modify that
+shipping file or automatically run from `prepare.ts`. The diagnostic bundler
+applies it once to the actual source module. Disabled output is the original
+string byte for byte, even for unrecognized future syntax, with no runtime import.
+
+Enabled instrumentation requires exactly one direct exported synchronous
+`dispatchCompatibilityHost(hostSlot: number, bytes: Uint8Array): Uint8Array`.
+Defaults, optional/rest/generic/async/generator signatures, duplicate export
+bindings, an existing audit binding and unreviewed bodies fail closed. The reviewed
+body is pinned by its TS 6.0.3 AST-shape SHA-256; formatting/comments do not
+change its structure. ASI-sensitive return newlines do change it. Review source changes before updating the pin, never derive an accepted
+pin from the input being measured. Only the body is wrapped, preserving the named
+function binding used by host registration and the original nested `finally`.
+
+The injected call uses the actual directional overload:
+`measureApi('dispatchCompatibilityHost', 'wasm-to-js', 'operation', body)`.
+The existing three-argument overload remains JS-to-WASM. Both preserve return and
+opaque thrown-value identity and emit zero API bytes. The generated physical
+`__wbg_call` entry remains independently counted; this hook adds one logical API
+entry per dispatcher invocation. Do not instrument `compatibilityCallbackCall` or
+`callCompatibilityScope` again: generated API instrumentation already covers that
+crossing. There is no unconditional shipping import of measurement runtime.
+
+`host.test.ts` requires `MEASUREMENT_HOST_SOURCE_ROOT`. It compiles an overlay of
+the actual host source against actual generated protocol types and this runtime,
+writing source hashes and compiler identity under `TMPDIR`. Its nested return,
+opaque-error and counter behavior fixtures are explicitly synthetic transform
+checks, not a native engine, full Macro route or compatibility acceptance. The
+synthetic physical-call entries are labeled as such. Missing actual source fails;
+there is no alternate fixture or ambient declaration fallback.
 
 Bind `AuditRecorder` before initializing diagnostic glue with
 `bindAuditRecorder(recorder, request => CompatBatchRequest.decode(request).finalize)`.
@@ -72,6 +105,19 @@ Payloads count active lengths at actual transfer helpers, not allocator capacity
 Typed shared-memory out-parameter writes are counted as physical buffer transfers
 as well; they are not implied by a void function's return signature.
 New direct memory accesses and unknown memory-helper contexts fail the transform.
+
+The current generator's `new Uint8Array(getArrayU8FromWasm0(ptr, len))` import
+copies WASM bytes to JS. Its view helper is not itself a transfer. Count the
+successful copy once, using the result's intrinsic typed-array byte length after
+construction; do not repeat pointer/length evaluation or count a constructor that
+throws. The captured intrinsic getter avoids invoking an own `byteLength` getter.
+The actual clamped copy length, not the requested length, is charged. Require the
+reviewed view/cache helper bodies and resolved bindings, an unshadowed constructor,
+exact pointer/length parameters, and the actual module/import ABI
+`(i32, i32) -> externref`. Unknown constructors, shadows, helper rewrites and ABI
+mismatches fail closed. The synthetic small-WASM regression checks this boundary,
+return identity and opaque errors; it is not an editor acceptance fixture.
+
 
 All generated session API methods and exported bridge functions are observed,
 including input, takeOutput, wakeAt and finalizer frees. Only synchronous end-update
