@@ -618,6 +618,20 @@ pub struct GenerationSession {
     pub surfaces: Vec<String>,
 }
 
+/// Who reads the person's feed or acts on one of their ideas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum IdeaCaller {
+    /// The person, in the app.
+    User,
+    /// An agent acting for the person, such as their chat agent's program.
+    Agent {
+        /// The code-mode invocation the agent's credential names, when it
+        /// has one; a generation session's is refused.
+        correlation: Option<Uuid>,
+    },
+}
+
 /// What a change-log entry records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -687,6 +701,10 @@ pub enum IdeaError {
     /// Only an open ideas session of the person's may call this.
     #[error("only an ideas generation session may do this")]
     NotGenerating,
+    /// A generation session may not read the feed or act on an idea for
+    /// the person.
+    #[error("a generation session may not read the feed or act on ideas")]
+    Generating,
     /// Anything else.
     #[error("internal ideas error: {0:?}")]
     Internal(rootcause::Report),

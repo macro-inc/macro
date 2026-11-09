@@ -1,25 +1,26 @@
-//! The ideas routes: the person's feed and what they do with an idea, and
-//! the tools generation sessions call from code mode.
+//! The ideas routes: the person's feed and what they, or their own agent,
+//! do with an idea, and the tools generation sessions call from code mode.
 
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroUserAuthentication, UserOnly, is_agent_run,
 };
 use macro_uuid::Uuid;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    AttachDraft, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea,
-    SuggestIdea,
+    AttachDraft, IdeaCaller, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea,
+    RewriteIdea, SuggestIdea,
 };
 use crate::domain::ports::IdeaApi;
 
@@ -102,7 +103,7 @@ impl IntoResponse for IdeaApiError {
             Self::Service(error @ IdeaError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
-            Self::Service(error @ IdeaError::NotGenerating) => {
+            Self::Service(error @ (IdeaError::NotGenerating | IdeaError::Generating)) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
             Self::Service(IdeaError::Internal(report)) => {
@@ -110,6 +111,20 @@ impl IntoResponse for IdeaApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
         }
+    }
+}
+
+/// Who is at the feed: an agent when the credential carries an agent's
+/// attribution, a code-mode invocation, or comes from a program; the person
+/// otherwise. Only the signed invocation decides anything (a generation
+/// session's is refused); the rest labels the span.
+fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> IdeaCaller {
+    // Validated against its session at the router's boundary.
+    let correlation = agent_correlation::context::current();
+    if correlation.is_some() || is_agent_run(user.agent_id.is_some(), headers) {
+        IdeaCaller::Agent { correlation }
+    } else {
+        IdeaCaller::User
     }
 }
 
@@ -133,24 +148,27 @@ pub struct FeedQuery {
     responses(
         (status = 200, body = Ideas, description = "The caller's open ideas they can open every item of, best first"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not read the feed"),
         (status = 404, body = String, description = "Ideas are off for the caller"),
         (status = 500, body = String),
     )
 )]
-/// The caller's feed.
+/// The caller's feed, for them or their own agent.
 pub async fn list_ideas<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Query(query): Query<FeedQuery>,
 ) -> Result<Json<Ideas>, IdeaApiError>
 where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id, query.timezone)
+            .feed(&user.authorization.macro_user_id, caller, query.timezone)
             .await?,
     ))
 }
@@ -164,23 +182,26 @@ where
     responses(
         (status = 204, description = "Accepted"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not accept"),
         (status = 404, body = String, description = "No proposed idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller acts on a proposed idea.
+/// The caller, or their own agent, acts on a proposed idea.
 pub async fn accept_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, IdeaApiError>
 where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     state
         .service
-        .accept(&user.authorization.macro_user_id, id)
+        .accept(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -194,23 +215,26 @@ where
     responses(
         (status = 204, description = "Dismissed; generation sessions see when"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not dismiss"),
         (status = 404, body = String, description = "No open idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller isn't interested in an open idea.
+/// The caller, or their own agent, isn't interested in an open idea.
 pub async fn dismiss_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, IdeaApiError>
 where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     state
         .service
-        .dismiss(&user.authorization.macro_user_id, id)
+        .dismiss(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

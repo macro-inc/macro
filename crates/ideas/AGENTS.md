@@ -17,6 +17,14 @@ person. Served by the harness under the scheduler's gateway prefix
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
+- The feed, `accept` and `dismiss` (`UserOnly`) serve the person and their own
+  agent: a code-mode credential is a Macro API token for the person, so it
+  passes. The router labels the caller (`IdeaCaller`, span field
+  `ideas.caller`: `user` or `agent`); an agent whose signed invocation names
+  an open generation session, of either kind, gets 403 (`Generating`), since
+  hidden sessions only manage the feed through their own tools. Accepting
+  works the same for both: a background prompt idea starts a run (below);
+  any other idea is only marked accepted.
 - Code only validates (`domain/check.rs`), stores and logs. Ranking, wording and
   when an idea stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no

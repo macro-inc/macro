@@ -1,5 +1,5 @@
-//! The ideas service: the person's feed and the tools hidden generation
-//! sessions write it with.
+//! The ideas service: the person's feed, which they and their own agent
+//! read and act on, and the tools hidden generation sessions write it with.
 //!
 //! Code here only validates and stores. Which ideas exist, how they are
 //! worded and ranked, and when one stops mattering are all decided by the
@@ -20,8 +20,8 @@ use model_owner::CreationPrincipal;
 use super::check;
 use super::model::{
     AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger, Idea,
-    IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas,
-    KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError,
+    IdeaCaller, IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome,
+    Ideas, KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError,
     SessionKind, SessionReadError, SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
@@ -282,6 +282,36 @@ where
         Ok(session)
     }
 
+    /// Let the person, or an agent of theirs, at their feed, refusing a
+    /// generation session: those are hidden, and only manage the feed
+    /// through their own tools. Records the caller's kind on the span.
+    async fn admit(&self, caller: IdeaCaller) -> Result<(), IdeaError> {
+        tracing::Span::current().record("ideas.caller", caller.as_ref());
+        let IdeaCaller::Agent {
+            correlation: Some(correlation),
+        } = caller
+        else {
+            return Ok(());
+        };
+        let session = self
+            .request_sessions
+            .session_of(correlation)
+            .await
+            .map_err(IdeaError::Internal)?;
+        let Some(session) = session else {
+            return Ok(());
+        };
+        let generation = self
+            .generation_sessions
+            .open_session(session)
+            .await
+            .map_err(IdeaError::Internal)?;
+        if generation.is_some() {
+            return Err(IdeaError::Generating);
+        }
+        Ok(())
+    }
+
     /// Items in `targets` the person can't open, as problems.
     async fn inaccessible(
         &self,
@@ -375,6 +405,7 @@ where
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(name = "ideas.feed", skip_all, fields(
+        ideas.caller = tracing::field::Empty,
         ideas.open = tracing::field::Empty,
         ideas.done = tracing::field::Empty,
         ideas.hidden = tracing::field::Empty,
@@ -382,9 +413,11 @@ where
     async fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> Result<Ideas, IdeaError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         if let Some(timezone) = timezone {
             // Reading the feed counts the person in for nightly generations;
             // a failure here never fails the read.
@@ -445,9 +478,18 @@ where
             .map_err(IdeaError::internal)
     }
 
-    #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]
-    async fn accept(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
+    #[tracing::instrument(name = "ideas.accept", skip_all, fields(
+        idea.id = %id,
+        ideas.caller = tracing::field::Empty,
+    ), err)]
+    async fn accept(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
+        id: Uuid,
+    ) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         let idea = self
             .repo
             .idea(user, id)
@@ -573,9 +615,18 @@ where
         Ok(settled)
     }
 
-    #[tracing::instrument(name = "ideas.dismiss", skip_all, fields(idea.id = %id), err)]
-    async fn dismiss(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
+    #[tracing::instrument(name = "ideas.dismiss", skip_all, fields(
+        idea.id = %id,
+        ideas.caller = tracing::field::Empty,
+    ), err)]
+    async fn dismiss(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
+        id: Uuid,
+    ) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
+        self.admit(caller).await?;
         let idea = self
             .repo
             .idea(user, id)

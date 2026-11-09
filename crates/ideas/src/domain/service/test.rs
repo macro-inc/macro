@@ -234,7 +234,11 @@ pub(crate) fn entity_idea(key: &str) -> SuggestIdea {
 impl Harness {
     /// The latest run of the person's first idea in the feed.
     async fn first_run(&self) -> crate::domain::model::IdeaRun {
-        self.service.feed(&user(OWNER), None).await.unwrap().ideas[0]
+        self.service
+            .feed(&user(OWNER), IdeaCaller::User, None)
+            .await
+            .unwrap()
+            .ideas[0]
             .run
             .clone()
             .unwrap()
@@ -343,7 +347,11 @@ async fn an_ideas_session_adds_an_idea_the_person_sees(pool: PgPool) {
     );
     let feed = h
         .service
-        .feed(&user(OWNER), Some(chrono_tz::Europe::Paris))
+        .feed(
+            &user(OWNER),
+            IdeaCaller::User,
+            Some(chrono_tz::Europe::Paris),
+        )
         .await
         .unwrap();
     assert_eq!(feed.ideas, vec![idea]);
@@ -353,7 +361,7 @@ async fn an_ideas_session_adds_an_idea_the_person_sees(pool: PgPool) {
     );
     assert!(
         h.service
-            .feed(&user(OTHER), None)
+            .feed(&user(OTHER), IdeaCaller::User, None)
             .await
             .unwrap()
             .ideas
@@ -417,7 +425,7 @@ async fn ideas_are_off_without_the_flag(pool: PgPool) {
         Err(IdeaError::NotFound)
     ));
     assert!(matches!(
-        h.service.feed(&user(OWNER), None).await,
+        h.service.feed(&user(OWNER), IdeaCaller::User, None).await,
         Err(IdeaError::NotFound)
     ));
 }
@@ -446,7 +454,7 @@ async fn the_same_dedup_key_updates_the_idea_and_its_kind_never_changes(pool: Pg
     assert_eq!(second.title, "Pick the cheapest supplier");
     assert_eq!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), IdeaCaller::User, None)
             .await
             .unwrap()
             .ideas
@@ -481,10 +489,13 @@ async fn a_dismissed_idea_comes_back_only_with_a_reason(pool: PgPool) {
         .await
         .idea
         .unwrap();
-    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .dismiss(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), IdeaCaller::User, None)
             .await
             .unwrap()
             .ideas
@@ -565,7 +576,7 @@ async fn a_session_rewrites_and_retires_open_ideas_and_a_retired_one_comes_back(
     assert_eq!(retired.idea.unwrap().state, IdeaState::Retired);
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), IdeaCaller::User, None)
             .await
             .unwrap()
             .ideas
@@ -699,7 +710,11 @@ async fn the_feed_hides_ideas_about_items_the_person_lost(pool: PgPool) {
     h.suggest(session, prompt_idea("quotes:compare", "Compare quotes"))
         .await;
     h.suggest(session, entity_idea("venue:headcount")).await;
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     // Best first.
     assert_eq!(feed.ideas[0].dedup_key, "venue:headcount");
     h.access
@@ -707,7 +722,11 @@ async fn the_feed_hides_ideas_about_items_the_person_lost(pool: PgPool) {
         .lock()
         .unwrap()
         .insert("thread-2".to_owned());
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.ideas.len(), 1);
     assert_eq!(feed.ideas[0].dedup_key, "quotes:compare");
 }
@@ -722,23 +741,164 @@ async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
         .idea
         .unwrap();
     assert!(matches!(
-        h.service.accept(&user(OTHER), idea.id).await,
+        h.service
+            .accept(&user(OTHER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     assert_eq!(
-        h.service.feed(&user(OWNER), None).await.unwrap().ideas[0].state,
+        h.service
+            .feed(&user(OWNER), IdeaCaller::User, None)
+            .await
+            .unwrap()
+            .ideas[0]
+            .state,
         IdeaState::Accepted
     );
-    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .dismiss(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert!(matches!(
-        h.service.dismiss(&user(OWNER), idea.id).await,
+        h.service
+            .dismiss(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
+}
+
+/// The person's own agent, in a chat session of theirs.
+fn chat_agent() -> IdeaCaller {
+    IdeaCaller::Agent {
+        correlation: Some(Uuid::now_v7()),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_persons_own_agent_reads_accepts_and_dismisses_their_ideas(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let mut request = prompt_idea("quotes:compare", "Compare the supplier quotes");
+    request.run_mode = Some(RunMode::Composer);
+    let prompt = h.suggest(session, request).await.idea.unwrap();
+    let entity = h
+        .suggest(session, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), chat_agent(), None)
+        .await
+        .unwrap();
+    assert_eq!(feed.ideas, vec![entity.clone(), prompt.clone()]);
+    // A composer prompt idea is only marked accepted; the agent acts on
+    // the prompt itself.
+    h.service
+        .accept(&user(OWNER), chat_agent(), prompt.id)
+        .await
+        .unwrap();
+    // An agent with no code-mode invocation is the person's too.
+    h.service
+        .dismiss(
+            &user(OWNER),
+            IdeaCaller::Agent { correlation: None },
+            entity.id,
+        )
+        .await
+        .unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), chat_agent(), None)
+        .await
+        .unwrap();
+    assert_eq!(feed.ideas.len(), 1);
+    assert_eq!(feed.ideas[0].id, prompt.id);
+    assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
+    assert_eq!(feed.ideas[0].kind, prompt.kind);
+    assert_eq!(
+        h.changes(prompt.id).await.len(),
+        1,
+        "accepting logs no change"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_persons_agent_never_reaches_the_persons_ideas(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(session, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
+    assert!(
+        h.service
+            .feed(&user(OTHER), chat_agent(), None)
+            .await
+            .unwrap()
+            .ideas
+            .is_empty()
+    );
+    assert!(matches!(
+        h.service.accept(&user(OTHER), chat_agent(), idea.id).await,
+        Err(IdeaError::NotFound)
+    ));
+    assert!(matches!(
+        h.service.dismiss(&user(OTHER), chat_agent(), idea.id).await,
+        Err(IdeaError::NotFound)
+    ));
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
+    assert_eq!(feed.ideas[0].state, IdeaState::Proposed);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generation_sessions_never_read_accept_or_dismiss_for_the_person(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let ideas = h.session(OWNER, "ideas").await;
+    let routines = h.session(OWNER, "routines").await;
+    let others = h.session(OTHER, "ideas").await;
+    let idea = h
+        .suggest(ideas, entity_idea("venue:headcount"))
+        .await
+        .idea
+        .unwrap();
+    for session in [ideas, routines, others] {
+        let caller = IdeaCaller::Agent {
+            correlation: Some(session),
+        };
+        let feed = h
+            .service
+            .feed(&user(OWNER), caller, Some(chrono_tz::Europe::Paris))
+            .await;
+        assert!(matches!(feed, Err(IdeaError::Generating)), "{feed:?}");
+        let accept = h.service.accept(&user(OWNER), caller, idea.id).await;
+        assert!(matches!(accept, Err(IdeaError::Generating)), "{accept:?}");
+        let dismiss = h.service.dismiss(&user(OWNER), caller, idea.id).await;
+        assert!(matches!(dismiss, Err(IdeaError::Generating)), "{dismiss:?}");
+    }
+    // Its read counted no one in, and the idea is untouched.
+    assert!(h.audience.0.lock().unwrap().is_empty());
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
+    assert_eq!(feed.ideas[0].state, IdeaState::Proposed);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -785,7 +945,11 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
     .unwrap();
     tx.commit().await.unwrap();
 
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     let idea = feed.ideas[0].clone();
     assert_eq!(
         idea.kind,
@@ -823,7 +987,10 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
         .unwrap();
     assert!(!retire.ok);
     // The person dismissing it dismisses its suggestion, which closes both.
-    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .dismiss(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
 }
 
@@ -926,7 +1093,10 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
         .idea
         .unwrap();
 
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let started = runs.started.lock().unwrap().clone();
     assert_eq!(started.len(), 1);
     assert!(
@@ -940,7 +1110,9 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
     assert!(started[0].1.contains("Post, send or share nothing:"));
     // A run going can't be started twice.
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     let run_session = started[0].0;
@@ -950,7 +1122,12 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
         (run_session, RunProgress::Running)
     );
     assert_eq!(
-        h.service.feed(&user(OWNER), None).await.unwrap().ideas[0].state,
+        h.service
+            .feed(&user(OWNER), IdeaCaller::User, None)
+            .await
+            .unwrap()
+            .ideas[0]
+            .state,
         IdeaState::Accepted
     );
 
@@ -1003,21 +1180,33 @@ async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
     // A session that never opened leaves the idea to try again.
     *runs.starts_as.lock().unwrap() = StartsAs::NotStarted;
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::Internal(_))
     ));
     *runs.starts_as.lock().unwrap() = StartsAs::Started;
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::Failed);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
     assert_eq!(
         feed.ideas[0].run.as_ref().unwrap().progress,
         RunProgress::Failed
     );
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
@@ -1035,12 +1224,18 @@ async fn accepting_any_other_idea_starts_no_run(pool: PgPool) {
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), composer.id).await.unwrap();
-    h.service.accept(&user(OWNER), entity.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, composer.id)
+        .await
+        .unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, entity.id)
+        .await
+        .unwrap();
     assert!(runs.started.lock().unwrap().is_empty());
     assert!(
         h.service
-            .feed(&user(OWNER), None)
+            .feed(&user(OWNER), IdeaCaller::User, None)
             .await
             .unwrap()
             .ideas
@@ -1077,10 +1272,15 @@ async fn a_run_whose_prompt_may_have_arrived_is_never_started_twice(pool: PgPool
         .idea
         .unwrap();
     *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     *runs.starts_as.lock().unwrap() = StartsAs::Started;
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     assert_eq!(runs.started.lock().unwrap().len(), 1);
@@ -1105,14 +1305,20 @@ async fn a_run_whose_prompt_never_arrived_is_given_up_and_runs_again(pool: PgPoo
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::AwaitingPrompt);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
@@ -1132,7 +1338,10 @@ async fn a_live_run_whose_session_cant_be_read_is_never_given_up(pool: PgPool) {
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.unreadable.lock().unwrap().insert(run_session);
     age_runs(&h.pool, chrono::Duration::hours(3)).await;
@@ -1140,7 +1349,9 @@ async fn a_live_run_whose_session_cant_be_read_is_never_given_up(pool: PgPool) {
         assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     }
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     assert_eq!(runs.started.lock().unwrap().len(), 1);
@@ -1166,14 +1377,20 @@ async fn a_run_whose_session_is_missing_is_given_up_after_its_start_window(pool:
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.state.lock().unwrap().remove(&run_session);
     // It may still be opening.
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
@@ -1298,7 +1515,11 @@ async fn a_draft_is_attached_only_to_an_open_reply_idea_in_its_thread(pool: PgPo
         draft: Some(draft_target(thread, mine)),
     };
     assert_eq!(attached.idea.unwrap().kind, expected);
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     let shown = feed.ideas.iter().find(|idea| idea.id == reply.id).unwrap();
     assert_eq!(shown.kind, expected);
 
@@ -1475,7 +1696,10 @@ async fn an_unprompted_session_that_cant_be_deleted_keeps_its_run(pool: PgPool) 
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::AwaitingPrompt);
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
@@ -1483,7 +1707,9 @@ async fn an_unprompted_session_that_cant_be_deleted_keeps_its_run(pool: PgPool) 
         .store(true, std::sync::atomic::Ordering::SeqCst);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     runs.discard_fails
@@ -1524,7 +1750,11 @@ async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
     .execute(&h.pool)
     .await
     .unwrap();
-    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(
         feed.ideas.iter().map(|idea| idea.id).collect::<Vec<_>>(),
         [ids[2]]
@@ -1569,7 +1799,10 @@ async fn a_background_idea_says_what_it_sends_and_running_it_approves_that(pool:
         .await
         .unwrap();
     assert!(rewritten.ok, "{:?}", rewritten.problems);
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let prompt = runs.started.lock().unwrap()[0].1.clone();
     assert!(
         prompt.contains("this run will: Posts the weekly status summary in #ops-leads."),

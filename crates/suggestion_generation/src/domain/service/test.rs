@@ -8,8 +8,8 @@ use chrono::DateTime;
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
 use ideas::domain::model::{
-    AttachDraft, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea,
-    SuggestIdea,
+    AttachDraft, IdeaCaller, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea,
+    RewriteIdea, SuggestIdea,
 };
 use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
@@ -187,15 +187,30 @@ impl RoutineSuggestionApi for FakeRoutines {
 struct FakeIdeas(Arc<Kept>);
 
 impl IdeaApi for FakeIdeas {
-    async fn feed(&self, _: &MacroUserIdStr<'static>, _: Option<Tz>) -> Result<Ideas, IdeaError> {
+    async fn feed(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: IdeaCaller,
+        _: Option<Tz>,
+    ) -> Result<Ideas, IdeaError> {
         unreachable!()
     }
 
-    async fn accept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), IdeaError> {
+    async fn accept(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: IdeaCaller,
+        _: Uuid,
+    ) -> Result<(), IdeaError> {
         unreachable!()
     }
 
-    async fn dismiss(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), IdeaError> {
+    async fn dismiss(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: IdeaCaller,
+        _: Uuid,
+    ) -> Result<(), IdeaError> {
         unreachable!()
     }
 

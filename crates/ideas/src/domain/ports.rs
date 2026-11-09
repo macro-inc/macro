@@ -9,10 +9,10 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    AttachDraft, Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
-    IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
-    RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun, SuggestIdea,
-    Target,
+    AttachDraft, Change, GenerationSession, GenerationTrigger, Idea, IdeaCaller, IdeaContent,
+    IdeaError, IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason,
+    RetireIdea, RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun,
+    SuggestIdea, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
@@ -265,30 +265,36 @@ pub trait RunSessions: Send + Sync + 'static {
     async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
 }
 
-/// Ideas as the API serves them: the person's feed, and the tools hidden
-/// generation sessions manage it with.
+/// Ideas as the API serves them: the person's feed, which they and their
+/// own agent read and act on, and the tools hidden generation sessions
+/// manage it with.
 pub trait IdeaApi: Send + Sync + 'static {
     /// The person's open ideas they can still open every item of, best
     /// first. With their `timezone`, it also counts them in for nightly
-    /// generations.
+    /// generations. `caller` is the person or their own agent; a
+    /// generation session is refused.
     fn feed(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<Ideas, IdeaError>> + Send;
 
-    /// The person acts on a proposed idea; a background prompt idea starts
-    /// a run, and one whose last run failed runs again.
+    /// The person, or their own agent, acts on a proposed idea; a
+    /// background prompt idea starts a run, and one whose last run failed
+    /// runs again.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
         id: Uuid,
     ) -> impl Future<Output = Result<(), IdeaError>> + Send;
 
-    /// The person isn't interested in an open idea.
+    /// The person, or their own agent, isn't interested in an open idea.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'static>,
+        caller: IdeaCaller,
         id: Uuid,
     ) -> impl Future<Output = Result<(), IdeaError>> + Send;
 
