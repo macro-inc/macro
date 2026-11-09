@@ -8,4 +8,8 @@ export {
   $internalCreateSelection,
   $updateDOMSelection,
 } from './selection';
+export {
+  createSelectionDOMMethods,
+  type SelectionDOMRuntime,
+} from './selection-methods';
 export { type CompatCommit, type CompatView, createCompatView } from './view';

@@ -50,3 +50,17 @@ export type DOMRuntimeContract = Matches<
   Pick<typeof import('lexical'), keyof PublicRuntime>,
   PublicRuntime
 >;
+
+export type DOMSelectionMethodsContract = Matches<
+  {
+    applyDOMRange(
+      selection: import('lexical').RangeSelection,
+      ...args: Parameters<import('lexical').RangeSelection['applyDOMRange']>
+    ): ReturnType<import('lexical').RangeSelection['applyDOMRange']>;
+    modifyDOMSelection(
+      selection: import('lexical').RangeSelection,
+      ...args: Parameters<import('lexical').RangeSelection['modify']>
+    ): ReturnType<import('lexical').RangeSelection['modify']>;
+  },
+  ReturnType<typeof import('./selection-methods').createSelectionDOMMethods>
+>;
