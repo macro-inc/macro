@@ -1,0 +1,31 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Licensed under the MIT license in the upstream Lexical source tree.
+ */
+import type { SerializedLexicalNode } from 'lexical';
+import type { DOMConversionMap } from './dom-types';
+import type { LexicalNode } from './index';
+
+export interface StaticNodeConfigValue<
+  T extends LexicalNode,
+  Type extends string,
+> {
+  readonly type?: Type;
+  readonly $transform?: (node: T) => void;
+  readonly $importJSON?: (serializedNode: SerializedLexicalNode) => T;
+  readonly importDOM?: DOMConversionMap;
+  readonly stateConfigs?: import('lexical').StaticNodeConfigValue<
+    import('lexical').LexicalNode,
+    string
+  >['stateConfigs'];
+  readonly extends?: LexicalNode['constructor'];
+}
+
+export type BaseStaticNodeConfig = {
+  readonly [K in string]?: StaticNodeConfigValue<LexicalNode, string>;
+};
+
+export type StaticNodeConfigRecord<
+  Type extends string,
+  Config,
+> = BaseStaticNodeConfig & { readonly [K in Type]?: Config };
