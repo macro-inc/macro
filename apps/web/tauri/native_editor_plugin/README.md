@@ -119,6 +119,11 @@ The shared `NativeHistoryScenario` also pins full exported JSON, durable text ID
 and both native/model caret offsets across repeated physical Undo/Redo, for the
 default code registry and the full application custom-code registry. Physical
 editing shortcuts pass their modifier facts through the shared KeyDown route.
+`NativeClipboardPolicyScenario` separately checks actual Android clipboard paste
+through the full application registry: code keeps Markdown, pull-request URLs and
+long input verbatim; 1501 plain characters create a paste node followed by an
+empty caret paragraph. These cases do not establish downstream behavior for
+source plugins that yield, or complete clipboard/device parity.
 
 Bridge records for all three languages are generated from `schema/bridge.schema.json`.
 Install the private generator
