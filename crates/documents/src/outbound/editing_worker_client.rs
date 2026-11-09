@@ -10,6 +10,12 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
+// Let the worker report its own 20-second read and 30-second commit deadlines.
+#[cfg(feature = "ai_tools")]
+const LEXICAL_STATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+#[cfg(feature = "ai_tools")]
+const LEXICAL_COMMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(40);
+
 /// The meaning of a failed spreadsheet worker response: a 400 or 413 is an
 /// invalid request and a 409 a stale revision, both saving nothing; anything
 /// else may follow a save.
@@ -583,7 +589,11 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     }
 
     #[cfg(feature = "ai_tools")]
-    #[tracing::instrument(skip_all, fields(%document_id, http.status_code), err)]
+    #[tracing::instrument(
+        skip_all,
+        fields(%document_id, http.status_code, outcome, otel.status_code),
+        err
+    )]
     async fn lexical_state(
         &self,
         document_id: &str,
@@ -595,12 +605,20 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             .client
             .post(format!("{}/lexical-state", self.worker_url))
             .headers(headers)
+            .timeout(LEXICAL_STATE_TIMEOUT)
             .json(&serde_json::json!({
                 "documentId": document_id,
                 "documentToken": document_token.as_str(),
             }))
             .send()
             .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            })
             .context("editing worker request failed")?;
 
         let status = response.status();
@@ -613,6 +631,13 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         response
             .json()
             .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            })
             .context("editing worker reported a malformed lexical state")
     }
 
@@ -627,6 +652,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             blocks = commit.blocks.len(),
             removed = commit.removed.len(),
             http.status_code,
+            outcome,
+            otel.status_code,
         ),
         err
     )]
@@ -656,9 +683,17 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             .client
             .post(format!("{}/lexical-commit", self.worker_url))
             .headers(headers)
+            .timeout(LEXICAL_COMMIT_TIMEOUT)
             .json(&request_body)
             .send()
-            .await;
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            });
         let response = match sent {
             Ok(response) => response,
             Err(error) if error.is_connect() => {
@@ -673,7 +708,16 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
 
         let status = response.status();
         tracing::Span::current().record("http.status_code", status.as_u16());
-        let body = match response.json::<serde_json::Value>().await {
+        let body = match response
+            .json::<serde_json::Value>()
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            }) {
             Ok(body) => body,
             Err(error) if status.is_client_error() => {
                 anyhow::bail!("editing worker returned {status} with an unreadable body: {error}")
@@ -704,6 +748,9 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
                     body["message"].as_str().unwrap_or_default().to_owned(),
                 ))
             }
+            (reqwest::StatusCode::BAD_REQUEST, _) => Ok(LexicalCommitOutcome::Invalid(format!(
+                "editing worker refused the request: {body}"
+            ))),
             (reqwest::StatusCode::BAD_GATEWAY, Some("unacknowledged")) => {
                 Ok(LexicalCommitOutcome::Unacknowledged(
                     body["message"].as_str().unwrap_or_default().to_owned(),

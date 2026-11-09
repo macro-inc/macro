@@ -291,6 +291,10 @@ async fn lexical_commit_sends_the_blocks_and_maps_each_worker_outcome() {
                         StatusCode::UNPROCESSABLE_ENTITY,
                         serde_json::json!({ "error": "invalid", "message": "unknown node type: banner" }),
                     ),
+                    Some("bad_request") => (
+                        StatusCode::BAD_REQUEST,
+                        serde_json::json!({ "success": false, "error": { "name": "ZodError" } }),
+                    ),
                     Some("unacknowledged") => (
                         StatusCode::BAD_GATEWAY,
                         serde_json::json!({ "error": "unacknowledged", "message": "sync service timed out" }),
@@ -360,6 +364,13 @@ async fn lexical_commit_sends_the_blocks_and_maps_each_worker_outcome() {
             .unwrap(),
         LexicalCommitOutcome::Invalid("unknown node type: banner".to_string())
     );
+    assert!(matches!(
+        client
+            .lexical_commit("bad_request", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Invalid(message) if message.contains("ZodError")
+    ));
     assert_eq!(
         client
             .lexical_commit("unacknowledged", &token, &commit, None)
@@ -406,8 +417,8 @@ async fn lexical_commit_sends_the_blocks_and_maps_each_worker_outcome() {
 
 #[cfg(feature = "ai_tools")]
 #[tokio::test]
-async fn a_lexical_commit_that_never_connects_failed_and_one_that_times_out_is_unknown() {
-    use crate::domain::lexical::{DocumentLexicalCommitRequest, LexicalCommitOutcome};
+async fn a_lexical_commit_that_never_connects_fails() {
+    use crate::domain::lexical::DocumentLexicalCommitRequest;
 
     let commit = DocumentLexicalCommitRequest {
         revision: "AQID".to_string(),
@@ -422,30 +433,71 @@ async fn a_lexical_commit_that_never_connects_failed_and_one_that_times_out_is_u
         format!("http://{}", socket.local_addr().unwrap()),
         Arc::new(Client::builder().no_proxy().build().unwrap()),
     );
-    // Keep the connection queued without serving a response.
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let silent = ReqwestEditingWorkerClient::new(
-        format!("http://{}", listener.local_addr().unwrap()),
-        Arc::new(
-            Client::builder()
-                .no_proxy()
-                .timeout(Duration::from_millis(100))
-                .build()
-                .unwrap(),
-        ),
-    );
-
     let error = refused
         .lexical_commit("doc", &token, &commit, None)
         .await
         .unwrap_err();
-    let outcome = silent
-        .lexical_commit("doc", &token, &commit, None)
-        .await
-        .unwrap();
-
     assert_eq!(error.to_string(), "editing worker request failed");
     assert!(error.downcast_ref::<reqwest::Error>().unwrap().is_connect());
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn lexical_worker_deadlines_fail_reads_and_leave_sent_commits_unknown() {
+    use crate::domain::lexical::{DocumentLexicalCommitRequest, LexicalCommitOutcome};
+    use axum::{Router, http::StatusCode, routing::post};
+
+    let (received, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    let stalled = post(move || {
+        let received = received.clone();
+        async move {
+            received.send(()).unwrap();
+            std::future::pending::<StatusCode>().await
+        }
+    });
+    let app = Router::new()
+        .route("/lexical-state", stalled.clone())
+        .route("/lexical-commit", stalled);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let client = Arc::new(ReqwestEditingWorkerClient::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    ));
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let reader = client.clone();
+    let read = tokio::spawn(async move {
+        reader
+            .lexical_state("doc", &"test-token".to_owned().into())
+            .await
+    });
+    let commit = tokio::spawn(async move {
+        client
+            .lexical_commit(
+                "doc",
+                &"test-token".to_owned().into(),
+                &DocumentLexicalCommitRequest {
+                    revision: "AQID".to_string(),
+                    blocks: Vec::new(),
+                    removed: Vec::new(),
+                },
+                None,
+            )
+            .await
+    });
+
+    // Freeze time only after both requests reached the worker, so connection
+    // setup cannot race the request deadlines.
+    requests.recv().await.unwrap();
+    requests.recv().await.unwrap();
+    tokio::time::pause();
+    let (read, commit) = tokio::time::timeout(Duration::from_secs(41), async {
+        tokio::join!(read, commit)
+    })
+    .await
+    .expect("both requests must finish within their own deadlines");
+    let error = read.unwrap().unwrap_err();
+    assert!(error.downcast_ref::<reqwest::Error>().unwrap().is_timeout());
+    let outcome = commit.unwrap().unwrap();
     assert!(
         matches!(&outcome, LexicalCommitOutcome::Unacknowledged(message) if message.starts_with("editing worker request failed after it was sent")),
         "{outcome:?}"

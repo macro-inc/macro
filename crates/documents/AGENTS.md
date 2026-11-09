@@ -51,6 +51,8 @@ word docs, Illustrator/Photoshop files).
   revision: 409 `conflict` and 422 `invalid` applied nothing; 502
   `edit_outcome_unknown` (unacknowledged, a worker 5xx, or a transport failure
   after sending) may have applied.
+  Worker HTTP 400 validation failures also map to 422. Read and commit requests
+  expire after 30 and 40 seconds; timeouts mark the existing worker span as an error.
 - `src/inbound/axum_router/canvas.rs`: the SDK's canvas routes,
   `POST /{id}/canvas/{scene,render,edits,ai-edit}`, over `CanvasService` with
   `CanvasRouteDeps`. Calls run as `CanvasCaller` (the acting user, plus the bot
