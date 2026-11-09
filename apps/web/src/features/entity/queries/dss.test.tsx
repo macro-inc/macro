@@ -395,6 +395,24 @@ describe('bulk delete GraphQL optimism', () => {
     );
   });
 
+  it('re-reads the database and form lists after a folder is deleted', async () => {
+    const invalidate = vi
+      .spyOn(client, 'invalidateQueries')
+      .mockResolvedValue(undefined);
+    mocks.deleteItem.mockResolvedValue(true);
+    const { mutation } = mount();
+    await expect(
+      mutation.mutateAsync([entity('folder-1', 'project')])
+    ).resolves.toEqual([true]);
+    // Its databases and forms return to the root on the server.
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: databasesKeys.list.queryKey,
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: formsKeys.list.queryKey,
+    });
+  });
+
   it('trashes databases through the database API instead of DSS delete', async () => {
     const { mutation } = mount();
     await expect(

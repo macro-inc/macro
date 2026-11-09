@@ -115,6 +115,7 @@ describe('active call cache writers', () => {
 const record = (over: Partial<CallRecord>): CallRecord => ({
   callId: 'call-1',
   channelId: 'channel-1',
+  discussion: { kind: 'call_chat', call_id: 'call-1' },
   createdBy: 'macro|a@test.com',
   isActive: false,
   participants: [],

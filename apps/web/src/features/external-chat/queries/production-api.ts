@@ -240,10 +240,8 @@ export const externalChatApi: ExternalChatApi = {
       unreadCount: view.unreadCount,
       members: (view.members?.participants ?? []).map((person) => ({
         id: person.jid,
-        name:
-          person.displayName ??
-          phoneFromJid(person.jid) ??
-          'WhatsApp participant',
+        // The server names everyone (provider name, else phone number).
+        name: person.name,
         admin: person.admin,
       })),
       backfill: view.backfill

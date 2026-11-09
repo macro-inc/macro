@@ -1,4 +1,4 @@
-//! Code execution for an authenticated user outside any agent session.
+//! Authenticated MCP code execution, optionally attributed to a managed session.
 use super::{
     CodeModeError, ExecutionActivity, ExecutionStatus,
     service::{Reviews, settle, validate_request},
@@ -22,10 +22,11 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 
-/// Outcome returned straight to the caller; nothing is persisted.
+/// Outcome returned to the caller without a saved execution journal.
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserExecutionReceipt {
@@ -41,7 +42,8 @@ pub struct UserExecutionReceipt {
     pub error: Option<String>,
 }
 
-/// Run a program as the authenticated user, with no session, journal or reviews.
+/// Run a program as the authenticated user, with optional session attribution
+/// but no execution journal or reviews.
 #[async_trait]
 pub trait UserCodeMode: Send + Sync + 'static {
     /// Execute and wait for the outcome. Cancelling stops the process; completed
@@ -50,6 +52,7 @@ pub trait UserCodeMode: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError>;
@@ -91,11 +94,12 @@ impl UserCodeMode for UserCodeModeService {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
+        session: Option<uuid::Uuid>,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
-        let environment = self.credentials.issue(user, caller).await?;
+        let environment = self.credentials.issue(user, caller, session).await?;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self.executor.execute_program_with_progress(
             request,

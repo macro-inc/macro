@@ -17,7 +17,7 @@ use whatsapp_linked::domain::events::{
     MessageAnchor, MessageKind, Receipt, ReceiptState, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
-use whatsapp_linked::domain::models::Identity;
+use whatsapp_linked::domain::models::{GroupInfo as Roster, Identity};
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
@@ -215,10 +215,9 @@ pub async fn macro_chat(lids: &dyn LidStore, chat: &str) -> String {
 /// WhatsApp redelivers it.
 pub async fn complete_addresses(
     lids: &dyn LidStore,
-    contacts: &dyn ContactStore,
     event: &mut InboundEvent,
 ) -> Result<(), StoreError> {
-    complete_sender(lids, contacts, event).await?;
+    complete_sender(lids, event).await?;
     if event.chat_alternate_jid.is_some() {
         return Ok(());
     }
@@ -245,32 +244,27 @@ pub async fn complete_addresses(
 /// account's LID store, which whatsmeow fills at pairing (the account's own
 /// pair), from group participant lists and from message addressing. Without
 /// it a LID-only sender cannot be matched to the person already seen by phone
-/// number and is quarantined. A sender the message does not name (history
-/// messages, votes, system lines) gets the name the contact store keeps for
-/// either address ([`contact_name`]).
+/// number and is quarantined.
 pub async fn complete_sender(
     lids: &dyn LidStore,
-    contacts: &dyn ContactStore,
     event: &mut InboundEvent,
 ) -> Result<(), StoreError> {
     let InboundKind::Message(message) = &mut event.kind else {
         return Ok(());
     };
     let sender = &mut message.sender;
+    if sender.alternate_jid.is_some() {
+        return Ok(());
+    }
     let Ok(jid) = sender.jid.parse::<Jid>() else {
         return Ok(());
     };
-    if sender.alternate_jid.is_none() {
-        let alternate = match jid.server.as_str() {
-            HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await?,
-            DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await?,
-            _ => return Ok(()),
-        };
-        sender.alternate_jid = alternate.as_ref().and_then(person);
-    }
-    if sender.display_name.is_none() {
-        sender.display_name = contact_name(contacts, sender).await?;
-    }
+    let alternate = match jid.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await?,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await?,
+        _ => return Ok(()),
+    };
+    sender.alternate_jid = alternate.as_ref().and_then(person);
     Ok(())
 }
 
@@ -313,6 +307,53 @@ fn best_contact_name(contacts: &[ContactInfo]) -> Option<String> {
         .or_else(|| pick(|contact| &contact.full_name))
         .or_else(|| pick(|contact| &contact.first_name))
         .or_else(|| pick(|contact| &contact.business_name))
+}
+
+/// Names a message sender who came without a WhatsApp name (history pages
+/// usually carry none) by [`contact_name`]. `true` when it named them.
+pub async fn complete_sender_name(
+    contacts: &dyn ContactStore,
+    event: &mut InboundEvent,
+) -> Result<bool, StoreError> {
+    let InboundKind::Message(message) = &mut event.kind else {
+        return Ok(false);
+    };
+    if message.sender.display_name.is_some() {
+        return Ok(false);
+    }
+    message.sender.display_name = contact_name(contacts, &message.sender).await?;
+    Ok(message.sender.display_name.is_some())
+}
+
+/// Completes the names WhatsApp's group metadata leaves out (it has none
+/// for LID participants) from the account's contacts, as for senders.
+pub fn complete_participant_names(contacts: &HashMap<Jid, ContactInfo>, group: &mut Roster) {
+    for participant in &mut group.participants {
+        let identity = &mut participant.identity;
+        if identity.display_name.is_some() {
+            continue;
+        }
+        let found: Vec<ContactInfo> = [
+            Some(identity.jid.as_str()),
+            identity.alternate_jid.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|jid| contacts.get(&jid.parse::<Jid>().ok()?).cloned())
+        .collect();
+        identity.display_name = best_contact_name(&found);
+    }
+}
+
+/// Whether the event is a message whose sender has a name.
+pub fn sender_named(event: &InboundEvent) -> bool {
+    matches!(&event.kind, InboundKind::Message(message) if message.sender.display_name.is_some())
+}
+
+/// A WhatsApp name as messages carry it; `-` means none.
+fn push_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name != "-").then(|| name.to_owned())
 }
 
 fn person(jid: &Jid) -> Option<String> {
@@ -769,7 +810,7 @@ fn inbound_message(
     let sender = Identity {
         jid: author.to_owned(),
         alternate_jid: person(&info.sender_alt),
-        display_name: (!info.push_name.is_empty()).then(|| info.push_name.clone()),
+        display_name: push_name(&info.push_name),
     };
     let revision_text = content.revision.to_string();
     let mentions = content

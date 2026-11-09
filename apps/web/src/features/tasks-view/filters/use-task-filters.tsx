@@ -2,6 +2,11 @@ import type {
   AiFilterOutcome,
   ListFilterGroup,
 } from '@app/components/view-shell';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
@@ -10,7 +15,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { Tooltip } from '@ui';
-import { batch, createMemo, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
 import {
@@ -47,6 +52,15 @@ export function useTaskFilters() {
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
   const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
+  const assigneePicker = useAssigneePicker(
+    () => (state.facets.assignees ?? []).filter((id) => id !== TASK_VIEWER),
+    () => true
+  );
+  const selectedAssigneesAtViewEntry = createMemo(
+    on(assigneePicker.selectedIdsAtViewEntry, () => [
+      ...(state.facets.assignees ?? []),
+    ])
+  );
 
   const peopleOptions = createMemo(() => {
     const me = currentUserId();
@@ -99,6 +113,11 @@ export function useTaskFilters() {
         ]
       : options;
   });
+
+  const assigneeOptions = createMemo(() => [
+    ...peopleOptions().filter((option) => option.id === TASK_VIEWER),
+    ...assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+  ]);
 
   const withUnavailable = (
     id: TaskFilterGroupId,
@@ -168,8 +187,10 @@ export function useTaskFilters() {
       {
         id: 'assignees',
         label: 'Assignee',
-        searchPlaceholder: 'Search assignees...',
-        options: withUnavailable('assignees', peopleOptions()),
+        searchPlaceholder: assigneePicker.placeholder(),
+        options: assigneeOptions(),
+        footer: <AssigneePickerStatus picker={assigneePicker} />,
+        onOpenChange: assigneePicker.onOpenChange,
       },
       {
         id: 'created-by',
@@ -281,6 +302,7 @@ export function useTaskFilters() {
       setCustomRange(undefined);
     },
     groups,
+    selectedAssigneesAtViewEntry,
     isSelected,
     selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,

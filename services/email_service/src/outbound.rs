@@ -29,3 +29,5 @@ pub mod message_source;
 /// Forwarded-attachment persistence facts.
 pub mod forwarded_attachments;
 pub mod mailbox_settings;
+/// Provider reads of a user's newest inbox messages.
+pub mod recent_inbox;

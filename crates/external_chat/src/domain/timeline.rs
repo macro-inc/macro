@@ -89,6 +89,9 @@ pub struct ExternalChatParticipant {
     pub alternate_jid: Option<String>,
     /// Their name at the provider, untrusted.
     pub display_name: Option<String>,
+    /// What to call them: their provider name, else their phone number,
+    /// else a generic name.
+    pub name: String,
     /// Group admin.
     pub admin: bool,
 }

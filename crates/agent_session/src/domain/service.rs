@@ -78,7 +78,7 @@ use super::ports::{
 };
 use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input, StopReason as SessionStopReason};
+use super::session::{CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -195,6 +195,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner, set
+    /// by whoever opened it.
+    fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
 
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
@@ -345,6 +352,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         servers: Vec<McpServer>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Answer the agent's permission requests under `policy` from now on, on
+    /// the session's live connection on this instance. A session attached
+    /// nowhere here needs nothing: its next attach takes a fresh policy.
+    fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The session an incoming channel context routes to, if any.
@@ -918,6 +934,13 @@ where
         self.repo.get(id).await
     }
 
+    async fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -1242,6 +1265,24 @@ where
         };
         commands
             .send(SessionMessage::ReplaceMcpServers(servers))
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))
+    }
+
+    async fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
+    ) -> Result<()> {
+        let Some(commands) = self
+            .active
+            .get(&id)
+            .and_then(|active| active.commands.clone())
+        else {
+            return Ok(());
+        };
+        commands
+            .send(SessionMessage::SetPermissionPolicy(policy))
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))
     }
@@ -2097,6 +2138,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

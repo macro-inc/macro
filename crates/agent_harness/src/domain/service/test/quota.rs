@@ -53,6 +53,8 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             id,
             owner_id: owner,
@@ -120,6 +122,7 @@ async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
             for origin in [
                 open.origin.clone(),
                 SessionOrigin::TaskAssignment(crate::domain::model::TaskAssignmentOrigin {
+                    trigger_origin: trigger_context::TriggerOrigin::Unknown,
                     parent: MessageParent::parse("document", "assigned-task").unwrap(),
                     discussion_id: macro_uuid::generate_uuid_v7(),
                     actor: staff_sender(),
@@ -176,6 +179,8 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
         let id = AgentSessionId::new();
         let result = service
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
+                origin: trigger_context::TriggerOrigin::Unknown,
                 id: Some(id),
                 owner: Owner::User(sender()),
                 repo_url: None,

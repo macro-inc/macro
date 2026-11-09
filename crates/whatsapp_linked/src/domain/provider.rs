@@ -15,7 +15,10 @@ use external_chat::domain::{
         AccountRef, ChatProvider, ExternalChatResult, Members, MutationTarget, SendIntent,
         SendingFacts, StoredSend,
     },
-    timeline::{ExternalChatMembers, ExternalChatParticipant, view::People},
+    timeline::{
+        ExternalChatMembers, ExternalChatParticipant,
+        view::{People, UNKNOWN_PERSON},
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -290,6 +293,10 @@ fn members(info: &GroupInfo) -> ExternalChatMembers {
                 jid: participant.identity.jid.clone(),
                 alternate_jid: participant.identity.alternate_jid.clone(),
                 display_name: participant.identity.display_name.clone(),
+                name: participant
+                    .identity
+                    .label()
+                    .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
                 admin: participant.admin,
             })
             .collect(),

@@ -13,8 +13,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, InboundEvent, InboundKind, LookupAnswer, MediaImport, MessageAnchor,
-    OutboundMedia, OutgoingContent, SessionScope, Target,
+    ChatUpdate, ClaimedSend, InboundEvent, LookupAnswer, MediaImport, MessageAnchor, OutboundMedia,
+    OutgoingContent, SessionScope, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
@@ -205,16 +205,26 @@ struct Forwarder {
 }
 
 impl Forwarder {
-    /// [`events::complete_addresses`]; `false` when the LID or contact store
-    /// failed, so the event is left unacknowledged and WhatsApp redelivers it.
+    /// [`events::complete_addresses`]; `false` when the LID store failed, so
+    /// the event is left unacknowledged and WhatsApp redelivers it.
     async fn complete_addresses(&self, event: &mut InboundEvent) -> bool {
-        match events::complete_addresses(self.store.as_ref(), self.store.as_ref(), event).await {
-            Ok(()) => true,
+        match events::complete_addresses(self.store.as_ref(), event).await {
+            Ok(()) => {
+                // A name is only display: without one the sender is still stored.
+                if let Err(error) = events::complete_sender_name(self.store.as_ref(), event).await {
+                    tracing::warn!(
+                        account_id = %self.account,
+                        error = %error,
+                        "Reading the WhatsApp contact store failed; storing the sender unnamed"
+                    );
+                }
+                true
+            }
             Err(error) => {
                 tracing::warn!(
                     account_id = %self.account,
                     error = %error,
-                    "Reading the WhatsApp LID or contact store failed; leaving the event unacknowledged"
+                    "Reading the WhatsApp LID store failed; leaving the event unacknowledged"
                 );
                 false
             }
@@ -360,9 +370,9 @@ impl Forwarder {
                 let votes = events::history_poll_votes(self.account, &parsed, now);
                 let mut message_kept = true;
                 for mut event in std::iter::once(event).chain(votes) {
-                    let pushed = SenderNames::named(&event);
+                    let carried = events::sender_named(&event);
                     let completed = self.complete_addresses(&mut event).await;
-                    names.count(pushed, SenderNames::named(&event));
+                    names.count(carried, events::sender_named(&event));
                     message_kept &= completed && Box::pin(self.inbound.accept(&event)).await;
                 }
                 if message_kept {
@@ -400,8 +410,8 @@ impl Forwarder {
     }
 }
 
-/// How the senders of a history page could be named, for its span: by a
-/// WhatsApp name the message carries, by the account's contact store, or
+/// How the senders of a history page were named, for its span: by a
+/// WhatsApp name the message carries, from the account's contact store, or
 /// not at all. Counts only; never the names.
 #[derive(Default)]
 struct SenderNames {
@@ -411,20 +421,11 @@ struct SenderNames {
 }
 
 impl SenderNames {
-    /// Whether the event's sender has a name.
-    fn named(event: &InboundEvent) -> bool {
-        matches!(&event.kind, InboundKind::Message(message) if message.sender.display_name.is_some())
-    }
-
-    /// `pushed`: the message named its sender; `named`: it is named after
-    /// the contact store completed it.
-    fn count(&mut self, pushed: bool, named: bool) {
-        if pushed {
-            self.push += 1;
-        } else if named {
-            self.contact += 1;
-        } else {
-            self.none += 1;
+    fn count(&mut self, carried: bool, named: bool) {
+        match (carried, named) {
+            (true, _) => self.push += 1,
+            (false, true) => self.contact += 1,
+            (false, false) => self.none += 1,
         }
     }
 }
@@ -789,6 +790,17 @@ fn anchor_info(chat_jid: &str, anchor: &MessageAnchor) -> Result<MessageInfo, Se
     })
 }
 
+impl WhatsmeowSession {
+    /// The account's contacts, to name group participants; none when the
+    /// store can't be read (names are only display).
+    async fn contacts(&self) -> std::collections::HashMap<Jid, whatsmeow::types::ContactInfo> {
+        self.store.get_all_contacts().await.unwrap_or_else(|error| {
+            tracing::warn!(error = %error, "Reading the WhatsApp contact store failed");
+            Default::default()
+        })
+    }
+}
+
 fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) -> GroupInfo {
     GroupInfo {
         jid: group.jid.to_string(),
@@ -968,10 +980,15 @@ impl WhatsAppSession for WhatsmeowSession {
     async fn joined_groups(&self) -> Result<Vec<GroupInfo>, SessionError> {
         let observed_at = Utc::now();
         let groups = self.client.get_joined_groups().await.map_err(internal)?;
-        Ok(groups
+        let mut groups: Vec<GroupInfo> = groups
             .into_iter()
             .map(|group| group_info(group, observed_at))
-            .collect())
+            .collect();
+        let contacts = self.contacts().await;
+        for group in &mut groups {
+            events::complete_participant_names(&contacts, group);
+        }
+        Ok(groups)
     }
 
     async fn group(&self, group_jid: &str) -> Result<Option<GroupInfo>, SessionError> {
@@ -980,7 +997,11 @@ impl WhatsAppSession for WhatsmeowSession {
             SessionError::Internal(rootcause::report!("invalid group JID").into_dynamic())
         })?;
         match self.client.get_group_info(&jid).await {
-            Ok(group) => Ok(Some(group_info(group, Utc::now()))),
+            Ok(group) => {
+                let mut group = group_info(group, Utc::now());
+                events::complete_participant_names(&self.contacts().await, &mut group);
+                Ok(Some(group))
+            }
             Err(error) if not_a_member(&error) => Ok(None),
             Err(error) => Err(internal(error)),
         }

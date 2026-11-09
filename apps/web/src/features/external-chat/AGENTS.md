@@ -44,6 +44,9 @@ belong to `features/external-view`. Architecture:
 
 ## Gotchas
 
+- Refetch a timeline through `invalidateExternalChatMessages`. A plain refetch
+  cancels an older page that is loading, and the page is lost. It waits at most
+  10 s, so a hung older page can't block refreshes; past that it cancels the page.
 - `kind` is `group` or `direct`. A direct chat has no members list (header
   shows the person) and only its owner sends; shared viewers see "Only
   <owner> can reply in this chat" (`sendReason: 'not_added'`).
@@ -119,7 +122,8 @@ belong to `features/external-view`. Architecture:
 - Macro users (senders, reactors and system-line people with a `userId`)
   show their Macro name and avatar; everyone else shows the name DSS gives
   (`imported_author`; reactors through the reaction's `names`, which
-  `ReactionChip` reads for ids outside Macro).
+  `ReactionChip` reads for ids outside Macro). DSS supplies sender and member
+  names; render them as sent without client-side fallbacks.
 - Spans are `external_chat.*` with `external_chat.id`; provider account
   operations stay `whatsapp.*` in `lib/queries/whatsapp-linked`.
 - Use backend limits for text, files, edits and deletes.

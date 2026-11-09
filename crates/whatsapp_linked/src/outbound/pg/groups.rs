@@ -120,6 +120,7 @@ pub(super) async fn store_groups_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
+    changed_groups.extend(name_people_in(tx, &fresh, &bindings).await?);
     if complete {
         let observed_at = groups
             .iter()
@@ -182,6 +183,59 @@ async fn signal_changes_in(
         notify_change(tx, Change::Chat { chat_id }).await?;
     }
     Ok(())
+}
+
+/// Names the people of these groups' chats who have no name yet from the
+/// names a roster read carries (the session fills them from the account's
+/// contacts). Returns the chats whose people were named.
+async fn name_people_in(
+    tx: &mut Transaction<'_, Postgres>,
+    groups: &[&GroupInfo],
+    bindings: &[(Uuid, String)],
+) -> ExternalChatResult<Vec<Uuid>> {
+    let mut chats = vec![];
+    let mut jids = vec![];
+    let mut names = vec![];
+    for (chat, group_jid) in bindings {
+        let Some(group) = groups.iter().find(|group| &group.jid == group_jid) else {
+            continue;
+        };
+        for participant in &group.participants {
+            let identity = &participant.identity;
+            let Some(name) = identity
+                .display_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+            else {
+                continue;
+            };
+            for jid in [Some(&identity.jid), identity.alternate_jid.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                chats.push(*chat);
+                jids.push(jid.clone());
+                names.push(name.to_owned());
+            }
+        }
+    }
+    if chats.is_empty() {
+        return Ok(vec![]);
+    }
+    sqlx::query_scalar!(
+        r#"UPDATE external_chat_person p SET display_name = named.name
+        FROM UNNEST($1::uuid[], $2::text[], $3::text[]) AS named(chat_id, jid, name)
+        JOIN whatsapp_identity_alias a ON a.chat_id = named.chat_id AND a.jid = named.jid
+        WHERE p.id = a.person_id AND p.chat_id = named.chat_id AND p.display_name IS NULL
+        RETURNING p.chat_id"#,
+        &chats,
+        &jids,
+        &names
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(failure)
 }
 
 /// The account is no longer in this group (a live group event).

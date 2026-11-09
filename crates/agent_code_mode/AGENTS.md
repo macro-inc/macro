@@ -42,10 +42,23 @@ stacks. Process isolation belongs to
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
+- `src/domain/connected_apps.rs`: a running execution's connected apps
+  (`macro.connectedApps`). `GET|POST /agent-sessions/{id}/code-executions/{execution}/connected-apps…`
+  admits only a running execution of the session's current turn, called by
+  the account that execution was approved to act as; the harness adapter
+  (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
+  session's agent was given (`EgressProvisioner::advertised_all`) and calls
+  them through `agent_egress`'s `SessionMcpExchange`, so credentials never
+  reach the sandbox. In a turn someone other than the owner prompted, each
+  call spending the owner's access is held for the owner's approval
+  (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
+  and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
+  the native tool gate, so both tools are in `covered_by_code_sdk`.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
-  symbol). Jev ranks entities on their descriptions (32 per call, at most 8
-  calls) for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
+  symbol). Jev ranks entities on their descriptions, in parallel calls of 32
+  (`cognition::domain::decide_in_batches`; a late or failed call loses only
+  its own entities), for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
   reads symbol references (32 KiB). `Guidance::Selected` (owners with
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
@@ -64,7 +77,7 @@ session presentation. Never replay an uncertain submitted action.
 
 ## Tool contracts
 
-- Keep native `NameSearch` and `ListEntities` available for session-aware discovery; agent SDK documentation excludes legacy chats and workspace feeds.
+- `ContentSearch`, `NameSearch`, `ListEntities` and `ReadChat` are covered by the SDK's `search`, `workspace` and `chats` entities (`macro.search`, `macro.workspace`, `macro.chats`); the `search` entity carries the search guide. Keep their filters in step.
 
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.
@@ -88,7 +101,6 @@ longer delivery state.
   database configuration and `SQLX_OFFLINE` unset.
 - The review toolset test builds every review tool through shared provider schema
   validation.
-- Keep generated discovery topics within the classifier's 32-question limit.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,
   generated from the public SDK at build time; change the SDK or
   `packages/code-mode-sdk`, never a generated file.
@@ -100,3 +112,5 @@ The web and SDK review types are generated from these Rust types with specta
 (`src/bin/export_review_types.rs`, `just gen-agent-review-types` in `apps/web`).
 Regenerate after changing a review type or a type a draft or result reuses; CI
 fails on stale output.
+
+- Create fresh invocation attribution in the credential issuer; managed MCP session provenance comes only from verified request context.

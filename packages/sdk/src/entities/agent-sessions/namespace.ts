@@ -7,7 +7,9 @@ import type {
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
+  type AgentSessionUpdates,
   type CreateManagedSessionOptions,
+  type RegisteredWork,
   type SelectableRepository,
 } from './agent-session';
 
@@ -21,16 +23,15 @@ import {
  *
  * Do repository and coding work yourself when you can. Start another agent session only when the user asks for one, or the work needs a repository runtime you do not have.
  *
- * Start sessions from ExecuteCode. macro.agents.list() returns the user's own configurable agents; choose by name and instructions, preferring an agent the user named, and pass it as `agent` to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use the default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
+ * Start sessions from ExecuteCode. For coding work, macro.agents.coding() lists the coding personas the user can start right now, built-in ones such as Cursor included; for a chat agent, macro.agents.list() lists the user's configurable agents. Choose by name, description and instructions, preferring an agent the user named, and pass its `agent` handle to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use Macro's default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
  *
  * ```javascript
  * export async function main({macro}) {
- *   const agents = await macro.agents.list();
- *   const names = await Promise.all(agents.map((agent) => agent.name()));
- *   const agent = agents[names.indexOf('Web maintainer')];
- *   if (!agent) return {data: {error: 'No agent named Web maintainer', available: names}};
+ *   const coding = await macro.agents.coding();
+ *   const chosen = coding.find((option) => option.name === 'Cursor');
+ *   if (!chosen) return {data: {error: 'Cursor is not connected', available: coding.map((option) => option.name)}};
  *   const session = await macro.agentSessions.createManaged({
- *     agent,
+ *     agent: chosen.agent,
  *     repoUrl: 'https://github.com/acme/web',
  *     prompt: 'Fix the login redirect loop in acme/web. ...',
  *   });
@@ -39,6 +40,10 @@ import {
  * ```
  *
  * The prompt must be self-contained: the task, repository, relevant findings and links, constraints, and expected outcome. The new session does not receive this conversation. When the outcome is a pull request, require it to be ready for review, not a draft, with CI passing before the agent finishes. Create once per task and do not retry automatically after an uncertain failure. Link the session in your reply with its id. To check on it later, create a routine; never wait or poll inside an execution.
+ *
+ * ## Sessions waiting for the user
+ *
+ * macro.agentSessions.updates() lists the user's sessions waiting on them (permission requests, questions, held tool approvals) or stalled. A session's held tool calls come from session.pendingApprovals(); approve or deny one only when the user said so for that call. session.linkTask(task) links a session the user owns to its Macro task, and the session's pull request with it.
  */
 export class AgentSessionNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -50,14 +55,24 @@ export class AgentSessionNamespace {
 
   /**
    * Create a managed session as `agent` when one is named, otherwise the
-   * deployment's default coding persona. List personas with
-   * {@link AgentNamespace.list} and construct one with {@link Agent.byId}.
-   * Unknown or inaccessible personas fail. `model` and `instructions`
+   * deployment's default persona. Take `agent` from
+   * {@link AgentNamespace.coding} (coding personas, Cursor included) or
+   * {@link AgentNamespace.list} (configurable agents); never construct one
+   * from an id. Unknown or inaccessible personas fail. `model` and `instructions`
    * outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
    * and it starts as Cursor.
    */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * The sessions the caller registered as its work with
+   * {@link AgentSession.registerAsWork} and can still view, newest first.
+   * Ended registrations and archived sessions are left out.
+   */
+  registeredWork(): Promise<RegisteredWork[]> {
+    return AgentSession.listRegisteredWork(this.client);
   }
 
   /**
@@ -83,6 +98,16 @@ export class AgentSessionNamespace {
    */
   repositoryBranches(repoUrl: string): Promise<string[]> {
     return AgentSession.repositoryBranches(this.client, repoUrl);
+  }
+
+  /**
+   * The caller's coding sessions waiting for them: permission requests,
+   * questions and held tool approvals to answer, and sessions stalled for
+   * over 20 minutes, newest activity first. Read a session's held approvals
+   * with {@link AgentSession.pendingApprovals}.
+   */
+  updates(): Promise<AgentSessionUpdates> {
+    return AgentSession.updates(this.client);
   }
 
   /**

@@ -22,8 +22,8 @@ VALUES ('macro|user-1@example.com', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'mem
        ('macro|user-2@example.com', '77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'owner');
 
 INSERT INTO public.team_crm_settings ("team_id", "crm_enabled")
-VALUES ('77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', TRUE),
-       ('77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', TRUE);
+VALUES ('77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', FALSE),
+       ('77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', FALSE);
 
 INSERT INTO public.crm_companies ("id", "team_id", "hidden", "first_interaction", "last_interaction", "custom_name")
 VALUES ('88888888-0000-0000-0000-000000000001', '77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', FALSE, '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00', 'Company 1'),

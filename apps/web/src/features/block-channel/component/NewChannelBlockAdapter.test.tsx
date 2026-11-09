@@ -66,6 +66,7 @@ vi.mock('@channel/Bots/use-channel-bot-management', () => ({
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({}));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({}));
+vi.mock('@channel/views/pending-direct-message', () => ({}));
 vi.mock('@channel/Call/CallEventSync', () => ({}));
 vi.mock('@channel/Call/ChannelCallAutoJoin', () => ({}));
 vi.mock('@channel/Call/ChannelCallButton', () => ({}));
