@@ -6,16 +6,7 @@ impl EditorSession {
     /// Raw live editor JSON, including local UI state.
     #[wasm_bindgen(js_name=serializedState)]
     pub fn serialized_state(&self) -> Result<String, JsError> {
-        serde_json::to_string(
-            &self
-                .surface()
-                .state()
-                .to_json()
-                .map_err(BoundaryError::from)
-                .map_err(js)?,
-        )
-        .map_err(BoundaryError::from)
-        .map_err(js)
+        bulk::serialize(self.surface().state()).map_err(js)
     }
     /// Download-safe Macro JSON with regenerated search text and transient nodes removed.
     #[wasm_bindgen(js_name=savedState)]

@@ -214,7 +214,7 @@ pub(crate) fn query(
             }
         }
         6 => reply.text = serde_json::to_string(&view.export_json(NodeKey::ROOT)?)?,
-        7 => reply.text = serde_json::to_string(&state.to_json()?)?,
+        7 => reply.text = bulk::serialize(state)?,
         8 => {
             if let Some(cursors) = surface.selection_cursors() {
                 reply.nodes = vec![serde_json::to_string(&lexical_loro::encode_selection(

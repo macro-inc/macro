@@ -53,6 +53,8 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 
 ## Boundaries
 
+Route raw live-state string and query-kind-7 exports through the model streaming writer in `src/bulk.rs`; keep application saved-state cleanup separate.
+
 Sync policy, authorization, history and retries remain in document_session/doc_sync_core.
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.

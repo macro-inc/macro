@@ -78,3 +78,5 @@ mod compatibility;
 /// Typed synchronous host callbacks scoped to the active native operation.
 #[cfg(feature = "compatibility")]
 pub mod compatibility_host;
+
+mod bulk;
