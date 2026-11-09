@@ -62,7 +62,13 @@ impl Plugin for Keyboard {
             Command::Key {
                 command: KeyCommand::Enter,
                 event,
-            } => enter(tx, event.as_ref()),
+            } => {
+                let handled = enter(tx, event.as_ref())?;
+                if handled == Handled::Yes {
+                    tx.prevent_default();
+                }
+                Ok(handled)
+            }
             _ => Ok(Handled::No),
         }
     }
