@@ -158,3 +158,64 @@ test.each([false, true])(
     }
   }
 );
+
+test.each(['copy', 'cut'] as const)(
+  '%s exports the current DOM range before selectionchange admission',
+  (kind) => {
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [
+                  {
+                    type: 'text',
+                    version: 1,
+                    text: 'fresh bold',
+                    format: 1,
+                    detail: 0,
+                    mode: 'normal',
+                    style: '',
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      );
+      const node = [...fixture.view.mirror.values()].find(
+        (node) => node.kind === 'text'
+      );
+      if (!node) throw new Error('Missing actual text node');
+      const element = fixture.view.getElementByKey(node.key);
+      if (!element) throw new Error('Missing actual text DOM');
+      const leaf = document
+        .createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        .nextNode();
+      if (!leaf) throw new Error('Missing actual text leaf');
+      fixture.root.focus();
+      document.getSelection()?.setBaseAndExtent(leaf, 0, leaf, 10);
+      // No synthetic selectionchange: the real copy handler must admit this range.
+      const clipboard = transfer('');
+      const event = new Event(kind, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: clipboard });
+      fixture.root.dispatchEvent(event);
+      expect(clipboard.getData('text/plain')).toBe('fresh bold');
+      const payload = JSON.parse(
+        clipboard.getData('application/x-lexical-editor')
+      );
+      expect(payload.nodes[0].text).toBe('fresh bold');
+      expect(payload.nodes[0].format).toBe(1);
+      expect(event.defaultPrevented).toBe(true);
+      if (kind === 'cut') expect(fixture.root.textContent).toBe('');
+    } finally {
+      fixture.close();
+    }
+  }
+);
