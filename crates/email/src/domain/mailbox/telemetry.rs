@@ -22,7 +22,7 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
             "auth_required"
         }
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
-        MailboxError::Effect => "effect",
+        MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         _ => "other",
     }
@@ -56,10 +56,11 @@ pub(super) fn record_deferred(
     span.record("outlook.outcome", "deferred");
     span.record("outlook.defer_reason", reason);
     span.record("outlook.defer_seconds", i64::from(delay_seconds));
+    let attachment_id = record_effect(span, error);
     if is_gate_refusal(error) {
         tracing::debug!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), %error, "mailbox sync work deferred");
     } else {
-        tracing::warn!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), %error, "mailbox sync work deferred");
+        tracing::warn!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), attachment_id = attachment_id.map(tracing::field::display), %error, "mailbox sync work deferred");
     }
 }
 
@@ -70,11 +71,29 @@ pub(super) fn record_failed(span: &Span, link_id: Uuid, error: &MailboxError) {
     span.record("outlook.outcome", "failed");
     span.record("outlook.defer_reason", reason);
     span.record("otel.status_description", tracing::field::display(error));
+    let attachment_id = record_effect(span, error);
     if matches!(error, MailboxError::Stale) {
         tracing::debug!(parent: span, %link_id, defer_reason = reason, %error, "mailbox sync work failed");
     } else {
-        tracing::warn!(parent: span, %link_id, defer_reason = reason, %error, "mailbox sync work failed");
+        tracing::warn!(parent: span, %link_id, defer_reason = reason, attachment_id = attachment_id.map(tracing::field::display), %error, "mailbox sync work failed");
     }
+}
+
+/// Records which effect failed (`outlook.effect`) and the attachment it was
+/// working on (`outlook.attachment_id`), and returns that attachment.
+fn record_effect(span: &Span, error: &MailboxError) -> Option<Uuid> {
+    let MailboxError::Effect(failure) = error else {
+        return None;
+    };
+    span.record("outlook.effect", failure.kind());
+    let attachment_id = failure.attachment_id();
+    if let Some(attachment_id) = attachment_id {
+        span.record(
+            "outlook.attachment_id",
+            tracing::field::display(attachment_id),
+        );
+    }
+    attachment_id
 }
 
 /// Logs why a unit of the other mailbox loops (contacts, drafts, commands,
