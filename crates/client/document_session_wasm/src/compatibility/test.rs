@@ -73,6 +73,8 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     let initial = editor.compat_snapshot_inner(0)?;
     assert_eq!(initial.batch.records.len(), 1);
     assert_eq!(initial.batch.records[0].type_name, "root");
+    assert!(!initial.batch.records[0].has_root_cached_text);
+    assert!(initial.batch.records[0].root_cached_text.is_empty());
     let original = initial.batch.records[0].record;
     editor.machine.sync(SyncInput::Start, 0.0, None)?;
     editor.machine.sync(
@@ -641,6 +643,14 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
     request.operation = Op::GetWritable;
     assert!(editor.compat_call_inner(&bytes(&request)?).is_err());
     let snapshot = editor.compat_snapshot_inner(committed.version)?;
+    let root_cache = snapshot
+        .batch
+        .records
+        .iter()
+        .find(|record| record.type_name == "root")
+        .unwrap();
+    assert!(!root_cache.has_root_cached_text);
+    assert!(root_cache.root_cached_text.is_empty());
     let frozen_text = snapshot
         .batch
         .records

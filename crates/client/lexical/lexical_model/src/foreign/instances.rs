@@ -357,7 +357,7 @@ impl StateRef<'_> {
                 &instance,
             )?;
         ForeignReadOperation::check()?;
-        if key == NodeKey::ROOT {
+        if key == NodeKey::ROOT && self.state.registry.derive_view_caches {
             self.foreign_root_cached_text()?;
         }
         slot.foreign_instance

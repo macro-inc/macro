@@ -11,7 +11,6 @@ impl Host {
         Ok(version)
     }
     fn refresh(&mut self, state: &EditorState) -> Result<Vec<Commit>, BoundaryError> {
-        state.view().foreign_root_cached_text()?;
         let receipts = std::mem::take(
             &mut *self
                 .receipts

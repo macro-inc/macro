@@ -806,3 +806,53 @@ fn builder_installs_instance_host_before_initial_state_publication()
     );
     Ok(())
 }
+
+#[test]
+fn external_reconciler_root_hydration_preserves_null_cache() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .without_reconciler_caches()
+        .build()
+        .expect("external reconciler");
+    let host = Arc::new(Host {
+        classes: vec![(1, "root")],
+        next: AtomicU32::new(2),
+        failure: AtomicU32::new(0),
+        calls: Mutex::new(vec![]),
+    });
+    editor.install_foreign_instance_hooks(host.clone())?;
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("unmaterialized")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(())
+    })?;
+    let state = editor.state().clone();
+    let view = state.view();
+    let identity = view.foreign_record_identity(NodeKey::ROOT)?;
+    let instance = ForeignInstance::new(editor.foreign_instance_owner(), 1, 1)?;
+    assert!(state.root_text.get().is_none());
+    view.bind_foreign_instance(NodeKey::ROOT, &identity, instance.clone())?;
+    view.bind_foreign_instance(NodeKey::ROOT, &identity, instance)?;
+    assert!(state.root_text.get().is_none());
+    assert_eq!(
+        view.node_or_err(NodeKey::ROOT)?
+            .foreign_raw_root_cached_text(),
+        None
+    );
+    let captured = view.snapshot_for_foreign_read()?;
+    assert_eq!(
+        captured.render_records([NodeKey::ROOT])?[0].root_cached_text(),
+        None
+    );
+    assert!(host.calls.lock().unwrap().is_empty());
+    assert!(view.foreign_record_identity(NodeKey::ROOT)? == identity);
+    assert_eq!(view.foreign_root_cached_text()?, None);
+    assert_eq!(state.root_text_content().as_ref(), "unmaterialized");
+    assert_eq!(
+        view.node_or_err(NodeKey::ROOT)?
+            .foreign_raw_root_cached_text(),
+        None
+    );
+    Ok(())
+}

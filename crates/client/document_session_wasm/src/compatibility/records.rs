@@ -186,7 +186,6 @@ impl Host {
         state: &EditorState,
         version: u64,
     ) -> Result<compat::ForeignRenderBatch, BoundaryError> {
-        state.view().foreign_root_cached_text()?;
         let source = Arc::new(state.view().snapshot_for_foreign_read()?);
         let keys = source.record_keys();
         Ok(compat::ForeignRenderBatch {

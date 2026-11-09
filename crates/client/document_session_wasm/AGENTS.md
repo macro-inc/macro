@@ -106,3 +106,6 @@ Disable native reconciler cache derivation in compatibility factories so the JS
 reconciler owns root text and element text-format/style caches, including virtual
 setter calls. Keep createMacro cache behavior unchanged; prepublication derived
 acknowledgements still require their own validated reconciliation stage.
+
+Capture compatibility snapshots and publication metadata without materializing
+root text; raw cache absence must survive hydration and transport refresh.
