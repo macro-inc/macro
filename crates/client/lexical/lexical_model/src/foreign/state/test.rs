@@ -462,3 +462,57 @@ fn foreign_state_builder_reuses_one_config_and_rejects_a_different_identity() {
         Err(BuildError::StateKeyCollision { key: "value" })
     ));
 }
+
+#[test]
+fn empty_foreign_state_metadata_borrows_layout_and_builtin_text_still_uses_js_state()
+-> Result<(), Error> {
+    let registry = ForeignStateRegistry::default();
+    let layout = StateLayout::default();
+    assert!(matches!(
+        registry.layout(&layout),
+        std::borrow::Cow::Borrowed(_)
+    ));
+    let bindings = ForeignBindings::default();
+    assert!(!bindings.contains("counter"));
+    assert!(bindings.configs().is_empty());
+    assert!(!bindings.clone().populated.load(Ordering::Acquire));
+    struct Codec;
+    impl ForeignStateCodec for Codec {
+        fn is_equal(&self, a: &Value, b: &Value) -> bool {
+            a == b
+        }
+        fn is_default(&self, value: &Value) -> bool {
+            value == 0
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_state(ForeignStateConfig {
+            key: "counter".into(),
+            flat: true,
+            codec: Arc::new(Codec),
+        })
+        .build()
+        .expect("editor");
+    assert!(!editor.state.registry.has_foreign_payloads);
+    let (key, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let text = tx.create_text("native text")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_foreign_state(text.key(), "counter", 1.into())?;
+        Ok(text.key())
+    })?;
+    let previous = editor.state().clone();
+    assert_eq!(previous.view().export_json(key)?["counter"], 1);
+    editor.update(|tx| tx.set_foreign_state(key, "counter", 0.into()))?;
+    assert!(
+        editor
+            .state()
+            .view()
+            .export_json(key)?
+            .get("counter")
+            .is_none()
+    );
+    assert_eq!(previous.view().export_json(key)?["counter"], 1);
+    Ok(())
+}
