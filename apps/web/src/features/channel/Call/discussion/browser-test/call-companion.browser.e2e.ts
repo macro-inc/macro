@@ -155,3 +155,56 @@ test('companion controls open reactions from the unchanged call popover header',
     expect(box!.y).toBe(row!.y);
   }
 });
+
+test('companion controls match the shared bar height', async ({
+  page,
+}, info) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || info.project.name === 'phone'
+  );
+  for (const width of [1280, 600]) {
+    for (const theme of ['dark', 'light']) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(
+        `/src/features/channel/Call/discussion/browser-test/call-overlay.html?theme=${theme}&work=off`
+      );
+      const controls = page.locator('[data-call-controls]');
+      await expect(controls).toBeVisible();
+      const microphone = await controls
+        .getByRole('group', { name: 'Microphone', exact: true })
+        .boundingBox();
+      expect(microphone?.height).toBe(width === 1280 ? 40 : 32);
+      for (const label of ['Camera', 'Screen share']) {
+        expect(
+          (
+            await controls
+              .getByRole('group', { name: label, exact: true })
+              .boundingBox()
+          )?.height
+        ).toBe(microphone?.height);
+      }
+      for (const label of ['Reactions', 'More', 'Leave call']) {
+        const button = controls.getByRole('button', {
+          name: label,
+          exact: true,
+        });
+        if (await button.isVisible())
+          expect((await button.boundingBox())?.height).toBe(microphone?.height);
+      }
+      expect(
+        (
+          await page
+            .getByRole('button', {
+              name: 'Open chat and participants',
+              exact: true,
+            })
+            .boundingBox()
+        )?.height
+      ).toBe(microphone?.height);
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L102-${width}-${theme}.png`,
+        });
+    }
+  }
+});
