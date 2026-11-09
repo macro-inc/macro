@@ -130,15 +130,38 @@ impl EditorCore {
         let mut tx = self.editor.transaction();
         let mut handled = Handled::No;
         let mut installed = None;
+        let mut displayed_delta = None;
         let result = (|| {
             let mut fresh = true;
             for item in inputs {
+                // An unchanged DOM input ignores its reported selection upstream.
+                // Validate the span before any pending selection or model write.
+                if let Input::TextDeltaFromView(delta) = item
+                    && !delta.composition_end
+                    && delta.is_unchanged(tx.view())?
+                {
+                    continue;
+                }
                 let command_empty = matches!(item,Input::Command {command,..} if tx.editor.listener_table.levels(command.kind()).is_none() && !(self.history.is_some() && matches!(command,Command::Undo|Command::Redo|Command::ClearHistory|Command::ClearEditor)));
                 if fresh
                     && !command_empty
                     && let Some(selection) = item.selection()
                 {
+                    let typing = if matches!(item, Input::TextDeltaFromView(delta) if !delta.composition_end)
+                    {
+                        tx.selection()
+                            .and_then(Selection::as_range)
+                            .map(|range| (range.format, range.style.clone()))
+                    } else {
+                        None
+                    };
                     tx.selection_from_view(selection.clone())?;
+                    if let Some((format, style)) = typing
+                        && let Some(Selection::Range(range)) = tx.pending.selection.as_mut()
+                    {
+                        range.format = format;
+                        range.style = style;
+                    }
                     installed = tx.selection().cloned();
                     fresh = false;
                 }
@@ -150,6 +173,7 @@ impl EditorCore {
                     &mut self.history,
                     item,
                     parsed.as_ref(),
+                    &mut displayed_delta,
                     &mut effects,
                 )?;
                 if inputs.len() > 1 {
@@ -201,6 +225,25 @@ impl EditorCore {
             .composition_key
             .map_or(Composition::Idle, |key| Composition::Composing { key });
         let view_match = match &input {
+            Input::TextDeltaFromView(delta)
+                if self
+                    .editor
+                    .state
+                    .view()
+                    .text(delta.key)
+                    .is_some_and(|node| {
+                        displayed_delta.as_ref().map_or_else(
+                            || {
+                                delta
+                                    .is_unchanged(self.editor.state.view())
+                                    .unwrap_or(false)
+                            },
+                            |text| node.text.as_str() == text,
+                        )
+                    }) =>
+            {
+                Some(delta.key)
+            }
             Input::TextFromView { key, text, .. }
                 if self
                     .editor
@@ -216,6 +259,7 @@ impl EditorCore {
         let elide = matches!(
             input,
             Input::TextFromView { .. }
+                | Input::TextDeltaFromView(_)
                 | Input::SelectionFromView { .. }
                 | Input::Composition { .. }
         );
@@ -403,9 +447,38 @@ fn run(
     history: &mut Option<History>,
     input: &Input,
     parsed: Option<&EditorState>,
+    displayed_delta: &mut Option<String>,
     effects: &mut Vec<Effect>,
 ) -> Result<Handled, Error> {
     match input {
+        Input::TextDeltaFromView(delta) => {
+            let displayed = delta.displayed_text(tx.view())?;
+            if delta.composition_end {
+                text::composition(
+                    tx,
+                    &CompositionEvent::End {
+                        key: delta.key,
+                        text: displayed.clone(),
+                        anchor: delta.anchor,
+                        focus: delta.focus,
+                        data: delta.composition_data.clone().unwrap_or_default(),
+                    },
+                    effects,
+                )?;
+            } else {
+                text::from_view(
+                    tx,
+                    delta.key,
+                    &displayed,
+                    (delta.anchor, delta.focus),
+                    false,
+                    delta.composition_data.as_deref(),
+                    effects,
+                )?;
+            }
+            *displayed_delta = Some(displayed);
+            Ok(Handled::No)
+        }
         Input::TextFromView {
             key,
             text,

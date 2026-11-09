@@ -291,6 +291,7 @@ impl<S: Surface> DocumentSession<S> {
             &input,
             SessionInput::Editor(
                 lexical_model::Input::TextFromView { .. }
+                    | lexical_model::Input::TextDeltaFromView(_)
                     | lexical_model::Input::Composition {
                         event: lexical_model::CompositionEvent::End { .. },
                         ..

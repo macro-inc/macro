@@ -44,6 +44,7 @@ The host supplies identities and both clocks and executes the returned effects.
 ## Gotchas
 
 Set peer immediately on every new/forked document and disable recorded timestamps.
+Admit TextDeltaFromView on the held IME branch before releasing queued remote updates; full TextFromView remains an explicit resync input.
 Project early commits even when apply fails; consume buffered remote events only after
 successful binding. Validate complete generic batches before changing the live document.
 
