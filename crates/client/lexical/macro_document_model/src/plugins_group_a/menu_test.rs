@@ -413,3 +413,342 @@ fn async_snippet_empty_or_failed_content_removes_pending_node_at_the_adjacent_ca
     assert_eq!(caret.anchor, Point::text(key, Utf16Offset(7)));
     Ok(())
 }
+
+#[test]
+fn native_source_snippet_extracts_internal_markdown_then_parses_the_native_target()
+-> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeClock(std::sync::Arc::new(|| 1_000_000)))
+    .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+        vec![4; length]
+    })))
+    .extension_state(crate::NodeHost::default())
+    .build()
+    .expect("surface");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text(";s")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        tx.select_end(text)?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command("group-a.menu-select", &json!({
+        "key":key.index(),"offset":0,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture"}}
+    }).to_string(), key.generation())?.expect("start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("request");
+    let placeholder = editor
+        .state()
+        .view()
+        .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+        .key();
+    let raw: SerializedEditorState = serde_json::from_value(
+        json!({"root":{"type":"root","children":[
+            {"type":"paragraph","children":[{"type":"comment-mark","isDraft":true,"ids":["local-draft"],"children":[{"type":"text","text":"bold","format":1,"$":{"id":"source-text"}}]}]},
+            {"type":"code","language":"rust","children":[{"type":"text","text":"let v = 1;"}]},
+            {"type":"list","listType":"number","tag":"ol","start":4,"children":[{"type":"listitem","value":4,"children":[{"type":"text","text":"item"}]}]}
+        ]}}),
+    )?;
+    let untouched = raw.clone();
+    let answer = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        Some(raw.clone()),
+        crate::EditorType::MarkdownSync,
+    );
+    let (handled, commit) = editor.dispatch(&answer)?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.tags.contains(&UpdateTag::HistoryMerge));
+    assert_eq!(raw, untouched);
+    assert_eq!(
+        editor.state().root_text_content().as_ref(),
+        "bold\n\nlet v = 1;\n\nitem"
+    );
+    let state = editor.state().to_json()?;
+    let children = state.root["children"].as_array().expect("blocks");
+    assert_eq!(children[0]["type"], "paragraph");
+    assert_eq!(children[0]["children"][0]["text"], "bold");
+    assert_eq!(children[0]["children"][0]["format"], 1);
+    assert_eq!(children[1]["type"], "custom-code");
+    assert_eq!(children[1]["language"], "rust");
+    assert_eq!(children[2]["type"], "list");
+    // Current stored-list import policy preserves ListNode; authored creation
+    // is the separate replacement path pinned by tests/registries.rs.
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::TaskListNode>()
+            .len(),
+        0
+    );
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<lexical_rich_nodes::list::ListNode>()
+            .len(),
+        1
+    );
+    assert_eq!(children[2]["start"], 4);
+    assert!(!serde_json::to_string(&state)?.contains("source-text"));
+    assert!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::CommentNode>()
+            .is_empty()
+    );
+    assert!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::AwaitNode>()
+            .is_empty()
+    );
+    let completed = editor.state().to_json()?;
+    assert_eq!(editor.dispatch(&answer)?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, completed);
+    Ok(())
+}
+
+#[test]
+fn fresh_invalid_native_source_clears_pending_and_completed_requests_ignore_replay()
+-> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+        vec![5; length]
+    })))
+    .build()
+    .expect("surface");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text(";s")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        tx.select_end(text)?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command("group-a.menu-select", &json!({
+        "key":key.index(),"offset":0,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":"snippet-fixture"}}
+    }).to_string(), key.generation())?.expect("start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("request");
+    let placeholder = editor
+        .state()
+        .view()
+        .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+        .key();
+    let raw = serde_json::from_value(
+        json!({"root":{"type":"root","children":[{"type":"unregistered-snippet-node"}]}}),
+    )?;
+    let invalid = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        Some(raw),
+        crate::EditorType::MarkdownSync,
+    );
+    assert_eq!(editor.dispatch(&invalid)?.0, Handled::Yes);
+    assert!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::AwaitNode>()
+            .is_empty()
+    );
+    let clear = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        None,
+        crate::EditorType::MarkdownSync,
+    );
+    let (handled, _) = editor.dispatch(&clear)?;
+    assert_eq!(handled, Handled::No);
+    assert!(
+        editor
+            .state()
+            .view()
+            .nodes_of_type::<crate::nodes::AwaitNode>()
+            .is_empty()
+    );
+    let completed = editor.state().to_json()?;
+    assert_eq!(editor.dispatch(&invalid)?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, completed);
+    Ok(())
+}
+
+#[test]
+fn native_snippet_keeps_the_recorded_source_cache_across_target_resets() -> Result<(), Error> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    };
+    let calls = Arc::new(AtomicU8::new(0));
+    let supplied = calls.clone();
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeRandom(Arc::new(move |length| {
+        vec![supplied.fetch_add(1, Ordering::Relaxed); length]
+    })))
+    .build()
+    .expect("surface");
+    let mut first = None;
+    let mut tokens = std::collections::BTreeSet::new();
+    for (index, raw) in [
+        json!({"root":{"type":"root","children":[]}}),
+        json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"First snippet","format":1}]}]}}),
+        json!({"root":{"type":"root","children":[]}}),
+        json!({"root":{"type":"root","children":[{"type":"fixture-unknown-snippet-node","version":1}]}}),
+        json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"Second snippet","format":1}]}]}}),
+    ].into_iter().enumerate() {
+        let (key, _) = editor.update(|tx| {
+            for child in tx.children_keys(NodeKey::ROOT)? { tx.remove(child, false)?; }
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text(";s")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[text.key()])?;
+            tx.select_end(text)?;
+            Ok(text.key())
+        })?;
+        let start = super::menu::decode_command("group-a.menu-select", &json!({
+            "key":key.index(),"offset":0,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":format!("snippet-{index}")}}
+        }).to_string(), key.generation())?.expect("start");
+        let (_, commit) = editor.dispatch(&start)?;
+        let request = crate::surface::event_payload(&commit.events[0])?.expect("request");
+        let await_id = request["awaitId"].as_str().expect("identity").to_owned();
+        assert!(tokens.insert(await_id.clone()));
+        let placeholder = editor.state().view().nodes_of_type::<crate::nodes::AwaitNode>()[0].key();
+        let answer = super::menu::resolve_snippet_source(placeholder, await_id, Some(serde_json::from_value(raw)?), crate::EditorType::MarkdownSync);
+        let (handled, commit) = editor.dispatch(&answer)?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(commit.tags.contains(&UpdateTag::HistoryMerge));
+        assert!(editor.state().view().nodes_of_type::<crate::nodes::AwaitNode>().is_empty());
+        if index == 3 {
+            let error = commit.events.iter().find(|event| event.name() == "group-a.snippet-source-error").expect("source import error retained");
+            let diagnostic = crate::surface::event_payload(error)?.expect("diagnostic");
+            assert!(diagnostic["message"].as_str().expect("error").contains("fixture-unknown-snippet-node"));
+        } else { assert!(commit.events.is_empty()); }
+        let state = editor.state().to_json()?;
+        if index == 1 { first = Some(state.clone()); }
+        if index == 0 {
+            assert_eq!(editor.state().root_text_content().as_ref(), "");
+            assert_eq!(state.root["children"][0]["type"], "paragraph");
+            assert_eq!(state.root["children"][0]["children"], json!([]));
+            continue;
+        }
+        if index < 4 {
+            assert_eq!(state, *first.as_ref().expect("first state"));
+            assert_eq!(editor.state().root_text_content().as_ref(), "First snippet");
+        } else { assert_eq!(editor.state().root_text_content().as_ref(), "Second snippet"); }
+        assert_eq!(state.root["children"][0]["children"][0]["format"], 1);
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 5);
+    Ok(())
+}
+
+#[test]
+fn issued_deleted_snippet_updates_only_the_extractor_and_consumed_tokens_cannot_replay()
+-> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .extension_state(crate::NodeRandom(std::sync::Arc::new(|length| {
+        vec![6; length]
+    })))
+    .build()
+    .expect("surface");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text(";s")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        tx.select_end(text)?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command("group-a.menu-select", &json!({
+        "key":key.index(),"offset":0,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":"snippet-first"}}
+    }).to_string(), key.generation())?.expect("start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("request");
+    let placeholder = editor
+        .state()
+        .view()
+        .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+        .key();
+    editor.update(|tx| tx.remove(placeholder, false))?;
+    let removed = editor.state().to_json()?;
+    let raw: SerializedEditorState = serde_json::from_value(
+        json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"Late source","format":1}]}]}}),
+    )?;
+    let wrong = super::menu::resolve_snippet_source(
+        placeholder,
+        "wrong".into(),
+        Some(raw.clone()),
+        crate::EditorType::MarkdownSync,
+    );
+    assert_eq!(editor.dispatch(&wrong)?.0, Handled::No);
+    let late = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        Some(raw),
+        crate::EditorType::MarkdownSync,
+    );
+    assert_eq!(editor.dispatch(&late)?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, removed);
+    let replay = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        Some(serde_json::from_value(
+            json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"Replayed source"}]}]}}),
+        )?),
+        crate::EditorType::MarkdownSync,
+    );
+    assert_eq!(editor.dispatch(&replay)?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, removed);
+    let (key, _) = editor.update(|tx| {
+        for child in tx.children_keys(NodeKey::ROOT)? {
+            tx.remove(child, false)?;
+        }
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text(";s")?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[text.key()])?;
+        tx.select_end(text)?;
+        Ok(text.key())
+    })?;
+    let start = super::menu::decode_command("group-a.menu-select", &json!({
+        "key":key.index(),"offset":0,"expected":";s","choice":{"kind":"snippet-start","payload":{"documentId":"snippet-empty"}}
+    }).to_string(), key.generation())?.expect("next start");
+    let (_, commit) = editor.dispatch(&start)?;
+    let request = crate::surface::event_payload(&commit.events[0])?.expect("next request");
+    let placeholder = editor
+        .state()
+        .view()
+        .nodes_of_type::<crate::nodes::AwaitNode>()[0]
+        .key();
+    let answer = super::menu::resolve_snippet_source(
+        placeholder,
+        request["awaitId"].as_str().expect("identity").into(),
+        Some(serde_json::from_value(
+            json!({"root":{"type":"root","children":[]}}),
+        )?),
+        crate::EditorType::MarkdownSync,
+    );
+    assert_eq!(editor.dispatch(&answer)?.0, Handled::Yes);
+    assert_eq!(editor.state().root_text_content().as_ref(), "Late source");
+    assert_eq!(
+        editor.state().to_json()?.root["children"][0]["children"][0]["format"],
+        1
+    );
+    Ok(())
+}

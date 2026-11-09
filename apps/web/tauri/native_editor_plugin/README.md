@@ -177,3 +177,8 @@ before revalidating the returned query span. Query normalization follows source
 whitespace rules while retaining the exact raw replacement literal.
 The bridge and provider component do not themselves admit or mount a surface;
 full inline-search lifecycle parity remains required.
+
+`NativeSnippetScenario` exercises matched JNI pending-node creation, source-state
+resolution, exact JSON across Undo/Redo and native caret7 after an emoji prefix.
+It calls the shared converter without a WebView editor. Fetch/provider and
+popup transport admission remain separate from this direct native boundary.

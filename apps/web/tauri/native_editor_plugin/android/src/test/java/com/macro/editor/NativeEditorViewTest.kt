@@ -9,6 +9,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class NativeEditorViewTest {
+    @Test fun snippetsKeepTheConfirmedSourceExtractionCache() {
+        NativeSnippetScenario.sourceCache(RuntimeEnvironment.getApplication())
+    }
+
+    @Test fun sourceSnippetResolutionPreservesNativeCaretAndHistory() {
+        NativeSnippetScenario.run(RuntimeEnvironment.getApplication())
+    }
+
     @Test fun defaultCodeRedoPreservesRawJsonAndCaret() {
         NativeHistoryScenario.restoredCodeIdentity(RuntimeEnvironment.getApplication(), false)
     }

@@ -44,7 +44,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
 - Admit Group A menu answers only against the exact current UTF-16 search span and collapsed caret; preserve typed mention payloads and source snippet placement while rejecting stale, composing and code-block targets.
-- Resolve asynchronous snippet content only for the attached generation-aware AwaitNode and matching awaitId; merge resolution history and preserve source placeholder placement.
+- Resolve asynchronous snippet content only for its issued generation-aware token and matching AwaitNode; preserve source extractor cache behavior, diagnostic cleanup, placeholder placement and merged history.
 - Export PasteFacts and its MIME constant as the shared host-admission contract; serialize native paste facts from that type.
 - Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.

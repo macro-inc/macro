@@ -693,6 +693,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_query(
     ): Int
+    external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_resolve_snippet(
+    ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_text_content(
     ): Int
     external fun uniffi_document_session_ffi_checksum_constructor_nativedocsession_new(
@@ -744,6 +746,8 @@ internal object UniffiLib {
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_markdown(`ptr`: Long,`flavor`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_query(`ptr`: Long,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_resolve_snippet(`ptr`: Long,`now`: RustBuffer.ByValue,`key`: RustBuffer.ByValue,`awaitId`: RustBuffer.ByValue,`source`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_text_content(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -895,6 +899,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_query() and 0xFFFF) != 3516) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_resolve_snippet() and 0xFFFF) != 21361) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_text_content() and 0xFFFF) != 4807) {
@@ -1742,6 +1749,14 @@ public interface NativeEditorSessionInterface {
     fun `query`(`request`: FfiQuery): FfiQueryReply
     
     /**
+     * Resolve one live snippet placeholder using shared source/target Markdown policy.
+     * Source is the full structured serialized editor state, including its root.
+     * None clears a failed fetch. Empty/malformed fetched states follow the
+     * existing source extractor retention policy; no host I/O runs here.
+     */
+    fun `resolveSnippet`(`now`: FfiNow, `key`: NodeKey, `awaitId`: kotlin.String, `source`: JsonValue?): FfiOutput
+    
+    /**
      * Read cached native root text.
      */
     fun `textContent`(): kotlin.String
@@ -1958,6 +1973,30 @@ open class NativeEditorSession: Disposable, AutoCloseable, NativeEditorSessionIn
         it,
         
         FfiConverterTypeFfiQuery.lower(`request`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Resolve one live snippet placeholder using shared source/target Markdown policy.
+     * Source is the full structured serialized editor state, including its root.
+     * None clears a failed fetch. Empty/malformed fetched states follow the
+     * existing source extractor retention policy; no host I/O runs here.
+     */
+    @Throws(FfiSessionException::class)override fun `resolveSnippet`(`now`: FfiNow, `key`: NodeKey, `awaitId`: kotlin.String, `source`: JsonValue?): FfiOutput {
+            return FfiConverterTypeFfiOutput.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_method_nativeeditorsession_resolve_snippet(
+        it,
+        
+        FfiConverterTypeFfiNow.lower(`now`),
+        FfiConverterTypeNodeKey.lower(`key`),
+        FfiConverterString.lower(`awaitId`),
+        FfiConverterOptionalTypeJsonValue.lower(`source`),_status)
 }
     }
     )
