@@ -25,9 +25,11 @@ impl Visit for Fields {
     }
 }
 
+type SpanRecord = (&'static str, HashMap<&'static str, String>);
+
 /// Every closed span's name and the last value recorded for each field.
 #[derive(Clone, Default)]
-struct Spans(Arc<Mutex<Vec<(&'static str, HashMap<&'static str, String>)>>>);
+struct Spans(Arc<Mutex<Vec<SpanRecord>>>);
 
 impl Spans {
     fn named(&self, name: &str) -> Vec<HashMap<&'static str, String>> {
