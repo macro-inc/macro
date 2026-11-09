@@ -92,7 +92,7 @@ class NativeEditorView(
                 admit(FfiInput.Command(command, replacedSelection))
             }
         })
-        setOnFocusChangeListener { _, focused -> if (ready) admit(FfiInput.Focus(focused)) }
+        setOnFocusChangeListener { _, focused -> if (ready && !applying) admit(FfiInput.Focus(focused)) }
     }
 
     /** Repaint an already seeded session without replacing its document or history. */
@@ -118,22 +118,29 @@ class NativeEditorView(
         check(Looper.myLooper() == Looper.getMainLooper())
         try {
             val output = session.handle(host.now(), input)
-            val rejected = output.view.any { it is FfiViewEffect.Error }
-            val displayedText = if (rejected) null else when (input) {
-                is FfiInput.TextFromView -> input.key to input.text
-                is FfiInput.TextDeltaFromView -> {
-                    val delta = input.delta
-                    val old = requireNotNull(projection.nodes[delta.key]).text
-                    val offset = delta.offset.toInt()
-                    delta.key to old.replaceRange(offset, offset + delta.deleted.toInt(), delta.inserted)
+            try {
+                val rejected = output.view.any { it is FfiViewEffect.Error }
+                val displayedText = if (rejected) null else when (input) {
+                    is FfiInput.TextFromView -> input.key to input.text
+                    is FfiInput.TextDeltaFromView -> {
+                        val delta = input.delta
+                        val old = requireNotNull(projection.nodes[delta.key]).text
+                        val offset = delta.offset.toInt()
+                        delta.key to old.replaceRange(offset, offset + delta.deleted.toInt(), delta.inserted)
+                    }
+                    else -> null
                 }
-                else -> null
-            }
-            apply(output, displayedText)
-            host.execute(output, ::admit)
+                apply(output, displayedText)
+            } finally { host.execute(output, ::admit) }
         } catch (error: Exception) {
             host.failed(error)
         }
+    }
+
+    /** Session-lifetime I/O may publish a correction while this view is mounted. */
+    fun acceptOutput(output: FfiOutput) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        apply(output, null)
     }
 
     private fun apply(output: FfiOutput, displayedText: Pair<NodeKey, String>?) {
