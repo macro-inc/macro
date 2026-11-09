@@ -499,6 +499,14 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::delete_channel_label_handler,
         channel_labels::inbound::axum_router::set_channel_label_handler,
 
+        // channel sections
+        channel_labels::inbound::axum_router::list_channel_sections_handler,
+        channel_labels::inbound::axum_router::preview_channel_section_handler,
+        channel_labels::inbound::axum_router::create_channel_section_handler,
+        channel_labels::inbound::axum_router::update_channel_section_handler,
+        channel_labels::inbound::axum_router::delete_channel_section_handler,
+        channel_labels::inbound::axum_router::set_channel_section_handler,
+
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
         account_manager::inbound::axum_router::list_account_managers_handler,

@@ -2350,6 +2350,13 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        channel_sections_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::for_sections(
+                PgChannelLabelsRepo::for_sections(db.clone()),
+            )),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
