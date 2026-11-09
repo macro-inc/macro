@@ -517,7 +517,20 @@ where
             .map_err(Into::into)?)
     }
 
-    #[tracing::instrument(skip(self, capabilities), fields(screen = capabilities.screen, persona_count = capabilities.personas.len()), err)]
+    #[tracing::instrument(
+        skip(self, capabilities),
+        fields(
+            screen = capabilities.screen,
+            persona_count = capabilities.personas.len() as i64,
+            // Macro computer setup traces read the first report with a healthy brain as Alive.
+            healthy_personas = capabilities
+                .personas
+                .values()
+                .filter(|health| matches!(health, super::models::PersonaHealth::Healthy { .. }))
+                .count() as i64
+        ),
+        err
+    )]
     async fn report_capabilities(
         &self,
         harness_id: HarnessId,
