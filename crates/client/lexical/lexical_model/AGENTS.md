@@ -17,7 +17,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
-- `src/pipeline/` implements flush order, normalization, GC and view-attached caches; its non-converging transform regression pins the upstream invariant text.
+- `src/pipeline/` implements flush order, normalization, GC and view-attached caches; its non-converging transform regression pins the upstream invariant text. `pipeline/continuation.rs` shares this engine between ordinary unboxed flush and owned sliced work; budgets count node work rather than elapsed time. Move its optional state unchanged through suspend/resume/adoption, reject intervening writes, and retain failed continuations until cancellation.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.

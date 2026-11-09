@@ -59,6 +59,8 @@ pub struct Transaction<'editor> {
     pub(crate) nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
     pub(crate) transform_iterations: u16,
     pub(crate) dirty_since_flush: bool,
+    pub(crate) pipeline_continuation:
+        Option<Box<crate::pipeline::continuation::PipelineContinuation>>,
     #[cfg(feature = "bench-counters")]
     pub(crate) work: WorkCounters,
     pub(crate) detached: Vec<Option<Selection>>,
@@ -118,6 +120,7 @@ impl<'editor> Transaction<'editor> {
             nested: crate::pipeline::nested_queue(),
             transform_iterations: 0,
             dirty_since_flush: true,
+            pipeline_continuation: None,
             #[cfg(feature = "bench-counters")]
             work: WorkCounters::default(),
             detached: vec![],
