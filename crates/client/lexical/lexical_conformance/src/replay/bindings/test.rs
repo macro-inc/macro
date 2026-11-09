@@ -88,3 +88,34 @@ fn snapshot_release_and_replacement_drop_foreign_owners_outside_the_lock() -> Re
     }
     Ok(())
 }
+
+#[test]
+fn releasing_one_editors_version_keeps_the_other_editors_handle() -> Result<()> {
+    let bindings = Bindings::default();
+    let (first, _) =
+        bindings.intern_handle("first".into(), 1, "node", &serde_json::json!({"editor":0}))?;
+    let (second, _) =
+        bindings.intern_handle("second".into(), 1, "node", &serde_json::json!({"editor":1}))?;
+    let released = bindings.release_editor_identities(0, 1)?;
+    assert!(released.contains(&first));
+    assert!(!released.contains(&second));
+    assert_eq!(bindings.identity("second")?, Some(second));
+    Ok(())
+}
+
+#[test]
+fn saved_snapshot_owners_include_editor_and_version() -> Result<()> {
+    let bindings = Bindings::default();
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let first = bindings.published_editor_state(0, 1, editor.state())?;
+    let second = bindings.published_editor_state(1, 1, editor.state())?;
+    assert_ne!(first, second);
+    assert_eq!(bindings.saved_owner(first)?, Some((0, 1)));
+    assert_eq!(bindings.saved_owner(second)?, Some((1, 1)));
+    bindings.release_saved_state(first)?;
+    assert_eq!(bindings.saved_owner(first)?, None);
+    assert_eq!(bindings.saved_owner(second)?, Some((1, 1)));
+    Ok(())
+}

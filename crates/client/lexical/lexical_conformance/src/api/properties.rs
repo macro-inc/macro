@@ -40,16 +40,29 @@ pub(crate) fn get(
         let state = r
             .saved_state(integer(&receiver["$snapshot"])? as usize)?
             .clone();
-        let mut pairs = Vec::new();
-        for key in crate::snapshot::keys(&state) {
-            let raw = if key.generation() == 0 {
-                json!(key.to_string())
-            } else {
-                key_value(key)
-            };
-            pairs.push(json!([raw, r.node(state.view(), key)?]));
-        }
-        return Ok(json!({"$map":pairs}));
+        let owner = r
+            .bindings
+            .saved_owner(integer(&receiver["$snapshot"])? as usize)?;
+        let previous_owner = r.record_owner.take();
+        let previous_editor = r.record_editor.take();
+        let (editor, version) = owner.unwrap_or((r.editor_id, r.version));
+        r.record_owner = Some((version, state.clone()));
+        r.record_editor = Some(editor);
+        let result = (|| {
+            let mut pairs = Vec::new();
+            for key in crate::snapshot::keys(&state) {
+                let raw = if key.generation() == 0 {
+                    json!(key.to_string())
+                } else {
+                    key_value(key)
+                };
+                pairs.push(json!([raw, r.node(state.view(), key)?]));
+            }
+            Ok(json!({"$map":pairs}))
+        })();
+        r.record_owner = previous_owner;
+        r.record_editor = previous_editor;
+        return result;
     }
     if name == "then" && (receiver.get("$editor").is_some() || receiver.get("$snapshot").is_some())
     {
