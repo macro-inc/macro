@@ -355,6 +355,14 @@ fn failed_stages_and_partial_payload_patches_never_install_into_the_source() -> 
         );
         assert!(editor.state().view().foreign_record_identity(key)? == identity);
     }
+    host.failure.store(1, Ordering::SeqCst);
+    {
+        let mut tx = editor.transaction();
+        assert!(tx.text(key)?.set_text_content("after").is_err());
+        assert!(!tx.has_dirty_nodes());
+        tx.flush()?;
+        assert!(!tx.has_foreign_effects());
+    }
     host.failure.store(7, Ordering::SeqCst);
     editor.update(|tx| tx.text(key)?.set_text_content("after").map(|_| ()))?;
     assert_eq!(

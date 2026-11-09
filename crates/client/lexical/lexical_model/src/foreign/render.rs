@@ -126,3 +126,55 @@ impl ForeignReadSnapshot {
 
 #[cfg(test)]
 mod test;
+
+impl ForeignReadSnapshot {
+    /// All live record keys, including detached pending nodes, in stable key order.
+    pub fn record_keys(&self) -> Vec<NodeKey> {
+        let mut keys = self.state().nodes.keys().copied().collect::<Vec<_>>();
+        keys.sort();
+        keys
+    }
+    /// Active selection object identity for this exact owned snapshot.
+    pub fn selection_identity(&self) -> Option<&ForeignSelectionIdentity> {
+        self.state()
+            .selection
+            .as_ref()
+            .map(|_| &self.state().foreign_selection_identity)
+    }
+    /// Previous selection identity retained in this snapshot's callback context.
+    pub fn previous_selection_identity(&self) -> Option<&ForeignSelectionIdentity> {
+        self.view()
+            .previous_selection()
+            .and(self.view().foreign_previous_selection_identity)
+    }
+}
+impl StateRef<'_> {
+    /// Publication owner's opaque namespace, without retaining the editor.
+    pub fn foreign_instance_owner(self) -> ForeignEditorIdentity {
+        self.state.foreign_instances.owner.clone()
+    }
+}
+
+impl Transaction<'_> {
+    /// Semantic writability survives incidental Arc sharing by owned read captures.
+    pub fn foreign_is_writable(&self, key: NodeKey) -> bool {
+        let Some(slot) = self.pending.nodes.get(&key) else {
+            return false;
+        };
+        if slot.foreign_instance.get().is_some() {
+            return slot
+                .foreign_instance_write
+                .as_ref()
+                .is_some_and(|update| update.matches(self));
+        }
+        let intentional = self.dirty_leaves.contains(&key)
+            || self.dirty_elements.get(&key) == Some(&DirtyIntent::Intentional);
+        intentional
+            && self
+                .editor
+                .state
+                .nodes
+                .get(&key)
+                .is_none_or(|previous| !Arc::ptr_eq(previous, slot))
+    }
+}

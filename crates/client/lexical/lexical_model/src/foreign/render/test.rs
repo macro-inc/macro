@@ -231,3 +231,54 @@ fn bound_instance_diff_skips_public_export_indent_and_node_state_callbacks() -> 
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     Ok(())
 }
+
+#[test]
+fn capture_metadata_retains_detached_keys_and_semantic_writability_across_reads()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let owner = editor.foreign_instance_owner();
+    let mut tx = editor.transaction();
+    assert!(tx.view().foreign_instance_owner().same_owner(&owner));
+    assert!(!tx.foreign_is_writable(NodeKey::ROOT));
+    let text = tx.create_text("detached")?.key();
+    assert!(tx.foreign_is_writable(text));
+    let source = tx.view().snapshot_for_foreign_read()?;
+    assert_eq!(source.record_keys(), vec![NodeKey::ROOT, text]);
+    assert!(source.selection_identity().is_none());
+    assert!(source.previous_selection_identity().is_none());
+    assert!(tx.foreign_is_writable(text));
+    tx.mark_dirty(NodeKey::ROOT)?;
+    assert!(tx.foreign_is_writable(NodeKey::ROOT));
+    let captured = tx.view().snapshot_for_foreign_read()?;
+    assert!(tx.foreign_is_writable(NodeKey::ROOT));
+    assert_eq!(captured.record_keys(), vec![NodeKey::ROOT, text]);
+    assert_eq!(source.view().text_content(text), "detached");
+    Ok(())
+}
+
+#[test]
+fn captures_expose_exact_current_and_previous_selection_identities() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("selected")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_end(text)?;
+        Ok(())
+    })?;
+    let previous = editor.state().view().snapshot_for_foreign_read()?;
+    let mut tx = editor.transaction();
+    tx.replace_selection(Some(Selection::Node(NodeSelection::new())))?;
+    let captured = tx.view().snapshot_for_foreign_read()?;
+    assert!(captured.contains_selection_identity(captured.selection_identity().unwrap()));
+    assert_eq!(
+        captured.previous_selection_identity(),
+        previous.selection_identity()
+    );
+    assert_ne!(
+        captured.selection_identity(),
+        captured.previous_selection_identity()
+    );
+    Ok(())
+}
