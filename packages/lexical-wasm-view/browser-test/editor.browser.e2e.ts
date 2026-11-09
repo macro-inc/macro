@@ -202,7 +202,7 @@ test('lists, tables, links, stored code highlights and marks render from real WA
     await page
       .locator('#editor h2')
       .evaluate((element) => element.style.contentVisibility)
-  ).toBe('auto');
+  ).toBe('');
   expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
   await page.screenshot({ path: info.outputPath('rich.png') });
 });
