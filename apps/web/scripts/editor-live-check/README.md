@@ -47,3 +47,5 @@ or browser acceptance. Run `bunx vitest run --config scripts/editor-live-check/v
 `bunx tsc -p scripts/editor-live-check/tsconfig.json` for the tooling type check.
 
 The common-block persistence fixture reads the actual mounted view namespace and authors its rich clipboard packet for that receiving instance. This covers construction, rendering and durability; real cross-instance clipboard routing is verified separately with trusted copy/paste. For a privately bundled candidate, `nativeViewModuleURL` may identify a same-origin bundle entry that only reexports the actual public `EditorView`; it must share the application build module identity and never expose a debug global or mutate editor state.
+
+WASM response checks cover both development and hashed build URLs. An artifact overlay must actually serve both glue and WASM; otherwise the check fails rather than attributing the installed artifact to the candidate. New-document typing waits for its actual editable paragraph.

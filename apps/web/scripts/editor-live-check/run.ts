@@ -49,6 +49,7 @@ const browser = await chromium.launch({
 const errors: string[] = [];
 const assets: string[] = [];
 const assetReads: Promise<void>[] = [];
+const overlays = { glue: 0, wasm: 0 };
 const steps: { name: string; status: 'pass' | 'fail'; error?: string }[] = [];
 const modules = new WeakMap<Page, string>();
 
@@ -80,6 +81,7 @@ async function context(
         const file = new URL(route.request().url()).pathname.endsWith('.wasm')
           ? 'document_session_wasm_bg.wasm'
           : 'document_session_wasm.js';
+        overlays[file.endsWith('.wasm') ? 'wasm' : 'glue']++;
         await route.fulfill({
           path: resolve(artifacts, file),
           contentType: file.endsWith('.wasm')
@@ -105,8 +107,8 @@ async function context(
     });
     page.on('response', (response) => {
       if (
-        new URL(response.url()).pathname.endsWith(
-          '/document_session_wasm_bg.wasm'
+        /\/document_session_wasm_bg(?:-[A-Za-z0-9_-]+)?\.wasm$/.test(
+          new URL(response.url()).pathname
         )
       ) {
         const read = async () => {
@@ -193,6 +195,7 @@ try {
     await page.reload();
     await ready(page);
     await expect(body(page)).toHaveText('');
+    await expect(body(page).locator('p').first()).toBeVisible();
   });
   let typed: Awaited<ReturnType<typeof snapshot>> | undefined;
   await step('type', async () => {
@@ -340,6 +343,10 @@ try {
   for (const read of reads)
     if (read.status === 'rejected')
       errors.push(`Unreadable WASM response: ${String(read.reason)}`);
+  if (config.candidateArtifacts && (!overlays.glue || !overlays.wasm))
+    errors.push(
+      'Configured artifact overlay did not serve both matching files'
+    );
   const passed =
     steps.length === installSteps.length &&
     steps.every(
@@ -360,6 +367,7 @@ try {
         steps,
         errors,
         assets,
+        overlays,
       },
       null,
       2
