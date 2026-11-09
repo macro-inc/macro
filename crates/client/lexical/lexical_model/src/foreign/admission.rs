@@ -1,80 +1,11 @@
-//! Adopt a staged host update only after the normal input policy admits it.
+//! Compatibility entry point for common staged admission.
 use super::*;
-
 impl Transaction<'_> {
-    pub(crate) fn guard_foreign_publication(&self) -> Result<(), Error> {
-        if self.foreign_defer_publication {
-            return Err(Error::Invariant("host update awaits admission"));
-        }
-        Ok(())
-    }
-    /// Install an unpublished update into a pristine command transaction.
-    /// The host must route the command through its ordinary authorization and
-    /// readiness boundary; this method grants no independent edit authority.
+    /// Install an unpublished update through the common admission contract.
     pub fn adopt_foreign_update(&mut self, update: PendingUpdate) -> Result<(), Error> {
-        self.guard_write()?;
-        if update.read_only {
-            return Err(Error::ForeignReadOnly);
-        }
-        if !Arc::ptr_eq(&self.editor.suspend_owner, &update.owner)
-            || self.editor.suspend_version != update.version
-        {
-            return Err(Error::StaleSuspendedUpdate);
-        }
-        if self.has_foreign_effects()
-            || self.preceding.is_some()
-            || self.options
-                != (UpdateOptions {
-                    tags: self.editor.carried_tags.clone(),
-                    ..UpdateOptions::default()
-                })
-        {
-            return Err(Error::Invariant("host update target is not pristine"));
-        }
-        if update.preceding.is_some() {
-            return Err(Error::Invariant(
-                "host update already published a preceding commit",
-            ));
-        }
-        self.foreign_defer_publication = false;
-        self.foreign_update = update.update;
-        self.foreign_native_calls = update.native_calls;
-        self.foreign_read_only = update.read_only;
-        self.foreign_read_sources = update.read_sources;
-        self.foreign_read_origin = update.read_origin;
-        self.foreign_read_update_facts = update.read_update_facts;
-        self.foreign_retired_records = update.retired_records;
-        self.foreign_previous_selection = update.previous_selection;
-        self.foreign_previous_selection_identity = update.previous_selection_identity;
-        self.native_projection = update.native_projection;
-        self.extensions = update.extensions;
-        self.events = update.events;
-        self.default_prevented = update.default_prevented;
-        self.pending = update.pending;
-        self.dirty_leaves = update.dirty_leaves;
-        self.dirty_elements = update.dirty_elements;
-        self.composition_key = update.composition_key;
-        self.selection_context = update.selection_context;
-        self.sealed = update.sealed;
-        self.full_reconcile = update.full_reconcile;
-        self.selection_dirty = update.selection_dirty;
-        self.preceding = update.preceding;
-        self.options = update.options;
-        self.normalized = update.normalized;
-        self.nested = update.nested;
-        self.transform_iterations = update.transform_iterations;
-        self.dirty_since_flush = update.dirty_since_flush;
-        #[cfg(feature = "bench-counters")]
-        {
-            self.work = update.work;
-        }
-        self.detached = update.detached;
-        self.selection_replacements = update.selection_replacements;
-        self.foreign_selections = update.foreign_selections;
-        Ok(())
+        self.adopt_staged_update(update)
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;

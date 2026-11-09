@@ -38,6 +38,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - `TMPDIR=/home/wolf/tmp cargo test -p document_session -j4`
 - `TMPDIR=/home/wolf/tmp cargo check -p document_session --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p document_session --all-targets -j4 -- -D warnings`
+- `TMPDIR=/home/wolf/tmp cargo test -p document_session --no-default-features --features application -j2` checks generic admission with compatibility disabled.
 - `cargo tree -p document_session --target wasm32-unknown-unknown -i workspace-hack`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 
@@ -78,7 +79,7 @@ Run the current TS stack differential from the repository root:
 Run `cargo test -p document_session --all-features -j4` for the native bridge too.
 `tests/telemetry.rs` isolates its tracing subscriber from parallel unit callsites.
 
-The compatibility feature exposes same-core unpublished host scopes and a single-consumption adoption command. Route it through normal handle readiness/access checks; never add the extension command to local_commands. compat_editor_builder installs only that admission handler, without native behavior plugins.
+Common staging exposes same-core unpublished scopes and StagedUpdate in every feature profile. Route its single-consumption admission command through normal handle readiness/access checks; never add it to local_commands. register_editor_commands installs the one generic admission handler for native application builders. The compatibility feature keeps CompatUpdate and old scope names as aliases; compat_editor_builder installs that same handler without native behavior plugins. Recover refused state with recover_unadopted before retrying; adoption alone is not a successful-commit receipt.
 Forward late Stop even when the session is already terminal. Its real Stopped reply
 acknowledges host Close only after the original terminal WAL barrier completes.
 

@@ -1,8 +1,6 @@
-//! Owned unpublished updates held across runtime host calls.
-use crate::collections::{IndexMap, IndexSet};
+//! Compatibility identities over the common unpublished update.
 use crate::*;
 use std::sync::Arc;
-
 /// Opaque runtime host identity for an editor, independent of its state.
 /// Clones retain only an identity marker, never the editor or its callbacks.
 #[derive(Clone)]
@@ -28,72 +26,7 @@ impl ForeignUpdateIdentity {
     }
 }
 
-/// An unpublished transaction detached from its editor borrow.
-/// Dropping it discards its writes, events, extensions, tags and queued updates.
-pub struct PendingUpdate {
-    update: Arc<()>,
-    native_calls: Arc<super::native::NativeCalls>,
-    read_only: bool,
-    defer_publication: bool,
-    read_sources: Option<crate::state::NodeMap>,
-    read_origin: Option<super::ReadOrigin>,
-    read_update_facts: Option<Arc<ForeignUpdateFacts>>,
-    retired_records: crate::state::NodeMap,
-    previous_selection: Option<Selection>,
-    previous_selection_identity: Option<ForeignSelectionIdentity>,
-    owner: Arc<()>,
-    version: CommitId,
-    extensions: crate::extension::Extensions,
-    events: Vec<PluginEvent>,
-    default_prevented: bool,
-    pending: EditorState,
-    dirty_leaves: IndexSet<NodeKey>,
-    dirty_elements: IndexMap<NodeKey, DirtyIntent>,
-    composition_key: Option<NodeKey>,
-    selection_context: Option<SelectionChangeContext>,
-    sealed: bool,
-    full_reconcile: bool,
-    selection_dirty: bool,
-    preceding: Option<Box<Commit>>,
-    options: UpdateOptions,
-    normalized: IndexSet<NodeKey>,
-    nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
-    transform_iterations: u16,
-    dirty_since_flush: bool,
-    #[cfg(feature = "bench-counters")]
-    work: WorkCounters,
-    detached: Vec<Option<Selection>>,
-    selection_replacements: u64,
-    foreign_selections: super::selections::SelectionIdentities,
-    native_projection: Option<super::projection::NativeProjection>,
-}
-
 impl Transaction<'_> {
-    /// Whether writes or queued work require another pipeline pass before commit.
-    /// This is the same predicate used by commit and survives suspend/resume.
-    pub fn needs_flush(&self) -> bool {
-        self.dirty_since_flush
-    }
-    /// Whether dropping this update would lose model effects beyond host API values/tags.
-    /// This observes the current pending state; it neither flushes nor authorizes writes.
-    pub fn has_foreign_effects(&self) -> bool {
-        self.has_dirty_nodes()
-            || self.selection_will_change()
-            || self.composition_key != self.editor.composition_key
-            || self.full_reconcile
-            || self.default_prevented
-            || !self.events.is_empty()
-            || !self.nested.is_empty()
-            || self.foreign_extensions_changed()
-            || self.preceding.as_ref().is_some_and(|commit| {
-                commit.chain().any(|entry| {
-                    !entry.is_noop()
-                        || entry.composition_changed
-                        || entry.full_reconcile
-                        || entry.default_prevented
-                })
-            })
-    }
     /// Capture editor identity without retaining its state or registry.
     pub fn foreign_editor_identity(&self) -> ForeignEditorIdentity {
         ForeignEditorIdentity(self.editor.suspend_owner.clone())
@@ -104,97 +37,12 @@ impl Transaction<'_> {
         ForeignUpdateIdentity(self.foreign_update.clone())
     }
 
-    /// Detach without flushing or publishing the pending update.
-    pub fn suspend(self) -> PendingUpdate {
-        PendingUpdate {
-            update: self.foreign_update,
-            native_calls: self.foreign_native_calls,
-            read_only: self.foreign_read_only,
-            defer_publication: self.foreign_defer_publication,
-            read_sources: self.foreign_read_sources,
-            read_origin: self.foreign_read_origin,
-            read_update_facts: self.foreign_read_update_facts,
-            retired_records: self.foreign_retired_records,
-            previous_selection: self.foreign_previous_selection,
-            previous_selection_identity: self.foreign_previous_selection_identity,
-            native_projection: self.native_projection,
-            owner: self.editor.suspend_owner.clone(),
-            version: self.editor.suspend_version,
-            extensions: self.extensions,
-            events: self.events,
-            default_prevented: self.default_prevented,
-            pending: self.pending,
-            dirty_leaves: self.dirty_leaves,
-            dirty_elements: self.dirty_elements,
-            composition_key: self.composition_key,
-            selection_context: self.selection_context,
-            sealed: self.sealed,
-            full_reconcile: self.full_reconcile,
-            selection_dirty: self.selection_dirty,
-            preceding: self.preceding,
-            options: self.options,
-            normalized: self.normalized,
-            nested: self.nested,
-            transform_iterations: self.transform_iterations,
-            dirty_since_flush: self.dirty_since_flush,
-            #[cfg(feature = "bench-counters")]
-            work: self.work,
-            detached: self.detached,
-            selection_replacements: self.selection_replacements,
-            foreign_selections: self.foreign_selections,
-        }
+    /// Compatibility name for the common staged-effects predicate.
+    pub fn has_foreign_effects(&self) -> bool {
+        self.has_staged_effects()
     }
 }
-impl Editor {
-    /// Resume an update belonging to this editor at its original publication.
-    /// A commit or state installation since suspension makes the update stale.
-    pub fn resume(&mut self, update: PendingUpdate) -> Result<Transaction<'_>, Error> {
-        if !Arc::ptr_eq(&self.suspend_owner, &update.owner)
-            || self.suspend_version != update.version
-        {
-            return Err(Error::StaleSuspendedUpdate);
-        }
-        Ok(Transaction {
-            foreign_update: update.update,
-            foreign_native_calls: update.native_calls,
-            foreign_read_only: update.read_only,
-            foreign_defer_publication: update.defer_publication,
-            foreign_read_sources: update.read_sources,
-            foreign_read_origin: update.read_origin,
-            foreign_read_update_facts: update.read_update_facts,
-            foreign_retired_records: update.retired_records,
-            foreign_previous_selection: update.previous_selection,
-            foreign_previous_selection_identity: update.previous_selection_identity,
-            native_projection: update.native_projection,
-            editor: self,
-            extensions: update.extensions,
-            events: update.events,
-            default_prevented: update.default_prevented,
-            pending: update.pending,
-            dirty_leaves: update.dirty_leaves,
-            dirty_elements: update.dirty_elements,
-            composition_key: update.composition_key,
-            selection_context: update.selection_context,
-            sealed: update.sealed,
-            full_reconcile: update.full_reconcile,
-            selection_dirty: update.selection_dirty,
-            preceding: update.preceding,
-            options: update.options,
-            normalized: update.normalized,
-            nested: update.nested,
-            transform_iterations: update.transform_iterations,
-            dirty_since_flush: update.dirty_since_flush,
-            #[cfg(feature = "bench-counters")]
-            work: update.work,
-            detached: update.detached,
-            selection_replacements: update.selection_replacements,
-            foreign_selections: update.foreign_selections,
-        })
-    }
-}
-
-#[cfg(test)]
-mod test;
-
 #[path = "admission.rs"]
 mod admission;
+#[cfg(test)]
+mod test;

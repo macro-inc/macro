@@ -193,7 +193,6 @@ fn suspended_work_rejects_writes_and_mode_changes_then_flush_resumes() -> Result
     Ok(())
 }
 
-#[cfg(feature = "foreign-nodes")]
 #[test]
 fn sliced_pipeline_moves_through_suspend_resume_and_cancel_discards_it() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)

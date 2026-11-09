@@ -1,27 +1,19 @@
-//! Short, scoped access to unpublished host transactions on this same core.
+//! Compatibility aliases over common same-core staging.
 use super::*;
-
 impl EditorCore {
-    /// Begin an unpublished update; normal input handling still owns admission.
+    /// Begin an unpublished compatibility update on this same editor.
     pub fn suspend_foreign_update(&mut self) -> PendingUpdate {
-        let mut tx = self.editor.transaction();
-        tx.foreign_defer_publication = true;
-        tx.suspend()
+        self.suspend_staged_update()
     }
-
-    /// Resume without exposing or replacing the core editor. The body result
-    /// remains opaque, including a host exception carried as its return value.
+    /// Resume a compatibility update without changing its ownership or scope.
     pub fn with_foreign_update<T>(
         &mut self,
         pending: PendingUpdate,
         body: impl FnOnce(&mut Transaction<'_>) -> T,
     ) -> Result<(PendingUpdate, T), Error> {
-        let mut tx = self.editor.resume(pending)?;
-        let value = body(&mut tx);
-        Ok((tx.suspend(), value))
+        self.with_staged_update(pending, body)
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;

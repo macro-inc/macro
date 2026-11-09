@@ -859,6 +859,9 @@ impl DocumentSession<EditorSurface> {
     }
 }
 
+#[path = "staging.rs"]
+pub mod staging;
+
 #[cfg(feature = "compatibility")]
 #[path = "compatibility.rs"]
 pub mod compatibility;
