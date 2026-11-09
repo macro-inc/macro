@@ -37,6 +37,7 @@ import {
   dispatchCommand,
   getActiveEditor,
   INPUT_COMMAND,
+  isSameNode,
   KEY_DOWN_COMMAND,
   type RangeSelection,
   SELECTION_CHANGE_COMMAND,
@@ -249,7 +250,10 @@ export function onSelectionChange(
           curAnchor.offset === prevAnchor.offset + 1) ||
         // Or rightward shift into sibling node
         (curAnchor.offset === 1 &&
-          prevAnchor.getNode().is(curAnchor.getNode().getPreviousSibling()))
+          isSameNode(
+            prevAnchor.getNode(),
+            curAnchor.getNode().getPreviousSibling()
+          ))
       ) {
         // Restore selection
         selection = eventsState.postDeleteSelectionToRestore.clone();

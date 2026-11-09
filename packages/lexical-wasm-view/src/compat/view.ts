@@ -168,19 +168,11 @@ export function createCompatView(
   /** Called after the core finishes publishing/freeze, before its update listeners. */
   function publish(commit: CompatCommit, mutations: MutatedNodes | null): void {
     if (mutations) {
-      for (const [listener, classes] of Array.from(
-        editor._listeners.mutation
-      )) {
-        for (const klass of classes) {
-          const changes = mutations.get(klass);
-          if (changes)
-            listener(changes, {
-              dirtyLeaves: commit.dirtyLeaves,
-              prevEditorState: commit.prevEditorState,
-              updateTags: commit.tags,
-            });
-        }
-      }
+      runtime.publishMutationListeners(editor, mutations, {
+        dirtyLeaves: commit.dirtyLeaves,
+        prevEditorState: commit.prevEditorState,
+        updateTags: commit.tags,
+      });
     }
     const selection = commit.editorState._selection;
     if (

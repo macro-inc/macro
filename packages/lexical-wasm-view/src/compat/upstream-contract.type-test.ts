@@ -12,14 +12,20 @@ type DOMExports =
   | 'stopLexicalPropagation';
 
 type InternalRuntimeExports =
-  | 'RangeSelection'
+  | 'createRangeSelection'
   | '$getCompositionKey'
   | 'createEmptyEditorState'
   | 'getActiveEditor'
   | 'getActiveEditorState'
   | 'isCurrentlyReadOnlyMode'
   | 'updateEditorSync'
-  | 'withReconciliation';
+  | 'withReconciliation'
+  | 'getEditorDOMRenderConfig'
+  | 'isSameNode'
+  | 'replaceNode'
+  | 'decorateNode'
+  | 'reconcileObservedMutation'
+  | 'publishMutationListeners';
 type PublicRuntime = Omit<CompatRuntime, InternalRuntimeExports>;
 type ExpectedSelectionMethods = {
   applyDOMRange(

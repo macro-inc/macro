@@ -22,6 +22,8 @@ import {
   $isRangeSelection,
   $isTextNode,
   $setSelection,
+  isSameNode,
+  reconcileObservedMutation,
   updateEditorSync,
 } from './runtime';
 import type { BaseSelection } from './selection';
@@ -111,7 +113,7 @@ export function shouldUpdateTextNodeFromMutation(
   if ($isRangeSelection(selection)) {
     const anchorNode = selection.anchor.getNode();
     if (
-      anchorNode.is(targetNode) &&
+      isSameNode(anchorNode, targetNode) &&
       selection.format !== anchorNode.getFormat()
     ) {
       return false;
@@ -262,7 +264,7 @@ export function flushMutations(
       // an internal revert on the DOM.
       if (badDOMTargets.size > 0) {
         for (const [nodeDOM, targetNode] of badDOMTargets) {
-          targetNode.reconcileObservedMutation(nodeDOM, editor);
+          reconcileObservedMutation(targetNode, nodeDOM, editor);
         }
       }
 

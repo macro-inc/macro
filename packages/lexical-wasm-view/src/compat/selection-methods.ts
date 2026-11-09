@@ -38,7 +38,7 @@ interface TextCaret<D extends CaretDirection>
   readonly direction: D;
   readonly origin: import('./types').CompatTextNode;
 }
-type PointCaret<D extends CaretDirection> =
+export type PointCaret<D extends CaretDirection> =
   | SiblingCaret<D>
   | ChildCaret<D>
   | TextCaret<D>;

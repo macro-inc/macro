@@ -1,6 +1,6 @@
 import * as Lexical from 'lexical';
-import { createSelectionDOMMethods } from '../selection-methods';
 import { getUpstreamRuntime } from '../test-setup';
+import { createUpstreamSelectionDOMMethods } from '../upstream-selection-runtime';
 import { createCompatView } from '../view';
 
 declare const __COMPAT_ADAPTER__: boolean;
@@ -69,10 +69,7 @@ declare global {
   }
 }
 window.compatModifySelection = (granularity) => {
-  const methods = createSelectionDOMMethods({
-    ...getUpstreamRuntime(),
-    ...Lexical,
-  });
+  const methods = createUpstreamSelectionDOMMethods(Lexical);
   let result: unknown;
   editor.update(
     () => {

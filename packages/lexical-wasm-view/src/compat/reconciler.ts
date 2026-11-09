@@ -26,6 +26,8 @@ import {
   $isLineBreakNode,
   $isRootNode,
   $isTextNode,
+  decorateNode,
+  withReconciliation,
 } from './runtime';
 import { invariant } from './support';
 import type {
@@ -68,7 +70,9 @@ export const cachedTextSizes = new WeakMap<LexicalNode, number>();
 // elements and leaves still read their O(1) caches, so a large untouched suffix
 // child is not re-walked.
 export function $prevSuffixTextSize(startKey: NodeKey, count: number): number {
-  return reconcilerState.activePrevEditorState.read(
+  return withReconciliation(
+    reconcilerState.activeEditor,
+    reconcilerState.activePrevEditorState,
     () => {
       let size = 0;
       let cur: NodeKey | null = startKey;
@@ -122,8 +126,7 @@ export function $prevSuffixTextSize(startKey: NodeKey, count: number): number {
         cur = prevNode.__next;
       }
       return size;
-    },
-    { editor: reconcilerState.activeEditor }
+    }
   );
 }
 
@@ -452,10 +455,7 @@ export function $createNode(
     const text = node.getTextContent();
 
     if ($isDecoratorNode(node)) {
-      const decorator = node.decorate(
-        reconcilerState.activeEditor,
-        reconcilerState.activeEditorConfig
-      );
+      const decorator = decorateNode(node, reconcilerState.activeEditor);
 
       if (decorator !== null) {
         reconcileDecorator(key, decorator);
