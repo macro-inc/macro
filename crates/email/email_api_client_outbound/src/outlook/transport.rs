@@ -43,14 +43,15 @@ impl OutlookApiClientRepository {
     pub(super) fn endpoint(&self, segments: &[&str]) -> Result<Url, EmailApiError> {
         let mut url = self.root.clone();
         url.path_segments_mut()
-            .map_err(|_| invalid_response())?
+            .map_err(|_| invalid_response("Graph root cannot take path segments"))?
             .pop_if_empty()
             .extend(segments.iter().copied());
         Ok(url)
     }
 
     pub(super) fn continuation(&self, token: &StreamToken) -> Result<Url, EmailApiError> {
-        let url = Url::parse(token.expose()).map_err(|_| invalid_response())?;
+        let url =
+            Url::parse(token.expose()).map_err(|_| invalid_response("nextLink is not a URL"))?;
         // Never send a bearer to a host or API root supplied by a provider cursor.
         // Redirects are disabled as well. Opaque query parameters remain unchanged.
         if url.origin() != self.root.origin()
@@ -103,7 +104,7 @@ impl OutlookApiClientRepository {
         let refreshed = self
             .refreshed_token
             .lock()
-            .map_err(|_| invalid_response())?
+            .map_err(|_| invalid_response("refreshed token lock is poisoned"))?
             .clone();
         let token = refreshed.as_ref().unwrap_or(token);
         let mut request = self
@@ -139,7 +140,8 @@ impl OutlookApiClientRepository {
                     *self
                         .refreshed_token
                         .lock()
-                        .map_err(|_| invalid_response())? = Some(fresh.clone());
+                        .map_err(|_| invalid_response("refreshed token lock is poisoned"))? =
+                        Some(fresh.clone());
                     // A 401 explicitly rejected this request. Every network,
                     // timeout, and non-401 response is returned without replay.
                     let mut headers = reqwest::header::HeaderMap::new();
@@ -147,7 +149,7 @@ impl OutlookApiClientRepository {
                         "Bearer {}",
                         fresh.expose_secret()
                     ))
-                    .map_err(|_| invalid_response())?;
+                    .map_err(|_| invalid_response("refreshed token is not a header value"))?;
                     authorization.set_sensitive(true);
                     headers.insert(reqwest::header::AUTHORIZATION, authorization);
                     self.graph_attempt(retry.headers(headers), &method, &path, true)
@@ -207,7 +209,9 @@ impl OutlookApiClientRepository {
 
     async fn gated_graph_request(&self, request: RequestBuilder) -> Result<Response, GraphFailure> {
         let permit = if let Some(gate) = &self.gate {
-            let mailbox = self.mailbox.ok_or_else(invalid_response)?;
+            let mailbox = self
+                .mailbox
+                .ok_or_else(|| invalid_response("gated request has no mailbox"))?;
             let started = Instant::now();
             let permit = gate
                 .acquire(mailbox)
@@ -332,11 +336,7 @@ impl OutlookApiClientRepository {
         token: &AccessToken,
         url: Url,
     ) -> Result<T, EmailApiError> {
-        self.request(token, Method::GET, url, None)
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())
+        read_json(self.request(token, Method::GET, url, None).await?).await
     }
 }
 
@@ -381,8 +381,53 @@ fn whole_seconds(delay: Duration) -> i64 {
     i64::try_from(delay.as_millis().div_ceil(1000)).unwrap_or(i64::MAX)
 }
 
-pub(super) fn invalid_response() -> EmailApiError {
+/// `what` names the field or shape that failed. It must never quote the
+/// response, which can carry mail content.
+pub(super) fn invalid_response(what: impl std::fmt::Display) -> EmailApiError {
     EmailApiError::Permanent {
-        message: "invalid Microsoft Graph response".into(),
+        message: format!("invalid Microsoft Graph response: {what}"),
     }
+}
+
+/// Decodes a Graph JSON body. A failure names the JSON path it happened at
+/// and, for a missing or duplicate field, the field; serde's own message is
+/// dropped because it quotes the offending value.
+pub(super) async fn read_json<T: DeserializeOwned>(response: Response) -> Result<T, EmailApiError> {
+    let body = response
+        .bytes()
+        .await
+        .map_err(|_| invalid_response("body was cut off"))?;
+    decode(&body)
+}
+
+fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, EmailApiError> {
+    let mut deserializer = serde_json::Deserializer::from_slice(body);
+    let value = serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
+        let problem = match error.inner().classify() {
+            serde_json::error::Category::Data => data_problem(&error.inner().to_string()),
+            serde_json::error::Category::Eof => "truncated JSON".to_owned(),
+            serde_json::error::Category::Syntax | serde_json::error::Category::Io => {
+                "malformed JSON".to_owned()
+            }
+        };
+        invalid_response(format_args!("{problem} at {}", error.path()))
+    })?;
+    deserializer
+        .end()
+        .map_err(|_| invalid_response("trailing data after JSON"))?;
+    Ok(value)
+}
+
+/// Field names come from the wire types, so they are safe to report; any
+/// other data error is summarized.
+fn data_problem(message: &str) -> String {
+    for kind in ["missing field `", "duplicate field `"] {
+        if let Some((field, _)) = message
+            .strip_prefix(kind)
+            .and_then(|rest| rest.split_once('`'))
+        {
+            return format!("{kind}{field}`");
+        }
+    }
+    "unexpected value".to_owned()
 }

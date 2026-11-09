@@ -4,6 +4,8 @@ use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
+mod retries;
+
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
     let link = macro_uuid::generate_uuid_v7();
     sqlx::query!(r#"
@@ -246,6 +248,7 @@ pub(super) fn snapshot(
             message,
             calendar_parts: Vec::new(),
         },
+        calendar_parts_unavailable: false,
         state,
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],

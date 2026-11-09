@@ -476,7 +476,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 rig-agent = "0.41.0"
 rig-core = "0.41.0"
 # Features unified here, not by workspace-hack (.config/hakari.toml final-excludes).
-rmcp = { version = "1.6.0", features = [
+rmcp = { version = "3.9.0", features = [
   "auth",
   "client",
   "transport-streamable-http-client-reqwest",

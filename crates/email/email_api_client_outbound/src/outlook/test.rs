@@ -781,3 +781,114 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
     assert!(messages[0].state.in_inbox);
     assert!(newest.attachments.is_empty());
 }
+
+#[tokio::test]
+async fn an_invitation_whose_source_fails_reads_without_calendar_parts() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "@odata.type":"#microsoft.graph.eventMessageRequest",
+            "id":"m1", "conversationId":"conversation", "parentFolderId":"folder"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/$value"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error":{"code":"ErrorInternalServerError","message":"internal"}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let message = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(message.calendar_parts_unavailable);
+    assert!(message.content.calendar_parts.is_empty());
+    assert_eq!(message.content.message.provider_id.as_deref(), Some("m1"));
+}
+
+#[tokio::test]
+async fn a_throttled_invitation_source_still_fails_the_read() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "@odata.type":"#microsoft.graph.eventMessageRequest",
+            "id":"m1", "conversationId":"conversation"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/$value"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "9"))
+        .mount(&server)
+        .await;
+
+    let error = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, EmailApiError::RateLimited { .. }),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m1", "conversationId":"conversation",
+            "toRecipients":[{"emailAddress":{"address":"ok@example.com"}},{"emailAddress":{"address":["private@example.com"]}}]
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m2", "subject":"Quarterly numbers"
+        })))
+        .mount(&server)
+        .await;
+
+    let read = |id: &'static str| {
+        let api = &api;
+        let token = &token;
+        async move {
+            api.message(token, Uuid::now_v7(), &ProviderId::new(id).unwrap(), &[])
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    let wrong_type = read("m1").await;
+    let missing = read("m2").await;
+
+    assert_eq!(
+        wrong_type,
+        "permanent email provider failure: invalid Microsoft Graph response: unexpected value at toRecipients[1].emailAddress.address"
+    );
+    assert_eq!(
+        missing,
+        "permanent email provider failure: invalid Microsoft Graph response: missing field `conversationId` at ."
+    );
+}

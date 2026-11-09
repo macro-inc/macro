@@ -286,7 +286,7 @@ impl InboxLifecycleRepository for PgMailboxSync {
             UserProvider::Outlook => {
                 let stream=sqlx::query!("SELECT id,initial_complete FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog' LIMIT 1",link,current.sync_generation).fetch_optional(&mut *tx).await.map_err(failed)?;
                 let in_progress=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder') AND NOT initial_complete)
-                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import) AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
+                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity') AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
                 let run_id = stream
                     .as_ref()
                     .map_or_else(macro_uuid::generate_uuid_v7, |stream| stream.id);

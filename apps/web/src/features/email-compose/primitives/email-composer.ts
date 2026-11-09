@@ -976,8 +976,17 @@ export function createEmailComposer(props: EmailComposerOptions) {
       } else {
         try {
           await autosave.save();
-        } catch {
-          // Legacy standalone sends can proceed without a saved draft.
+        } catch (error) {
+          // Legacy standalone sends can proceed without a saved draft. A
+          // durable send pins the local copy it saved, so a failed local write
+          // would leave Undo an older one; a failed server save alone does not.
+          if (
+            props.delivery.queueActive?.(activeInboxId()) &&
+            autosave.localSaveState() === 'failed'
+          ) {
+            props.notices.reportError(error);
+            return refuseSend(props.notices, 'draft-not-saved');
+          }
         }
       }
       // Already sent from another device: the composer was reset mid-save.

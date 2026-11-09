@@ -650,3 +650,91 @@ async fn one_message_reads_like_its_timeline_entry(pool: PgPool) {
         .unwrap_err();
     assert_eq!(missing.current_context(), &ExternalChatError::NotFound);
 }
+
+/// History messages carry no WhatsApp name. People still read by the
+/// owner's own contact name, then their WhatsApp name, then their number,
+/// as senders and as reactors, for everyone who can view the chat.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn people_read_by_contact_name_then_whatsapp_name_then_number(pool: PgPool) {
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
+    let stranger = format!("{}@s.whatsapp.net", 5550002);
+    let sam = format!("{}@s.whatsapp.net", 5550003);
+    // Alice saved the customer; Bob saved nobody.
+    session
+        .update_chats(
+            alice,
+            &[ChatUpdate {
+                jid: CUSTOMER_JID.into(),
+                kind: ExternalChatKind::Direct,
+                name: Some("Dana (customer)".into()),
+                last_activity_at: None,
+                archived: None,
+                pinned: None,
+                anchor: None,
+                create: true,
+            }],
+        )
+        .await
+        .unwrap();
+    let unnamed = |event: u128, sender: &str, source: &str| {
+        let mut event = text(event, sender, source, source);
+        let InboundKind::Message(message) = &mut event.kind else {
+            unreachable!()
+        };
+        message.sender.display_name = None;
+        message.history = true;
+        event
+    };
+    session
+        .ingest_event(alice, &unnamed(1, CUSTOMER_JID, "FROM-CUSTOMER"))
+        .await
+        .unwrap();
+    session
+        .ingest_event(alice, &unnamed(2, &stranger, "FROM-STRANGER"))
+        .await
+        .unwrap();
+    let reactions = [
+        (3, CUSTOMER_JID, None),
+        (4, stranger.as_str(), None),
+        (5, sam.as_str(), Some("Sam")),
+    ];
+    for (event, sender, name) in reactions {
+        let mut reaction = text(event, sender, &format!("REACT-{event}"), "👍");
+        let InboundKind::Message(message) = &mut reaction.kind else {
+            unreachable!()
+        };
+        message.kind = MessageKind::Reaction;
+        message.revision = 1;
+        message.sender.display_name = name.map(str::to_owned);
+        message.target = Some(Target {
+            source_id: "FROM-CUSTOMER".into(),
+            sender_jid: CUSTOMER_JID.into(),
+        });
+        session.ingest_event(alice, &reaction).await.unwrap();
+    }
+
+    let page = linked
+        .chats
+        .messages(&receipt::<MessageView>(BOB, binding.id), None, Some(50))
+        .await
+        .unwrap();
+
+    let senders: Vec<(&str, &str)> = page
+        .messages
+        .iter()
+        .map(|message| (message.body.as_str(), message.sender.name.as_str()))
+        .collect();
+    assert_eq!(
+        senders,
+        vec![
+            ("FROM-STRANGER", "+5550002"),
+            ("FROM-CUSTOMER", "Dana (customer)"),
+        ]
+    );
+    let reactors: Vec<&str> = page.messages[1].reactions[0]
+        .reactors
+        .iter()
+        .map(|reactor| reactor.name.as_str())
+        .collect();
+    assert_eq!(reactors, vec!["Dana (customer)", "+5550002", "Sam"]);
+}

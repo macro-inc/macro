@@ -1,4 +1,8 @@
-use super::{OutlookApiClientRepository, transport::invalid_response, wire};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire,
+};
 use email_api_client_core::{models::*, ports::MailboxSettingsClient};
 use reqwest::Method;
 use serde::Deserialize;
@@ -120,7 +124,7 @@ impl MailboxSettingsClient for OutlookApiClientRepository {
         let mut result = Vec::new();
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("messageRules pages repeat"));
             }
             let page: wire::Page<Rule> = self.get(token, url).await?;
             result.extend(page.value.into_iter().filter_map(owned));
@@ -137,16 +141,16 @@ impl MailboxSettingsClient for OutlookApiClientRepository {
         correlation: Uuid,
         sender: &str,
     ) -> Result<ProviderId, EmailApiError> {
-        let value: Value = self.request(token, Method::POST, self.endpoint(&["me", "mailFolders", "inbox", "messageRules"])?,
+        let response = self.request(token, Method::POST, self.endpoint(&["me", "mailFolders", "inbox", "messageRules"])?,
             Some(&json!({"displayName": format!("Macro block {correlation}"), "sequence": 1, "isEnabled": true,
                 "conditions": {"fromAddresses": [{"emailAddress": {"address": sender}}]},
-                "actions": {"delete": true, "stopProcessingRules": true}}))).await?
-            .json().await.map_err(|_| invalid_response())?;
+                "actions": {"delete": true, "stopProcessingRules": true}}))).await?;
+        let value: Value = read_json(response).await?;
         ProviderId::new(
             value
                 .get("id")
                 .and_then(Value::as_str)
-                .ok_or_else(invalid_response)?,
+                .ok_or_else(|| invalid_response("created messageRule has no id"))?,
         )
     }
 

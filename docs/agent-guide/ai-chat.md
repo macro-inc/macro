@@ -27,6 +27,11 @@ in its channel or comment thread, the task, the email, the call, the routine,
 or the session that handed the work off. The context the agent was given stays
 hidden. A prompt still sending shows no line until the log confirms it.
 
+A finished agent reply shows when it was sent under its last line
+(`data-testid="reply-footer"`), in the same treatment as a prompt's time: the
+moment its turn ended. A reply still running, history a runtime replayed on
+load, and a turn stopped before the agent said anything show no time.
+
 ## Connecting an app from an agent session
 
 When existing tools cannot handle a request, agent sessions can use

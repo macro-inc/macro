@@ -1,4 +1,8 @@
-use super::{OutlookApiClientRepository, transport::invalid_response, wire};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire,
+};
 use chrono::Utc;
 use email_api_client_core::{
     models::{AccessToken, EmailApiError, StreamToken},
@@ -43,7 +47,7 @@ impl MailboxLabelClient for OutlookApiClientRepository {
         let mut visited = std::collections::HashSet::new();
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("masterCategories pages repeat"));
             }
             let page: wire::Page<Category> = self.get(token, url).await?;
             labels.extend(
@@ -72,7 +76,7 @@ impl MailboxLabelClient for OutlookApiClientRepository {
                 Some(&json!({"displayName":name,"color":"none"})),
             )
             .await?;
-        let category = response.json().await.map_err(|_| invalid_response())?;
+        let category = read_json(response).await?;
         Ok(label(category, link_id))
     }
 
@@ -81,7 +85,7 @@ impl MailboxLabelClient for OutlookApiClientRepository {
         let mut visited = std::collections::HashSet::new();
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("masterCategories pages repeat"));
             }
             let page: wire::Page<Category> = self.get(token, url).await?;
             if let Some(category) = page

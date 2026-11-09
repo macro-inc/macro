@@ -81,6 +81,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   subquery can be NULL and types it non-null from the table. Alias such
   columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
   nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
+- A query that claims rows (`upload_claimed_at`) must return every row it
+  claims: read optional columns such as the sender through a `LEFT JOIN`. A
+  claimed attachment the caller never sees is never uploaded, and the Outlook
+  projection waits on its claim forever.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its

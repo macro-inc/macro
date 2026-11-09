@@ -2,7 +2,11 @@ use chrono::{DateTime, Utc};
 use reqwest::Method;
 use serde_json::json;
 
-use super::{OutlookApiClientRepository, transport::invalid_response, wire};
+use super::{
+    OutlookApiClientRepository,
+    transport::{invalid_response, read_json},
+    wire,
+};
 use email_api_client_core::models::{
     AccessToken, EmailApiError, MailboxChangePage, MailboxSubscription, ProviderId, StreamPosition,
     StreamToken,
@@ -41,7 +45,11 @@ impl FolderChangeReader for OutlookApiClientRepository {
         let position = match (page.next, page.delta) {
             (Some(next), None) => StreamPosition::Continue(StreamToken::new(next)),
             (None, Some(delta)) => StreamPosition::Checkpoint(StreamToken::new(delta)),
-            _ => return Err(invalid_response()),
+            _ => {
+                return Err(invalid_response(
+                    "delta page lacks one of nextLink and deltaLink",
+                ));
+            }
         };
         // Reject unsafe URLs before they can become durable checkpoints.
         let next = match &position {
@@ -75,7 +83,7 @@ impl MailboxWatchClient for OutlookApiClientRepository {
         let mut url = self.endpoint(&["subscriptions"])?;
         loop {
             if !visited.insert(url.as_str().to_owned()) {
-                return Err(invalid_response());
+                return Err(invalid_response("subscriptions pages repeat"));
             }
             let page: wire::Page<Watch> = self.get(token, url).await?;
             for value in page.value {
@@ -108,18 +116,15 @@ impl MailboxWatchClient for OutlookApiClientRepository {
             "notificationUrl":notification_url, "lifecycleNotificationUrl":lifecycle_url,
             "clientState":client_state, "expirationDateTime":expires_at.to_rfc3339(),
         });
-        let result: wire::Subscription = self
+        let result = self
             .request(
                 token,
                 Method::POST,
                 self.endpoint(&["subscriptions"])?,
                 Some(&body),
             )
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())?;
-        subscription(result)
+            .await?;
+        subscription(read_json(result).await?)
     }
 
     async fn renew_watch(
@@ -129,18 +134,15 @@ impl MailboxWatchClient for OutlookApiClientRepository {
         expires_at: DateTime<Utc>,
     ) -> Result<MailboxSubscription, EmailApiError> {
         let body = json!({"expirationDateTime":expires_at.to_rfc3339()});
-        let result: wire::Subscription = self
+        let result = self
             .request(
                 token,
                 Method::PATCH,
                 self.endpoint(&["subscriptions", id.as_str()])?,
                 Some(&body),
             )
-            .await?
-            .json()
-            .await
-            .map_err(|_| invalid_response())?;
-        subscription(result)
+            .await?;
+        subscription(read_json(result).await?)
     }
 
     async fn remove_watch(
