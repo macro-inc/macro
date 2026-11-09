@@ -92,6 +92,7 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 /// Registry shared by all snapshots from one editor.
 /// s2: CFG-05, CFG-07
 pub struct Registry {
+    pub(crate) derive_view_caches: bool,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_overlays:
         HashMap<NodeTypeIndex, crate::foreign::native_overlay::NativeOverlay>,
@@ -228,6 +229,7 @@ pub struct EditorBuilder {
     projections: HashMap<(TypeId, TypeId), Box<dyn Any + Send + Sync>>,
     transforms: TransformRegistrations,
     include_static_transforms: bool,
+    derive_view_caches: bool,
 }
 impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
@@ -253,6 +255,7 @@ impl EditorBuilder {
             projections: HashMap::default(),
             transforms: vec![],
             include_static_transforms: true,
+            derive_view_caches: true,
         }
         .node::<Root>()
         .node::<Text>()
@@ -281,6 +284,12 @@ impl EditorBuilder {
     /// explicit registrations and the engine's core text normalization.
     pub fn without_static_transforms(mut self) -> Self {
         self.include_static_transforms = false;
+        self
+    }
+    /// Leave root text and element text-format/style caches to the external
+    /// reconciler. Intrinsic text/tree normalization and explicit edits still run.
+    pub fn without_reconciler_caches(mut self) -> Self {
+        self.derive_view_caches = false;
         self
     }
     /// Run a typed transform for this type and its direct replacement.
@@ -373,6 +382,7 @@ impl EditorBuilder {
             }
         }
         let mut registry = Registry {
+            derive_view_caches: self.derive_view_caches,
             #[cfg(feature = "foreign-nodes")]
             native_overlays: Default::default(),
             #[cfg(feature = "foreign-nodes")]

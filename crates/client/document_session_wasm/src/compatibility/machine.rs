@@ -43,8 +43,9 @@ impl Machine {
             }
         }
         // Resolve every registration before constructing the live editor.
-        let mut prepared =
-            compat_editor_builder(EditorMode::Headless, 0).without_static_transforms();
+        let mut prepared = compat_editor_builder(EditorMode::Headless, 0)
+            .without_static_transforms()
+            .without_reconciler_caches();
         for name in classes.keys() {
             prepared = macro_document_model::editor::register_supported_node(prepared, name)?;
         }
@@ -87,6 +88,7 @@ impl Machine {
                 builder: Arc::new(move |mode, peer| {
                     let mut builder = compat_editor_builder(mode, peer)
                         .without_static_transforms()
+                        .without_reconciler_caches()
                         .key_source(lexical_model::KeySource::Shared(keys.clone()))
                         .plugin(crate::compatibility::observer::Observer(receipts.clone()));
                     for name in classes.keys() {

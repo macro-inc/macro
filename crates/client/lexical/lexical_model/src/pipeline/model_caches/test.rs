@@ -64,3 +64,102 @@ fn lazy_previous_and_pending_text_caches_retain_current_callback_provenance() ->
     assert!(attached.state.root_text.get().is_some());
     Ok(())
 }
+
+#[test]
+fn external_reconciler_owns_root_and_element_cache_writes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .without_reconciler_caches()
+        .build()
+        .expect("external reconciler");
+    let ((p, t), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let t = tx.create_text("child")?;
+        tx.text(t)?
+            .set_format(TextFormat::BOLD)?
+            .set_style("color:red")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p.key(), t.key()))
+    })?;
+    editor.update(|tx| {
+        tx.text(t)?
+            .set_format(TextFormat::BOLD | TextFormat::ITALIC)?
+            .set_style("color:blue")?;
+        Ok(())
+    })?;
+    assert_eq!(
+        editor.state().view().element_data(p)?.text_format,
+        TextFormat::empty()
+    );
+    assert_eq!(
+        editor.state().view().element_data(p)?.text_style.as_ref(),
+        ""
+    );
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .node_or_err(NodeKey::ROOT)?
+            .foreign_raw_root_cached_text(),
+        None
+    );
+    editor.update(|tx| {
+        tx.mark_dirty(p)?;
+        // A JS virtual setter may deliberately choose a different cache value.
+        tx.patch_foreign_base(
+            p,
+            ForeignBaseField::TextFormat(TextFormat::SUBSCRIPT.bits()),
+        )?;
+        tx.patch_foreign_base(p, ForeignBaseField::TextStyle("font-weight:normal".into()))?;
+        Ok(())
+    })?;
+    assert_eq!(
+        editor.state().view().element_data(p)?.text_format,
+        TextFormat::SUBSCRIPT
+    );
+    assert_eq!(
+        editor.state().view().element_data(p)?.text_style.as_ref(),
+        "font-weight:normal"
+    );
+    assert_eq!(
+        editor.state().view().text_data(t)?.format,
+        TextFormat::BOLD | TextFormat::ITALIC
+    );
+    assert_eq!(editor.state().root_text_content().as_ref(), "child");
+    let mut normal = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("native reconciler");
+    let ((p, t), _) = normal.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let t = tx.create_text("child")?;
+        tx.text(t)?
+            .set_format(TextFormat::BOLD)?
+            .set_style("color:red")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p.key(), t.key()))
+    })?;
+    normal.update(|tx| {
+        tx.text(t)?
+            .set_format(TextFormat::BOLD | TextFormat::ITALIC)?
+            .set_style("color:blue")?;
+        Ok(())
+    })?;
+    assert_eq!(
+        normal.state().view().element_data(p)?.text_format,
+        TextFormat::BOLD | TextFormat::ITALIC
+    );
+    assert_eq!(
+        normal.state().view().element_data(p)?.text_style.as_ref(),
+        "color:blue"
+    );
+    assert_eq!(
+        normal
+            .state()
+            .view()
+            .node_or_err(NodeKey::ROOT)?
+            .foreign_raw_root_cached_text(),
+        Some("child")
+    );
+    Ok(())
+}
