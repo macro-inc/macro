@@ -608,3 +608,146 @@ it('recognizes abstract shim bases without calling their throwing getType', () =
   );
   registry.dispose();
 });
+
+it('does not resolve unchanged hook implementations on each update', () => {
+  class Element {
+    static getType() {
+      return 'element';
+    }
+    isInline() {
+      return false;
+    }
+  }
+  let lookups = 0;
+  const Custom = new Proxy(
+    class extends Element {
+      static getType() {
+        return 'cached-custom';
+      }
+    },
+    {
+      get(target, name, receiver) {
+        if (name === 'transform') lookups++;
+        return Reflect.get(target, name, receiver);
+      },
+    }
+  );
+  const registry = new ForeignClassRegistry(
+    new NativeNodeCatalog([{ klass: Element, kind: 'Element' }]),
+    [Custom]
+  );
+  try {
+    registry.beforeUpdate();
+    const initialLookups = lookups;
+    for (let index = 0; index < 1024; index++) registry.beforeUpdate();
+    expect(lookups).toBe(initialLookups);
+  } finally {
+    registry.dispose();
+  }
+});
+
+it('observes changing user getters even when the property descriptor is stable', () => {
+  class Element {
+    static getType() {
+      return 'element';
+    }
+    isInline() {
+      return false;
+    }
+  }
+  class Custom extends Element {
+    static getType() {
+      return 'dynamic-custom';
+    }
+  }
+  const native = Element.prototype.isInline;
+  let implementation = native;
+  Object.defineProperty(Custom.prototype, 'isInline', {
+    configurable: true,
+    get: () => implementation,
+  });
+  const registry = new ForeignClassRegistry(
+    new NativeNodeCatalog([{ klass: Element, kind: 'Element' }]),
+    [Custom]
+  );
+  try {
+    expect(registry.beforeUpdate()[0].overrides).toBe(0n);
+    implementation = () => true;
+    expect(() => registry.beforeUpdate()).toThrow('native hook isInline');
+    implementation = native;
+    expect(registry.beforeUpdate()[0].overrides).toBe(0n);
+  } finally {
+    registry.dispose();
+  }
+});
+
+it('detects inherited hook changes through a replaced prototype chain', () => {
+  class Element {
+    static getType() {
+      return 'element';
+    }
+    isInline() {
+      return false;
+    }
+  }
+  class Custom extends Element {
+    static getType() {
+      return 'prototype-custom';
+    }
+  }
+  class Alternate extends Element {
+    isInline() {
+      return true;
+    }
+  }
+  const registry = new ForeignClassRegistry(
+    new NativeNodeCatalog([{ klass: Element, kind: 'Element' }]),
+    [Custom]
+  );
+  try {
+    expect(registry.beforeUpdate()[0].overrides).toBe(0n);
+    Reflect.setPrototypeOf(Custom.prototype, Alternate.prototype);
+    expect(new Custom().isInline()).toBe(true);
+    expect(() => registry.beforeUpdate()).toThrow('native hook isInline');
+    Reflect.setPrototypeOf(Custom.prototype, Element.prototype);
+    expect(registry.beforeUpdate()[0].overrides).toBe(0n);
+  } finally {
+    registry.dispose();
+  }
+});
+
+it('watches a new inherited owner when the chain changes before updates begin', () => {
+  class Element {
+    static getType() {
+      return 'element';
+    }
+    isInline() {
+      return false;
+    }
+  }
+  class Custom extends Element {
+    static getType() {
+      return 'early-prototype-custom';
+    }
+  }
+  class Alternate extends Element {
+    isInline() {
+      return true;
+    }
+  }
+  const registry = new ForeignClassRegistry(
+    new NativeNodeCatalog([{ klass: Element, kind: 'Element' }]),
+    [Custom]
+  );
+  try {
+    Reflect.setPrototypeOf(Custom.prototype, Alternate.prototype);
+    expect(registry.beforeUpdate()[0].overrides).not.toBe(0n);
+    Alternate.prototype.isInline = Element.prototype.isInline;
+    expect(registry.beforeUpdate()[0].overrides).toBe(0n);
+    expect(() => {
+      Alternate.prototype.isInline = () => true;
+    }).toThrow('native hook isInline');
+  } finally {
+    registry.dispose();
+  }
+});
