@@ -376,3 +376,7 @@ fn cursor(data: &[u8]) -> Result<lexical_loro::NodeCursor, BoundaryError> {
             .map_err(|_| BoundaryError::Invalid("cursor"))?,
     })
 }
+
+#[cfg(feature = "compatibility")]
+#[path = "compatibility/machine.rs"]
+mod compatibility;

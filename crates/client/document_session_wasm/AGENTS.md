@@ -42,6 +42,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 - Serialize application PluginEvent payloads through surface.rs group encoders into the existing editor-effect envelope; never perform host I/O in the model.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
+- `src/compatibility.rs` and `compatibility/`: optional production same-core adapter, exact typed capture IDs, retained publications and normal session admission; schema generation stays in the separate compatibility generator. Never silently run native behavior for advertised JS hooks before their callback host is installed.
 - `src/application_exports.rs`: raw serializedState and download-safe savedState; Macro markdown uses internal/external application transformers while generic sessions keep built-ins.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
 - `src/paste_init.rs`: additive prepareMacroPaste export; the shared engine gate calls it during idle preparation after paint, before admitting editor input. Reserve 16 MiB through the allocator in that hook so idle initialization owns growth and dlmalloc can reuse the pages.
@@ -60,6 +61,8 @@ Carry the exact WAL adoption selection across the ABI, including delivered flags
 The document-session-wasm profile optimizes the measured group of six paste caller crates at level 3; keep dependency tuning separate and compare fresh paired browser samples before changing the group.
 Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.
 Preserve keystroke work counters when changing code-generation or post-processing settings.
+
+Reserve a fresh pending publication version at compatBegin, publish that version only after admission, and burn it on discard/no-op. Observe Start/Seed/remote/undo through compatCurrentVersion; compatSnapshot(version) always reads that exact retained publication. Validate full issued references for receivers and typed arguments; raw core-field reads use their owned captures rather than the latest graph. Pure commit observers may collect receipts, never install parallel editing behavior.
 
 ## Checks
 
