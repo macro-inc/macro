@@ -25,6 +25,13 @@ export type TaskTemplateSelection =
   | { kind: 'editing'; template: SavedTaskTemplate; name: string }
   | { kind: 'saved'; template: SavedTaskTemplate };
 
+/** A template editing session is persisted beside, never instead of, the task draft. */
+export type TaskTemplateEditorDraft = {
+  selection: Extract<TaskTemplateSelection, { kind: 'new' | 'editing' }>;
+  contents: TaskTemplateContents;
+  request?: TemplateCreationRequest;
+};
+
 export function templateSubmitKind(
   selection: TaskTemplateSelection,
   title: string

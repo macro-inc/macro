@@ -1,4 +1,5 @@
 import type {
+  TaskTemplateEditorDraft,
   TaskTemplateSelection,
   TemplateCreationRequest,
 } from '@app/features/task-composer/core/template-selection';
@@ -70,6 +71,8 @@ export type TaskComposerDraftStorage = {
 export interface TaskComposerDraft {
   title: string;
   templateSelection?: TaskTemplateSelection;
+  /** Template mode never overwrites the underlying task fields. */
+  templateEditor?: TaskTemplateEditorDraft;
   /** Last programmatically applied property and description state. */
   templateBaseline?: TaskTemplateContents;
   /** Immutable first admitted template creation input. */
@@ -89,7 +92,7 @@ export interface TaskComposerDraft {
 export function saveTaskComposerDraft(
   draft: Omit<TaskComposerDraft, 'timestamp'>,
   storage?: TaskComposerDraftStorage
-): void {
+): boolean {
   try {
     const draftWithTimestamp: TaskComposerDraft = {
       ...draft,
@@ -99,8 +102,10 @@ export function saveTaskComposerDraft(
       storage?.storageKey ?? STORAGE_KEY,
       JSON.stringify(draftWithTimestamp)
     );
+    return true;
   } catch (error) {
     console.warn('Failed to save task composer draft:', error);
+    return false;
   }
 }
 
