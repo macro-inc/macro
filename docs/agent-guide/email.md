@@ -309,6 +309,9 @@ that supplemental metadata appears without replacing the rows or thread body.
 On the first mobile Mail visit, its filter button and Signal/Noise pills must
 also appear. Navigate Home → Mail → a thread → Mail and verify those controls
 survive header replacement, including with the network still blocked.
+The pill row has an explicit 0.5rem top gutter below the split header's safe-area
+position, matching Drive's header gutter even when Duo has no top safe-area inset.
+The email list reserves the pill row and a 0.75rem gap beneath it.
 
 Opening an email shows loading while its local draft identity and thread data
 resolve. Verify a cold open and switching directly between threads with delayed

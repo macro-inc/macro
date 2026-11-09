@@ -190,7 +190,7 @@ function EmailMobileLayout(props: ParentProps) {
   return (
     <>
       <SplitHeaderLeft>
-        <div class="flex h-full w-full min-w-0 flex-1 items-center">
+        <div class="flex h-full w-full min-w-0 flex-1 items-start pt-2">
           <PillTabs
             scrollable
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
