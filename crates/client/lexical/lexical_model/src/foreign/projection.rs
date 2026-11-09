@@ -135,6 +135,7 @@ impl NativeProjection {
         Ok(node)
     }
     fn write_back(&self, tx: &mut Transaction<'_>) -> Result<(), Error> {
+        ForeignReadOperation::check()?;
         self.check_error()?;
         if !self.changed || !tx.pending.nodes.contains_key(&self.key) {
             return Ok(());
@@ -150,6 +151,8 @@ impl NativeProjection {
 }
 
 fn restore(tx: &mut Transaction<'_>, previous: Option<NativeProjection>) -> Result<(), Error> {
+    // Refreshing decoded Arcs invokes no hook and writes no model record.
+    // Preserve pre-throw payload changes when a nested failure is caught.
     let refreshed = previous
         .as_ref()
         .filter(|frame| tx.pending.nodes.contains_key(&frame.key))
@@ -163,13 +166,14 @@ fn restore(tx: &mut Transaction<'_>, previous: Option<NativeProjection>) -> Resu
             return Err(error);
         }
     }
-    Ok(())
+    ForeignReadOperation::check()
 }
 pub(crate) fn native<Value>(
     tx: &mut Transaction<'_>,
     key: NodeKey,
     invoke: impl FnOnce(&NodeVTable, &mut Transaction<'_>) -> Result<Value, Error>,
 ) -> Result<Value, Error> {
+    ForeignReadOperation::check()?;
     let previous = tx.native_projection.take();
     if let Some(frame) = &previous
         && let Err(error) = frame.write_back(tx)
@@ -202,6 +206,7 @@ pub(crate) fn foreign<Value>(
     tx: &mut Transaction<'_>,
     invoke: impl FnOnce(&mut Transaction<'_>) -> Value,
 ) -> Result<Value, Error> {
+    ForeignReadOperation::check()?;
     let previous = tx.native_projection.take();
     if let Some(frame) = &previous
         && let Err(error) = frame.write_back(tx)

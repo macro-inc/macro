@@ -100,36 +100,74 @@ pub(crate) fn clone_payload(
     key: NodeKey,
     original: NodeKey,
     data: &Arc<dyn AnyNodeData>,
+    source: Option<ForeignReadSnapshot>,
 ) -> Option<Arc<dyn AnyNodeData>> {
+    let _scope = super::clone::Scope::enter(source);
     if let Some(payload) = data.as_any().downcast_ref::<ForeignPayload>() {
         let fields = &payload.user;
         let mut entry = registry.node(index);
         while let Some(current) = entry {
+            if ForeignReadOperation::check().is_err() {
+                return None;
+            }
             let Some(definition) = &current.foreign else {
                 break;
             };
             match definition.hooks.after_clone(key, original, fields) {
                 Override::Value(value) => {
-                    return value.map(|user| {
-                        let copy =
-                            match ForeignPayload::with_table(payload.table.clone(), user.clone()) {
-                                Ok(copy) => copy,
-                                Err(error) => {
-                                    let mut copy = payload.clone();
-                                    copy.user = user;
-                                    copy.invalid = Some(error.to_string().into());
-                                    copy
-                                }
-                            };
-                        Arc::new(copy) as Arc<dyn AnyNodeData>
-                    });
+                    let user = value?;
+                    return match ForeignPayload::with_table(payload.table.clone(), user.clone()) {
+                        Ok(copy) => Some(Arc::new(copy)),
+                        Err(error) => failed_clone(payload, user, error),
+                    };
                 }
                 Override::Inherit => {}
             }
             entry = definition.extends.and_then(|parent| registry.get(parent));
         }
+        let native = payload.native.after_clone()?;
+        if ForeignReadOperation::check().is_err() {
+            return None;
+        }
+        let replacement: Result<ForeignPayload, Error> = (|| {
+            let mut fields = payload.user.fields.clone();
+            let normalized = native.to_json()?;
+            for field in payload.native.to_json()?.keys() {
+                if !normalized.contains_key(field) {
+                    fields.shift_remove(field);
+                }
+            }
+            fields.extend(normalized);
+            Ok(ForeignPayload {
+                user: ForeignData { fields },
+                native,
+                table: payload.table.clone(),
+                invalid: payload.invalid.clone(),
+            })
+        })();
+        return match replacement {
+            Ok(copy) => Some(Arc::new(copy)),
+            Err(error) => failed_clone(payload, payload.user.clone(), error),
+        };
     }
     data.after_clone()
+}
+
+fn failed_clone(
+    payload: &ForeignPayload,
+    user: ForeignData,
+    error: Error,
+) -> Option<Arc<dyn AnyNodeData>> {
+    if ForeignReadOperation::is_active() {
+        let _ = ForeignReadOperation::defer(error);
+        return None;
+    }
+    // Unscoped native APIs have no fallible return from a clone hook. Retain
+    // their existing invalid-payload diagnostic for validation at publication.
+    let mut copy = payload.clone();
+    copy.user = user;
+    copy.invalid = Some(error.to_string().into());
+    Some(Arc::new(copy))
 }
 
 impl StateRef<'_> {

@@ -9,6 +9,16 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
     if root_text_changed(tx)
+        && {
+            #[cfg(feature = "foreign-nodes")]
+            {
+                ForeignReadOperation::check().is_ok()
+            }
+            #[cfg(not(feature = "foreign-nodes"))]
+            {
+                true
+            }
+        }
         && let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT)
     {
         Arc::make_mut(root);
@@ -21,6 +31,10 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         tx.dirty_elements.keys().copied().collect::<Vec<_>>()
     };
     for key in keys {
+        #[cfg(feature = "foreign-nodes")]
+        if ForeignReadOperation::check().is_err() {
+            return;
+        }
         if !tx.editor.state.nodes.contains_key(&key) || tx.is_root_or_shadow_root(key) {
             continue;
         }
@@ -34,6 +48,10 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         }) else {
             continue;
         };
+        #[cfg(feature = "foreign-nodes")]
+        if ForeignReadOperation::check().is_err() {
+            return;
+        }
         if tx
             .view()
             .element(key)
@@ -54,6 +72,12 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
 fn root_text_changed(tx: &Transaction<'_>) -> bool {
     let previous = &tx.editor.state;
     let next = &tx.pending;
+    let next_view = tx.view();
+    let previous_view = StateRef {
+        #[cfg(feature = "foreign-nodes")]
+        foreign_origin: next_view.foreign_origin,
+        ..previous.view()
+    };
     let unchanged_elements = !tx.full_reconcile
         && previous.opaque_text_count == 0
         && next.opaque_text_count == 0
@@ -87,8 +111,11 @@ fn root_text_changed(tx: &Transaction<'_>) -> bool {
             && a.links.prev == b.links.prev
             && a.links.next == b.links.next
         {
-            return previous.view().text_content(*key) != next.view().text_content(*key);
+            return previous_view.text_content(*key) != next_view.text_content(*key);
         }
     }
-    next.root_text_content() != previous.root_text_content()
+    next_view.cached_root_text_content() != previous_view.cached_root_text_content()
 }
+
+#[cfg(all(test, feature = "foreign-nodes"))]
+mod test;

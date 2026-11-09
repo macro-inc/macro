@@ -94,10 +94,16 @@ impl ForeignBindings {
     ) {
         let configs = self.configs();
         for (name, config) in configs {
-            if values
+            if ForeignReadOperation::check().is_err() {
+                return;
+            }
+            let is_default = values
                 .get(name)
-                .is_some_and(|value| config.codec.is_default(value))
-            {
+                .is_some_and(|value| config.codec.is_default(value));
+            if ForeignReadOperation::check().is_err() {
+                return;
+            }
+            if is_default {
                 values.shift_remove(name);
             }
             let flat = layout
@@ -123,6 +129,9 @@ pub(crate) fn equivalent(left: &NodeState, right: &NodeState) -> Option<Configs>
         configs.insert(name, config);
     }
     for (name, config) in &configs {
+        if ForeignReadOperation::check().is_err() {
+            return None;
+        }
         let a = left.unknown.as_ref().and_then(|values| values.get(*name));
         let b = right.unknown.as_ref().and_then(|values| values.get(*name));
         let equal = match (a, b) {
@@ -130,6 +139,9 @@ pub(crate) fn equivalent(left: &NodeState, right: &NodeState) -> Option<Configs>
             (Some(value), None) | (None, Some(value)) => config.codec.is_default(value),
             (None, None) => true,
         };
+        if ForeignReadOperation::check().is_err() {
+            return None;
+        }
         if !equal {
             return None;
         }
@@ -239,6 +251,9 @@ impl Transaction<'_> {
 impl<'state> StateRef<'state> {
     /// Read an unparsed slot and lazily bind its registered codec without dirtying the node.
     pub fn foreign_state(self, node: impl Into<NodeKey>, key: &str) -> Option<&'state Value> {
+        if ForeignReadOperation::check().is_err() {
+            return None;
+        }
         let state = self.slot(node.into())?.state.as_deref()?;
         if let Some((name, config)) = self.state.registry.foreign_states.get(key) {
             state.foreign.bind(name, config);

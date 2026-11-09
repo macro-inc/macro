@@ -134,6 +134,15 @@ impl Commit {
     }
 }
 impl Transaction<'_> {
+    pub(crate) fn selection_will_change(&self) -> bool {
+        self.selection_dirty
+            || self
+                .pending
+                .selection
+                .as_ref()
+                .is_some_and(Selection::is_dirty)
+            || self.pending.selection != self.editor.state.selection
+    }
     /// Flush pending writes and publish atomically; any error leaves the editor unchanged.
     pub fn commit(mut self) -> Result<Commit, Error> {
         if self.dirty_since_flush {
@@ -142,19 +151,37 @@ impl Transaction<'_> {
         self.commit_phase()
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
+        self.commit_phase_prepared(|_| Ok(()))
+            .map(|(commit, ())| commit)
+    }
+
+    /// Prepare a development host artifact before publishing pending model effects.
+    /// A preparation error drops this update; previously published preceding commits
+    /// remain published, and allocated keys/commit IDs are never reused.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn commit_foreign<T, E: From<Error>>(
+        mut self,
+        prepare: impl FnOnce(&Commit) -> Result<T, E>,
+    ) -> Result<(Commit, T), E> {
+        if self.dirty_since_flush {
+            self.flush()?;
+        }
+        self.commit_phase_prepared(prepare)
+    }
+
+    fn commit_phase_prepared<T, E: From<Error>>(
+        &mut self,
+        prepare: impl FnOnce(&Commit) -> Result<T, E>,
+    ) -> Result<(Commit, T), E> {
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
-            return Err(Error::ForeignReadOnly);
+            return Err(Error::ForeignReadOnly.into());
         }
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
-        let selection_changed = self.selection_dirty
-            || self
-                .pending
-                .selection
-                .as_ref()
-                .is_some_and(Selection::is_dirty)
-            || self.pending.selection != prev.selection;
+        let selection_changed = self.selection_will_change();
         let mut changes = Changes {
             dirty_leaves: self.dirty_leaves.clone(),
             dirty_elements: self.dirty_elements.clone(),
@@ -206,35 +233,32 @@ impl Transaction<'_> {
         }
         crate::pipeline::apply_model_caches(self);
         #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        #[cfg(feature = "foreign-nodes")]
         self.view().check_foreign_payloads()?;
         changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
         if let Some(selection) = &mut self.pending.selection {
             selection.set_dirty(false);
         }
-        if dirty || selection_changed {
-            self.editor.state = self.pending.clone();
-        }
-        self.editor.carried_tags = if !dirty && selection_changed {
-            self.options.tags.clone()
-        } else {
-            TagSet::default()
-        };
         let composition_changed = self.editor.composition_key != self.composition_key;
-        self.editor.composition_key = self.composition_key;
-        self.editor.extensions = self.extensions.clone();
         #[cfg(feature = "foreign-nodes")]
         {
-            self.editor.suspend_version = next_id;
+            self.pending.foreign_selection_identity = self.foreign_selections.current.clone();
         }
-        Ok(Commit {
+        let next = if dirty || selection_changed {
+            self.pending.clone()
+        } else {
+            prev.clone()
+        };
+        let commit = Commit {
             default_prevented: self.default_prevented,
             following: vec![],
             follow_up_error: None,
             events: std::mem::take(&mut self.events),
             id: next_id,
             prev,
-            next: self.editor.state.clone(),
+            next,
             changes,
             tags: self.options.tags.clone(),
             normalized: self.normalized.clone(),
@@ -245,7 +269,25 @@ impl Transaction<'_> {
             preceding: self.preceding.take(),
             #[cfg(feature = "bench-counters")]
             work: std::mem::take(&mut self.work),
-        })
+        };
+        let artifact = prepare(&commit)?;
+        #[cfg(feature = "foreign-nodes")]
+        ForeignReadOperation::check()?;
+        if dirty || selection_changed {
+            self.editor.state = self.pending.clone();
+        }
+        self.editor.carried_tags = if !dirty && selection_changed {
+            self.options.tags.clone()
+        } else {
+            TagSet::default()
+        };
+        self.editor.composition_key = self.composition_key;
+        self.editor.extensions = self.extensions.clone();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.editor.suspend_version = next_id;
+        }
+        Ok((commit, artifact))
     }
 }
 
@@ -257,8 +299,12 @@ impl Transaction<'_> {
             return Err(Error::ForeignEditorState);
         }
         self.editor.keys.raise_to(state.max_key());
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.pending = state.pending();
         for key in self.pending.nodes.keys().copied().collect::<Vec<_>>() {
+            #[cfg(feature = "foreign-nodes")]
+            let clone_source = self.foreign_clone_source(key)?;
             let slot = self
                 .pending
                 .nodes
@@ -271,7 +317,10 @@ impl Transaction<'_> {
                 key,
                 key,
                 &slot.data,
+                clone_source,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let record = Arc::make_mut(slot);
@@ -298,6 +347,8 @@ impl Transaction<'_> {
         for tag in tags.iter() {
             self.add_tag(tag.clone());
         }
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.pending = state.pending();
         self.composition_key = None;
         self.dirty_leaves.clear();

@@ -1,6 +1,130 @@
 use super::*;
 
 #[test]
+fn flush_state_tracks_writes_and_queued_updates_across_suspension() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    assert!(tx.needs_flush());
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("text")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    tx.add_tag(UpdateTag::HistoryPush);
+    assert!(!tx.needs_flush());
+    tx.text(text)?.set_text_content("updated")?;
+    assert!(tx.needs_flush());
+    let pending = tx.suspend();
+    let mut tx = editor.resume(pending)?;
+    assert!(tx.needs_flush());
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    tx.queue_update(|_| Ok(()), UpdateOptions::default())?;
+    assert!(tx.needs_flush());
+    tx.flush()?;
+    assert!(!tx.needs_flush());
+    assert_eq!(tx.text_content(text), "updated");
+    Ok(())
+}
+
+#[test]
+fn failed_host_preparation_discards_current_model_effects_and_preserves_published_state()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(0u32)
+        .build()
+        .expect("registry");
+    let unchanged = editor.transaction().suspend();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let text = tx.create_text("pending")?;
+    tx.append(p, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.select_end(text)?;
+    tx.set_composition_key(Some(text.key()))?;
+    *tx.extension_mut::<u32>()? = 7;
+    tx.prevent_default();
+    let result: Result<(Commit, ()), Error> = tx.commit_foreign(|commit| {
+        assert_eq!(commit.next.root_text_content().as_ref(), "pending");
+        assert!(commit.selection_changed);
+        assert!(commit.composition_changed);
+        assert!(commit.default_prevented);
+        Err(Error::Invariant("host encoding failed"))
+    });
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("host encoding failed"))
+    ));
+    assert!(editor.state().is_empty_state());
+    assert!(editor.state().selection().is_none());
+    assert_eq!(*editor.extension::<u32>()?, 0);
+    let mut tx = editor.resume(unchanged)?;
+    assert_eq!(tx.composition_key(), None);
+    let next = tx.create(Paragraph::default())?;
+    assert!(next.key() > text.key());
+    tx.append(NodeKey::ROOT, &[next.key()])?;
+    let (commit, artifact) = tx.commit_foreign(|commit| commit.next.to_json())?;
+    assert_eq!(commit.id, CommitId(2));
+    assert_eq!(editor.state().to_json()?, artifact);
+    assert!(!commit.default_prevented);
+    Ok(())
+}
+
+#[test]
+fn no_op_detection_preserves_event_and_prevent_default_only_updates() -> Result<(), Error> {
+    static EVENT: EventKey<u32> = EventKey::new("host-event");
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    tx.prevent_default();
+    assert!(tx.has_foreign_effects());
+    assert!(tx.commit()?.default_prevented);
+    let mut tx = editor.transaction();
+    tx.emit(&EVENT, 7);
+    assert!(tx.has_foreign_effects());
+    assert_eq!(tx.commit()?.events.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn no_op_detection_preserves_selection_extensions_and_queued_work() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(0u32)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    tx.add_tag(UpdateTag::HistoryPush);
+    assert!(!tx.has_foreign_effects());
+    tx.select_start(NodeKey::ROOT)?;
+    assert!(tx.has_foreign_effects());
+    drop(tx);
+
+    let mut tx = editor.transaction();
+    *tx.extension_mut::<u32>()? = 7;
+    assert!(tx.has_foreign_effects());
+    tx.commit()?;
+    assert_eq!(*editor.extension::<u32>()?, 7);
+
+    let mut tx = editor.transaction();
+    assert!(!tx.has_foreign_effects());
+    tx.queue_update(
+        |tx| {
+            *tx.extension_mut::<u32>()? = 8;
+            Ok(())
+        },
+        UpdateOptions::default(),
+    )?;
+    assert!(tx.has_foreign_effects());
+    tx.commit()?;
+    assert_eq!(*editor.extension::<u32>()?, 8);
+    Ok(())
+}
+
+#[test]
 fn suspended_update_retains_writes_selection_composition_and_tags() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()

@@ -14,6 +14,7 @@ export const root = path.resolve(
   '../../..'
 );
 export const pkg = path.join(root, 'packages/lexical-conformance');
+const jobs = process.env.CARGO_BUILD_JOBS ?? '4';
 function run(command: string, args: string[]) {
   const temporary = process.env.TMPDIR ?? path.join(root, 'target/tmp');
   mkdirSync(temporary, { recursive: true });
@@ -23,7 +24,7 @@ function run(command: string, args: string[]) {
     env: {
       ...process.env,
       TMPDIR: temporary,
-      CARGO_BUILD_JOBS: '4',
+      CARGO_BUILD_JOBS: jobs,
       CARGO_TARGET_DIR: path.join(root, 'target'),
     },
   });
@@ -102,7 +103,7 @@ export function buildWasm() {
     'wasm32-unknown-unknown',
     '-p',
     'lexical_conformance_wasm',
-    '-j4',
+    `-j${jobs}`,
   ]);
   for (const target of ['nodejs', 'web']) {
     const out = path.join(output, target === 'nodejs' ? 'node' : 'web');
@@ -125,6 +126,28 @@ export function buildWasm() {
       '-o',
       path.join(out, 'lexical_conformance_wasm_bg.wasm'),
     ]);
+    // Run last: wrappers mark actual exports, preserving internal model calls.
+    run('cargo', [
+      'run',
+      '-p',
+      'lexical_conformance_wasm',
+      '--example',
+      'instrument_exports',
+      `-j${jobs}`,
+      '--',
+      '--input',
+      path.join(out, 'lexical_conformance_wasm_bg.wasm'),
+      '--output',
+      path.join(out, 'lexical_conformance_wasm_bg.wasm'),
+    ]);
+    // Bindgen emits inline snippets as ESM even for its CommonJS entry point.
+    // Node's require(esm) needs an explicit module boundary for those files.
+    const snippets = path.join(out, 'snippets');
+    if (existsSync(snippets))
+      writeFileSync(
+        path.join(snippets, 'package.json'),
+        JSON.stringify({ private: true, type: 'module' })
+      );
     writeFileSync(
       path.join(out, 'package.json'),
       JSON.stringify({

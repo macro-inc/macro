@@ -16,15 +16,30 @@ pub(crate) fn call(
 
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
-    let snapshot = r.read_state.clone().or_else(|| {
-        (!r.in_callback || !tx.view().contains(key))
-            .then(|| r.captured_state(receiver))
-            .flatten()
-    });
+    let selection_arg = match method {
+        "isSelected" => a.first(),
+        "extractWithChild" => a.get(1),
+        _ => None,
+    };
+    let selection_capture = selection_arg
+        .filter(|value| !value.is_null() && value.get("$undef").is_none())
+        .map(|value| -> Result<_> {
+            let slot = slot_arg(r, tx, value)?;
+            Ok(tx.capture_foreign_selection(slot)?)
+        })
+        .transpose()?
+        .flatten();
+    let selection = selection_capture
+        .as_ref()
+        .map(ForeignSelectionCapture::value);
+    let snapshot = r.read_state.clone();
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
+    let view = selection_capture.as_ref().map_or(view, |argument| {
+        view.with_foreign_selection_argument(argument)
+    });
     if view
         .get::<lexical_rich_nodes::link::LinkNode>(key)
         .is_some()
@@ -36,6 +51,10 @@ pub(crate) fn call(
         return Ok(value);
     }
     match method {
+        "selectionTransform" => {
+            tx.selection_transform(key)?;
+            return Ok(undefined());
+        }
         "getListType" => {
             return Ok(serde_json::to_value(
                 view.get_or_err::<lexical_rich_nodes::list::ListNode>(key)?
@@ -89,14 +108,25 @@ pub(crate) fn call(
         }
         "getFormatFlags" => {
             let kind: TextFormatType = str_arg(a, 0)?.parse().map_err(|_| fail("format kind"))?;
-            let align = a
-                .get(1)
-                .filter(|v| !v.is_null())
-                .map(|v| integer(v).map(|v| TextFormat::from_bits_retain(v as u32)))
-                .transpose()?;
-            return Ok(json!(view.text_data(key)?.format_flags(kind, align).bits()));
+            let align = match a.get(1) {
+                Some(Value::Null) => None,
+                None => Some(TextFormat::empty()),
+                Some(value) if value.get("$undef").is_some() => Some(TextFormat::empty()),
+                Some(value) => Some(TextFormat::from_bits_retain(integer(value)? as u32)),
+            };
+            let format = if view.is_text(key) {
+                view.text_data(key)?.format
+            } else {
+                view.element_data(key)?.text_format
+            };
+            return Ok(json!(format.toggled(kind, align).bits()));
         }
         "is" => {
+            if a.first()
+                .is_none_or(|value| value.is_null() || value.get("$undef").is_some())
+            {
+                return Ok(json!(false));
+            }
             return Ok(json!(
                 key == node_key(a.first().ok_or_else(|| fail("other node"))?)?
             ));
@@ -133,7 +163,55 @@ pub(crate) fn call(
                 node_key(a.first().ok_or_else(|| fail("isParentOf target"))?)?
             )));
         }
+        "isSelected" => {
+            return Ok(json!(view.is_selected(key, selection)));
+        }
+        "excludeFromCopy" => {
+            let destination = a
+                .first()
+                .filter(|value| value.get("$undef").is_none())
+                .map(copy_destination)
+                .transpose()?;
+            return Ok(json!(view.exclude_from_copy(key, destination)));
+        }
+        "extractWithChild" => {
+            let child = node_key(a.first().ok_or_else(|| fail("child"))?)?;
+            let destination = copy_destination(a.get(2).ok_or_else(|| fail("copy destination"))?)?;
+            return Ok(json!(view.extract_with_child(
+                key,
+                child,
+                selection,
+                destination
+            )));
+        }
         "isAttached" => return Ok(json!(view.is_attached(key))),
+        "isLastChild" => return Ok(json!(view.is_last_child(key)?)),
+        "isDirty" => {
+            return Ok(json!(if view.is_element(key) {
+                tx.is_dirty_element(key)
+            } else {
+                tx.is_dirty_leaf(key)
+            }));
+        }
+        "isComposing" => return Ok(json!(view.is_composing(key))),
+        "isShadowRoot" => return Ok(json!(view.is_shadow_root(key))),
+        "isParentRequired" => return Ok(json!(view.is_parent_required(key))),
+        "isTextEntity" => return Ok(json!(view.is_text_entity(key))),
+        "isIsolated" => return Ok(json!(view.is_isolated(key))),
+        "isKeyboardSelectable" => return Ok(json!(view.is_keyboard_selectable(key))),
+        "canIndent" => return Ok(json!(view.can_indent(key))),
+        "canMergeWhenEmpty" => return Ok(json!(view.can_merge_when_empty(key))),
+        "canHaveFormat" => return Ok(json!(view.can_have_format(key))),
+        "canInsertTextBefore" => return Ok(json!(view.can_insert_text_before(key))),
+        "canInsertTextAfter" => return Ok(json!(view.can_insert_text_after(key))),
+        "canMergeWith" | "canReplaceWith" | "canInsertAfter" => {
+            let other = node_key(a.first().ok_or_else(|| fail("other node"))?)?;
+            return Ok(json!(match method {
+                "canMergeWith" => view.can_merge_with(key, other),
+                "canReplaceWith" => view.can_replace_with(key, other),
+                _ => view.can_insert_after(key, other),
+            }));
+        }
         "getLatest" => return r.node(view, key),
         "getWritable" => {
             tx.mark_dirty(key)?;
@@ -180,6 +258,9 @@ pub(crate) fn call(
         | "getLastChild"
         | "getNextSibling"
         | "getPreviousSibling"
+        | "getDescendantByIndex"
+        | "getTopLevelElement"
+        | "getTopLevelElementOrThrow"
         | "getChildAtIndex" => {
             let node = match method {
                 "getParent" => view.parent(key),
@@ -190,9 +271,51 @@ pub(crate) fn call(
                 "getLastChild" => view.last_child(key),
                 "getNextSibling" => view.next_sibling(key),
                 "getPreviousSibling" => view.prev_sibling(key),
+                "getDescendantByIndex" => {
+                    view.descendant_by_index(key, ChildIndex(u32_arg(a, 0, 0)?))
+                }
+                "getTopLevelElement" => view.top_level_element(key)?,
+                "getTopLevelElementOrThrow" => Some(view.top_level_element_or_err(key)?),
                 _ => view.child_at_index(key, ChildIndex(u32_arg(a, 0, 0)?)),
             };
             return node.map(|key| r.node(view, key)).unwrap_or(Ok(Value::Null));
+        }
+        "getCommonAncestor" => {
+            let other = node_key(a.first().ok_or_else(|| fail("other node"))?)?;
+            let a = if view.is_element(key) {
+                Some(key)
+            } else {
+                view.parent(key)
+            };
+            let b = if view.is_element(other) {
+                Some(other)
+            } else {
+                view.parent(other)
+            };
+            let ancestor = a
+                .zip(b)
+                .and_then(|(a, b)| view.common_ancestor(a, b))
+                .map(CommonAncestor::ancestor);
+            return ancestor
+                .map(|key| r.node(view, key))
+                .unwrap_or(Ok(Value::Null));
+        }
+        "getChildrenKeys" => {
+            return Ok(view
+                .children_keys(key)?
+                .into_iter()
+                .map(key_value)
+                .collect());
+        }
+        "getParents" | "getNextSiblings" | "getPreviousSiblings" | "getNodesBetween" => {
+            let nodes: Vec<_> = match method {
+                "getParents" => view.ancestors(key).collect(),
+                "getNextSiblings" => view.next_siblings(key).collect(),
+                "getPreviousSiblings" => view.prev_siblings(key).collect(),
+                _ => view
+                    .nodes_between(key, node_key(a.first().ok_or_else(|| fail("other node"))?)?)?,
+            };
+            return nodes.into_iter().map(|key| r.node(view, key)).collect();
         }
         "getChildren" | "getAllTextNodes" => {
             let nodes = if method == "getChildren" {
@@ -224,13 +347,55 @@ pub(crate) fn call(
             return Ok(super::wire::exported_object(Value::Object(json)));
         }
         "hasFormat" => {
+            if view.is_element(key) {
+                let format = str_arg(a, 0)?.parse().map_err(|_| fail("element format"))?;
+                return Ok(json!(view.element_data(key)?.format.has_format(format)));
+            }
             return Ok(json!(
                 view.text_data(key)?
                     .has_format(str_arg(a, 0)?.parse().map_err(|_| fail("format"))?)
             ));
         }
-        "getFormat" => return Ok(json!(view.text_data(key)?.format.bits())),
-        "getStyle" => return Ok(json!(view.text_data(key)?.style)),
+        "getFormat" => {
+            return Ok(json!(if view.is_text(key) {
+                view.text_data(key)?.format.bits()
+            } else {
+                view.element_data(key)?.format.bits()
+            }));
+        }
+        "getStyle" => {
+            return Ok(json!(if view.is_text(key) {
+                &view.text_data(key)?.style
+            } else {
+                &view.element_data(key)?.style
+            }));
+        }
+        "getTextFormat" => return Ok(json!(view.element_data(key)?.text_format.bits())),
+        "getFormatType" => return Ok(json!(view.element_data(key)?.format)),
+        "getIndent" => return Ok(json!(view.indent(key))),
+        "getDirection" => return Ok(json!(view.element_data(key)?.direction)),
+        "getDetail" => return Ok(json!(view.text_data(key)?.detail.bits())),
+        "getMode" => return Ok(json!(view.text_data(key)?.mode)),
+        "isToken" => return Ok(json!(view.text_data(key)?.mode == TextMode::Token)),
+        "isSegmented" => return Ok(json!(view.text_data(key)?.mode == TextMode::Segmented)),
+        "isDirectionless" => {
+            return Ok(json!(
+                view.text_data(key)?
+                    .detail
+                    .contains(TextDetail::DIRECTIONLESS)
+            ));
+        }
+        "isUnmergeable" => {
+            return Ok(json!(
+                view.text_data(key)?
+                    .detail
+                    .contains(TextDetail::UNMERGEABLE)
+            ));
+        }
+        "hasTextFormat" => {
+            let format = str_arg(a, 0)?.parse().map_err(|_| fail("text format"))?;
+            return Ok(json!(view.element_data(key)?.text_format.has(format)));
+        }
         "getTextStyle" => return Ok(json!(view.element_data(key)?.text_style)),
         "getParentKeys" => {
             let mut keys = Vec::new();
@@ -273,10 +438,45 @@ pub(crate) fn call(
         "collapseAtStart" => {
             let slot = a
                 .first()
-                .map(|v| slot_arg(r, v))
+                .map(|v| slot_arg(r, tx, v))
                 .transpose()?
                 .unwrap_or(SelectionSlot::Active);
             return Ok(json!(tx.collapse_at_start(key, slot)?));
+        }
+        "createParentElementNode" => {
+            let parent = tx.create_parent_element(key)?;
+            return r.node(tx.view(), parent);
+        }
+        "insertNewAfter" => {
+            let selection = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
+            let restore = a.get(1).and_then(Value::as_bool).unwrap_or(true);
+            return tx
+                .insert_new_after(key, selection, restore)?
+                .map(|node| r.node(tx.view(), node))
+                .unwrap_or(Ok(Value::Null));
+        }
+        "resetOnCopyNodeFrom" => {
+            let original = node_key(a.first().ok_or_else(|| fail("original node"))?)?;
+            tx.reset_on_copy(key, original)?;
+            return Ok(undefined());
+        }
+        "updateFromJSON" => {
+            let json = a
+                .first()
+                .and_then(Value::as_object)
+                .ok_or_else(|| fail("serialized node"))?;
+            tx.update_from_json(key, json)?;
+        }
+        "spliceText" => {
+            let start = u32_arg(a, 0, 0)?;
+            let end = start.saturating_add(u32_arg(a, 1, 0)?);
+            let insert = str_arg(a, 2)?;
+            let move_selection = a.get(3).and_then(Value::as_bool).unwrap_or(false);
+            tx.text(key)?.splice_text(
+                Utf16Offset(start)..Utf16Offset(end),
+                insert,
+                move_selection,
+            )?;
         }
         "append" => {
             let nodes = a.iter().map(node_key).collect::<Result<Vec<_>>>()?;
@@ -290,11 +490,6 @@ pub(crate) fn call(
             return Ok(undefined());
         }
         "replace" => {
-            if let Some(id) = r.selections.take_active()?
-                && let Some(selection) = tx.selection().cloned()
-            {
-                r.selections.set_slot(id, tx.detach_selection(selection))?;
-            }
             let node = node_key(a.first().ok_or_else(|| fail("replacement"))?)?;
             let node = tx.replace(
                 key,
@@ -348,7 +543,27 @@ pub(crate) fn call(
             tx.text(key)?.set_text_content(str_arg(a, 0)?)?;
         }
         "setStyle" => {
-            tx.text(key)?.set_style(str_arg(a, 0)?)?;
+            if tx.is_text(key) {
+                tx.text(key)?.set_style(str_arg(a, 0)?)?;
+            } else {
+                tx.element(key)?.set_style(str_arg(a, 0)?)?;
+            }
+        }
+        "setTextFormat" => {
+            tx.element(key)?
+                .set_text_format(TextFormat::from_bits_retain(u32_arg(a, 0, 0)?))?;
+        }
+        "setDetail" => {
+            let detail = if a.first().is_some_and(Value::is_string) {
+                match str_arg(a, 0)? {
+                    "directionless" => TextDetail::DIRECTIONLESS,
+                    "unmergeable" => TextDetail::UNMERGEABLE,
+                    _ => return Err(fail("text detail")),
+                }
+            } else {
+                TextDetail::from_bits_retain(u32_arg(a, 0, 0)?)
+            };
+            tx.text(key)?.set_detail(detail)?;
         }
         "setMode" => {
             tx.text(key)?
@@ -404,6 +619,14 @@ pub(crate) fn call(
         _ => return Err(fail(format!("unmapped API: Node.{method}"))),
     }
     r.node(tx.view(), key)
+}
+
+fn copy_destination(value: &Value) -> Result<CopyDestination> {
+    match value.as_str() {
+        Some("clone") => Ok(CopyDestination::Clone),
+        Some("html") => Ok(CopyDestination::Html),
+        _ => Err(fail("copy destination")),
+    }
 }
 
 #[cfg(test)]

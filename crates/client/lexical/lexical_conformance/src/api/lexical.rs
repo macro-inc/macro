@@ -79,6 +79,30 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         })));
     }
     match name {
+        "lexical.$parseSerializedNode" => {
+            let json = a
+                .first()
+                .and_then(Value::as_object)
+                .ok_or_else(|| fail("serialized node must be an object"))?;
+            let key = tx.import_node(json)?;
+            r.node(tx.view(), key)
+        }
+        "lexical.$copyNode" => {
+            let original = node_key(a.first().ok_or_else(|| fail("copy source"))?)?;
+            let copy =
+                tx.copy_node(original, a.get(1).and_then(Value::as_bool).unwrap_or(false))?;
+            r.node(tx.view(), copy)
+        }
+        "conformance.createForeignNode" => {
+            let type_name = str_arg(a, 0)?;
+            let fields = a
+                .get(1)
+                .and_then(Value::as_object)
+                .cloned()
+                .ok_or_else(|| fail("foreign fields must be an object"))?;
+            let key = tx.create_foreign(type_name, fields)?;
+            r.node(tx.view(), key)
+        }
         "lexical.nodeStatesAreEquivalent" | "lexical/LexicalNodeState.nodeStatesAreEquivalent" => {
             let state = |value: Option<&Value>| -> Result<Option<NodeState>> {
                 let Some(value) =
@@ -194,9 +218,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             Ok(undefined())
         }
         "@lexical/mark.$wrapSelectionInMarkNode" => {
-            let range = tx
-                .range_at(slot_arg(r, a.first().ok_or_else(|| fail("selection"))?)?)?
-                .clone();
+            let slot = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
+            let range = tx.range_at(slot)?.clone();
             let backward = a.get(1).and_then(Value::as_bool).unwrap_or(false);
             let id = str_arg(a, 2)?;
             lexical_rich_nodes::mark::wrap_selection_in_mark_node::<
@@ -364,7 +387,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical/__tests__/utils.$assertRangeSelection" => {
             let value = a.first().ok_or_else(|| fail("range argument"))?;
-            tx.range_at(slot_arg(r, value)?)?;
+            let slot = slot_arg(r, tx, value)?;
+            tx.range_at(slot)?;
             Ok(value.clone())
         }
         "@lexical/text.$rootTextContent" => Ok(json!(view.text_content(NodeKey::ROOT))),
@@ -379,13 +403,21 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$getRoot" => r.node(view, NodeKey::ROOT),
         "lexical.$getSelection" => r.selection(tx),
+        "lexical.$getPreviousSelection" => match tx.detach_previous_foreign_selection()? {
+            Some(slot) => r.selection_at(tx, slot),
+            None => Ok(Value::Null),
+        },
         "lexical.$createRangeSelection" | "lexical.$createNodeSelection" => {
             let selection = if short == "$createRangeSelection" {
                 Selection::Range(RangeSelection::at_root())
             } else {
                 Selection::Node(NodeSelection::new())
             };
-            let id = r.selections.push(tx.detach_selection(selection))?;
+            let slot = tx.detach_selection(selection);
+            let identity = tx
+                .foreign_selection_identity(slot)
+                .ok_or_else(|| fail("selection identity"))?;
+            let id = r.selections.push(slot, identity)?;
             Ok(
                 json!({"$selection":id,"kind":if short == "$createRangeSelection" {"range"} else {"node"}}),
             )
@@ -402,7 +434,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .map(|id| r.selections.try_slot(id as usize))
+                .map(|id| r.selections.resolve(tx, id as usize))
                 .transpose()?
                 .flatten()
                 .and_then(|slot| tx.selection_at(slot).ok().flatten())
@@ -412,7 +444,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .map(|id| r.selections.try_slot(id as usize))
+                .map(|id| r.selections.resolve(tx, id as usize))
                 .transpose()?
                 .flatten()
                 .and_then(|slot| tx.selection_at(slot).ok().flatten())
@@ -471,8 +503,14 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             r.node(tx.view(), key)
         }
         "lexical.$getNodeByKey" => {
-            let key = key_arg(r, a.first().ok_or_else(|| fail("key argument"))?)?;
-            if view.contains(key) {
+            let key = match a.first() {
+                Some(value) if value.get("$nodeKey").is_some() => {
+                    Some(tagged_key(value, "$nodeKey")?)
+                }
+                Some(Value::String(key)) => r.bindings.key(key)?,
+                _ => None,
+            };
+            if let Some(key) = key.filter(|key| view.contains(*key)) {
                 r.node(view, key)
             } else {
                 Ok(Value::Null)
@@ -501,7 +539,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$normalizeSelection" | "lexical/LexicalNormalization.$normalizeSelection" => {
             let value = a.first().ok_or_else(|| fail("selection argument"))?;
-            let slot = slot_arg(r, value)?;
+            let slot = slot_arg(r, tx, value)?;
             tx.normalize_selection_at(slot)?;
             Ok(value.clone())
         }
@@ -586,8 +624,12 @@ pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
         .key(string(value)?)?
         .ok_or_else(|| fail(format!("unknown key argument: {value}")))
 }
-pub(crate) fn slot_arg(r: &Replayer, value: &Value) -> Result<SelectionSlot> {
-    r.selections.slot(integer(&value["$selection"])? as usize)
+pub(crate) fn slot_arg(
+    r: &Replayer,
+    tx: &mut Transaction<'_>,
+    value: &Value,
+) -> Result<SelectionSlot> {
+    r.selection_slot(tx, integer(&value["$selection"])? as usize)
 }
 pub(crate) fn node_args(value: &Value) -> Result<Vec<NodeKey>> {
     value

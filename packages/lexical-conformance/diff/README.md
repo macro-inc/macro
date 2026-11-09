@@ -93,3 +93,51 @@ For an identical paired caret bounds error, S1 D-13 permits upstream's empty
 recovery publication versus Rust's absent commit. The comparator accepts this
 only when every upstream commit array is empty and Rust's JSON, selection, text
 and live keys equal the previous snapshot. Nonempty recovery metadata fails.
+
+The build postprocesses each optimized artifact with the native
+`instrument_exports` example. Forwarding wrappers count actual export entries,
+including imported function exports, raw allocator calls and trapping frees;
+internal model calls retain their original indices. Bindgen throw imports receive
+internal string wrappers so trapping-receiver error messages count too. Do not optimize after this step.
+`debug.test.ts` verifies the resulting Node/web counters and editor-facade
+lifetimes. Reset starts a new crossing interval; observations count their own
+entry. Byte accounting derives fixed inputs and string ABI positions from the Rust
+exports, verifies optimized signatures, and rejects unknown export policies.
+Strings count UTF-16 units times two, including copied inputs of trapping calls;
+optional absent strings ignore stale bindgen lengths. Numeric values use their
+facade widths; returned object keys/values count recursively, with f64 JS numbers.
+Container, allocator, pointer/length and generated control metadata carry no
+payload. Reserved raw counter-helper arguments are measurement adjustments.
+The existing raw facades still do not implement the full WP-54 EditorHandle
+contract.
+
+
+`host.test.ts` also exercises the native indexed `EditorHandle`: its API IDs come
+from the Tier A dispatch table, and each call uses `{args: [...], this?: handle}`.
+Updates suspend between calls; flush does not publish, commit returns the existing
+flat diff plus changed base-record/mutation/selection metadata in a development
+postcard envelope, and discard invalidates unpublished handles. Packet TypeScript
+types are generated from Rust with `cargo run -p lexical_conformance_wasm --example
+export_host_types -j4` (add `-- --check` for freshness). The decoder rejects truncated,
+overflowing, invalid-UTF8 and trailing data. Namespace/theme/editability and discrete
+scheduling belong to the JS host. The current constructor accepts only the core
+registry; foreign-class hooks, pure indexed reads and the complete shim
+hosting contract remain pending.
+
+The native host tests also execute real JS transforms through the normal model
+fixpoint pipeline. Their scoped current-hook reborrows allow indexed API calls,
+raw fields and live transform registration without an ancestor transaction pointer.
+The tests cover nested editors, function identity, rollback and opaque exception
+identity. This is not yet the full foreign-class or shim scheduling surface.
+
+`listeners.test.ts` drives the development application's opaque command route.
+The Rust model still owns priority ordering, snapshots and propagation stopping;
+unrelated command identities are filtered before JS. Payloads can be cyclic
+objects or browser events and preserve identity. This explicit-update route
+retains the original exception value and leaves caught failures recoverable.
+The future shim must allocate command identities, schedule idle dispatch and
+propagate commands between parent editors. Tier A fixture codecs stay separate.
+
+Host packet format2 adds a model-derived changed flag so the JS scheduler can
+suppress no-op update listeners without guessing from diff operation counts.
+The decoder rejects the earlier unreleased format and malformed boolean flags.

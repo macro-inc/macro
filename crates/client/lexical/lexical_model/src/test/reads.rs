@@ -1,6 +1,86 @@
 use super::*;
 
 #[test]
+fn descendant_index_past_the_last_child_uses_its_last_descendant() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let inline = tx.create(Inline {
+        label: "nested".into(),
+    })?;
+    let first = tx.create_text("first")?;
+    let last = tx.create_text("last")?;
+    tx.append(inline, &[first.key(), last.key()])?;
+    tx.append(p, &[inline.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    let view = tx.view();
+    assert_eq!(
+        view.descendant_by_index(p, ChildIndex(0)),
+        Some(first.key())
+    );
+    assert_eq!(view.descendant_by_index(p, ChildIndex(1)), Some(last.key()));
+    assert_eq!(
+        view.descendant_by_index(p, ChildIndex(99)),
+        Some(last.key())
+    );
+    assert_eq!(view.descendant_by_index(last, ChildIndex(0)), None);
+    Ok(())
+}
+
+// LexicalNode.test.ts:862, plus direction/ancestor literals from the pinned oracle.
+#[test]
+fn nodes_between_retains_visited_ancestors_in_upstream_traversal_order() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let foo = tx.create_text("foo")?;
+    let bar = tx.create_text("bar")?;
+    tx.text(bar)?.toggle_unmergeable()?;
+    let baz = tx.create_text("baz")?;
+    tx.text(baz)?.toggle_unmergeable()?;
+    let q = tx.create(Paragraph::default())?;
+    let qux = tx.create_text("qux")?;
+    tx.text(qux)?.toggle_unmergeable()?;
+    tx.append(p, &[foo.key(), bar.key(), baz.key()])?;
+    tx.append(q, &[qux.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key(), q.key()])?;
+    tx.commit()?;
+    let view = editor.state().view();
+    assert_eq!(view.nodes_between(foo, foo)?, vec![foo.key()]);
+    assert_eq!(view.nodes_between(foo, bar)?, vec![foo.key(), bar.key()]);
+    assert_eq!(
+        view.nodes_between(foo, baz)?,
+        vec![foo.key(), bar.key(), baz.key()]
+    );
+    assert_eq!(
+        view.nodes_between(foo, qux)?,
+        vec![foo.key(), bar.key(), baz.key(), p.key(), q.key(), qux.key()]
+    );
+    assert_eq!(
+        view.nodes_between(qux, foo)?,
+        vec![foo.key(), bar.key(), baz.key(), p.key(), q.key(), qux.key()]
+    );
+    assert_eq!(
+        view.nodes_between(p, foo)?,
+        vec![foo.key(), bar.key(), baz.key(), p.key()]
+    );
+    assert_eq!(
+        view.nodes_between(foo, p)?,
+        vec![foo.key(), bar.key(), baz.key(), p.key()]
+    );
+    assert_eq!(
+        view.nodes_between(NodeKey::ROOT, qux)?,
+        vec![qux.key(), q.key(), NodeKey::ROOT]
+    );
+    Ok(())
+}
+
+#[test]
 fn structural_reads_preserve_document_order_depth_and_boundaries() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<Inline>()
@@ -98,7 +178,7 @@ fn structural_reads_preserve_document_order_depth_and_boundaries() -> Result<(),
     assert_eq!(view.common_ancestor_element(a, b), Some(p.key()));
     assert_eq!(
         view.nodes_between(a, line)?,
-        vec![a.key(), b.key(), line.key()]
+        vec![a.key(), inline.key(), b.key(), line.key()]
     );
     assert_eq!(
         view.adjacent_node(&Point::text(a, Utf16Offset(1)), EditDirection::Forward)?,
