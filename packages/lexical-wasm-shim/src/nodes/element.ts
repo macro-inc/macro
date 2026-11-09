@@ -12,7 +12,11 @@ import type {
 } from 'lexical';
 
 import { ElementDOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
-import { getEditorDOMRenderConfig, type LexicalEditor } from '../editor';
+import {
+  getActiveEditor,
+  getEditorDOMRenderConfig,
+  type LexicalEditor,
+} from '../editor';
 import type { BaseSelection } from '../selection';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
@@ -226,6 +230,10 @@ export class ElementNode extends LexicalNode {
   }
   isEmpty(): boolean {
     return this.getChildrenSize() === 0;
+  }
+  isDirty(): boolean {
+    const dirtyElements = getActiveEditor()._dirtyElements;
+    return dirtyElements !== null && dirtyElements.has(this.__key);
   }
   isLastChild(): boolean {
     return this.is(this.getParentOrThrow().getLastChild());
