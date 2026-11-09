@@ -43,6 +43,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Count draft marks from each commit’s mutations and attachment-changing subtrees; rebuild only for full reconciles and leave unrelated marks untouched during typing.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
+- Export PasteFacts and its MIME constant as the shared host-admission contract; serialize native paste facts from that type.
 - Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.

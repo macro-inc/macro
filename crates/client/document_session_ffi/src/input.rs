@@ -177,6 +177,25 @@ impl From<FfiCommand> for Command {
         }
     }
 }
+/// Shared application clipboard facts, generated for native hosts.
+pub type FfiPasteFacts = macro_document_model::plugins_group_b::PasteFacts;
+#[uniffi::remote(Record)]
+struct FfiPasteFacts {
+    request: u32,
+    plain_only: bool,
+    has_file_entries: bool,
+    mobile_image_recovery: bool,
+}
+
+/// Encode the shared paste facts without native mirrors of its wire format.
+#[uniffi::export]
+pub fn clipboard_paste_facts(facts: FfiPasteFacts) -> Result<FfiClipboardEntry, FfiSessionError> {
+    Ok(FfiClipboardEntry {
+        mime: macro_document_model::plugins_group_b::PASTE_FACTS_MIME.to_owned(),
+        text: serde_json::to_string(&facts).map_err(invalid)?,
+    })
+}
+
 /// Clipboard entries retain source MIME order.
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct FfiClipboardEntry {

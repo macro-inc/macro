@@ -3,6 +3,7 @@ use lexical_model::*;
 
 mod checklist;
 mod clipboard;
+pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
 mod diff;
 mod keyboard;

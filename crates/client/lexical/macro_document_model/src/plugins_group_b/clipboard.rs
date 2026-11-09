@@ -1,13 +1,19 @@
 //! Clipboard host facts and typed requests, keeping file I/O outside the model.
 use super::*;
 
-pub(super) const FACTS_MIME: &str = "application/x-macro-paste-facts";
-#[derive(Clone, Debug, Default, serde::Deserialize)]
+/// Clipboard entry carrying application paste admission facts.
+pub const FACTS_MIME: &str = "application/x-macro-paste-facts";
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct PasteFacts {
+/// Host clipboard facts consumed by the shared paste plugins.
+pub struct PasteFacts {
+    /// Correlation for asynchronous file work; zero for text-only paste.
     pub request: u32,
+    /// Explicit plain paste suppresses rich Markdown transformation.
     pub plain_only: bool,
+    /// The native clipboard contains file or directory entries.
     pub has_file_entries: bool,
+    /// A mobile host may recover an image outside ordinary file entries.
     pub mobile_image_recovery: bool,
 }
 impl PasteFacts {

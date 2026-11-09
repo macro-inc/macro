@@ -30,3 +30,5 @@ Preserve current commit tags, resolved peer cursors, forced composition end and 
 Select the actual surface with FfiApplicationConfig; reuse document_session::application_editor_config rather than duplicating registry/policy/clock/entropy setup. Application command/query and plugin payloads cross as typed values.
 
 Read sync_defaults when constructing host configuration; keep timeout, retry, WAL and recovery constants in the shared core.
+
+Generate application paste facts through clipboard_paste_facts; never mirror their MIME/JSON wire fields in native hosts.

@@ -675,6 +675,8 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_document_session_ffi_checksum_func_clipboard_paste_facts(
+    ): Int
     external fun uniffi_document_session_ffi_checksum_func_sync_defaults(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_handle(
@@ -744,6 +746,8 @@ internal object UniffiLib {
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_query(`ptr`: Long,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_text_content(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_document_session_ffi_fn_func_clipboard_paste_facts(`facts`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_func_sync_defaults(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -866,6 +870,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() and 0xFFFF) != 58742) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_document_session_ffi_checksum_func_sync_defaults() and 0xFFFF) != 56654) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3164,6 +3171,54 @@ public object FfiConverterTypeFfiOutput: FfiConverterRustBuffer<FfiOutput> {
             FfiConverterSequenceTypeFfiIoEffect.write(value.`io`, buf)
             FfiConverterOptionalULong.write(value.`wakeAtMs`, buf)
             FfiConverterBoolean.write(value.`needPeerIds`, buf)
+    }
+}
+
+
+
+data class FfiPasteFacts (
+    var `request`: kotlin.UInt
+    , 
+    var `plainOnly`: kotlin.Boolean
+    , 
+    var `hasFileEntries`: kotlin.Boolean
+    , 
+    var `mobileImageRecovery`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiPasteFacts: FfiConverterRustBuffer<FfiPasteFacts> {
+    override fun read(buf: ByteBuffer): FfiPasteFacts {
+        return FfiPasteFacts(
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiPasteFacts) = (
+            FfiConverterUInt.allocationSize(value.`request`) +
+            FfiConverterBoolean.allocationSize(value.`plainOnly`) +
+            FfiConverterBoolean.allocationSize(value.`hasFileEntries`) +
+            FfiConverterBoolean.allocationSize(value.`mobileImageRecovery`)
+    )
+
+    override fun write(value: FfiPasteFacts, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`request`, buf)
+            FfiConverterBoolean.write(value.`plainOnly`, buf)
+            FfiConverterBoolean.write(value.`hasFileEntries`, buf)
+            FfiConverterBoolean.write(value.`mobileImageRecovery`, buf)
     }
 }
 
@@ -15542,6 +15597,21 @@ public typealias FfiConverterTypeWalSeq = FfiConverterULong
 
 public typealias WallDuration = kotlin.Long
 public typealias FfiConverterTypeWallDuration = FfiConverterLong
+        /**
+         * Encode the shared paste facts without native mirrors of its wire format.
+         */
+    @Throws(FfiSessionException::class) fun `clipboardPasteFacts`(`facts`: FfiPasteFacts): FfiClipboardEntry {
+            return FfiConverterTypeFfiClipboardEntry.lift(
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_func_clipboard_paste_facts(
+    
+        
+        FfiConverterTypeFfiPasteFacts.lower(`facts`),_status)
+}
+    )
+    }
+    
+
         /**
          * Read policy defaults from the shared core before supplying surface-specific settings.
          */ fun `syncDefaults`(): FfiSyncDefaults {

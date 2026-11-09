@@ -2709,6 +2709,68 @@ public func FfiConverterTypeFfiOutput_lower(_ value: FfiOutput) -> RustBuffer {
 }
 
 
+public struct FfiPasteFacts: Equatable, Hashable {
+    public var request: UInt32
+    public var plainOnly: Bool
+    public var hasFileEntries: Bool
+    public var mobileImageRecovery: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(request: UInt32, plainOnly: Bool, hasFileEntries: Bool, mobileImageRecovery: Bool) {
+        self.request = request
+        self.plainOnly = plainOnly
+        self.hasFileEntries = hasFileEntries
+        self.mobileImageRecovery = mobileImageRecovery
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiPasteFacts: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiPasteFacts: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiPasteFacts {
+        return
+            try FfiPasteFacts(
+                request: FfiConverterUInt32.read(from: &buf), 
+                plainOnly: FfiConverterBool.read(from: &buf), 
+                hasFileEntries: FfiConverterBool.read(from: &buf), 
+                mobileImageRecovery: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiPasteFacts, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.request, into: &buf)
+        FfiConverterBool.write(value.plainOnly, into: &buf)
+        FfiConverterBool.write(value.hasFileEntries, into: &buf)
+        FfiConverterBool.write(value.mobileImageRecovery, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiPasteFacts_lift(_ buf: RustBuffer) throws -> FfiPasteFacts {
+    return try FfiConverterTypeFfiPasteFacts.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiPasteFacts_lower(_ value: FfiPasteFacts) -> RustBuffer {
+    return FfiConverterTypeFfiPasteFacts.lower(value)
+}
+
+
 /**
  * Saved native range, including collapsed typing attributes.
  */
@@ -15406,6 +15468,17 @@ public func FfiConverterTypeWallDuration_lower(_ value: WallDuration) -> Int64 {
 }
 
 /**
+ * Encode the shared paste facts without native mirrors of its wire format.
+ */
+public func clipboardPasteFacts(facts: FfiPasteFacts)throws  -> FfiClipboardEntry  {
+    return try  FfiConverterTypeFfiClipboardEntry_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_func_clipboard_paste_facts(
+        FfiConverterTypeFfiPasteFacts_lower(facts),uniffiCallStatus
+    )
+})
+}
+/**
  * Read policy defaults from the shared core before supplying surface-specific settings.
  */
 public func syncDefaults() -> FfiSyncDefaults  {
@@ -15430,6 +15503,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_document_session_ffi_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() != 58742) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_func_sync_defaults() != 56654) {
         return InitializationResult.apiChecksumMismatch
