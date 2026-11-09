@@ -44,7 +44,7 @@ import type {
   EmailEditorFiles,
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
-import { decodeBase64Utf8 } from '../core/decode-base64';
+import { draftEditorHtml } from '../core/draft-editor-html';
 import type { EmailRecipient } from '../core/email-recipient';
 import { fromInboxOptions } from '../core/email-sender';
 import { plainTextToHtml } from '../core/plain-text-to-html';
@@ -584,9 +584,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       form.restoreDraft(draft);
       if (attachments) form.attachments.replace(attachments);
       setIncludeSignature(change.includeSignature !== false);
-      const bodyHtml = draft.body_html_sanitized
-        ? decodeBase64Utf8(draft.body_html_sanitized)
-        : plainTextToHtml(draft.body_text ?? '');
+      const bodyHtml =
+        draftEditorHtml(draft) ?? plainTextToHtml(draft.body_text ?? '');
       setRestoredBodyHtml(bodyHtml);
       const currentEditor = editor();
       if (currentEditor) setEditorStateFromHtml(currentEditor, bodyHtml);
@@ -1423,9 +1422,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
         : undefined;
     }
 
-    if (draft.body_html_sanitized) {
-      return decodeBase64Utf8(draft.body_html_sanitized);
-    }
+    const html = draftEditorHtml(draft);
+    if (html) return html;
 
     if (draft.body_text) {
       return plainTextToHtml(draft.body_text);

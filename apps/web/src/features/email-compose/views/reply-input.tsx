@@ -43,7 +43,7 @@ import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
-import { decodeBase64Utf8 } from '../core/decode-base64';
+import { draftEditorHtml } from '../core/draft-editor-html';
 import { proposesMeeting } from '../core/meeting-intent';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
@@ -98,8 +98,8 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
-    if (draft.body_html_sanitized != null)
-      return decodeBase64Utf8(draft.body_html_sanitized);
+    const html = draftEditorHtml(draft);
+    if (html !== undefined) return html;
     return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   };
   return (
