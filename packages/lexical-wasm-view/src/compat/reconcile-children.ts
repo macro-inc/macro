@@ -6,6 +6,10 @@ import type { NodeKey } from 'lexical';
 import { DOUBLE_LINE_BREAK } from './constants';
 import type { ElementDOMSlot } from './dom-slot';
 import {
+  $rebuildChildTextIndex,
+  $tryReconcileChangedChildren,
+} from './reconcile-incremental';
+import {
   $reconcileNodeChildren,
   getPrevElementByKeyOrThrow,
 } from './reconcile-root';
@@ -27,6 +31,7 @@ import {
   $prevSuffixTextSize,
   $reconcileChildrenWithDirection,
   $reconcileElementTerminatingLineBreak,
+  $recordRenderedChild,
   $setCachedTextSize,
   $setElementDirection,
   MIN_FAST_PATH_CHILDREN,
@@ -79,6 +84,14 @@ export function $reconcileChildren(
   );
 
   const sizeDelta = nextChildrenSize - prevChildrenSize;
+  if (
+    !__benchOnly.skipChildrenFastPath &&
+    $tryReconcileChangedChildren(prevElement, nextElement, slot, cacheDom)
+  ) {
+    reconcilerState.subTreeTextContent =
+      previousSubTreeTextContent + reconcilerState.subTreeTextContent;
+    return;
+  }
   if (
     !__benchOnly.skipChildrenFastPath &&
     // A FULL_RECONCILE (e.g. `setEditorState`, which backs history
@@ -411,11 +424,22 @@ export function $reconcileChildren(
 
   cacheDom.__lexicalTextContent = reconcilerState.subTreeTextContent;
   cacheDom.__lexicalFirstTextKey = reconcilerState.subTreeFirstTextKey;
+  $rebuildChildTextIndex(nextElement, cacheDom);
   reconcilerState.subTreeTextContent =
     previousSubTreeTextContent + reconcilerState.subTreeTextContent;
 }
 
 export function $reconcileNode(
+  key: NodeKey,
+  parentDOM: HTMLElement | null
+): HTMLElement {
+  const start = reconcilerState.subTreeTextContent.length;
+  const dom = reconcileNode(key, parentDOM);
+  $recordRenderedChild(key, dom, start);
+  return dom;
+}
+
+function reconcileNode(
   key: NodeKey,
   parentDOM: HTMLElement | null
 ): HTMLElement {

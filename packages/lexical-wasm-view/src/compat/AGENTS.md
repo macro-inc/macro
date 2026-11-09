@@ -10,6 +10,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 ## Map
 
 - `gen-map.ts`: pinned copy-on-write keyed DOM snapshots.
+- `child-text-index.ts`, `reconcile-incremental.ts`: view-owned ordered text/first-text aggregates and sparse child reconciliation; initial/full passes build the index, ordinary commits touch dirty children and changed adjacency runs.
 - `runtime.ts`: boot-selected core namespace and active editor/read/update scopes.
 - `view.ts`: lazy root binding, reconciliation and publication of DOM listeners.
 - `reconciler.ts`, `reconcile-*.ts`: node creation, suffix updates, children and root pass.
@@ -31,6 +32,8 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Supply a real empty-root EditorState from the core for the first full reconcile after each bind.
 - Run reconcile in withReconciliation with the published read-only next state associated with its editor; captured previous-node fields retain their previous values.
 - Keep root-string deltas bounded to invalidation; require an exact JS derived-cache path before freeze, and never substitute null/stale/memo writes to published raw fields. Native-finalized caches and the upstream-model DOM oracle do not establish this production obligation.
+- Supply authoritative removedNodes from the sparse delta even while unmounted; remove only those decorator entries, never scan all decorators on an unchanged commit. Keep upstream plain-record cloning only for actual decorator changes.
+- Preserve the pinned interleaving of DOM hooks, moves and removals when skipping untouched sibling runs.
 - Call publish after finalizing the next state and before core update listeners; preserve the caller update phase for mutation callbacks and enqueue only decorator callbacks.
 - Clear core composition on every root change and keep its native composition field synchronized.
 - Pass a caller-owned parentSpan to root binding or reconciliation when available; the view ends only its own child span.

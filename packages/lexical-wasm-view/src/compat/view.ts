@@ -20,6 +20,7 @@ import type {
   LexicalPrivateDOM,
   MutatedNodes,
 } from './types';
+import { removeDecorator } from './utils';
 
 export type CompatCommit = Pick<
   UpdateListenerPayload,
@@ -29,6 +30,8 @@ export type CompatCommit = Pick<
   prevEditorState: import('./types').CompatEditorState;
   dirtyType: 0 | 1 | 2;
   mutatedNodes?: MutatedNodes | null;
+  /** Authoritative sparse delta; also required for commits while unmounted. */
+  removedNodes?: ReadonlySet<string>;
 };
 const observerOptions = { characterData: true, childList: true, subtree: true };
 
@@ -128,17 +131,7 @@ export function createCompatView(
     return mutations;
   }
 
-  function publishDecorators(commit: CompatCommit): void {
-    let decorators = editor._pendingDecorators ?? editor._decorators;
-    for (const key of Object.keys(decorators)) {
-      if (!commit.editorState._nodeMap.has(key)) {
-        if (decorators === editor._decorators) {
-          decorators = { ...decorators };
-          editor._pendingDecorators = decorators;
-        }
-        delete decorators[key];
-      }
-    }
+  function publishDecorators(): void {
     const pending = editor._pendingDecorators;
     if (pending === null) return;
     editor._decorators = pending;
@@ -167,6 +160,9 @@ export function createCompatView(
 
   /** Called after the core finishes publishing/freeze, before its update listeners. */
   function publish(commit: CompatCommit, mutations: MutatedNodes | null): void {
+    for (const key of commit.removedNodes ?? []) {
+      if (!commit.editorState._nodeMap.has(key)) removeDecorator(editor, key);
+    }
     if (mutations) {
       runtime.publishMutationListeners(editor, mutations, {
         dirtyLeaves: commit.dirtyLeaves,
@@ -182,7 +178,7 @@ export function createCompatView(
     ) {
       editor.dispatchCommand(runtime.SELECTION_CHANGE_COMMAND, undefined);
     }
-    publishDecorators(commit);
+    publishDecorators();
   }
 
   function setRootElement(root: HTMLElement | null, parentSpan?: Span): void {
