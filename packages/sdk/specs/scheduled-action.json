@@ -3281,6 +3281,17 @@
                 },
                 "description": "What acting on it produced."
               },
+              "run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/IdeaRun",
+                    "description": "A background prompt idea's latest run."
+                  }
+                ]
+              },
               "state": {
                 "$ref": "#/components/schemas/IdeaState",
                 "description": "Where it is for the person."
@@ -3407,6 +3418,27 @@
             "format": "int32",
             "description": "The most open ideas a person may have.",
             "minimum": 0
+          }
+        }
+      },
+      "IdeaRun": {
+        "type": "object",
+        "description": "A run of a background prompt idea: a hidden agent session of the\nperson's, with the full toolset and approvals on.",
+        "required": ["sessionId", "startedAt", "progress"],
+        "properties": {
+          "progress": {
+            "$ref": "#/components/schemas/RunProgress",
+            "description": "How it is going, read from the session."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The agent session: open it to see the result or answer what it\nwaits for."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it started."
           }
         }
       },
@@ -4243,6 +4275,18 @@
         "type": "string",
         "description": "How a prompt idea runs.",
         "enum": ["composer", "background"]
+      },
+      "RunProgress": {
+        "type": "string",
+        "description": "How a run is going, as its session says.",
+        "enum": [
+          "running",
+          "needs_approval",
+          "needs_input",
+          "finished",
+          "failed",
+          "unknown"
+        ]
       },
       "RunStart": {
         "oneOf": [

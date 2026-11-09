@@ -5,10 +5,12 @@ import type {
   IdeaState,
   IdeaWriteOutcome as IdeaWriteRecord,
   RunMode,
+  RunProgress,
   Target,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { AgentSession } from '../agent-sessions/agent-session';
 import type { MacroEntityType } from '../entity';
 
 /** An item an idea is about: any handle with an entity type, such as an `EmailThread`, and optionally a part of it, such as one message in a channel. */
@@ -141,6 +143,25 @@ export class Idea {
   /** A prompt idea's run mode. */
   get runMode(): RunMode | undefined {
     return this.record.kind === 'prompt' ? this.record.runMode : undefined;
+  }
+
+  /**
+   * A background prompt idea's latest run: its hidden agent `session`
+   * (open it to see the result or answer an approval it waits for), when it
+   * started, and its `progress` (`running`, `needs_approval`, `needs_input`,
+   * `finished`, `failed`, or `unknown` when the session couldn't be read).
+   */
+  get run():
+    | { session: AgentSession; startedAt: string; progress: RunProgress }
+    | undefined {
+    const run = this.record.run;
+    return run
+      ? {
+          session: AgentSession.byId(this.client, run.sessionId),
+          startedAt: run.startedAt,
+          progress: run.progress,
+        }
+      : undefined;
   }
 
   /** An entity idea's action. */

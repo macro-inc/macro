@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use feature_flags::outbound::fake::FakeFeatureFlags;
@@ -195,6 +195,14 @@ fn entity_idea(key: &str) -> SuggestIdea {
 }
 
 impl Harness {
+    /// The latest run of the person's first idea in the feed.
+    async fn first_run(&self) -> crate::domain::model::IdeaRun {
+        self.service.feed(&user(OWNER), None).await.unwrap().ideas[0]
+            .run
+            .clone()
+            .unwrap()
+    }
+
     /// An open session of `kind` in `owner`'s running generation, started
     /// when none is running.
     async fn session(&self, owner: &str, kind: &str) -> Uuid {
@@ -779,6 +787,154 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
     // The person dismissing it dismisses its suggestion, which closes both.
     h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
+}
+
+/// Run sessions whose progress the test sets, recording what they started.
+#[derive(Default)]
+struct FakeRuns {
+    started: Mutex<Vec<(Uuid, String)>>,
+    progress: Mutex<HashMap<Uuid, RunProgress>>,
+    fail_start: std::sync::atomic::AtomicBool,
+}
+
+#[async_trait::async_trait]
+impl RunSessions for FakeRuns {
+    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), rootcause::Report> {
+        if self.fail_start.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(rootcause::report!("the session didn't open"));
+        }
+        self.started.lock().unwrap().push((run.session, prompt.to_owned()));
+        self.progress.lock().unwrap().insert(run.session, RunProgress::Running);
+        Ok(())
+    }
+
+    async fn progress(&self, run: &StoredRun) -> Result<RunProgress, rootcause::Report> {
+        Ok(*self.progress.lock().unwrap().get(&run.session).unwrap_or(&RunProgress::Unknown))
+    }
+
+    async fn produced(&self, _: &StoredRun) -> Result<Vec<Target>, rootcause::Report> {
+        Ok(vec![Target {
+            entity_type: EntityType::Document,
+            entity_id: "comparison-doc".to_owned(),
+            part_id: None,
+        }])
+    }
+}
+
+const RUN_AGENT: Uuid = Uuid::from_u128(0xa2a2);
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .await
+        .idea
+        .unwrap();
+
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let started = runs.started.lock().unwrap().clone();
+    assert_eq!(started.len(), 1);
+    assert_eq!(
+        started[0].1,
+        "Compare the supplier quotes in my inbox and list the cheapest."
+    );
+    // A run going can't be started twice.
+    assert!(matches!(
+        h.service.accept(&user(OWNER), idea.id).await,
+        Err(IdeaError::NotFound)
+    ));
+    let run_session = started[0].0;
+    let run = h.first_run().await;
+    assert_eq!((run.session_id, run.progress), (run_session, RunProgress::Running));
+    assert_eq!(h.service.feed(&user(OWNER), None).await.unwrap().ideas[0].state, IdeaState::Accepted);
+
+    // Waiting for an approval shows on the idea, for the person to answer.
+    runs.progress.lock().unwrap().insert(run_session, RunProgress::NeedsApproval);
+    assert_eq!(h.first_run().await.progress, RunProgress::NeedsApproval);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+
+    // Once its session finished, the idea is done with what the run made.
+    runs.progress.lock().unwrap().insert(run_session, RunProgress::Finished);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    let done = PgIdeaRepo::new(h.pool.clone())
+        .idea(&user(OWNER), idea.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(done.state, IdeaState::Done);
+    assert_eq!(
+        done.produced,
+        [
+            Target {
+                entity_type: EntityType::AgentSession,
+                entity_id: run_session.to_string(),
+                part_id: None,
+            },
+            Target {
+                entity_type: EntityType::Document,
+                entity_id: "comparison-doc".to_owned(),
+                part_id: None,
+            },
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(session, prompt_idea("quotes:compare", "Compare the supplier quotes"))
+        .await
+        .idea
+        .unwrap();
+    // A session that never opened leaves the idea to try again.
+    runs.fail_start.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(matches!(
+        h.service.accept(&user(OWNER), idea.id).await,
+        Err(IdeaError::Internal(_))
+    ));
+    runs.fail_start.store(false, std::sync::atomic::Ordering::SeqCst);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.progress.lock().unwrap().insert(run_session, RunProgress::Failed);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
+    assert_eq!(feed.ideas[0].run.as_ref().unwrap().progress, RunProgress::Failed);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(runs.started.lock().unwrap().len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn accepting_any_other_idea_starts_no_run(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let mut composer = prompt_idea("quotes:compare", "Compare the supplier quotes");
+    composer.run_mode = Some(RunMode::Composer);
+    let composer = h.suggest(session, composer).await.idea.unwrap();
+    let entity = h.suggest(session, entity_idea("venue:headcount")).await.idea.unwrap();
+    h.service.accept(&user(OWNER), composer.id).await.unwrap();
+    h.service.accept(&user(OWNER), entity.id).await.unwrap();
+    assert!(runs.started.lock().unwrap().is_empty());
+    assert!(
+        h.service
+            .feed(&user(OWNER), None)
+            .await
+            .unwrap()
+            .ideas
+            .iter()
+            .all(|idea| idea.run.is_none())
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

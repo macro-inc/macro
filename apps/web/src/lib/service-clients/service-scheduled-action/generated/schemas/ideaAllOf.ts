@@ -7,6 +7,7 @@
  */
 
 import type { Category } from './category';
+import type { IdeaAllOfRun } from './ideaAllOfRun';
 import type { IdeaAllOfStateReason } from './ideaAllOfStateReason';
 import type { IdeaState } from './ideaState';
 import type { Target } from './target';
@@ -30,6 +31,7 @@ this idea instead of adding one. */
   importance: number;
   /** What acting on it produced. */
   produced: Target[];
+  run?: IdeaAllOfRun;
   /** Where it is for the person. */
   state: IdeaState;
   /** When its state last changed, such as when it was dismissed. */

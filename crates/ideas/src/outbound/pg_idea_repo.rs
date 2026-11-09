@@ -12,7 +12,7 @@ use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
     Category, Change, EntityAction, Idea, IdeaContent, IdeaKind, IdeaState, NewKind, OpenTarget,
-    ResolveReason, Target, TargetRole,
+    ResolveReason, RunSettled, StoredRun, Target, TargetRole,
 };
 use crate::domain::ports::{IdeaRepo, Limits, Written};
 
@@ -154,6 +154,7 @@ impl PgIdeaRepo {
                     created_at: row.created_at,
                     updated_at: row.updated_at,
                     state_changed_at: row.state_changed_at,
+                    run: None,
                     kind,
                 })
             })();
@@ -165,6 +166,35 @@ impl PgIdeaRepo {
         });
         Ok(ideas.collect())
     }
+}
+
+#[expect(clippy::too_many_arguments, reason = "one row, all of its columns")]
+fn run(
+    session: Uuid,
+    idea: Uuid,
+    user_id: String,
+    agent: &str,
+    action: Uuid,
+    started_at: DateTime<Utc>,
+    outcome: Option<String>,
+) -> Result<StoredRun, PgIdeaRepoError> {
+    Ok(StoredRun {
+        session,
+        idea,
+        user: MacroUserIdStr::try_from(user_id)
+            .map_err(|_| PgIdeaRepoError::Decode("a run's user".to_owned()))?,
+        agent: agent
+            .parse()
+            .map_err(|_| PgIdeaRepoError::Decode("a run's agent".to_owned()))?,
+        action,
+        started_at,
+        settled: match outcome.as_deref() {
+            None => None,
+            Some("finished") => Some(RunSettled::Finished),
+            Some("failed") => Some(RunSettled::Failed),
+            Some(other) => return Err(PgIdeaRepoError::Decode(format!("run outcome `{other}`"))),
+        },
+    })
 }
 
 fn parse<T: std::str::FromStr>(value: &str) -> Result<T, PgIdeaRepoError> {
@@ -304,6 +334,135 @@ impl IdeaRepo for PgIdeaRepo {
         .fetch_one(&self.pool)
         .await?;
         Ok(u32::try_from(count).unwrap_or(u32::MAX))
+    }
+
+    async fn start_run(&self, run: &StoredRun) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        ideas_db_utils::lock_user(&mut tx, run.user.as_ref()).await?;
+        // Proposed, or accepted with no run going and its last one failed.
+        let accepted = sqlx::query!(
+            r#"UPDATE idea SET state = 'accepted', updated_at = $3,
+                   state_changed_at = CASE WHEN state = 'accepted' THEN state_changed_at ELSE $3 END
+               WHERE id = $1 AND user_id = $2
+                 AND EXISTS (SELECT 1 FROM idea_prompt p WHERE p.idea_id = idea.id AND p.run_mode = 'background')
+                 AND (state = 'proposed'
+                      OR (state = 'accepted' AND NOT EXISTS (
+                          SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id
+                            AND (r.outcome IS DISTINCT FROM 'failed'))))"#,
+            run.idea,
+            run.user.as_ref(),
+            run.started_at,
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+            == 1;
+        if !accepted {
+            return Ok(false);
+        }
+        sqlx::query!(
+            r#"INSERT INTO idea_run (session_id, idea_id, user_id, agent_id, action_id, started_at)
+               VALUES ($1, $2, $3, $4, $5, $6)"#,
+            run.session,
+            run.idea,
+            run.user.as_ref(),
+            run.agent.to_string(),
+            run.action,
+            run.started_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn latest_runs(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<StoredRun>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,
+                      started_at, outcome
+               FROM idea_run WHERE user_id = $1
+               ORDER BY idea_id, started_at DESC"#,
+            user.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| run(row.session_id, row.idea_id, row.user_id, &row.agent_id, row.action_id, row.started_at, row.outcome))
+            .collect()
+    }
+
+    async fn unsettled_runs(&self, limit: u16) -> Result<Vec<StoredRun>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"SELECT session_id, idea_id, user_id, agent_id, action_id, started_at, outcome
+               FROM idea_run WHERE settled_at IS NULL
+               ORDER BY started_at LIMIT $1"#,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| run(row.session_id, row.idea_id, row.user_id, &row.agent_id, row.action_id, row.started_at, row.outcome))
+            .collect()
+    }
+
+    async fn settle_run(
+        &self,
+        session: Uuid,
+        settled: RunSettled,
+        produced: &[Target],
+        at: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        let outcome = match settled {
+            RunSettled::Finished => "finished",
+            RunSettled::Failed => "failed",
+        };
+        let idea = sqlx::query_scalar!(
+            r#"UPDATE idea_run SET settled_at = $2, outcome = $3
+               WHERE session_id = $1 AND settled_at IS NULL
+               RETURNING idea_id"#,
+            session,
+            at,
+            outcome,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(idea) = idea else {
+            return Ok(false);
+        };
+        if settled == RunSettled::Finished {
+            let existing = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM idea_target WHERE idea_id = $1 AND role = 'produced'"#,
+                idea,
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            for (offset, target) in produced.iter().enumerate() {
+                sqlx::query!(
+                    r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id, part_id)
+                       VALUES ($1, 'produced', $2, $3, $4, $5)"#,
+                    idea,
+                    i16::try_from(existing + i64::try_from(offset).unwrap_or(i64::MAX)).unwrap_or(i16::MAX),
+                    target.entity_type.as_ref(),
+                    target.entity_id,
+                    target.part_id,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+            // A run of an idea retired or dismissed meanwhile still records
+            // what it made; only an accepted idea becomes done.
+            sqlx::query!(
+                r#"UPDATE idea SET state = 'done', updated_at = $2, state_changed_at = $2
+                   WHERE id = $1 AND state = 'accepted'"#,
+                idea,
+                at,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(true)
     }
 
     async fn create(

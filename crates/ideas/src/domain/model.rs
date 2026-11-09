@@ -39,9 +39,80 @@ pub struct Idea {
     pub updated_at: DateTime<Utc>,
     /// When its state last changed, such as when it was dismissed.
     pub state_changed_at: DateTime<Utc>,
+    /// A background prompt idea's latest run.
+    pub run: Option<IdeaRun>,
     /// Its kind, with that kind's data.
     #[serde(flatten)]
     pub kind: IdeaKind,
+}
+
+/// A run of a background prompt idea: a hidden agent session of the
+/// person's, with the full toolset and approvals on.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeaRun {
+    /// The agent session: open it to see the result or answer what it
+    /// waits for.
+    #[schema(value_type = String, format = Uuid)]
+    pub session_id: Uuid,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// How it is going, read from the session.
+    pub progress: RunProgress,
+}
+
+/// How a run is going, as its session says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema, strum::AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunProgress {
+    /// Working.
+    Running,
+    /// Waiting for the person to approve a tool call.
+    NeedsApproval,
+    /// Waiting for the person to answer a question.
+    NeedsInput,
+    /// Done; its result is in the session and the idea's `produced`.
+    Finished,
+    /// It stopped without finishing; accepting the idea again retries.
+    Failed,
+    /// The session couldn't be read just now.
+    Unknown,
+}
+
+impl RunProgress {
+    /// Finished or failed: nothing more will happen.
+    pub fn is_over(self) -> bool {
+        matches!(self, Self::Finished | Self::Failed)
+    }
+}
+
+/// A run as stored, before its progress is read.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoredRun {
+    /// The agent session.
+    pub session: Uuid,
+    /// The idea it runs.
+    pub idea: Uuid,
+    /// Whose.
+    pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// The agent it runs as.
+    pub agent: Uuid,
+    /// Its first prompt's action.
+    pub action: Uuid,
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// Whether it was settled, and how.
+    pub settled: Option<RunSettled>,
+}
+
+/// How a finished run was settled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunSettled {
+    /// It finished: the idea is done.
+    Finished,
+    /// It failed: the idea may be accepted again.
+    Failed,
 }
 
 /// What kind of idea it is, with that kind's data. A kind never changes.

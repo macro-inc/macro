@@ -651,6 +651,7 @@ export type Idea = IdeaKind & {
      * What acting on it produced.
      */
     produced: Array<Target>;
+    run?: null | IdeaRun;
     /**
      * Where it is for the person.
      */
@@ -727,6 +728,26 @@ export type IdeaReview = {
      * The most open ideas a person may have.
      */
     openLimit: number;
+};
+
+/**
+ * A run of a background prompt idea: a hidden agent session of the
+ * person's, with the full toolset and approvals on.
+ */
+export type IdeaRun = {
+    /**
+     * How it is going, read from the session.
+     */
+    progress: RunProgress;
+    /**
+     * The agent session: open it to see the result or answer what it
+     * waits for.
+     */
+    sessionId: string;
+    /**
+     * When it started.
+     */
+    startedAt: string;
 };
 
 /**
@@ -1236,6 +1257,11 @@ export type RunInfo = {
  * How a prompt idea runs.
  */
 export type RunMode = 'composer' | 'background';
+
+/**
+ * How a run is going, as its session says.
+ */
+export type RunProgress = 'running' | 'needs_approval' | 'needs_input' | 'finished' | 'failed' | 'unknown';
 
 /**
  * What started a run, for its page.

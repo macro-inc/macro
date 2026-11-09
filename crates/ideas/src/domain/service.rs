@@ -19,12 +19,12 @@ use model_owner::CreationPrincipal;
 use super::check;
 use super::model::{
     Change, ChangeAction, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
-    IdeaKind, IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea,
-    SessionKind, SuggestIdea, Target,
+    IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea,
+    RewriteIdea, RunMode, RunProgress, RunSettled, SessionKind, StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
     GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
-    RoutineSuggestionDismissal, SuggestionAudience, Written,
+    RoutineSuggestionDismissal, RunSessions, SuggestionAudience, Written,
 };
 use super::prompt;
 
@@ -57,10 +57,20 @@ pub struct IdeaService<Repo, Access, Flags> {
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
     routine_suggestions: Arc<dyn RoutineSuggestionDismissal>,
+    runs: Option<Runs>,
     flags: Option<Flags>,
     /// The SDK reference an ideas session's brief carries.
     sdk_reference: String,
 }
+
+/// The sessions background prompt ideas run in, and the agent they run as.
+struct Runs {
+    sessions: Arc<dyn RunSessions>,
+    agent: Uuid,
+}
+
+/// Runs one settle pass checks at most.
+const SETTLE_BATCH: u16 = 50;
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
 where
@@ -85,6 +95,7 @@ where
             generation_sessions,
             audience,
             routine_suggestions,
+            runs: None,
             flags,
             sdk_reference: String::new(),
         }
@@ -96,6 +107,104 @@ where
     pub fn with_sdk_reference(mut self, reference: String) -> Self {
         self.sdk_reference = reference;
         self
+    }
+
+    /// Run background prompt ideas in `sessions`, as agent `agent`. Without
+    /// it, accepting one fails.
+    pub fn with_runs(mut self, sessions: Arc<dyn RunSessions>, agent: Uuid) -> Self {
+        self.runs = Some(Runs { sessions, agent });
+        self
+    }
+
+    /// Attach each idea's latest run, with how it is going read from its
+    /// session.
+    async fn attach_runs(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ideas: &mut [Idea],
+    ) -> Result<(), IdeaError> {
+        let runs = self
+            .repo
+            .latest_runs(user)
+            .await
+            .map_err(IdeaError::internal)?;
+        for idea in ideas.iter_mut() {
+            let Some(run) = runs.iter().find(|run| run.idea == idea.id) else {
+                continue;
+            };
+            let progress = match (&run.settled, &self.runs) {
+                (Some(RunSettled::Finished), _) => RunProgress::Finished,
+                (Some(RunSettled::Failed), _) => RunProgress::Failed,
+                (None, Some(runs)) => runs
+                    .sessions
+                    .progress(run)
+                    .await
+                    .inspect_err(|error| tracing::warn!(?error, "could not read a run's session"))
+                    .unwrap_or(RunProgress::Unknown),
+                (None, None) => RunProgress::Unknown,
+            };
+            idea.run = Some(IdeaRun {
+                session_id: run.session,
+                started_at: run.started_at,
+                progress,
+            });
+        }
+        Ok(())
+    }
+
+    /// Start a run of background prompt idea `idea`.
+    #[tracing::instrument(name = "ideas.run.start", skip_all, fields(
+        idea.id = %idea.id,
+        agent.session.id = tracing::field::Empty,
+        idea.run.outcome = tracing::field::Empty,
+    ), err)]
+    async fn start_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        idea: &Idea,
+        prompt: &str,
+    ) -> Result<(), IdeaError> {
+        let span = tracing::Span::current();
+        let Some(runs) = &self.runs else {
+            return Err(IdeaError::Internal(rootcause::report!(
+                "background runs are not configured"
+            )));
+        };
+        let run = StoredRun {
+            session: Uuid::now_v7(),
+            idea: idea.id,
+            user: user.clone(),
+            agent: runs.agent,
+            action: Uuid::now_v7(),
+            started_at: Utc::now(),
+            settled: None,
+        };
+        span.record("agent.session.id", run.session.to_string());
+        // The row first, so two accepts at once start one session.
+        if !self
+            .repo
+            .start_run(&run)
+            .await
+            .map_err(IdeaError::internal)?
+        {
+            span.record("idea.run.outcome", "not_runnable");
+            return Err(IdeaError::NotFound);
+        }
+        if let Err(error) = runs.sessions.start(&run, prompt).await {
+            // The idea may be accepted again to retry.
+            let _ = self
+                .repo
+                .settle_run(run.session, RunSettled::Failed, &[], Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(?error, "could not settle a run that failed to start")
+                });
+            span.record("idea.run.outcome", "failed_to_start");
+            return Err(IdeaError::Internal(error));
+        }
+        span.record("idea.run.outcome", "started");
+        tracing::info!(event = "ideas.run_started");
+        Ok(())
     }
 
     #[tracing::instrument(name = "ideas.flag", err, skip_all)]
@@ -280,6 +389,8 @@ where
         let hidden = before - viewable.len();
         let (mut ideas, mut done): (Vec<Idea>, Vec<Idea>) =
             viewable.into_iter().partition(|idea| idea.state.is_open());
+        self.attach_runs(user, &mut ideas).await?;
+        self.attach_runs(user, &mut done).await?;
         ideas.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
@@ -307,6 +418,19 @@ where
     #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]
     async fn accept(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
+        let idea = self
+            .repo
+            .idea(user, id)
+            .await
+            .map_err(IdeaError::internal)?
+            .ok_or(IdeaError::NotFound)?;
+        if let IdeaKind::Prompt {
+            prompt,
+            run_mode: RunMode::Background,
+        } = &idea.kind
+        {
+            return self.start_run(user, &idea, prompt).await;
+        }
         let moved = self
             .repo
             .set_state(
@@ -324,6 +448,73 @@ where
         }
         tracing::info!(event = "ideas.accepted");
         Ok(())
+    }
+
+    #[tracing::instrument(name = "ideas.runs.settle", skip_all, fields(
+        ideas.runs.checked = tracing::field::Empty,
+        ideas.runs.settled = tracing::field::Empty,
+    ), err)]
+    async fn settle_runs(&self) -> Result<usize, IdeaError> {
+        let Some(runs) = &self.runs else {
+            return Ok(0);
+        };
+        let unsettled = self
+            .repo
+            .unsettled_runs(SETTLE_BATCH)
+            .await
+            .map_err(IdeaError::internal)?;
+        let mut settled = 0;
+        for run in &unsettled {
+            let progress = match runs.sessions.progress(run).await {
+                Ok(progress) => progress,
+                Err(error) => {
+                    tracing::warn!(?error, "could not read a run's session");
+                    continue;
+                }
+            };
+            let (outcome, produced) = match progress {
+                RunProgress::Finished => {
+                    // The session is the result; the items it made come with it.
+                    let mut produced = vec![Target {
+                        entity_type: model_entity::EntityType::AgentSession,
+                        entity_id: run.session.to_string(),
+                        part_id: None,
+                    }];
+                    match runs.sessions.produced(run).await {
+                        Ok(items) => produced.extend(items),
+                        Err(error) => {
+                            tracing::warn!(?error, "could not read what a run made");
+                            continue;
+                        }
+                    }
+                    (RunSettled::Finished, produced)
+                }
+                RunProgress::Failed => (RunSettled::Failed, Vec::new()),
+                RunProgress::Running
+                | RunProgress::NeedsApproval
+                | RunProgress::NeedsInput
+                | RunProgress::Unknown => continue,
+            };
+            let moved = self
+                .repo
+                .settle_run(run.session, outcome, &produced, Utc::now())
+                .await
+                .map_err(IdeaError::internal)?;
+            settled += usize::from(moved);
+            tracing::info!(
+                event = "ideas.run_settled",
+                outcome = if outcome == RunSettled::Finished {
+                    "finished"
+                } else {
+                    "failed"
+                },
+                produced = produced.len(),
+            );
+        }
+        let span = tracing::Span::current();
+        span.record("ideas.runs.checked", unsettled.len());
+        span.record("ideas.runs.settled", settled);
+        Ok(settled)
     }
 
     #[tracing::instrument(name = "ideas.dismiss", skip_all, fields(idea.id = %id), err)]
@@ -398,6 +589,8 @@ where
                     .map_err(IdeaError::internal)
             },
         )?;
+        let mut ideas = ideas;
+        self.attach_runs(&session.user, &mut ideas).await?;
         let (mut open, mut closed): (Vec<Idea>, Vec<Idea>) =
             ideas.into_iter().partition(|idea| idea.state.is_open());
         open.sort_by(|a, b| b.importance.cmp(&a.importance));

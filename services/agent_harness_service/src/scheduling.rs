@@ -94,6 +94,8 @@ const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 /// How often generation sessions a stopped process left behind are cleaned up.
 const GENERATION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often finished background runs of ideas are settled.
+const IDEA_RUN_SETTLE_INTERVAL: Duration = Duration::from_secs(30);
 /// How often people in their night are checked for a nightly generation.
 const NIGHTLY_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -176,6 +178,118 @@ impl ideas::domain::ports::RequestSessions for CorrelationSessions {
         RequestSessions::session_of(self, correlation)
             .await
             .map_err(|error| rootcause::report!("{error:?}"))
+    }
+}
+
+/// Background runs of ideas: hidden sessions of the person's, with the full
+/// toolset and approvals on, billed as their agent usage.
+struct IdeaRunSessions {
+    sessions: Arc<AgentSessionClient>,
+    creations: ActivityCreations,
+}
+
+impl IdeaRunSessions {
+    fn action(
+        run: &ideas::domain::model::StoredRun,
+    ) -> agent_session::domain::routines::RoutineSessionAction {
+        agent_session::domain::routines::RoutineSessionAction {
+            owner: run.user.clone(),
+            bot_id: bot_id::BotId::new_from_uuid(run.agent),
+            session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(run.session),
+            action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(run.action),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ideas::domain::ports::RunSessions for IdeaRunSessions {
+    async fn start(
+        &self,
+        run: &ideas::domain::model::StoredRun,
+        prompt: &str,
+    ) -> Result<(), rootcause::Report> {
+        use agent_session::domain::routines::{
+            PrepareRoutineSession, PromptRoutineSession, RoutineSessions as _,
+            ValidateRoutineSession,
+        };
+        let action = Self::action(run);
+        self.sessions
+            .prepare(PrepareRoutineSession {
+                selection: ValidateRoutineSession {
+                    owner: action.owner.clone(),
+                    bot_id: action.bot_id,
+                    model: None,
+                    mcp_servers: Vec::new(),
+                },
+                session_id: action.session_id,
+                // The person's own session, hidden: the idea's card shows it.
+                source: agent_session::domain::model::SessionSource::User,
+                visibility: agent_session::domain::model::SessionVisibility::Hidden,
+                origin: trigger_context::TriggerOrigin::Requested {
+                    by: action.owner.clone(),
+                },
+                billing: agent_session::domain::model::SessionBilling::Billable,
+            })
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        self.sessions
+            .prompt(PromptRoutineSession {
+                action,
+                prompt: prompt.to_owned(),
+                context: None,
+            })
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(())
+    }
+
+    async fn progress(
+        &self,
+        run: &ideas::domain::model::StoredRun,
+    ) -> Result<ideas::domain::model::RunProgress, rootcause::Report> {
+        use agent_session::domain::routines::{
+            RoutineActionStatus, RoutinePendingReason, RoutineSessions as _,
+        };
+        use ideas::domain::model::RunProgress;
+        let status = self
+            .sessions
+            .status(Self::action(run))
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(match status {
+            RoutineActionStatus::Succeeded => RunProgress::Finished,
+            RoutineActionStatus::Failed(_) => RunProgress::Failed,
+            RoutineActionStatus::Pending(RoutinePendingReason::Permission) => {
+                RunProgress::NeedsApproval
+            }
+            RoutineActionStatus::Pending(RoutinePendingReason::Elicitation) => {
+                RunProgress::NeedsInput
+            }
+            RoutineActionStatus::Pending(
+                RoutinePendingReason::AwaitingPrompt
+                | RoutinePendingReason::Running
+                | RoutinePendingReason::Disconnected,
+            ) => RunProgress::Running,
+        })
+    }
+
+    async fn produced(
+        &self,
+        run: &ideas::domain::model::StoredRun,
+    ) -> Result<Vec<ideas::domain::model::Target>, rootcause::Report> {
+        let created = self
+            .creations
+            .created_by(run.session)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(created
+            .into_iter()
+            .map(|item| ideas::domain::model::Target {
+                entity_type: item.entity_type,
+                entity_id: item.entity_id,
+                part_id: None,
+            })
+            .collect())
     }
 }
 
@@ -559,6 +673,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
             template_flags.clone(),
         )
+        // Accepting a background prompt idea runs it in a hidden session of the
+        // in-process Macro agent, as the person, billed as their agent usage.
+        .with_runs(
+            Arc::new(IdeaRunSessions {
+                sessions: Arc::clone(&sessions),
+                creations: ActivityCreations(
+                    activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+                ),
+            }),
+            bot_id::MACRO_NEW_BOT_ID.as_uuid(),
+        )
         .with_sdk_reference(agent_code_mode::domain::index_digest(
             ideas::domain::prompt::SYMBOLS,
             ideas::domain::prompt::FIELDS_OF,
@@ -587,6 +712,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // once ready, people in their night get their nightly generation.
     {
         let generation = Arc::clone(&generation);
+        let settling = Arc::clone(&ideas);
         let stop = lifecycle.stop_workers.clone();
         let mut ready = generation_ready;
         lifecycle.workers.spawn(async move {
@@ -599,6 +725,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             let mut nightly = tokio::time::interval(NIGHTLY_INTERVAL);
             nightly.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            let mut runs = tokio::time::interval(IDEA_RUN_SETTLE_INTERVAL);
+            runs.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 // Each is logged by its own span.
                 tokio::select! {
@@ -606,6 +734,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     _ = stop.cancelled() => return,
                     _ = sweep.tick() => { let _ = generation.sweep().await; }
                     _ = nightly.tick() => { let _ = generation.nightly().await; }
+                    _ = runs.tick() => {
+                        let _ = ideas::domain::ports::IdeaApi::settle_runs(settling.as_ref()).await;
+                    }
                 }
             }
         });
