@@ -41,3 +41,5 @@ pub use instances::{
 
 mod render;
 pub use render::{ForeignRenderRecord, ForeignWeakEditorIdentity};
+
+mod selection_values;

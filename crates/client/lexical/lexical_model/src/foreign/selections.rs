@@ -11,6 +11,11 @@ impl PartialEq for ForeignSelectionIdentity {
     }
 }
 impl Eq for ForeignSelectionIdentity {}
+impl std::hash::Hash for ForeignSelectionIdentity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(Arc::as_ptr(&self.0), state);
+    }
+}
 impl Default for ForeignSelectionIdentity {
     fn default() -> Self {
         Self(Arc::new(()))
