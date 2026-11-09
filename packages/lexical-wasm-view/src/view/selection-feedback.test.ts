@@ -4,6 +4,7 @@ import {
   initializeNativeSurfaceTests,
   nativeSurface,
 } from './test/native-surface';
+
 beforeAll(initializeNativeSurfaceTests);
 
 test('native caret movement publishes derived typing attributes', () => {
@@ -160,6 +161,122 @@ test('an exact unformatted caret keeps zero-output acknowledgement and one admis
     expect(flags).toBe(0);
     expect(fixture.counters.admissions).toBe(1);
     expect(fixture.view.selection().selection).toEqual(moved);
+  } finally {
+    fixture.close();
+  }
+});
+
+test('DOM-first text with native notifications carries final selection without another admission', () => {
+  const fixture = nativeSurface();
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            { type: 'paragraph', children: [{ type: 'text', text: 'b' }] },
+          ],
+        },
+      })
+    );
+    const leaf = [...fixture.view.mirror.values()].find(
+      (node) => node.text === 'b'
+    );
+    if (!leaf) throw new Error('Missing text');
+    fixture.root.focus();
+    fixture.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: leaf.key, type: 'text', offset: 1 },
+      focus: { key: leaf.key, type: 'text', offset: 1 },
+    });
+    const dom = fixture.view.getElementByKey(leaf.key)?.firstChild;
+    const selection = document.getSelection();
+    if (!dom || !selection) throw new Error('Missing text selection');
+    dom.nodeValue = 'b;';
+    selection.setBaseAndExtent(dom, 2, dom, 2);
+    const original = fixture.session.textFromView.bind(fixture.session);
+    let flags = -1;
+    fixture.session.textFromView = (...args) => {
+      args[7] = 1000;
+      flags = original(...args);
+      return flags;
+    };
+    fixture.session.query = () => {
+      throw new Error('Unexpected query');
+    };
+    fixture.session.nodeText = () => {
+      throw new Error('Unexpected per-node query');
+    };
+    fixture.counters.admissions = 0;
+    fixture.port.textFromView({
+      key: leaf.key,
+      text: 'b;',
+      anchorOffset: 2,
+      focusOffset: 2,
+      selectionKind: 'range',
+      compositionEnd: false,
+    });
+    expect(flags & 1).toBe(1);
+    expect(fixture.counters.admissions).toBe(1);
+    expect(fixture.view.selection().selection).toEqual({
+      kind: 'range',
+      anchor: { key: leaf.key, type: 'text', offset: 2 },
+      focus: { key: leaf.key, type: 'text', offset: 2 },
+    });
+    expect(fixture.view.text(leaf.key)).toBe('b;');
+    expect(selection.anchorNode).toBe(dom);
+    expect(selection.anchorOffset).toBe(2);
+  } finally {
+    fixture.close();
+  }
+});
+
+test('text feedback created only by typing attributes also carries authoritative text', () => {
+  const fixture = nativeSurface();
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                { type: 'text', text: 'b', format: 1, style: 'color: red;' },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    const leaf = [...fixture.view.mirror.values()].find(
+      (node) => node.text === 'b'
+    );
+    const dom = document
+      .createTreeWalker(fixture.root, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    const selection = document.getSelection();
+    if (!leaf || !dom || !selection) throw new Error('Missing text');
+    fixture.root.focus();
+    dom.nodeValue = 'b;';
+    selection.setBaseAndExtent(dom, 2, dom, 2);
+    fixture.counters.admissions = 0;
+    fixture.port.textFromView({
+      key: leaf.key,
+      text: 'b;',
+      anchorOffset: 2,
+      focusOffset: 2,
+      selectionKind: 'range',
+      compositionEnd: false,
+    });
+    expect(fixture.counters.admissions).toBe(1);
+    expect(fixture.view.text(leaf.key)).toBe('b;');
+    expect(fixture.view.selection().selection).toEqual({
+      kind: 'range',
+      anchor: { key: leaf.key, type: 'text', offset: 2 },
+      focus: { key: leaf.key, type: 'text', offset: 2 },
+    });
+    expect(selection.anchorOffset).toBe(2);
   } finally {
     fixture.close();
   }

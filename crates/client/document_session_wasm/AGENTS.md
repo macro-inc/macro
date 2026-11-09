@@ -5,6 +5,7 @@
 The production cdylib for portable editor and generic document sessions.
 The generated Bebop schema and flat Diff stream are the only cold wire contract.
 Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
+TextFromView text and selection corrections share the final nonzero-output decision; either correction must carry the other final model facts for submitted ranges.
 TextFromView returns zero only for an exact accepted DOM edit; all other outcomes
 include authoritative text or full view repair, including permission rejection,
 stale/non-text keys and malformed UTF-16. A cold `initialize` rebuilds only the
