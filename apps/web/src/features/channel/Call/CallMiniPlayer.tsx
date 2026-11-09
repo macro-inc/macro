@@ -2,11 +2,13 @@ import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CornersIn from '@icon/system/regular/corners-in.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import { useLiveCallRecordQuery } from '@queries/call/call';
-import { Button, cn } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import type { Participant } from 'livekit-client';
 import {
   createMemo,
@@ -191,6 +193,56 @@ export function CallMiniPlayer(props: {
       [corner().startsWith('top') ? 'top' : 'bottom']: '20px',
     };
   };
+  const atDefaults = () => {
+    const point = position();
+    return (
+      storedWidth() === 336 &&
+      storedAudioHeight() === 144 &&
+      corner() === 'bottom-right' &&
+      (!point ||
+        (Math.abs(point.x - (viewport().width - width() - 20)) < 1 &&
+          Math.abs(
+            point.y -
+              (viewport().height - root.getBoundingClientRect().height - 20)
+          ) < 1))
+    );
+  };
+  let resetFrame: number | undefined;
+  onCleanup(() => {
+    if (resetFrame !== undefined) cancelAnimationFrame(resetFrame);
+  });
+  const resetPlayer = () => {
+    setPreviewSize(undefined);
+    setWidth(336);
+    setAudioHeight(144);
+    localStorage.removeItem('macro:pref:call:mini-player-width');
+    localStorage.removeItem('macro:pref:call:mini-player-audio-height');
+    setCorner('bottom-right');
+    setSnapTarget(undefined);
+    if (resetFrame !== undefined) cancelAnimationFrame(resetFrame);
+    resetFrame = requestAnimationFrame(() => {
+      resetFrame = undefined;
+      const box = root.getBoundingClientRect();
+      const target = constrainCallPlayerPosition(
+        window.innerWidth - box.width - 20,
+        window.innerHeight - box.height - 20,
+        box.width,
+        box.height,
+        window.innerWidth,
+        window.innerHeight
+      );
+      if (
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
+        (Math.abs(box.x - target.x) < 1 && Math.abs(box.y - target.y) < 1)
+      ) {
+        setSnapping(false);
+        setPosition(undefined);
+        return;
+      }
+      setSnapping(true);
+      setPosition(target);
+    });
+  };
   const finishDrag = (event: PointerEvent, cancelled = false) => {
     if (!drag || drag.pointer !== event.pointerId) return;
     const box = root.getBoundingClientRect();
@@ -273,7 +325,16 @@ export function CallMiniPlayer(props: {
             'transition-[left,top] duration-200 ease-out motion-reduce:transition-none'
         )}
         onTransitionEnd={(event) => {
-          if (event.target === root) setSnapping(false);
+          if (event.target === root) {
+            setSnapping(false);
+            const box = root.getBoundingClientRect();
+            if (
+              corner() === 'bottom-right' &&
+              Math.abs(box.right - (window.innerWidth - 20)) < 1 &&
+              Math.abs(box.bottom - (window.innerHeight - 20)) < 1
+            )
+              setPosition(undefined);
+          }
         }}
         style={{ ...placement(), width: `${width()}px` }}
       >
@@ -286,7 +347,7 @@ export function CallMiniPlayer(props: {
               drag ||
               resize ||
               (event.target instanceof Element &&
-                event.target.closest('button'))
+                event.target.closest('button, [role="menu"]'))
             )
               return;
             setSnapping(false);
@@ -337,6 +398,23 @@ export function CallMiniPlayer(props: {
             bare
             startedAt={record.isSuccess ? record.data.startedAt : undefined}
           />
+          <Dropdown placement="bottom-end">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('calls.more')}
+            >
+              <DotsThree class="size-4" />
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <Dropdown.Item disabled={atDefaults()} onSelect={resetPlayer}>
+                  <ArrowCounterClockwise class="size-4" />
+                  <span>{t('calls.resetPlayer')}</span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
           <Button
             variant="ghost"
             size="icon-xs"

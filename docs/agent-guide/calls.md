@@ -82,7 +82,8 @@ edge-anchored success gradient previews the snap, fading
 toward the centre with only the two outer edges marked. Release there to ease
 into that corner, or elsewhere to keep the dropped position. The indicator
 fades over 150ms; reduced motion shows/hides and snaps without animation. Collapse
-tucks it back into the rail.
+tucks it back into the rail. **More → Reset position and size** clears saved
+size preferences and restores the 336px player to the bottom-right corner.
 Resize from any edge or corner; video/screens remain 16:9 and audio retains its
 minimum height. Width is capped at 960px, or the available window width/height
 when smaller. Width and audio height persist as local preferences; the player

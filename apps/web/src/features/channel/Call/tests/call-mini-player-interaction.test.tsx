@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallMiniPlayer } from '../CallMiniPlayer';
@@ -32,7 +32,8 @@ vi.mock('@core/user', () => ({
 vi.mock('../CallLiveChip', () => ({ CallLiveChip: () => null }));
 vi.mock('../CallQuickControls', () => ({ CallQuickControls: () => null }));
 vi.mock('../TrackView', () => ({ TrackView: () => null }));
-vi.mock('@ui', () => ({
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -96,4 +97,32 @@ it('keeps the drag owned by its starting pointer', () => {
   pointer(header, 'pointerup', 1, 180);
   pointer(header, 'pointermove', 1, 220);
   expect(player.style.left).toBe('170px');
+});
+
+it('resets saved dimensions', async () => {
+  localStorage.setItem('macro:pref:call:mini-player-width', '480');
+  localStorage.setItem('macro:pref:call:mini-player-audio-height', '220');
+  let nextFrame: FrameRequestCallback | undefined;
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    nextFrame = callback;
+    return 1;
+  });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  render(() => <CallMiniPlayer onCollapse={() => {}} onOpenCall={() => {}} />);
+  const more = screen.getByRole('button', { name: 'More' });
+  more.focus();
+  fireEvent.keyDown(more, { key: 'ArrowDown' });
+  const reset = await screen.findByRole('menuitem', {
+    name: 'Reset position and size',
+  });
+  reset.focus();
+  fireEvent.keyDown(reset, { key: 'Enter' });
+  nextFrame?.(0);
+  expect(localStorage.getItem('macro:pref:call:mini-player-width')).toBeNull();
+  expect(
+    localStorage.getItem('macro:pref:call:mini-player-audio-height')
+  ).toBeNull();
+  expect(
+    screen.getByRole('region', { name: 'Call', hidden: true }).style.width
+  ).toBe('336px');
 });

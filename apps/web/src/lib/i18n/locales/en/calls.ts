@@ -80,6 +80,7 @@ export default {
   guest: 'Guest',
   agent: 'Agent',
   speaking: 'Speaking',
+  resetPlayer: 'Reset position and size',
   stopSharingToChange: 'Stop sharing to change this',
   availableOnceJoined: "Available once you've joined",
   microphoneOff: 'Microphone off',
