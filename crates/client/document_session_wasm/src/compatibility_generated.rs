@@ -1190,6 +1190,52 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPatch<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch<'raw> {}
 
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct CompatAuditSnapshot {
+    pub retained_captures: u64,
+    pub live_nodes: u64,
+}
+
+impl ::bebop::FixedSized for CompatAuditSnapshot {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatAuditSnapshot {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        Self::SERIALIZED_SIZE
+    }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        Ok(
+            ::bebop::packed_read!(zelf.retained_captures)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.live_nodes)._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            retained_captures: v0,
+            live_nodes: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatAuditSnapshot {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompatKeyReservation<'raw> {
     pub editor_id: u32,
@@ -8153,6 +8199,8 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch {}
 
+    pub use super::CompatAuditSnapshot;
+
     #[derive(Clone, Debug, PartialEq)]
     pub struct CompatKeyReservation {
         pub editor_id: u32,
@@ -13552,4 +13600,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "260b600ba0ab014808e9d2aaaafb03ce7c05aed5dcbb0f13b4751fe670163b83";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "24c38b2078bf718c3812f5e0c4d25ee9bbb288845648c291d0eb79df730174eb";
