@@ -819,11 +819,12 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
-Desktop places the secondary Template selector at the left of the header, then
+Desktop places the secondary template selector at the left of the header, then
 Clear Draft, expansion, and Close on the right. Without a selection the trigger
-reads Template; selecting one shows its name. The anchored searchable dropdown
-lists No template with a blank-page icon, then templates grouped under Personal
-and the current team name, then New template at the bottom. A check marks the
+reads No template with the menu's blank-page icon; selecting one shows its name.
+The anchored searchable dropdown lists No template with a blank-page icon,
+then templates grouped under Personal and the current team name, then New
+template at the bottom. A check marks the
 selected row. Managers get an edit action on hover or keyboard focus; touch
 keeps it visible. Empty collections and unmatched searches show a brief empty
 state. ArrowDown from search enters the menu; Escape dismisses it. On touch,
@@ -842,8 +843,9 @@ Customer / Contact row participates in defaults without duplicate property pills
 New template opens template mode over the preserved task draft, without a
 replacement confirmation. Its whole Back button, including the New template
 label, returns to that unchanged draft. The template name replaces the task
-title on the same line, without a leading icon. Draft fields and description become initial defaults, without
-the task title or attachments. The footer's Share with team switch controls new
+title on the same line, without a leading icon. Draft fields and description
+become initial defaults, without the task title or attachments. The footer's
+Share with team switch controls new
 template ownership. Edit opens the same mode with the saved name and defaults;
 team ownership reads Shared with the owning team, while personal templates have
 no ownership label. Both hide Attach and Create More. Save template

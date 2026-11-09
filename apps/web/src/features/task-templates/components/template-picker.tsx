@@ -339,7 +339,12 @@ export function TemplateDropdown(
           name: props.selectedLabel,
         })}
       >
-        <CopyIcon class="size-4 shrink-0" />
+        <Show
+          when={props.selectedKey === 'none'}
+          fallback={<CopyIcon class="size-4 shrink-0" />}
+        >
+          <FileIcon class="size-4 shrink-0" />
+        </Show>
         <span class="min-w-0 max-w-50 truncate">{props.selectedLabel}</span>
         <Show when={props.dirty}>
           <span class="size-1.5 shrink-0 rounded-full bg-accent" />

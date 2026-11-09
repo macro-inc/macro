@@ -6,6 +6,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import FileIcon from '@icon/system/regular/file.svg';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import {
   Button,
@@ -166,7 +167,7 @@ export function TaskTemplateControls(props: {
   };
   const selectedLabel = () => {
     const selection = props.composer.templateSelection();
-    if (selection.kind === 'none') return t('create.taskTemplateLabel');
+    if (selection.kind === 'none') return t('create.taskTemplateNone');
     if (selection.kind === 'new') return t('create.taskTemplateNew');
     if (selection.kind === 'editing') return t('create.taskTemplateEdit');
     return selection.template.name;
@@ -351,7 +352,12 @@ export function TaskTemplateControls(props: {
               onMouseDown={(event) => event.preventDefault()}
               onClick={openPicker}
             >
-              <CopyIcon class="size-4 shrink-0" />
+              <Show
+                when={selectedKey() === 'none'}
+                fallback={<CopyIcon class="size-4 shrink-0" />}
+              >
+                <FileIcon class="size-4 shrink-0" />
+              </Show>
               <Show when={!props.compact}>{selectedLabel()}</Show>
               <Show when={props.composer.areTemplateFieldsDirty()}>
                 <span class="size-1.5 shrink-0 rounded-full bg-accent" />

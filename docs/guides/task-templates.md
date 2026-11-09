@@ -4,7 +4,7 @@ Task templates store a name and typed task configuration. Personal templates are
 
 ## Composer
 
-The secondary Template selector opens a searchable desktop dropdown or the existing touch picker sheet. No template is the default. Search is followed by No template, saved templates grouped under Personal and the team name, and New template at the bottom. The trigger shows the selected template's name; a trailing check marks its row. Managers get a row edit action on hover or keyboard focus, always available on touch.
+The secondary template selector opens a searchable desktop dropdown or the existing touch picker sheet. No template is the default. Search is followed by No template, saved templates grouped under Personal and the team name, and New template at the bottom. The trigger shows the selected template's name, or No template with the menu's blank-page icon when none is applied; a trailing check marks its row. Managers get a row edit action on hover or keyboard focus, always available on touch.
 
 Selecting a saved template replaces untouched template fields and description. Switching away from edited fields or prefilled task text requires confirmation. Task titles and launch-context property presets remain intact. A changed-field accent dot appears on the trigger and selected row, without modifying the shared property pills. Managers get Reset and Update template at the bottom of the picker. These actions restore or save fields only: Reset leaves task description text intact, and Update template retains the template's saved description.
 

@@ -50,7 +50,8 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Reuse `DropdownSearchInput` for flush, divided search matching the assignee selector.
 - Match trailing selection checks to `PropertyEntitySelector` using its check icon and classes.
 - Overlay the edit action within the full-width row; reveal it on hover, keyboard focus, and touch.
-- Use a secondary selection trigger and the existing touch picker sheet; keep empty states brief.
+- Use a secondary trigger showing No template with the menu's blank-page icon when no template is applied.
+- Retain the compact touch trigger's accessible label and the existing touch picker sheet; keep empty states brief.
 - Show an accent dot for changed template fields, not task title or description changes; keep property pills unchanged.
 - Follow saved-view actions with Reset and Update template for managers; reset or save fields without changing description text.
 

@@ -332,7 +332,6 @@ export default {
   guideForm: 'Collect structured responses through a shareable form.',
   guideInThisFolder: 'Create one in this folder.',
   taskTemplates: 'Templates',
-  taskTemplateLabel: 'Template',
   taskTemplateReset: 'Reset',
   taskTemplateUpdate: 'Update template',
   taskTemplateNone: 'No template',
