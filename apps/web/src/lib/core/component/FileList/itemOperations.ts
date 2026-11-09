@@ -8,10 +8,7 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
 import { duplicateDatabase } from '@queries/storage/databases';
-import {
-  getDeletedTree,
-  optimisticallyRemoveDeletedItem,
-} from '@queries/storage/deleted';
+import { getDeletedTree } from '@queries/storage/deleted';
 import {
   duplicateEntity,
   moveEntity,
@@ -586,7 +583,6 @@ export async function permanentlyDelete(args: {
   let result;
   switch (itemType) {
     case 'document': {
-      optimisticallyRemoveDeletedItem(id);
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'DOCUMENT', id })
@@ -597,25 +593,6 @@ export async function permanentlyDelete(args: {
       break;
     }
     case 'project': {
-      const deleteTree = getDeletedTree();
-      const findAllDescendants = (projectId: string): string[] => {
-        const descendantIds: string[] = [];
-        const node = deleteTree.itemMap[projectId];
-        if (node && node.children) {
-          node.children.forEach((child) => {
-            descendantIds.push(child.id);
-            descendantIds.push(...findAllDescendants(child.id));
-          });
-        }
-        return descendantIds;
-      };
-
-      const descendantIds = findAllDescendants(id);
-      descendantIds.forEach((descendantId) => {
-        optimisticallyRemoveDeletedItem(descendantId);
-      });
-      optimisticallyRemoveDeletedItem(id);
-
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'PROJECT', id })
@@ -624,7 +601,6 @@ export async function permanentlyDelete(args: {
       break;
     }
     case 'chat': {
-      optimisticallyRemoveDeletedItem(id);
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'CHAT', id })
@@ -682,11 +658,6 @@ export async function bulkPermanentlyDelete(
     }
 
     return true;
-  });
-
-  // Descendants need to be optimistically removed from history tree
-  descendants.forEach((item) => {
-    optimisticallyRemoveDeletedItem(item.id);
   });
 
   for (let i = 0; i < eldestItemsOnly.length; i += chunkSize) {

@@ -477,8 +477,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
         let entity_ast = self.entity_ast();
         let crm_scope = entity_ast.and_then(|a| a.email_filter.crm_scope.clone());
 
-        // A CRM scope reads teammates' threads, which email authorizes against
-        // the scope, so a viewer without a mailbox of their own still sees them.
+        // CRM access is separate from mailbox contribution: a viewer without a
+        // mailbox still reads team-contributed threads, which email authorizes
+        // against the CRM scope and filters by consent and exclusions.
         if self.link_ids.is_empty() && crm_scope.is_none() {
             return None;
         }

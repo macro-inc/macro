@@ -101,6 +101,73 @@ export type AccessiblePipeline = Pipeline & {
 };
 
 /**
+ * A response to a request.
+ */
+export type AccountManagerDecision = 'approve' | 'decline';
+
+/**
+ * A request for manager access and what became of it.
+ */
+export type AccountManagerGrant = {
+    /**
+     * When the manager claimed the credential.
+     */
+    claimedAt?: string | null;
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * When the pending request or unclaimed approval stops being usable.
+     */
+    expiresAt?: string | null;
+    /**
+     * Grant id.
+     */
+    id: string;
+    /**
+     * When the credential was last used, to the minute.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * The account being managed.
+     */
+    managedUserId: string;
+    /**
+     * The agent account doing the managing.
+     */
+    managerUserId: string;
+    /**
+     * The side that asked.
+     */
+    requestedBy: AccountManagerRole;
+    /**
+     * Lifecycle status.
+     */
+    status: AccountManagerGrantStatus;
+};
+
+/**
+ * Where a grant is in its lifecycle.
+ */
+export type AccountManagerGrantStatus = 'pending' | 'approved' | 'declined' | 'active' | 'revoked' | 'expired';
+
+/**
+ * One side of a grant.
+ */
+export type AccountManagerRole = 'managed' | 'manager';
+
+/**
+ * The managers of the caller's account.
+ */
+export type AccountManagersList = {
+    /**
+     * Approved and active grants on the caller's account.
+     */
+    grants: Array<AccountManagerGrant>;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -161,6 +228,48 @@ export type ActiveMeetingsResponse = {
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
+
+/**
+ * Request to add a bot to a channel.
+ */
+export type AddChannelBotRequest = {
+    /**
+     * Bot id.
+     */
+    bot_id: BotId;
+};
+
+/**
+ * Entries to add.
+ */
+export type AddEntriesRequest = {
+    /**
+     * Add a record again although it already has an entry here.
+     */
+    allowDuplicates?: boolean;
+    /**
+     * The records to add, each with its starting fields.
+     */
+    entries: Array<NewEntry>;
+};
+
+/**
+ * The entries added.
+ */
+export type AddEntriesResponse = {
+    /**
+     * The new entries, as saved.
+     */
+    added: Array<PipelineEntry>;
+    /**
+     * Existing entries of requested records that were not added again.
+     */
+    alreadyPresent: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
 
 /**
  * Request body for favoriting an entity.
@@ -265,6 +374,21 @@ export type AgentActionId = string;
 export type AgentChannelScope = 'all' | 'selected';
 
 /**
+ * Where an agent can be mentioned: everywhere its owner can use it, or
+ * exactly the listed channels.
+ */
+export type AgentChannelSelection = {
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+};
+
+/**
  * Historical persona identity displayed beside a private conversation.
  */
 export type AgentDmProfile = {
@@ -280,6 +404,19 @@ export type AgentDmProfile = {
      * Persona display name.
      */
     name: string;
+};
+
+/**
+ * The runtime an agent runs on: a harness slug and, for `macrod`, the
+ * registered harness serving it. Travel together because one without the
+ * other is never a valid choice.
+ */
+export type AgentHarnessSelection = {
+    /**
+     * Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
 };
 
 /**
@@ -481,6 +618,93 @@ export type AnchorId = PdfAnchorId & {
 export type AnchorResponse = {
     data: Array<Anchor>;
 };
+
+/**
+ * An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and
+ * Motion Paths galleries).
+ */
+export type AnimationClass = 'entrance' | 'emphasis' | 'exit' | 'path' | 'media' | 'other';
+
+/**
+ * How often an animation plays.
+ */
+export type AnimationRepeat = number | RepeatUntil;
+
+/**
+ * One animation of a slide, for [`EditOp::SetAnimations`] and
+ * [`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's
+ * defaults, or keep the values of the existing animation it matches.
+ */
+export type AnimationSpec = {
+    /**
+     * Effect group: `entrance`, `emphasis`, `exit`, or `path` (`media` and
+     * `other` can only keep animations the slide already has).
+     */
+    class: AnimationClass;
+    /**
+     * Wait in milliseconds after the animation's start (click, previous
+     * animation's start, or its end) before it plays, 0-60000 (default 0).
+     */
+    delayMs?: number | null;
+    /**
+     * Effect option (default: the first listed). `flyIn`, `flyOut` (edge it
+     * flies in from or out to): `bottom`, `left`, `right`, `top`,
+     * `bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it
+     * starts from): `bottom`, `left`, `right`, `top`; `split` (entrance):
+     * `verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:
+     * the `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,
+     * `boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`
+     * (exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,
+     * `spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:
+     * `objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:
+     * `down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,
+     * `left`, `right`, `up` (a straight line a quarter of the slide long).
+     */
+    direction?: string | null;
+    /**
+     * Duration of one play in milliseconds, 10-60000 (default: the
+     * effect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn
+     * and teeter, 2000 for spin, growShrink, shape, wheel, and paths).
+     * `appear` and `disappear` are instant and ignore it.
+     */
+    durationMs?: number | null;
+    /**
+     * Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,
+     * `wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,
+     * `bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,
+     * `growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,
+     * `boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,
+     * `floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,
+     * `shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names
+     * the slide's outline reports (and `custom`) only keep an existing
+     * animation of that name on the same shape.
+     */
+    effect: string;
+    /**
+     * Animate only this paragraph of the shape's text (0-based); omit to
+     * animate the whole shape. One animation per paragraph builds a list
+     * paragraph by paragraph.
+     */
+    paragraph?: number | null;
+    /**
+     * `path` class only: a motion path of its own instead of a direction,
+     * in PowerPoint's syntax with coordinates as fractions of the slide's
+     * width and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;
+     * commands `M`, `L`, `C`, `Z`, and `E` for the end).
+     */
+    path?: string | null;
+    repeat?: null | AnimationRepeat;
+    /**
+     * Id of the shape to animate. A group member's id animates only that member.
+     */
+    shapeId: number;
+    start?: null | AnimationStart;
+};
+
+/**
+ * When an animation starts.
+ */
+export type AnimationStart = 'onClick' | 'withPrevious' | 'afterPrevious';
 
 export type AnnotationIncrementalUpdate = {
     payload: {
@@ -1195,6 +1419,30 @@ export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 
 export type Audience = 'members' | 'public';
 
 /**
+ * Whether missing busy blocks can safely be interpreted as free time.
+ */
+export type AvailabilityCoverage = 'complete' | 'unknown';
+
+/**
+ * An exact, half-open interval of UTC instants, without event metadata.
+ */
+export type AvailabilityInterval = {
+    /**
+     * Exclusive end.
+     */
+    end: string;
+    /**
+     * Inclusive start.
+     */
+    start: string;
+};
+
+/**
+ * Why a person's unoccupied intervals cannot establish availability.
+ */
+export type AvailabilityUnknownReason = 'hidden' | 'unavailable' | 'truncated' | 'missing_time_zone' | 'invalid_time_zone' | 'invalid_interval' | 'conflicting_copies';
+
+/**
  * Where one viewer is inside a database right now: ephemeral, relayed to
  * the other viewers and never stored. A missing row or column means the
  * viewer is on the table but on no cell. Optional end row and column IDs
@@ -1348,6 +1596,33 @@ export type BasicDocumentSubType = {
     type: 'initiative_description';
 };
 
+/**
+ * Text box (body) changes.
+ */
+export type BodyPatch = {
+    /**
+     * `top`, `middle`, `bottom`.
+     */
+    anchor?: string | null;
+    /**
+     * `none`, `shrink` (shrink text on overflow), `resize` (resize shape to fit).
+     */
+    autofit?: string | null;
+    /**
+     * Number of columns.
+     */
+    columns?: number | null;
+    direction?: null | TextDirection;
+    /**
+     * Insets `[left, top, right, bottom]` in points.
+     */
+    insets?: Array<number> | null;
+    /**
+     * Wrap text at the box width.
+     */
+    wrap?: boolean | null;
+};
+
 export type BomPart = {
     /**
      * The uuid of the bom part
@@ -1376,6 +1651,35 @@ export type BookingTarget = {
      * The scheduling profile that owns the event.
      */
     profileId: string;
+};
+
+/**
+ * Which borders of a cell range [`EditOp::FormatCells`](super::EditOp::FormatCells) changes. A border
+ * between two cells is shared, so both cells get the change.
+ */
+export type BorderEdges = 'all' | 'outside' | 'inside' | 'top' | 'bottom' | 'left' | 'right' | 'insideHorizontal' | 'insideVertical';
+
+/**
+ * A table border change (`None` = leave unchanged). A border that did not
+ * exist yet becomes a solid 1 pt `tx1` line unless the change says otherwise.
+ */
+export type BorderLine = {
+    /**
+     * Color (`RRGGBB` or theme name).
+     */
+    color?: string | null;
+    /**
+     * Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).
+     */
+    dash?: string | null;
+    /**
+     * Remove the border (no line).
+     */
+    none?: boolean;
+    /**
+     * Width in points.
+     */
+    width?: number | null;
 };
 
 /**
@@ -1409,7 +1713,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -1580,6 +1884,49 @@ export type BulkWakeupRequest = {
 
 export type BulkWakeupResponse = {
     dispatched: number;
+};
+
+/**
+ * Bullet style for paragraphs.
+ */
+export type BulletSpec = {
+    kind: 'none';
+} | {
+    kind: 'inherit';
+} | {
+    /**
+     * The bullet character.
+     */
+    char: string;
+    kind: 'char';
+} | {
+    kind: 'number';
+    /**
+     * Numbering scheme.
+     */
+    scheme: string;
+    /**
+     * First number.
+     */
+    start?: number;
+};
+
+/**
+ * Scratch formulas to evaluate against a workbook, without writing anything.
+ */
+export type CalculateSpreadsheetRequest = {
+    /**
+     * At most 20 formulas beginning with =.
+     */
+    formulas: Array<SpreadsheetFormula>;
+    /**
+     * Hypothetical cell inputs, never saved.
+     */
+    overrides?: Array<SpreadsheetOverride> | null;
+    /**
+     * Sheet for unqualified references; defaults to the first sheet.
+     */
+    sheetId?: string | null;
 };
 
 /**
@@ -2111,6 +2458,47 @@ export type CallActiveResponse = {
 };
 
 /**
+ * Where a call's discussion lives, decided once when the call is created.
+ * `channel_id` cannot decide this: past channel calls keep their own thread.
+ */
+export type CallDiscussion = {
+    /**
+     * The channel holding the thread.
+     */
+    channel_id: string;
+    kind: 'channel_thread';
+    /**
+     * The thread's root message.
+     */
+    root_id: string;
+} | {
+    /**
+     * The call owning the thread.
+     */
+    call_id: string;
+    kind: 'call_chat';
+};
+
+/**
+ * A channel call's life, as its timeline row shows it.
+ */
+export type CallEntryStatus = {
+    state: 'live';
+} | {
+    /**
+     * How long it lasted.
+     */
+    duration_ms: number;
+    /**
+     * When it ended.
+     */
+    ended_at: string;
+    state: 'ended';
+} | {
+    state: 'record_deleted';
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -2134,6 +2522,106 @@ export type CallFilters = {
      */
     speaker_ids?: Array<string>;
     status?: null | CallStatus;
+};
+
+/**
+ * Public call events. Private variants carry a recipient on the broker only.
+ */
+export type CallNotificationEvent = {
+    event_type: 'call.started';
+    /**
+     * A call started.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.ended';
+    /**
+     * A call ended.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.participant_joined';
+    /**
+     * A participant entered the RTC room.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.participant_left';
+    /**
+     * A participant left the RTC room.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.recording_ready';
+    /**
+     * A recording became available.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.summarized';
+    /**
+     * A summary became available.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.ringing';
+    /**
+     * The recipient is being rung.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.answered';
+    /**
+     * The recipient answered.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.declined';
+    /**
+     * The recipient declined.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.invited';
+    /**
+     * The recipient was invited.
+     */
+    metadata: CallNotificationMetadata;
+};
+
+/**
+ * Identifiers and actors for a public call notification. Optional fields are
+ * absent when they do not apply to the event.
+ */
+export type CallNotificationMetadata = {
+    /**
+     * Call identifier.
+     */
+    call_id: string;
+    /**
+     * Channel containing the call, if any.
+     */
+    channel_id?: string | null;
+    /**
+     * User who created the call.
+     */
+    created_by?: string | null;
+    /**
+     * Room identity of the joining or departing participant.
+     */
+    identity?: string | null;
+    /**
+     * User who sent an invitation.
+     */
+    invited_by?: string | null;
+    /**
+     * Meeting associated with an invitation.
+     */
+    meeting_id?: string | null;
+    /**
+     * Account identifier of the participant or answering user.
+     */
+    user_id?: string | null;
 };
 
 /**
@@ -2167,6 +2655,10 @@ export type CallRecord = {
      * archived `call_records`; active calls always return `None`.
      */
     customName?: string | null;
+    /**
+     * Where this call's discussion lives.
+     */
+    discussion: CallDiscussion;
     /**
      * Call duration in milliseconds (None if still active).
      */
@@ -2415,9 +2907,260 @@ export type CallTokenResponse = {
      */
     shareToken?: string | null;
     /**
+     * Whether this request allocated the call.
+     */
+    started: boolean;
+    /**
      * The RTC token for connecting to the room.
      */
     token: string;
+};
+
+/**
+ * What to change, in words.
+ */
+export type CanvasAiEditRequest = {
+    /**
+     * Natural-language instructions, naming items by id where they exist.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type CanvasAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * What the editor did, in words.
+     */
+    summary: string;
+};
+
+/**
+ * World-space crop or object bounds.
+ */
+export type CanvasBounds = {
+    /**
+     * Positive world height.
+     */
+    height: number;
+    /**
+     * Positive world width.
+     */
+    width: number;
+    /**
+     * World x coordinate.
+     */
+    x: number;
+    /**
+     * World y coordinate.
+     */
+    y: number;
+};
+
+/**
+ * A committed batch.
+ */
+export type CanvasEdited = {
+    /**
+     * Operations the live scene acknowledged.
+     */
+    operationsApplied: number;
+    /**
+     * The scene's revision after the batch.
+     */
+    revision: string;
+    /**
+     * The scene after the batch, with `textLayout` for measured text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+    /**
+     * What happened, in words.
+     */
+    summary: string;
+};
+
+/**
+ * One batch of CanvasEditor code to apply against a revision.
+ */
+export type CanvasEditsRequest = {
+    /**
+     * JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.
+     */
+    code: string;
+    /**
+     * The revision the batch was planned against, from a fresh scene read.
+     */
+    expectedRevision: string;
+    /**
+     * Plain text values the code reads as `snippets.<key>`.
+     */
+    snippets?: {
+        [key: string]: string;
+    } | null;
+};
+
+/**
+ * Why a canvas call failed.
+ */
+export type CanvasErrorBody = {
+    /**
+     * What kind of failure.
+     */
+    error: CanvasErrorCode;
+    /**
+     * What happened and what to do next.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a canvas call.
+ */
+export type CanvasErrorCode = 'invalid_request' | 'revision_conflict' | 'edit_rejected' | 'edit_refused' | 'edit_failed' | 'internal';
+
+/**
+ * Scene representation requested by a reader.
+ */
+export type CanvasReadFormat = 'scene' | 'overview';
+
+/**
+ * Stable object-to-image mapping.
+ */
+export type CanvasRenderObject = {
+    /**
+     * World-space bounds in the frozen scene.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+};
+
+/**
+ * What to render.
+ */
+export type CanvasRenderRequest = {
+    crop?: null | CanvasBounds;
+    /**
+     * Items to fit the image to, at most 100.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * A PNG of the canvas, stored as a static file owned by the caller.
+ */
+export type CanvasRendered = {
+    /**
+     * World bounds the image covers; pixels map linearly onto them.
+     */
+    crop: CanvasBounds;
+    /**
+     * Static file id of the PNG.
+     */
+    fileId: string;
+    /**
+     * Image height in pixels.
+     */
+    height: number;
+    /**
+     * Items in the image, with their world bounds.
+     */
+    objects: Array<CanvasRenderObject>;
+    /**
+     * Revision of the scene the image shows.
+     */
+    revision: string;
+    /**
+     * Rendered text bounds and whether text overflows its frame.
+     */
+    textLayout: Array<CanvasTextLayout>;
+    /**
+     * Referenced content the renderer could not show, and why.
+     */
+    unavailable: Array<CanvasUnavailable>;
+    /**
+     * Permanent URL of the PNG.
+     */
+    url: string;
+    /**
+     * Image width in pixels.
+     */
+    width: number;
+};
+
+/**
+ * The live scene at one revision.
+ */
+export type CanvasScene = {
+    /**
+     * The scene's immutable revision; pass it as `expectedRevision` to edit.
+     */
+    revision: string;
+    /**
+     * The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and
+     * `items` with stable ids, transforms, world bounds, shapes and text.
+     */
+    scene: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Which part of the scene to read.
+ */
+export type CanvasSceneRequest = {
+    format?: null | CanvasReadFormat;
+    /**
+     * Stable item ids to read, at most 100; omit for the whole scene, up to
+     * 300 items.
+     */
+    itemIds?: Array<string> | null;
+};
+
+/**
+ * Actual browser text bounds and overflow for a read-only render.
+ */
+export type CanvasTextLayout = {
+    /**
+     * Actual rendered text bounds in world coordinates.
+     */
+    bounds: CanvasBounds;
+    /**
+     * Stable item ID.
+     */
+    id: string;
+    /**
+     * Whether the DOM text exceeds its intended text frame.
+     */
+    overflow: boolean;
+};
+
+/**
+ * Explicitly unavailable referenced content.
+ */
+export type CanvasUnavailable = {
+    /**
+     * Canvas item ID.
+     */
+    id: string;
+    /**
+     * Why no referenced resource was loaded.
+     */
+    reason: string;
 };
 
 /**
@@ -2444,6 +3187,34 @@ export type CardPosition = {
  * Whether a column's values convert to a type.
  */
 export type CastVerdict = 'safe' | 'checked' | 'never';
+
+/**
+ * Borders to change in [`EditOp::FormatCells`](super::EditOp::FormatCells).
+ */
+export type CellBorders = {
+    /**
+     * Which borders.
+     */
+    edges: BorderEdges;
+    /**
+     * The change applied to each of them.
+     */
+    line: BorderLine;
+};
+
+/**
+ * A table cell inside a graphic frame (0-based).
+ */
+export type CellRef = {
+    /**
+     * Column index.
+     */
+    col: number;
+    /**
+     * Row index.
+     */
+    row: number;
+};
 
 /**
  * A cell's value. It must fit the column's type: text for a text column,
@@ -3067,6 +3838,14 @@ export type ChannelPreviewData = {
 export type ChannelSender = string;
 
 /**
+ * Entity types a channel grant can cover.
+ *
+ * Values are the stored entity types. `calendar` is accepted for a calendar
+ * chip, whose stored type is `calendar_event`.
+ */
+export type ChannelShareEntityType = 'calendar_event' | 'document' | 'project' | 'database' | 'form' | 'call' | 'thread' | 'agent_session' | 'external_chat';
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -3218,6 +3997,34 @@ export type ChannelWithParticipants = {
     participants: Array<ChannelParticipant>;
 };
 
+/**
+ * A series color for [`EditOp::FormatChart`](super::EditOp::FormatChart).
+ */
+export type ChartSeriesColor = {
+    /**
+     * `RRGGBB`, or a theme color name (`accent1`, `tx1`...).
+     */
+    color: string;
+    /**
+     * Series index in plot order (0-based).
+     */
+    series: number;
+};
+
+/**
+ * One series of chart data.
+ */
+export type ChartSeriesData = {
+    /**
+     * Series name (legend text).
+     */
+    name: string;
+    /**
+     * One value per category (`null` for a blank).
+     */
+    values: Array<number | null>;
+};
+
 export type Chat = {
     /**
      * The time the chat was created
@@ -3298,6 +4105,20 @@ export type ClaimPairingRequest = {
      * The claim credential returned when the pairing was created.
      */
     device_secret: string;
+};
+
+/**
+ * The credential, returned only by the claim that issued it.
+ */
+export type ClaimedAccountManagerToken = {
+    /**
+     * The grant, now active.
+     */
+    grant: AccountManagerGrant;
+    /**
+     * The secret. Shown only once.
+     */
+    token: string;
 };
 
 /**
@@ -3720,6 +4541,65 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * The quote could not be anchored; nothing was posted.
+ */
+export type CommentOnTextRefused = {
+    /**
+     * Always `quote_not_placed`.
+     */
+    error: CommentOnTextRefusedCode;
+    /**
+     * Lists each appearance to choose from with `occurrence`, or says the
+     * text was not found.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of a quote the document cannot anchor to.
+ */
+export type CommentOnTextRefusedCode = 'quote_not_placed';
+
+/**
+ * A comment on a quoted passage.
+ */
+export type CommentOnTextRequest = {
+    /**
+     * Comment body in macro markdown.
+     */
+    content: string;
+    /**
+     * The people and items the body mentions, notified as in any comment.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Which appearance of the passage, counting from 1 in document order.
+     * Only needed when it appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * The passage to comment on, quoted exactly as the document reads: plain
+     * text without markdown syntax, within one paragraph, heading, list item
+     * or table cell.
+     */
+    quote: string;
+};
+
+/**
+ * The thread the comment started.
+ */
+export type CommentOnTextResponse = {
+    /**
+     * The posted comment, the root of its thread.
+     */
+    comment: Message;
+    /**
+     * The text the comment is anchored to, as the document reads.
+     */
+    markedText: string;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -3736,6 +4616,29 @@ export type CommittedChange = {
      * The version the batch produced.
      */
     version: TableVersion;
+};
+
+/**
+ * What a companies import did.
+ */
+export type CompanyImportResponse = {
+    /**
+     * Companies created.
+     */
+    created: number;
+    /**
+     * Companies the team already had.
+     */
+    existing: number;
+    /**
+     * Companies that could not be created.
+     */
+    failed: Array<SkippedImportRecord>;
+    pipeline?: null | PipelineImportResponse;
+    /**
+     * Rows without a domain like acme.com.
+     */
+    skippedRows: number;
 };
 
 /**
@@ -4025,7 +4928,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4036,6 +4939,34 @@ export type CreateBotRequest = {
      * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
      */
     team_id?: string | null;
+};
+
+/**
+ * Request to create a bot token.
+ */
+export type CreateBotTokenRequest = {
+    /**
+     * Optional expiration timestamp.
+     */
+    expires_at?: string | null;
+    /**
+     * Token label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Response containing a newly minted token.
+ */
+export type CreateBotTokenResponse = {
+    /**
+     * Raw bearer token.
+     */
+    bearer_token: string;
+    /**
+     * Token metadata.
+     */
+    token: BotToken;
 };
 
 export type CreateBulkDocumentResponse = {
@@ -4158,7 +5089,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4547,17 +5478,15 @@ export type CreatePairingRequest = {
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -4647,6 +5576,30 @@ export type CreateSnippetRequest = {
 export type CreateSnippetResponse = {
     /**
      * The document ID of the created snippet.
+     */
+    documentId: string;
+};
+
+/**
+ * Request to create a blank native spreadsheet.
+ */
+export type CreateSpreadsheetRequest = {
+    /**
+     * Spreadsheet name.
+     */
+    documentName: string;
+    /**
+     * Optional parent project.
+     */
+    projectId?: string | null;
+};
+
+/**
+ * A created native spreadsheet.
+ */
+export type CreateSpreadsheetResponse = {
+    /**
+     * The new spreadsheet's document ID.
      */
     documentId: string;
 };
@@ -4856,6 +5809,24 @@ export type CreatedDatabaseWebhookResponse = {
 };
 
 /**
+ * A slide or shape an edit created.
+ */
+export type CreatedItem = {
+    /**
+     * Section id, for created sections.
+     */
+    section?: string | null;
+    /**
+     * Shape id, for created shapes.
+     */
+    shape?: number | null;
+    /**
+     * Slide id.
+     */
+    slide: number;
+};
+
+/**
  * A pairing the daemon created, including its claim credential.
  *
  * `device_secret` is returned exactly once and never stored raw; the daemon
@@ -5052,6 +6023,11 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
+     * Whether the address uses a known personal provider and permits company edits.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    personalEmail?: boolean;
+    /**
      * When the contact record was last updated.
      */
     updatedAt: string;
@@ -5132,8 +6108,8 @@ export type CrmStagesResponse = {
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
- * except the `crm_enabled` killswitch, which is managed via
- * `PATCH /team/crm` on the auth service).
+ * except the retired `crm_enabled` flag). Email contribution consent and
+ * exclusions are managed separately through `/crm/email-privacy`.
  */
 export type CrmTeamSettingsResponse = {
     /**
@@ -5173,6 +6149,11 @@ export type CrmTeamSettingsResponse = {
      */
     team_views: unknown;
 };
+
+/**
+ * How `cropPicture` fits a picture's image to its frame.
+ */
+export type CropMode = 'fill' | 'fit';
 
 /**
  * One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
@@ -5497,6 +6478,17 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
+ * A design file described as text.
+ */
+export type DesignFileDescription = {
+    /**
+     * The description: pages or artboards, the layer tree, and the text of
+     * text layers.
+     */
+    content: string;
+};
+
+/**
  * A direct user grant; inherited grants are deliberately not editable here.
  */
 export type DirectAccess = {
@@ -5801,155 +6793,51 @@ export type DocumentInteractionMetadata = {
 };
 
 /**
- * One new, changed or moved top-level block.
+ * A markdown document's body and the revision it was read at.
  */
-export type DocumentLexicalBlock = {
+export type DocumentMarkdown = {
     /**
-     * The id of the top-level block this one follows, or `null` for first.
+     * The body as Markdown, in the format `text-content` returns.
      */
-    after?: string | null;
+    markdown: string;
     /**
-     * The block's durable node id; equals the id inside `node`.
-     */
-    id: string;
-    /**
-     * The block's serialized Lexical node, ids included.
-     */
-    node: {
-        [key: string]: unknown;
-    };
-};
-
-/**
- * The change to a document's top-level blocks since `revision`.
- */
-export type DocumentLexicalCommitRequest = {
-    /**
-     * Every new, changed or moved top-level block, in document order; at most 500.
-     */
-    blocks: Array<DocumentLexicalBlock>;
-    /**
-     * Ids of the top-level blocks the change removes.
-     */
-    removed: Array<string>;
-    /**
-     * The revision the change was made against, from the read.
+     * The document's version, as sync-service encodes it. Pass it back to
+     * write the body only if nobody has changed the document since.
      */
     revision: string;
 };
 
 /**
- * A committed change.
+ * Why a body read or write did not complete.
  */
-export type DocumentLexicalCommitted = {
+export type DocumentMarkdownFailure = {
     /**
-     * The document's version after the commit.
+     * What went wrong.
      */
-    revision: string;
+    error: DocumentMarkdownFailureCode;
     /**
-     * The live document after the commit, merged with everyone's edits and
-     * normalized as a read is.
-     */
-    state: {
-        [key: string]: unknown;
-    };
-};
-
-/**
- * Nodes that could not merge with the live document; nothing was applied.
- * Read the document again and redo the change.
- */
-export type DocumentLexicalConflict = {
-    /**
-     * Each node that could not merge, and why.
-     */
-    conflicts: Array<DocumentLexicalNodeConflict>;
-    /**
-     * Always `conflict`.
-     */
-    error: DocumentLexicalConflictCode;
-};
-
-/**
- * Error code of a commit that could not merge.
- */
-export type DocumentLexicalConflictCode = 'conflict';
-
-/**
- * Why a node could not merge.
- */
-export type DocumentLexicalConflictReason = 'changed' | 'removed' | 'moved' | 'revision';
-
-/**
- * The blocks are malformed: an unknown node type, duplicate or mismatched
- * ids, or an `after` outside the document. Nothing was applied.
- */
-export type DocumentLexicalInvalid = {
-    /**
-     * Always `invalid`.
-     */
-    error: DocumentLexicalInvalidCode;
-    /**
-     * What is wrong, for the program that built the blocks.
+     * What to do next; the cause is logged, never returned.
      */
     message: string;
 };
 
 /**
- * Error code of a malformed commit.
+ * Error code of a body read or write that did not complete.
  */
-export type DocumentLexicalInvalidCode = 'invalid';
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
 
 /**
- * One node of a commit that could not merge with the live document.
+ * A body write that landed, or found the body already reading that way.
  */
-export type DocumentLexicalNodeConflict = {
+export type DocumentMarkdownWritten = {
     /**
-     * The node's id; `null` for a `revision` conflict.
+     * Whether the body changed; `false` when it already read that way.
      */
-    id?: string | null;
+    changed: boolean;
     /**
-     * Why it could not merge.
-     */
-    reason: DocumentLexicalConflictReason;
-};
-
-/**
- * The commit was sent but never acknowledged, so it may have applied. Read
- * the document before retrying.
- */
-export type DocumentLexicalOutcomeUnknown = {
-    /**
-     * Always `edit_outcome_unknown`.
-     */
-    error: DocumentLexicalOutcomeUnknownCode;
-    /**
-     * What the editing worker reported.
-     */
-    message: string;
-};
-
-/**
- * Error code of a commit whose outcome is unknown.
- */
-export type DocumentLexicalOutcomeUnknownCode = 'edit_outcome_unknown';
-
-/**
- * A markdown document read as Lexical state.
- */
-export type DocumentLexicalState = {
-    /**
-     * The document version the state was read at, as sync-service encodes
-     * it. Commit against it.
+     * The document's version after the write.
      */
     revision: string;
-    /**
-     * The serialized Lexical editor state, normalized through a headless
-     * editor with every Macro node registered.
-     */
-    state: {
-        [key: string]: unknown;
-    };
 };
 
 export type DocumentMetadata = {
@@ -6279,6 +7167,10 @@ export type DocumentSyncEditor = {
      * User or bot that performed the edit.
      */
     actor: string;
+    /**
+     * Invocation from the editor's signed document grant.
+     */
+    agent_correlation_id?: string | null;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -6487,6 +7379,1373 @@ export type EditDocumentServiceArgs = {
     sharePermission?: null | UpdateSharePermissionRequestV2;
 };
 
+/**
+ * One edit operation.
+ */
+export type EditOp = {
+    cell?: null | CellRef;
+    op: 'setText';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * New text.
+     */
+    text: string;
+} | {
+    /**
+     * Where to insert.
+     */
+    at: TextPos;
+    cell?: null | CellRef;
+    op: 'insertText';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Text to insert.
+     */
+    text: string;
+} | {
+    cell?: null | CellRef;
+    /**
+     * End (exclusive).
+     */
+    end: TextPos;
+    op: 'deleteText';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Start (inclusive).
+     */
+    start: TextPos;
+} | {
+    cell?: null | CellRef;
+    end?: null | TextPos;
+    op: 'formatText';
+    /**
+     * Changes.
+     */
+    props: RunPatch;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    start?: null | TextPos;
+} | {
+    cell?: null | CellRef;
+    /**
+     * First paragraph.
+     */
+    from?: number | null;
+    op: 'formatParagraphs';
+    /**
+     * Changes.
+     */
+    props: ParaPatch;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Last paragraph.
+     */
+    to?: number | null;
+} | {
+    cell?: null | CellRef;
+    op: 'formatBody';
+    /**
+     * Changes.
+     */
+    props: BodyPatch;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Horizontal flip.
+     */
+    flipH?: boolean | null;
+    /**
+     * Vertical flip.
+     */
+    flipV?: boolean | null;
+    /**
+     * Height (points).
+     */
+    h?: number | null;
+    op: 'setTransform';
+    /**
+     * Rotation in degrees.
+     */
+    rotation?: number | null;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Width (points).
+     */
+    w?: number | null;
+    /**
+     * Left (points).
+     */
+    x?: number | null;
+    /**
+     * Top (points).
+     */
+    y?: number | null;
+} | {
+    /**
+     * The fill.
+     */
+    fill: FillSpec;
+    op: 'setFill';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Changes.
+     */
+    line: LinePatch;
+    op: 'setLine';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'setGeometry';
+    /**
+     * Preset name.
+     */
+    preset: string;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Height (points).
+     */
+    h: number;
+    op: 'addShape';
+    /**
+     * What to add.
+     */
+    shape: NewShape;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Width (points).
+     */
+    w: number;
+    /**
+     * Left (points).
+     */
+    x: number;
+    /**
+     * Top (points).
+     */
+    y: number;
+} | {
+    op: 'deleteShape';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Horizontal offset.
+     */
+    dx?: number;
+    /**
+     * Vertical offset.
+     */
+    dy?: number;
+    op: 'duplicateShape';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'reorderShape';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Where to move it.
+     */
+    to: ZOrder;
+} | {
+    /**
+     * Base64-encoded PNG, JPEG, or GIF bytes.
+     */
+    data: string;
+    op: 'replaceImage';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Column.
+     */
+    col: number;
+    op: 'setCellText';
+    /**
+     * Row.
+     */
+    row: number;
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Text.
+     */
+    text: string;
+} | {
+    /**
+     * Index of the new row.
+     */
+    at: number;
+    op: 'insertTableRow';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'deleteTableRow';
+    /**
+     * Row index.
+     */
+    row: number;
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Index of the new column.
+     */
+    at: number;
+    op: 'insertTableColumn';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Column index.
+     */
+    col: number;
+    op: 'deleteTableColumn';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * One corner of the rectangle.
+     */
+    from: CellRef;
+    op: 'mergeCells';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The opposite corner.
+     */
+    to: CellRef;
+} | {
+    /**
+     * Any grid cell the merged cell covers.
+     */
+    cell: CellRef;
+    op: 'splitCell';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Vertical text alignment: `top`, `middle`, or `bottom`.
+     */
+    anchor?: string | null;
+    borders?: null | CellBorders;
+    fill?: null | FillSpec;
+    /**
+     * One corner of the rectangle.
+     */
+    from: CellRef;
+    /**
+     * Cell margins `[left, top, right, bottom]` in points.
+     */
+    margins?: Array<number> | null;
+    op: 'formatCells';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The opposite corner.
+     */
+    to: CellRef;
+} | {
+    /**
+     * Alternate the shading of columns.
+     */
+    bandCol?: boolean | null;
+    /**
+     * Alternate the shading of rows.
+     */
+    bandRow?: boolean | null;
+    /**
+     * Emphasize the first column.
+     */
+    firstCol?: boolean | null;
+    /**
+     * Emphasize the first (header) row.
+     */
+    firstRow?: boolean | null;
+    /**
+     * Emphasize the last column.
+     */
+    lastCol?: boolean | null;
+    /**
+     * Emphasize the last (total) row.
+     */
+    lastRow?: boolean | null;
+    op: 'setTableStyle';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Style id (a GUID from the deck outline's `tableStyles`, e.g.
+     * `{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}` = Medium Style 2 - Accent 1),
+     * or `""` for no style.
+     */
+    style?: string | null;
+} | {
+    /**
+     * One width per column.
+     */
+    columnWidths?: Array<number> | null;
+    op: 'setTableGrid';
+    /**
+     * One minimum height per row.
+     */
+    rowHeights?: Array<number> | null;
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Insert after this slide (end of deck when omitted).
+     */
+    after?: number | null;
+    /**
+     * Body placeholder text (`\n` separates paragraphs).
+     */
+    body?: string | null;
+    /**
+     * Layout name (e.g. "Title and Content"); defaults to the layout of the reference slide.
+     */
+    layout?: string | null;
+    op: 'addSlide';
+    /**
+     * Title placeholder text.
+     */
+    title?: string | null;
+} | {
+    op: 'duplicateSlide';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'deleteSlide';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'moveSlide';
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * New index.
+     */
+    to: number;
+} | {
+    /**
+     * Hidden.
+     */
+    hidden: boolean;
+    op: 'setSlideHidden';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'setNotes';
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Notes text (`\n` separates paragraphs).
+     */
+    text: string;
+} | {
+    fill?: null | FillSpec;
+    op: 'setBackground';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Category labels.
+     */
+    categories: Array<string>;
+    op: 'setChartData';
+    /**
+     * Series in plot order (one value per category).
+     */
+    series: Array<ChartSeriesData>;
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * `clustered`, `stacked`, `percentStacked`, or `standard` (kept or the type's default when omitted).
+     */
+    grouping?: string | null;
+    /**
+     * `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.
+     */
+    kind: string;
+    op: 'setChartType';
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Show or hide value data labels on every series.
+     */
+    dataLabels?: boolean | null;
+    /**
+     * Legend position: `right`, `left`, `top`, `bottom`, `topRight`, or `none`.
+     */
+    legend?: string | null;
+    op: 'formatChart';
+    /**
+     * Series colors.
+     */
+    seriesColors?: Array<ChartSeriesColor> | null;
+    /**
+     * Graphic frame id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Title text (`""` removes the title).
+     */
+    title?: string | null;
+} | {
+    op: 'groupShapes';
+    /**
+     * Ids of the shapes to group (at least two).
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'ungroupShape';
+    /**
+     * Group id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Horizontal offset in points.
+     */
+    dx?: number;
+    /**
+     * Vertical offset in points.
+     */
+    dy?: number;
+    op: 'pasteShapes';
+    /**
+     * The clipboard payload JSON returned by `copyShapes`.
+     */
+    payload: string;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Insert after this slide (end of deck when omitted).
+     */
+    after?: number | null;
+    op: 'pasteSlides';
+    /**
+     * The clipboard payload JSON returned by `copySlides`.
+     */
+    payload: string;
+} | {
+    /**
+     * Layout name (e.g. "Title Only"), as listed in the deck's layouts.
+     */
+    layout: string;
+    op: 'setSlideLayout';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Advance automatically after this many milliseconds; `0` turns
+     * automatic advance off, and an omitted (or null) field keeps the
+     * current setting.
+     */
+    advanceAfterMs?: number | null;
+    /**
+     * Whether a click advances to the next slide.
+     */
+    advanceOnClick?: boolean | null;
+    /**
+     * Give every slide of the deck the resulting transition.
+     */
+    applyToAll?: boolean;
+    /**
+     * Effect option: `fade`: `smooth` or `black`; `push`, `wipe`: `l`,
+     * `r`, `u`, `d`; `cover`, `uncover`: those or `lu`, `ru`, `ld`, `rd`;
+     * `split`: `horzOut`, `horzIn`, `vertOut`, `vertIn`; `reveal`: `l`,
+     * `r`; `randomBar`: `horz`, `vert`; `shape`: `circle`, `diamond`,
+     * `plus`; `zoom`: `in`, `out`; `morph`: `byObject`, `byWord`,
+     * `byChar`. Directions are the OOXML `dir` values.
+     */
+    direction?: string | null;
+    /**
+     * Duration in milliseconds (at most 60000).
+     */
+    durationMs?: number | null;
+    /**
+     * Effect: `none` (removes the transition), `cut`, `fade`, `push`,
+     * `wipe`, `split`, `reveal`, `randomBar`, `shape`, `uncover`,
+     * `cover`, `zoom`, `dissolve`, `flash`, or `morph`.
+     */
+    kind: string;
+    op: 'setTransition';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Animations in playback order.
+     */
+    animations: Array<AnimationSpec>;
+    op: 'setAnimations';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * The animation.
+     */
+    animation: AnimationSpec;
+    /**
+     * 0-based position in playback order (the end when omitted).
+     */
+    index?: number | null;
+    op: 'addAnimation';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * 0-based playback positions to remove.
+     */
+    indexes?: Array<number> | null;
+    op: 'removeAnimations';
+    /**
+     * Shapes whose animations to remove.
+     */
+    shapeIds?: Array<number> | null;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Text to find (within one paragraph).
+     */
+    find: string;
+    /**
+     * Match upper and lower case exactly (default: ignore case).
+     */
+    matchCase?: boolean;
+    op: 'replaceText';
+    /**
+     * Replacement text (may be empty; no paragraph or line breaks).
+     */
+    replace: string;
+    /**
+     * Slide id; omit to replace on every slide.
+     */
+    slide?: number | null;
+    /**
+     * Only match whole words (no letter, digit, or `_` on either side).
+     */
+    wholeWord?: boolean;
+} | {
+    op: 'setAltText';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Alt text.
+     */
+    text: string;
+} | {
+    /**
+     * New name.
+     */
+    name: string;
+    op: 'setShapeName';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * An address (`https://…`, `mailto:…`), `#slide=<id>`, a slide show
+     * jump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+     * `#lastslideviewed`, `#endshow`), or `""` to remove the link.
+     */
+    link: string;
+    op: 'setShapeLink';
+    /**
+     * Shape ids.
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The ScreenTip shown on hover.
+     */
+    tip?: string | null;
+} | {
+    /**
+     * Hidden.
+     */
+    hidden: boolean;
+    op: 'setShapeHidden';
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Shape id to copy from (a shape, line, or picture).
+     */
+    fromShape: number;
+    /**
+     * Slide id of the shape to copy from.
+     */
+    fromSlide: number;
+    op: 'pasteFormat';
+    /**
+     * Shape ids to restyle.
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id of the shapes to restyle.
+     */
+    slide: number;
+} | {
+    /**
+     * Fraction of the image's height cropped off its bottom edge.
+     */
+    bottom?: number | null;
+    /**
+     * Fraction of the image's width cropped off its left edge.
+     */
+    left?: number | null;
+    mode?: null | CropMode;
+    op: 'cropPicture';
+    /**
+     * Fraction of the image's width cropped off its right edge.
+     */
+    right?: number | null;
+    /**
+     * Picture id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Fraction of the image's height cropped off its top edge.
+     */
+    top?: number | null;
+} | {
+    /**
+     * Brightness from -1 to 1 (0 = unchanged, 0.2 = +20%).
+     */
+    brightness?: number | null;
+    /**
+     * Contrast from -1 to 1 (0 = unchanged).
+     */
+    contrast?: number | null;
+    op: 'formatPicture';
+    /**
+     * Recolor: `none`, `grayscale`, `sepia`, `washout`, `blackWhite`
+     * (50% threshold), `blackWhite25`, `blackWhite75`,
+     * `duotone:<color>` (the image in dark shades of the color, on
+     * white), `duotoneLight:<color>` (in light shades of it, on black),
+     * or `duotone:<dark>,<light>` (black and white become these
+     * colors). Colors are `RRGGBB` or theme names (`accent1`...).
+     */
+    recolor?: string | null;
+    /**
+     * First remove the crop (the frame grows back to the whole image at
+     * its current scale) and every adjustment; the other fields then
+     * apply.
+     */
+    reset?: boolean;
+    /**
+     * Ids of the pictures.
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * Transparency from 0 (opaque) to 1.
+     */
+    transparency?: number | null;
+} | {
+    glow?: null | EffectSpecGlowOptions;
+    op: 'setShapeEffects';
+    reflection?: null | EffectSpecReflectionOptions;
+    shadow?: null | EffectSpecShadowOptions;
+    /**
+     * Shape ids.
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    softEdge?: null | EffectSpecSoftEdgeOptions;
+} | {
+    /**
+     * When true (the default when omitted or null), the shape's box is
+     * moved and resized to the paths' bounds so the outline stays
+     * exactly where it is drawn on the slide, as PowerPoint does after
+     * Edit Points; points may then lie outside the current box. When
+     * false, the box stays and the paths are drawn in it as given
+     * (resizing the shape later stretches them).
+     */
+    fit?: boolean | null;
+    op: 'setCustomGeometry';
+    /**
+     * The outline's paths, in shape-local points (see `PathCommand`).
+     */
+    paths: Array<GeometryPath>;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * `union`, `combine`, `fragment`, `intersect`, or `subtract`.
+     */
+    mode: MergeMode;
+    op: 'mergeShapes';
+    /**
+     * Ids of two or more shapes in selection order; the first one's
+     * formatting wins (and `subtract` cuts the others out of it).
+     */
+    shapes: Array<number>;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Slots to set.
+     */
+    colors: Array<ThemeColor>;
+    /**
+     * New name of the color scheme.
+     */
+    name?: string | null;
+    op: 'setThemeColors';
+} | {
+    /**
+     * Heading font (kept when omitted).
+     */
+    major?: string | null;
+    /**
+     * Body font (kept when omitted).
+     */
+    minor?: string | null;
+    /**
+     * New name of the font scheme.
+     */
+    name?: string | null;
+    op: 'setThemeFonts';
+} | {
+    /**
+     * Show the date.
+     */
+    date?: boolean | null;
+    /**
+     * Format of an automatic date: `datetime1` (10/12/2007, the
+     * default), `datetime2` (Friday, October 12, 2007), `datetime3` (12
+     * October 2007), `datetime4` (October 12, 2007), `datetime5`
+     * (12-Oct-07), `datetime6` (October 07), `datetime7` (Oct-07),
+     * `datetime8` (10/12/2007 4:28 PM), `datetime9` (10/12/2007 4:28:34
+     * PM), `datetime10` (16:28), `datetime11` (16:28:34), `datetime12`
+     * (4:28 PM), or `datetime13` (4:28:34 PM). A format without
+     * `dateText` makes the date automatic.
+     */
+    dateFormat?: string | null;
+    /**
+     * Fixed date text (e.g. "Q3 2026"); `""` makes the date automatic
+     * (it shows the current date). Changes slides that show a date, so
+     * pass `date: true` to turn it on.
+     */
+    dateText?: string | null;
+    /**
+     * Show the footer.
+     */
+    footer?: boolean | null;
+    /**
+     * Footer text. Changes slides that show a footer, so pass
+     * `footer: true` to turn it on.
+     */
+    footerText?: string | null;
+    /**
+     * Don't show the elements on slides whose layout is a Title Slide
+     * layout (they are removed there).
+     */
+    notOnTitle?: boolean;
+    op: 'setHeaderFooter';
+    /**
+     * Show the slide number.
+     */
+    slideNumber?: boolean | null;
+    /**
+     * Slide ids to change; omit (or null) for every slide ("Apply to
+     * All", which also makes slides added later show the same elements).
+     */
+    slides?: Array<number> | null;
+} | {
+    /**
+     * Height in points, 72-4032 (540 for widescreen, 4:3, and A4; 405
+     * for 16:9 on-screen show).
+     */
+    height: number;
+    op: 'setSlideSize';
+    scale?: null | SlideScale;
+    /**
+     * Width in points, 72-4032 (960 for 16:9 widescreen, 720 for 4:3
+     * and 16:9 on-screen show, 780 for A4).
+     */
+    width: number;
+} | {
+    /**
+     * Id of the section's first slide.
+     */
+    beforeSlide: number;
+    /**
+     * Section name.
+     */
+    name: string;
+    op: 'addSection';
+} | {
+    /**
+     * Section id (a GUID from the deck outline's `sections`).
+     */
+    id: string;
+    /**
+     * New name.
+     */
+    name: string;
+    op: 'renameSection';
+} | {
+    /**
+     * Delete the section's slides too.
+     */
+    deleteSlides?: boolean;
+    /**
+     * Section id.
+     */
+    id: string;
+    op: 'removeSection';
+} | {
+    /**
+     * Section id.
+     */
+    id: string;
+    op: 'moveSection';
+    /**
+     * New index among the sections.
+     */
+    toIndex: number;
+} | {
+    /**
+     * The guides, in order.
+     */
+    guides: Array<GuideSpec>;
+    op: 'setGuides';
+} | {
+    /**
+     * Id of the layout to insert it after; a master's id puts it first
+     * (default: right after `duplicate`, else after the master's last
+     * layout).
+     */
+    after?: number | null;
+    /**
+     * Id of a layout to copy, with its shapes and background.
+     */
+    duplicate?: number | null;
+    /**
+     * Id of the master to add it to (default: the master of `after`
+     * or `duplicate`, else the first master).
+     */
+    master?: number | null;
+    /**
+     * Name (default: "Custom Layout", or for a copy the original's name
+     * prefixed "1_", numbered further when the master has one already).
+     */
+    name?: string | null;
+    op: 'addLayout';
+} | {
+    /**
+     * Layout or master id.
+     */
+    layout: number;
+    /**
+     * New name.
+     */
+    name: string;
+    op: 'renameLayout';
+} | {
+    /**
+     * Layout or master id.
+     */
+    layout: number;
+    op: 'deleteLayout';
+} | {
+    /**
+     * Height (points).
+     */
+    h: number;
+    /**
+     * What it holds: `content`, `text`, `picture`, `chart`, `table`,
+     * `smartArt`, or `media`.
+     */
+    kind: PlaceholderKind;
+    /**
+     * Layout id.
+     */
+    layout: number;
+    op: 'insertPlaceholder';
+    /**
+     * Vertical text (PowerPoint's "Content (Vertical)" and "Text
+     * (Vertical)"); content and text placeholders only.
+     */
+    vertical?: boolean;
+    /**
+     * Width (points).
+     */
+    w: number;
+    /**
+     * Left (points).
+     */
+    x: number;
+    /**
+     * Top (points).
+     */
+    y: number;
+} | {
+    /**
+     * Show the date, footer, and slide number placeholders the master
+     * has (added where the master has them, or removed).
+     */
+    footers?: boolean | null;
+    /**
+     * Hide the master's shapes (logos, lines, pictures) on the layout
+     * and its slides.
+     */
+    hideBackgroundGraphics?: boolean | null;
+    /**
+     * Layout id.
+     */
+    layout: number;
+    op: 'setLayoutOptions';
+    /**
+     * Show a title placeholder (added where the master's title is, or
+     * removed).
+     */
+    title?: boolean | null;
+} | {
+    op: 'setBackgroundStyle';
+    /**
+     * Slide, master, or layout id.
+     */
+    slide: number;
+    /**
+     * Style number, 1-12.
+     */
+    style: number;
+} | {
+    /**
+     * The author's name, as the Comments pane shows it.
+     */
+    author: string;
+    /**
+     * The author's initials (omit or null: the first letters of the
+     * first two words of `author`).
+     */
+    initials?: string | null;
+    op: 'addComment';
+    /**
+     * Shape id to attach the comment to (its marker sits at the
+     * shape's top-right corner); omit or null for the slide itself.
+     */
+    shape?: number | null;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The comment (`\n` separates paragraphs).
+     */
+    text: string;
+    /**
+     * Where the comment's marker sits, in points from the slide's left
+     * edge, for a comment on the slide (omit or null with `y` for
+     * PowerPoint's default, the slide's top-left corner). Ignored with
+     * `shape`.
+     */
+    x?: number | null;
+    /**
+     * Marker position in points from the slide's top edge.
+     */
+    y?: number | null;
+} | {
+    /**
+     * The author's name.
+     */
+    author: string;
+    /**
+     * Thread id (a comment's `id` in the outline). Legacy comments
+     * (`legacy-…` ids) cannot be replied to.
+     */
+    comment: string;
+    /**
+     * The author's initials (omit or null: derived from `author`).
+     */
+    initials?: string | null;
+    op: 'replyComment';
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The reply (`\n` separates paragraphs).
+     */
+    text: string;
+} | {
+    /**
+     * Thread or reply id.
+     */
+    comment: string;
+    op: 'editComment';
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * The new text.
+     */
+    text: string;
+} | {
+    /**
+     * Thread id.
+     */
+    comment: string;
+    op: 'resolveComment';
+    /**
+     * `true` resolves; `false` reopens.
+     */
+    resolved: boolean;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * Thread or reply id.
+     */
+    comment: string;
+    op: 'deleteComment';
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'deleteAllComments';
+    /**
+     * Slide id (omit or null: all slides).
+     */
+    slide?: number | null;
+} | {
+    at?: null | TextPos;
+    cell?: null | CellRef;
+    /**
+     * `true`: a display equation on a line (paragraph) of its own,
+     * centered, with large operators and fractions at full size (what
+     * PowerPoint inserts); `false`: inline, flowing with the text
+     * around it. Omit (or null) for display in an empty paragraph or a
+     * new text box, inline otherwise.
+     */
+    display?: boolean | null;
+    /**
+     * The equation, e.g. `x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}`.
+     */
+    latex: string;
+    op: 'insertEquation';
+    /**
+     * Shape whose text gets the equation; omit (or null) to add a new
+     * text box holding only the equation.
+     */
+    shape?: number | null;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    cell?: null | CellRef;
+    /**
+     * Make it a display (`true`) or inline (`false`) equation; omit
+     * (or null) to keep.
+     */
+    display?: boolean | null;
+    /**
+     * The equation's character index in the paragraph (its `index` in
+     * the outline).
+     */
+    index: number;
+    /**
+     * The new equation in the linear format (see `insertEquation`).
+     */
+    latex: string;
+    op: 'setEquation';
+    /**
+     * Paragraph index.
+     */
+    paragraph: number;
+    /**
+     * Shape id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    /**
+     * The change.
+     */
+    edit: SmartArtEdit;
+    op: 'editSmartArt';
+    /**
+     * The SmartArt graphic frame's id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+} | {
+    op: 'convertSmartArt';
+    /**
+     * The SmartArt graphic frame's id.
+     */
+    shape: number;
+    /**
+     * Slide id.
+     */
+    slide: number;
+    /**
+     * `shapes` or `text`.
+     */
+    to: SmartArtTarget;
+};
+
 export type EditPdfAnchorRequest = EditPdfPlaceableCommentAnchorRequest & {
     anchorType: 'free-comment';
 };
@@ -6506,6 +8765,158 @@ export type EditPdfPlaceableCommentAnchorRequest = {
     xPct?: number | null;
     yPct?: number | null;
 };
+
+/**
+ * Changes to a pipeline's name, sharing, fields and options, applied
+ * together.
+ */
+export type EditPipelineRequest = {
+    /**
+     * Fields to add.
+     */
+    addFields?: Array<NewFieldRequest>;
+    /**
+     * Labels to add to select fields; for Stage, new stages go last.
+     */
+    addOptions?: Array<FieldOptions>;
+    /**
+     * A new name.
+     */
+    name?: string | null;
+    /**
+     * Fields to delete with their values.
+     */
+    removeFields?: Array<string>;
+    /**
+     * Options to delete.
+     */
+    removeOptions?: Array<OptionRemoval>;
+    /**
+     * Fields to rename.
+     */
+    renameFields?: Array<FieldRename>;
+    /**
+     * Options to relabel.
+     */
+    renameOptions?: Array<OptionRename>;
+    sharing?: null | PipelineSharing;
+};
+
+/**
+ * One atomic batch of operations against the revision it was planned on.
+ */
+export type EditSpreadsheetRequest = {
+    /**
+     * The revision a read returned; a changed workbook rejects the batch.
+     */
+    expectedRevision: string;
+    /**
+     * Between 1 and 25 operations, validated and saved together.
+     */
+    operations: Array<SpreadsheetOperation>;
+};
+
+/**
+ * One effect of `setShapeEffects` (or a text effect of `formatText`): a
+ * preset name (`"none"` removes the effect), or options.
+ */
+export type EffectSpecGlowOptions = string | {
+    /**
+     * Color: `RRGGBB` or a theme color name (`accent1`...; theme colors
+     * get PowerPoint's 175% saturation). A new glow defaults to `accent1`.
+     */
+    color?: string | null;
+    /**
+     * Glow size in points (a new glow defaults to 10; 0 removes the glow).
+     */
+    sizePt?: number | null;
+    /**
+     * Transparency 0-1 (a new glow defaults to 0.6).
+     */
+    transparency?: number | null;
+};
+
+/**
+ * One effect of `setShapeEffects` (or a text effect of `formatText`): a
+ * preset name (`"none"` removes the effect), or options.
+ */
+export type EffectSpecReflectionOptions = string | {
+    /**
+     * Blur radius in points.
+     */
+    blurPt?: number | null;
+    /**
+     * Gap between the shape and its reflection in points.
+     */
+    distancePt?: number | null;
+    /**
+     * Preset to start from (the names `reflection` takes); omitted: the
+     * current reflection, or `tightTouching` when there is none.
+     */
+    preset?: string | null;
+    /**
+     * How much of the shape is reflected, in percent of its height (1-100).
+     */
+    sizePct?: number | null;
+    /**
+     * Transparency 0-1 where the reflection starts (it fades out from there).
+     */
+    transparency?: number | null;
+};
+
+/**
+ * One effect of `setShapeEffects` (or a text effect of `formatText`): a
+ * preset name (`"none"` removes the effect), or options.
+ */
+export type EffectSpecShadowOptions = string | {
+    /**
+     * Direction the shadow falls, in degrees clockwise from the right
+     * (45 = toward the bottom right, 90 = straight down).
+     */
+    angleDeg?: number | null;
+    /**
+     * Blur radius in points.
+     */
+    blurPt?: number | null;
+    /**
+     * Color: `RRGGBB` or a theme color name (presets use black).
+     */
+    color?: string | null;
+    /**
+     * Distance from the shape in points.
+     */
+    distancePt?: number | null;
+    /**
+     * Preset to start from (the names `shadow` takes); omitted: the
+     * current shadow, or `outerBottomRight` when there is none.
+     */
+    preset?: string | null;
+    /**
+     * Size in percent of the shape (outer shadows only; 100 = same size).
+     */
+    sizePct?: number | null;
+    /**
+     * Transparency 0-1 (0 = opaque).
+     */
+    transparency?: number | null;
+};
+
+/**
+ * One effect of `setShapeEffects` (or a text effect of `formatText`): a
+ * preset name (`"none"` removes the effect), or options.
+ */
+export type EffectSpecSoftEdgeOptions = string | {
+    /**
+     * Width of the feathered edge in points (a new soft edge defaults to
+     * 5; 0 removes it).
+     */
+    sizePt?: number | null;
+};
+
+/**
+ * The audience affected by a domain exclusion.
+ */
+export type EmailBlockScope = 'team' | 'personal';
 
 /**
  * The email filters used to filter down what emails you search over.
@@ -6671,6 +9082,71 @@ export type EmailFollowupCommand = {
  */
 export type EmailFollowupResponse = {
     followup?: null | EmailFollowup;
+};
+
+/**
+ * One explicit privacy change, avoiding lost updates to whole blocklists.
+ */
+export type EmailPrivacyChange = {
+    action: 'set_consent';
+    /**
+     * False withdraws this mailbox's CRM contribution without deleting records.
+     */
+    enabled: boolean;
+    /**
+     * Required when enabling; must match the displayed primary connection.
+     */
+    link_id?: string | null;
+} | {
+    action: 'add_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which contributions the exclusion affects.
+     */
+    scope: EmailBlockScope;
+} | {
+    action: 'remove_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which list to edit.
+     */
+    scope: EmailBlockScope;
+};
+
+/**
+ * Current consent and exclusions, readable by any team member.
+ */
+export type EmailPrivacySettings = {
+    /**
+     * Whether the caller can remove a team exclusion.
+     */
+    can_remove_team_domains: boolean;
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute; absent before email connection.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary connection; clients bind opt-in to this identifier.
+     */
+    mailbox_link_id?: string | null;
+    /**
+     * Domains excluded only for the caller's contributions.
+     */
+    personal_domains: Array<string>;
+    /**
+     * Domains excluded across the team, including legacy company exclusions.
+     */
+    team_domains: Array<string>;
 };
 
 /**
@@ -6880,6 +9356,107 @@ export type EntityReference = {
  * Type of entity that can be referenced by entity properties.
  */
 export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+
+/**
+ * The changes to one entry: exactly one of `entryId` or `recordId`.
+ */
+export type EntryChanges = {
+    /**
+     * The entry.
+     */
+    entryId?: string | null;
+    /**
+     * The record whose single entry in the pipeline to change.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to set.
+     */
+    set: Array<FieldValueInput>;
+};
+
+/**
+ * One field's value before and after an update.
+ */
+export type EntryFieldChange = {
+    after?: null | EntryFieldValue;
+    before?: null | EntryFieldValue;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * A stored value in its field's own terms.
+ */
+export type EntryFieldValue = {
+    type: 'text';
+    /**
+     * Free text.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A number.
+     */
+    value: number;
+} | {
+    type: 'checkbox';
+    /**
+     * True or false.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'date_range';
+    /**
+     * A span of time, written start/end: 2026-10-12/2026-10-16.
+     */
+    value: string;
+} | {
+    type: 'labels';
+    /**
+     * Option labels, in the cell's order.
+     */
+    value: Array<string>;
+} | {
+    type: 'links';
+    /**
+     * URLs.
+     */
+    value: Array<string>;
+} | {
+    type: 'references';
+    /**
+     * Macro ids: people as macro| user ids, records or other items.
+     */
+    value: Array<string>;
+};
+
+/**
+ * The company or contact an entry tracks.
+ */
+export type EntryRecord = {
+    /**
+     * A company's domain or a contact's email.
+     */
+    detail?: string | null;
+    /**
+     * The CRM company or contact id.
+     */
+    id: string;
+    /**
+     * Its name; missing when the caller cannot see the record.
+     */
+    name?: string | null;
+};
 
 /**
  * A plain old json error response for use with axum.
@@ -7468,6 +10045,11 @@ export type ExternalChatParticipant = {
      * Their id at the provider (WhatsApp: phone-number or LID JID).
      */
     jid: string;
+    /**
+     * What to call them: their provider name, else their phone number,
+     * else a generic name.
+     */
+    name: string;
 };
 
 /**
@@ -7866,6 +10448,88 @@ export type FavoritesList = {
 };
 
 /**
+ * Matched entries per option of one single-select field, such as Stage.
+ */
+export type FieldOptionCounts = {
+    /**
+     * Every option in order, with its count.
+     */
+    counts: Array<OptionCount>;
+    /**
+     * Matched entries with the field empty.
+     */
+    empty: number;
+    /**
+     * The field.
+     */
+    field: string;
+};
+
+/**
+ * Labels to add to a select field.
+ */
+export type FieldOptions = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The labels.
+     */
+    labels: Array<string>;
+};
+
+/**
+ * A field to rename.
+ */
+export type FieldRename = {
+    /**
+     * Its current name.
+     */
+    from: string;
+    /**
+     * Its new name.
+     */
+    to: string;
+};
+
+/**
+ * The sum of a number field over the matched entries.
+ */
+export type FieldTotal = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The sum.
+     */
+    sum: number;
+};
+
+/**
+ * A field and the text to write into it or match it against. Leave out both
+ * `value` and `values` to empty the field, or in a filter to match an empty
+ * field.
+ */
+export type FieldValueInput = {
+    /**
+     * The field's name, ignoring case.
+     */
+    field: string;
+    /**
+     * One value: an option label, a person as "me", an email or a macro|
+     * user id, a number, true/false, or a date.
+     */
+    value?: string | null;
+    /**
+     * Several values, for a field holding several. A filter matches an entry
+     * holding any of them.
+     */
+    values?: Array<string> | null;
+};
+
+/**
  * What happened to a file, on the wire.
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
@@ -7909,6 +10573,33 @@ export type FileTypeUpdate = {
      */
     set: FileType;
 } | 'clear';
+
+/**
+ * A fill specification.
+ */
+export type FillSpec = {
+    kind: 'none';
+} | {
+    /**
+     * Opacity 0-1.
+     */
+    alpha?: number | null;
+    /**
+     * `RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).
+     */
+    color: string;
+    kind: 'solid';
+} | {
+    /**
+     * Angle in degrees.
+     */
+    angle?: number;
+    /**
+     * Stop colors (`RRGGBB` or theme names), evenly spaced.
+     */
+    colors: Array<string>;
+    kind: 'gradient';
+};
 
 /**
  * A test of one column's cells.
@@ -8025,6 +10716,38 @@ export type FilterTest = {
      * How the cell's references relate to these.
      */
     operator: SetOperator;
+};
+
+/**
+ * Which entries to read, and how to order them.
+ */
+export type FindEntriesRequest = {
+    /**
+     * Put the largest first.
+     */
+    descending?: boolean;
+    /**
+     * Every filter must match.
+     */
+    filters?: Array<FieldValueInput>;
+    /**
+     * Most entries to return, 1 to 5000; defaults to 50. Counts and totals
+     * cover every match regardless.
+     */
+    limit?: number | null;
+    /**
+     * Only entries tracking one of these companies or contacts.
+     */
+    recordIds?: Array<string>;
+    /**
+     * Text the record's name, domain or email must contain.
+     */
+    search?: string | null;
+    /**
+     * The field to order by; number, date and select fields order by value
+     * and stage order.
+     */
+    sortBy?: string | null;
 };
 
 export type FolderItem = {
@@ -8623,6 +11346,37 @@ export type Formula = {
     operand: Formula;
 };
 
+/**
+ * The entries a query matched.
+ */
+export type FoundEntriesResponse = {
+    /**
+     * Whether every entry was read; a pipeline beyond 5000 entries is not,
+     * so counts and totals cover only the entries read.
+     */
+    complete: boolean;
+    /**
+     * Matched entries per option of each single-select field.
+     */
+    counts: Array<FieldOptionCounts>;
+    /**
+     * The first `limit` matches, in the requested order.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * How many entries matched in all.
+     */
+    matched: number;
+    /**
+     * The pipeline read, with its fields and version.
+     */
+    pipeline: PipelineFields;
+    /**
+     * The sum of each number field over the matched entries.
+     */
+    totals: Array<FieldTotal>;
+};
+
 export type GenericErrorResponse = {
     /**
      * Indicates if an error occurred
@@ -8654,6 +11408,22 @@ export type GenericSuccessResponse = {
      * Indicates if the request was successful
      */
     success: boolean;
+};
+
+/**
+ * One path of a shape's outline: sub-paths filled together (a sub-path
+ * inside another and running the other way is a hole) and outlined.
+ */
+export type GeometryPath = {
+    /**
+     * The drawing commands; each sub-path starts with `moveTo`.
+     */
+    commands: Array<PathCommand>;
+    fill?: null | PathFillMode;
+    /**
+     * Whether the shape outline draws this path; true when omitted.
+     */
+    stroke?: boolean | null;
 };
 
 /**
@@ -9545,6 +12315,39 @@ export type GuestPolicy = {
 };
 
 /**
+ * Which way a drawing guide runs.
+ */
+export type GuideOrient = 'horizontal' | 'vertical';
+
+/**
+ * One drawing guide of [`EditOp::SetGuides`](super::EditOp::SetGuides).
+ */
+export type GuideSpec = {
+    /**
+     * Color as `RRGGBB` or a theme color name (`accent1`, `tx1`...).
+     * Omitted or null keeps the color of the guide `id` names, and gives a
+     * new guide PowerPoint's gray.
+     */
+    color?: string | null;
+    /**
+     * The id (from the deck outline's `guides`) of the guide this entry
+     * keeps, with anything else the file stores on it. Omitted or null for
+     * a new guide.
+     */
+    id?: number | null;
+    /**
+     * `horizontal` (a line across the slide) or `vertical` (a line down it).
+     */
+    orient: GuideOrient;
+    /**
+     * Distance in points from the slide's top edge (horizontal guides) or
+     * left edge (vertical guides), from 0 to the slide's height or width.
+     * The slide's center is half its height or width.
+     */
+    position: number;
+};
+
+/**
  * A registered user-run harness.
  *
  * Clients deserialize this, so both derives are used.
@@ -9689,6 +12492,27 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * A companies CSV to import: exactly one of its text or a CSV file in
+ * Macro, and at most one of `pipelineId` or `newPipeline` for its Stage,
+ * Owner and Revenue values (a new private pipeline when neither is given).
+ */
+export type ImportCompaniesCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
+    newPipeline?: null | NewImportPipeline;
+    /**
+     * An existing company pipeline the caller can edit.
+     */
+    pipelineId?: string | null;
+};
+
+/**
  * Committed counters, never optimistic browser or uncommitted worker counts.
  */
 export type ImportCounters = {
@@ -9782,6 +12606,20 @@ export type ImportPage = {
      * Binding summary used by the picker confirmation.
      */
     sourceBinding: SourceBinding;
+};
+
+/**
+ * A CSV to import: exactly one of its text or a CSV file in Macro.
+ */
+export type ImportPipelineCsvRequest = {
+    /**
+     * The CSV text.
+     */
+    csv?: string | null;
+    /**
+     * A CSV document the caller can open.
+     */
+    documentId?: string | null;
 };
 
 /**
@@ -9934,6 +12772,71 @@ export type InitialPropertyValue = {
 };
 
 /**
+ * Stable cursor for project history.
+ */
+export type InitiativeActivityCursor = {
+    /**
+     * Tie-breaker within the same timestamp.
+     */
+    id: string;
+    /**
+     * Time of the last scanned activity.
+     */
+    occurredAt: string;
+};
+
+/**
+ * History page. Access filtering can shorten records; follow nextCursor until exhausted.
+ */
+export type InitiativeActivityPage = {
+    nextCursor?: null | InitiativeActivityCursor;
+    /**
+     * Visible changes in newest-first order.
+     */
+    records: Array<InitiativeActivityRecord>;
+};
+
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export type InitiativeActivityRecord = {
+    /**
+     * Durable activity action tag.
+     */
+    action: string;
+    /**
+     * Typed payload for known actions. Absent for unknown actions.
+     */
+    actionPayload?: unknown;
+    /**
+     * Principal who acted.
+     */
+    actorId: string;
+    /**
+     * Stable record identifier, also used for realtime deduplication.
+     */
+    id: string;
+    /**
+     * Time of the change.
+     */
+    occurredAt: string;
+    /**
+     * Acting user's feed identity when a bot acted on their behalf.
+     */
+    subjectId: string;
+};
+
+/**
+ * An initiative's description.
+ */
+export type InitiativeDescription = {
+    /**
+     * GitHub-flavored markdown; empty while no one has opened or written it.
+     */
+    markdown: string;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -10028,6 +12931,73 @@ export type InitiativeList = {
      */
     initiatives: Array<InitiativeSummary>;
 };
+
+/**
+ * One authorized project collection page.
+ */
+export type InitiativePage = {
+    /**
+     * Rows in requested order.
+     */
+    initiatives: Array<InitiativePageRow>;
+    /**
+     * Continuation, absent when exhausted.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A project row with caller-specific permissions, properties and visible task progress.
+ */
+export type InitiativePageRow = InitiativeSummary & {
+    /**
+     * Number of visible tasks whose status is completed.
+     */
+    completedTaskCount: number;
+    /**
+     * Canonical property values.
+     */
+    properties: InitiativePropertySnapshot;
+    /**
+     * Number of associated tasks the caller may view.
+     */
+    taskCount: number;
+    /**
+     * Verified effective access for the caller.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Snapshot of canonical property values, never a second writable store.
+ */
+export type InitiativePropertySnapshot = {
+    /**
+     * Assigned user ids, independent of sharing membership.
+     */
+    assignees: Array<string>;
+    /**
+     * Whether the canonical task status represents completion.
+     */
+    completed: boolean;
+    /**
+     * Due timestamp, or unset.
+     */
+    dueDate?: string | null;
+    /**
+     * Priority option id, or unset.
+     */
+    priority?: string | null;
+    /**
+     * Status option id, or unset.
+     */
+    status?: string | null;
+};
+
+/**
+ * Supported collection ordering. Every ordering uses id as its final tie breaker.
+ */
+export type InitiativeSort = 'updated' | 'name' | 'due';
 
 /**
  * List-row view of an initiative.
@@ -10126,6 +13096,24 @@ export type JobId = string;
  * Job lifecycle. Cancellation remains in progress while any lease is active.
  */
 export type JobStatus = 'uploading' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelling' | 'cancelled';
+
+/**
+ * Options for an authenticated call join.
+ */
+export type JoinCallRequest = {
+    /**
+     * Optional display name in the RTC room.
+     */
+    name?: string | null;
+    /**
+     * What to do when this account is participating in another call.
+     */
+    onOtherCall?: OnOtherCall;
+    /**
+     * Disconnect an existing RTC connection for this identity.
+     */
+    replace?: boolean;
+};
 
 /**
  * Single safe source folder/key segment; never a path or authorization proof.
@@ -10246,6 +13234,36 @@ export type LeaveCallResponse = {
 };
 
 /**
+ * Outline changes.
+ */
+export type LinePatch = {
+    /**
+     * Color (`RRGGBB` or theme name).
+     */
+    color?: string | null;
+    /**
+     * Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).
+     */
+    dash?: string | null;
+    /**
+     * Arrowhead at the start.
+     */
+    head?: string | null;
+    /**
+     * Remove the outline.
+     */
+    none?: boolean;
+    /**
+     * Arrowhead at the end (`none`, `triangle`, `stealth`, `diamond`, `oval`, `arrow`).
+     */
+    tail?: string | null;
+    /**
+     * Width in points.
+     */
+    width?: number | null;
+};
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -10305,6 +13323,135 @@ export type ListedForm = {
      */
     form: Form;
 };
+
+/**
+ * Whether a live call is associated with a channel.
+ */
+export type LiveCallKind = 'channel' | 'standalone';
+
+/**
+ * A connected participant in an RTC room.
+ */
+export type LiveCallParticipant = {
+    /**
+     * Name displayed to room members.
+     */
+    displayName: string;
+    /**
+     * RTC identity.
+     */
+    identity: string;
+    /**
+     * Whether the caller is a program.
+     */
+    isProgram: boolean;
+    /**
+     * RTC connection time.
+     */
+    joinedAt?: string | null;
+    /**
+     * User or guest.
+     */
+    kind: LiveParticipantKind;
+    /**
+     * Published media tracks.
+     */
+    tracks: Array<LiveCallTrack>;
+    /**
+     * Macro account identifier, if this is a user.
+     */
+    userId?: string | null;
+};
+
+/**
+ * A live RTC room roster.
+ */
+export type LiveCallParticipantsResponse = {
+    /**
+     * Connected participants.
+     */
+    participants: Array<LiveCallParticipant>;
+};
+
+/**
+ * A live call visible to an account that can join it.
+ */
+export type LiveCallSummary = {
+    /**
+     * Session identifier.
+     */
+    callId: string;
+    /**
+     * Channel identifier, if present.
+     */
+    channelId?: string | null;
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * Caller identifier.
+     */
+    createdBy: string;
+    /**
+     * Channel or standalone call.
+     */
+    kind: LiveCallKind;
+    /**
+     * Invitation identifier, if present.
+     */
+    meetingId?: string | null;
+    /**
+     * Number of active people and guests.
+     */
+    participantCount: number;
+    /**
+     * Whether this account is currently being rung.
+     */
+    ringing: boolean;
+    /**
+     * Invitation capability, if present.
+     */
+    shareToken?: string | null;
+    /**
+     * Invitation title, if present.
+     */
+    title?: string | null;
+};
+
+/**
+ * A live media track.
+ */
+export type LiveCallTrack = {
+    /**
+     * Whether the track is muted.
+     */
+    muted: boolean;
+    /**
+     * Microphone, camera, or screen source.
+     */
+    source: LiveTrackSource;
+};
+
+/**
+ * Response containing every live call this account may join.
+ */
+export type LiveCallsResponse = {
+    /**
+     * Joinable live calls.
+     */
+    calls: Array<LiveCallSummary>;
+};
+
+/**
+ * Participant kind in the live room.
+ */
+export type LiveParticipantKind = 'user' | 'guest' | 'bot';
+
+/**
+ * A live media track.
+ */
+export type LiveTrackSource = 'microphone' | 'camera' | 'screen_share' | 'screen_share_audio' | 'unknown';
 
 export type LocationResponseData = {
     /**
@@ -10472,6 +13619,11 @@ export type MeetingsResponse = {
 };
 
 /**
+ * How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).
+ */
+export type MergeMode = 'union' | 'combine' | 'fragment' | 'intersect' | 'subtract';
+
+/**
  * Shared message representation for channel timelines and entity discussions.
  */
 export type Message = {
@@ -10505,6 +13657,10 @@ export type Message = {
      */
     id: string;
     imported_author?: null | ImportedAuthor;
+    /**
+     * What this message is.
+     */
+    kind?: MessageKind;
     /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
@@ -10687,6 +13843,12 @@ export type MessageChange = {
     type: 'reaction_changed';
 } | {
     /**
+     * Persisted root.
+     */
+    message: Message;
+    type: 'call_root_posted';
+} | {
+    /**
      * Persisted thread state.
      */
     state: ThreadState;
@@ -10796,6 +13958,11 @@ export type MessageEventAttachment = {
      */
     entity_type: string;
 };
+
+/**
+ * What a persisted message is. Set by the server, never by a client.
+ */
+export type MessageKind = 'message' | 'call_root';
 
 /**
  * Root message with its small thread preview, independent of its parent type.
@@ -11061,6 +14228,16 @@ export type MessageTimelineEntry = {
      */
     activity: TimelineActivity;
     type: 'activity';
+} | {
+    /**
+     * The call's root message, its thread state and its reply preview.
+     */
+    message: MessageListItem;
+    /**
+     * Where the call is in its life.
+     */
+    status: CallEntryStatus;
+    type: 'call';
 };
 
 /**
@@ -11247,6 +14424,62 @@ export type NewColumn = {
 };
 
 /**
+ * One entry to add: at most one of `recordId` or `email`. A tracked
+ * pipeline's entry names its record; a generic pipeline's names none.
+ */
+export type NewEntry = {
+    /**
+     * A contact's email: that contact, or in a company pipeline its company.
+     */
+    email?: string | null;
+    /**
+     * A CRM company or contact id.
+     */
+    recordId?: string | null;
+    /**
+     * Fields to fill in.
+     */
+    set?: Array<FieldValueInput>;
+};
+
+/**
+ * A field to add.
+ */
+export type NewFieldRequest = {
+    /**
+     * Its name, unique in the pipeline ignoring case.
+     */
+    name: string;
+    /**
+     * A select field's labels, in order.
+     */
+    options?: Array<string>;
+    /**
+     * Its type.
+     */
+    type: NewFieldType;
+};
+
+/**
+ * The type of a field to add.
+ */
+export type NewFieldType = 'text' | 'number' | 'checkbox' | 'date' | 'link' | 'select' | 'multi_select' | 'person' | 'people';
+
+/**
+ * A new company pipeline for a companies import.
+ */
+export type NewImportPipeline = {
+    /**
+     * Its name; defaults to the file's name.
+     */
+    name?: string | null;
+    /**
+     * Whether the team may edit it; private by default.
+     */
+    sharing?: PipelineSharing;
+};
+
+/**
  * A select or tag option to create.
  */
 export type NewOption = {
@@ -11259,6 +14492,134 @@ export type NewOption = {
      * select's labels are numbers.
      */
     label: string;
+};
+
+/**
+ * What to add with [`EditOp::AddShape`](super::EditOp::AddShape).
+ */
+export type NewShape = {
+    kind: 'textBox';
+    /**
+     * Initial text (`\n` separates paragraphs).
+     */
+    text?: string;
+} | {
+    kind: 'shape';
+    /**
+     * Preset geometry name.
+     */
+    preset: string;
+    /**
+     * Initial text.
+     */
+    text?: string;
+} | {
+    /**
+     * Arrowhead at the end.
+     */
+    arrow?: boolean;
+    kind: 'line';
+} | {
+    /**
+     * Base64-encoded PNG, JPEG, or GIF bytes.
+     */
+    data: string;
+    /**
+     * Alt text.
+     */
+    description?: string;
+    kind: 'image';
+} | {
+    /**
+     * The file's MIME type (`video/mp4`...).
+     */
+    contentType: string;
+    /**
+     * Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.
+     */
+    data: string;
+    /**
+     * Alt text.
+     */
+    description?: string;
+    kind: 'video';
+    /**
+     * Base64-encoded PNG or JPEG shown until it plays (its first frame).
+     */
+    poster: string;
+} | {
+    /**
+     * The file's MIME type (`audio/mpeg`...).
+     */
+    contentType: string;
+    /**
+     * Base64-encoded MP3, M4A, WAV, or OGG bytes.
+     */
+    data: string;
+    /**
+     * Alt text.
+     */
+    description?: string;
+    kind: 'audio';
+    /**
+     * Base64-encoded PNG or JPEG icon.
+     */
+    poster: string;
+} | {
+    /**
+     * Cell text, row by row.
+     */
+    cells: Array<Array<string>>;
+    kind: 'table';
+} | {
+    /**
+     * Category labels.
+     */
+    categories: Array<string>;
+    /**
+     * `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.
+     */
+    chartType: string;
+    /**
+     * `clustered`, `stacked`, `percentStacked`, or `standard` (the type's default when omitted).
+     */
+    grouping?: string | null;
+    kind: 'chart';
+    /**
+     * Series in plot order.
+     */
+    series: Array<ChartSeriesData>;
+    /**
+     * Chart title (no title when omitted or empty).
+     */
+    title?: string | null;
+} | {
+    /**
+     * Color variation (`accent1_2` when omitted; see `editSmartArt`'s
+     * `setColors`).
+     */
+    colors?: string | null;
+    /**
+     * The text as an outline (one item per node); omit for the
+     * layout's sample nodes showing the "[Text]" prompt.
+     */
+    items?: Array<SmartArtItem> | null;
+    kind: 'smartArt';
+    /**
+     * Layout: `default` (Basic Block List), `vList2` (Vertical Bullet
+     * List), `hList1` (Horizontal Bullet List), `process1` (Basic
+     * Process), `chevron1` (Basic Chevron Process), `cycle2` (Basic
+     * Cycle), `radial1` (Basic Radial: the first item is the center,
+     * level-2 items around it), `hierarchy1` (Hierarchy), `orgChart1`
+     * (Organization Chart), `venn1` (Basic Venn), or `pyramid1` (Basic
+     * Pyramid).
+     */
+    layout: string;
+    /**
+     * SmartArt style (`simple1` when omitted; see `editSmartArt`'s
+     * `setStyle`).
+     */
+    style?: string | null;
 };
 
 /**
@@ -11385,6 +14746,11 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
 export type NumberOperator = 'is' | 'isNot' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
 
 /**
+ * Policy for another active call.
+ */
+export type OnOtherCall = 'fail' | 'switch';
+
+/**
  * A batch of ops for one database and the versions its tables must be at.
  */
 export type OpBatch = {
@@ -11509,6 +14875,20 @@ export type OpResult = {
 export type Operator = 'add' | 'subtract' | 'multiply' | 'divide';
 
 /**
+ * How many matched entries hold one option.
+ */
+export type OptionCount = {
+    /**
+     * Matched entries holding it.
+     */
+    count: number;
+    /**
+     * The option's label.
+     */
+    label: string;
+};
+
+/**
  * Identifier of an option of a select or tag column.
  */
 export type OptionId = string;
@@ -11527,6 +14907,38 @@ export type OptionRef = {
      * is refused.
      */
     label: string;
+};
+
+/**
+ * An option to delete, emptying the entries holding it.
+ */
+export type OptionRemoval = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The label.
+     */
+    label: string;
+};
+
+/**
+ * An option to relabel.
+ */
+export type OptionRename = {
+    /**
+     * The field.
+     */
+    field: string;
+    /**
+     * The current label.
+     */
+    from: string;
+    /**
+     * The new label.
+     */
+    to: string;
 };
 
 /**
@@ -11556,6 +14968,41 @@ export type PairingDetails = {
 };
 
 /**
+ * Paragraph formatting changes.
+ */
+export type ParaPatch = {
+    /**
+     * `left`, `center`, `right`, `justify`, `distributed`.
+     */
+    align?: string | null;
+    bullet?: null | BulletSpec;
+    /**
+     * First-line indent in points (negative = hanging).
+     */
+    indent?: number | null;
+    /**
+     * Outline level 0-8.
+     */
+    level?: number | null;
+    /**
+     * Line spacing as a multiple of single spacing (1.0, 1.5...).
+     */
+    lineSpacing?: number | null;
+    /**
+     * Left margin in points.
+     */
+    marginLeft?: number | null;
+    /**
+     * Space after in points.
+     */
+    spaceAfter?: number | null;
+    /**
+     * Space before in points.
+     */
+    spaceBefore?: number | null;
+};
+
+/**
  * Query parameters shared by soup endpoints.
  */
 export type Params = {
@@ -11581,6 +15028,39 @@ export type Params = {
 export type ParticipantRole = 'owner' | 'admin' | 'member';
 
 /**
+ * Request to change part of a persisted agent's instructions or settings.
+ *
+ * Every field is optional; an absent field keeps the agent's current value.
+ * Ownership and the bot profile (name, handle, description, avatar) are not
+ * patchable here: the profile has [`PatchBotRequest`], and ownership changes
+ * go through [`UpdateAgentRequest`]. Unknown fields are refused, so a
+ * misspelled or flattened setting is never silently ignored.
+ */
+export type PatchAgentRequest = {
+    /**
+     * Replacement permission choice: approve without asking (`true`) or
+     * prompt (`false`). A patch cannot clear the choice back to unset; an
+     * explicit `false` prompts exactly as unset does.
+     */
+    auto_accept_permissions?: boolean | null;
+    channels?: null | AgentChannelSelection;
+    /**
+     * Replacement model.
+     */
+    default_model?: string | null;
+    harness?: null | AgentHarnessSelection;
+    /**
+     * Replacement instructions, whole.
+     */
+    instructions?: string | null;
+    /**
+     * Replacement coding choice.
+     */
+    is_coding?: boolean | null;
+    mcp?: null | AgentMcpServers;
+};
+
+/**
  * Request to patch a bot.
  */
 export type PatchBotRequest = {
@@ -11597,7 +15077,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**
@@ -11684,6 +15164,102 @@ export type PatchWebhookRequest = {
     name?: string | null;
     status?: null | WebhookStatus;
 };
+
+/**
+ * One drawing command of a [`GeometryPath`], in shape-local points:
+ * `(0, 0)` is the top-left corner of the shape's box before rotation and
+ * flips, x grows to the right and y downward.
+ */
+export type PathCommand = {
+    cmd: 'moveTo';
+    /**
+     * X (points).
+     */
+    x: number;
+    /**
+     * Y (points).
+     */
+    y: number;
+} | {
+    cmd: 'lineTo';
+    /**
+     * X (points).
+     */
+    x: number;
+    /**
+     * Y (points).
+     */
+    y: number;
+} | {
+    cmd: 'cubicBezTo';
+    /**
+     * End X (points).
+     */
+    x: number;
+    /**
+     * First control point X (points).
+     */
+    x1: number;
+    /**
+     * Second control point X (points).
+     */
+    x2: number;
+    /**
+     * End Y (points).
+     */
+    y: number;
+    /**
+     * First control point Y (points).
+     */
+    y1: number;
+    /**
+     * Second control point Y (points).
+     */
+    y2: number;
+} | {
+    cmd: 'quadBezTo';
+    /**
+     * End X (points).
+     */
+    x: number;
+    /**
+     * Control point X (points).
+     */
+    x1: number;
+    /**
+     * End Y (points).
+     */
+    y: number;
+    /**
+     * Control point Y (points).
+     */
+    y1: number;
+} | {
+    cmd: 'arcTo';
+    /**
+     * Vertical radius (points).
+     */
+    hR: number;
+    /**
+     * Start angle in degrees.
+     */
+    stAng: number;
+    /**
+     * Sweep in degrees (negative sweeps counter-clockwise).
+     */
+    swAng: number;
+    /**
+     * Horizontal radius (points).
+     */
+    wR: number;
+} | {
+    cmd: 'close';
+};
+
+/**
+ * How a [`GeometryPath`] is filled (DrawingML's path `fill`).
+ */
+export type PathFillMode = 'norm' | 'none' | 'lighten' | 'lightenLess' | 'darken' | 'darkenLess';
 
 export type PdfAnchor = (PdfPlaceableCommentAnchor & {
     anchorType: 'placeable';
@@ -11820,13 +15396,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -11850,6 +15424,182 @@ export type Pipeline = {
 };
 
 /**
+ * A pipeline's entries as CSV text: Company and Domain (or Contact and
+ * Email), then one column per field, people as emails.
+ */
+export type PipelineCsvResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV.
+     */
+    csv: string;
+    /**
+     * The pipeline's name.
+     */
+    name: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * A pipeline's entries among those asked for.
+ */
+export type PipelineEntries = {
+    /**
+     * Its matching entries.
+     */
+    entries: Array<PipelineEntry>;
+    /**
+     * The pipeline.
+     */
+    pipeline: AccessiblePipeline;
+};
+
+/**
+ * One pipeline entry.
+ */
+export type PipelineEntry = {
+    /**
+     * The entry: a row of the pipeline's table.
+     */
+    entryId: string;
+    /**
+     * Its other fields that hold a value, by name.
+     */
+    fields: {
+        [key: string]: EntryFieldValue;
+    };
+    record?: null | EntryRecord;
+};
+
+/**
+ * A pipeline saved as a CSV file in the caller's files.
+ */
+export type PipelineExportResponse = {
+    /**
+     * Whether every entry was written; a pipeline beyond 5000 entries is cut.
+     */
+    complete: boolean;
+    /**
+     * The CSV document.
+     */
+    documentId: string;
+    /**
+     * Its name.
+     */
+    fileName: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * One field of a pipeline, named as people see it.
+ */
+export type PipelineFieldSummary = {
+    /**
+     * Whether it holds several values.
+     */
+    multiple: boolean;
+    /**
+     * The name entries and filters use.
+     */
+    name: string;
+    /**
+     * A select or tags field's labels in order: for Stage, the stages from
+     * first to last.
+     */
+    options: Array<string>;
+    /**
+     * Whether the caller cannot write it.
+     */
+    readOnly: boolean;
+    /**
+     * Whether every entry must have a value.
+     */
+    required: boolean;
+    /**
+     * What it holds.
+     */
+    type: PipelineFieldType;
+};
+
+/**
+ * What a field holds.
+ */
+export type PipelineFieldType = 'company' | 'contact' | 'text' | 'number' | 'checkbox' | 'date' | 'date_range' | 'link' | 'select' | 'tags' | 'person' | 'item' | 'relation' | 'formula';
+
+/**
+ * A pipeline with its fields.
+ */
+export type PipelineFields = AccessiblePipeline & {
+    /**
+     * Its fields in column order; a tracked pipeline's first names its record.
+     */
+    fields: Array<PipelineFieldSummary>;
+    /**
+     * Its table's version when read.
+     */
+    version: number;
+};
+
+/**
+ * What a pipeline import did.
+ */
+export type PipelineImportResponse = {
+    /**
+     * Entries added.
+     */
+    added: number;
+    /**
+     * Labels added to select fields so the CSV's values fit.
+     */
+    addedOptions: Array<FieldOptions>;
+    /**
+     * Rows whose record the pipeline already had.
+     */
+    alreadyPresent: number;
+    /**
+     * Companies or contacts the import created.
+     */
+    createdRecords: number;
+    /**
+     * Pipeline fields the CSV filled.
+     */
+    filledFields: Array<string>;
+    /**
+     * CSV columns matching no field the import can fill.
+     */
+    ignoredColumns: Array<string>;
+    /**
+     * Rows refused for a value their field cannot hold.
+     */
+    invalid: Array<SkippedImportRecord>;
+    /**
+     * The pipeline filled.
+     */
+    pipelineId: string;
+    /**
+     * Its name.
+     */
+    pipelineName: string;
+    /**
+     * Rows without a domain or email.
+     */
+    skippedRows: number;
+    /**
+     * Records that could not be found or created.
+     */
+    unresolved: Array<SkippedImportRecord>;
+};
+
+/**
  * Which CRM entity each row references. Fixed when a pipeline is created.
  */
 export type PipelineRecordType = 'company' | 'contact';
@@ -11858,6 +15608,12 @@ export type PipelineRecordType = 'company' | 'contact';
  * Initial sharing, or the desired team grant. Individual ownership is preserved.
  */
 export type PipelineSharing = 'private' | 'team';
+
+/**
+ * What a placeholder inserted on a slide layout holds (PowerPoint's Slide
+ * Master ▸ Insert Placeholder menu).
+ */
+export type PlaceholderKind = 'content' | 'text' | 'picture' | 'chart' | 'table' | 'smartArt' | 'media';
 
 /**
  * Request body for `POST /channels/activity`.
@@ -11979,6 +15735,71 @@ export type PreSaveDocumentResponseData = {
  * Whether a cell is empty.
  */
 export type PresenceOperator = 'isEmpty' | 'isNotEmpty';
+
+/**
+ * Where an edited copy of a presentation is created.
+ */
+export type PresentationCopyRequest = {
+    /**
+     * Name of the new presentation, without the `.pptx` extension.
+     */
+    name: string;
+    /**
+     * Operations to apply to the copy, at most 100; none for a plain copy.
+     */
+    operations?: Array<EditOp>;
+    /**
+     * Project to create it in; defaults to the original's project when the
+     * caller can edit it.
+     */
+    projectId?: string | null;
+};
+
+/**
+ * A presentation described as text.
+ */
+export type PresentationDescription = {
+    /**
+     * Slide size, layouts, theme colors, and each slide's id, layout and
+     * shapes (ids, kinds, positions and sizes in points, text, tables,
+     * charts, pictures), plus sections, masters, comments and notes.
+     */
+    content: string;
+};
+
+/**
+ * What an edit did.
+ */
+export type PresentationEditOutcome = {
+    /**
+     * The changed slides as they now read (after a structure change, the
+     * deck summary and sections too).
+     */
+    changedSlides: string;
+    /**
+     * Slides and shapes the operations created, in order.
+     */
+    created: Array<CreatedItem>;
+    /**
+     * The edited document (clients reload open editors of it).
+     */
+    documentId: string;
+    /**
+     * Whether slides were added, removed, or reordered, or the slide size
+     * or sections changed.
+     */
+    structureChanged: boolean;
+};
+
+/**
+ * An atomic batch of edit operations.
+ */
+export type PresentationEditRequest = {
+    /**
+     * Operations validated and committed together, in order: 1 to 100.
+     */
+    operations: Array<EditOp>;
+};
 
 export type PresignedUrl = {
     /**
@@ -12421,12 +16242,45 @@ export type ReactionInput = {
     nonce?: string | null;
 };
 
+/**
+ * What to read from a workbook.
+ */
+export type ReadSpreadsheetRequest = {
+    /**
+     * Include cell formatting.
+     */
+    includeStyles?: boolean | null;
+    /**
+     * A1 ranges such as A1:F20. Omit for the workbook overview and samples.
+     */
+    ranges?: Array<string> | null;
+    /**
+     * Stable sheet ID or exact name; defaults to the first sheet.
+     */
+    sheetId?: string | null;
+};
+
 export type RecentlyDeletedResponseData = {
     /**
      * The items returned from the call
      */
     items: Array<Item>;
 };
+
+/**
+ * The companies or contacts to find entries for, across pipelines.
+ */
+export type RecordEntriesRequest = {
+    /**
+     * CRM company or contact ids.
+     */
+    recordIds: Array<string>;
+};
+
+/**
+ * OpenAPI representation of streamed recording bytes.
+ */
+export type RecordingBytes = Blob | File;
 
 /**
  * Batched registration, also used to renew an unchanged descriptor's grant.
@@ -12436,6 +16290,34 @@ export type RegisterUploads = {
      * At most 50 descriptors; no duplicate identities in a call.
      */
     descriptors: Array<UploadDescriptor>;
+};
+
+/**
+ * Entries to delete; their companies and contacts stay in the CRM.
+ */
+export type RemoveEntriesRequest = {
+    /**
+     * Entries to delete.
+     */
+    entryIds?: Array<string>;
+    /**
+     * Records whose every entry in the pipeline to delete.
+     */
+    recordIds?: Array<string>;
+};
+
+/**
+ * The entries deleted.
+ */
+export type RemoveEntriesResponse = {
+    /**
+     * Each entry as it was.
+     */
+    removed: Array<PipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
 };
 
 /**
@@ -12496,6 +16378,11 @@ export type ReorderPinRequest = {
 };
 
 /**
+ * The event that ends a repeating animation.
+ */
+export type RepeatUntil = 'untilNextClick' | 'untilEndOfSlide';
+
+/**
  * Request body for `PUT /crm/stages`: the whole stage set in order.
  */
 export type ReplaceCrmStagesRequest = {
@@ -12517,6 +16404,20 @@ export type RequestAccess = {
      * Last observed revision; omitted only for the first request.
      */
     revision?: number | null;
+};
+
+/**
+ * Request body for asking for a grant.
+ */
+export type RequestAccountManagerBody = {
+    /**
+     * The side the caller takes.
+     */
+    callerRole: AccountManagerRole;
+    /**
+     * The other account (`macro|...`).
+     */
+    counterpartyId: string;
 };
 
 /**
@@ -12604,6 +16505,16 @@ export type ResolveRequest = {
      * Request revision being reviewed.
      */
     revision: number;
+};
+
+/**
+ * Request body for responding to a request.
+ */
+export type RespondToAccountManagerRequestBody = {
+    /**
+     * The response.
+     */
+    decision: AccountManagerDecision;
 };
 
 /**
@@ -12840,6 +16751,66 @@ export type RowsResult = {
     kind: 'deleted';
 };
 
+/**
+ * Character formatting changes (`None` = leave unchanged).
+ */
+export type RunPatch = {
+    /**
+     * Baseline shift in percent (30 = superscript, -25 = subscript, 0 = normal).
+     */
+    baseline?: number | null;
+    /**
+     * Bold.
+     */
+    bold?: boolean | null;
+    /**
+     * Text color as `RRGGBB`.
+     */
+    color?: string | null;
+    /**
+     * Latin typeface.
+     */
+    font?: string | null;
+    glow?: null | EffectSpecGlowOptions;
+    /**
+     * Highlight color as `RRGGBB`, or `""` to remove.
+     */
+    highlight?: string | null;
+    /**
+     * Italic.
+     */
+    italic?: boolean | null;
+    /**
+     * Hyperlink, or `""` to remove: an address (`https://…`, `mailto:…`),
+     * `#slide=<id>` for another slide by stable id, or a slide show jump
+     * (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+     * `#lastslideviewed`, `#endshow`).
+     */
+    link?: string | null;
+    /**
+     * The link's ScreenTip (written with `link`).
+     */
+    linkTip?: string | null;
+    shadow?: null | EffectSpecShadowOptions;
+    /**
+     * Size in points.
+     */
+    size?: number | null;
+    /**
+     * Character spacing in points added between letters (negative
+     * condenses; 0 = normal).
+     */
+    spacing?: number | null;
+    /**
+     * Strikethrough.
+     */
+    strike?: boolean | null;
+    /**
+     * Underline.
+     */
+    underline?: boolean | null;
+};
+
 export type S3ObjectInfo = {
     bucket: string;
     key: string;
@@ -12899,16 +16870,39 @@ export type SaveDocumentResponseData = {
 };
 
 /**
- * Request body for saving a query.
+ * The result columns a chart of a saved question plots.
+ */
+export type SaveQueryChart = {
+    /**
+     * The column whose values split the series.
+     */
+    color?: string;
+    /**
+     * The label column.
+     */
+    x: string;
+    /**
+     * The value columns, each a number.
+     */
+    y: Array<string>;
+};
+
+/**
+ * Request body for saving a question.
  */
 export type SaveQueryRequest = {
+    /**
+     * The result columns a chart of the answer plots, checked against what
+     * the `SELECT` returns. The chart itself lives with the answer's block.
+     */
+    chart?: SaveQueryChart;
     /**
      * The database whose tables win name resolution. The caller must be
      * able to see it.
      */
     databaseId?: string;
     /**
-     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     * What the question asks: `{"version": 1, "query": "<SELECT>"}`.
      */
     definition: QueryDefinition;
 };
@@ -13172,6 +17166,26 @@ export type SetCompanyNameRequest = {
 };
 
 /**
+ * Link or switch a contact with a known personal-provider email.
+ */
+export type SetContactCompanyRequest = {
+    /**
+     * Destination company in the same team. Unlinking is not supported.
+     */
+    companyId: string;
+};
+
+/**
+ * Add a missing contact email. Existing addresses are read-only.
+ */
+export type SetContactEmailRequest = {
+    /**
+     * The address to add. An identical retry is accepted.
+     */
+    email: string;
+};
+
+/**
  * Request body for `PUT /contacts/{contact_id}/hidden`.
  */
 export type SetContactHiddenRequest = {
@@ -13217,12 +17231,11 @@ export type SetDocumentTeamShareRequest = {
  */
 export type SetEmailSyncRequest = {
     /**
-     * New value for `crm_companies.email_sync`. Purely a read-side
-     * visibility/permission gate — `soup` queries and email-permission
-     * checks require `email_sync = true` before exposing the
-     * company's emails team-wide. Populate continues to write CRM
-     * history regardless, so toggling never destroys data and
-     * re-enabling never requires a backfill.
+     * Allow eligible email contributions for this company's domains.
+     * Disabling excludes new ingestion and CRM thread access while preserving
+     * records. Re-enabling requires an admin, removes exact team exclusions,
+     * and schedules backfill only for explicitly consenting primary mailboxes.
+     * Personal and broader team exclusions continue to apply.
      */
     email_sync: boolean;
 };
@@ -13335,6 +17348,20 @@ export type SharePipeline = {
 };
 
 /**
+ * Request to share one item with a channel's current members.
+ */
+export type ShareWithChannelRequest = {
+    /**
+     * Id of the item to share. For a calendar event, the event id.
+     */
+    entityId: string;
+    /**
+     * Stored entity type of the item.
+     */
+    entityType: ChannelShareEntityType;
+};
+
+/**
  * Controls whether shared email threads are included in results.
  */
 export type SharedEmailFilter = 'exclude' | 'include' | 'only';
@@ -13412,6 +17439,20 @@ export type SkippedCell = {
 };
 
 /**
+ * A record an import could not add, and why.
+ */
+export type SkippedImportRecord = {
+    /**
+     * The company's domain or the contact's email.
+     */
+    key: string;
+    /**
+     * What went wrong.
+     */
+    reason: string;
+};
+
+/**
  * At most fifty registered identities to verify and an optional immutable conversation seal.
  */
 export type SlackCompleteRequest = CompleteUploads;
@@ -13436,6 +17477,142 @@ export type SlackTimestamp = string;
  * Slack member identity (U or W prefix), including USLACKBOT.
  */
 export type SlackUserId = string;
+
+/**
+ * How slide content follows a new slide size
+ * ([`EditOp::SetSlideSize`](super::EditOp::SetSlideSize)).
+ */
+export type SlideScale = 'none' | 'fit' | 'maximize';
+
+/**
+ * One change to a SmartArt graphic.
+ */
+export type SmartArtEdit = {
+    action: 'setText';
+    /**
+     * Node id (from the outline's `smartArt.nodes`).
+     */
+    node: string;
+    /**
+     * New text.
+     */
+    text: string;
+} | {
+    action: 'addNode';
+    /**
+     * The node to add next to; omit to add a last top-level node.
+     */
+    node?: string | null;
+    /**
+     * Where to add it (`after` when omitted).
+     */
+    position?: SmartArtPosition;
+    /**
+     * Text of the new node (empty: the "[Text]" prompt).
+     */
+    text?: string;
+} | {
+    action: 'deleteNode';
+    /**
+     * Node id.
+     */
+    node: string;
+} | {
+    action: 'promote';
+    /**
+     * Node id.
+     */
+    node: string;
+} | {
+    action: 'demote';
+    /**
+     * Node id.
+     */
+    node: string;
+} | {
+    action: 'moveUp';
+    /**
+     * Node id.
+     */
+    node: string;
+} | {
+    action: 'moveDown';
+    /**
+     * Node id.
+     */
+    node: string;
+} | {
+    action: 'setNodes';
+    /**
+     * The bullets, in order.
+     */
+    items: Array<SmartArtItem>;
+} | {
+    action: 'setLayout';
+    /**
+     * Layout: `default` (Basic Block List), `vList2` (Vertical Bullet
+     * List), `hList1` (Horizontal Bullet List), `process1` (Basic
+     * Process), `chevron1` (Basic Chevron Process), `cycle2` (Basic
+     * Cycle), `radial1` (Basic Radial), `hierarchy1` (Hierarchy),
+     * `orgChart1` (Organization Chart), `venn1` (Basic Venn), or
+     * `pyramid1` (Basic Pyramid); a full id
+     * (`urn:microsoft.com/office/officeart/2005/8/layout/process1`) or
+     * the display name also works.
+     */
+    layout: string;
+} | {
+    action: 'setColors';
+    /**
+     * Color variation: `accent0_1` Dark 1 Outline, `accent0_2` Dark 2
+     * Outline, `accent0_3` Dark 2 Fill, `colorful1` Colorful - Accent
+     * Colors, `colorful2`-`colorful5` Colorful Range - Accent Colors
+     * 2 to 3 ... 5 to 6, and for accent N = 1-6: `accentN_1` Colored
+     * Outline, `accentN_2` Colored Fill (PowerPoint's default
+     * `accent1_2`), `accentN_3` Gradient Range, `accentN_4` Gradient
+     * Loop, `accentN_5` Transparent Gradient Range. Full ids
+     * (`urn:microsoft.com/office/officeart/2005/8/colors/colorful1`)
+     * and display names also work.
+     */
+    colors: string;
+} | {
+    action: 'setStyle';
+    /**
+     * Style: `simple1` Simple Fill (the default), `simple2` White
+     * Outline, `simple3` Subtle Effect, `simple4` Moderate Effect, or
+     * `simple5` Intense Effect (or a full id or display name).
+     */
+    style: string;
+} | {
+    action: 'reset';
+};
+
+/**
+ * One bullet of a SmartArt graphic's text: a node and its outline level.
+ */
+export type SmartArtItem = {
+    /**
+     * Outline level: 1 for top-level shapes, 2 for their sub-bullets (or
+     * child shapes in hierarchies), and so on. The first item must be at
+     * level 1, and each item at most one level below the one before it.
+     * Omitted (or null) means 1.
+     */
+    level?: number;
+    /**
+     * The node's text (`""` leaves the "[Text]" prompt; `\u{b}` is a line break).
+     */
+    text: string;
+};
+
+/**
+ * Where `addNode` puts the new node, relative to the given one
+ * (PowerPoint's Add Shape After/Before/Above/Below/Add Assistant).
+ */
+export type SmartArtPosition = 'after' | 'before' | 'above' | 'below' | 'assistant';
+
+/**
+ * What `convertSmartArt` turns a SmartArt graphic into.
+ */
+export type SmartArtTarget = 'shapes' | 'text';
 
 /**
  * A channel visible to the caller that matches a smart tag rule.
@@ -14867,6 +19044,728 @@ export type SourceIdentity = {
 };
 
 /**
+ * What to change in a workbook, in words.
+ */
+export type SpreadsheetAiEditRequest = {
+    /**
+     * Natural-language instructions. Name the sheet and the cells, columns
+     * or table to change, describe the outcome, and say what must stay.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type SpreadsheetAiEdited = {
+    /**
+     * Whether a new change was persisted.
+     */
+    applied: boolean;
+    /**
+     * What changed, one summary per operation.
+     */
+    changes: Array<SpreadsheetChange>;
+    /**
+     * Revision after the edit.
+     */
+    revision: string;
+    /**
+     * Every sheet after the edit.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Issues to check, such as formula errors; they are not repaired.
+     */
+    warnings: Array<string>;
+};
+
+/**
+ * Excel border line style.
+ */
+export type SpreadsheetBorderStyle = 'reset' | 'thin' | 'medium' | 'thick' | 'double' | 'dotted' | 'dashed' | 'dashDot' | 'dashDotDot' | 'slantDashDot' | 'hair' | 'mediumDashed' | 'mediumDashDot' | 'mediumDashDotDot';
+
+/**
+ * Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.
+ */
+export type SpreadsheetCellInput = {
+    /**
+     * A1 address, from A1 through XFD100000.
+     */
+    address: string;
+    /**
+     * The new input: text or a formula, a number, true/false, or null to empty the cell.
+     */
+    value: SpreadsheetCellValue;
+};
+
+/**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
+
+/**
+ * Applied edit summary.
+ */
+export type SpreadsheetChange = {
+    /**
+     * Affected range, when applicable.
+     */
+    range?: string | null;
+    /**
+     * Affected stable sheet identity.
+     */
+    sheetId: string;
+    /**
+     * Human-readable change summary.
+     */
+    summary: string;
+    /**
+     * Operation type.
+     */
+    type: string;
+};
+
+/**
+ * What a table column holds, as Google Sheets types table columns.
+ */
+export type SpreadsheetColumnType = 'text' | 'number' | 'percent' | 'currency' | 'date' | 'datetime' | 'time' | 'checkbox' | 'dropdown' | 'person';
+
+/**
+ * A column width.
+ */
+export type SpreadsheetColumnWidth = {
+    /**
+     * Column letter A through XFD.
+     */
+    column: string;
+    /**
+     * Width in pixels, 8 through 640.
+     */
+    width: number;
+};
+
+/**
+ * A dropdown choice's color. Cells showing the choice draw it as a chip of this color.
+ */
+export type SpreadsheetDropdownColor = {
+    /**
+     * Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.
+     */
+    color: string;
+    /**
+     * The choice, matched to cell text ignoring case.
+     */
+    item: string;
+};
+
+/**
+ * Font family.
+ */
+export type SpreadsheetFont = 'sans' | 'serif' | 'mono';
+
+/**
+ * A scratch formula evaluated without persisting it.
+ */
+export type SpreadsheetFormula = {
+    /**
+     * Excel-style formula, beginning with =.
+     */
+    formula: string;
+    /**
+     * Optional label echoed with the result.
+     */
+    label?: string | null;
+};
+
+/**
+ * One hypothetical formula result.
+ */
+export type SpreadsheetFormulaResult = SpreadsheetValue & {
+    /**
+     * Evaluated scratch formula.
+     */
+    formula: string;
+    /**
+     * Caller-supplied label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Horizontal alignment.
+ */
+export type SpreadsheetHorizontalAlign = 'auto' | 'left' | 'center' | 'right';
+
+/**
+ * Number interpretation and display; currency and accounting are USD and dates use UTC.
+ */
+export type SpreadsheetNumberFormat = 'general' | 'number' | 'currency' | 'accounting' | 'percent' | 'date' | 'time' | 'scientific' | 'text';
+
+/**
+ * One operation in an atomic workbook edit. All operations validate before any write.
+ */
+export type SpreadsheetOperation = {
+    /**
+     * Cells and their new source inputs.
+     */
+    cells: Array<SpreadsheetCellInput>;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'set_cells';
+} | {
+    /**
+     * A1 rectangle, for example A1:D20.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Properties to change; omitted properties remain unchanged.
+     */
+    style: SpreadsheetStyle;
+    type: 'format_cells';
+} | {
+    /**
+     * Defaults to false; preserves formatting unless requested.
+     */
+    clearFormatting?: boolean | null;
+    /**
+     * A1 rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'clear_cells';
+} | {
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Source rectangle.
+     */
+    sourceRange: string;
+    /**
+     * Target rectangle.
+     */
+    targetRange: string;
+    type: 'fill_cells';
+} | {
+    /**
+     * Unique Excel-compatible name, at most 31 characters.
+     */
+    name: string;
+    type: 'add_sheet';
+} | {
+    /**
+     * New unique name.
+     */
+    name: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'rename_sheet';
+} | {
+    /**
+     * Optional unique name for the copy.
+     */
+    name?: string | null;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'duplicate_sheet';
+} | {
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'delete_sheet';
+} | {
+    /**
+     * Number of rows to append.
+     */
+    count: number;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'append_rows';
+} | {
+    /**
+     * Column widths to set.
+     */
+    columns: Array<SpreadsheetColumnWidth>;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'resize_columns';
+} | {
+    /**
+     * Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.
+     */
+    colors?: Array<SpreadsheetDropdownColor> | null;
+    /**
+     * Typed choices, without commas, at most 253 characters in total.
+     */
+    items?: Array<string> | null;
+    /**
+     * A1 rectangle, for example C2:C200.
+     */
+    range: string;
+    /**
+     * Defaults to true: reject typed entries that are not a choice. False only suggests the choices.
+     */
+    rejectInvalid?: boolean | null;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet.
+     */
+    source?: string | null;
+    type: 'set_dropdown';
+} | {
+    /**
+     * A1 rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'clear_validation';
+} | {
+    /**
+     * A1 rectangle, for example D2:D50.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'insert_checkboxes';
+} | {
+    /**
+     * Column types by header name. A type formats the column's data cells; checkbox makes
+     * them checkboxes and dropdown offers the column's values as colored choices.
+     */
+    columnTypes?: Array<SpreadsheetTableColumnType> | null;
+    /**
+     * Unique table name, such as Sales; spaces become underscores. Defaults to the next free
+     * TableN.
+     */
+    name?: string | null;
+    /**
+     * A1 rectangle including the header row, for example A1:D20. Must not overlap a table.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Add a total row below the data, which must be empty. Defaults to false.
+     */
+    totalsRow?: boolean | null;
+    type: 'create_table';
+};
+
+/**
+ * Hypothetical inputs applied only to the calculation's disposable workbook.
+ */
+export type SpreadsheetOverride = {
+    /**
+     * Cells to change in this hypothetical calculation.
+     */
+    cells: Array<SpreadsheetCellInput>;
+    /**
+     * Stable sheet ID or exact sheet name from ReadSpreadsheet.
+     */
+    sheetId: string;
+};
+
+/**
+ * Cell source and calculated result.
+ */
+export type SpreadsheetReadCell = SpreadsheetValue & {
+    /**
+     * A1 address.
+     */
+    address: string;
+    /**
+     * Formula, when this input is calculated.
+     */
+    formula?: string | null;
+    /**
+     * Exact persisted source input.
+     */
+    source: string;
+    style?: null | SpreadsheetStyle;
+};
+
+/**
+ * Addressed range with explicit truncation.
+ */
+export type SpreadsheetReadRange = {
+    /**
+     * Cells with their sources and current results.
+     */
+    cells: Array<SpreadsheetReadCell>;
+    /**
+     * Requested or sampled rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet identity.
+     */
+    sheetId: string;
+    /**
+     * Current sheet name.
+     */
+    sheetName: string;
+    /**
+     * True when a narrower follow-up read is needed to see every cell.
+     */
+    truncated: boolean;
+    /**
+     * Dropdowns and other data validation rules overlapping this range.
+     */
+    validations?: Array<SpreadsheetReadValidation>;
+};
+
+/**
+ * A data validation rule; list rules are dropdowns.
+ */
+export type SpreadsheetReadValidation = {
+    /**
+     * A dropdown's choice colors.
+     */
+    colors?: Array<SpreadsheetDropdownColor> | null;
+    /**
+     * Whether a list rule shows its dropdown arrow.
+     */
+    dropdown?: boolean | null;
+    /**
+     * Rule formulas, without the leading =.
+     */
+    formulas?: Array<string> | null;
+    /**
+     * A dropdown's typed choices.
+     */
+    items?: Array<string> | null;
+    /**
+     * Comparison for number, date, time and text-length rules.
+     */
+    operator?: string | null;
+    /**
+     * Cells the rule covers, as space-separated A1 ranges.
+     */
+    range: string;
+    /**
+     * Whether entries that break the rule are rejected.
+     */
+    rejectInvalid: boolean;
+    /**
+     * A dropdown's source range.
+     */
+    source?: string | null;
+    /**
+     * Rule kind: list, whole, decimal, date, time, textLength, custom, or any.
+     */
+    type: string;
+};
+
+/**
+ * Structured output from a deterministic workbook operation.
+ */
+export type SpreadsheetResponse = {
+    action: 'read';
+    /**
+     * Addressed cells with raw inputs and calculated results.
+     */
+    ranges: Array<SpreadsheetReadRange>;
+    /**
+     * Opaque revision required for EditSpreadsheet.
+     */
+    revision: string;
+    /**
+     * All visible sheets and their used bounds.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Limits or issues the caller should account for.
+     */
+    warnings: Array<string>;
+} | {
+    action: 'calculate';
+    /**
+     * Results in input order.
+     */
+    results: Array<SpreadsheetFormulaResult>;
+    /**
+     * Revision used for these calculations.
+     */
+    revision: string;
+    /**
+     * Calculation limits or issues.
+     */
+    warnings: Array<string>;
+} | {
+    action: 'edit';
+    /**
+     * Whether a new change was persisted.
+     */
+    applied: boolean;
+    /**
+     * Applied operation summaries.
+     */
+    changes: Array<SpreadsheetChange>;
+    /**
+     * Revision after the edit; use a fresh read before further editing.
+     */
+    revision: string;
+    /**
+     * Sheet metadata after editing.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Issues requiring inspection, including formula errors.
+     */
+    warnings: Array<string>;
+};
+
+/**
+ * Compact metadata for a sheet.
+ */
+export type SpreadsheetSheetSummary = {
+    /**
+     * Available columns.
+     */
+    columnCount: number;
+    /**
+     * Number of calculated errors.
+     */
+    errorCells: number;
+    /**
+     * Number of formulas.
+     */
+    formulaCells: number;
+    /**
+     * Stable sheet identity for future calls.
+     */
+    id: string;
+    /**
+     * Current sheet name.
+     */
+    name: string;
+    /**
+     * Number of populated cells.
+     */
+    populatedCells: number;
+    /**
+     * Available rows.
+     */
+    rowCount: number;
+    /**
+     * Named tables on the sheet.
+     */
+    tables?: Array<SpreadsheetTableSummary>;
+    /**
+     * Bounding rectangle of used cells, or null for an empty sheet.
+     */
+    usedRange?: string | null;
+};
+
+/**
+ * Sparse cell styling patch. Omitted fields remain unchanged.
+ */
+export type SpreadsheetStyle = {
+    /**
+     * Bold text.
+     */
+    bold?: boolean | null;
+    /**
+     * Bottom border.
+     */
+    borderBottom?: boolean | null;
+    /**
+     * Bottom border color.
+     */
+    borderBottomColor?: string | null;
+    borderBottomStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Left border.
+     */
+    borderLeft?: boolean | null;
+    /**
+     * Left border color.
+     */
+    borderLeftColor?: string | null;
+    borderLeftStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Right border.
+     */
+    borderRight?: boolean | null;
+    /**
+     * Right border color.
+     */
+    borderRightColor?: string | null;
+    borderRightStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Top border.
+     */
+    borderTop?: boolean | null;
+    /**
+     * Top border color.
+     */
+    borderTopColor?: string | null;
+    borderTopStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Show the cell's TRUE/FALSE value as a checkbox; false removes it and keeps the value.
+     */
+    checkbox?: boolean | null;
+    /**
+     * Decimal places, 0 through 10; -1 restores automatic.
+     */
+    decimals?: number | null;
+    /**
+     * Fill color as #RRGGBB; empty string resets it.
+     */
+    fillColor?: string | null;
+    fontFamily?: null | SpreadsheetFont;
+    /**
+     * Exact Excel font name, up to 128 characters.
+     */
+    fontName?: string | null;
+    /**
+     * Font size in points, 8 through 36.
+     */
+    fontSize?: number | null;
+    format?: null | SpreadsheetNumberFormat;
+    horizontalAlign?: null | SpreadsheetHorizontalAlign;
+    /**
+     * Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the
+     * left edge, or from the right edge of right-aligned cells. Centered cells ignore it.
+     */
+    indent?: number | null;
+    /**
+     * Italic text.
+     */
+    italic?: boolean | null;
+    /**
+     * Exact Excel number format, up to 512 characters; it overrides the display of `format`.
+     * Show dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,
+     * mm/dd/yyyy, dd/mm/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with
+     * format=time and a code such as h:mm AM/PM.
+     */
+    numberFormat?: string | null;
+    /**
+     * Struck-through text.
+     */
+    strikethrough?: boolean | null;
+    /**
+     * Text color as #RRGGBB; empty string resets it.
+     */
+    textColor?: string | null;
+    /**
+     * Underlined text.
+     */
+    underline?: boolean | null;
+    verticalAlign?: null | SpreadsheetVerticalAlign;
+    /**
+     * Wrap text.
+     */
+    wrap?: boolean | null;
+};
+
+/**
+ * A table column's type, by its header name.
+ */
+export type SpreadsheetTableColumnType = {
+    /**
+     * Header name of the column, ignoring case.
+     */
+    column: string;
+    /**
+     * What the column holds.
+     */
+    type: SpreadsheetColumnType;
+};
+
+/**
+ * A named table (an Excel table) that formulas address with structured references.
+ */
+export type SpreadsheetTableSummary = {
+    /**
+     * Typed columns; untyped columns are left out.
+     */
+    columnTypes?: Array<SpreadsheetTableColumnType>;
+    /**
+     * Column names, from the header row.
+     */
+    columns: Array<string>;
+    /**
+     * Columns whose filters currently hide rows.
+     */
+    filteredColumns?: Array<string>;
+    /**
+     * Table name, as in Sales[Amount].
+     */
+    name: string;
+    /**
+     * A1 rectangle from the header row through the total row, if any.
+     */
+    range: string;
+    /**
+     * Whether the last row is a total row.
+     */
+    totalsRow: boolean;
+};
+
+/**
+ * A calculated scalar with its display text and optional error explanation.
+ */
+export type SpreadsheetValue = {
+    /**
+     * Text shown in the spreadsheet.
+     */
+    display: string;
+    /**
+     * Explanation for an error result.
+     */
+    error?: string | null;
+    /**
+     * Scalar kind: blank, number, text, boolean, or error.
+     */
+    type: SpreadsheetValueKind;
+    /**
+     * The typed scalar. Empty cells have a null value.
+     */
+    value: unknown;
+};
+
+/**
+ * The calculation result kind.
+ */
+export type SpreadsheetValueKind = 'blank' | 'number' | 'text' | 'boolean' | 'error';
+
+/**
+ * Vertical alignment.
+ */
+export type SpreadsheetVerticalAlign = 'top' | 'middle' | 'bottom';
+
+/**
  * A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell
  * is the empty set.
  */
@@ -15636,6 +20535,61 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * Availability for exactly the members selected by the domain service.
+ */
+export type TeamAvailability = {
+    /**
+     * True only when all requested people and source intervals were covered.
+     */
+    complete: boolean;
+    /**
+     * Exclusive requested end.
+     */
+    end: string;
+    /**
+     * Common calendar gaps for every included person, present only with
+     * complete coverage. These are not working-hours or booking guarantees.
+     */
+    freeWindows?: Array<AvailabilityInterval> | null;
+    /**
+     * Included people, always including the requester.
+     */
+    members: Array<TeamMemberAvailability>;
+    /**
+     * Inclusive requested start.
+     */
+    start: string;
+    /**
+     * A concise explanation that does not overstate incomplete results.
+     */
+    summary: string;
+    /**
+     * Requested identifiers without a current team relationship. No profile
+     * or calendar data about those identifiers is disclosed.
+     */
+    unknownUserIds: Array<string>;
+};
+
+/**
+ * A bounded window and the teammates whose busy time to merge.
+ */
+export type TeamAvailabilityRequest = {
+    /**
+     * Exclusive instant.
+     */
+    end: string;
+    /**
+     * Inclusive instant.
+     */
+    start: string;
+    /**
+     * At most 100 current teammates; the requester is always included.
+     * Omit for the whole team; an empty list checks only the requester.
+     */
+    userIds?: Array<string> | null;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -15756,6 +20710,28 @@ export type TeamCalendarPage = {
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
 
 /**
+ * Busy time and confidence for one explicitly included person.
+ */
+export type TeamMemberAvailability = {
+    /**
+     * Merged known busy intervals clipped to the requested range.
+     */
+    busy: Array<AvailabilityInterval>;
+    /**
+     * Whether the whole requested range was established.
+     */
+    coverage: AvailabilityCoverage;
+    /**
+     * Reasons gaps in the busy intervals cannot be called free.
+     */
+    unknownReasons: Array<AvailabilityUnknownReason>;
+    /**
+     * Macro identifier of the included person.
+     */
+    userId: string;
+};
+
+/**
  * One teammate's out-of-office occurrence.
  */
 export type TeamOutOfOfficeItem = {
@@ -15797,9 +20773,42 @@ export type TeamOutOfOfficeResponse = {
 export type TeamRole = 'member' | 'admin' | 'owner';
 
 /**
+ * A text direction (`ST_TextVerticalType`).
+ */
+export type TextDirection = 'horz' | 'vert' | 'vert270' | 'wordArtVert' | 'eaVert' | 'mongolianVert' | 'wordArtVertRtl';
+
+/**
  * How a text cell compares to a text.
  */
 export type TextOperator = 'is' | 'isNot' | 'contains' | 'doesNotContain' | 'startsWith' | 'endsWith';
+
+/**
+ * A position inside a shape's text.
+ */
+export type TextPos = {
+    /**
+     * Character offset within the paragraph.
+     */
+    offset: number;
+    /**
+     * Paragraph index.
+     */
+    paragraph: number;
+};
+
+/**
+ * One theme color for [`EditOp::SetThemeColors`](super::EditOp::SetThemeColors).
+ */
+export type ThemeColor = {
+    /**
+     * `RRGGBB`.
+     */
+    color: string;
+    /**
+     * `dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.
+     */
+    slot: string;
+};
 
 /**
  * A thread's location within its document. PDF geometry remains annotation-owned.
@@ -16384,6 +21393,34 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
+ * Entries to change.
+ */
+export type UpdateEntriesRequest = {
+    /**
+     * Refuse the change if the pipeline's table moved past this version.
+     */
+    baseVersion?: number | null;
+    /**
+     * Each entry's changes.
+     */
+    updates: Array<EntryChanges>;
+};
+
+/**
+ * The entries an update wrote.
+ */
+export type UpdateEntriesResponse = {
+    /**
+     * Each entry, in request order.
+     */
+    updated: Array<UpdatedPipelineEntry>;
+    /**
+     * The table's version after the write; missing when nothing was written.
+     */
+    version?: number | null;
+};
+
+/**
  * A change to a form's facts; what is left out stays. The description,
  * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
@@ -16487,6 +21524,21 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * An updated entry.
+ */
+export type UpdatedPipelineEntry = {
+    /**
+     * The fields set, as they were and are.
+     */
+    changes: Array<EntryFieldChange>;
+    /**
+     * The entry.
+     */
+    entryId: string;
+    record?: null | EntryRecord;
+};
+
+/**
  * Immutable expected object properties, registered before signing an upload.
  */
 export type UploadDescriptor = {
@@ -16517,6 +21569,20 @@ export type UploadExtractFolderRequest = {
     name?: string | null;
     parentId?: string | null;
     sha: string;
+};
+
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
 };
 
 export type UploadFolderRequest = {
@@ -17056,7 +22122,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -17381,6 +22447,479 @@ export type WithProjectId = {
     id: string;
 };
 
+/**
+ * An atomic batch of edits to a Word document.
+ */
+export type WordDocumentEditRequest = {
+    /**
+     * Name tracked changes and comments are attributed to; omit for the
+     * requesting user's name.
+     */
+    author?: string | null;
+    /**
+     * Operations applied together, in order: 1 to 50.
+     */
+    operations: Array<WordDocumentOperation>;
+    /**
+     * Record the edits as tracked changes (true) or apply them directly
+     * (false); omit to follow the document's own Track Changes setting.
+     */
+    trackChanges?: boolean | null;
+};
+
+/**
+ * One change to a Word document's body. Ids are the paragraph, table and
+ * block ids `ReadWordDocument` reports.
+ */
+export type WordDocumentOperation = {
+    /**
+     * Exact text to find in that paragraph's plain text.
+     */
+    find: string;
+    /**
+     * Which match (1-based) when `find` appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * Paragraph id.
+     */
+    paragraph: string;
+    /**
+     * Replacement text, empty to delete. No line breaks; tabs are kept.
+     */
+    replace: string;
+    type: 'replaceText';
+} | {
+    /**
+     * Paragraph id.
+     */
+    paragraph: string;
+    /**
+     * The new text. No line breaks; use insertParagraph for more paragraphs.
+     */
+    text: string;
+    type: 'setText';
+} | {
+    /**
+     * Bold.
+     */
+    bold?: boolean | null;
+    /**
+     * Exact text to format; omit for the whole paragraph.
+     */
+    find?: string | null;
+    /**
+     * Italic.
+     */
+    italic?: boolean | null;
+    /**
+     * Which match (1-based) when `find` appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * Paragraph id.
+     */
+    paragraph: string;
+    /**
+     * Strikethrough.
+     */
+    strikethrough?: boolean | null;
+    type: 'formatText';
+    /**
+     * Single underline.
+     */
+    underline?: boolean | null;
+} | {
+    /**
+     * Insert after this paragraph or block id.
+     */
+    after?: string | null;
+    /**
+     * Insert before this paragraph or block id.
+     */
+    before?: string | null;
+    /**
+     * Paragraph style id or name. Omitted: after a heading the style's
+     * next style (usually Normal), otherwise the neighbour's formatting.
+     */
+    style?: string | null;
+    /**
+     * Text; newlines separate paragraphs.
+     */
+    text: string;
+    type: 'insertParagraph';
+} | {
+    /**
+     * Paragraph, table or block id.
+     */
+    id: string;
+    type: 'delete';
+} | {
+    /**
+     * Paragraph id.
+     */
+    paragraph: string;
+    /**
+     * Paragraph style id or name, from the list ReadWordDocument shows.
+     */
+    style: string;
+    type: 'setStyle';
+} | {
+    /**
+     * Exact text to comment on; omit for the whole paragraph.
+     */
+    find?: string | null;
+    /**
+     * Which match (1-based) when `find` appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * Paragraph id.
+     */
+    paragraph: string;
+    /**
+     * The comment. Newlines separate its paragraphs.
+     */
+    text: string;
+    type: 'addComment';
+};
+
+/**
+ * The worker's answer: the document, or the changed blocks, as text.
+ */
+export type WordDocumentResponse = {
+    /**
+     * Blocks with their ids and text, or what an edit changed.
+     */
+    content: string;
+};
+
+/**
+ * The body to write and the revision it was written against.
+ */
+export type WriteDocumentMarkdownRequest = {
+    /**
+     * The `revision` from the read this body is based on. The write applies
+     * only if the document is still at this revision.
+     */
+    expectedRevision: string;
+    /**
+     * The whole new body, as Markdown.
+     */
+    markdown: string;
+};
+
+/**
+ * Z-order moves.
+ */
+export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
+
+/**
+ * One new, changed or moved top-level block.
+ */
+export type DocumentLexicalBlock = {
+    /**
+     * The id of the top-level block this one follows, or `null` for first.
+     */
+    after?: string | null;
+    /**
+     * The block's durable node id; equals the id inside `node`.
+     */
+    id: string;
+    /**
+     * The block's serialized Lexical node, ids included.
+     */
+    node: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * The change to a document's top-level blocks since `revision`.
+ */
+export type DocumentLexicalCommitRequest = {
+    /**
+     * Every new, changed or moved top-level block, in document order; at most 500.
+     */
+    blocks: Array<DocumentLexicalBlock>;
+    /**
+     * Ids of the top-level blocks the change removes.
+     */
+    removed: Array<string>;
+    /**
+     * The revision the change was made against, from the read.
+     */
+    revision: string;
+};
+
+/**
+ * A committed change.
+ */
+export type DocumentLexicalCommitted = {
+    /**
+     * The document's version after the commit.
+     */
+    revision: string;
+    /**
+     * The live document after the commit, merged with everyone's edits and
+     * normalized as a read is.
+     */
+    state: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * Nodes that could not merge with the live document; nothing was applied.
+ * Read the document again and redo the change.
+ */
+export type DocumentLexicalConflict = {
+    /**
+     * Each node that could not merge, and why.
+     */
+    conflicts: Array<DocumentLexicalNodeConflict>;
+    /**
+     * Always `conflict`.
+     */
+    error: DocumentLexicalConflictCode;
+};
+
+/**
+ * Error code of a commit that could not merge.
+ */
+export type DocumentLexicalConflictCode = 'conflict';
+
+/**
+ * Why a node could not merge.
+ */
+export type DocumentLexicalConflictReason = 'changed' | 'removed' | 'moved' | 'revision';
+
+/**
+ * The blocks are malformed: an unknown node type, duplicate or mismatched
+ * ids, or an `after` outside the document. Nothing was applied.
+ */
+export type DocumentLexicalInvalid = {
+    /**
+     * Always `invalid`.
+     */
+    error: DocumentLexicalInvalidCode;
+    /**
+     * What is wrong, for the program that built the blocks.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a malformed commit.
+ */
+export type DocumentLexicalInvalidCode = 'invalid';
+
+/**
+ * One node of a commit that could not merge with the live document.
+ */
+export type DocumentLexicalNodeConflict = {
+    /**
+     * The node's id; `null` for a `revision` conflict.
+     */
+    id?: string | null;
+    /**
+     * Why it could not merge.
+     */
+    reason: DocumentLexicalConflictReason;
+};
+
+/**
+ * The commit was sent but never acknowledged, so it may have applied. Read
+ * the document before retrying.
+ */
+export type DocumentLexicalOutcomeUnknown = {
+    /**
+     * Always `edit_outcome_unknown`.
+     */
+    error: DocumentLexicalOutcomeUnknownCode;
+    /**
+     * What the editing worker reported.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a commit whose outcome is unknown.
+ */
+export type DocumentLexicalOutcomeUnknownCode = 'edit_outcome_unknown';
+
+/**
+ * A markdown document read as Lexical state.
+ */
+export type DocumentLexicalState = {
+    /**
+     * The document version the state was read at, as sync-service encodes
+     * it. Commit against it.
+     */
+    revision: string;
+    /**
+     * The serialized Lexical editor state, normalized through a headless
+     * editor with every Macro node registered.
+     */
+    state: {
+        [key: string]: unknown;
+    };
+};
+
+export type ListAccountManagersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type ListAccountManagersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAccountManagersError = ListAccountManagersErrors[keyof ListAccountManagersErrors];
+
+export type ListAccountManagersResponses = {
+    200: AccountManagersList;
+};
+
+export type ListAccountManagersResponse = ListAccountManagersResponses[keyof ListAccountManagersResponses];
+
+export type RequestAccountManagerData = {
+    body: RequestAccountManagerBody;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type RequestAccountManagerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestAccountManagerError = RequestAccountManagerErrors[keyof RequestAccountManagerErrors];
+
+export type RequestAccountManagerResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RequestAccountManagerResponse = RequestAccountManagerResponses[keyof RequestAccountManagerResponses];
+
+export type RevokeAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type RevokeAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeAccountManagerGrantError = RevokeAccountManagerGrantErrors[keyof RevokeAccountManagerGrantErrors];
+
+export type RevokeAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RevokeAccountManagerGrantResponse = RevokeAccountManagerGrantResponses[keyof RevokeAccountManagerGrantResponses];
+
+export type GetAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type GetAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetAccountManagerGrantError = GetAccountManagerGrantErrors[keyof GetAccountManagerGrantErrors];
+
+export type GetAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type GetAccountManagerGrantResponse = GetAccountManagerGrantResponses[keyof GetAccountManagerGrantResponses];
+
+export type RespondToAccountManagerRequestData = {
+    body: RespondToAccountManagerRequestBody;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/response';
+};
+
+export type RespondToAccountManagerRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RespondToAccountManagerRequestError = RespondToAccountManagerRequestErrors[keyof RespondToAccountManagerRequestErrors];
+
+export type RespondToAccountManagerRequestResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RespondToAccountManagerRequestResponse = RespondToAccountManagerRequestResponses[keyof RespondToAccountManagerRequestResponses];
+
+export type ClaimAccountManagerTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/token';
+};
+
+export type ClaimAccountManagerTokenErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimAccountManagerTokenError = ClaimAccountManagerTokenErrors[keyof ClaimAccountManagerTokenErrors];
+
+export type ClaimAccountManagerTokenResponses = {
+    200: ClaimedAccountManagerToken;
+};
+
+export type ClaimAccountManagerTokenResponse = ClaimAccountManagerTokenResponses[keyof ClaimAccountManagerTokenResponses];
+
 export type ListAgentsData = {
     body?: never;
     path?: never;
@@ -17421,6 +22960,33 @@ export type CreateAgentResponses = {
 };
 
 export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type PatchAgentData = {
+    body: PatchAgentRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}';
+};
+
+export type PatchAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchAgentError = PatchAgentErrors[keyof PatchAgentErrors];
+
+export type PatchAgentResponses = {
+    200: Agent;
+};
+
+export type PatchAgentResponse = PatchAgentResponses[keyof PatchAgentResponses];
 
 export type UpdateAgentData = {
     body: UpdateAgentRequest;
@@ -17543,6 +23109,47 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
+export type ListBotsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type ListBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotsError = ListBotsErrors[keyof ListBotsErrors];
+
+export type ListBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListBotsResponse = ListBotsResponses[keyof ListBotsResponses];
+
+export type CreateBotData = {
+    body: CreateBotRequest;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type CreateBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotError = CreateBotErrors[keyof CreateBotErrors];
+
+export type CreateBotResponses = {
+    201: Bot;
+};
+
+export type CreateBotResponse = CreateBotResponses[keyof CreateBotResponses];
+
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -17590,6 +23197,85 @@ export type GetBotOwnerProfilesResponses = {
 };
 
 export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
+
+export type DeleteBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type DeleteBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteBotError = DeleteBotErrors[keyof DeleteBotErrors];
+
+export type DeleteBotResponses = {
+    204: void;
+};
+
+export type DeleteBotResponse = DeleteBotResponses[keyof DeleteBotResponses];
+
+export type GetBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type GetBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotError = GetBotErrors[keyof GetBotErrors];
+
+export type GetBotResponses = {
+    200: Bot;
+};
+
+export type GetBotResponse = GetBotResponses[keyof GetBotResponses];
+
+export type PatchBotData = {
+    body: PatchBotRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type PatchBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchBotError = PatchBotErrors[keyof PatchBotErrors];
+
+export type PatchBotResponses = {
+    200: Bot;
+};
+
+export type PatchBotResponse = PatchBotResponses[keyof PatchBotResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -17646,6 +23332,89 @@ export type RemoveBotFromChannelByBotResponses = {
 };
 
 export type RemoveBotFromChannelByBotResponse = RemoveBotFromChannelByBotResponses[keyof RemoveBotFromChannelByBotResponses];
+
+export type ListBotTokensData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type ListBotTokensErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotTokensError = ListBotTokensErrors[keyof ListBotTokensErrors];
+
+export type ListBotTokensResponses = {
+    200: Array<BotToken>;
+};
+
+export type ListBotTokensResponse = ListBotTokensResponses[keyof ListBotTokensResponses];
+
+export type CreateBotTokenData = {
+    body: CreateBotTokenRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type CreateBotTokenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotTokenError = CreateBotTokenErrors[keyof CreateBotTokenErrors];
+
+export type CreateBotTokenResponses = {
+    201: CreateBotTokenResponse;
+};
+
+export type CreateBotTokenResponse2 = CreateBotTokenResponses[keyof CreateBotTokenResponses];
+
+export type RevokeBotTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+        /**
+         * Token ID
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens/{token_id}';
+};
+
+export type RevokeBotTokenErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeBotTokenError = RevokeBotTokenErrors[keyof RevokeBotTokenErrors];
+
+export type RevokeBotTokenResponses = {
+    204: void;
+};
+
+export type RevokeBotTokenResponse = RevokeBotTokenResponses[keyof RevokeBotTokenResponses];
 
 export type ListOccurrencesData = {
     body?: never;
@@ -17816,6 +23585,30 @@ export type ListTeamOutOfOfficeResponses = {
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
 
+export type GetTeamAvailabilityData = {
+    body: TeamAvailabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/team/availability';
+};
+
+export type GetTeamAvailabilityErrors = {
+    /**
+     * Invalid window or more than 100 teammates
+     */
+    400: unknown;
+    /**
+     * Team calendar sharing is disabled
+     */
+    404: unknown;
+};
+
+export type GetTeamAvailabilityResponses = {
+    200: TeamAvailability;
+};
+
+export type GetTeamAvailabilityResponse = GetTeamAvailabilityResponses[keyof GetTeamAvailabilityResponses];
+
 export type EventIcsData = {
     body?: never;
     path: {
@@ -17951,6 +23744,19 @@ export type GetActiveCallsResponses = {
 };
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
+
+export type GetLiveCallsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/active/all';
+};
+
+export type GetLiveCallsResponses = {
+    200: LiveCallsResponse;
+};
+
+export type GetLiveCallsResponse = GetLiveCallsResponses[keyof GetLiveCallsResponses];
 
 export type GuestCallChatReadData = {
     body?: never;
@@ -18216,7 +24022,7 @@ export type MeetingInviteUsersResponses = {
 export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
 
 export type MeetingJoinData = {
-    body?: never;
+    body?: JoinCallRequest;
     path: {
         token: string;
     };
@@ -18498,6 +24304,50 @@ export type DeclineCallResponses = {
 
 export type DeclineCallResponse = DeclineCallResponses[keyof DeclineCallResponses];
 
+export type JoinCallData = {
+    body: JoinCallRequest;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/join';
+};
+
+export type JoinCallErrors = {
+    403: ErrorResponse;
+    409: unknown;
+    410: unknown;
+};
+
+export type JoinCallError = JoinCallErrors[keyof JoinCallErrors];
+
+export type JoinCallResponses = {
+    200: CallTokenResponse;
+};
+
+export type JoinCallResponse = JoinCallResponses[keyof JoinCallResponses];
+
+export type LeaveCallData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/leave';
+};
+
+export type LeaveCallErrors = {
+    404: ErrorResponse;
+};
+
+export type LeaveCallError = LeaveCallErrors[keyof LeaveCallErrors];
+
+export type LeaveCallResponses = {
+    200: LeaveCallResponse;
+};
+
+export type LeaveCallResponse2 = LeaveCallResponses[keyof LeaveCallResponses];
+
 export type MeetingShareData = {
     body?: never;
     path: {
@@ -18521,6 +24371,67 @@ export type MeetingShareResponses = {
 };
 
 export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
+
+export type GetCallParticipantsData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/participants';
+};
+
+export type GetCallParticipantsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetCallParticipantsResponses = {
+    200: LiveCallParticipantsResponse;
+};
+
+export type GetCallParticipantsResponse = GetCallParticipantsResponses[keyof GetCallParticipantsResponses];
+
+export type GetCallRecordingData = {
+    body?: never;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/recording';
+};
+
+export type GetCallRecordingErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCallRecordingError = GetCallRecordingErrors[keyof GetCallRecordingErrors];
+
+export type GetCallRecordingResponses = {
+    200: RecordingBytes;
+};
+
+export type GetCallRecordingResponse = GetCallRecordingResponses[keyof GetCallRecordingResponses];
+
+export type GetCallRingStateData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/ring';
+};
+
+export type GetCallRingStateResponses = {
+    200: RingStatusResponse;
+};
+
+export type GetCallRingStateResponse = GetCallRingStateResponses[keyof GetCallRingStateResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -18725,6 +24636,28 @@ export type GetOrCreateCallResponses = {
 };
 
 export type GetOrCreateCallResponse = GetOrCreateCallResponses[keyof GetOrCreateCallResponses];
+
+export type StartCallData = {
+    body: JoinCallRequest;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/call/{channel_id}';
+};
+
+export type StartCallErrors = {
+    403: ErrorResponse;
+    409: unknown;
+};
+
+export type StartCallError = StartCallErrors[keyof StartCallErrors];
+
+export type StartCallResponses = {
+    200: CallTokenResponse;
+};
+
+export type StartCallResponse = StartCallResponses[keyof StartCallResponses];
 
 export type CheckActiveCallData = {
     body?: never;
@@ -19461,6 +25394,58 @@ export type GetChannelAttachmentsResponses = {
 
 export type GetChannelAttachmentsResponse = GetChannelAttachmentsResponses[keyof GetChannelAttachmentsResponses];
 
+export type ListChannelBotsData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type ListChannelBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelBotsError = ListChannelBotsErrors[keyof ListChannelBotsErrors];
+
+export type ListChannelBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListChannelBotsResponse = ListChannelBotsResponses[keyof ListChannelBotsResponses];
+
+export type AddChannelBotData = {
+    body: AddChannelBotRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type AddChannelBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddChannelBotError = AddChannelBotErrors[keyof AddChannelBotErrors];
+
+export type AddChannelBotResponses = {
+    204: void;
+};
+
+export type AddChannelBotResponse = AddChannelBotResponses[keyof AddChannelBotResponses];
+
 export type CreateChannelScopedBotData = {
     body: CreateChannelScopedBotRequest;
     path: {
@@ -19675,6 +25660,40 @@ export type SetChannelPictureResponses = {
 };
 
 export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
+
+export type ShareWithChannelData = {
+    body: ShareWithChannelRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/shares';
+};
+
+export type ShareWithChannelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The caller cannot share this item
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ShareWithChannelError = ShareWithChannelErrors[keyof ShareWithChannelErrors];
+
+export type ShareWithChannelResponses = {
+    /**
+     * The channel's members can see the item
+     */
+    204: void;
+};
+
+export type ShareWithChannelResponse = ShareWithChannelResponses[keyof ShareWithChannelResponses];
 
 export type PostChannelBotWebhookData = {
     body: ChannelWebhookRequest;
@@ -19990,6 +26009,25 @@ export type CreateCrmCompanyResponses = {
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
 
+export type ImportCrmCompaniesCsvData = {
+    body: ImportCompaniesCsvRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/companies/import';
+};
+
+export type ImportCrmCompaniesCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmCompaniesCsvError = ImportCrmCompaniesCsvErrors[keyof ImportCrmCompaniesCsvErrors];
+
+export type ImportCrmCompaniesCsvResponses = {
+    200: CompanyImportResponse;
+};
+
+export type ImportCrmCompaniesCsvResponse = ImportCrmCompaniesCsvResponses[keyof ImportCrmCompaniesCsvResponses];
+
 export type GetCompanyData = {
     body?: never;
     path: {
@@ -20265,6 +26303,64 @@ export type GetContactResponses = {
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
 
+export type SetCrmContactCompanyData = {
+    body: SetContactCompanyRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type SetCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactCompanyError = SetCrmContactCompanyErrors[keyof SetCrmContactCompanyErrors];
+
+export type SetCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactCompanyResponse = SetCrmContactCompanyResponses[keyof SetCrmContactCompanyResponses];
+
+export type SetCrmContactEmailData = {
+    body: SetContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/email';
+};
+
+export type SetCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetCrmContactEmailError = SetCrmContactEmailErrors[keyof SetCrmContactEmailErrors];
+
+export type SetCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
+
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;
     path: {
@@ -20318,6 +26414,32 @@ export type SetCrmContactNameResponses = {
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
 
+export type GetCrmEmailPrivacyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type GetCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
+
+export type UpdateCrmEmailPrivacyData = {
+    body: EmailPrivacyChange;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type UpdateCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
 export type ListCrmPipelinesData = {
     body?: never;
     path?: never;
@@ -20344,6 +26466,53 @@ export type CreateCrmPipelineResponses = {
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
 
+export type SearchCrmPipelineEntriesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Text the record's name, domain or email must contain.
+         */
+        search: string;
+        /**
+         * Most entries per pipeline, 1 to 5000; defaults to 50.
+         */
+        limit?: number | null;
+    };
+    url: '/crm/pipelines/entry-search';
+};
+
+export type SearchCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type SearchCrmPipelineEntriesError = SearchCrmPipelineEntriesErrors[keyof SearchCrmPipelineEntriesErrors];
+
+export type SearchCrmPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type SearchCrmPipelineEntriesResponse = SearchCrmPipelineEntriesResponses[keyof SearchCrmPipelineEntriesResponses];
+
+export type ListCrmRecordPipelineEntriesData = {
+    body: RecordEntriesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/record-entries';
+};
+
+export type ListCrmRecordPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmRecordPipelineEntriesError = ListCrmRecordPipelineEntriesErrors[keyof ListCrmRecordPipelineEntriesErrors];
+
+export type ListCrmRecordPipelineEntriesResponses = {
+    200: Array<PipelineEntries>;
+};
+
+export type ListCrmRecordPipelineEntriesResponse = ListCrmRecordPipelineEntriesResponses[keyof ListCrmRecordPipelineEntriesResponses];
+
 export type GetCrmPipelineData = {
     body?: never;
     path: {
@@ -20358,6 +26527,175 @@ export type GetCrmPipelineResponses = {
 };
 
 export type GetCrmPipelineResponse = GetCrmPipelineResponses[keyof GetCrmPipelineResponses];
+
+export type GetCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/csv';
+};
+
+export type GetCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type GetCrmPipelineCsvError = GetCrmPipelineCsvErrors[keyof GetCrmPipelineCsvErrors];
+
+export type GetCrmPipelineCsvResponses = {
+    200: PipelineCsvResponse;
+};
+
+export type GetCrmPipelineCsvResponse = GetCrmPipelineCsvResponses[keyof GetCrmPipelineCsvResponses];
+
+export type EditCrmPipelineData = {
+    body: EditPipelineRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/edit';
+};
+
+export type EditCrmPipelineErrors = {
+    400: ErrorResponse;
+};
+
+export type EditCrmPipelineError = EditCrmPipelineErrors[keyof EditCrmPipelineErrors];
+
+export type EditCrmPipelineResponses = {
+    200: PipelineFields;
+};
+
+export type EditCrmPipelineResponse = EditCrmPipelineResponses[keyof EditCrmPipelineResponses];
+
+export type UpdateCrmPipelineEntriesData = {
+    body: UpdateEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type UpdateCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateCrmPipelineEntriesError = UpdateCrmPipelineEntriesErrors[keyof UpdateCrmPipelineEntriesErrors];
+
+export type UpdateCrmPipelineEntriesResponses = {
+    200: UpdateEntriesResponse;
+};
+
+export type UpdateCrmPipelineEntriesResponse = UpdateCrmPipelineEntriesResponses[keyof UpdateCrmPipelineEntriesResponses];
+
+export type AddCrmPipelineEntriesData = {
+    body: AddEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries';
+};
+
+export type AddCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type AddCrmPipelineEntriesError = AddCrmPipelineEntriesErrors[keyof AddCrmPipelineEntriesErrors];
+
+export type AddCrmPipelineEntriesResponses = {
+    200: AddEntriesResponse;
+};
+
+export type AddCrmPipelineEntriesResponse = AddCrmPipelineEntriesResponses[keyof AddCrmPipelineEntriesResponses];
+
+export type FindCrmPipelineEntriesData = {
+    body: FindEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/find';
+};
+
+export type FindCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type FindCrmPipelineEntriesError = FindCrmPipelineEntriesErrors[keyof FindCrmPipelineEntriesErrors];
+
+export type FindCrmPipelineEntriesResponses = {
+    200: FoundEntriesResponse;
+};
+
+export type FindCrmPipelineEntriesResponse = FindCrmPipelineEntriesResponses[keyof FindCrmPipelineEntriesResponses];
+
+export type RemoveCrmPipelineEntriesData = {
+    body: RemoveEntriesRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/entries/remove';
+};
+
+export type RemoveCrmPipelineEntriesErrors = {
+    400: ErrorResponse;
+};
+
+export type RemoveCrmPipelineEntriesError = RemoveCrmPipelineEntriesErrors[keyof RemoveCrmPipelineEntriesErrors];
+
+export type RemoveCrmPipelineEntriesResponses = {
+    200: RemoveEntriesResponse;
+};
+
+export type RemoveCrmPipelineEntriesResponse = RemoveCrmPipelineEntriesResponses[keyof RemoveCrmPipelineEntriesResponses];
+
+export type ExportCrmPipelineCsvData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/export';
+};
+
+export type ExportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ExportCrmPipelineCsvError = ExportCrmPipelineCsvErrors[keyof ExportCrmPipelineCsvErrors];
+
+export type ExportCrmPipelineCsvResponses = {
+    200: PipelineExportResponse;
+};
+
+export type ExportCrmPipelineCsvResponse = ExportCrmPipelineCsvResponses[keyof ExportCrmPipelineCsvResponses];
+
+export type ImportCrmPipelineCsvData = {
+    body: ImportPipelineCsvRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/import';
+};
+
+export type ImportCrmPipelineCsvErrors = {
+    400: ErrorResponse;
+};
+
+export type ImportCrmPipelineCsvError = ImportCrmPipelineCsvErrors[keyof ImportCrmPipelineCsvErrors];
+
+export type ImportCrmPipelineCsvResponses = {
+    200: PipelineImportResponse;
+};
+
+export type ImportCrmPipelineCsvResponse = ImportCrmPipelineCsvResponses[keyof ImportCrmPipelineCsvResponses];
 
 export type RenameCrmPipelineData = {
     body: RenamePipeline;
@@ -20685,6 +27023,10 @@ export type SaveDatabaseQueryData = {
 };
 
 export type SaveDatabaseQueryErrors = {
+    /**
+     * Not a SELECT, does not compile, or the chart names a column it does not return
+     */
+    400: ErrorResponse;
     /**
      * Missing or invalid credentials
      */
@@ -21671,6 +28013,31 @@ export type CreateSnippetHandlerResponses = {
 
 export type CreateSnippetHandlerResponse = CreateSnippetHandlerResponses[keyof CreateSnippetHandlerResponses];
 
+export type CreateSpreadsheetData = {
+    body: CreateSpreadsheetRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_spreadsheet';
+};
+
+export type CreateSpreadsheetErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * Project edit access denied
+     */
+    403: unknown;
+    500: ErrorResponse;
+};
+
+export type CreateSpreadsheetError = CreateSpreadsheetErrors[keyof CreateSpreadsheetErrors];
+
+export type CreateSpreadsheetResponses = {
+    200: CreateSpreadsheetResponse;
+};
+
+export type CreateSpreadsheetResponse2 = CreateSpreadsheetResponses[keyof CreateSpreadsheetResponses];
+
 export type CreateTaskHandlerData = {
     body: CreateTaskRequest;
     path?: never;
@@ -21978,6 +28345,58 @@ export type GetSystemSkillsHandlerResponses = {
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
+
 export type DeleteDocumentData = {
     body?: never;
     path: {
@@ -22169,6 +28588,265 @@ export type GetDocumentBranchNameResponses = {
 
 export type GetDocumentBranchNameResponse = GetDocumentBranchNameResponses[keyof GetDocumentBranchNameResponses];
 
+export type EditCanvasWithAiData = {
+    body: CanvasAiEditRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/ai-edit';
+};
+
+export type EditCanvasWithAiErrors = {
+    /**
+     * Not a canvas, or empty instructions
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The edit could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: CanvasErrorBody;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditCanvasWithAiError = EditCanvasWithAiErrors[keyof EditCanvasWithAiErrors];
+
+export type EditCanvasWithAiResponses = {
+    200: CanvasAiEdited;
+};
+
+export type EditCanvasWithAiResponse = EditCanvasWithAiResponses[keyof EditCanvasWithAiResponses];
+
+export type ApplyCanvasEditsData = {
+    body: CanvasEditsRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/edits';
+};
+
+export type ApplyCanvasEditsErrors = {
+    /**
+     * Not a canvas, or an invalid revision, code or snippets
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The scene changed since expectedRevision; nothing was committed
+     */
+    409: CanvasErrorBody;
+    /**
+     * The batch failed before it committed; nothing changed
+     */
+    422: CanvasErrorBody;
+    /**
+     * The batch could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The batch failed and may have applied
+     */
+    502: CanvasErrorBody;
+};
+
+export type ApplyCanvasEditsError = ApplyCanvasEditsErrors[keyof ApplyCanvasEditsErrors];
+
+export type ApplyCanvasEditsResponses = {
+    200: CanvasEdited;
+};
+
+export type ApplyCanvasEditsResponse = ApplyCanvasEditsResponses[keyof ApplyCanvasEditsResponses];
+
+export type RenderCanvasData = {
+    body: CanvasRenderRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/render';
+};
+
+export type RenderCanvasErrors = {
+    /**
+     * Not a canvas, or an invalid crop or selection
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The render could not start or be stored
+     */
+    500: CanvasErrorBody;
+    /**
+     * The render failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type RenderCanvasError = RenderCanvasErrors[keyof RenderCanvasErrors];
+
+export type RenderCanvasResponses = {
+    200: CanvasRendered;
+};
+
+export type RenderCanvasResponse = RenderCanvasResponses[keyof RenderCanvasResponses];
+
+export type ReadCanvasSceneData = {
+    body: CanvasSceneRequest;
+    path: {
+        /**
+         * Canvas document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/canvas/scene';
+};
+
+export type ReadCanvasSceneErrors = {
+    /**
+     * Not a canvas, or an invalid request
+     */
+    400: CanvasErrorBody;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The read could not start
+     */
+    500: CanvasErrorBody;
+    /**
+     * The read failed
+     */
+    502: CanvasErrorBody;
+};
+
+export type ReadCanvasSceneError = ReadCanvasSceneErrors[keyof ReadCanvasSceneErrors];
+
+export type ReadCanvasSceneResponses = {
+    200: CanvasScene;
+};
+
+export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
+
+export type CommentOnDocumentTextData = {
+    body: CommentOnTextRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/comments/text';
+};
+
+export type CommentOnDocumentTextErrors = {
+    /**
+     * Not a markdown or Word document, or an invalid quote or occurrence
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document comment access denied
+     */
+    403: ErrorResponse;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The quote appears more than once or not at all; nothing was posted
+     */
+    422: CommentOnTextRefused;
+    /**
+     * The comment could not be posted
+     */
+    500: ErrorResponse;
+    /**
+     * The comment could not be anchored; nothing was posted
+     */
+    502: ErrorResponse;
+};
+
+export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
+
+export type CommentOnDocumentTextResponses = {
+    200: CommentOnTextResponse;
+};
+
+export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
+
 export type CopyDocumentData = {
     body: CopyDocumentRequest;
     path: {
@@ -22200,6 +28878,51 @@ export type CopyDocumentResponses = {
 };
 
 export type CopyDocumentResponse2 = CopyDocumentResponses[keyof CopyDocumentResponses];
+
+export type ReadDesignData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: {
+        /**
+         * 1-based page numbers to read; omit for the whole design.
+         */
+        page?: Array<number>;
+    };
+    url: '/documents/{document_id}/design';
+};
+
+export type ReadDesignErrors = {
+    /**
+     * Not a readable Figma design, or too large
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type ReadDesignError = ReadDesignErrors[keyof ReadDesignErrors];
+
+export type ReadDesignResponses = {
+    200: DesignFileDescription;
+};
+
+export type ReadDesignResponse = ReadDesignResponses[keyof ReadDesignResponses];
 
 export type ExportDocumentData = {
     body?: never;
@@ -22258,7 +28981,7 @@ export type GetDocumentGithubPullRequestsResponses = {
 
 export type GetDocumentGithubPullRequestsResponse = GetDocumentGithubPullRequestsResponses[keyof GetDocumentGithubPullRequestsResponses];
 
-export type GetDocumentLexicalData = {
+export type ReadIllustratorDocumentData = {
     body?: never;
     path: {
         /**
@@ -22267,12 +28990,12 @@ export type GetDocumentLexicalData = {
         document_id: string;
     };
     query?: never;
-    url: '/documents/{document_id}/lexical';
+    url: '/documents/{document_id}/illustrator';
 };
 
-export type GetDocumentLexicalErrors = {
+export type ReadIllustratorDocumentErrors = {
     /**
-     * Not a markdown document
+     * Not a readable Illustrator document, or too large
      */
     400: ErrorResponse;
     /**
@@ -22280,81 +29003,23 @@ export type GetDocumentLexicalErrors = {
      */
     401: unknown;
     /**
-     * Document view access denied
+     * Document access denied
      */
     403: unknown;
     /**
      * Document not found
      */
     404: unknown;
-    /**
-     * The document could not be read
-     */
     500: ErrorResponse;
 };
 
-export type GetDocumentLexicalError = GetDocumentLexicalErrors[keyof GetDocumentLexicalErrors];
+export type ReadIllustratorDocumentError = ReadIllustratorDocumentErrors[keyof ReadIllustratorDocumentErrors];
 
-export type GetDocumentLexicalResponses = {
-    200: DocumentLexicalState;
+export type ReadIllustratorDocumentResponses = {
+    200: DesignFileDescription;
 };
 
-export type GetDocumentLexicalResponse = GetDocumentLexicalResponses[keyof GetDocumentLexicalResponses];
-
-export type CommitDocumentLexicalData = {
-    body: DocumentLexicalCommitRequest;
-    path: {
-        /**
-         * Document identity
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/documents/{document_id}/lexical';
-};
-
-export type CommitDocumentLexicalErrors = {
-    /**
-     * Not a markdown document, more than 500 blocks, or a malformed body
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Document edit access denied
-     */
-    403: unknown;
-    /**
-     * Document not found
-     */
-    404: unknown;
-    /**
-     * Nodes could not merge with the live document; nothing was applied
-     */
-    409: DocumentLexicalConflict;
-    /**
-     * The blocks are malformed; nothing was applied
-     */
-    422: DocumentLexicalInvalid;
-    /**
-     * The commit could not be sent; nothing was applied
-     */
-    500: ErrorResponse;
-    /**
-     * Outcome unknown: the commit may have applied
-     */
-    502: DocumentLexicalOutcomeUnknown;
-};
-
-export type CommitDocumentLexicalError = CommitDocumentLexicalErrors[keyof CommitDocumentLexicalErrors];
-
-export type CommitDocumentLexicalResponses = {
-    200: DocumentLexicalCommitted;
-};
-
-export type CommitDocumentLexicalResponse = CommitDocumentLexicalResponses[keyof CommitDocumentLexicalResponses];
+export type ReadIllustratorDocumentResponse = ReadIllustratorDocumentResponses[keyof ReadIllustratorDocumentResponses];
 
 export type GetLocationHandlerData = {
     body?: never;
@@ -22428,6 +29093,96 @@ export type GetDocumentLocationV3Responses = {
 
 export type GetDocumentLocationV3Response = GetDocumentLocationV3Responses[keyof GetDocumentLocationV3Responses];
 
+export type GetDocumentMarkdownData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type GetDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The body could not be read
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type GetDocumentMarkdownError = GetDocumentMarkdownErrors[keyof GetDocumentMarkdownErrors];
+
+export type GetDocumentMarkdownResponses = {
+    200: DocumentMarkdown;
+};
+
+export type GetDocumentMarkdownResponse = GetDocumentMarkdownResponses[keyof GetDocumentMarkdownResponses];
+
+export type WriteDocumentMarkdownData = {
+    body: WriteDocumentMarkdownRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type WriteDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an empty revision
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document changed since the revision was read; nothing was written
+     */
+    409: DocumentMarkdownFailure;
+    /**
+     * The write failed and may have applied
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type WriteDocumentMarkdownError = WriteDocumentMarkdownErrors[keyof WriteDocumentMarkdownErrors];
+
+export type WriteDocumentMarkdownResponses = {
+    200: DocumentMarkdownWritten;
+};
+
+export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
+
 export type PermanentlyDeleteDocumentData = {
     body?: never;
     path: {
@@ -22453,6 +29208,175 @@ export type PermanentlyDeleteDocumentResponses = {
 };
 
 export type PermanentlyDeleteDocumentResponse = PermanentlyDeleteDocumentResponses[keyof PermanentlyDeleteDocumentResponses];
+
+export type ReadPhotoshopDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/photoshop';
+};
+
+export type ReadPhotoshopDocumentErrors = {
+    /**
+     * Not a readable Photoshop document, or too large
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type ReadPhotoshopDocumentError = ReadPhotoshopDocumentErrors[keyof ReadPhotoshopDocumentErrors];
+
+export type ReadPhotoshopDocumentResponses = {
+    200: DesignFileDescription;
+};
+
+export type ReadPhotoshopDocumentResponse = ReadPhotoshopDocumentResponses[keyof ReadPhotoshopDocumentResponses];
+
+export type ReadPresentationData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: {
+        /**
+         * 1-based slide numbers to read; omit for the whole deck.
+         */
+        slide?: Array<number>;
+    };
+    url: '/documents/{document_id}/presentation';
+};
+
+export type ReadPresentationErrors = {
+    /**
+     * Not a readable PowerPoint presentation
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type ReadPresentationError = ReadPresentationErrors[keyof ReadPresentationErrors];
+
+export type ReadPresentationResponses = {
+    200: PresentationDescription;
+};
+
+export type ReadPresentationResponse = ReadPresentationResponses[keyof ReadPresentationResponses];
+
+export type CopyPresentationData = {
+    body: PresentationCopyRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/presentation/copy';
+};
+
+export type CopyPresentationErrors = {
+    /**
+     * Not a PowerPoint presentation, an empty name, more than 100 operations, or an operation the deck rejected; nothing was created
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * Document access denied, or the caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type CopyPresentationError = CopyPresentationErrors[keyof CopyPresentationErrors];
+
+export type CopyPresentationResponses = {
+    200: PresentationEditOutcome;
+};
+
+export type CopyPresentationResponse = CopyPresentationResponses[keyof CopyPresentationResponses];
+
+export type EditPresentationData = {
+    body: PresentationEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/presentation/edits';
+};
+
+export type EditPresentationErrors = {
+    /**
+     * Not a PowerPoint presentation, a batch outside 1 to 100 operations, or an operation the deck rejected; nothing was saved
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type EditPresentationError = EditPresentationErrors[keyof EditPresentationErrors];
+
+export type EditPresentationResponses = {
+    200: PresentationEditOutcome;
+};
+
+export type EditPresentationResponse = EditPresentationResponses[keyof EditPresentationResponses];
 
 export type GetDocumentProcessingResultData = {
     body?: never;
@@ -22644,6 +29568,202 @@ export type SetSkillDescriptionResponses = {
 
 export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
 
+export type EditSpreadsheetWithAiData = {
+    body: SpreadsheetAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/ai-edit';
+};
+
+export type EditSpreadsheetWithAiErrors = {
+    /**
+     * Not a native spreadsheet, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The workbook changed while the edit ran; nothing changed
+     */
+    409: ErrorResponse;
+    /**
+     * The writer could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit failed before saving; nothing changed
+     */
+    500: ErrorResponse;
+    /**
+     * The edit may have been saved
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditSpreadsheetWithAiError = EditSpreadsheetWithAiErrors[keyof EditSpreadsheetWithAiErrors];
+
+export type EditSpreadsheetWithAiResponses = {
+    200: SpreadsheetAiEdited;
+};
+
+export type EditSpreadsheetWithAiResponse = EditSpreadsheetWithAiResponses[keyof EditSpreadsheetWithAiResponses];
+
+export type CalculateSpreadsheetData = {
+    body: CalculateSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/calculate';
+};
+
+export type CalculateSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or invalid formulas or overrides
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The spreadsheet engine failed
+     */
+    502: ErrorResponse;
+};
+
+export type CalculateSpreadsheetError = CalculateSpreadsheetErrors[keyof CalculateSpreadsheetErrors];
+
+export type CalculateSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type CalculateSpreadsheetResponse = CalculateSpreadsheetResponses[keyof CalculateSpreadsheetResponses];
+
+export type EditSpreadsheetData = {
+    body: EditSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/edits';
+};
+
+export type EditSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or an invalid batch; nothing changed
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The workbook changed since expectedRevision; nothing changed
+     */
+    409: ErrorResponse;
+    /**
+     * The engine failed and the batch may have been saved
+     */
+    502: ErrorResponse;
+};
+
+export type EditSpreadsheetError = EditSpreadsheetErrors[keyof EditSpreadsheetErrors];
+
+export type EditSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type EditSpreadsheetResponse = EditSpreadsheetResponses[keyof EditSpreadsheetResponses];
+
+export type ReadSpreadsheetData = {
+    body: ReadSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/read';
+};
+
+export type ReadSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or an invalid sheet or range
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The spreadsheet engine failed
+     */
+    502: ErrorResponse;
+};
+
+export type ReadSpreadsheetError = ReadSpreadsheetErrors[keyof ReadSpreadsheetErrors];
+
+export type ReadSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type ReadSpreadsheetResponse = ReadSpreadsheetResponses[keyof ReadSpreadsheetResponses];
+
 export type GetDocumentTeamShareData = {
     body?: never;
     path: {
@@ -22769,6 +29889,95 @@ export type GetDocumentViewsHandlerResponses = {
 };
 
 export type GetDocumentViewsHandlerResponse = GetDocumentViewsHandlerResponses[keyof GetDocumentViewsHandlerResponses];
+
+export type ReadWordDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: {
+        /**
+         * First block to show, 1-based; omit to start at the beginning.
+         */
+        start?: number;
+        /**
+         * Most blocks to show; omit for as many as fit.
+         */
+        count?: number;
+    };
+    url: '/documents/{document_id}/word';
+};
+
+export type ReadWordDocumentErrors = {
+    /**
+     * Not an uploaded Word document, or still being processed after upload
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required, or a bot with no acting user
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type ReadWordDocumentError = ReadWordDocumentErrors[keyof ReadWordDocumentErrors];
+
+export type ReadWordDocumentResponses = {
+    200: WordDocumentResponse;
+};
+
+export type ReadWordDocumentResponse = ReadWordDocumentResponses[keyof ReadWordDocumentResponses];
+
+export type EditWordDocumentData = {
+    body: WordDocumentEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/word/edits';
+};
+
+export type EditWordDocumentErrors = {
+    /**
+     * Not an uploaded Word document, a batch outside 1 to 50 operations, an invalid author, or operations the editor refused; nothing changed
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required, or a bot with no acting user
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    500: ErrorResponse;
+};
+
+export type EditWordDocumentError = EditWordDocumentErrors[keyof EditWordDocumentErrors];
+
+export type EditWordDocumentResponses = {
+    200: WordDocumentResponse;
+};
+
+export type EditWordDocumentResponse = EditWordDocumentResponses[keyof EditWordDocumentResponses];
 
 export type GetDocumentVersionData = {
     body?: never;
@@ -24303,6 +31512,71 @@ export type CreateInitiativeResponses = {
 
 export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
 
+export type PageInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum rows, between one and one hundred; defaults to fifty.
+         */
+        limit?: number | null;
+        /**
+         * Opaque continuation returned by the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Case-insensitive name substring.
+         */
+        query?: string | null;
+        /**
+         * Required status option id.
+         */
+        status?: string | null;
+        /**
+         * Required priority option id.
+         */
+        priority?: string | null;
+        /**
+         * Required assignee user id.
+         */
+        assignee?: string | null;
+        /**
+         * Inclusive due-date lower bound.
+         */
+        dueAfter?: string | null;
+        /**
+         * Inclusive due-date upper bound.
+         */
+        dueBefore?: string | null;
+        /**
+         * Sort key; defaults to updated time.
+         */
+        sort?: InitiativeSort;
+        /**
+         * Descending order; defaults to true for updated time.
+         */
+        descending?: boolean | null;
+    };
+    url: '/initiatives/page';
+};
+
+export type PageInitiativesErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PageInitiativesError = PageInitiativesErrors[keyof PageInitiativesErrors];
+
+export type PageInitiativesResponses = {
+    200: InitiativePage;
+};
+
+export type PageInitiativesResponse = PageInitiativesResponses[keyof PageInitiativesResponses];
+
 export type DeleteInitiativeData = {
     body?: never;
     path: {
@@ -24397,6 +31671,87 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type GetInitiativeActivityData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: {
+        /**
+         * Only changes at or after this time.
+         */
+        after?: string;
+        /**
+         * Only changes before this time.
+         */
+        before?: string;
+        /**
+         * `occurredAt` of the previous page's `nextCursor`; send with `cursorId`.
+         */
+        cursorOccurredAt?: string;
+        /**
+         * `id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.
+         */
+        cursorId?: string;
+        /**
+         * Events to scan, 1 through 100; defaults to 100.
+         */
+        limit?: number;
+    };
+    url: '/initiatives/{initiative_id}/activity';
+};
+
+export type GetInitiativeActivityErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeActivityError = GetInitiativeActivityErrors[keyof GetInitiativeActivityErrors];
+
+export type GetInitiativeActivityResponses = {
+    200: InitiativeActivityPage;
+};
+
+export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
+
+export type GetInitiativeDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/description';
+};
+
+export type GetInitiativeDescriptionErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeDescriptionError = GetInitiativeDescriptionErrors[keyof GetInitiativeDescriptionErrors];
+
+export type GetInitiativeDescriptionResponses = {
+    200: InitiativeDescription;
+};
+
+export type GetInitiativeDescriptionResponse = GetInitiativeDescriptionResponses[keyof GetInitiativeDescriptionResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
@@ -26335,3 +33690,101 @@ export type WhatsappPasskeyResponses = {
 };
 
 export type WhatsappPasskeyResponse = WhatsappPasskeyResponses[keyof WhatsappPasskeyResponses];
+
+export type GetDocumentLexicalData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type GetDocumentLexicalErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document view access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document could not be read
+     */
+    500: ErrorResponse;
+};
+
+export type GetDocumentLexicalError = GetDocumentLexicalErrors[keyof GetDocumentLexicalErrors];
+
+export type GetDocumentLexicalResponses = {
+    200: DocumentLexicalState;
+};
+
+export type GetDocumentLexicalResponse = GetDocumentLexicalResponses[keyof GetDocumentLexicalResponses];
+
+export type CommitDocumentLexicalData = {
+    body: DocumentLexicalCommitRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/lexical';
+};
+
+export type CommitDocumentLexicalErrors = {
+    /**
+     * Not a markdown document, more than 500 blocks, or a malformed body
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Nodes could not merge with the live document; nothing was applied
+     */
+    409: DocumentLexicalConflict;
+    /**
+     * The blocks are malformed; nothing was applied
+     */
+    422: DocumentLexicalInvalid;
+    /**
+     * The commit could not be sent; nothing was applied
+     */
+    500: ErrorResponse;
+    /**
+     * Outcome unknown: the commit may have applied
+     */
+    502: DocumentLexicalOutcomeUnknown;
+};
+
+export type CommitDocumentLexicalError = CommitDocumentLexicalErrors[keyof CommitDocumentLexicalErrors];
+
+export type CommitDocumentLexicalResponses = {
+    200: DocumentLexicalCommitted;
+};
+
+export type CommitDocumentLexicalResponse = CommitDocumentLexicalResponses[keyof CommitDocumentLexicalResponses];

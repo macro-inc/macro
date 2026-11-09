@@ -17,6 +17,7 @@ import {
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
+import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 import './agents-page.css';
 
@@ -113,6 +114,7 @@ export function RouteAgents() {
             'to get things done alongside your team.',
           ]}
           cta="agents_hero_get_started"
+          tutorial="agents"
         />
       </div>
       <WorkspaceDesktopDemo
@@ -184,12 +186,15 @@ export function RouteAgents() {
                 workspace. Connect through macrod and keep your agent running on
                 your machine.
               </p>
-              <a
-                class="agents-setup-link"
-                href="https://docs.macro.com/AI/bring-your-own"
-              >
-                Connect your agent <ArrowUpRight aria-hidden="true" />
-              </a>
+              <div class="agents-setup-actions">
+                <TutorialVideoDialog tutorial="macrod" />
+                <a
+                  class="agents-setup-link"
+                  href="https://docs.macro.com/AI/bring-your-own"
+                >
+                  Connect your agent <ArrowUpRight aria-hidden="true" />
+                </a>
+              </div>
             </div>
             <div class="agents-connection-path">
               <h3>Macro, inside your agent</h3>

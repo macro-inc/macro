@@ -11,7 +11,11 @@ service. Session authentication, token issuance and execution storage belong to
 - `README.md`: permissions, limits and the program contract.
 - `src/domain/service.rs`: admission and cancellation.
 - `src/outbound/deno.rs`: process lifecycle and restricted permissions.
-- `src/outbound/deno/bootstrap.mjs`: program loading and final JSON protocol.
+- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+  and final JSON protocol.
+- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
+- `src/domain/operations.rs`: the generated operation catalog (labels, routes,
+  read or write) and the SDK fingerprint.
 
 ## Gotchas
 
@@ -22,11 +26,22 @@ completed API writes. SDK, Handlebars and Lexical modules come from
 run writes the Lexical modules under `lexical/` and maps `lexical`, the
 `@lexical/*` packages and `@macro-inc/sdk/lexical` in `imports.json`; `sdk.mjs`
 imports them by specifier, so programs share one instance of each.
+A POST that only reads must be listed in the generator's `postReads`, or dry runs skip it.
+The routine checker maps `lexical` to the core declarations embedded beside the
+SDK types; it resolves no npm packages at check time.
 
 Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
 run under a plain user token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
-mutation routes demand the copy's `inbox` from such requests.
+mutation routes demand the copy's `inbox` from such requests, the calendar
+create route refuses them, and the email send and schedule routes refuse
+them unless the schedule quotes the user's approval
+(`macro_authorization::is_agent_run`).
+
+`RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
+host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
+`new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
+local would point at macro.com.
 
 The bootstrap bans timers before importing `main.mjs`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
@@ -34,6 +49,8 @@ the SSE reconnect delay, so a reconnecting event stream fails the same way.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
+An unattended result is never summarized: later routine steps read it whole, so
+one over the limit fails the run with a message saying so.
 
 ## Checks
 

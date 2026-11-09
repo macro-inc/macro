@@ -8,11 +8,11 @@ fn rendered_yaml() -> String {
 
 /// Merges to `main` publish, so the package suite has to guard them too.
 #[test]
-fn checks_the_package_on_pull_requests_and_main() {
+fn checks_the_package_in_pr_ci_and_on_main() {
     let yaml = rendered_yaml();
 
     assert!(yaml.contains("check-package"));
-    assert!(yaml.contains("pull_request:"));
+    assert!(yaml.contains("workflow_call:"));
     assert!(yaml.contains("push:"));
 }
 

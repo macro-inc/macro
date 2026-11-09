@@ -12,7 +12,8 @@ pub const HANDLEBARS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/ha
 pub const DOCUMENTATION: &str =
     include_str!(concat!(env!("CODE_MODE_ASSETS"), "/documentation.json"));
 
-/// Display labels for every generated SDK operation, keyed `service.method`, as JSON.
+/// Every generated SDK operation, keyed `service.method`, with its display
+/// label, HTTP method, path and whether it can write, as JSON.
 pub const OPERATIONS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/operations.json"));
 
 /// One file of the code-split Lexical modules, written under the run's root.
@@ -31,3 +32,6 @@ pub struct LexicalModule {
 /// `@macro-inc/sdk/lexical`, which `sdk.mjs` imports by specifier.
 pub const LEXICAL_MODULES: &[LexicalModule] =
     include!(concat!(env!("OUT_DIR"), "/lexical_modules.rs"));
+/// The SDK's TypeScript declarations that routine code is type-checked
+/// against, with their fingerprint, as JSON.
+pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));

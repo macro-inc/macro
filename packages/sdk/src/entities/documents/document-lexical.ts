@@ -1,3 +1,4 @@
+/// <reference lib="esnext.disposable" preserve="true" />
 import type {
   LexicalEditor,
   LexicalNode,

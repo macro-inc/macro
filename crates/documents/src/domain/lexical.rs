@@ -138,7 +138,7 @@ pub async fn read_lexical<Worker: EditingWorkerService>(
     document: &DocumentBasic,
 ) -> Result<DocumentLexicalState, DocumentError> {
     ensure_markdown(&access, document)?;
-    let (document_token, _) = worker_token(&access, document, AccessLevel::View, jwt_secret)?;
+    let (document_token, _) = worker_token(&access, AccessLevel::View, jwt_secret)?;
     worker
         .lexical_state(&document.document_id, &document_token)
         .await
@@ -176,7 +176,7 @@ pub async fn commit_lexical<Worker: EditingWorkerService>(
         .into());
     }
 
-    let (document_token, editor) = worker_token(&access, document, AccessLevel::Edit, jwt_secret)?;
+    let (document_token, editor) = worker_token(&access, AccessLevel::Edit, jwt_secret)?;
     let outcome = worker
         .lexical_commit(&document.document_id, &document_token, commit, editor)
         .await

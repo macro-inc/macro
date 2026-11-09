@@ -1,6 +1,10 @@
 // Vendored from packages/lexical-core/decoratorRegistry.ts by `bun run vendor`; edit the source, not this copy.
 import type { Klass, LexicalNode } from 'lexical';
 import type {
+  AccountManagerRequestDecoratorProps,
+  AccountManagerRequestNode,
+} from './nodes/AccountManagerRequestNode';
+import type {
   AgentActivityDecoratorProps,
   AgentActivityNode,
 } from './nodes/AgentActivityNode';
@@ -191,6 +195,10 @@ export interface NodeDecoratorMap {
   TagMentionNode: {
     klass: typeof TagMentionNode;
     props: TagMentionDecoratorProps;
+  };
+  AccountManagerRequestNode: {
+    klass: typeof AccountManagerRequestNode;
+    props: AccountManagerRequestDecoratorProps;
   };
   ConnectAppNode: {
     klass: typeof ConnectAppNode;

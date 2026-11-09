@@ -1,6 +1,7 @@
 // Vendored from packages/lexical-core/utils/parsers.ts by `bun run vendor`; edit the source, not this copy.
 import { isAgentContextData } from '../nodes/AgentContextNode';
 import { parseDatabaseQueryJson } from '../nodes/DatabaseQueryNode';
+import { parseDateMentionBody } from '../nodes/DateMentionNode';
 
 type UserMentionData = {
   userId?: string;
@@ -71,9 +72,12 @@ export function parseContactMentions(text: string): string {
 }
 
 export function parseDateMentions(text: string): string {
-  return text.replace(/<m-date-mention>(.*?)<\/m-date-mention>/g, (_, json) => {
+  return text.replace(/<m-date-mention>(.*?)<\/m-date-mention>/g, (_, body) => {
+    if (!body.trim().startsWith('{')) {
+      return parseDateMentionBody(body)?.displayFormat ?? '';
+    }
     try {
-      const data = JSON.parse(json);
+      const data = JSON.parse(body);
       return data.displayFormat || '';
     } catch {
       return '';
@@ -135,6 +139,14 @@ function githubPullRequestRef(url: string): string | undefined {
     /github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/pull\/([1-9][0-9]*)/
   );
   return match ? `${match[1]}/${match[2]}#${match[3]}` : undefined;
+}
+
+/** Account manager cards read as what they are; their payload is only an id. */
+export function parseAccountManagerRequests(text: string): string {
+  return text.replace(
+    /<m-account-manager-request>.*?<\/m-account-manager-request>/g,
+    'Account manager request'
+  );
 }
 
 /** `<m-connect-app>` chips read as their call to action. */
@@ -322,6 +334,7 @@ function flattenMarkdown(
     parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
+    parseAccountManagerRequests,
     parseCursorSystemNotifications,
     parseDatabaseQueries,
     parseSnapshots,
@@ -523,6 +536,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-connect-app', (data) =>
     data.name ? `Connect ${data.name}` : ''
+  );
+  text = replaceJsonTag(
+    text,
+    'm-account-manager-request',
+    () => 'Account manager request'
   );
   text = replaceJsonTag(
     text,

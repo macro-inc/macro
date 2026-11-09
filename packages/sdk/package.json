@@ -1,6 +1,6 @@
 {
   "name": "@macro-inc/sdk",
-  "version": "0.2.2",
+  "version": "0.4.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/macro-inc/macro.git",
@@ -24,9 +24,20 @@
     "./generated/*": {
       "types": "./dist/generated/*/index.d.ts",
       "import": "./dist/generated/*/index.js"
+    },
+    "./calls/node": {
+      "types": "./dist/src/calls/node.d.ts",
+      "import": "./dist/src/calls/node.js"
+    },
+    "./calls/browser": {
+      "types": "./dist/src/calls/browser.d.ts",
+      "import": "./dist/src/calls/browser.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "CALLS.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -44,13 +55,17 @@
     "lint": "biome check",
     "format": "biome format --write",
     "vendor": "bun scripts/vendor.ts",
-    "vendor:check": "bun scripts/vendor.ts --check"
+    "vendor:check": "bun scripts/vendor.ts --check",
+    "check:pack": "bun scripts/check-pack.ts"
   },
   "dependencies": {
     "linkify-it": "^5.0.0",
     "nanoid": "^5.1.5",
     "ts-pattern": "^5.8.0",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@opentelemetry/api": "^1.9.1",
+    "prismjs": "^1.30.0",
+    "lexical": "0.45.0"
   },
   "peerDependencies": {
     "@lexical/code": "0.45.0",
@@ -62,19 +77,43 @@
     "@lexical/rich-text": "0.45.0",
     "@lexical/table": "0.45.0",
     "@lexical/utils": "0.45.0",
-    "lexical": "0.45.0"
+    "@livekit/rtc-node": "^1.2.1",
+    "livekit-client": "^2.18.0"
   },
   "peerDependenciesMeta": {
-    "@lexical/code": { "optional": true },
-    "@lexical/headless": { "optional": true },
-    "@lexical/link": { "optional": true },
-    "@lexical/list": { "optional": true },
-    "@lexical/mark": { "optional": true },
-    "@lexical/markdown": { "optional": true },
-    "@lexical/rich-text": { "optional": true },
-    "@lexical/table": { "optional": true },
-    "@lexical/utils": { "optional": true },
-    "lexical": { "optional": true }
+    "@lexical/code": {
+      "optional": true
+    },
+    "@lexical/headless": {
+      "optional": true
+    },
+    "@lexical/link": {
+      "optional": true
+    },
+    "@lexical/list": {
+      "optional": true
+    },
+    "@lexical/mark": {
+      "optional": true
+    },
+    "@lexical/markdown": {
+      "optional": true
+    },
+    "@lexical/rich-text": {
+      "optional": true
+    },
+    "@lexical/table": {
+      "optional": true
+    },
+    "@lexical/utils": {
+      "optional": true
+    },
+    "@livekit/rtc-node": {
+      "optional": true
+    },
+    "livekit-client": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
@@ -93,8 +132,9 @@
     "@types/semver": "^7.8.0",
     "esbuild": "^0.28.1",
     "hono": "^4.12.27",
-    "lexical": "0.45.0",
     "semver": "^7.8.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@livekit/rtc-node": "^1.2.1",
+    "livekit-client": "^2.18.0"
   }
 }

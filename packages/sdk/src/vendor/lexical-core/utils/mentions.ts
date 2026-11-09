@@ -2,6 +2,11 @@
 import { $dfsIterator } from '@lexical/utils';
 import { $getRoot, type LexicalNode } from 'lexical';
 import { match, P } from 'ts-pattern';
+import type { Widget_Serialize as Widget } from '../generated/dynamic-ui';
+import {
+  $isAgentActivityNode,
+  isAgentActivityCard,
+} from '../nodes/AgentActivityNode';
 import {
   $isAgentSessionMentionNode,
   type AgentSessionMentionInfo,
@@ -125,6 +130,18 @@ function documentMentionEntityType(blockName: string): string {
   );
 }
 
+/** The forms in a presented view's cards, nested containers included. */
+function viewFormIds(widgets: readonly Widget[]): string[] {
+  return widgets.flatMap((widget) =>
+    match(widget)
+      .with({ type: 'cards' }, ({ items }) =>
+        items.filter((item) => item.type === 'form').map((item) => item.id)
+      )
+      .with({ type: 'container' }, ({ children }) => viewFormIds(children))
+      .otherwise(() => [])
+  );
+}
+
 /**
  * Extracts the mentions in the current editor state as `ChannelMention`s,
  * the way the web editor tracks them while composing a channel message.
@@ -133,7 +150,9 @@ function documentMentionEntityType(blockName: string): string {
  * carry no referencable entity and are skipped. Project (initiative) and CRM
  * pipeline mentions are skipped too: channel references auto-share their
  * target with members.
- * Authored group mentions are preserved. Duplicates are dropped.
+ * Authored group mentions are preserved. Forms an agent reply presents as
+ * cards in its steps count as references, like a posted form card, so
+ * channel delivery can share them. Duplicates are dropped.
  */
 export function $extractChannelMentions(): ChannelMention[] {
   const out: ChannelMention[] = [];
@@ -157,6 +176,13 @@ export function $extractChannelMentions(): ChannelMention[] {
         entityType: documentMentionEntityType(node.getBlockName()),
         entityId: node.getDocumentId(),
       });
+    } else if ($isAgentActivityNode(node)) {
+      for (const row of node.exportComponentProps().rows) {
+        if (!isAgentActivityCard(row.card)) continue;
+        for (const formId of viewFormIds(row.card.view.widgets)) {
+          push({ entityType: 'form', entityId: formId });
+        }
+      }
     } else if ($isAgentSessionMentionNode(node)) {
       push({ entityType: 'agent_session', entityId: node.getId() });
     } else if ($isGroupMentionNode(node)) {

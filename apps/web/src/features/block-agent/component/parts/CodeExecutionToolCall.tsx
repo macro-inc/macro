@@ -20,7 +20,9 @@ export function CodeExecutionToolCall(props: {
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
-  const errorVisible = () =>
+  // The error text is written for the agent, which reads it and retries; the
+  // person watching only sees that the program ended badly.
+  const ended = () =>
     Boolean(
       props.error &&
         (props.record?.status !== 'running' ||
@@ -34,7 +36,7 @@ export function CodeExecutionToolCall(props: {
 
   return (
     <div class="min-w-0" data-code-execution={props.record?.executionId}>
-      <Show when={activity().length === 0 || errorVisible()}>
+      <Show when={activity().length === 0 || ended()}>
         <ToolCard
           title="Workspace activity"
           status={props.common.status}
@@ -47,12 +49,7 @@ export function CodeExecutionToolCall(props: {
                 ? 'Working in your workspace…'
                 : undefined)
           }
-          hasContent={errorVisible()}
-        >
-          <Show when={errorVisible()}>
-            <p class="mt-2 text-ink-muted">{props.error}</p>
-          </Show>
-        </ToolCard>
+        />
       </Show>
       <Show when={activity().length > 0}>
         <LiveToolGroup

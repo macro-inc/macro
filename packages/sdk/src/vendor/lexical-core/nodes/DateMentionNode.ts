@@ -231,3 +231,73 @@ export function $isDateMentionNode(
 ): node is DateMentionNode {
   return node instanceof DateMentionNode;
 }
+
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+// An ISO 8601 calendar date, optionally with a time and a UTC offset.
+const BARE_DATE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+
+/**
+ * Label for a bare ISO date or timestamp, as written: "Nov 13, 2026" or
+ * "Nov 13, 2026, 3:00 PM". Null when it is not a real date and time.
+ * `crates/mention_utils` labels bare bodies the same way.
+ */
+function bareDateLabel(body: string): string | null {
+  const parts = BARE_DATE.exec(body);
+  if (!parts) return null;
+  const [year, month, day] = parts.slice(1, 4).map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) return null;
+  const date = `${MONTHS[month - 1]} ${day}, ${year}`;
+  if (parts[4] === undefined) return date;
+  const hour = Number(parts[4]);
+  if (hour > 23 || Number(parts[5]) > 59) return null;
+  const period = hour < 12 ? 'AM' : 'PM';
+  return `${date}, ${hour % 12 || 12}:${parts[5]} ${period}`;
+}
+
+/**
+ * Reads the body of an `<m-date-mention>` tag: the JSON object the app
+ * writes, or a bare ISO 8601 calendar date or timestamp, which models write
+ * in place of the object. A bare body gets a label derived from the date.
+ * Returns null for anything else.
+ */
+export function parseDateMentionBody(body: string): DateMentionInfo | null {
+  const trimmed = body.trim();
+  if (trimmed.startsWith('{')) {
+    let data: unknown;
+    try {
+      data = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+    if (typeof data !== 'object' || data === null) return null;
+    if (!('date' in data) || !('displayFormat' in data)) return null;
+    const { date, displayFormat } = data;
+    if (typeof date !== 'string' || typeof displayFormat !== 'string') {
+      return null;
+    }
+    const mentionUuid =
+      'mentionUuid' in data && typeof data.mentionUuid === 'string'
+        ? data.mentionUuid
+        : undefined;
+    return { date, displayFormat, mentionUuid };
+  }
+  const displayFormat = bareDateLabel(trimmed);
+  if (displayFormat === null) return null;
+  return { date: trimmed, displayFormat };
+}

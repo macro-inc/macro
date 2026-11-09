@@ -14,6 +14,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AccountManagerRequestNode } from './nodes/AccountManagerRequestNode';
 import { AgentActivityNode } from './nodes/AgentActivityNode';
 import { AgentContextNode } from './nodes/AgentContextNode';
 import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
@@ -123,6 +124,7 @@ export const SupportedNodeTypes = [
   ThemeMentionNode,
   TagMentionNode,
   ConnectAppNode,
+  AccountManagerRequestNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,

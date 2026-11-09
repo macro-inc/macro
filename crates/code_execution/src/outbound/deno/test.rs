@@ -133,7 +133,11 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
         )]),
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
-        hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        unattended: None,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -215,7 +219,11 @@ async fn a_program_presents_a_view_through_its_session() {
         trace_headers: BTreeMap::new(),
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
-        hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        unattended: None,
     };
     let source = r#"
 export async function main({execution}) {
@@ -264,6 +272,53 @@ async fn javascript_logs_result_and_cleanup() {
         |event| matches!(&event.kind, EventKind::Log { message, .. } if message == "working")
     ));
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn links_point_at_the_deployment_web_app() {
+    let (_root, service) = setup(Limits::default()).await;
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::new(),
+            web_app_url: "https://dev.macro.com".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+import { Macro } from '@macro-inc/sdk';
+export async function main({token, hosts, webAppUrl, macro: supplied}) {
+  const constructed = new Macro({token, hosts, webAppUrl});
+  return {
+    supplied: supplied.forms.byId('fixture-form').webUrl(),
+    constructed: constructed.documents.byId('fixture-document').webUrl(),
+  };
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "supplied": "https://dev.macro.com/app/form/fixture-form",
+            "constructed": "https://dev.macro.com/app/md/fixture-document",
+        })
+    );
     service.shutdown().await;
 }
 
@@ -385,7 +440,7 @@ async fn denies_unlisted_destinations_including_redirects() {
         read_request(&mut stream).await;
         stream.write_all(format!("HTTP/1.1 302 Found\r\nLocation: http://{forbidden_address}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
     });
-    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..RunEnvironment::default() }).unwrap()).await;
+    let (_, outcome) = collect(service.execute(ExecuteRequest { source: format!("export async function main() {{ return await fetch('http://{allowed_address}'); }}"), timeout_ms: 5000 }, RunEnvironment { endpoints: SdkEndpoints { hosts: BTreeMap::from([("cognition".into(), format!("http://{allowed_address}"))]), ..SdkEndpoints::default() }, ..RunEnvironment::default() }).unwrap()).await;
     assert!(
         matches!(outcome, Outcome::Failed { .. }),
         "redirect escaped allowlist: {outcome:?}"
@@ -511,10 +566,10 @@ async fn oversized_result_data_is_summarized_and_reviews_kept() {
     assert!(data["bytes"].as_u64().unwrap() > max_result_bytes as u64);
     assert_eq!(
         data["outline"],
-        "{keys: Array(8) of string, items: Array(2000) of {id: number, name: string}}"
+        "{keys: Array(9) of string, items: Array(2000) of {id: number, name: string}}"
     );
     assert!(data["preview"].as_str().unwrap().starts_with(
-        r#"{"keys":["token","traceHeaders","sessionId","executionId","hosts","macro","session","execution"],"items":[{"id":0,"#
+        r#"{"keys":["token","traceHeaders","sessionId","executionId","hosts","webAppUrl","macro","session","execution"],"items":[{"id":0,"#
     ));
     assert!(serde_json::to_vec(&value).unwrap().len() <= max_result_bytes);
     service.shutdown().await;
@@ -608,6 +663,248 @@ async fn redacts_run_token_from_results_keys_console_stderr_and_errors() {
             unexpected => panic!("unexpected outcome: {unexpected:?}"),
         }
     }
+    service.shutdown().await;
+}
+
+fn unattended(
+    token: &str,
+    hosts: &[(&str, String)],
+    arguments: serde_json::Value,
+    dry_run: bool,
+) -> RunEnvironment {
+    RunEnvironment {
+        token: token.into(),
+        endpoints: SdkEndpoints {
+            hosts: hosts
+                .iter()
+                .map(|(name, url)| ((*name).to_owned(), url.clone()))
+                .collect(),
+            ..SdkEndpoints::default()
+        },
+        unattended: Some(Unattended {
+            arguments: arguments.as_object().unwrap().clone(),
+            dry_run,
+        }),
+        ..RunEnvironment::default()
+    }
+}
+
+async fn run_unattended(
+    service: &ExecutionService,
+    source: &str,
+    environment: RunEnvironment,
+) -> (Vec<serde_json::Value>, Outcome) {
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let progress = events
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            EventKind::Progress { value } => Some(value),
+            _ => None,
+        })
+        .collect();
+    (progress, outcome)
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
+    let (_root, service) = setup(Limits::default()).await;
+    let fits = "export function main() { return { items: Array.from({ length: 400 }, (_, id) => ({ id, name: 'x'.repeat(100) })) }; }";
+    let (_, outcome) = run_unattended(
+        &service,
+        fits,
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["items"].as_array().unwrap().len(), 400);
+
+    let (_, outcome) = run_unattended(
+        &service,
+        "export function main() { return 'x'.repeat(70 * 1024); }",
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "The step's output is 71 KB as JSON; a step's output can be at most 64 KB. Return only what later steps need."
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn unattended_typescript_gets_its_arguments_and_no_credential_or_raw_network() {
+    let (_root, service) = setup(Limits::default()).await;
+    let source = r#"
+type Context = { macro: object; trigger: { subject: string } };
+export async function main(context: Context): Promise<object> {
+  let net = "loaded";
+  try { await import("node:" + "net"); } catch { net = "unavailable"; }
+  return {
+    keys: Object.keys(context).sort(),
+    subject: context.trigger.subject,
+    connect: typeof Deno.connect,
+    worker: typeof Worker,
+    net,
+  };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[],
+        serde_json::json!({"trigger": {"subject": "Invoice 7"}}),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "keys": ["macro", "trigger"],
+            "subject": "Invoice 7",
+            "connect": "undefined",
+            "worker": "undefined",
+            "net": "unavailable",
+        })
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_reads_but_sends_no_writes() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("POST /decisions "), "{request}");
+        respond(&mut stream, r#"{"probabilities":{"yes":0.9}}"#).await;
+        // Nothing else reaches the API: the write is skipped and the raw
+        // request is stopped in the process.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let source = r#"
+export async function main({ macro, host }: { macro: any; host: string }) {
+  const decision = await macro.ai.decide({ input: "x", questions: { yes: "Yes?" } });
+  const archived = await macro._client.email.archiveThread({ path: { id: "thread-1" }, body: { archived: true } });
+  const token = macro._client.email.client.getConfig().auth;
+  let raw = "sent";
+  try {
+    await fetch(`${host}/email/labels`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+  } catch (error) {
+    raw = String(error);
+  }
+  return { yes: decision.probabilities.yes, archived: archived.data, raw };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone()), ("email", host.clone())],
+        serde_json::json!({ "host": host }),
+        true,
+    );
+    let (progress, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["yes"], 0.9);
+    assert_eq!(value["archived"], serde_json::json!({}));
+    assert!(
+        value["raw"]
+            .as_str()
+            .unwrap()
+            .contains("A dry run doesn't send changes."),
+        "{value}"
+    );
+    assert!(progress.iter().any(|event| event["service"] == "email"
+        && event["operation"] == "archiveThread"
+        && event["status"] == "skipped"));
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_real_run_sends_its_writes() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("DELETE "), "{request}");
+        respond(&mut stream, "{}").await;
+    });
+    let source = r#"
+export async function main({ macro }: { macro: any }) {
+  await macro._client.storage.deleteDocument({ path: { document_id: "document-1" } });
+  return { deleted: true };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("storage", host.clone())],
+        serde_json::json!({}),
+        false,
+    );
+    let (progress, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["deleted"], true);
+    assert!(
+        progress
+            .iter()
+            .any(|event| event["operation"] == "deleteDocument" && event["status"] == "completed")
+    );
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn the_cpu_limit_stops_a_busy_program() {
+    let (_root, service) = setup(Limits {
+        max_cpu: Some(Duration::from_secs(1)),
+        background: true,
+        ..Limits::default()
+    })
+    .await;
+    let (_, outcome) = run(
+        &service,
+        "export async function main() { for (;;) {} }",
+        10_000,
+    )
+    .await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message.contains("CPU")),
+        "{outcome:?}"
+    );
     service.shutdown().await;
 }
 
@@ -730,7 +1027,10 @@ export async function main({ token, hosts }) {
                 },
                 RunEnvironment {
                     token: "fixture-run-token".into(),
-                    hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+                    endpoints: SdkEndpoints {
+                        hosts: BTreeMap::from([("storage".into(), format!("http://{address}"))]),
+                        ..SdkEndpoints::default()
+                    },
                     ..RunEnvironment::default()
                 },
             )

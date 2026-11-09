@@ -3,7 +3,7 @@ import { Button, Dialog, Panel } from '@ui';
 import { Show } from 'solid-js';
 import { PipelineImportFailures } from '../components/pipeline-import-failures';
 import type { PipelineTransfer } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import type { TrackedPipeline } from '../core/pipeline';
 import { pipelineRecordHeaders } from '../core/pipeline-csv';
 import { createPipelineImport } from '../primitives/pipeline-transfer';
 
@@ -11,7 +11,7 @@ const entries = (count: number) =>
   `${count.toLocaleString()} ${count === 1 ? 'entry' : 'entries'}`;
 
 export function PipelineImport(props: {
-  pipeline: Pipeline;
+  pipeline: TrackedPipeline;
   transfer: PipelineTransfer;
   onClose: () => void;
 }) {

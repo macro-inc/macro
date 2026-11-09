@@ -16,10 +16,12 @@ HTML worker belong to `packages/sdk-docs`.
   `lexical-modules.tsv`, so a program and `document.lexical()` share each
   module instance through the import map.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
-  per-symbol references (classes, methods, types).
-- `scripts/catalog.ts`: the entity directories agents discover; agent and
-  harness docs share a topic, as do native channels, external chats and
-  WhatsApp.
+  per-symbol references (classes, methods, types). A discriminated union over
+  the 16 KiB reference size, such as `EditOp`, lists its members, each read as
+  `EditOp.<discriminator>`.
+- `scripts/catalog.ts`: the entity directories agents discover, one entity
+  each. Never fold an area into another to save room: Jev routes the catalog
+  in parallel 32-question calls, so its size is not capped.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
   collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
@@ -31,7 +33,6 @@ HTML worker belong to `packages/sdk-docs`.
 ## Tool contracts
 
 - External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
-- Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks
 
@@ -43,6 +44,8 @@ HTML worker belong to `packages/sdk-docs`.
 Run from this directory after installing the root workspace and the standalone
 `packages/sdk` dependencies with `bun install --frozen-lockfile`, as CI does;
 the generator refuses to run without `packages/sdk/node_modules`.
+Core Lexical declarations are embedded in `sdk-types.json` alongside the SDK types
+so the offline routine checker can resolve `DocumentLexical` without npm.
 
 ## Gotchas
 

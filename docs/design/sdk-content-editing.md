@@ -51,7 +51,7 @@ Every direct edit tool has the same two layers:
 
 The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
-to the hosts in `sdk_hosts()` (DSS, auth, cognition, email and others). Neither
+to the hosts in `sdk_endpoints()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle
 (`sdk.mjs`, 375 KB) has no WASM.
 
@@ -190,7 +190,7 @@ the new revision, or the new document for `saveAs`, and `webUrl`):
 | Type | Method | Server pipeline | Abort |
 | --- | --- | --- | --- |
 | Markdown, tasks | `doc.edit` | `EditDocument`'s (exists) | Yes, op by op; no rollback (above) |
-| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | Yes; one commit, so all or nothing |
+| Canvas | `canvas.edit` | `EditCanvas`'s (exists) | Yes; each acknowledged step stays |
 | Spreadsheet | `sheet.edit` | New: one writer model | Yes until the commit; one commit |
 | Word | `wordDoc.edit` | New: one writer model | Yes until the commit; one commit |
 | PowerPoint | `deck.edit` (with `saveAs` for a new deck) | New: one writer model | Yes until the save; one version |
@@ -386,13 +386,27 @@ Canvases keep the structured layer: `CanvasEditor` ops against
 `expectedRevision`, raising `RevisionConflictError` after rebasing unrelated
 concurrent edits, in the canvas PR.
 
-### Later option: structured editing for spreadsheets, Word and PowerPoint
+Typed handles for the other types refuse the wrong file type and each has
+`webUrl()`. Spreadsheets have one: `macro.documents.spreadsheet(document)`
+returns a `Spreadsheet` (a namespace method, because a `Document` method
+returning a `Document` subclass would be a circular import), and
+`documents.createSpreadsheet()` joins `createCanvas()`.
 
-Not part of this stack. A typed lower layer like canvas's (vendored
-spreadsheet and Word op types, `pptx_engine` `EditOp` types generated from its
-schema, reads in the tools' formats, `expectedRevision` conflicts, and a
-PowerPoint version check replacing today's last-writer-wins) can follow if
-programs need exact cell, paragraph or shape edits without a model.
+### Structured editing for spreadsheets; later option for Word and PowerPoint
+
+Spreadsheets get the structured layer in their PR, without vendoring: the
+spreadsheet ops are already serde types in `crates/documents`, so DSS
+publishes them in its OpenAPI and the SDK's generated client types them.
+`Spreadsheet.read()`, `calculate()` and `applyEdits(ops, { expectedRevision })`
+are `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet` over HTTP,
+on the same `SpreadsheetService`, with `RevisionConflictError` for a stale
+revision and `EditOutcomeUnknownError` for a lost acknowledgement.
+
+A typed lower layer for Word and PowerPoint (their op types, `pptx_engine`
+`EditOp` types generated from its schema, reads in the tools' formats,
+`expectedRevision` conflicts, and a PowerPoint version check replacing today's
+last-writer-wins) can follow if programs need exact paragraph or shape edits
+without a model.
 
 ## Hiding the direct tools
 
@@ -408,6 +422,8 @@ until they move.
 Instruction edits need nothing in the sandbox. The Lexical layer needs
 `lexical`, the `@lexical/*` packages lexical-core uses, and
 `packages/lexical-core` itself, as ordinary JavaScript: no WASM.
+
+Canvas needs no vendored builder: `canvas.apply(code, { expectedRevision })` runs CanvasEditor code in the worker through the same guarded apply path as `ApplyCanvasEdits`.
 
 ### Spike results
 
@@ -440,9 +456,10 @@ bootstrap's timer ban):
   checks) fails when a copy is stale. The SDK exports it as the
   `@macro-inc/sdk/lexical` subpath, and `doc.lexical()` loads it with a dynamic
   `import()`, so the SDK's main entry stays the size it is.
-- `lexical` and the `@lexical/*` packages are optional peer dependencies of
-  `@macro-inc/sdk`, pinned to the version lexical-core uses, so an npm
-  program's `lexical` import is the SDK's. Only `doc.lexical()` needs them; it
+- Core `lexical` is a regular dependency because `DocumentLexical` exposes its
+  types. The `@lexical/*` packages are optional peers of `@macro-inc/sdk`,
+  pinned to the version lexical-core uses, so an npm program shares the SDK's
+  module instances. Only `doc.lexical()` needs them; it
   fails with a message naming them when they are missing. lexical-core's own
   runtime dependencies (`nanoid`, `linkify-it`, `prismjs`) become SDK
   dependencies.
@@ -511,7 +528,7 @@ generated at build time), and adds the direct tool it replaces to
      worker's `/edit` returns the revision. Hides `EditDocument`.
    - With #9333: `opts.queries`.
    - Tests for round trips, concurrent typing during an edit, aborts, and
-     refused edits.
+     refused edits and batches.
 3. **Documents with Lexical** (MACRO-4631), stacked PRs, tests first:
    1. This design's Lexical layer, and lexical-core: `zod` replaced in
       `transformers/tables.ts`, the curated `sdk.ts` entry.
@@ -524,18 +541,30 @@ generated at build time), and adds the direct tool it replaces to
       outcome mapping (409 conflict, 422 invalid, 502 unknown), spans.
    4. SDK `Document.lexical()`, `DocumentLexical`, the block diff,
       `DocumentEditConflictError`, the vendored `@macro-inc/sdk/lexical` entry
-      and optional `lexical` peers; the code-mode chunks and import map, with a
+      and optional `@lexical/*` peers; the code-mode chunks and import map, with a
       Deno test that edits a document under the sandbox flags.
-4. **Spreadsheets** (MACRO-4587). `sheet.edit(instructions, { signal })` with a
-   new writer model over `SpreadsheetService`; changed ranges and the new
-   revision; `documents.createSpreadsheet()`. Hides `EditSpreadsheet`.
-5. **PowerPoint** (MACRO-4581). `deck.edit(instructions, { signal, saveAs })`
-   with a new writer model over `PresentationService`; changed slides, the new
-   version or the new `Presentation` for `saveAs`. Hides `EditPresentation`.
-6. **Word** (MACRO-4581). `wordDoc.edit(instructions, { signal })` with a new
-   writer model over `WordDocumentService`; changed paragraph ids. Hides
-   `EditWordDocument`.
-7. **Canvases** (MACRO-4584). `canvas.edit(instructions, { signal })` over
-   `EditCanvas`; the structured layer (`CanvasEditor` in `packages/editor-ops`,
-   ops with `expectedRevision`) and render. Hides `EditCanvas` and
-   `ApplyCanvasEdits`.
+4. **Spreadsheets** (MACRO-4587). `documents.createSpreadsheet()`,
+   `documents.spreadsheet(document)` with `read`, `calculate` and
+   `applyEdits` over `SpreadsheetService`. Hides `ReadSpreadsheet`,
+   `CalculateSpreadsheet` and `EditSpreadsheet`. Then `sheet.edit(instructions,
+   { signal })` with a new writer model over the same engine: the worker's
+   `/spreadsheet/instructions` reads, calculates and commits one batch, and
+   DSS `POST /documents/{id}/spreadsheet/ai-edit` admits and meters it.
+5. **PowerPoint and Word** (MACRO-4581, MACRO-4841). Shipped as the
+   structured layer first: `Document.readPresentation()`,
+   `editPresentation(operations)` and `copyPresentation(name, { operations })`
+   over `PresentationService`, and `Document.readWord()` and
+   `editWord(operations, { trackChanges })` over `WordDocumentService`'s live
+   copy, through DSS `/documents/{id}/presentation` and `/word` routes. The
+   operation unions are generated from `pptx_engine::EditOp` and
+   `WordDocumentOperation`. The same PR adds the read-only
+   `readDesign()`, `readPhotoshop()` and `readIllustrator()`, and hides the
+   seven matching tools. An instructions `edit()` with a writer model can
+   follow.
+6. **Canvases** (MACRO-4584). `document.canvas()` with `scene()` over
+   `ReadCanvas`, `apply(code, { expectedRevision })` over `ApplyCanvasEdits`
+   (409 conflict and 422 rejection when nothing committed), `edit(instructions,
+   { signal })` over `EditCanvas`, and `render()` returning a stored
+   `StaticImage`. Hides `ReadCanvas`, `EditCanvas` and `ApplyCanvasEdits`.
+   `RenderCanvas` stays direct: an `ExecuteCode` result can't carry an image
+   to the model.
