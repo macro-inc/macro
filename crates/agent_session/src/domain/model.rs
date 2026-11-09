@@ -577,6 +577,37 @@ pub struct TurnPrompter {
     pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
     /// The user who prompted it, absent when a bot acted on nobody's behalf.
     pub user: Option<MacroUserIdStr<'static>>,
+    /// The app tab the person typed the prompt in, when they typed it in one.
+    pub client: Option<UiClientId>,
+}
+
+/// One open Macro app tab, minted by the tab and kept for its lifetime.
+///
+/// Sent with a prompt typed in that tab, so what the turn shows the person
+/// reaches that tab and no other. It names a tab, not a person: it grants
+/// nothing, and is only ever read beside the prompter it came with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct UiClientId(Uuid);
+
+impl UiClientId {
+    /// Wrap a tab's id.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The id, for storage.
+    #[must_use]
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for UiClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl TurnPrompter {
@@ -616,6 +647,9 @@ pub struct StoredQueuedAction {
     /// Why the agent is being asked, composed into the prompt at dispatch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the prompt was typed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<UiClientId>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {

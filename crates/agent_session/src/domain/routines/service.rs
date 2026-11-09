@@ -266,6 +266,7 @@ where
                     action_id: Some(action.action_id),
                     actor: Some(action.owner),
                     context: command.context,
+                    client: None,
                 },
             )
             .await
@@ -307,6 +308,7 @@ where
                     action_id: Some(AgentActionId::mint()),
                     actor: Some(command.owner),
                     context: None,
+                    client: None,
                 },
             )
             .await

@@ -1282,6 +1282,9 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
 }
 
 /// What accepting a control operation did with it.

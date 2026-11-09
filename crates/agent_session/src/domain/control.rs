@@ -6,6 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use trigger_context::TriggerContext;
 
 use super::error::{AgentSessionError, Result};
+use super::model::UiClientId;
 use super::ports::ControlEvent;
 
 /// The authenticated principal, before an acting-user claim erases its origin.
@@ -24,10 +25,15 @@ impl ControlEvent {
     /// Trigger context is only accepted from a runtime forwarding a prompt it
     /// was triggered with. A user could otherwise tell an owner's agent that
     /// the owner asked for something.
+    ///
+    /// An app tab is only accepted from the person typing in it: a runtime
+    /// forwarding a prompt has no tab, and naming one would let it steer
+    /// whatever the turn shows into a tab it never saw.
     pub fn authorized(
         action: AgentAction,
         action_id: Option<AgentActionId>,
         context: Option<TriggerContext>,
+        client: Option<UiClientId>,
         principal: ControlPrincipal,
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<Self> {
@@ -45,6 +51,9 @@ impl ControlEvent {
                     .map_err(|_| AgentSessionError::Forbidden)?
                     .clone(),
             ),
+            ControlPrincipal::Runtime(_) if client.is_some() => {
+                return Err(AgentSessionError::Forbidden);
+            }
             ControlPrincipal::Runtime(actor) => {
                 if matches!(
                     action,
@@ -60,6 +69,7 @@ impl ControlEvent {
             action_id,
             actor,
             context,
+            client,
         })
     }
 }

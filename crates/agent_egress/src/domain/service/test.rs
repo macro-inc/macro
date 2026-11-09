@@ -1301,6 +1301,7 @@ fn prompted_by(prompter: Option<MacroUserIdStr<'static>>) -> StubSessions {
         kind: agent_session::domain::model::PrompterKind::User,
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: prompter,
+        client: None,
     });
     StubSessions(Ok(grant))
 }

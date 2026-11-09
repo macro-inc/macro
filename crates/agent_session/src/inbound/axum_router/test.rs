@@ -1461,6 +1461,7 @@ fn an_unnamed_control_request_omits_the_field() {
         action_id: None,
         action: AgentAction::Stop,
         context: None,
+        client_id: None,
     })
     .expect("a control request serializes");
 

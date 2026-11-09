@@ -108,6 +108,7 @@ fn held(
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
+            client: None,
         },
         server_slug: "macro".to_owned(),
         server_name: "Macro".to_owned(),
@@ -423,6 +424,7 @@ fn in_process(session: AgentSessionId) -> InProcessCall {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(asker()),
+            client: None,
         },
         server_slug: "macro".to_owned(),
         server_name: "Macro".to_owned(),
@@ -581,6 +583,7 @@ async fn approving_one_macro_tool_for_good_still_asks_about_anything_else() {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: Some(MacroUserIdStr::try_from_email("someone@macro.com").unwrap()),
+            client: None,
         },
         ..in_process(session)
     };
@@ -702,6 +705,7 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
             kind: agent_session::domain::model::PrompterKind::User,
             action_id: AgentActionId::mint(),
             user: None,
+            client: None,
         },
         ..in_process(session)
     };

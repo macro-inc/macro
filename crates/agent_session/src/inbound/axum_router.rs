@@ -536,6 +536,11 @@ pub struct ControlRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the person typed this in (a UUID the tab keeps for its
+    /// lifetime), so what the turn opens in the app reaches that tab only.
+    /// Only a person's own request may send it; a runtime's is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<Uuid>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -1103,6 +1108,8 @@ pub async fn control_agent_session_handler<
                 req.action,
                 req.action_id,
                 req.context,
+                req.client_id
+                    .map(crate::domain::model::UiClientId::from_uuid),
                 principal,
                 access.entity_access_receipt,
             )?,
