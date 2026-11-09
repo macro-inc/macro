@@ -113,6 +113,8 @@ pub enum Port {
     PreviewSsh = 2222,
     /// Local wildcard preview TLS listener.
     PreviewHttps = 8443,
+    /// Local-only plaintext gateway reachable from Macro computers.
+    ComputerGateway = 8112,
 }
 
 impl Port {
