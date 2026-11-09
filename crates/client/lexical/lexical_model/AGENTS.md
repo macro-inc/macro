@@ -63,7 +63,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
-- Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
+- Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 
 - Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration, opaque editor/update identity markers and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
 - Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
