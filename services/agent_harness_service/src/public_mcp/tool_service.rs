@@ -12,8 +12,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        CallToolResult, Content, Icon, InitializeRequestParams, InitializeResult, ListToolsResult,
-        PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool, ToolAnnotations,
+        CallToolResult, ContentBlock, Icon, InitializeRequestParams, InitializeResult,
+        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+        ToolAnnotations,
     },
 };
 use std::{sync::Arc, time::Instant};
@@ -212,8 +213,8 @@ impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
     Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION"))
             .with_title("Macro")
@@ -299,7 +300,7 @@ where
         &self,
         request: rmcp::model::CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
-    ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
         let started = Instant::now();
         // Bounded: an unknown tool's name is whatever the client sent.
@@ -316,7 +317,7 @@ where
                 duration: started.elapsed(),
             },
         );
-        result
+        result.map(Into::into)
     }
 }
 
@@ -403,7 +404,7 @@ where
                 // A failed program is a completed execution with a receipt.
                 Err(error) => (
                     ToolCallOutcome::ToolError,
-                    Ok(CallToolResult::error(vec![Content::text(
+                    Ok(CallToolResult::error(vec![ContentBlock::text(
                         error.description,
                     )])),
                 ),
@@ -449,9 +450,9 @@ where
             ),
             Err(error) => (
                 ToolCallOutcome::ToolError,
-                Ok(rmcp::model::CallToolResult::error(vec![Content::text(
-                    error.description,
-                )])),
+                Ok(rmcp::model::CallToolResult::error(vec![
+                    ContentBlock::text(error.description),
+                ])),
             ),
         }
     }

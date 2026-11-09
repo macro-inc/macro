@@ -6,7 +6,7 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use rmcp::{ServiceExt, model::ClientInfo, transport::StreamableHttpClientTransport};
+use rmcp::{ServiceExt, model::ClientConfig, transport::StreamableHttpClientTransport};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
@@ -20,7 +20,7 @@ use traced_client::TracedClient;
 #[cfg(test)]
 mod test;
 
-type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientInfo>;
+type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientConfig>;
 type Connection = Arc<OnceCell<Arc<Client>>>;
 
 #[derive(Hash, PartialEq, Eq)]
@@ -103,7 +103,7 @@ impl HttpActorMcpTransport {
             let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
             let client = tokio::time::timeout(
                 std::time::Duration::from_secs(30),
-                ClientInfo::default().serve(transport),
+                ClientConfig::default().serve(transport),
             )
             .await
             .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
