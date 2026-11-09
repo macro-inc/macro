@@ -69,7 +69,7 @@ const participants = Array.from(
       params.get('portrait') === 'true' && index === 0
     );
     const screen = videoTrack(`Shared screen ${index + 1}`);
-    let volume = params.get('mutedForYou') === 'true' ? 0 : 1;
+    let volume = params.get('sdkVolume') === 'zero' ? 0 : 1;
     return {
       identity,
       name,

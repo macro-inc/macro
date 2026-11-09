@@ -39,3 +39,28 @@ it('publishes microphone-only volume to every observer and resets with a new par
     dispose();
   });
 });
+
+it('does not interpret an unset SDK gain as a personal mute', () => {
+  createRoot((dispose) => {
+    const volume = createCallVolumeState();
+    const participant = new RemoteParticipant(
+      new Room().engine.client,
+      'remote-sid',
+      'remote'
+    );
+    expect(volume.level(participant)).toBe(1);
+    participant.setVolume(0, Track.Source.Microphone);
+    expect(volume.level(participant)).toBe(1);
+    volume.set(participant, 0);
+    expect(volume.level(participant)).toBe(0);
+    volume.set(participant, 1);
+    expect(volume.level(participant)).toBe(1);
+    const other = new RemoteParticipant(
+      new Room().engine.client,
+      'other-sid',
+      'other'
+    );
+    expect(volume.level(other)).toBe(1);
+    dispose();
+  });
+});

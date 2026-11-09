@@ -77,3 +77,32 @@ for (const surface of ['bar', 'popover', 'player']) {
     }
   });
 }
+
+test('only explicit zero volume marks a participant muted for you', async ({
+  page,
+}) => {
+  for (const theme of ['dark', 'light']) {
+    await page.goto(
+      `/src/features/channel/Call/discussion/browser-test/call-overlay.html?theme=${theme}&work=off&chat=off&sdkVolume=zero`
+    );
+    const tile = page.locator('[data-call-participant]').first();
+    await tile.hover();
+    const button = page
+      .getByRole('button', { name: 'Volume', exact: true })
+      .first();
+    await button.click();
+    const slider = page.getByRole('slider', { name: /Volume for/ }).first();
+    await expect(slider).toHaveAttribute('aria-valuenow', '100');
+    await expect(page.locator('[data-call-muted-for-you]')).toHaveCount(0);
+    if (artifacts)
+      await page.screenshot({ path: `${artifacts}/L120-unset-${theme}.png` });
+    await slider.press('Home');
+    await expect(
+      tile.locator('[data-call-muted-for-you]').first()
+    ).toBeVisible();
+    if (artifacts)
+      await page.screenshot({ path: `${artifacts}/L120-zero-${theme}.png` });
+    await slider.press('End');
+    await expect(page.locator('[data-call-muted-for-you]')).toHaveCount(0);
+  }
+});

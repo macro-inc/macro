@@ -7,23 +7,28 @@ import {
 } from 'solid-js';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 
-/** LiveKit owns microphone gain; one call-wide version notifies every view. */
+/** Track explicit playback choices separately from SDK gain defaults. */
 export function createCallVolumeState() {
   const [version, setVersion] = createSignal(0);
+  const choices = new WeakMap<object, number>();
   return {
     level(participant: {
       identity: string;
       getVolume?: RemoteParticipant['getVolume'];
     }) {
       version();
-      return participant.getVolume?.(LK_TRACK_SOURCE.Microphone) ?? 1;
+      const chosen = choices.get(participant);
+      if (chosen !== undefined) return chosen;
+      const reported = participant.getVolume?.(LK_TRACK_SOURCE.Microphone);
+      return reported !== undefined && Number.isFinite(reported) && reported > 0
+        ? reported
+        : 1;
     },
     set(participant: RemoteParticipant, value: number) {
       if (!Number.isFinite(value)) return;
-      participant.setVolume(
-        Math.max(0, Math.min(1, value)),
-        LK_TRACK_SOURCE.Microphone
-      );
+      const level = Math.max(0, Math.min(1, value));
+      participant.setVolume(level, LK_TRACK_SOURCE.Microphone);
+      choices.set(participant, level);
       setVersion((value) => value + 1);
     },
   };

@@ -1,5 +1,5 @@
 import { CallFullscreenProvider } from '../../call-fullscreen-host';
-import { CallVolumeProvider } from '../../call-volume';
+import { CallVolumeProvider, useCallVolumeOptional } from '../../call-volume';
 import '@app/index.css';
 import { CallOverlay as MainCallOverlay } from 'virtual:baseline-call-overlay';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
@@ -28,9 +28,20 @@ import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
 import { ActiveCallHeader } from '../../ActiveCallHeader';
 import { ActiveCallPopover } from '../../ActiveCallPopover';
+import { useCallContext } from '../../CallContext';
 import { CallMiniPlayer } from '../../CallMiniPlayer';
 import { CallOverlay } from '../../CallOverlay';
 import { CallDiscussionContent } from '../CallDiscussionContent';
+
+function SeedVolume() {
+  const volumes = useCallVolumeOptional();
+  const call = useCallContext();
+  if (new URLSearchParams(location.search).get('mutedForYou') === 'true') {
+    for (const participant of call.remoteParticipants().values())
+      volumes?.set(participant, 0);
+  }
+  return null;
+}
 
 applyTheme(
   new URLSearchParams(location.search).get('theme') === 'light'
@@ -82,6 +93,7 @@ function Fixture() {
                           </button>
                           <ImperativeDialogHost />
                           <CallVolumeProvider>
+                            <SeedVolume />
                             <CallFullscreenProvider
                               callId={() => 'fixture-call'}
                             >
