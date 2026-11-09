@@ -340,26 +340,31 @@ export function CallTranscript(props: {
                             <Message.SenderIcon />
                           </Show>
                         </span>
-                        <span class="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+                        <span class="flex min-w-0 items-center justify-between gap-2 text-xs">
                           <Show
                             when={!guest()}
                             fallback={<span class="font-medium">{name()}</span>}
                           >
                             <Message.SenderName />
                           </Show>
-                          <Show when={item.seconds !== null}>
-                            <span class="tabular-nums text-ink-muted">
-                              {formatVideoTimestamp(item.seconds ?? 0)}
+                          <span class="flex w-24 shrink-0 items-center justify-end gap-2">
+                            <Show when={item.seconds !== null}>
+                              <span class="tabular-nums text-ink-muted">
+                                {formatVideoTimestamp(item.seconds ?? 0)}
+                              </span>
+                            </Show>
+                            <span class="grid size-3 shrink-0 place-items-center">
+                              <Show when={active()}>
+                                <WaveformIcon
+                                  class="size-3 shrink-0 text-accent"
+                                  classList={{
+                                    'recording-speaking-waveform':
+                                      props.playing,
+                                  }}
+                                />
+                              </Show>
                             </span>
-                          </Show>
-                          <Show when={active()}>
-                            <WaveformIcon
-                              class="size-3 shrink-0 text-accent"
-                              classList={{
-                                'recording-speaking-waveform': props.playing,
-                              }}
-                            />
-                          </Show>
+                          </span>
                         </span>
                         <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">
                           {segment().content}

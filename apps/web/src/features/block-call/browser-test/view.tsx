@@ -37,7 +37,13 @@ const RECORD: CallRecord = {
     ),
   ].join('\n\n'),
   participants: [],
-  guests: [],
+  guests: [
+    {
+      id: 'fixture-guest',
+      joinedAt: '2026-01-01T00:00:00Z',
+      displayName: 'Another guest',
+    },
+  ],
   discussion: { kind: 'call_chat', call_id: 'fixture-call' },
   transcript: [
     {
@@ -54,7 +60,7 @@ RECORD.transcript.push(
   ...Array.from({ length: 32 }, (_, index) => ({
     transcriptId: `fixture-segment-${index + 1}`,
     sequenceNum: index + 1,
-    speakerId: 'fixture-speaker',
+    speakerId: index % 2 === 0 ? 'fixture-guest' : 'fixture-speaker',
     startedAt: new Date(
       Date.parse(RECORD.startedAt) + 1100 + index * 20
     ).toISOString(),

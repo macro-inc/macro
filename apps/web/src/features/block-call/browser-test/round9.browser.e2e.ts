@@ -21,6 +21,34 @@ for (const theme of ['light', 'dark']) {
         path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d55-${theme}.png`,
       });
   });
+  test(`timestamps keep a fixed right slot (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}`);
+    const card = page.getByRole('complementary', { name: 'Transcript' });
+    await card
+      .getByRole('button', { name: /Playback has one transcript line/ })
+      .click();
+    const slots = await card
+      .locator('[data-call-transcript-row] .tabular-nums')
+      .evaluateAll((timestamps) =>
+        timestamps.slice(0, 6).map((timestamp) => {
+          const slot = timestamp.parentElement!.getBoundingClientRect();
+          const time = timestamp.getBoundingClientRect();
+          return {
+            right: slot.right,
+            width: slot.width,
+            timeRight: time.right,
+          };
+        })
+      );
+    expect(new Set(slots.map((slot) => slot.right)).size).toBe(1);
+    expect(new Set(slots.map((slot) => slot.timeRight)).size).toBe(1);
+    expect(slots.every((slot) => slot.width === 96)).toBe(true);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d58-${theme}.png`,
+      });
+  });
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     test(`active waveform follows native playback (${theme}, ${reducedMotion})`, async ({
       page,

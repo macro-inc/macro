@@ -64,7 +64,8 @@ no border or shadow, and an inset Sync surface in both themes. Details floats ov
 the card without changing its scroll position or follow state. There is no separate
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
-Transcript rows show speaker identity and recording time; click a row to seek.
+Transcript rows show speaker identity with recording time and waveform in a fixed
+right-aligned slot; click a row to seek.
 The active line's waveform animates only while playback runs and stays still
 when paused or reduced motion is enabled. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
