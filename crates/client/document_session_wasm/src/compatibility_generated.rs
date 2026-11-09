@@ -687,6 +687,44 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatCommit<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for CompatCommit<'raw> {}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatPublications<'raw> {
+    pub commits: ::std::vec::Vec<CompatCommit<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatPublications<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::std::vec::Vec<CompatCommit<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.commits.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.commits._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            commits: v0,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatPublications<'raw> {}
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CompatPointKind {
@@ -4660,6 +4698,52 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatCommit {}
 
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatPublications {
+        pub commits: ::std::vec::Vec<CompatCommit>,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatPublications<'raw>> for CompatPublications {
+        fn from(value: super::CompatPublications) -> Self {
+            Self {
+                commits: value.commits.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatPublications {
+        const MIN_SERIALIZED_SIZE: usize =
+            <::std::vec::Vec<CompatCommit>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.commits.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.commits._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                commits: v0,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatPublications {}
+
     pub use super::CompatPointKind;
 
     pub use super::CompatPoint;
@@ -7630,4 +7714,4 @@ pub mod owned {
     pub use super::ForeignNativeField;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "8feac1f170dc0613b15934c07fa4f001add1fb0f07f3facd5b36b8b9cf7acddf";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "f54016202934ac63303df846dbcb5abdc26e3cb57aa3797a74c238ce417af999";

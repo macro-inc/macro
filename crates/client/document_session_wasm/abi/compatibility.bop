@@ -61,6 +61,9 @@ struct CompatCommit {
   CompatSelectionData selection;
 }
 
+// External native publications retain the actual commit metadata until delivery.
+struct CompatPublications { CompatCommit[] commits; }
+
 // Ordinary JS selections retain their objects; these are typed native snapshots
 // and explicit writes, never a JSON encoding of arbitrary own properties.
 enum CompatPointKind : byte { Unknown = 0; Text = 1; Element = 2; }
