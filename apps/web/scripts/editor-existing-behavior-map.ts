@@ -913,4 +913,25 @@ export const EDITOR_EXISTING_BEHAVIOR_MAP = [
       'desktop pasted files falls back to browser files when staging fails',
     ],
   },
+  // Closed-menu tests pin host loading/lazy reads with query/component
+  // boundaries; the snippet editor is a stub, so no insertion is established.
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/TagsMenu.tsx',
+    anchor: '  const teamName = () =>',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/TagsMenu.test.tsx',
+    cases: [
+      'closed inline tags menu does not suspend its editor on missing team metadata (enabled=true)',
+      'closed inline tags menu does not suspend its editor on missing team metadata (enabled=false)',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SnippetsMenu/SnippetsMenu.tsx',
+    anchor: '    <Show when={menuOpen()}>',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SnippetsMenu/SnippetsMenu.test.tsx',
+    cases: ['SnippetsMenu reads snippets only once the menu opens'],
+  },
 ] as const;
