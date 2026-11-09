@@ -282,6 +282,22 @@ async fn a_channel_reply_resolves_ideas_about_its_thread(pool: PgPool) {
         )
         .await;
 
+    // A new top-level post answers the channel, not a thread in it.
+    h.resolution
+        .resolve(&ResolutionEvent::Replied {
+            user: user(OWNER),
+            item: Item {
+                entity_type: EntityType::Channel,
+                entity_id: CHANNEL.to_owned(),
+            },
+            thread: None,
+            at: Utc::now(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(h.state(in_thread).await, open());
+    assert_eq!(h.state(channel).await, resolved("replied"));
+
     h.resolution
         .resolve(&ResolutionEvent::Replied {
             user: user(OWNER),
