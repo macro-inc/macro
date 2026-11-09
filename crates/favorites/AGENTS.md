@@ -49,9 +49,8 @@ hexagonal architecture pattern.
 
 - Authorize adds with `ports::FavoriteView`, not `ViewAccessLevel`: channels
   resolve to channel roles, which `ViewAccessLevel` never accepts.
+- A channel-message favorite may expose a private message parent only to that message audience’s initiating user.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
-
-A channel-message favorite may expose a private message parent only to that message audience’s initiating user.

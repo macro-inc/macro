@@ -30,6 +30,7 @@ before changing ingestion or delivery behavior.
   `agent_trigger`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.
 - Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
+- Keep private posts out of ordinary channel webhooks; scope private message SSE, agent triggers, and session lifecycle events to the initiating personal workspace, without parent or team expansion.
 
 ## Recipes
 
@@ -49,5 +50,3 @@ before changing ingestion or delivery behavior.
 ## Related
 
 - Docs: `crates/webhook/README.md` · Rules: `.agents/rules/rust/architecture.md`
-
-Keep private posts out of ordinary channel webhooks; scope private message SSE, agent triggers, and session lifecycle events to the initiating personal workspace, without parent or team expansion.

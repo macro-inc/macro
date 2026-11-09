@@ -95,6 +95,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   checking replacement branch migrations.
 
 - External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
+- Private message visibility is additive and immutable. Deploy all audience-aware readers/consumers before enabling private writes; see `docs/architecture/private-message-threads.md`.
 
 ## Related
 
@@ -127,5 +128,3 @@ foreign keys; the broker deletes expired rows.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
-
-Private message visibility is additive and immutable. Deploy all audience-aware readers/consumers before enabling private writes; see `docs/architecture/private-message-threads.md`.

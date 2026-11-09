@@ -58,6 +58,7 @@ execution, display) that don't belong to a single domain.
   plus `bot_id`, `attachment`, `static_file`.
 - Used by: `document_storage_service`, `agent_harness_service` (session
   tools, cognition, and public MCP).
+- Wire `EphemeralAgentReader` into the shared message service so tool-created posts apply the same agent mention privacy as HTTP posts.
 
 ## Recipes
 
@@ -94,5 +95,3 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
-
-Wire `EphemeralAgentReader` into the shared message service so tool-created posts apply the same agent mention privacy as HTTP posts.

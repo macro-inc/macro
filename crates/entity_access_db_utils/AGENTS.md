@@ -56,9 +56,8 @@ top of it.
   through their parent dynamically and do not get UUID grant rows.
 
 - `external_chat` entities use the generic direct-sharing facts and grant helpers; provider membership never creates a grant.
+- Return no direct-sharing facts for private-thread agent sessions; the immutable session audience also rejects non-owner grants in storage.
 
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
-
-Return no direct-sharing facts for private-thread agent sessions; the immutable session audience also rejects non-owner grants in storage.

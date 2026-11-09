@@ -115,6 +115,7 @@ threads, pins, recents, notifications, folders, activity.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Every shared message writer supplies the bots-owned ephemeral settings reader; private thread delivery and reads follow `docs/architecture/private-message-threads.md`.
 
 ## Related
 
@@ -123,5 +124,3 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
-
-Every shared message writer supplies the bots-owned ephemeral settings reader; private thread delivery and reads follow `docs/architecture/private-message-threads.md`.

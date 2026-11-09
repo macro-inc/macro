@@ -64,10 +64,9 @@ the entity-access domain service.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- Do not inherit document/call permissions for a session whose source thread is private, or document access for a file attached in a private discussion; explicit grants govern access.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
   · Skill: `cloud-storage-hexagonal-architecture`
-
-Do not inherit document/call permissions for a session whose source thread is private, or document access for a file attached in a private discussion; explicit grants govern access.

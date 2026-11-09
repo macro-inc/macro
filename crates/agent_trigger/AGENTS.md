@@ -64,9 +64,8 @@ session that results.
   limit (`messages::domain::agent_hops`) is the loop guard and runs before any
   routing or judge call; a bot's message never targets its own bot's session.
   Unattributed bot posts trigger nothing.
+- Private posts bypass the shared agent-DM conversation router, target only invited bots, and retain audience metadata through parent-aware events. Keep agent context inside the target private thread plus public history.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
-
-Private posts bypass the shared agent-DM conversation router, target only invited bots, and retain audience metadata through parent-aware events. Keep agent context inside the target private thread plus public history.

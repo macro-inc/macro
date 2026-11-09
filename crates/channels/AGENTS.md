@@ -105,11 +105,10 @@ DMs, and the shared message store other domains discuss things on.
   name a thread, so `idx_user_notification_channel_threads` holds only rows
   that can. Web Home sends `(unseen OR seen) AND unseen`;
   `drop_implied_notification_conjuncts` folds that to one notification read.
+- Private message delivery targets only its initiating user and skips channel sharing, activity, notifications, and public projections. Keep legacy list/reference reads public-only; viewer-scoped private history belongs to `messages`.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.
-
-Private message delivery targets only its initiating user and skips channel sharing, activity, notifications, and public projections. Keep legacy list/reference reads public-only; viewer-scoped private history belongs to `messages`.

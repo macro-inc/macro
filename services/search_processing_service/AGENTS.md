@@ -45,9 +45,8 @@ OpenSearch, and exposes backfill HTTP routes for each.
   there is a crash-loss window; recovery is the backfill routes, not replay.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
+- Private message posts are never indexed; the search backfill readers also exclude them. Keep both paths aligned with `docs/architecture/private-message-threads.md`.
 
 ## Related
 
 - Docs: this directory's `README.md` · Rules: `.agents/rules/rust/architecture.md`
-
-Private message posts are never indexed; the search backfill readers also exclude them. Keep both paths aligned with `docs/architecture/private-message-threads.md`.
