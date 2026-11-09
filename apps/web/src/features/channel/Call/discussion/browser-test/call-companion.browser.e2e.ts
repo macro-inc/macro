@@ -129,6 +129,13 @@ test('companion controls open reactions from the unchanged call popover header',
     });
   const header = await popup.locator(':scope > div').first().boundingBox();
   const controls = popup.locator('[data-call-controls]');
+  await expect(
+    controls.getByRole('button', { name: 'Call sharing', exact: true })
+  ).toHaveCount(0);
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/L103-popover.png`,
+    });
   expect(
     await controls
       .locator(':scope > div')
@@ -152,7 +159,7 @@ test('companion controls open reactions from the unchanged call popover header',
     const box = await button.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(bounds!.x);
     expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
-    expect(box!.y).toBe(row!.y);
+    expect(box!.y + box!.height / 2).toBe(row!.y + row!.height / 2);
   }
 });
 

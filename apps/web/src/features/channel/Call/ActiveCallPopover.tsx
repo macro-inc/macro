@@ -87,7 +87,7 @@ export function ActiveCallPopover(props: {
           onReaction={(emoji) =>
             fireAndForget(reactions.send(emoji), 'active-call-popover')
           }
-          controls={['camera', 'screen', 'sharing']}
+          controls={['camera', 'screen']}
           channelName={
             record.isSuccess && record.data.discussion.kind === 'channel_thread'
               ? (record.data.channelName ?? undefined)
