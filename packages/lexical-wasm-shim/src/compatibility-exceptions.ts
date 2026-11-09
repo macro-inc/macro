@@ -1,4 +1,4 @@
-/** The seven upstream declaration/runtime exceptions approved for compatibility. */
+/** The eight upstream declaration/runtime exceptions approved for compatibility. */
 import type { NodeKey } from 'lexical';
 import { DequeSet } from './command/deque-set';
 import type { CommandBucket, CommandRegistry } from './command/types';
@@ -95,4 +95,12 @@ export function invokeDOMConversionWithNode<R>(
   node: Node
 ): R {
   return conversion(node as HTMLElement);
+}
+
+/** Preserve upstream's declared ordering type, including its NaN runtime result. */
+export function compareNumberWithUpstreamType(
+  a: number,
+  b: number
+): -1 | 0 | 1 {
+  return Math.sign(a - b) as -1 | 0 | 1;
 }
