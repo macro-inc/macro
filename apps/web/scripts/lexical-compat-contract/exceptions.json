@@ -1,0 +1,141 @@
+{
+  "source": "src/compatibility-exceptions.ts",
+  "implementationCommit": "970270d05ebcd93b72d175deebd00d21543647a9",
+  "implementationSha256": "f71fec4377d92ab3d43c533f38db92565d0f2e8a0289d4d4f71301cdc26a60f7",
+  "pointDelegationCommit": "0b84f77036",
+  "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "exceptions": [
+    {
+      "helper": "assumeNodeType",
+      "contract": "Upstream caller-asserted node generics have no runtime type witness.",
+      "guards": [
+        "actual compat LexicalNode instance",
+        "live weak-cache identity",
+        "exact active graph capture"
+      ],
+      "calls": [
+        "nodes/base.ts:getParent",
+        "nodes/base.ts:getPreviousSibling",
+        "nodes/base.ts:getNextSibling",
+        "nodes/base.ts:getCommonAncestor",
+        "nodes/runtime-primitives.ts:nodeByKey",
+        "nodes/runtime-primitives.ts:nodeWritable",
+        "nodes/replacement/helpers.ts:$applyNodeReplacement",
+        "nodes/replacement/helpers.ts:$create"
+      ],
+      "indirect": ["nodes/runtime-primitives.ts:nodeLatest through nodeByKey"],
+      "evidenceSha256": "e10a4c3ed18996ad3dede147327d8c04b2d7abf18f75a25fb051a1796601b299",
+      "reexports": ["nodes/runtime.ts:assumeNodeType"],
+      "replacementEvidenceSha256": "a02369f42051c68ec17917df06617ff903db31c1f45e8a9faf40402bca747628",
+      "replacementUpstreamSource": "packages/lexical/src/LexicalUtils.ts",
+      "sourceLocations": [
+        "nodes/replacement/helpers.ts:45",
+        "nodes/replacement/helpers.ts:58"
+      ]
+    },
+    {
+      "helper": "nodeConfigRecord",
+      "contract": "Exact upstream StaticNodeConfigRecord intersection with a single computed own key.",
+      "guards": ["exactly one own key", "own key equals requested type"],
+      "calls": ["nodes/base.ts:config"],
+      "upstreamSource": "packages/lexical/src/LexicalNode.ts:config",
+      "sourceLocations": ["nodes/base.ts:81"],
+      "reexports": ["nodes/runtime.ts:nodeConfigRecord"],
+      "sourceLocationCommit": "af059c0e64"
+    },
+    {
+      "helper": "createPointWithUpstreamType",
+      "contract": "Upstream creates a null-owned Point while declaring the narrower PointType owner.",
+      "guards": [
+        "new actual Point",
+        "null owner",
+        "key, offset and type preserved"
+      ],
+      "calls": ["selection/point.ts:$createPoint"],
+      "upstreamSource": "packages/lexical/src/LexicalSelection.ts:$createPoint"
+    },
+    {
+      "helper": "applyValueOrUpdater",
+      "contract": "Upstream calls callable values as updaters even when V itself is callable.",
+      "guards": [
+        "exact typeof function dispatch",
+        "no re-parsing or public constraint change"
+      ],
+      "calls": ["nodes/state/helpers.ts:$setState"],
+      "sourceLocations": ["nodes/state/helpers.ts:81"],
+      "upstreamSource": "packages/lexical/src/LexicalNodeState.ts:$setState",
+      "evidenceSha256": "320835f048ff3d44ef160998ec219d267fb9b5a7b4a479d68f3cfaa981dc08c1"
+    },
+    {
+      "helper": "nodeStateToJSON",
+      "contract": "Upstream public NodeStateJSON maps V while runtime serializes through unparse, including Date to string.",
+      "guards": ["original serialize/unparse result", "no value re-parsing"],
+      "calls": ["nodes/state/record.ts:toJSON"],
+      "sourceLocations": ["nodes/state/record.ts:81"],
+      "upstreamSource": "packages/lexical/src/LexicalNodeState.ts:NodeState.toJSON",
+      "evidenceSha256": "320835f048ff3d44ef160998ec219d267fb9b5a7b4a479d68f3cfaa981dc08c1"
+    },
+    {
+      "helper": "commandBucket",
+      "contract": "A command identity indexes exactly its own typed listener payload bucket; arbitrary command payloads remain in JS.",
+      "guards": [
+        "exact command-identity lookup",
+        "real array of length five",
+        "all five entries are real DequeSet priority groups, including sparse-array rejection"
+      ],
+      "calls": ["command/registry.ts:lookup"],
+      "sourceLocations": ["command/registry.ts:22"],
+      "upstreamSource": "packages/lexical/src/LexicalUpdates.ts:triggerCommandListeners",
+      "evidenceSha256": "1887977cb2d598301efed3b959c13baaacdd76423c08bd548350b90229c9e159"
+    },
+    {
+      "helper": "invokeDOMConversionWithNode",
+      "contract": "Upstream HTMLElement-declared DOM conversion factories and callbacks receive the actual Node, including Text for #text, with original exception order.",
+      "guards": [
+        "original Node identity and arguments",
+        "generic return type preserved",
+        "no HTMLElement guard or conversion"
+      ],
+      "calls": [
+        "configuration/html-conversions.ts:getDOMNodeConversionFunction",
+        "configuration/html-conversions.ts:getDOMNodeConversionFunction"
+      ],
+      "sourceLocations": [
+        "configuration/html-conversions.ts:77",
+        "configuration/html-conversions.ts:87"
+      ],
+      "upstreamSource": "packages/lexical-html/src/index.ts:getConversionFunction and $createNodesFromDOM",
+      "evidenceSha256": "2fa4d95e782f1d24e7fff548eaf410a64762c5bea6dbc084fe399a93465244d5",
+      "callForms": ["variable-initializer", "returned-arrow-body"]
+    }
+  ],
+  "scope": "Exactly seven named assertions in one central module, plus one separately AST-verified sound runtime-witness guard. No eighth assertion, full namespace or native runtime replacement acceptance is granted.",
+  "commandConsumerCommit": "741092a441",
+  "runtimeGuards": [
+    {
+      "helper": "isInstanceOfKlass",
+      "kind": "runtime-witness guard (sound)",
+      "body": "return value instanceof klass;",
+      "assertions": 0,
+      "calls": ["nodes/replacement/bind.ts:bindReplacement"],
+      "sourceLocations": ["nodes/replacement/bind.ts:39"],
+      "evidenceSha256": "a02369f42051c68ec17917df06617ff903db31c1f45e8a9faf40402bca747628",
+      "sourceLocationCommit": "2ec91cf1e0fa3b8682701b5207f629c7b62bf124"
+    }
+  ],
+  "unsupportedInternalMutation": {
+    "member": "NodeState.knownState",
+    "reads": "Real live Map contents support get, has, entries, iteration and size, including the upstream devtools reader.",
+    "mutation": "Unsupported; direct mutations throw a clear internal field/use $setState error.",
+    "upstreamProductionReader": "packages/lexical-devtools-core/src/generateContent.ts:412",
+    "externalProductionMutationSites": 0,
+    "evidenceSha256": "f58a4d41d4ea00d50577077839ad550cfc0c8406b310a66b063feb4c6ee37458"
+  },
+  "replacementConsumerCommit": "57d67c915f2ec7f9b2f69fa1fc93b04c4c4ba6b6",
+  "publicReplacementAlias": {
+    "source": "nodes/replacement/types.ts:6",
+    "barrel": "nodes/replacement/index.ts:15",
+    "upstream": "lexical:LexicalNodeReplacement",
+    "declarationEvidenceSha256": "f9aaab6e1d20489c5f8f9cb8e67988714f927d7a4e92715b5f95e22fa6bb1815"
+  }
+}
