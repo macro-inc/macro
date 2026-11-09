@@ -64,6 +64,19 @@ Evidence uses `/home/wolf/tmp/integration3-acceptance/next-union-*` and
 End-to-end trace connectivity and the earlier comment-button/table-picker parity
 gaps remain open. Integration3 is not accepted by this checkpoint.
 
+### Native wake regression
+
+`4ea8272be3` adds the actual-native WAL regression from `6511a03189`.
+The integrated executor already ceils timer delays and rearms an unchanged wake
+through `f717f12e2e`; its rearming occurs after output consumption and remains
+unchanged. The executor suite passes 26/26, the full collaboration suite passes
+463/463, both package/session-test type checks and scoped checks pass, and the
+source audit passes. Removing only early-tick rearming makes actual WAL delivery
+fail with zero updates instead of one; the runtime was restored byte-for-byte.
+This test-only addition changes no installed product code or WASM, so the live
+five-flow proof above still covers the installed scheduler. Evidence uses the
+`save-wake-*` prefix, including the preserved negative-control proof.
+
 ## Previous native preview checkpoint
 
 Source freeze `cafc3c1f80da8c92778e0b9e9a02da2d11c741ea` is built and installed
