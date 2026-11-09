@@ -440,11 +440,12 @@ impl LoroProjection {
             schema::initialize_map(&map, &json, schema::MapSchema::Node)?;
             self.index.bind_tree(view, *key, &map, self.policy)?;
             handled.insert(*key);
+            stats.nodes_visited += 1;
             for (child, _) in view.descendants(*key) {
                 handled.insert(child);
+                stats.nodes_visited += 1;
             }
             stats.containers_written += 1;
-            stats.nodes_visited += 1 + view.descendants(*key).count();
             live.insert(i, Some(*key));
         }
         // Rebind surviving positions only if necessary; cross-parent moves already replaced their own entries.

@@ -40,7 +40,9 @@ fn local_state_is_masked_and_dropped_subtrees_and_transparent_wrappers_are_filte
     let plain_doc = new_doc(3)?;
     let plain = plain_doc.get_map("root");
     plain.insert("$", schema::to_loro(&json!({"local":{"only":true}})))?;
-    assert!(!schema::has_plain_composites(&plain, &FILTER));
+    let mut index = crate::index::NodeIndex::default();
+    index.bind(NodeKey::ROOT, &plain, &FILTER)?;
+    assert!(!index.nodes[&NodeKey::ROOT].plain_composite);
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()
         .expect("editor");
