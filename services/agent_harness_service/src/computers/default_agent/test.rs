@@ -64,7 +64,6 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> HarnessId {
             team_id,
             name: "Ada".to_owned(),
             created_by: MacroUserIdStr::try_from(BUYER.to_owned()).unwrap(),
-            allow_permission_bypass: true,
             computer_id,
         })
         .await

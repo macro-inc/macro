@@ -350,8 +350,6 @@ impl Harnesses for HostedHarnesses {
                 team_id: computer.team_id,
                 name: computer.name.as_str().to_owned(),
                 created_by: computer.created_by.clone(),
-                // The computer is the team's own isolated VM, run for agents.
-                allow_permission_bypass: true,
                 computer_id: computer.id,
             })
             .await?;
