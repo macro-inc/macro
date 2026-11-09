@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project health</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --risk: #d9480f; --watch: #e67700; --ok: #2f9e44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27;
+      --risk: #ff8a5c; --watch: #ffc078; --ok: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  label { color: var(--muted); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  button, select { font: inherit; color: inherit; }
+  select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; max-width: 220px; }
+  button { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px; padding: 16px; align-items: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; border-left: 4px solid var(--ok); min-width: 0; }
+  .card.risk { border-left-color: var(--risk); }
+  .card.watch { border-left-color: var(--watch); }
+  .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .name { font-weight: 600; word-break: break-word; }
+  .badge { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--ok); }
+  .risk .badge { color: var(--risk); }
+  .watch .badge { color: var(--watch); }
+  .bar { height: 6px; background: var(--chip); border-radius: 3px; margin: 10px 0 6px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); }
+  .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .metric { background: var(--chip); border-radius: 999px; padding: 1px 9px; font-size: 12px; color: var(--muted); }
+  .metric.hot { color: var(--risk); }
+  .muted { color: var(--muted); font-size: 12px; }
+  ul { margin: 6px 0 10px; padding-left: 18px; }
+  li { word-break: break-word; }
+  li span { color: var(--risk); font-size: 12px; }
+  .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .empty { color: var(--muted); padding: 0 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Project health</h1>
+  <label>Nudges post to <select id="channel" aria-label="Channel for nudges"></select></label>
+</header>
+<p class="status" id="status">Loading…</p>
+<main class="grid" id="projects"></main>
+
+<script type="text/macro" id="health" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const PROJECT = '00000001-0000-0000-0000-000000000014';
+  const CLOSED = ['00000001-0000-0000-0002-000000000004', '00000001-0000-0000-0002-000000000005'];
+  const DAY = 86_400_000;
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const listings = [];
+    for await (const listing of macro.initiatives.list({ sort: 'updated', limit: 50 })) {
+      if (listing.status !== 'completed' && listing.status !== 'canceled') listings.push(listing);
+      if (listings.length === 30) break;
+    }
+    const [taskPage, channelPage] = await Promise.all([
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 300 }),
+      macro.workspace.page({ includeTypes: ['channel'], limit: 40 }),
+    ]);
+
+    const now = Date.now();
+    const byProject = new Map<string, { name: string; due: number | null; assigned: boolean; updatedAt: string }[]>();
+    for (const item of taskPage.items) {
+      if (item.type !== 'document') continue;
+      const properties = item.snapshot.data.properties;
+      const value = (id: string) => properties.find((p) => p.definition.id === id)?.value;
+      const project = value(PROJECT);
+      const projectId = project?.type === 'EntityReference' ? project.value[0]?.entity_id : undefined;
+      if (!projectId) continue;
+      const status = value(STATUS);
+      if (status?.type === 'SelectOption' && status.value.some((id) => CLOSED.includes(id))) continue;
+      const due = value(DUE);
+      const assignees = value(ASSIGNEES);
+      const open = byProject.get(projectId) ?? [];
+      open.push({
+        name: item.name,
+        due: due?.type === 'Date' ? new Date(due.value).getTime() : null,
+        assigned: assignees?.type === 'EntityReference' && assignees.value.length > 0,
+        updatedAt: item.snapshot.data.updatedAt,
+      });
+      byProject.set(projectId, open);
+    }
+
+    const projects = listings.map((listing) => {
+      const open = byProject.get(listing.initiative.id) ?? [];
+      const overdue = open.filter((task) => task.due !== null && task.due < now);
+      const dueSoon = open.filter((task) => task.due !== null && task.due >= now && task.due < now + 7 * DAY);
+      const unassigned = open.filter((task) => !task.assigned).length;
+      const lastActivity = [listing.updatedAt, ...open.map((task) => task.updatedAt)].sort().at(-1)!;
+      const idleDays = Math.floor((now - new Date(lastActivity).getTime()) / DAY);
+      const late = listing.dueDate !== undefined && new Date(listing.dueDate).getTime() < now;
+      let health: 'risk' | 'watch' | 'ok' = 'ok';
+      if (unassigned > 0 || dueSoon.length > 0 || idleDays > 14) health = 'watch';
+      if (overdue.length > 0 || late) health = 'risk';
+      return {
+        id: listing.initiative.id,
+        name: listing.name,
+        health,
+        dueDate: listing.dueDate ?? null,
+        tasks: listing.taskCount,
+        done: listing.completedTaskCount,
+        open: open.length,
+        unassigned,
+        dueSoon: dueSoon.length,
+        idleDays,
+        overdue: overdue
+          .sort((a, b) => a.due! - b.due!)
+          .slice(0, 4)
+          .map((task) => ({ name: task.name, daysLate: Math.ceil((now - task.due!) / DAY) })),
+        overdueCount: overdue.length,
+      };
+    });
+    const order = { risk: 0, watch: 1, ok: 2 };
+    projects.sort((a, b) => order[a.health] - order[b.health] || b.overdueCount - a.overdueCount);
+
+    const channels = channelPage.items.flatMap((item) =>
+      item.type === 'channel' && item.name ? [{ id: item.id, name: item.name }] : [],
+    );
+    return { projects, channels };
+  }
+</script>
+
+<script type="text/macro" id="nudge" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const PROJECT = '00000001-0000-0000-0000-000000000014';
+  const CLOSED = ['00000001-0000-0000-0002-000000000004', '00000001-0000-0000-0002-000000000005'];
+
+  export default async function (
+    { projectId, channelId }: { projectId: string; channelId: string },
+    { macro }: ProgramContext,
+  ) {
+    const page = await macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 300 });
+    const now = Date.now();
+    const overdue = page.items.flatMap((item) => {
+      if (item.type !== 'document') return [];
+      const properties = item.snapshot.data.properties;
+      const value = (id: string) => properties.find((p) => p.definition.id === id)?.value;
+      const project = value(PROJECT);
+      const status = value(STATUS);
+      const due = value(DUE);
+      const inProject = project?.type === 'EntityReference' && project.value.some((ref) => ref.entity_id === projectId);
+      const closed = status?.type === 'SelectOption' && status.value.some((id) => CLOSED.includes(id));
+      const late = due?.type === 'Date' && new Date(due.value).getTime() < now;
+      return inProject && !closed && late ? [macro.tasks.byId(item.id)] : [];
+    }).slice(0, 8);
+
+    const name = await macro.initiatives.byId(projectId).name();
+    if (overdue.length === 0) return { posted: false, count: 0 };
+
+    // Load each task so its mention carries the task's name.
+    await Promise.all(overdue.map((task) => task.name()));
+    const parts = overdue.map((task) => task.toMention());
+    const content = `⏰ ${name} has ${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}: `
+      + parts.map((part) => part.tag).join(', ')
+      + '. Can owners update the dates or close them out?';
+    await macro.channels.byId(channelId).send({ content, mentions: parts.map((part) => part.mention) });
+    return { posted: true, count: overdue.length };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { health, nudge } from 'macro:programs';
+
+  type Health = Awaited<ReturnType<typeof health>>;
+
+  const root = document.getElementById('projects')!;
+  const status = document.getElementById('status')!;
+  const channelSelect = document.getElementById('channel') as HTMLSelectElement;
+  const labels = { risk: 'At risk', watch: 'Watch', ok: 'On track' };
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function render({ projects, channels }: Health) {
+    const selected = channelSelect.value;
+    channelSelect.replaceChildren(...channels.map((channel) => {
+      const option = el('option', '', `#${channel.name}`);
+      option.value = channel.id;
+      option.selected = channel.id === selected;
+      return option;
+    }));
+
+    if (projects.length === 0) {
+      root.replaceChildren(el('p', 'empty', 'No active projects. Projects you create or join show up here.'));
+      return;
+    }
+    root.replaceChildren(...projects.map((project) => {
+      const card = el('article', `card ${project.health}`);
+      const top = el('div', 'top');
+      top.append(el('div', 'name', project.name), el('span', 'badge', labels[project.health]));
+
+      const bar = el('div', 'bar');
+      const fill = el('span');
+      fill.style.width = `${project.tasks ? Math.round((project.done / project.tasks) * 100) : 0}%`;
+      bar.append(fill);
+
+      const due = project.dueDate
+        ? ` · due ${new Date(project.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+        : '';
+      const progress = el('div', 'muted', `${project.done} of ${project.tasks} tasks done${due}`);
+
+      const metrics = el('div', 'metrics');
+      const metric = (text: string, hot: boolean) => metrics.append(el('span', hot ? 'metric hot' : 'metric', text));
+      metric(`${project.overdueCount} overdue`, project.overdueCount > 0);
+      metric(`${project.dueSoon} due this week`, false);
+      metric(`${project.unassigned} unassigned`, project.unassigned > 0);
+      metric(project.idleDays === 0 ? 'active today' : `idle ${project.idleDays}d`, project.idleDays > 14);
+
+      card.append(top, bar, progress, metrics);
+      if (project.overdue.length) {
+        const list = el('ul');
+        for (const task of project.overdue) {
+          const li = el('li', '', `${task.name} `);
+          li.append(el('span', '', `${task.daysLate}d late`));
+          list.append(li);
+        }
+        card.append(list);
+
+        const actions = el('div', 'actions');
+        const result = el('span', 'muted');
+        const button = el('button', '', 'Nudge channel');
+        button.disabled = channels.length === 0;
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            const sent = await nudge({ projectId: project.id, channelId: channelSelect.value });
+            result.textContent = sent.posted ? `Posted ${sent.count} overdue tasks.` : 'Nothing overdue now.';
+          } catch (error) {
+            result.textContent = `Couldn't post: ${String(error)}`;
+          }
+          button.disabled = false;
+        });
+        actions.append(result, button);
+        card.append(actions);
+      }
+      return card;
+    }));
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      const data = await health();
+      render(data);
+      const atRisk = data.projects.filter((project) => project.health === 'risk').length;
+      status.textContent = `${data.projects.length} active projects · ${atRisk} at risk`;
+    } catch (error) {
+      status.textContent = `Couldn't load projects: ${String(error)}`;
+    }
+  }
+
+  // Tasks are documents; project edits arrive with their task updates.
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  await reload();
+</script>
+</body>
+</html>
