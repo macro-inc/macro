@@ -267,11 +267,17 @@ impl Editor {
             let extensions = self.extensions.clone();
             let tags = self.carried_tags.clone();
             let composition = self.composition_key;
+            #[cfg(feature = "foreign-nodes")]
+            let publication_cutoff = self.suspend_version;
             let rollback = |editor: &mut Editor| {
                 editor.state = state.clone();
                 editor.extensions = extensions.clone();
                 editor.carried_tags = tags.clone();
                 editor.composition_key = composition;
+                #[cfg(feature = "foreign-nodes")]
+                if let Some(observer) = &editor.foreign_publication_observer {
+                    observer.rolled_back(&editor.state, publication_cutoff);
+                }
             };
             let mut tx = self.transaction();
             let mut failed = None;
@@ -374,11 +380,17 @@ impl Editor {
                     let extensions = self.extensions.clone();
                     let tags = self.carried_tags.clone();
                     let composition = self.composition_key;
+                    #[cfg(feature = "foreign-nodes")]
+                    let publication_cutoff = self.suspend_version;
                     let restore = |editor: &mut Editor| {
                         editor.state = state;
                         editor.extensions = extensions;
                         editor.carried_tags = tags;
                         editor.composition_key = composition;
+                        #[cfg(feature = "foreign-nodes")]
+                        if let Some(observer) = &editor.foreign_publication_observer {
+                            observer.rolled_back(&editor.state, publication_cutoff);
+                        }
                     };
                     let mut tx = self.transaction();
                     match hook.apply(&mut tx, prior) {
@@ -447,6 +459,8 @@ impl Editor {
         let extensions = self.extensions.clone();
         let tags = self.carried_tags.clone();
         let composition = self.composition_key;
+        #[cfg(feature = "foreign-nodes")]
+        let publication_cutoff = self.suspend_version;
         let mut tx = self.transaction();
         let result = match update(&mut tx) {
             Ok(true) => tx.commit().map(Some),
@@ -460,6 +474,10 @@ impl Editor {
             self.extensions = extensions;
             self.carried_tags = tags;
             self.composition_key = composition;
+            #[cfg(feature = "foreign-nodes")]
+            if let Some(observer) = &self.foreign_publication_observer {
+                observer.rolled_back(&self.state, publication_cutoff);
+            }
         }
         result
     }

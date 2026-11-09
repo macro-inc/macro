@@ -14,6 +14,8 @@ pub enum EditorMode {
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_publication_observer: Option<Arc<dyn ForeignPublicationObserver>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_instances: Arc<crate::foreign::instances::ForeignInstances>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_runtime: crate::foreign::runtime::ForeignRuntime,
@@ -54,6 +56,8 @@ impl Editor {
             (state, owner, instances)
         };
         Ok(Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_publication_observer: None,
             #[cfg(feature = "foreign-nodes")]
             foreign_runtime: Default::default(),
             #[cfg(feature = "foreign-nodes")]
