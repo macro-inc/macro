@@ -50,6 +50,24 @@ describe('macro.ui', () => {
     ]);
   });
 
+  test('opens a channel message at its place in the channel', async () => {
+    const { macro, execution, requests } = macroAnswering({
+      status: 'sent',
+      commandId: '0198a4cc-e138-7670-a308-a6b7666027aa',
+    });
+    const message = macro.channels.byId('c1').message('m1');
+
+    const result = await macro.ui.open(execution, message);
+
+    expect(result.url).toBe(
+      'https://macro.com/app/channel/c1?channel_message_id=m1',
+    );
+    expect(requests[0]?.body).toEqual({
+      executionId: EXECUTION,
+      path: '/channel/c1?channel_message_id=m1',
+    });
+  });
+
   test('answers no_client and declined with the link to reply with', async () => {
     const link = 'https://macro.com/app/tasks?s0.tasks.tab=mine';
 
