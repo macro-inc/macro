@@ -78,6 +78,7 @@ impl Modify for SecurityAddon {
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
+        agent_code_mode::inbound::document_router::run_document_program,
         agent_code_mode::inbound::axum_router::list_connected_apps,
         agent_code_mode::inbound::axum_router::list_connected_app_tools,
         agent_code_mode::inbound::axum_router::call_connected_app_tool,
@@ -216,7 +217,8 @@ impl Modify for SecurityAddon {
         (name = "agent-sessions", description = "Agent sessions"),
         (name = "agent-models", description = "Fresh provider model discovery"),
         (name = "agent-repositories", description = "Repositories a coding session can work on"),
-        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent")
+        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent"),
+        (name = "documents", description = "Programs embedded in documents, run as the viewer")
     )
 )]
 pub struct ApiDoc;

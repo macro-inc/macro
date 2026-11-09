@@ -80,7 +80,7 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
         0xA1,
     )));
     let receipt = service
-        .execute(&user(), &caller, None, request(), CancellationToken::new())
+        .execute(&user(), &caller, None, request(), None, CancellationToken::new())
         .await
         .unwrap();
 
@@ -114,6 +114,7 @@ async fn review_references_fail_outside_a_session() {
             &ToolCaller::ApiKey,
             None,
             request(),
+            None,
             CancellationToken::new(),
         )
         .await
@@ -146,6 +147,7 @@ async fn invalid_requests_are_rejected_before_minting_a_credential() {
                     &ToolCaller::ApiKey,
                     None,
                     request,
+                    None,
                     CancellationToken::new()
                 )
                 .await,
@@ -168,6 +170,7 @@ async fn an_empty_reviews_list_is_dropped() {
             &ToolCaller::ApiKey,
             None,
             request(),
+            None,
             CancellationToken::new(),
         )
         .await

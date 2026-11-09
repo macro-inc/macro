@@ -1,6 +1,7 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
+    CodeModeError, DocumentProgramGate, ExecutionCredentials, ExecutionIdentity,
+    UserExecutionCredentials,
 };
 use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
@@ -69,6 +70,9 @@ impl ExecutionCredentials for RunCredentials {
 /// labelled with the MCP client's name - the same attribution the direct MCP
 /// tools give. The MCP client asks the user before each tool call, so there is
 /// no owner gate.
+///
+/// A document's embedded program runs as the user with no agent: the person
+/// opened the file and the app asks them before it writes.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
@@ -84,13 +88,14 @@ impl UserExecutionCredentials for UserRunCredentials {
         session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         let agent = match caller {
-            ai_toolset::ToolCaller::Agent(agent) => *agent,
+            ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
             ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
-                bot_id::MACRO_AI_BOT_ID
+                Some(bot_id::MACRO_AI_BOT_ID)
             }
+            ai_toolset::ToolCaller::Document => None,
         };
-        let correlation = match session {
-            Some(session) => Some(
+        let correlation = match (session, agent) {
+            (Some(session), Some(agent)) => Some(
                 self.correlations
                     .create(session, agent.as_uuid())
                     .await
@@ -99,7 +104,7 @@ impl UserExecutionCredentials for UserRunCredentials {
                         CodeModeError::Unavailable
                     })?,
             ),
-            None => None,
+            _ => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
@@ -107,7 +112,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             .mint_for_agent(
                 user,
                 60,
-                Some(agent.as_uuid()),
+                agent.map(|agent| agent.as_uuid()),
                 caller.via().map(str::to_owned),
                 None,
                 correlation,
@@ -125,6 +130,31 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
         })
+    }
+}
+
+/// Document programs roll out per user through
+/// [`agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG`]. Without a flag provider
+/// (no PostHog key) they run only locally; a flag read that fails is off.
+pub struct FlaggedDocumentPrograms {
+    pub flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
+    pub local: bool,
+}
+
+#[async_trait]
+impl DocumentProgramGate for FlaggedDocumentPrograms {
+    async fn allows(&self, user: &MacroUserIdStr<'static>) -> bool {
+        use feature_flags::FeatureFlags;
+        let Some(flags) = &self.flags else {
+            return self.local;
+        };
+        match flags.load(user).await {
+            Ok(snapshot) => snapshot.is_enabled(agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG),
+            Err(error) => {
+                tracing::warn!(?error, "could not read document program rollout; refusing");
+                false
+            }
+        }
     }
 }
 

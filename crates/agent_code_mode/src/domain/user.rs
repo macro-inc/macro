@@ -5,13 +5,14 @@ use super::{
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment};
+use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment, Unattended};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use utoipa::ToSchema;
 
 /// Mint a short-lived credential for the user a run acts as.
 #[async_trait]
@@ -27,7 +28,7 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
 }
 
 /// Outcome returned to the caller without a saved execution journal.
-#[derive(Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserExecutionReceipt {
     /// How the program ended.
@@ -47,13 +48,17 @@ pub struct UserExecutionReceipt {
 #[async_trait]
 pub trait UserCodeMode: Send + Sync + 'static {
     /// Execute and wait for the outcome. Cancelling stops the process; completed
-    /// API writes stand.
+    /// API writes stand. `inputs` selects the program's contract: `None` is
+    /// ExecuteCode's JavaScript `main({macro, ...})`; `Some` hands a TypeScript
+    /// `main({...arguments, macro})` its inputs and never the credential, and
+    /// can make the run a dry run.
     async fn execute(
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ToolCaller,
         session: Option<uuid::Uuid>,
         request: ExecuteRequest,
+        inputs: Option<Unattended>,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError>;
 }
@@ -85,6 +90,7 @@ impl UserCodeMode for UserCodeModeService {
         fields(
             source_bytes = request.source.len(),
             timeout_ms = request.timeout_ms,
+            dry_run = inputs.as_ref().is_some_and(|inputs| inputs.dry_run),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
         ),
@@ -96,10 +102,12 @@ impl UserCodeMode for UserCodeModeService {
         caller: &ToolCaller,
         session: Option<uuid::Uuid>,
         request: ExecuteRequest,
+        inputs: Option<Unattended>,
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
-        let environment = self.credentials.issue(user, caller, session).await?;
+        let mut environment = self.credentials.issue(user, caller, session).await?;
+        environment.unattended = inputs;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self.executor.execute_program_with_progress(
             request,

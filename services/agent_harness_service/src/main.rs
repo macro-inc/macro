@@ -752,25 +752,31 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
-            service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
-                Arc::new(public.clone()),
-                Arc::new(code_mode::UserRunCredentials {
-                    correlations: agent_correlation::outbound::PgCorrelationRepository(
-                        pool.clone(),
-                    ),
-                    signer: MacroApiTokenSigner::new(
-                        pool.clone(),
-                        config.macro_api_token_issuer.as_ref(),
-                        config.macro_api_token_private_secret_key.as_ref(),
-                    ),
-                    endpoints: code_mode::sdk_endpoints()?,
-                }),
+    // User-scoped runs, shared by public MCP's ExecuteCode and the programs
+    // embedded in HTML documents the app previews.
+    let user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>> =
+        match &code_runner {
+            Some((_, public, _, _)) => Some(Arc::new(
+                agent_code_mode::domain::UserCodeModeService::new(
+                    Arc::new(public.clone()),
+                    Arc::new(code_mode::UserRunCredentials {
+                        correlations: agent_correlation::outbound::PgCorrelationRepository(
+                            pool.clone(),
+                        ),
+                        signer: MacroApiTokenSigner::new(
+                            pool.clone(),
+                            config.macro_api_token_issuer.as_ref(),
+                            config.macro_api_token_private_secret_key.as_ref(),
+                        ),
+                        endpoints: code_mode::sdk_endpoints()?,
+                    }),
+                ),
             )),
-        }),
-        None => None,
-    };
+            None => None,
+        };
+    let public_code_mode = user_code_mode
+        .clone()
+        .map(|service| public_mcp::PublicCodeMode { service });
     let public_mcp_router = public_mcp::router(
         &config,
         &secrets,
@@ -1804,6 +1810,19 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let document_programs = match &user_code_mode {
+        Some(service) => agent_code_mode::inbound::document_router::document_program_router(
+            agent_code_mode::inbound::document_router::DocumentProgramRouterState::new(
+                service.clone(),
+                Arc::new(code_mode::FlaggedDocumentPrograms {
+                    flags: feature_flags.clone(),
+                    local: matches!(config.environment, Environment::Local),
+                }),
+                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            ),
+        ),
+        None => axum::Router::new(),
+    };
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1892,6 +1911,7 @@ async fn run() -> anyhow::Result<()> {
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
+            .with_document_programs(document_programs)
             .with_notifications(notification_ingress)
             .with_cognition(cognition_router)
             .with_universal_input(

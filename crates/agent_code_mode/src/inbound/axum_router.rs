@@ -127,7 +127,8 @@ where
 }
 
 /// Map domain failures without exposing infrastructure details.
-pub struct CodeExecutionApiError(CodeModeError);
+#[derive(Debug)]
+pub struct CodeExecutionApiError(pub(crate) CodeModeError);
 
 impl IntoResponse for CodeExecutionApiError {
     fn into_response(self) -> Response {

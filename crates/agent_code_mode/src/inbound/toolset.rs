@@ -195,6 +195,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
                 },
+                None,
                 request.cancel,
             )
             .await

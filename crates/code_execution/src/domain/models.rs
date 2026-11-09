@@ -34,8 +34,9 @@ pub struct RunEnvironment {
     /// Where the SDK sends requests and what its links point at.
     #[serde(flatten)]
     pub endpoints: SdkEndpoints,
-    /// Set for a program that runs with nobody watching (a routine step)
-    /// instead of an agent's or a person's call.
+    /// Set for a program whose `main` receives inputs and never the
+    /// credential: a routine step running with nobody watching, or a program
+    /// embedded in a document the user opened.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
 }
@@ -51,7 +52,7 @@ pub struct SdkEndpoints {
     pub web_app_url: String,
 }
 
-/// How an unattended program runs: its source is TypeScript, and `main`
+/// How a program with inputs runs: its source is TypeScript, and `main`
 /// receives `macro` and `arguments` but never the credential.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
