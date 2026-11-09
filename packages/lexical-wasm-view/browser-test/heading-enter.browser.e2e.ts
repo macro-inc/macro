@@ -26,6 +26,10 @@ test('heading shortcut then Enter creates exactly one paragraph and caret', asyn
         snapshot.json.root.children.map((node: { type: string }) => node.type)
       )
       .toEqual(['heading', 'paragraph']);
+    expect.soft(snapshot.selection).toEqual({
+      anchor: { path: [1], offset: 0, type: 'element' },
+      focus: { path: [1], offset: 0, type: 'element' },
+    });
     expect.soft(snapshot.domSelection).toEqual({
       anchor: { path: [1], offset: 0 },
       focus: { path: [1], offset: 0 },
