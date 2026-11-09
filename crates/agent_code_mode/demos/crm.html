@@ -56,9 +56,11 @@
 
 <script type="text/macro" id="contacts" lang="ts">
   export default async function ({ query }: { query: string }, { macro }: ProgramContext) {
+    // CRM contacts belong to the viewer's current team.
+    if ((await macro.teams.list()).length === 0) return { inTeam: false, contacts: [] };
     const found = await macro.crm.searchContacts(query, { limit: 50 });
     const companies = new Map<string, Promise<string | null>>();
-    return Promise.all(found.map(async (contact) => {
+    const contacts = await Promise.all(found.map(async (contact) => {
       const company = await contact.company();
       if (company && !companies.has(company.id)) {
         companies.set(company.id, company.name().then((name) => name ?? null));
@@ -71,6 +73,7 @@
         lastInteraction: (await contact.lastInteraction()) ?? null,
       };
     }));
+    return { inTeam: true, contacts };
   }
 </script>
 
@@ -118,11 +121,10 @@
   }
 
   async function load() {
-    let rows: Awaited<ReturnType<typeof contacts>>;
-    try {
-      rows = await contacts({ query: queryInput.value.trim() });
-    } catch (error) {
-      list.replaceChildren(el('p', 'empty', `CRM isn't available for this account: ${String(error)}`));
+    const { inTeam, contacts: rows } = await contacts({ query: queryInput.value.trim() });
+    if (!inTeam) {
+      createButton.disabled = true;
+      list.replaceChildren(el('p', 'empty', 'Contacts belong to a team. Create or join a team to keep contacts here.'));
       return;
     }
     if (rows.length === 0) {
