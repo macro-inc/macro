@@ -209,28 +209,26 @@ export function EmailSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          searchLabel="Search email"
-          search={
-            canSearchEmailTab(state.tab)
-              ? () => (
-                  <SearchBar
-                    label="Search email"
-                    placeholder="Search email"
-                    value={state.search}
-                    onValueChange={(search) => setState('search', search)}
-                  />
-                )
-              : undefined
-          }
-        >
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
+      <ViewSidebar.Header
+        searchLabel="Search email"
+        search={
+          canSearchEmailTab(state.tab)
+            ? () => (
+                <SearchBar
+                  label="Search email"
+                  placeholder="Search email"
+                  value={state.search}
+                  onValueChange={(search) => setState('search', search)}
+                />
+              )
+            : undefined
+        }
+      >
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton class="shrink-0" />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
 
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Primary>

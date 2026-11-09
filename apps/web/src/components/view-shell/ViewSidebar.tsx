@@ -72,7 +72,7 @@ function Header(
         <div
           {...rest}
           class={cn(
-            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
             local.class
           )}
           data-view-sidebar-header=""
@@ -162,7 +162,7 @@ function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) touch:pt-[calc(var(--safe-top,0px)+var(--sidebar-gutter))]',
+        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
         local.class
       )}
     >
@@ -399,6 +399,7 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
 export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
+  Toggle: ViewSidebarToggle,
   CloseButton: ViewSidebarCloseButton,
   Title,
   Primary,

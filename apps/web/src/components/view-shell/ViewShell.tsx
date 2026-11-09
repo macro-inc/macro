@@ -11,6 +11,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
@@ -86,6 +87,7 @@ export type ViewShellLayout = {
 
 type ViewShellInternal = ViewShellLayout & {
   id: string;
+  root: Accessor<HTMLDivElement | undefined>;
   atLayoutBreakpoint: Accessor<boolean>;
   asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
   /** Which of a list aside and Main fills a narrow shell; undefined otherwise. */
@@ -414,6 +416,7 @@ function Root(props: ViewShellRootProps) {
 
   const value: ViewShellInternal = {
     id,
+    root,
     width,
     breakpoints,
     atLayoutBreakpoint,
@@ -712,7 +715,10 @@ export function ViewSidebarCloseButton(
 }
 
 /** Safe outside a shell so block preview headers can share this control. */
-export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
+export function ViewSidebarToggle(props: {
+  action: 'collapse' | 'expand';
+  presentation?: 'pill';
+}) {
   const ws = useContext(ViewShellContext);
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // only the expand toggle registers, from inside the callback.
@@ -734,10 +740,11 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
             props.action === 'expand' ? 'Show navigation' : 'Hide navigation',
           hotkey: TOKENS.workspace.toggleNavigation,
         }}
-        variant="ghost"
-        size="icon-xs"
+        variant={props.presentation === 'pill' ? 'secondary' : 'ghost'}
+        size={props.presentation === 'pill' ? 'icon-lg' : 'icon-xs'}
         class={cn(
-          'shrink-0 touch:hidden',
+          'shrink-0',
+          props.presentation === 'pill' && 'size-10 rounded-full',
           props.action === 'collapse' && 'ml-auto',
           props.action === 'collapse' &&
             ws?.aside.isOverlay() &&
@@ -747,8 +754,8 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
           if (props.action === 'expand') toggleTarget(element);
         }}
         data-view-sidebar-toggle={props.action}
-        onClick={(event) => {
-          const shell = event.currentTarget.closest('[data-view-shell]');
+        onClick={() => {
+          const shell = ws?.root();
           if (props.action === 'expand') ws?.aside.expand();
           else ws?.aside.collapse();
           const nextAction = props.action === 'expand' ? 'collapse' : 'expand';
@@ -757,7 +764,7 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
               ?.querySelector<HTMLButtonElement>(
                 `[data-view-sidebar-toggle="${nextAction}"]`
               )
-              ?.focus()
+              ?.focus({ preventScroll: true })
           );
         }}
       >
@@ -797,7 +804,12 @@ export function ViewNavigationControls() {
         <SplitPanel.CloseButton />
         <Show
           when={ws?.narrowList() === 'main'}
-          fallback={<ViewSidebarToggle action="expand" />}
+          fallback={
+            <ViewSidebarToggle
+              action="expand"
+              presentation={isTouchDevice() ? 'pill' : undefined}
+            />
+          }
         >
           <ViewListBackButton onClick={() => ws?.returnToList()} />
         </Show>

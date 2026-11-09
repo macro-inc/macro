@@ -45,9 +45,14 @@ Breakpoint transitions own host changes; pin changes only animate the active
 host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
 
-A view whose aside is its entity list (Chat, Notifications) passes `asideList`.
+A view whose aside is its entity list (Notifications) passes `asideList`.
 Narrow, it bypasses the overlay: the list fills the shell over an inert Main
 until `open`, then Main fills it and `ViewNavigationControls` shows Back,
 calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
+
+Workspace sidebars use the shared 720px container breakpoint on touch and desktop.
+Wide panes dock navigation; narrow panes open it as an overlay. The title header
+places collapse on the right; collapsed touch navigation uses the leading pill
+control, before filters.

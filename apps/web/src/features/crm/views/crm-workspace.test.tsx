@@ -16,6 +16,7 @@ const fixture = vi.hoisted(() => ({
   listsEnabled: true,
   touch: true,
   narrow: false,
+  width: 600,
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
   setCollapsed: vi.fn(),
@@ -31,7 +32,10 @@ vi.mock('@app/components/view-shell', () => ({
     Main: (props: ParentProps) => props.children,
     Header: (props: ParentProps) => <header>{props.children}</header>,
   },
-  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
+  ViewSidebar: {
+    Title: (props: ParentProps) => <h1>{props.children}</h1>,
+    Toggle: () => <button type="button" aria-label="Show navigation" />,
+  },
   useViewShell: () => ({
     aside: { isCollapsed: () => true },
     breakpoints: { narrow: () => fixture.narrow },
@@ -51,6 +55,19 @@ vi.mock('@app/preferences/use-preference', () => ({
     ];
   },
 }));
+vi.mock('@components/app/split-layout/context', async () => {
+  const { createContext } = await import('solid-js');
+  return {
+    SplitLayoutContext: createContext(),
+    SplitPanelContext: createContext({
+      panelSize: {
+        get width() {
+          return fixture.width;
+        },
+      },
+    }),
+  };
+});
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => fixture.touch,
 }));
@@ -277,6 +294,7 @@ afterEach(() => {
   fixture.listsEnabled = true;
   fixture.touch = true;
   fixture.narrow = false;
+  fixture.width = 600;
   fixture.openWithSplit.mockReset();
   fixture.setCollapsed.mockReset();
 });
@@ -367,7 +385,10 @@ it('omits pipelines and lists when those features are disabled', () => {
   setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
-    tabs.getAllByRole('button').map((button) => button.textContent)
+    tabs
+      .getAllByRole('button')
+      .filter((button) => button.hasAttribute('aria-pressed'))
+      .map((button) => button.textContent)
   ).toEqual([
     'Companies',
     'People',
@@ -453,6 +474,17 @@ it('opens the company of a pipeline row through the route on desktop', () => {
   expect(fixture.openWithSplit).not.toHaveBeenCalled();
 });
 
+it('opens a pipeline record inline on wide touch', () => {
+  fixture.width = 1000;
+  const { record, captureEntryState } = setup('pipeline:sales');
+  fireEvent.click(screen.getByRole('button', { name: 'Open Acme' }));
+  expect(captureEntryState).toHaveBeenCalledBefore(record.open);
+  expect(record.open).toHaveBeenCalledExactlyOnceWith([
+    { type: 'company', id: 'acme', name: '' },
+  ]);
+  expect(fixture.openWithSplit).not.toHaveBeenCalled();
+});
+
 it('returns to the pipeline when its record is open and the pipeline is picked again', () => {
   fixture.touch = false;
   const { activeTab, record } = setup('pipeline:sales');
@@ -461,33 +493,6 @@ it('returns to the pipeline when its record is open and the pipeline is picked a
   expect(record.close).toHaveBeenCalledOnce();
   expect(activeTab()).toBe('pipeline:sales');
   expect(screen.getByText('Sales table')).toBeTruthy();
-});
-
-it('keeps the split close in the header and offers no collapse in the narrow navigation menu', () => {
-  fixture.touch = false;
-  fixture.narrow = true;
-  setup('pipeline:sales');
-  const trigger = screen.getByRole('button', { name: 'Show CRM navigation' });
-  expect(
-    screen.getByRole('button', { name: 'Close split' }).nextElementSibling
-  ).toBe(trigger.parentElement);
-  fireEvent.click(trigger);
-  expect(
-    screen.getAllByRole('navigation', { name: 'CRM sidebar' })
-  ).toHaveLength(2);
-  expect(
-    screen.getAllByRole('button', { name: 'Collapse CRM sidebar' })
-  ).toHaveLength(1);
-  expect(fixture.setCollapsed).not.toHaveBeenCalled();
-});
-
-it('keeps the split close beside the collapsed sidebar toggle on a pipeline', () => {
-  fixture.touch = false;
-  setup('pipeline:sales');
-  const close = screen.getByRole('button', { name: 'Close split' });
-  expect(close.nextElementSibling?.getAttribute('aria-label')).toBe(
-    'Expand CRM sidebar'
-  );
 });
 
 it('opens the company of a pipeline row in its own split on touch', () => {

@@ -275,30 +275,28 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <ViewSidebar.Root aria-label="Agents navigation">
-        <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header
-            searchLabel="Search conversations"
-            searchOpen={searchOpen()}
-            onSearchOpenChange={(open) => (open ? openSearch() : closeSearch())}
-            search={() => (
-              <SearchBar
-                ref={searchInput}
-                placeholder="Search conversations"
-                label="Search conversations"
-                value={props.search}
-                onValueChange={props.onSearchChange}
-                onEscape={() => {
-                  if (!props.search) closeSearch();
-                }}
-              />
-            )}
-          >
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewSidebar.CloseButton />
-              <ViewSidebar.Title>Agents</ViewSidebar.Title>
-            </div>
-          </ViewSidebar.Header>
-        </Show>
+        <ViewSidebar.Header
+          searchLabel="Search conversations"
+          searchOpen={searchOpen()}
+          onSearchOpenChange={(open) => (open ? openSearch() : closeSearch())}
+          search={() => (
+            <SearchBar
+              ref={searchInput}
+              placeholder="Search conversations"
+              label="Search conversations"
+              value={props.search}
+              onValueChange={props.onSearchChange}
+              onEscape={() => {
+                if (!props.search) closeSearch();
+              }}
+            />
+          )}
+        >
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.CloseButton />
+            <ViewSidebar.Title>Agents</ViewSidebar.Title>
+          </div>
+        </ViewSidebar.Header>
 
         <Show when={!isTouchDevice()}>
           <ViewSidebar.Primary>

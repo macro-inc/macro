@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PillButton, PillTabs } from '@components/app/mobile/PillTabs';
@@ -90,6 +91,7 @@ export function TasksMobileTabs(props: { leading?: JSX.Element }) {
         contentClass="px-(--mobile-chrome-gutter)"
         leading={
           <>
+            <ViewSidebar.Toggle action="expand" presentation="pill" />
             {props.leading ?? (
               <Show when={!isProjectTab(state.tab)}>
                 <TasksFilterDrawer />

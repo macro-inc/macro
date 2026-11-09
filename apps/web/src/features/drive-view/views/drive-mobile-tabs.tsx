@@ -1,4 +1,6 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { Show } from 'solid-js';
 import { useDriveView } from '../context/drive-context';
 import {
   DRIVE_MOBILE_TABS,
@@ -29,7 +31,14 @@ export function DriveMobileTabs() {
         scrollable
         class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
         contentClass="px-(--mobile-chrome-gutter)"
-        leading={folderHierarchy() ? undefined : <DriveFilterDrawer />}
+        leading={
+          <>
+            <ViewSidebar.Toggle action="expand" presentation="pill" />
+            <Show when={!folderHierarchy()}>
+              <DriveFilterDrawer />
+            </Show>
+          </>
+        }
         items={items()}
         value={activeTab()}
         onChange={(tab) => state.navigate(driveMobileTabLocation(tab))}

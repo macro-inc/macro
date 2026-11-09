@@ -4,10 +4,10 @@ import type {
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
 import { driveSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -56,8 +56,11 @@ type DriveDetailNavigation = {
 
 const Context = createContext<DriveDetailNavigation>();
 
-function opensInline(options?: EntityDetailNavigationOptions) {
-  if (isTouchDevice()) return false;
+function opensInline(
+  inlineLayout: boolean,
+  options?: EntityDetailNavigationOptions
+) {
+  if (!inlineLayout) return false;
 
   const event = options?.event;
   if (!event) return true;
@@ -75,6 +78,7 @@ export function DriveDetailNavigationProvider(
   const navigate = useNavigate();
   const routeTrail = useRouteState(driveSplitRoute);
   const selectPreview = createPreviewSelectionGuard();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const activeDocument = createMemo(() => driveDocumentFromParams(params));
   const activeCallId = () => params.callId;
   const activeTarget = createMemo(() =>
@@ -110,7 +114,7 @@ export function DriveDetailNavigationProvider(
   ):
     | { target: DriveDetailTarget; document: DriveDocumentRoute }
     | undefined => {
-    if (!opensInline(options)) return;
+    if (!opensInline(inlinePreviewLayout(), options)) return;
 
     if (target.type === 'database' || target.type === 'form') {
       if (!selectPreview(target)) return;

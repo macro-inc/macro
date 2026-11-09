@@ -309,9 +309,13 @@ that supplemental metadata appears without replacing the rows or thread body.
 On the first mobile Mail visit, its filter button and Signal/Noise pills must
 also appear. Navigate Home → Mail → a thread → Mail and verify those controls
 survive header replacement, including with the network still blocked.
-The pill row has an explicit 0.5rem top gutter below the split header's safe-area
-position, matching Drive's header gutter even when Duo has no top safe-area inset.
-The email list reserves the pill row and a 0.75rem gap beneath it.
+The touch pill row is contained within the email-list pane, beside an expanded
+sidebar. It has an explicit 0.5rem top gutter below the safe-area boundary,
+matching Drive even when Duo has no top safe-area inset.
+The email list reserves the pill row and a 0.75rem gap beneath it. Email
+navigation docks above 720px and opens as an overlay at narrower widths; Hide
+navigation sits beside Email, and Show navigation precedes the filter button.
+Wide touch opens threads inline and follows the reading-pane preference like desktop.
 
 Opening an email shows loading while its local draft identity and thread data
 resolve. Verify a cold open and switching directly between threads with delayed

@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
@@ -292,11 +293,8 @@ export const CollapsedSoupViewTabs = () => {
 };
 
 /**
- * Filter-drawer button + per-view filter pills, rendered in the mobile split
- * header. The strip is full-bleed: negative margins cancel the header row's
- * gutter so pills scroll to the device edges, and the gutter travels inside
- * the scroll content. The drawer button leads the strip and scrolls along
- * with the pills.
+ * Navigation, filter drawer, and view pills within the touch list pane.
+ * The scroll content owns its gutters so the strip stays clear of the sidebar.
  */
 export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
@@ -322,17 +320,6 @@ export const MobileSoupViewTabs = () => {
   );
 };
 
-// Full-bleed breakout for header strips: the strip sits in the header row's
-// left flex slot, whose right edge stops short of the panel edge (row gap +
-// right-side column), so sizing it there leaves a sliver the pills can't
-// scroll over (right where the list's scrollbar sits). Instead, opt out of
-// flex sizing and span the header container itself (100cqw resolves against
-// @container/split-header = the panel width): -ml cancels the row gutter so
-// the strip runs device edge to device edge, over the scrollbar.
-const MOBILE_TAB_STRIP_CLASS =
-  '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
-const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
-
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
@@ -342,9 +329,14 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   return (
     <PillTabs
       scrollable
-      class={MOBILE_TAB_STRIP_CLASS}
-      contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer />}
+      class="w-full"
+      contentClass="px-(--mobile-chrome-gutter)"
+      leading={
+        <>
+          <ViewSidebar.Toggle action="expand" presentation="pill" />
+          <MobileFilterDrawer />
+        </>
+      }
       items={visibleViewTabs(props.view)}
       value={activeValue()}
       onChange={(value) => applyTabPreset(props.view, value)}

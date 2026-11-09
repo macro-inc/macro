@@ -1,5 +1,6 @@
 import { SearchBar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
@@ -28,32 +29,42 @@ export function HomeListLayout(
   }>
 ) {
   const { state, setState } = useHomeView();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
       class="relative flex size-full min-h-0 min-w-0 flex-col"
       style={{
-        '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
+        '--mobile-content-inset-top': inlinePreviewLayout()
+          ? '0px'
+          : 'calc(var(--safe-top, 0px) + 3.75rem)',
       }}
     >
       <Show
-        when={isTouchDevice()}
+        when={!inlinePreviewLayout()}
         fallback={
-          <SidebarCreateHeader
-            title="Home"
-            label="New chat"
-            onCreate={props.onNewChat}
-            actions={<HomeFilterDropdown />}
-            searchLabel="Search Home"
-            search={() => (
-              <SearchBar
-                label="Search Home"
-                placeholder="Search Home"
-                value={state.search}
-                onValueChange={(search) => setState('search', search)}
-              />
-            )}
-          />
+          <>
+            <SidebarCreateHeader
+              title={isTouchDevice() ? 'Notifications' : 'Home'}
+              label="New chat"
+              onCreate={props.onNewChat}
+              actions={<HomeFilterDropdown />}
+              searchLabel="Search Home"
+              search={() => (
+                <SearchBar
+                  label="Search Home"
+                  placeholder="Search Home"
+                  value={state.search}
+                  onValueChange={(search) => setState('search', search)}
+                />
+              )}
+            />
+            <Show when={isTouchDevice()}>
+              <div class="shrink-0 px-(--sidebar-gutter) pt-2">
+                {props.tabs}
+              </div>
+            </Show>
+          </>
         }
       >
         <MobileHomeHeader>{props.tabs}</MobileHomeHeader>

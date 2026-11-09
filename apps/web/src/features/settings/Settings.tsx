@@ -1,4 +1,8 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import {
+  useViewShell,
+  ViewShell,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
@@ -6,7 +10,6 @@ import {
   useNavigate as useSplitNavigate,
 } from '@app/lib/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
 import {
@@ -209,75 +212,67 @@ export function SettingsPanel(props: SettingsPanelProps) {
       data-settings-panel
       ref={settingsContainerRef}
     >
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <>
-            <SplitHeaderLeft>
-              {/* On touch the header strip hosts the tab pills (the bottom
-                  accessory region belongs to the global views row).
-                  Full-bleed breakout: span the header container (100cqw),
-                  opting out of the row's flex sizing, with -ml cancelling the
-                  row gutter so the pills scroll device edge to device edge —
-                  see MOBILE_TAB_STRIP_CLASS in soup-view-tabs.tsx. */}
-              <PillTabs
-                scrollable
-                class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
-                contentClass="px-(--mobile-chrome-gutter)"
-                items={tabItems()}
-                value={activeNavigationTab()}
-                onChange={handleTabChange}
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <ViewShell.Root
+            asidePreferenceKey="settings"
+            resizable
+            aside={{ preserveDuringResize: false }}
+            main={{ preferredWidth: 960 }}
+          >
+            <ViewShell.Aside>
+              <SettingsSidebar
+                groups={navGroups()}
+                results={searchResults()}
+                selectedResultId={
+                  searchSelection()?.tab === activeTabId()
+                    ? searchSelection()?.id
+                    : undefined
+                }
+                onSelectResult={(result) => {
+                  selectRoutedTab(result.tab);
+                  setSearchSelection({ ...result });
+                }}
+                searchQuery={searchQuery()}
+                onSearchQueryChange={setSearchQuery}
+                isItemActive={isItemActive}
+                onSelect={selectRoutedTab}
+                action={<TeamSidebarAction />}
               />
-            </SplitHeaderLeft>
-            {/* Full-frame on touch: the tab pages own the chrome insets
-                inside their scrollers (see SettingsPage in primitives.tsx), so
-                content scrolls under the floating header/dock like every other
-                block instead of being boxed between them. */}
-            <div class="relative min-h-0 flex-1 overflow-hidden">
-              {content()}
-            </div>
-          </>
-        }
-      >
-        <SplitPanel.Root>
-          <SplitPanel.Body>
-            <ViewShell.Root
-              asidePreferenceKey="settings"
-              asidePinned
-              resizable
-              aside={{ preserveDuringResize: false }}
-              main={{ preferredWidth: 960 }}
+            </ViewShell.Aside>
+            <ViewShell.Main
+              class="relative"
+              style={
+                isTouchDevice()
+                  ? {
+                      '--mobile-content-inset-top':
+                        'calc(var(--safe-top, 0px) + 3.75rem)',
+                    }
+                  : undefined
+              }
             >
-              <ViewShell.Aside>
-                <SettingsSidebar
-                  groups={navGroups()}
-                  results={searchResults()}
-                  selectedResultId={
-                    searchSelection()?.tab === activeTabId()
-                      ? searchSelection()?.id
-                      : undefined
-                  }
-                  onSelectResult={(result) => {
-                    selectRoutedTab(result.tab);
-                    setSearchSelection({ ...result });
-                  }}
-                  searchQuery={searchQuery()}
-                  onSearchQueryChange={setSearchQuery}
-                  isItemActive={isItemActive}
-                  onSelect={selectRoutedTab}
-                  action={<TeamSidebarAction />}
-                />
-              </ViewShell.Aside>
-              <ViewShell.Main>
-                <SettingsNavigationBar />
-                <div class="relative min-h-0 flex-1 overflow-hidden">
-                  {content()}
-                </div>
-              </ViewShell.Main>
-            </ViewShell.Root>
-          </SplitPanel.Body>
-        </SplitPanel.Root>
-      </Show>
+              <Show when={isTouchDevice()} fallback={<SettingsNavigationBar />}>
+                <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]">
+                  <PillTabs
+                    scrollable
+                    class="w-full"
+                    contentClass="px-(--mobile-chrome-gutter)"
+                    leading={
+                      <ViewSidebar.Toggle action="expand" presentation="pill" />
+                    }
+                    items={tabItems()}
+                    value={activeNavigationTab()}
+                    onChange={handleTabChange}
+                  />
+                </header>
+              </Show>
+              <div class="relative min-h-0 flex-1 overflow-hidden">
+                {content()}
+              </div>
+            </ViewShell.Main>
+          </ViewShell.Root>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
     </div>
   );
 }

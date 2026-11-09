@@ -139,8 +139,8 @@ export function ExternalView() {
       <SplitPanel.Body>
         <ViewShell.Root
           asidePreferenceKey="external"
-          aside={isTouchDevice() ? false : undefined}
-          resizable={!isTouchDevice()}
+          aside={{ preserveDuringResize: false }}
+          resizable
         >
           <ViewShell.Aside>
             <ViewSidebar.Root aria-label="External navigation">
@@ -188,6 +188,11 @@ export function ExternalView() {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
+            <Show when={isTouchDevice()}>
+              <ViewShell.Header class="empty:hidden">
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+              </ViewShell.Header>
+            </Show>
             <SplitRouter.Outlet fallback={whatsappPage} />
           </ViewShell.Main>
         </ViewShell.Root>

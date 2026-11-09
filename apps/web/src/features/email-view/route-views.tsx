@@ -36,7 +36,7 @@ export const MailRouteView = withAuth(() => {
   return (
     <AppView
       id="mail"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={detailRequested}
       detailFallback={<MailLegacyRouteView />}
     >

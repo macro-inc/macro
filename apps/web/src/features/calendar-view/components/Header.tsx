@@ -1,4 +1,8 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import {
+  useViewShell,
+  ViewShell,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
@@ -23,7 +27,6 @@ import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import ListIcon from '@icon/system/regular/list.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
@@ -34,6 +37,7 @@ import {
   type JSX,
   Match,
   onCleanup,
+  type ParentProps,
   Show,
   Switch,
 } from 'solid-js';
@@ -160,7 +164,36 @@ export function Header(props: {
   );
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
   const showBookingLinks = () => isMobile() || !shell?.breakpoints.narrow?.();
-  const usesSplitHeader = () => isTouchDevice();
+  const usesTouchHeader = () => isTouchDevice();
+  function TouchHeader(props: ParentProps) {
+    return (
+      <Show when={shell} fallback={props.children}>
+        <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 items-start justify-between gap-2 px-(--mobile-chrome-gutter) pt-[calc(var(--safe-top,0px)+0.5rem)]">
+          {props.children}
+        </header>
+      </Show>
+    );
+  }
+  function TouchHeaderLeft(props: ParentProps) {
+    return (
+      <Show
+        when={shell}
+        fallback={<SplitHeaderLeft>{props.children}</SplitHeaderLeft>}
+      >
+        <div class="flex min-w-0 shrink items-center">{props.children}</div>
+      </Show>
+    );
+  }
+  function TouchHeaderRight(props: ParentProps) {
+    return (
+      <Show
+        when={shell}
+        fallback={<SplitHeaderRight>{props.children}</SplitHeaderRight>}
+      >
+        <div class="flex min-w-0 shrink-0 items-center">{props.children}</div>
+      </Show>
+    );
+  }
   const createItems = () => (
     <>
       <CalendarCreateEventItem />
@@ -268,68 +301,59 @@ export function Header(props: {
   };
   return (
     <Switch>
-      <Match when={usesSplitHeader()}>
-        <SplitHeaderLeft>
-          <HeaderIsland class="min-w-0 shrink px-1">
-            <Show when={!isMobile() && shell?.aside.isCollapsed()}>
-              <Button
-                aria-label="Show calendar navigation"
-                tooltip="Show calendar navigation"
-                variant="ghost"
-                size="icon-sm"
-                class="shrink-0"
-                ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
-                aria-expanded={shell?.aside.isOverlay() ?? false}
-                onClick={() => shell?.aside.expand()}
-              >
-                <ListIcon class="size-5" />
-              </Button>
-            </Show>
-            <MonthDrawer month={currentDate()} />
-            {todayButton(isTouchDevice())}
-            <Show when={props.presentation === 'preview'}>
-              <CalendarCreateMenu
-                size="icon-lg"
-                class="shrink-0 rounded-full border-transparent bg-transparent"
-                label="New"
-                trigger={<PlusIcon class="size-5" />}
-              >
-                {createItems()}
-              </CalendarCreateMenu>
-            </Show>
-          </HeaderIsland>
-        </SplitHeaderLeft>
+      <Match when={usesTouchHeader()}>
+        <TouchHeader>
+          <TouchHeaderLeft>
+            <HeaderIsland class="min-w-0 shrink px-1">
+              <Show when={props.presentation === 'workspace'}>
+                <ViewSidebar.Toggle action="expand" />
+              </Show>
+              <MonthDrawer month={currentDate()} />
+              {todayButton(isTouchDevice())}
+              <Show when={props.presentation === 'preview'}>
+                <CalendarCreateMenu
+                  size="icon-lg"
+                  class="shrink-0 rounded-full border-transparent bg-transparent"
+                  label="New"
+                  trigger={<PlusIcon class="size-5" />}
+                >
+                  {createItems()}
+                </CalendarCreateMenu>
+              </Show>
+            </HeaderIsland>
+          </TouchHeaderLeft>
 
-        <SplitHeaderRight>
-          <HeaderIsland class="px-1">
-            <div
-              ref={tourTarget(CALENDAR_TOUR.period)}
-              class="flex items-center gap-1"
-            >
-              <Show when={!isMobile()}>
-                <PeriodSelector isNarrow={isNarrow()} />
-                <div class="flex shrink-0 items-center gap-1">
-                  {previous()}
-                  {next()}
-                </div>
-              </Show>
-              <Show when={isMobile() && props.presentation === 'workspace'}>
-                <CopyAvailabilityButton size="icon-lg" />
-              </Show>
-              <Show when={!isMobile()}>
-                <CalendarSearch />
-              </Show>
-              <Show when={showBookingLinks()}>
-                <CalendarSchedulingActions />
-              </Show>
-              <Show when={props.presentation === 'preview' || isMobile()}>
-                <CalendarSettingsDropdown isNarrow={isNarrow()} />
-              </Show>
-            </div>
-          </HeaderIsland>
-        </SplitHeaderRight>
+          <TouchHeaderRight>
+            <HeaderIsland class="px-1">
+              <div
+                ref={tourTarget(CALENDAR_TOUR.period)}
+                class="flex items-center gap-1"
+              >
+                <Show when={!isMobile()}>
+                  <PeriodSelector isNarrow={isNarrow()} />
+                  <div class="flex shrink-0 items-center gap-1">
+                    {previous()}
+                    {next()}
+                  </div>
+                </Show>
+                <Show when={isMobile() && props.presentation === 'workspace'}>
+                  <CopyAvailabilityButton size="icon-lg" />
+                </Show>
+                <Show when={!isMobile()}>
+                  <CalendarSearch />
+                </Show>
+                <Show when={showBookingLinks()}>
+                  <CalendarSchedulingActions />
+                </Show>
+                <Show when={props.presentation === 'preview' || isMobile()}>
+                  <CalendarSettingsDropdown isNarrow={isNarrow()} />
+                </Show>
+              </div>
+            </HeaderIsland>
+          </TouchHeaderRight>
+        </TouchHeader>
       </Match>
-      <Match when={!usesSplitHeader()}>
+      <Match when={!usesTouchHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
           class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"

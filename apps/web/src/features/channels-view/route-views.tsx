@@ -37,7 +37,7 @@ export const ChannelsRouteView = withAuth(() => {
   return (
     <AppView
       id="channels"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={detailRequested}
       detailFallback={<ChannelsLegacyRouteView />}
     >

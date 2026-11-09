@@ -14,6 +14,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
@@ -168,15 +169,23 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
             <ViewShell.Root
               asidePreferenceKey="calendar"
               resizable
-              aside={isMobile() ? false : { preserveDuringResize: false }}
+              aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}
             >
-              <Show when={!isMobile()}>
-                <ViewShell.Aside>
-                  <CalendarSidebar />
-                </ViewShell.Aside>
-              </Show>
-              <ViewShell.Main>
+              <ViewShell.Aside>
+                <CalendarSidebar />
+              </ViewShell.Aside>
+              <ViewShell.Main
+                class="relative"
+                style={
+                  isTouchDevice()
+                    ? {
+                        '--mobile-content-inset-top':
+                          'calc(var(--safe-top, 0px) + 3.75rem)',
+                      }
+                    : undefined
+                }
+              >
                 <Header presentation="workspace" />
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">

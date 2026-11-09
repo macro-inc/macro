@@ -22,7 +22,7 @@ export function HomeChatStart() {
   return (
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>
-        <ViewShell.TopBar>
+        <ViewShell.TopBar class="touch:flex touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top)">
           <ViewSidebar.Title caret={false}>Home</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>

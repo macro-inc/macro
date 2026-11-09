@@ -72,7 +72,8 @@ including a changed cursor and a failed later page. Retrying should replace the
 old pages; changing projects or filters must discard the old scope immediately.
 The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
 and switching tabs clears it like any other filter. On mobile, the tabs
-are pills and the leading sliders button opens one drawer containing Sort, Group, and
+are pills. When navigation is collapsed, its expand button comes first; the
+sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has **+ Task** and Search,
 with no floating Ask AI input.
 Mobile does not show the separate layout, sort, group, and filter toolbar.

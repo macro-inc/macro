@@ -1,3 +1,4 @@
+import { useViewShell } from '@app/components/view-shell';
 import {
   type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
@@ -110,6 +111,7 @@ export const [ChannelsViewProvider, useChannelsView] =
     'ChannelsView',
     (props) => {
       const panel = useSplitPanelOrThrow();
+      const shell = useViewShell();
       const userId = useUserId();
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
@@ -141,7 +143,8 @@ export const [ChannelsViewProvider, useChannelsView] =
         )
       );
 
-      const mobileLayout = () => isTouchDevice();
+      const mobileLayout = () =>
+        isTouchDevice() && (shell.breakpoints.narrow?.() ?? false);
       const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
         () => {
           const channelId = params.channelId;

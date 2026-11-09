@@ -15,7 +15,7 @@ import { callsRoute } from '@app/routes/routes';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type JSX, Show, Suspense } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 import { CallsHeader } from '../components/calls-header';
 import { CallsSidebar } from '../components/calls-sidebar';
 
@@ -85,15 +85,13 @@ export function CallsView() {
             resizable
             aside={{ preserveDuringResize: false }}
           >
-            <Show when={!isTouchDevice()}>
-              <ViewShell.Aside>
-                <Suspense>
-                  <SoupRowMetadataProvider>
-                    <CallsSidebar onNavigate={openList} />
-                  </SoupRowMetadataProvider>
-                </Suspense>
-              </ViewShell.Aside>
-            </Show>
+            <ViewShell.Aside>
+              <Suspense>
+                <SoupRowMetadataProvider>
+                  <CallsSidebar onNavigate={openList} />
+                </SoupRowMetadataProvider>
+              </Suspense>
+            </ViewShell.Aside>
             <ViewShell.Main>
               {list(
                 !isTouchDevice() ? (

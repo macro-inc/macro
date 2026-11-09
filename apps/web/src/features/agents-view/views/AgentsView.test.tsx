@@ -12,6 +12,8 @@ import type { AgentsRoute } from '../core/route';
 import { AgentsView } from './AgentsView';
 
 const state = vi.hoisted(() => ({
+  touch: false,
+  width: (): number => 1000,
   contentId: { current: 'agents' },
   navigate: { current: (_id: string) => {} },
   loads: new Map<string, (name: string) => void>(),
@@ -20,7 +22,14 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@app/components/view-shell', () => ({
+  useViewShell: () => ({
+    breakpoints: { narrow: () => false },
+    aside: { isOverlay: () => false },
+  }),
   ViewShell: { Root: state.pass, Aside: state.pass, Main: state.pass },
+}));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => state.width(),
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: () => 'pending',
@@ -85,7 +94,9 @@ vi.mock(
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('@core/constant/featureFlags', () => ({ enableAgentUpdates: {} }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => state.touch,
+}));
 vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: state.pass }));
 vi.mock('@notifications/mark-row-seen', () => ({
   markRowNotificationsSeenOnOpen: () => {},
@@ -195,6 +206,8 @@ function row(name: string) {
 }
 
 beforeEach(() => {
+  state.touch = false;
+  state.width = () => 1000;
   state.contentId.current = 'agents';
   state.loads.clear();
   state.mounts.length = 0;
@@ -236,3 +249,24 @@ it('keeps the open conversation mounted when it is selected again', async () => 
   expect(screen.getByTestId('pane').textContent).toBe('Session a');
   expect(state.mounts).toEqual(['a']);
 });
+
+it.each(['restored', 'selected'])(
+  'retains the %s touch conversation when its pane folds',
+  async (selection) => {
+    state.touch = true;
+    const [width, setWidth] = createSignal(1000);
+    state.width = width;
+    await openLoadedConversation();
+    if (selection === 'selected') {
+      fireEvent.click(row('b'));
+      state.loads.get('b')?.('Session b');
+      await screen.findByText('Session b');
+    }
+    const pane = screen.getByTestId('pane');
+    const mounted = [...state.mounts];
+    setWidth(600);
+    expect(pane.closest('main')?.classList.contains('hidden')).toBe(false);
+    expect(screen.getByTestId('pane')).toBe(pane);
+    expect(state.mounts).toEqual(mounted);
+  }
+);

@@ -49,7 +49,7 @@ export const TasksRouteView = withAuth(() => {
   return (
     <AppView
       id="tasks"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={() =>
         typeof params.taskId === 'string' && !params.projectId
       }

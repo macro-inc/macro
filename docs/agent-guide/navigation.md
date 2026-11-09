@@ -390,7 +390,16 @@ folders remain available in Files search.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
 at the shared 256px width; manual resizing and narrow layouts can change the
-displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16px
+displayed width. Navigation sidebars use the same container-width rule on desktop
+and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
+below. **Hide navigation** sits to the right of the sidebar title. After hiding,
+**Show navigation** is the first control in the touch filter row, or the main
+header when that view has no filter row. Each workspace retains its wide-layout
+choice across reloads and fold/unfold transitions; closing a narrow overlay does
+not change that preference. Wide touch opens selected items in the workspace's
+inline detail area, as desktop does; modifier actions can still request another
+split. The touch app shell and Duo's navigation strip use the same panel
+background as the surrounding views. Workspace navigation uses shared 32px rows (44px on touch), 16px
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
@@ -694,7 +703,7 @@ sidebar title bar and closes that split, including
 when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
-sidebar close button; mobile chrome is unchanged.
+sidebar close button.
 A lone desktop split shows no X, in its header or its frame corner. On a
 non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
 list in its history, preserving that list’s state; if there is no prior list, it
@@ -1146,8 +1155,7 @@ Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
 Saved split layouts and document/channel/spreadsheet mentions using the old
 block name also open routines; newly copied links use `/app/routines/<uuid>`.
 On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
-`/app/routines` opens the routines list directly, and the hidden Agents sidebar's
-entry moves to **Settings → Routines** (on phones **More views → Settings →
+`/app/routines` opens the routines list directly, and the Agents sidebar entry is also available in **Settings → Routines** (on phones **More views → Settings →
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
@@ -1761,9 +1769,9 @@ Selecting an entity owned by another view from a detail view leaves the current
 detail and navigation history unchanged, focuses the owning view, and shows a
 **Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
-selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
-never render inline previews or detail views: a tap opens the entity in the
-split, so the toast only appears when the content is genuinely open elsewhere.
+selection, keyboard preview navigation, and detail breadcrumbs. Wide touch panes
+use the same inline preview and detail routing as desktop. At 720px or less,
+a tap opens the entity in the split; duplicate-content handling still applies.
 
 Split-router ownership checks use the final redirected destination. Concurrent
 opens of the same claimed resource wait for the first outstanding request rather

@@ -4,7 +4,7 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits below the touch inset, outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button,
+Above 720px on desktop and touch, a collapsible sidebar starts with the shared outlined `New` button,
 with `Search calls` immediately left of collapse. Search reveals its field above
 New. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /

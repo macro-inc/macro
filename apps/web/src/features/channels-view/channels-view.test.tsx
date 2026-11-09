@@ -96,13 +96,21 @@ vi.mock('@app/lib/split-router', () => ({
 }));
 vi.mock('@app/features/tours/ViewTour', () => ({ ViewTour: () => null }));
 vi.mock('@app/components/view-shell', () => ({
+  useViewShell: () => ({
+    breakpoints: { narrow: () => mocks.mobileLayout() },
+    aside: { isCollapsed: () => mocks.mobileLayout() },
+  }),
   ViewShell: {
     Root: mocks.pass,
     Aside: mocks.pass,
     Main: mocks.pass,
     TopBar: mocks.pass,
+    Header: mocks.pass,
   },
-  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
+  ViewSidebar: {
+    Title: (props: ParentProps) => <h1>{props.children}</h1>,
+    Toggle: () => null,
+  },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: mocks.resolveTarget,
@@ -188,6 +196,10 @@ vi.mock('@channel/Channel/channel-entity', () => ({
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => mocks.mobileLayout(),
+}));
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 1000, height: 800 }),
+  createResizeObserver: () => {},
 }));
 vi.mock('@app/features/soup/search/context', () => ({
   useOptionalSearchContext: () => undefined,

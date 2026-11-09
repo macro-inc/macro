@@ -1062,18 +1062,14 @@ reopen the channel or mark it read after the user leaves its mobile pane. Messag
 loading retains its own access/error states. Verify with the notification request
 held, then failed, and with rapid back-navigation while it is pending.
 
-The title bar's **Hide navigation** control hides the whole rail. Reopen it with
-**Show navigation** (the hamburger) immediately before the conversation title.
-Chat remembers this choice independently of other workspaces and restores it
-after reload. While no conversation is selected, the rail stays open regardless
-of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
-selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits 720px wide or
-narrower, the rail and the conversation take turns at full width instead of a
-slide-over: with no conversation selected the rail fills the split (no Hide
-navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
-where the hamburger was. Back opens the Channels list route, so browser or split
-back returns to the conversation. There is no separate skinny sidebar mode.
+The sidebar title row's **Hide navigation** control hides the whole rail.
+Reopen it with **Show navigation** before the conversation title on desktop,
+or as the leading header pill on touch. Chat remembers the wide-layout choice
+independently of other workspaces. The rail uses the shared 256px starting width,
+docks above 720px, and opens as an overlay at 720px or narrower. It remains
+collapsible with no conversation selected and while showing Threads. Narrow
+touch keeps the Recent conversation list and full-screen navigation; unfolded
+touch uses the same inline conversation selection as a wide desktop pane.
 
 ### Sidebar redesign rollout
 

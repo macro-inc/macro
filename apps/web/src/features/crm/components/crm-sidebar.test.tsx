@@ -1,3 +1,4 @@
+import { ViewShell } from '@app/components/view-shell';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -10,8 +11,12 @@ vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
   SidebarRoutineSuggestions: () => null,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => 1000,
+}));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
+  createElementSize: () => ({ width: 1000, height: 800 }),
 }));
 
 const close = vi.fn();
@@ -21,7 +26,7 @@ afterEach(() => {
   close.mockReset();
 });
 
-function renderSidebar(onCollapse?: () => void) {
+function renderSidebar() {
   render(() => (
     <SplitPanelControllerProvider
       controller={{
@@ -33,40 +38,38 @@ function renderSidebar(onCollapse?: () => void) {
         close,
       }}
     >
-      <CrmSidebar
-        active="active"
-        lists={[]}
-        listsEnabled={false}
-        listsLoading={false}
-        listsError={false}
-        canCreateList
-        onNavigate={() => {}}
-        onCreateCompany={() => {}}
-        onCreateContact={() => {}}
-        onNewList={() => {}}
-        onImport={() => {}}
-        onExport={() => {}}
-        onSettings={() => {}}
-        onCollapse={onCollapse}
-      />
+      <ViewShell.Root asidePreferenceKey="crm">
+        <ViewShell.Aside>
+          <CrmSidebar
+            active="active"
+            lists={[]}
+            listsEnabled={false}
+            listsLoading={false}
+            listsError={false}
+            canCreateList
+            onNavigate={() => {}}
+            onCreateCompany={() => {}}
+            onCreateContact={() => {}}
+            onNewList={() => {}}
+            onImport={() => {}}
+            onExport={() => {}}
+            onSettings={() => {}}
+          />
+        </ViewShell.Aside>
+        <ViewShell.Main>
+          <ViewShell.TopBar />
+        </ViewShell.Main>
+      </ViewShell.Root>
     </SplitPanelControllerProvider>
   ));
 }
 
-it('closes the split and collapses from the docked sidebar header', () => {
-  const collapse = vi.fn();
-  renderSidebar(collapse);
-  fireEvent.click(screen.getByRole('button', { name: 'Collapse CRM sidebar' }));
-  expect(collapse).toHaveBeenCalledOnce();
+it('collapses and reopens CRM navigation through the shared shell', () => {
+  renderSidebar();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+  expect(screen.queryByRole('button', { name: 'Hide navigation' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   expect(close).toHaveBeenCalledOnce();
-});
-
-it('leaves split controls to the split header inside the navigation menu', () => {
-  renderSidebar();
-  expect(screen.getByText('Customers')).toBeTruthy();
-  expect(
-    screen.queryByRole('button', { name: 'Collapse CRM sidebar' })
-  ).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
 });

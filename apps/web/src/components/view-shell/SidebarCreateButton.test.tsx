@@ -85,13 +85,16 @@ it('updates close visibility when the last remaining split cannot close', () => 
   expect(view.queryByRole('button', { name: 'New email' })).not.toBeNull();
 });
 
-it('leaves touch headers without a desktop close control', () => {
+it('closes the owning split from a touch sidebar without creating a chat', () => {
   vi.mocked(isTouchDevice).mockReturnValue(true);
+  const close = vi.fn();
+  const create = vi.fn();
   const view = render(() => (
-    <SplitPanel.Root controller={controller(() => true)}>
-      <SidebarCreateHeader title="Home" label="New chat" onCreate={vi.fn()} />
+    <SplitPanel.Root controller={controller(() => true, close)}>
+      <SidebarCreateHeader title="Home" label="New chat" onCreate={create} />
     </SplitPanel.Root>
   ));
-  expect(view.queryByRole('button', { name: 'Close' })).toBeNull();
-  expect(view.queryByRole('button', { name: 'New chat' })).not.toBeNull();
+  fireEvent.click(view.getByRole('button', { name: 'Close' }));
+  expect(close).toHaveBeenCalledOnce();
+  expect(create).not.toHaveBeenCalled();
 });

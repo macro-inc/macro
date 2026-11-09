@@ -2,7 +2,9 @@
 
 ## Customers (CRM) — `/app/companies`
 
-On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
+The local sidebar uses the same width-based navigation as Email and Tasks on
+desktop and touch: docked above 720px, an overlay at narrower widths. Hide
+navigation sits beside Customers; Show navigation leads the touch filter pills.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled). The new-pipeline dialog's type menu
 (**Companies**, **Contacts**, **Generic**) shows the same icon, title and

@@ -2,13 +2,13 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -83,12 +83,21 @@ function EmailPanes(props: {
   const shell = useViewShell();
   const listColumn = (beside?: 'reader') => (
     <>
-      <EmailHeader
-        tabOnly={beside === 'reader'}
-        onSearchEscape={props.focusList}
-      />
       <ViewTour tour={emailTour} />
-      <ViewShell.Content>{props.list}</ViewShell.Content>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <>
+            <EmailHeader
+              tabOnly={beside === 'reader'}
+              onSearchEscape={props.focusList}
+            />
+            <ViewShell.Content>{props.list}</ViewShell.Content>
+          </>
+        }
+      >
+        <EmailMobileLayout>{props.list}</EmailMobileLayout>
+      </Show>
     </>
   );
 
@@ -98,12 +107,15 @@ function EmailPanes(props: {
     <Show
       when={shell.detail.placement() === 'inline'}
       fallback={
-        <ViewShell.Main>
+        <ViewShell.Main class="relative">
           <SplitRouter.Outlet fallback={() => listColumn()} />
         </ViewShell.Main>
       }
     >
-      <ViewShell.Main onWidthChangeEnd={props.onListWidthChange}>
+      <ViewShell.Main
+        class="relative"
+        onWidthChangeEnd={props.onListWidthChange}
+      >
         {listColumn('reader')}
       </ViewShell.Main>
       <ViewShell.Detail class="border-l border-edge-muted">
@@ -119,7 +131,7 @@ function EmailPanes(props: {
 /** The list column's width beside the reading pane, in pixels. */
 const LIST_WIDTH = { default: 440, min: 340, max: 720 };
 
-function EmailDesktopLayout(props: {
+function EmailLayout(props: {
   list: JSX.Element;
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
@@ -189,19 +201,25 @@ function EmailMobileLayout(props: ParentProps) {
 
   return (
     <>
-      <SplitHeaderLeft>
-        <div class="flex h-full w-full min-w-0 flex-1 items-start pt-2">
-          <PillTabs
-            scrollable
-            class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
-            contentClass="px-(--mobile-chrome-gutter)"
-            leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
-            value={state.tab}
-            onChange={setTab}
-          />
-        </div>
-      </SplitHeaderLeft>
+      <header
+        aria-label="Email filters"
+        class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]"
+      >
+        <PillTabs
+          scrollable
+          class="w-full"
+          contentClass="px-(--mobile-chrome-gutter)"
+          leading={
+            <>
+              <ViewSidebar.Toggle action="expand" presentation="pill" />
+              <EmailFilterDrawer />
+            </>
+          }
+          items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
+          value={state.tab}
+          onChange={setTab}
+        />
+      </header>
       <main
         class="size-full min-h-0 min-w-0"
         style={{
@@ -266,18 +284,11 @@ function EmailViewRoot() {
     <StaticMarkdownContext>
       <SplitPanel.Root>
         <SplitPanel.Body>
-          <Show
-            when={isTouchDevice()}
-            fallback={
-              <EmailDesktopLayout
-                list={list()}
-                focusList={focusList}
-                setListPane={setListPane}
-              />
-            }
-          >
-            <EmailMobileLayout>{list()}</EmailMobileLayout>
-          </Show>
+          <EmailLayout
+            list={list()}
+            focusList={focusList}
+            setListPane={setListPane}
+          />
         </SplitPanel.Body>
       </SplitPanel.Root>
     </StaticMarkdownContext>

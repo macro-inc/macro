@@ -4,6 +4,7 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSidebar,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
@@ -386,7 +387,12 @@ function ReviewsRoot() {
             <div class="h-10 min-w-0 flex-1">
               <PillTabs
                 scrollable
-                leading={<ReviewsFilterDrawer {...controls()} />}
+                leading={
+                  <>
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                    <ReviewsFilterDrawer {...controls()} />
+                  </>
+                }
                 items={REVIEW_SCOPE_TABS}
                 value={scope()}
                 onChange={selectScope}

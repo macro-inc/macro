@@ -6,6 +6,7 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
@@ -31,7 +32,6 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { listTagOptions } from '@property/tags/list-tag-options';
@@ -143,6 +143,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   EmailViewProviderProps
 >('EmailView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   const navigate = useNavigate();
   const routeParams = useRouteParams(emailThreadRoute);
   const matches = useMatches();
@@ -263,7 +264,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const opensInline = (options?: EntityDetailNavigationOptions) => {
     const event = options?.event;
     return (
-      !isTouchDevice() &&
+      inlinePreviewLayout() &&
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
