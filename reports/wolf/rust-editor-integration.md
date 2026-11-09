@@ -124,7 +124,7 @@ The publication envelope `6a52b4fbf9`, cold typed configuration `23e2b17731`
 and executor `runSync` `5bb990bbcc` are integrated as `2e78f1a546`,
 `3bbb38097e` and `9891e72e8b`. `CompatPublications` retains typed commit
 metadata; queue delivery and actual dirty/tag/current-version receipts remain
-the native consumer's responsibility. The latest schema fingerprint is
+the native consumer's responsibility. The publication checkpoint schema fingerprint is
 `f54016202934ac63303df846dbcb5abdc26e3cb57aa3797a74c238ce417af999`,
 verified independently against the three source files and both generated
 languages. Freshness checking passes.
@@ -144,6 +144,55 @@ Logs: `compat-cold-config-{shim-tests,shim-check,import}.log`,
 `compat-run-sync-{session-tests,types,test-types}.log`,
 `compat-publications-{schema-check,wasm-tests,cold-sync-check}.log` and
 `compat-publications-fingerprint.json`.
+
+
+Core prerequisites `5084f26ffb` and `4169c44304` are integrated as
+`f61123f885` and `44d22df2fa`; detached insertion correction `918df746e0`
+is `0c4f93f5fa`. RequireView preserves source structural movement while
+reporting missing DOM endpoints explicitly; NoView remains distinct. Presence
+ports are Send and raw registry indices still require checked lookup. Detached
+insertion resolves its split from Active while splicing the receiver block,
+including the source empty-block case.
+
+At `7cf7be3ad9`, the Group B declarations-only failures are fixed by moving
+`plugins_group_b/mod.rs` byte-for-byte into `plugins_group_b.rs`, the rule's
+preferred file-and-directory layout. All module/API paths and child imports
+remain unchanged; no lint exceptions were added. Own validation passes:
+169 core tests at the first prerequisite snapshot, then 459 model tests,
+23 WASM tests, 52 Macro unit tests plus 46 integration tests, including the
+20,000-case service oracle. Native replay passes 1,421 cases with zero failures
+and the unchanged 57-entry ledger. Scoped checks, strict all-target/all-feature
+clippy for core/model/Macro/WASM, and downstream all-feature wasm32 checking pass.
+These are native correctness results, not production compatibility acceptance.
+Logs: `compat-native-prerequisites-tests.log`,
+`compat-prerequisites-group-b-{tests,check,clippy,wasm32}.log`, and
+`compat-prerequisites-native-replay.log`.
+
+Compact reservation schema `f5ad17a00c` is integrated as `a1fb7f7b31` with
+paired hash `51304e5fdc885d3d80f50d777da8fe8a3f05ed1e39a1f740f2296b9cb58cce94`.
+It defines native key reservations, captured/reserved operands, capture leases,
+mutation epochs and sparse root-cache invalidation. Schema freshness and shim
+TypeScript checks pass (`compat-compact-schema-{check,shim-types}.log`).
+Messages alone do not establish their consumer behavior or initializer readiness.
+
+The independent compatibility audit adds mandatory parity prerequisites:
+stable JS node identity; at most two fixed crossings per update, zero per read,
+and ten per plain-text keystroke; at most 4 KB per key and at most 10% growth
+between 10-node and 10k-node documents; retained captures at most twice live
+nodes after GC; typing p95 ON/OFF upper 95% ratio at most 1.0 for S/M/L; and
+chapter paste with no task above 50 ms and rendering below 150 ms. No such full
+plugin performance acceptance is established here. Linux WebKit remains an
+engine proxy and cannot supply Safari acceptance.
+
+The out-of-tree fail-closed gate now requires `compatPerfAudit` with agreed
+requirements, actual producer bindings and node-identity/crossings/bytes/capture/
+typing/chapter evidence. Its canonical source fingerprint additionally binds
+`jsSha256` and `schemaSha256`. No accepting path exists until actual committed
+instrumentation, a coherent JS/WASM/schema build and audited metric validators
+are available. Protocol, native/source-model diagnostics and self-declared
+passes cannot qualify. Contract:
+`/home/wolf/tmp/lexical-port/browser-fuzz/validate-gate.mjs`; audit:
+`/home/wolf/tmp/lexical-port/reports/wolf/compat-perf-audit.md`.
 
 
 A frozen flag-OFF build with real timing marks is served at local port 39870,
