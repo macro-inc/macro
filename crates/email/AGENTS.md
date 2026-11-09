@@ -181,9 +181,9 @@ tools — hexagonal, heavily feature-gated.
   claimed unit of `MailboxSyncService` and `MailboxProjectionService` opens
   one root `outlook.sync.*` span (idle polls open none) and records
   `outlook.outcome`, `outlook.defer_reason` and `outlook.defer_seconds`
-  through `record_done`/`record_deferred`/`record_failed`. The mailbox loops
-  log their own deferrals with `link_id` (gate refusals at DEBUG), so the
-  worker must not log them again. Add a new defer reason in `defer_reason`.
+  through `record_done`/`record_deferred`/`record_abandoned`/`record_failed`.
+  The mailbox loops log their own deferrals with `link_id` (gate refusals at
+  DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.
@@ -199,6 +199,15 @@ tools — hexagonal, heavily feature-gated.
   import row is left. A resync must reset `import_started_at` and
   `import_completed_at` and log "outlook import started", as
   `outbound/mailbox_pg/lifecycle.rs` does.
+- A message reconciliation that keeps failing is abandoned
+  (`message_retry` in `domain/mailbox.rs`): its row waits at
+  `available_at = 'infinity'` with attempts reset, so claims stop at their
+  index bound and every enqueue's `available_at = now()` revives it. Any query
+  that reads queued or import-running state must leave those rows out, as
+  `settle_import`, the health snapshot, the backfill status and resync do.
+  Throttling and token refusals give their claim back to `attempts`.
+- Outlook sync claims (catalog, folder streams, messages, contacts) skip a
+  link with `needs_reauth`; clearing the flag resumes them.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

@@ -18,12 +18,15 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
             RateLimitOrigin::Local => "other",
         },
         MailboxError::Provider(EmailApiError::CredentialsUnavailable { .. }) => "token_unavailable",
-        MailboxError::Provider(EmailApiError::AuthRequired | EmailApiError::Forbidden) => {
-            "auth_required"
-        }
+        MailboxError::Provider(EmailApiError::AuthRequired) => "auth_required",
+        // Graph refuses one item (`ErrorAccessDenied`) while the grant still
+        // works; a revoked grant answers 401 and is `auth_required`.
+        MailboxError::Provider(EmailApiError::Forbidden) => "forbidden",
+        MailboxError::Provider(EmailApiError::Permanent { .. }) => "permanent",
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
+        MailboxError::CalendarPartsUnavailable => "calendar_parts",
         _ => "other",
     }
 }
@@ -62,6 +65,16 @@ pub(super) fn record_deferred(
     } else {
         tracing::warn!(parent: span, %link_id, defer_reason = reason, defer_seconds = i64::from(delay_seconds), attachment_id = attachment_id.map(tracing::field::display), %error, "mailbox sync work deferred");
     }
+}
+
+/// The unit gave up on its message (`MessageRetry::Abandon`): it stays queued,
+/// unclaimed, and the health snapshot counts it as `abandoned`.
+pub(super) fn record_abandoned(span: &Span, link_id: Uuid, error: &MailboxError, attempts: i32) {
+    let reason = defer_reason(error);
+    span.record("outlook.outcome", "abandoned");
+    span.record("outlook.defer_reason", reason);
+    span.record("otel.status_description", tracing::field::display(error));
+    tracing::warn!(parent: span, %link_id, defer_reason = reason, attempts, %error, "mailbox message abandoned");
 }
 
 /// The unit stopped without releasing its work, which another worker retries
