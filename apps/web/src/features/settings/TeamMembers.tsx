@@ -1035,6 +1035,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}
+        canInviteAgents={isAdminOrOwner()}
         open={showInviteModal()}
         onClose={() => setShowInviteModal(false)}
       />

@@ -104,3 +104,31 @@ fn agent_features_share_the_harness_process() {
         );
     }
 }
+
+#[test]
+fn services_are_named_by_compose_name_or_binary() {
+    let by_bin = services_named(Mode::Local, &["contacts_service".to_owned()]).unwrap();
+    assert_eq!(by_bin[0].cargo_bin, "contacts_service");
+    let auth = RUST_SERVICES
+        .iter()
+        .find(|s| s.cargo_bin == "authentication_service")
+        .unwrap();
+    let both = services_named(
+        Mode::Local,
+        &[
+            auth.compose_name.to_owned(),
+            "authentication_service".to_owned(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(both.len(), 1, "a service named twice is built once");
+}
+
+#[test]
+fn an_unknown_service_name_lists_the_known_ones() {
+    let err = services_named(Mode::Local, &["contact".to_owned()]).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("no local service named contact"));
+    assert!(msg.contains("contacts_service"));
+    assert!(services_named(Mode::Local, &[]).is_err());
+}

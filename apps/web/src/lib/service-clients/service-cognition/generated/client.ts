@@ -3957,6 +3957,11 @@ export type fetchWebPageResponse402 = {
   status: 402;
 };
 
+export type fetchWebPageResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type fetchWebPageResponse422 = {
   data: WebErrorBody;
   status: 422;
@@ -3984,6 +3989,7 @@ export type fetchWebPageResponseError = (
   | fetchWebPageResponse400
   | fetchWebPageResponse401
   | fetchWebPageResponse402
+  | fetchWebPageResponse404
   | fetchWebPageResponse422
   | fetchWebPageResponse429
   | fetchWebPageResponse502
@@ -4044,6 +4050,11 @@ export type searchWebResponse402 = {
   status: 402;
 };
 
+export type searchWebResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type searchWebResponse429 = {
   data: void;
   status: 429;
@@ -4066,6 +4077,7 @@ export type searchWebResponseError = (
   | searchWebResponse400
   | searchWebResponse401
   | searchWebResponse402
+  | searchWebResponse404
   | searchWebResponse429
   | searchWebResponse502
   | searchWebResponse503

@@ -57,6 +57,11 @@ pub struct UpdateArgs {
     /// Rebuild every repository-built local Docker service and recreate it.
     #[arg(long)]
     pub build_aux_services: bool,
+    /// Rebuild and restart only these Rust services (comma-separated compose or
+    /// binary names). The others keep running older code until a full update;
+    /// `status` lists them.
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    pub services: Vec<String>,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
@@ -349,6 +354,15 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
             computers: &state.computers(mode, &instance),
         },
     )?;
+    let only = if args.services.is_empty() {
+        None
+    } else {
+        if args.binaries_dir.is_some() {
+            bail!("--services rebuilds from source, so it can't be combined with --binaries-dir");
+        }
+        Some(super::inventory::services_named(mode, &args.services)?)
+    };
+    adopt_proxy_config(stage, &instance, mode, &env, &state)?;
     let mut reloaded = Vec::new();
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
@@ -373,9 +387,19 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
             &env,
             target,
             args.build_aux_services,
+            only.as_deref(),
         )?;
         false
     };
+    if remounted || args.binaries_dir.is_some() {
+        super::staleness::clear(&instance);
+    }
+    let stale = super::staleness::stale(&instance);
+    if let Some(notice) =
+        super::staleness::notice(&stale, &super::summary::instance_flags(&instance))
+    {
+        println!("{notice}");
+    }
 
     if args.binaries_dir.is_some() && args.build_aux_services {
         super::build_aux_service_images(stage, &instance, &env)?;
@@ -396,10 +420,61 @@ fn update_running(stage: &Stage, args: &UpdateArgs) -> Result<Vec<String>> {
                 "frontend_updated": args.frontend,
                 "aux_services_rebuilt": args.build_aux_services,
                 "reloaded": reloaded,
+                "stale_services": stale,
             }))?
         );
     }
     Ok(reloaded)
+}
+
+/// Rewrite the instance's Caddyfile and recreate only the proxy when it changed,
+/// so a stack started by an older xtask gets current routing and cookie rules
+/// with its data intact. `stack up` would wipe it.
+fn adopt_proxy_config(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    env: &env_layer::ResolvedEnv,
+    state: &StackState,
+) -> Result<()> {
+    let config = proxy::caddyfile(instance, mode, state.serves_bundle());
+    let mut up = super::compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
+    replace_running_config(
+        &super::gen_compose::caddyfile_path(instance),
+        &config,
+        stage.is_dry_run(),
+        || stage.run("Recreating proxy (configuration changed)", &mut up),
+    )
+}
+
+/// Put `config` at `path` and `reload` whatever runs it, only when it differs.
+/// The new file stays on disk only once the reload succeeds: a dry run writes
+/// nothing, and a failed reload restores the previous file (or removes a new
+/// one), so the next update sees the change again and retries.
+fn replace_running_config(
+    path: &std::path::Path,
+    config: &str,
+    dry_run: bool,
+    reload: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let previous = std::fs::read_to_string(path).ok();
+    if previous.as_deref() == Some(config) {
+        return Ok(());
+    }
+    if dry_run {
+        return reload();
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    std::fs::write(path, config).with_context(|| format!("writing {}", path.display()))?;
+    reload().inspect_err(|_| {
+        let _ = match &previous {
+            Some(previous) => std::fs::write(path, previous),
+            None => std::fs::remove_file(path),
+        };
+    })
 }
 
 fn remount(
@@ -599,6 +674,7 @@ pub(super) fn status_json(instance: &Instance) -> Result<serde_json::Value> {
     out["supervisor_alive"] = json!(supervisor::supervisor_alive(instance));
     out["job"] = supervisor::job_json(instance);
     out["services"] = json!(observed.services);
+    out["stale_services"] = json!(super::staleness::stale(instance));
     Ok(out)
 }
 
@@ -626,6 +702,12 @@ pub fn status(args: &StatusArgs) -> Result<()> {
         if let Some(log) = job.log {
             println!("  job log   {}", log.display());
         }
+    }
+    let stale = super::staleness::stale(&instance);
+    if let Some(notice) =
+        super::staleness::notice(&stale, &super::summary::instance_flags(&instance))
+    {
+        println!("  {notice}");
     }
     super::status::run(&instance)
 }

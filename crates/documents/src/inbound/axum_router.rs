@@ -151,8 +151,25 @@ struct NameTooLongErrorResponse {
     message: &'static str,
 }
 
+#[derive(serde::Serialize)]
+struct CodedErrorResponse {
+    code: &'static str,
+    message: &'static str,
+}
+
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
+        if let DocumentError::EmailAttachmentNotFound = &self {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(CodedErrorResponse {
+                    code: model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+                    message: "email attachment not found",
+                }),
+            )
+                .into_response();
+        }
+
         if let DocumentError::NameTooLong { max } = &self {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -166,7 +183,9 @@ impl IntoResponse for DocumentError {
         }
 
         let status_code = match &self {
-            DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
+            DocumentError::NotFound(_) | DocumentError::EmailAttachmentNotFound => {
+                StatusCode::NOT_FOUND
+            }
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,

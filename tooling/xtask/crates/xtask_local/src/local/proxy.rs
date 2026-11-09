@@ -10,6 +10,12 @@
 //! the development CA in `infra/local/certs`. Local mode also stamps wildcard CORS on the generated
 //! Caddyfile so any browser origin (`https://`, `*.localhost`, tunnels) can
 //! call the proxy without updating every service allowlist.
+//!
+//! Browsers scope cookies by host and ignore the port, so every stack on one
+//! machine name shares a cookie jar. Local mode therefore namespaces cookies
+//! per instance at this proxy (see [`cookie_rewrites`]): services and the web
+//! app keep their usual names, and no hostname, certificate, or redirect URI
+//! depends on the instance.
 
 use std::path::PathBuf;
 
@@ -81,7 +87,7 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
         std::fs::create_dir_all(dir)
             .with_context(|| format!("creating proxy dir {}", dir.display()))?;
     }
-    std::fs::write(&path, caddyfile(mode, static_frontend))
+    std::fs::write(&path, caddyfile(instance, mode, static_frontend))
         .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
@@ -90,7 +96,7 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
 /// the generated per-service routes (from the inventory), the special
 /// non-inventory routes, the mode's static-file block, the optional
 /// static-frontend block, then the tail.
-fn caddyfile(mode: Mode, static_frontend: bool) -> String {
+pub(super) fn caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
@@ -116,6 +122,12 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     // every service allowlist. `run_dev` still fans out to the shared-dev
     // gateway, so it keeps service CORS as-is.
     let cors_block = if mode == Mode::Local { LOCAL_CORS } else { "" };
+    // `run_dev` keeps hosted-style cookies, which it shares with the dev gateway.
+    let cookie_block = if mode == Mode::Local {
+        cookie_block(instance)
+    } else {
+        String::new()
+    };
     // Sync actively rejects unknown origins, including HTTPS machine names,
     // before upgrading a socket. Local CORS is owned by this proxy; normalize
     // only the local worker's upstream origin to its existing dev allowlist.
@@ -134,9 +146,99 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
         String::new()
     };
     format!(
-        "{CADDY_HEAD}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}{computer_gateway}",
+        "{CADDY_HEAD}{cookie_block}{cors_block}{routes}{special_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}{preview_block}{computer_gateway}",
         routes = service_routes(mode)
     )
+}
+
+/// One regex replacement on a header value, in the form Caddy and Go expect.
+/// Caddy reads an empty replacement as "set the header to the pattern", so a
+/// deletion replaces with `$1`, an empty capture group, rather than `""`.
+#[derive(Debug, PartialEq, Eq)]
+struct HeaderRewrite {
+    find: String,
+    replace: String,
+}
+
+impl HeaderRewrite {
+    fn new(find: impl Into<String>, replace: impl Into<String>) -> Self {
+        HeaderRewrite {
+            find: find.into(),
+            replace: replace.into(),
+        }
+    }
+}
+
+/// How this instance's cookies are renamed in the browser's jar, in the order
+/// Caddy must apply them.
+struct CookieRewrites {
+    /// Applied to each `Set-Cookie` a service sends.
+    set_cookie: Vec<HeaderRewrite>,
+    /// Applied to the `Cookie` header before it reaches a service.
+    cookie: Vec<HeaderRewrite>,
+}
+
+/// Cookies ignore ports, so a browser sends every stack the cookies of every
+/// other stack on the same hostname. Give each instance a name prefix in the
+/// browser, and only ever show a service its own cookies under their real name.
+/// The prefix is keyed on the instance name, which stays put when a port base
+/// moves, and goes after `__Host-` / `__Secure-`, which browsers enforce as
+/// name prefixes. Instance names are `[a-z0-9_-]`, so they need no escaping.
+///
+/// Requests forward only this instance's cookies. Everything else is dropped:
+/// other instances' cookies, nameless ones, and bare names, which come from
+/// older stacks, a service's own host port, or the app's JavaScript (the
+/// `login` hint, analytics). No service reads a cookie it didn't set, and a
+/// bare copy would otherwise shadow the stack's own (cookie jars keep the last
+/// cookie of a name).
+fn cookie_rewrites(instance: &Instance) -> CookieRewrites {
+    let namespace = format!("macro-{}--", instance.name());
+    CookieRewrites {
+        set_cookie: vec![
+            // Every named cookie; a nameless one (no `=` before `;`) can't be
+            // prefixed and no service sets one.
+            HeaderRewrite::new("^([^=;]*)=", format!("{namespace}$1=")),
+            HeaderRewrite::new(
+                format!("^{namespace}__Host-"),
+                format!("__Host-{namespace}"),
+            ),
+            HeaderRewrite::new(
+                format!("^{namespace}__Secure-"),
+                format!("__Secure-{namespace}"),
+            ),
+        ],
+        cookie: vec![
+            // Give every cookie one `; ` in front: browsers join with `; `,
+            // other clients may not.
+            HeaderRewrite::new(";[ \\t]*", "; "),
+            HeaderRewrite::new("^[ \\t]*", "; "),
+            // Mark this instance's cookies with `;!`, which no cookie name or
+            // value can contain, dropping the prefix.
+            HeaderRewrite::new(format!("; (__Host-|__Secure-)?{namespace}"), ";!$1"),
+            // Drop every unmarked cookie, then unmark.
+            HeaderRewrite::new("(); [^;]*", "$1"),
+            HeaderRewrite::new(";!", "; "),
+            HeaderRewrite::new("()^; ", "$1"),
+        ],
+    }
+}
+
+/// Render [`cookie_rewrites`] for the site block. Both directives run before
+/// any `handle`, so they cover every route, and `defer` applies the response
+/// side after `reverse_proxy` copies the upstream's headers.
+fn cookie_block(instance: &Instance) -> String {
+    let rewrites = cookie_rewrites(instance);
+    let mut block = String::from("    header {\n");
+    for HeaderRewrite { find, replace } in &rewrites.set_cookie {
+        block.push_str(&format!("        Set-Cookie \"{find}\" \"{replace}\"\n"));
+    }
+    block.push_str("        defer\n    }\n");
+    for HeaderRewrite { find, replace } in &rewrites.cookie {
+        block.push_str(&format!(
+            "    request_header Cookie \"{find}\" \"{replace}\"\n"
+        ));
+    }
+    block
 }
 
 /// Shared-dev gateway origin for Local-only inventory prefixes under `run-dev`.

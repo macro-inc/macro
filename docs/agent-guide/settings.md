@@ -197,8 +197,12 @@ settings (gear) menu beside **Copy link** with **Reset link** (the old link
 stops working and a new one is copied) and **Turn off**, each behind a
 confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before. The dialog no longer offers agent invites; send them with
-`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
+as before, for people only; invite an agent account by email with
+`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). For team admins and owners with `enable-team-agents` on, an
+**Invite an agent** section at the bottom has an **Invite agent** button that
+swaps this dialog for the agent invitation below (Cancel there ends the whole
+flow); members and flag-off users don't see it. The dialog body scrolls on
+phones. Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
@@ -268,7 +272,8 @@ existing person invitation with its main action; **Invite options** offers
 **Invite a person** and, for team managers, **Invite an agent**, with icons and descriptions in a menu below the controls. All header
 actions use the same control height on desktop and touch. In narrow Settings
 panes the controls move below the heading so its title and subtitle stay
-readable. Inviting an agent creates its account and buys its computer together. The existing email
+readable. **Invite your team** in the Settings sidebar offers the same agent
+invitation from its dialog. Inviting an agent creates its account and buys its computer together. The existing email
 invitation flow remains available.
 
 For billed teams without an active subscription, the dialog keeps specifications visible

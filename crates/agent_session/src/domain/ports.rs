@@ -340,6 +340,10 @@ pub struct OpenManagedSession {
     pub visibility: SessionVisibility,
     /// What opened the session.
     pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    /// Only an in-process session reads it; a non-billable session never
+    /// claims a warm session, whose row is billable.
+    pub billing: crate::domain::model::SessionBilling,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -441,6 +445,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner.
+    fn billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
 
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)
