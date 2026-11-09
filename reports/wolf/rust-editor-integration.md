@@ -229,12 +229,13 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `3b4d2afdf2` is integrated, including code,
+The OFF inventory continuation through `893d1a4cdf` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 739 selectors across five explicit reports (full web22,440, media36,
-conversion11, TaskList19, checklist planning32), including 480 new editor units; it is not a summed
+ledger has 744 selectors across six explicit reports (full web22,440, media36,
+conversion11, TaskList19, checklist planning32, checklist collection5), including
+485 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -271,6 +272,18 @@ owner paths still earn zero disposable-root OFF credit. Read-only verification
 finds739 unique passing owner-path selectors across the five reports, without
 rewriting them or asserting source/execution binding:
 `inventory-739-owner-selector-verification.json`.
+
+Real-node checklist collection `893d1a4cdf` is integrated as `42e0315034`.
+Independent focused execution passes5/5 cases and scoped `just check`. Cases
+cover root/nested checklist progress boundaries, wrapper ownership, date/task
+precedence, assignee deduplication and metadata removal after committed edits.
+The sixth report adds no controls UI, real query, ON or native admission proof;
+browser evidence remains153. Evidence: `checklist-collection-independent-tests.log`,
+`checklist-collection-scoped-check.log` and `checklist-collection-integration-audit.md`.
+The scanner validates744 source mappings. Preserved owner paths again earn zero
+disposable-root OFF credit; exact owner-path verification finds744 unique passing
+selectors across six reports, with no raw report rewriting or source/execution
+binding claim (`inventory-744-owner-selector-verification.json`).
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
