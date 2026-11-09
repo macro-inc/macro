@@ -47,6 +47,11 @@ Run document engine parity from an independent checkout using
 `src/features/block-md/browser-test/parity/README.md`; missing compat, saved-state
 or full accessibility comparisons must remain blocked.
 
+Source inventory and real-plugin editor regressions live in
+`src/lib/core/component/LexicalMarkdown/behavior-inventory/README.md`; its static
+browser fixture owns its build and browser. Source-site counts and directly
+importing tests do not establish complete behavioral or engine parity coverage.
+
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
