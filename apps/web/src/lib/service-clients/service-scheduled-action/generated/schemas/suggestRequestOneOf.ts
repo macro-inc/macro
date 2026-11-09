@@ -5,6 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { SuggestRequestOneOfIdea } from './suggestRequestOneOfIdea';
 import type { SuggestRequestOneOfKind } from './suggestRequestOneOfKind';
 import type { SuggestRequestOneOfKnobs } from './suggestRequestOneOfKnobs';
 import type { Surface } from './surface';
@@ -13,6 +14,7 @@ import type { Surface } from './surface';
  * A catalog routine, with knob values.
  */
 export type SuggestRequestOneOf = {
+  idea?: SuggestRequestOneOfIdea;
   keepProbability: number;
   key: string;
   kind: SuggestRequestOneOfKind;

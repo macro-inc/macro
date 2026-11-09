@@ -941,6 +941,25 @@ export type RoutineCheck = {
 };
 
 /**
+ * How a drafted routine suggestion shows among the person's ideas: every
+ * routine a session drafts is also one idea, kept and closed with it.
+ */
+export type RoutineIdea = {
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * 0 to 100: how much the person would regret missing it this week.
+     */
+    importance: number;
+    /**
+     * What it does for the person, in a few words.
+     */
+    title: string;
+};
+
+/**
  * A value a code step reads as `knobs.<name>`, which its owner can change
  * without the step being rewritten: the label it adds, a priority, a
  * number of days, a question it asks AI. Its type is part of the step's
@@ -1464,6 +1483,7 @@ export type SuggestOutcome = {
  * What a suggestion session hands back through `macro.routines.suggest`.
  */
 export type SuggestRequest = {
+    idea?: null | RoutineIdea;
     keepProbability: number;
     key: string;
     kind: 'catalog';
@@ -1477,6 +1497,10 @@ export type SuggestRequest = {
      * What the session created for it, as `macro.routines.check` takes.
      */
     created?: Array<CreatedItem>;
+    /**
+     * How it shows among the person's ideas.
+     */
+    idea: RoutineIdea;
     keepProbability: number;
     kind: 'routine';
     reason: string;

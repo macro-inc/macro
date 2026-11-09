@@ -3749,6 +3749,31 @@
           }
         }
       },
+      "RoutineIdea": {
+        "type": "object",
+        "description": "How a drafted routine suggestion shows among the person's ideas: every\nroutine a session drafts is also one idea, kept and closed with it.",
+        "required": ["title", "importance"],
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "The feed's filters it shows under."
+          },
+          "importance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0 to 100: how much the person would regret missing it this week.",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "description": "What it does for the person, in a few words."
+          }
+        },
+        "additionalProperties": false
+      },
       "RoutineKnob": {
         "oneOf": [
           {
@@ -4652,6 +4677,17 @@
               "kind"
             ],
             "properties": {
+              "idea": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineIdea",
+                    "description": "Never set: a catalog pick is not shown among ideas."
+                  }
+                ]
+              },
               "keepProbability": {
                 "type": "number",
                 "format": "float"
@@ -4685,6 +4721,7 @@
               "reason",
               "surfaces",
               "keepProbability",
+              "idea",
               "kind"
             ],
             "properties": {
@@ -4694,6 +4731,10 @@
                   "$ref": "#/components/schemas/CreatedItem"
                 },
                 "description": "What the session created for it, as `macro.routines.check` takes."
+              },
+              "idea": {
+                "$ref": "#/components/schemas/RoutineIdea",
+                "description": "How it shows among the person's ideas."
               },
               "keepProbability": {
                 "type": "number",
