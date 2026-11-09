@@ -7,6 +7,11 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeEditorInputTest {
+    @Test fun applicationCodeAndLargePlainClipboardPolicies() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeClipboardPolicyScenario.run(instrumentation.targetContext) }
+    }
+
     @Test fun codeRedoPreservesRawJsonAndCaret() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
