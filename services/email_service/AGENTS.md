@@ -89,6 +89,13 @@ the gateway `/email` prefix.
   would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
+- An attachment row can be deleted after it is claimed: a Gmail draft gets a
+  new message id on every save, and deleting the old revision cascades its
+  attachments. DSS then answers the import with a coded 404
+  (`EMAIL_ATTACHMENT_NOT_FOUND`), surfaced as
+  `UploadAttachmentError::AttachmentDeleted`. Every caller treats it as nothing
+  left to do: skip, no retry, no claim to release. The newer revision imports
+  its own rows.
 - BackfillThread reads a whole thread with one Gmail `threads.get` and writes
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
