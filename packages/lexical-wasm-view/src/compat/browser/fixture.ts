@@ -1,3 +1,5 @@
+import * as Lexical from 'lexical';
+import { createSelectionDOMMethods } from '../selection-methods';
 import { getUpstreamRuntime } from '../test-setup';
 import { createCompatView } from '../view';
 
@@ -63,8 +65,50 @@ function path(node: Node | null): number[] | null {
 declare global {
   interface Window {
     compatSnapshot: () => unknown;
+    compatModifySelection: (granularity: 'word' | 'lineboundary') => unknown;
   }
 }
+window.compatModifySelection = (granularity) => {
+  const methods = createSelectionDOMMethods({
+    ...getUpstreamRuntime(),
+    ...Lexical,
+  });
+  let result: unknown;
+  editor.update(
+    () => {
+      const initial = $getSelection();
+      if (!$isRangeSelection(initial))
+        throw new Error('Expected a real range selection');
+      const expected = initial.clone();
+      const actual = initial.clone();
+      expected.dirty = true;
+      actual.dirty = true;
+      expected.modify('extend', true, granularity);
+      methods.modifyDOMSelection(actual, 'extend', true, granularity);
+      result = {
+        equal: actual.is(expected),
+        moved: !actual.isCollapsed(),
+        dirtyMatches: actual.dirty === expected.dirty,
+        actual: {
+          anchor: actual.anchor.offset,
+          focus: actual.focus.offset,
+          anchorType: actual.anchor.type,
+          focusType: actual.focus.type,
+          dirty: actual.dirty,
+        },
+        expected: {
+          anchor: expected.anchor.offset,
+          focus: expected.focus.offset,
+          anchorType: expected.anchor.type,
+          focusType: expected.focus.type,
+          dirty: expected.dirty,
+        },
+      };
+    },
+    { discrete: true }
+  );
+  return result;
+};
 window.compatSnapshot = () =>
   editor.read(() => {
     const selection = $getSelection();

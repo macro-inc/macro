@@ -3,6 +3,30 @@ import { expect, type Page, test } from '@playwright/test';
 async function snapshot(page: Page) {
   return page.evaluate(() => window.compatSnapshot());
 }
+const granularities: ('word' | 'lineboundary')[] = ['word', 'lineboundary'];
+for (const granularity of granularities) {
+  test(`selection ${granularity} matches original browser movement`, async ({
+    page,
+  }) => {
+    await page.goto('http://127.0.0.1:41872');
+    await page.addStyleTag({
+      content: '#editor { width: 120px; white-space: pre-wrap; }',
+    });
+    await page.locator('#editor').click();
+    await page.keyboard.type(
+      'alpha 😀 café combining é and wrapped words finish'
+    );
+    const result = await page.evaluate(
+      (granularity) => window.compatModifySelection(granularity),
+      granularity
+    );
+    expect(result).toMatchObject({
+      equal: true,
+      moved: true,
+      dirtyMatches: true,
+    });
+  });
+}
 for (const [name, text] of [
   ['heading and Enter', '# title\n'],
   ['punctuation caret', 'b;'],

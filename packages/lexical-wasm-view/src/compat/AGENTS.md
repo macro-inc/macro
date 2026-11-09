@@ -15,6 +15,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - `reconciler.ts`, `reconcile-*.ts`: node creation, suffix updates, children and root pass.
 - `events.ts`, `input-events.ts`, `root-events.ts`: selection, input/composition and root/document handlers.
 - `selection.ts`, `dom-slot.ts`, `mutations.ts`: DOM selection, node slots and browser mutation repair.
+- `selection-methods.ts`: view-owned RangeSelection applyDOMRange/modify callbacks with injected caret primitives.
 - `utils.ts`, `dom-utils.ts`, `block-cursor.ts`: ported DOM/keyboard helpers.
 - `*-state.ts`: shared upstream pass/event state after splitting the source modules.
 - `upstream-harness.ts`: test-only source swapping; this retains the real upstream model.
