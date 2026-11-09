@@ -18,13 +18,20 @@ pub(crate) fn override_operation(
     let registry = tx.pending.registry.clone();
     let mut entry = tx.type_index(key).and_then(|index| registry.node(index));
     while let Some(current) = entry {
-        let definition = current.foreign.as_ref()?;
-        match super::projection::foreign(tx, |tx| invoke(definition.hooks.as_ref(), tx)) {
+        let hooks = match &current.foreign {
+            Some(definition) => definition.hooks.as_ref(),
+            None => registry.native_overlays.get(&current.index)?.hooks.as_ref(),
+        };
+        match super::projection::foreign(tx, |tx| invoke(hooks, tx)) {
             Ok(Override::Value(result)) => return Some(result),
             Err(error) => return Some(Err(error)),
             Ok(Override::Inherit) => {}
         }
-        entry = definition.extends.and_then(|parent| registry.get(parent));
+        entry = current
+            .foreign
+            .as_ref()
+            .and_then(|definition| definition.extends)
+            .and_then(|parent| registry.get(parent));
     }
     None
 }

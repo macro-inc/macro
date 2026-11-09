@@ -1,4 +1,4 @@
-//! Development-only runtime node hosting and suspended updates.
+//! Runtime node hosting and suspended updates.
 pub(crate) mod native;
 mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
@@ -45,3 +45,5 @@ pub use render::{ForeignRenderRecord, ForeignWeakEditorIdentity};
 mod selection_values;
 
 mod reserved;
+
+pub(crate) mod native_overlay;

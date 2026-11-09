@@ -24,7 +24,10 @@ pub(crate) fn parent_table(registry: &Registry, index: NodeTypeIndex) -> NodeVTa
     let mut entry = registry.node(index);
     while let Some(current) = entry {
         let Some(definition) = &current.foreign else {
-            return registry.vtable(current.index).clone();
+            return registry.native_overlays.get(&current.index).map_or_else(
+                || registry.vtable(current.index).clone(),
+                |overlay| overlay.baseline.clone(),
+            );
         };
         entry = definition.extends.and_then(|name| registry.get(name));
     }
