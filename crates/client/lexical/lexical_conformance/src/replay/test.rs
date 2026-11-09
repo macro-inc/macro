@@ -600,3 +600,5 @@ fn macro_class_aliases_are_checked_against_source_constructors() -> Result<()> {
     assert!(crate::config::validate_config(&config).is_err());
     Ok(())
 }
+
+mod retained_notifications;
