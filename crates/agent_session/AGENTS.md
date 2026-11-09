@@ -166,6 +166,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
+- What an in-process session's turns are admitted and metered as is
+  `agent_session.metering` (`SessionMetering`: `agent_session`, the default,
+  or `routine_suggestions`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_metering`). A
+  non-default session never claims a warm row, which is already metered.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.

@@ -5,7 +5,9 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::model::{AgentMcpServer, AgentSessionId, SessionSource, SessionVisibility};
+use crate::domain::model::{
+    AgentMcpServer, AgentSessionId, SessionMetering, SessionSource, SessionVisibility,
+};
 
 /// A persona selected by a routine's validated user owner.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +52,10 @@ pub struct PrepareRoutineSession {
         skip_serializing_if = "trigger_context::TriggerOrigin::is_unknown"
     )]
     pub origin: trigger_context::TriggerOrigin,
+    /// What the session's in-process turns are admitted and metered as. Older
+    /// schedulers omit it and get `AgentSession`, as every session was.
+    #[serde(default, skip_serializing_if = "SessionMetering::is_agent_session")]
+    pub metering: SessionMetering,
 }
 
 /// A verified, persisted session ready for its first prompt.

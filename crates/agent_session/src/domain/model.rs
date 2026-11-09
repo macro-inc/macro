@@ -318,6 +318,41 @@ pub enum SessionVisibility {
     Hidden,
 }
 
+/// What an in-process session's turns are admitted and metered as. Stored as
+/// `agent_session.metering`, set by whoever opens the session and fixed for
+/// its life. A closed set rather than any `AiFeature`, so a caller can only
+/// pick what a session may be metered as.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionMetering {
+    /// The owner's billable agent session usage: every session but the ones
+    /// below, including a routine draft's.
+    #[default]
+    AgentSession,
+    /// A routine suggestion session's: metered, never billed.
+    RoutineSuggestions,
+}
+
+impl SessionMetering {
+    /// Whether this is the default, the owner's billable agent session usage.
+    #[must_use]
+    pub fn is_agent_session(&self) -> bool {
+        *self == Self::AgentSession
+    }
+}
+
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
@@ -365,6 +400,8 @@ pub struct CreateAgentSessionParams {
     /// What opened the session, written with the session's row. `Unknown`
     /// writes nothing: an unclaimed warm session has no cause yet.
     pub origin: trigger_context::TriggerOrigin,
+    /// What the session's in-process turns are admitted and metered as.
+    pub metering: SessionMetering,
 }
 
 /// Who or what archived a session.

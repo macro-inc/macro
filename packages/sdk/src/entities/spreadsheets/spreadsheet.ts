@@ -11,8 +11,8 @@ import {
   DocumentEditRefusedError,
   EditOutcomeUnknownError,
   isRefusal,
-} from './ai-edit';
-import { Document } from './document';
+} from '../documents/ai-edit';
+import { Document } from '../documents/document';
 
 /** A sheet to address: its exact name, or a summary from `read().sheets`. */
 export type SpreadsheetSheet = string | SpreadsheetSheetSummary;
@@ -98,6 +98,10 @@ function sheetId(sheet: SpreadsheetSheet | undefined): string | undefined {
 /**
  * A native Macro spreadsheet: a workbook of sheets, calculated by the same
  * engine as the editor. Imported Excel files are not native spreadsheets.
+ * Get one with `macro.documents.spreadsheet(document)` or
+ * `macro.documents.createSpreadsheet()`.
+ *
+ * @routing Use when reading, calculating or editing a native spreadsheet's sheets, cells and formulas; not databases, CSV files or decks.
  */
 export class Spreadsheet extends Document {
   /**

@@ -12,14 +12,17 @@ async fn turns_use_the_trusted_owner_and_agent_session_feature() {
         Err(AiAdmissionError::Unavailable),
     ] {
         let admission = TestAdmission::new(result);
-        assert_eq!(admit_turn(&admission, &owner).await, result);
+        assert_eq!(
+            admit_turn(&admission, &owner, AiFeature::AgentSession).await,
+            result
+        );
         assert_eq!(
             *admission.calls.lock().unwrap(),
             vec![("macro|owner@macro.com".to_owned(), AiFeature::AgentSession)]
         );
     }
     assert_eq!(
-        admit_turn(&DisabledAiAdmissionService, &owner).await,
+        admit_turn(&DisabledAiAdmissionService, &owner, AiFeature::AgentSession).await,
         Ok(())
     );
 }
@@ -32,9 +35,28 @@ async fn unsupported_owners_are_not_substituted_with_system_identity() {
         Owner::Team(macro_uuid::generate_uuid_v7()),
     ] {
         assert_eq!(
-            admit_turn(&admission, &owner).await,
+            admit_turn(&admission, &owner, AiFeature::RoutineSuggestions).await,
             Err(AiAdmissionError::Unavailable)
         );
     }
     assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn turns_admit_as_the_feature_the_session_was_opened_with() {
+    let owner = Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap());
+    let admission = TestAdmission::new(Ok(()));
+    let feature = session_feature(SessionMetering::RoutineSuggestions);
+    assert_eq!(admit_turn(&admission, &owner, feature).await, Ok(()));
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        vec![(
+            "macro|owner@macro.com".to_owned(),
+            AiFeature::RoutineSuggestions
+        )]
+    );
+    assert_eq!(
+        session_feature(SessionMetering::default()),
+        AiFeature::AgentSession
+    );
 }

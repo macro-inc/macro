@@ -182,7 +182,10 @@ where
                 && bot_id == bot_id::MACRO_NEW_BOT_ID
                 && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
                 && request.repo_url.is_none()
-                && request.source == SessionSource::User;
+                && request.source == SessionSource::User
+                // A warm row is metered as an agent session; a session metered
+                // otherwise opens its own row.
+                && request.metering.is_agent_session();
             let claim = match &self.warm_lifecycle {
                 Some(lifecycle) if eligible => Some(
                     lifecycle
@@ -298,6 +301,7 @@ where
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
                 origin: request.origin,
+                metering: request.metering,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -456,6 +460,7 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
+            metering: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,
