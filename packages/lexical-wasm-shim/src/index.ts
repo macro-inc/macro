@@ -143,3 +143,5 @@ export {
   TEXT_TYPE_TO_FORMAT,
   type UpdateTag,
 } from './constants';
+
+export type { LexicalNodeReplacement } from './nodes/replacement';
