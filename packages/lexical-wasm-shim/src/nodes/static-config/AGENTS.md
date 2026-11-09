@@ -9,6 +9,9 @@ keys while flat flags accumulate, matching the pinned upstream algorithm.
 
 The pending clone source is a single consume-once token. Default clone writes it
 then invokes the actual constructor; do not add cleanup absent upstream.
+Preserve constructor checks and installed-factory order, including the exact
+pinned required-argument diagnostic. Original compiled invariant arguments are
+lazy: do not introduce extra length getter reads on successful checks.
 Runtime construction owns token validation, clone authorization and rollback.
 This module does not authorize a clone or replace constructor staging.
 

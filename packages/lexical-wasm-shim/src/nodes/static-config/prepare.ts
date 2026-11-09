@@ -49,7 +49,7 @@ function checkDefaultConstructor(
     klass.length !== 0
   ) {
     throw new Error(
-      `${klass.name} (type ${type}) must implement a static ${method} method since its constructor has ${klass.length} required arguments (expecting 0). Use an explicit default in the first argument of your constructor.`
+      `${klass.name} (type ${type}) must implement a static ${method} method since its constructor has ${String(klass.length)} required arguments (expecting 0). Use an explicit default in the first argument of your constructor(prop: T=X, nodeKey?: NodeKey).`
     );
   }
 }
