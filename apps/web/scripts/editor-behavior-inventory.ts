@@ -4,7 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { EDITOR_PLUGIN_BEHAVIORS } from './editor-plugin-behaviors';
-import { mappedBehaviors } from './editor-behavior-coverage';
+import { mappedBehaviors, mergeOffReports } from './editor-behavior-coverage';
 
 // This is a source ledger, not a coverage oracle. A test importing a module
 // does not prove that every branch or UI behavior in that module is covered.
@@ -185,13 +185,15 @@ async function main() {
       'Usage: bun scripts/editor-behavior-inventory.ts <output-directory>'
     );
   const all = await sources();
-  const resultsPath = process.argv[3];
-  const resultText = resultsPath
-    ? await readFile(resultsPath, 'utf8')
-    : undefined;
+  const resultPaths = process.argv.slice(3);
+  const resultTexts = await Promise.all(
+    resultPaths.map((path) => readFile(path, 'utf8'))
+  );
   const behaviorRows = await mappedBehaviors(
     ROOT,
-    resultText ? JSON.parse(resultText) : undefined
+    resultTexts.length
+      ? mergeOffReports(resultTexts.map((text) => JSON.parse(text)))
+      : undefined
   );
   const paths = new Set(all.map((source) => source.path));
   const imports = new Map<string, string[]>();
@@ -376,13 +378,10 @@ async function main() {
     mappedOffPassing: behaviorRows.filter(
       (row) => row.status === 'OFF pass; ON pending'
     ).length,
-    offResults:
-      resultText && resultsPath
-        ? {
-            path: resolve(resultsPath),
-            sha256: createHash('sha256').update(resultText).digest('hex'),
-          }
-        : undefined,
+    offResults: resultPaths.map((path, index) => ({
+      path: resolve(path),
+      sha256: createHash('sha256').update(resultTexts[index]).digest('hex'),
+    })),
     sites,
   };
   await writeFile(

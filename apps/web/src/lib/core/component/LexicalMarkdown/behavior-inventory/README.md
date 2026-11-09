@@ -35,7 +35,7 @@ not evidence that the cleanup intent is satisfied.
 bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source
 ```
 
-The optional third argument is an OFF Vitest JSON report:
+Optional trailing arguments are OFF Vitest JSON reports from separate runs:
 
 ```sh
 bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor-results.json
@@ -45,8 +45,10 @@ bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
-missing, duplicate, skipped and pending selectors stay unverified. Failed
-selectors stay failed. The report's content hash is preserved in the manifest.
+missing, duplicate, skipped and pending selectors stay unverified. Overlapping
+reports remain ambiguous; later results never overwrite earlier results. Failed
+selectors stay failed. Each supplied report path and content hash is preserved in the manifest;
+multiple reports are composite evidence, not a single full-suite execution.
 
 The scanner emits `source-ledger.json` with content hashes and tables for
 plugins, commands, transforms, events, guards, accessibility and surface mounts.

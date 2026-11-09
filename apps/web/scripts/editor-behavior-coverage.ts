@@ -17,6 +17,16 @@ const RESULTS_SCHEMA = z.object({
 });
 type Results = z.infer<typeof RESULTS_SCHEMA>;
 
+// Preserve every occurrence: overlapping evidence remains ambiguous rather
+// than silently preferring a later result or disguising a retry as one run.
+export function mergeOffReports(reports: unknown[]): Results {
+  return {
+    testResults: reports.flatMap(
+      (report) => RESULTS_SCHEMA.parse(report).testResults
+    ),
+  };
+}
+
 export type BehaviorResult = {
   behavior: string;
   source: string;
