@@ -3,9 +3,10 @@ package com.macro.editor
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.PersistableBundle
 import com.macro.documentsession.*
 
-/** Reads system text MIME entries and writes Android's HTML/plain clipboard pair. */
+/** Standard Android HTML/plain pair with app-owned structured copy metadata. */
 internal class EditorClipboard(context: Context) {
     private val clipboard = context.getSystemService(ClipboardManager::class.java)
 
@@ -14,8 +15,15 @@ internal class EditorClipboard(context: Context) {
         if (clip.itemCount == 0) return null
         val item = clip.getItemAt(0)
         val entries = mutableListOf<FfiClipboardEntry>()
+        val extras = clip.description.extras
+        val copiedPlain = extras?.getString("com.macro.editor.plain")
+        if (copiedPlain != null && copiedPlain == item.text?.toString()) {
+            for (mime in listOf("application/x-lexical-editor", "text/markdown")) {
+                extras?.getString("com.macro.editor.$mime")?.let { entries += FfiClipboardEntry(mime, it) }
+            }
+        }
         item.htmlText?.let { entries += FfiClipboardEntry("text/html", it) }
-        if (clip.description.hasMimeType("text/markdown")) {
+        if (entries.none { it.mime == "text/markdown" } && clip.description.hasMimeType("text/markdown")) {
             item.text?.let { entries += FfiClipboardEntry("text/markdown", it.toString()) }
         }
         item.text?.let { entries += FfiClipboardEntry("text/plain", it.toString()) }
@@ -28,6 +36,14 @@ internal class EditorClipboard(context: Context) {
         val html = entries.firstOrNull { it.mime == "text/html" }?.text
         val data = if (html == null) ClipData.newPlainText("", plain)
             else ClipData.newHtmlText("", plain, html)
+        val extras = PersistableBundle()
+        extras.putString("com.macro.editor.plain", plain)
+        for (entry in entries) {
+            if (entry.mime == "application/x-lexical-editor" || entry.mime == "text/markdown") {
+                extras.putString("com.macro.editor.${entry.mime}", entry.text)
+            }
+        }
+        data.description.extras = extras
         clipboard.setPrimaryClip(data)
         return true
     }
