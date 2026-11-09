@@ -15,11 +15,14 @@ import {
   CompatBegin,
   CompatCaptureLeases,
   CompatConfig,
+  CompatHostedConfig,
+  CompatNativePrototype,
   CompatOperation,
   CompatReply,
   CompatRequest,
   CompatSnapshot,
   ForeignCallbackValue,
+  ForeignNodeKind,
   type ICompatAuditSnapshot,
   type ICompatSnapshot,
   type IForeignRecordRef,
@@ -81,7 +84,10 @@ export class NativeFixture implements NodeHandleBackend {
   private initialOwner = true;
   private closed = false;
 
-  constructor(private readonly scheduling: 'manual' | 'microtask' = 'manual') {
+  constructor(
+    private readonly scheduling: 'manual' | 'microtask' = 'manual',
+    hosted = false
+  ) {
     this.unbind = bindAuditRecorder(
       this.recorder,
       (request) => CompatBatchRequest.decode(request).finalize
@@ -124,15 +130,82 @@ export class NativeFixture implements NodeHandleBackend {
         snapshotInterval: 0,
         observed: [],
       }).slice();
-      created = this.call('EditorSession.createCompat', () =>
-        wasm.EditorSession.createCompat(
-          ABI_MAJOR,
-          config,
-          0,
-          0,
-          CompatConfig.encode({ editorId: this.editorId, classes: [] }).slice()
-        )
-      );
+      if (hosted) {
+        wasm.installCompatibilityHost(() => {
+          throw new Error(
+            'Hydration-only fixture must not execute hosted callbacks'
+          );
+        });
+        const classes = [
+          {
+            name: 'root',
+            kind: ForeignNodeKind.Element,
+            prototype: CompatNativePrototype.RootNode,
+          },
+          {
+            name: 'text',
+            kind: ForeignNodeKind.Text,
+            prototype: CompatNativePrototype.TextNode,
+          },
+          {
+            name: 'paragraph',
+            kind: ForeignNodeKind.Element,
+            prototype: CompatNativePrototype.ParagraphNode,
+          },
+          {
+            name: 'linebreak',
+            kind: ForeignNodeKind.LineBreak,
+            prototype: CompatNativePrototype.LineBreakNode,
+          },
+          {
+            name: 'tab',
+            kind: ForeignNodeKind.Text,
+            prototype: CompatNativePrototype.TabNode,
+          },
+        ];
+        created = this.call('EditorSession.createCompatHosted', () =>
+          wasm.EditorSession.createCompatHosted(
+            ABI_MAJOR,
+            config,
+            0,
+            0,
+            CompatHostedConfig.encode({
+              registration: {
+                editorId: this.editorId,
+                classes: classes.map((entry, index) => ({
+                  ownerId: this.editorId,
+                  classId: index + 1,
+                  typeName: entry.name,
+                  className: entry.name,
+                  kind: entry.kind,
+                  ancestry: [],
+                  nativeType: entry.name,
+                  hooks: 0n,
+                })),
+              },
+              classes: classes.map((entry, index) => ({
+                classId: index + 1,
+                constructorToken: BigInt(index + 1),
+                nativePrototype: entry.prototype,
+              })),
+            }).slice(),
+            this.editorId
+          )
+        );
+      } else {
+        created = this.call('EditorSession.createCompat', () =>
+          wasm.EditorSession.createCompat(
+            ABI_MAJOR,
+            config,
+            0,
+            0,
+            CompatConfig.encode({
+              editorId: this.editorId,
+              classes: [],
+            }).slice()
+          )
+        );
+      }
       this.session = created;
       this.collector = new VersionCollector(this, (event) =>
         this.event(
@@ -198,7 +271,7 @@ export class NativeFixture implements NodeHandleBackend {
       collector,
     });
   }
-  private call<T>(method: string, body: () => T): T {
+  call<T>(method: string, body: () => T): T {
     const before = this.recorder.snapshot().calls.length;
     try {
       const result = body();

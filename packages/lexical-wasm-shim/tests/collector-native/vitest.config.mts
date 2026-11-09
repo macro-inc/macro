@@ -31,6 +31,13 @@ export default defineConfig({
         ),
       },
       {
+        find: '@macro-inc/collaboration/session/foreign-native-fields.generated',
+        replacement: resolve(
+          source,
+          'packages/collaboration/src/session/foreign-native-fields.generated.ts'
+        ),
+      },
+      {
         find: '@macro-inc/collaboration/session/input',
         replacement: resolve(
           source,

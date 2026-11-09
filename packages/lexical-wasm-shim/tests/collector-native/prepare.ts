@@ -76,6 +76,12 @@ const paths = {
   '@macro-inc/collaboration/session/abi.generated': [
     resolve(source, 'packages/collaboration/src/session/abi.generated.ts'),
   ],
+  '@macro-inc/collaboration/session/foreign-native-fields.generated': [
+    resolve(
+      source,
+      'packages/collaboration/src/session/foreign-native-fields.generated.ts'
+    ),
+  ],
   '@macro-inc/collaboration/session/input': [
     resolve(source, 'packages/collaboration/src/session/input.ts'),
   ],

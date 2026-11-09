@@ -6,7 +6,7 @@ capture-lease queue, and the existing sole `NodeHandles` version finalizer.
 There is no conformance model, initializer substitute, second version finalizer,
 handwritten WASM declaration or full `ShimBackend` mock.
 
-The fixture is state-only: it implements the actual minimal `NodeHandleBackend`
+The state fixture implements the actual minimal `NodeHandleBackend`
 port. `nodeLifetime` rejects raw node construction rather than fabricating capture
 ownership or reading a not-yet-bound node. Actual native snapshots issue versions
 and exact record refs. Local graph leases and native pending updates protect
@@ -68,9 +68,25 @@ serialized as lossless decimal strings. Session disposal remains in the raw trac
 outside the completed barrier. Inputs, measured glue/ABI manifests and source
 hashes are retained for independent inspection.
 
-This is a **production native state-lifetime boundary proof**, not full Macro or
-facade acceptance. It does not establish the production backend's raw capture-owner
-finalizer, installed plugin profile, document route, DOM parity, initializer or
-performance gates. `captureFinalizerProven` remains false and
-`fullMacroAcceptance` remains false. A successful bounded proof must not register
-an accepting full-application GC producer.
+The raw-capture fixture additionally uses the shared production `CaptureOwners`
+registry, actual `CapturedRecords` and `NodeHandles.adopt`. Its opaque JS identity
+has no emulated node methods. A real historical native record survives allocation
+graph retirement through its raw-owner lease; after actual V8 GC and the capture
+owner finalizer, the scheduled cold lease call acknowledges release. The native
+getter observes unchanged active version, advancing epoch and captures dropping
+to at most twice live nodes. Graph-count coverage keeps the wrapper alive through
+two real GCs until the final mirror/history owner leaves. Invalid identity and
+wire-authority refreshes must preserve the live lease. Successful refresh uses real
+native `compatBindInstance` hydration with the required core registration, then
+checks that actual GC releases only the new slot. That hydration-only fixture
+rejects every hosted callback; it does not claim hosted constructor or mutation
+execution. A synchronous actual major GC queues the old finalizer while a new
+wrapper is adopted on the same handle, proving the late callback preserves the
+replacement token and its graph owner.
+
+State evidence `real-gc.json` remains separately qualified. Raw evidence
+`raw-capture-gc.json` sets `captureFinalizerProven: true` for this shared production
+component/native boundary. Full Macro/facade acceptance, installed production
+backend wiring, plugin profile, document route, DOM parity, initializer and
+performance gates remain unproven. `fullMacroAcceptance` remains false. Do not
+register an accepting full-application producer from this bounded proof alone.
