@@ -17,7 +17,7 @@ import type {
   TextFormatType,
   TextNode,
 } from 'lexical';
-import { validateSelectionClass, writeSelection } from './codec';
+import { validateSelectionClass } from './codec';
 import { NodeSelection } from './node';
 import { $createPoint } from './point';
 import { RangeSelection } from './range';
@@ -96,7 +96,7 @@ export function $setSelection(selection: BaseSelection | null): void {
     selection.setCachedNodes(null);
   }
   runtime.getActiveState()._selection = selection;
-  writeSelection(selection, true);
+  runtime.bufferSelection(selection, true);
 }
 
 export function $internalMakeRangeSelection(
@@ -114,7 +114,9 @@ export function $internalMakeRangeSelection(
     ''
   );
   selection.dirty = true;
-  getSelectionRuntime().getActiveState()._selection = selection;
+  const runtime = getSelectionRuntime();
+  runtime.getActiveState()._selection = selection;
+  runtime.bufferSelection(selection, true);
   return selection;
 }
 

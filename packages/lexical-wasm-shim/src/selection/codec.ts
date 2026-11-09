@@ -1,9 +1,8 @@
 import type { TableSelection } from '@lexical/table';
 import {
-  CompatOperation,
+  type CompatOperation,
   CompatPointKind,
   CompatSelectionData,
-  CompatSelectionPatch,
   type ICompatPoint,
   type ICompatReply,
   type IForeignCallbackValue,
@@ -270,62 +269,17 @@ export function captureReplySelections(reply: ICompatReply): void {
   }
 }
 
-export function ensureSelectionReference(
-  selection: BaseSelection
-): IForeignSelectionRef {
-  const runtime = getSelectionRuntime();
-  validateSelectionClass(selection);
-  const existing = runtime.selectionRef(selection);
-  if (existing !== undefined) {
-    return existing;
-  }
-  let operation: CompatOperation;
-  if (selection instanceof RangeSelection) {
-    operation = CompatOperation.CreateRangeSelection;
-  } else if (selection instanceof NodeSelection) {
-    operation = CompatOperation.CreateNodeSelection;
-  } else {
-    operation = CompatOperation.CreateTableSelection;
-  }
-  const reply = runtime.invoke(operation, []);
-  const data = reply.value.data;
-  if (data.discriminator !== 3) {
-    throw new Error('Native selection construction returned a non-selection');
-  }
-  // Adopt before decoding: a pure JS constructor already supplied this instance.
-  bindSelectionReference(selection, data.value.value);
-  return data.value.value;
-}
-
-export function writeSelection(
-  selection: BaseSelection | null,
-  activate: boolean
-): void {
-  const runtime = getSelectionRuntime();
-  if (selection !== null) {
-    ensureSelectionReference(selection);
-  }
-  const reply = runtime.writeSelection(
-    new CompatSelectionPatch({
-      historical: runtime.isReadOnly(),
-      stateVersion: runtime.getActiveStateVersion(),
-      activate,
-      selection: selectionToSnapshot(selection),
-    })
-  );
-  captureReplySelections(reply);
-}
-
 export function callSelection(
   selection: BaseSelection,
   operation: CompatOperation,
   args: readonly IForeignCallbackValue[] = []
 ): IForeignCallbackValue {
-  const reference = ensureSelectionReference(selection);
-  if (!Object.isFrozen(selection)) {
-    writeSelection(selection, false);
-  }
-  const reply = getSelectionRuntime().invoke(operation, args, reference);
+  validateSelectionClass(selection);
+  const reply = getSelectionRuntime().invokeSelection(
+    selection,
+    operation,
+    args
+  );
   captureReplySelections(reply);
   return reply.value;
 }
