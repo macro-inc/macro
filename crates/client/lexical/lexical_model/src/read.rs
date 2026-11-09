@@ -176,6 +176,10 @@ impl<'state> StateRef<'state> {
         }
         (registered.decorator_render)(slot.data.as_any())
     }
+    /// Native registration metadata, not configured JS availability or creation authority.
+    pub fn registered_node_kind(self, name: &str) -> Option<NodeKind> {
+        self.state.registry.get(name).map(|node| node.kind)
+    }
     /// Type index.
     pub fn type_index(self, key: impl Into<NodeKey>) -> Option<NodeTypeIndex> {
         self.slot(key.into()).map(|slot| slot.type_index)
