@@ -111,3 +111,8 @@ Capture compatibility snapshots and publication metadata without materializing
 root text; raw cache absence must survive hydration and transport refresh.
 
 Keep CompatAuditSnapshot cold and read-only: count retained captures and actual live nodes without allocation or collection, reject pending updates, and measure it outside update/read/key windows.
+
+Emit sparse compatibility commit batches from actual dirty/mutation receipts;
+include every destroyed descendant from the previous subtree, filter against
+final membership, and reserve full batches for explicit snapshots or actual
+full reconciliation. Omit root text strings from hot replies and commit deltas.

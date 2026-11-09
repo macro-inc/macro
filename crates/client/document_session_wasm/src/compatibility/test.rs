@@ -1021,7 +1021,17 @@ fn historical_leaf_reply_size_and_capture_count_are_independent_of_document_size
         let host = session.compatibility.as_mut().unwrap();
         host.owner = state.view().foreign_instance_owner();
         host.states.insert(0, state);
-        let issued = host.records(source, vec![leaf], 0, 0, compat::ForeignAccess::Frozen, &[])?;
+        let issued = host.records(
+            source,
+            vec![leaf],
+            0,
+            0,
+            compat::ForeignAccess::Frozen,
+            records::CaptureOptions {
+                writable: &[],
+                include_root_cache: false,
+            },
+        )?;
         let receiver = issued[0].record;
         let request = bytes(&compat::CompatRequest {
             operation: Op::GetTextContent,
