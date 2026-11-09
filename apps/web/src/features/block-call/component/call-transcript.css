@@ -1,0 +1,12 @@
+@media (prefers-reduced-motion: no-preference) {
+  .recording-speaking-waveform {
+    animation: recording-speaking 700ms ease-in-out infinite;
+    transform-origin: center;
+  }
+}
+
+@keyframes recording-speaking {
+  0%, 100% { transform: scaleY(0.45); }
+  35% { transform: scaleY(1); }
+  70% { transform: scaleY(0.65); }
+}

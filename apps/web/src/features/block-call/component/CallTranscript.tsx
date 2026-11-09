@@ -1,3 +1,4 @@
+import './call-transcript.css';
 import { t } from '@app/lib/i18n';
 import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
@@ -40,6 +41,7 @@ export function CallTranscript(props: {
   timelineStartMs: number | null;
   durationSeconds?: number;
   activeSequenceNum?: number | null;
+  playing?: boolean;
   videoSeekGeneration?: number;
   onSeekToSeconds?: (seconds: number) => void;
   active?: boolean;
@@ -351,7 +353,12 @@ export function CallTranscript(props: {
                             </span>
                           </Show>
                           <Show when={active()}>
-                            <WaveformIcon class="size-3 text-accent" />
+                            <WaveformIcon
+                              class="size-3 shrink-0 text-accent"
+                              classList={{
+                                'recording-speaking-waveform': props.playing,
+                              }}
+                            />
                           </Show>
                         </span>
                         <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">

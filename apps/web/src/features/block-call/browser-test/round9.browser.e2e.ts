@@ -22,6 +22,35 @@ for (const theme of ['light', 'dark']) {
       });
   });
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    test(`active waveform follows native playback (${theme}, ${reducedMotion})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion });
+      await page.setViewportSize({ width: 1600, height: 900 });
+      await page.goto(`${fixture}?theme=${theme}`);
+      const video = page.locator('video');
+      await page
+        .getByRole('button', { name: /Playback has one transcript line/ })
+        .click();
+      await video.evaluate(async (element: HTMLVideoElement) => {
+        element.playbackRate = 0.1;
+        await element.play();
+      });
+      const waveform = page.locator('[data-macro-icon="waveform"]');
+      await expect(waveform).toHaveCount(1);
+      await expect(waveform).toHaveCSS(
+        'animation-name',
+        reducedMotion === 'reduce' ? 'none' : 'recording-speaking'
+      );
+      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d57-${theme}-${reducedMotion}.png`,
+        });
+      await video.evaluate((element: HTMLVideoElement) => element.pause());
+      await expect(waveform).toHaveCSS('animation-name', 'none');
+    });
+  }
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     test(`transcript enters without remounting (${theme}, ${reducedMotion})`, async ({
       page,
     }) => {

@@ -65,7 +65,8 @@ the card without changing its scroll position or follow state. There is no separ
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
 Transcript rows show speaker identity and recording time; click a row to seek.
-The active line has a waveform. Playback follows the transcript until the user
+The active line's waveform animates only while playback runs and stays still
+when paused or reduced motion is enabled. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
 playback and returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,

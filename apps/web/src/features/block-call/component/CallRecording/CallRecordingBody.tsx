@@ -471,6 +471,7 @@ export function CallRecordingBody(props: {
                               timelineStartMs={timelineStartMs()}
                               durationSeconds={recordingDuration()}
                               activeSequenceNum={activeSequenceNum()}
+                              playing={!playback.paused()}
                               videoSeekGeneration={videoSeekGeneration()}
                               onSeekToSeconds={seekToSeconds}
                               messages={messages()}
