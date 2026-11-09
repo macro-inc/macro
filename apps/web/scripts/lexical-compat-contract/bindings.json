@@ -1,0 +1,23 @@
+{
+  "lexical": ["."],
+  "@lexical/clipboard": ["."],
+  "@lexical/code": ["."],
+  "@lexical/headless": [".", "./dom"],
+  "@lexical/history": ["."],
+  "@lexical/html": ["."],
+  "@lexical/link": ["."],
+  "@lexical/list": ["."],
+  "@lexical/mark": ["."],
+  "@lexical/markdown": ["."],
+  "@lexical/plain-text": ["."],
+  "@lexical/rich-text": ["."],
+  "@lexical/selection": ["."],
+  "@lexical/table": ["."],
+  "@lexical/utils": ["."],
+  "@lexical/internal": ["./devInvariant", "./devInvariant.js", "./formatDevErrorMessage", "./formatDevErrorMessage.js", "./formatDevWarningMessage", "./formatDevWarningMessage.js", "./formatProdErrorMessage", "./formatProdErrorMessage.js", "./formatProdWarningMessage", "./formatProdWarningMessage.js", "./invariant", "./invariant.js", "./version", "./version.js", "./warnOnlyOnce", "./warnOnlyOnce.js"],
+  "@lexical/extension": ["."],
+  "@lexical/code-core": ["."],
+  "@lexical/code-prism": ["."],
+  "@lexical/text": ["."],
+  "@lexical/dragon": ["."]
+}
