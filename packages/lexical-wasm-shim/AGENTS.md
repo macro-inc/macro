@@ -12,6 +12,7 @@ use the real development conformance host.
 - `src/commands.ts`, `src/constants.ts`, `tests/commands/README.md`: pinned engine-independent command identities, primitive constants and actual-core payload contracts; integrate root reexports without recreating objects.
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
 - `src/backend/factory.ts`: typed editor configuration and validated hook-order binding selected after initialization; root module evaluation never loads WASM.
+- `src/configuration/registered-nodes.ts`: real static preparation and default registry; engine initialization binds this preparer after the cold class graph loads.
 - `src/backend/conformance.ts`: development backend and its runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
@@ -121,3 +122,5 @@ Keep arbitrary command payloads and listener queues in JS; use only the centrali
 Keep _updating true through update listeners and deferred callbacks without granting them an active dollar-function scope; preserve queued ordinary updates and synchronous internal command dispatch.
 
 Forward LexicalNodeReplacement from the replacement type barrel so the root preserves the canonical upstream alias; keep bound internal replacement configs private.
+
+Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.

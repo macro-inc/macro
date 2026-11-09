@@ -126,7 +126,7 @@ test('transform collection deduplicates static method identity and keeps actual 
   expect(receivers).toEqual(['Child', 'Child']);
 });
 
-test('replacement class validation matches upstream and public algorithms reject absent runtime', () => {
+test('replacement validation and active registry guards match upstream', () => {
   const bound = bindReplacement({
     replace: TextNode,
     with: (node: TextNode) => node,
@@ -135,11 +135,9 @@ test('replacement class validation matches upstream and public algorithms reject
   expect(() => buildRegisteredNodes([bound])).toThrow(
     "doesn't extend the TextNode"
   );
-  expect(() => $create(TextNode)).toThrow(
-    'Actual node replacement runtime has not been bound'
-  );
+  expect(() => $create(TextNode)).toThrow('Unable to find an active editor');
   const editor = createEditor({
-    namespace: 'replacement unbound',
+    namespace: 'replacement active registry',
     onError: (error) => {
       throw error;
     },
@@ -148,9 +146,7 @@ test('replacement class validation matches upstream and public algorithms reject
     editor.update(
       () => {
         const node = new TextNode('source');
-        expect(() => $applyNodeReplacement(node)).toThrow(
-          'Actual node replacement runtime has not been bound'
-        );
+        expect($applyNodeReplacement(node)).toBe(node);
       },
       { discrete: true }
     );
