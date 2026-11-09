@@ -8,7 +8,13 @@ export default mergeConfig(base, {
     outDir: process.env.EDITOR_INPUT_PARITY_DIST ?? 'dist/input-parity',
     emptyOutDir: true,
     rollupOptions: {
-      input: fileURLToPath(new URL('./heading-enter.html', import.meta.url)),
+      input: {
+        rendering: fileURLToPath(new URL('./index.html', import.meta.url)),
+        heading: fileURLToPath(
+          new URL('./heading-enter.html', import.meta.url)
+        ),
+        paste: fileURLToPath(new URL('./large-paste.html', import.meta.url)),
+      },
     },
   },
   preview: {
