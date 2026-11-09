@@ -10121,10 +10121,6 @@ export type ExternalChatProvider = 'whatsapp';
  */
 export type ExternalChatReaction = {
     /**
-     * Number of reacting people.
-     */
-    count: number;
-    /**
      * Emoji.
      */
     emoji: string;
@@ -10132,6 +10128,10 @@ export type ExternalChatReaction = {
      * Caller has this reaction.
      */
     mine: boolean;
+    /**
+     * The people who reacted with it, earliest first.
+     */
+    reactors: Array<ExternalChatPersonRef>;
 };
 
 /**
