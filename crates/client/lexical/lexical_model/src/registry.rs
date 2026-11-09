@@ -622,7 +622,7 @@ impl EditorBuilder {
             let mut tx = editor.transaction();
             tx.request_full_reconcile();
             let mut initial = tx
-                .commit()
+                .commit_imported_state()
                 .map_err(|e| BuildError::InitialState(Box::new(e)))?;
             initial.prev = prev;
             initial

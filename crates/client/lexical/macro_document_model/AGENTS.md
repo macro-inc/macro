@@ -88,3 +88,5 @@ keep the value in both editor JSON and Loro, and reject malformed text everywher
 
 Stage table key layout facts only around the nested native Key dispatch; restore the previous facts before returning, including error paths.
 
+
+Run cargo test -p macro_document_model --test sync_styled_cache for the stock Chromium import/attach/update oracle and real Loro peer propagation.
