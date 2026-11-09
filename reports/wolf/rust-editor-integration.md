@@ -195,6 +195,73 @@ passes cannot qualify. Contract:
 `/home/wolf/tmp/lexical-port/reports/wolf/compat-perf-audit.md`.
 
 
+The sparse native prerequisite batch is integrated: f423 as `2a93e8aae9`,
+selection helper 100cc as `22ecdcecd1`, raw selection metadata 77a19 as
+`2c732579de`, and compact begin/reservations 74d as `f997509e85`. The
+selection helper is not yet registered in the adapter; its literals cannot
+count as active runtime support. Stable capture IDs and flat 10-vs-10k leaf
+reply sizes are focused native evidence, not JS identity or full-plugin gates.
+The owner separately built an actual basic 74d artifact with paired schema
+51304 and passing create/StartSeed/reserve-eight/stable-root/append/commit/snapshot
+smoke. It was raw 7,149,854 / Brotli 1,643,457 bytes on that branch's profile;
+its old 1.13 MB check is obsolete here. No owner artifact was promoted.
+
+Typed compact-batch schema ade843 is `3c74f56cd1`, fingerprint
+`09ca9d476170325d1db727ed2cb2376027ef6bfeb64e310a502285e4ab504b93`.
+Registry-cache 7be7 is `eb18627db4`; local graph selection reads 2b6 are
+`dd7dea79d0`; structural DOM contracts 583 are `c748d671a0`. Own source-only
+selection checks pass nine cases including 169 point pairs with native functions
+made to throw. Structural DOM units pass 59/59 and DOM/shim types pass. A fresh
+optimized source conformance rebuild passes 172 tests in 33 files. The initial
+COPY run found an old renamed mod.rs left by the sync; only that stale source
+file was removed, rename/deletion propagation was fixed, and the rerun passed.
+No live dependency/cache files were touched. These are not native initializer
+or complete TS API acceptance.
+
+Native delta prerequisite 4562 is integrated as `04d6fc4db5`; it adds typed
+UTF-16 delta input without changing the wire ABI or existing full-text method.
+The combined non-FFI native subset passes model 465, session 49 plus one
+telemetry integration, and WASM 24. The ABI-3 adapters remain owner WIP and are
+not partially adopted; the live preview retains ABI 2. Final combined source
+will regenerate all declarations rather than copying branch-specific artifacts.
+
+Typed FFI b978 and matching bindings 90e are integrated as `8b5dfa9c3b` and
+`706c1bc766`; upstream HTML/Markdown now share current document_session exports,
+with the Macro branch preserved. Current FFI compilation and binding freshness
+are BLOCKED: the remote ModifyTarget mirror omits RequireView from the newer
+core. The owner is adding the exact variant, typed delta and regenerated bindings;
+those changes are not yet committed/consumed here. Audit also identified a
+bindgen artifact-path risk under inherited Cargo target overrides; its owner is
+pinning the host target and own artifact directory. The attempted local check
+used no target overrides and failed at compilation, so it provides no freshness
+pass. Android host-plugin/application-profile WIP is excluded; no Tauri files
+were touched.
+
+The five behavior-inventory commits are integrated (`4480cf0e43` through
+`2cf6c008ad`), preserving the honest docs and ON refusal. Own OFF validation
+passes 181 real-plugin unit cases plus one scanner regression and 18 static
+Chromium cases over desktop/tablet/phone. In-memory JSON, fixture ARIA and
+screenshots do not establish production persistence, accessibility or parity.
+No ON or exhaustive coverage claim is made. Full application OFF suites remain
+with the inventory owner, who is building its own missing WASM from source.
+
+Current logs: `compat-sparse-delta-native-tests.log`,
+`compat-sparse-registry-shim-tests-rerun.log`,
+`compat-local-selection-reads-tests.log`, `compat-structural-*.log`,
+`behavior-inventory-{unit-tests,scanner-test,browser}.log`,
+`compat-sparse-ffi-native-tests.log`, and `compat-ffi-bindings-freshness.log`.
+The latest broad scoped check passed before the final native-delta/type commits;
+its next rerun and FFI correction validation are queued after timing. Native
+replay 1,421/0/57 above belongs to the earlier prerequisite snapshot, not this
+new sparse/FFI/delta batch. All full bridge/performance gates remain blocked.
+
+The private-network controller subsequently passed three clean 60-round batches
+per stock browser (360 fresh processes, exact executable hashes), with zero
+performance samples and no metric traces. This is reliability evidence only.
+A fresh timing window is requested; own builds/checks will finish before the
+explicit quiet-ready signal. Frozen OFF source/build/auth remain unchanged.
+
+
 A frozen flag-OFF build with real timing marks is served at local port 39870,
 source `751b62fbb1531d81a0cb4ac840c1346efb5648b3`; empty dirty-diff SHA is
 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
