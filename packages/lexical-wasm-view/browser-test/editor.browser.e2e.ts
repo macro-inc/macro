@@ -243,10 +243,14 @@ test('Solid decorators retain identity by key and reserve stored height on first
 }) => {
   const result = await page.evaluate(() => {
     window.fixture.render.createImage();
-    const before = document.querySelector('[data-lexical-key="1000000"]');
+    const before = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000000
+    );
     const height = before instanceof HTMLElement ? before.style.height : '';
     window.fixture.render.updateImage();
-    const after = document.querySelector('[data-lexical-key="1000000"]');
+    const after = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000000
+    );
     return {
       same: before === after,
       text: after?.textContent,
@@ -265,20 +269,32 @@ test('Solid decorators retain identity by key and reserve stored height on first
     mounts: 1,
     unmounts: 1,
   });
-  await expect(page.locator('[data-lexical-key="1000000"]')).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#editor *')).some(
+        (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000000
+      )
+    )
+  ).toBe(false);
 });
 test('recreated elements move keyed children into the new managed slot', async ({
   page,
 }) => {
   const result = await page.evaluate(() => {
     window.fixture.render.createSlot();
-    const previous = document.querySelector('[data-lexical-key="1000002"]');
-    const before = document.querySelector(
-      '[data-lexical-key="1000001"]'
+    const previous = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000002
+    );
+    const before = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000001
     )?.textContent;
     window.fixture.render.recreateSlot();
-    const next = document.querySelector('[data-lexical-key="1000002"]');
-    const parent = document.querySelector('[data-lexical-key="1000001"]');
+    const next = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000002
+    );
+    const parent = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000001
+    );
     return {
       same: previous === next,
       before,
@@ -299,10 +315,14 @@ test('decorator DOM recreation preserves the Solid component and reactive update
 }) => {
   const result = await page.evaluate(() => {
     window.fixture.render.expandingDecorator(false);
-    const old = document.querySelector('[data-lexical-key="1000003"]');
+    const old = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000003
+    );
     const host = old?.firstChild;
     window.fixture.render.expandingDecorator(true);
-    const next = document.querySelector('[data-lexical-key="1000003"]');
+    const next = Array.from(document.querySelectorAll('#editor *')).find(
+      (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000003
+    );
     return {
       tag: next?.tagName,
       replaced: old !== next,

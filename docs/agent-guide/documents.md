@@ -27,6 +27,11 @@ paint. The blank-document callback uses the mirror's maintained root-child count
 This native-view check does not establish compat-core or application rollout
 readiness.
 
+The large-paste browser fixture also requires exact native/upstream DOM
+attributes, model and Markdown in all three engines. Native node keys are
+properties rather than serialized attributes; do not mask attributes in this
+comparison. This is behavior coverage, not a large-document latency gate.
+
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.
 Keep the app shell open for the offline navigation; the app has no asset-caching

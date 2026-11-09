@@ -29,6 +29,9 @@ text with Rust after each submission; production typing uses no per-node calls.
 `createBuiltinRegistry` supplies core and rich views. `registerMacroViews` adds
 all application node mounts and accepts the host's Solid component registry.
 Decorators retain component identity by node key. Missing views fail explicitly.
+Native keys live in a namespace-scoped DOM property and the view's WeakMap,
+without a serialized key attribute. Built-in views omit empty class/style
+attributes on creation and preserve upstream clearing behavior on updates.
 Application factory/preset and plugin wiring live in the later app integration.
 
 HTML import loads on paste/drop and includes source-compatible Macro node conversions
