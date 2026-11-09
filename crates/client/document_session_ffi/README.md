@@ -45,3 +45,11 @@ run `bun crates/client/document_session_ffi/scripts/build-android.ts
 x86_64-linux-android` (or `aarch64-linux-android`). This selects the API 24
 compiler/linker and limits Cargo to two jobs. Generated bindings stay in this
 crate; Android host integration lives in `apps/web/tauri/native_editor_plugin`.
+
+Native typing uses `FfiInput::TextDeltaFromView(ViewTextDelta)` with UTF-16
+start/deletion lengths and only the inserted text. Full `TextFromView` is explicit
+resynchronization. Use `ModifyTarget::RequireView` when layout endpoints are
+required and unavailable; never silently substitute `NoView`.
+Binding generation pins this worktree's target directory and explicitly selects
+the compiler's host triple for both library and generator, so inherited
+`CARGO_TARGET_DIR` or `CARGO_BUILD_TARGET` overrides cannot select stale artifacts.
