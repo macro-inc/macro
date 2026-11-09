@@ -55,3 +55,9 @@ and the generated ABI; packages/lexical-core for retained source node behavior.
 Pass the application loading span through ViewOptions.parentSpan; mount and the
 first native Initialize reconciliation stay under that span without ending it.
 Dispose DOM listeners before awaiting session close; continue terminal native I/O.
+
+The static paired-input regression runs on Chromium, Firefox and WebKit with
+`bunx playwright test --config browser-test/input-parity.playwright.config.ts`.
+It builds its own fixture bundle before serving it; set each browser's
+`PLAYWRIGHT_<BROWSER>_EXECUTABLE_PATH` independently on hosts with wrapped browsers.
+Set `EDITOR_INPUT_PARITY_DIST` and `EDITOR_INPUT_PARITY_REPORT` for isolated output.
