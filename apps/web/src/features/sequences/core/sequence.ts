@@ -148,14 +148,19 @@ export function draftChanges(
   return Object.keys(changes).length ? changes : undefined;
 }
 
-/** The server may have misread a reply or bounce, or the person may be back. */
-const RESUMABLE_STOPS: readonly EnrollmentReason[] = [
-  'replied',
-  'bounced',
-  'contact_removed',
-];
+/** The server may have misread a reply or bounce. */
+const RESUMABLE_STOPS: readonly EnrollmentReason[] = ['replied', 'bounced'];
 
-type EnrollmentState = Pick<EnrollmentSummary, 'status' | 'reason'>;
+type EnrollmentState = Pick<
+  EnrollmentSummary,
+  'status' | 'reason' | 'crmContactId'
+>;
+
+/** A stop that resuming can undo; an archived person may be back in the CRM. */
+function resumableStop({ reason, crmContactId }: EnrollmentState) {
+  if (reason === 'contact_removed') return !!crmContactId;
+  return !!reason && RESUMABLE_STOPS.includes(reason);
+}
 
 /** A sequence that isn't sending holds its active enrollments. */
 export function shownStatus(
@@ -173,16 +178,17 @@ export function shownStatus(
  * people. Anyone not opted out can be unsubscribed, even after a reply.
  */
 export function enrollmentActions(
-  { status, reason }: EnrollmentState,
+  enrollment: EnrollmentState,
   sequenceStatus: SequenceStatus
 ): EnrollmentAction[] {
+  const { status, reason } = enrollment;
   const sending = sequenceStatus === 'active';
   const live =
     status === 'active' || status === 'paused' || status === 'needs_attention';
   const resumable =
     status === 'paused' ||
     status === 'needs_attention' ||
-    (status === 'stopped' && !!reason && RESUMABLE_STOPS.includes(reason));
+    (status === 'stopped' && resumableStop(enrollment));
   const actions: EnrollmentAction[] = [];
   if (sending && resumable) actions.push('resume');
   if (sending && (status === 'active' || status === 'needs_attention'))

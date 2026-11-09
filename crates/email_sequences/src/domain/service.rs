@@ -294,16 +294,14 @@ where
         let now = Utc::now();
         let resumable = match row.status {
             EnrollmentStatus::Paused | EnrollmentStatus::NeedsAttention => true,
-            // A reply or bounce the server may have misread, or a person who
-            // may be back in the CRM (checked again before the next step).
-            EnrollmentStatus::Stopped => matches!(
-                row.reason,
-                Some(
-                    EnrollmentReason::Replied
-                        | EnrollmentReason::Bounced
-                        | EnrollmentReason::ContactRemoved
-                )
-            ),
+            // A reply or bounce the server may have misread, or an archived
+            // person who may be back (checked again before the next step). A
+            // deleted one has no CRM record left to come back.
+            EnrollmentStatus::Stopped => match row.reason {
+                Some(EnrollmentReason::Replied | EnrollmentReason::Bounced) => true,
+                Some(EnrollmentReason::ContactRemoved) => row.crm_contact_id.is_some(),
+                _ => false,
+            },
             EnrollmentStatus::Active | EnrollmentStatus::Completed => false,
         };
         if !resumable {
