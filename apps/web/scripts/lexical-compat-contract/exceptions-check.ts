@@ -46,6 +46,7 @@ const approved = [
   'invokeDOMConversionWithNode',
   'nodeConfigRecord',
   'nodeStateToJSON',
+  'widenTagConversionMap',
 ];
 
 function verifyRuntimeWitness(
@@ -183,9 +184,7 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
     [...manifest.exceptions.map((entry) => entry.helper)].sort().join() !==
     approved.join()
   )
-    throw new Error(
-      'Exactly the eight approved exception helpers are required'
-    );
+    throw new Error('Exactly the nine approved exception helpers are required');
   if (
     JSON.stringify(
       Object.entries(manifest.typeOnlyException.aliases).sort()
@@ -257,7 +256,7 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
       .join()
   )
     throw new Error(
-      'Central function list differs from eight assertions and declared runtime-witness guards'
+      'Central function list differs from nine assertions and declared runtime-witness guards'
     );
   for (const guard of manifest.runtimeGuards) {
     const declaration = declarations.find(
