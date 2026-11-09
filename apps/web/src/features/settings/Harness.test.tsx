@@ -477,6 +477,12 @@ describe('Harness', () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
     const { unmount } = render(() => <Harness />);
     expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+    expect(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    ).toHaveProperty('disabled', true);
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
     unmount();
 
@@ -515,7 +521,7 @@ describe('Harness', () => {
   });
 
   it('allows permission bypass on a paired runtime after confirming', async () => {
-    harnessMocks.query.data = [REGISTERED_HARNESS];
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     const toggle = screen.getByRole('switch', {
@@ -538,7 +544,7 @@ describe('Harness', () => {
   it('withdraws permission bypass without confirming', async () => {
     const { confirmDialog } = await import('@ui');
     harnessMocks.query.data = [
-      { ...REGISTERED_HARNESS, allow_permission_bypass: true },
+      { ...REGISTERED_HARNESS, access: 'owner', allow_permission_bypass: true },
     ];
 
     render(() => <Harness />);
@@ -558,7 +564,7 @@ describe('Harness', () => {
   });
 
   it('renames a paired runtime', async () => {
-    harnessMocks.query.data = [REGISTERED_HARNESS];
+    harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];
 
     render(() => <Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }));

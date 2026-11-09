@@ -837,19 +837,17 @@ async fn a_patch_rejects_a_blank_name() {
 
 #[tokio::test]
 async fn only_a_harness_manager_may_patch() {
-    for (owner, caller_id, allowed) in [
-        (
-            HarnessOwner::User {
-                user_id: OWNER_ID.to_owned(),
-            },
-            MEMBER_ID,
-            false,
-        ),
-        (HarnessOwner::Team { team_id: TEAM_ID }, MEMBER_ID, false),
-        (HarnessOwner::Team { team_id: TEAM_ID }, OWNER_ID, true),
+    // (harness, caller, caller owns the harness's team, allowed)
+    for (harness, caller_id, user_owns_team, allowed) in [
+        (harness(user_owner(OWNER_ID)), OWNER_ID, false, true),
+        (harness(user_owner(OWNER_ID)), MEMBER_ID, false, false),
+        (shared_with_team(), MEMBER_ID, false, false),
+        (shared_with_team(), MEMBER_ID, true, true),
     ] {
+        let owner = harness.owner.clone();
         let repo = FakeRepo {
-            harness: Some(harness(owner.clone())),
+            harness: Some(harness),
+            user_owns_team,
             ..FakeRepo::default()
         };
         let result = service(repo.clone())

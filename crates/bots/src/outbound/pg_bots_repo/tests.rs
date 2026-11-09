@@ -2101,6 +2101,22 @@ async fn insert_harness(
     Ok(HarnessId::new_from_uuid(harness_id))
 }
 
+/// A runtime owned by the team's owner and opened to the whole team.
+async fn insert_team_harness(pool: &PgPool, team_id: Uuid) -> anyhow::Result<HarnessId> {
+    let harness = insert_harness(pool, Some(TEAM_OWNER), None).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'edit')
+        "#,
+        harness.as_uuid(),
+        team_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(harness)
+}
+
 fn macrod_agent_req(handle: &str, harness_id: Option<HarnessId>) -> CreateAgentRequest {
     CreateAgentRequest {
         harness: "macrod".to_string(),
@@ -2200,8 +2216,9 @@ async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
 ) -> anyhow::Result<()> {
     let service = service(&pool);
     let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
     insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
-    let team_harness = insert_harness(&pool, None, Some(team_id)).await?;
+    let team_harness = insert_team_harness(&pool, team_id).await?;
     let agent = service
         .create_agent(
             user_id(TEAM_MEMBER),
@@ -2269,7 +2286,7 @@ async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
         .await;
     assert!(matches!(deleted_choice, Err(BotError::BadRequest(_))));
 
-    let rebound_harness = insert_harness(&pool, None, Some(team_id)).await?;
+    let rebound_harness = insert_team_harness(&pool, team_id).await?;
     let rebound = service
         .patch_agent(
             user_id(TEAM_MEMBER),

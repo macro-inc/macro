@@ -366,7 +366,7 @@ async fn connected_state_follows_connection_leases_over_timestamps(pool: PgPool)
     // A crashed replica writes no disconnect; the lapsed lease is what ends it.
     let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert!(!harness.connected);
-    let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+    let listed = repo.list_usable_harnesses(caller()).await.unwrap();
     assert!(!listed.iter().any(|harness| harness.connected));
 }
 

@@ -1,4 +1,3 @@
-import { match } from 'ts-pattern';
 import type { Harness as HarnessRecord } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -11,7 +10,7 @@ import { User } from '../users/user';
 export class Harness extends MacroEntity<HarnessRecord> {
   /**
    * Access requests for this host. Asking for access works from any credential;
-   * deciding who gets it takes a human authorized reviewer's session, in the app.
+   * deciding who gets it takes the owner's own session, in the app.
    */
   readonly access = new EntityAccess(this.client, 'harness', this);
 
@@ -76,8 +75,7 @@ export class Harness extends MacroEntity<HarnessRecord> {
 
   /**
    * The caller's role: `owner`, `user` (can run agents), `read` (can see what is
-   * on it, cannot run agents), `resident` (the assigned agent account, view-only),
-   * or `none` (can only see it exists).
+   * on it, cannot run agents), or `none` (can only see it exists).
    */
   readonly callerAccess = this.field('access');
 
@@ -96,20 +94,13 @@ export class Harness extends MacroEntity<HarnessRecord> {
     return this.access.request(role === 'read' ? 'view' : 'edit');
   }
 
-  /** Agents and agent accounts living on the host, for callers with at least `read`. */
-  async residents(): Promise<(Agent | User)[]> {
+  /** Agents living on the host, for callers with at least `read`. */
+  async residents(): Promise<Agent[]> {
     return unwrap(
       await this.client.storage.listHarnessResidents({
         path: { harness_id: this.id },
       }),
-    ).flatMap((resident): (Agent | User)[] =>
-      match(resident)
-        .with({ type: 'bot' }, (bot) => [Agent.byId(this.client, bot.bot_id)])
-        .with({ type: 'account' }, (account) => [
-          User.byId(this.client, account.user_id),
-        ])
-        .exhaustive(() => []),
-    );
+    ).map((resident) => Agent.byId(this.client, resident.bot_id));
   }
 
   /** Remove the host. */

@@ -188,7 +188,8 @@ function PairedRuntimeRow(props: {
           <Show
             when={
               props.harness.access === 'owner' ||
-              (props.canRemoveShared && props.harness.shared_team_ids.length > 0)
+              (props.canRemoveShared &&
+                props.harness.shared_team_ids.length > 0)
             }
           >
             <ConnectAction
