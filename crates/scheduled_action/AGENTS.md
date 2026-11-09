@@ -87,7 +87,9 @@ each run.
   fixed dry-run code step, `suggestions/signals.ts`) and has AI
   (`SuggestionModel`, the harness's `scheduling/routine_suggestions.rs`) pick
   catalog routines with knob values, or describe a request the drafter
-  writes on accept. `suggestions/decode.rs` is the trust boundary: only
+  writes on accept. Unlike a draft's, a suggestion session is prepared with
+  `SessionMetering::RoutineSuggestions`, so its turns are metered as the
+  non-billable `RoutineSuggestions`, never billed as agent session usage. `suggestions/decode.rs` is the trust boundary: only
   offered catalog keys, bounded one-line knob values that fit their knob,
   and one-line requests survive; `safeDefault` comes from the catalog, never
   from AI. One generation claims the person's row, so a late result from an

@@ -383,6 +383,11 @@ async fn a_generation_runs_hidden_sessions_once_and_their_suggestions_come_first
     for session in &prepared {
         assert_eq!(session.visibility, SessionVisibility::Hidden);
         assert_eq!(session.source, SessionSource::User);
+        // Metered as the non-billable routine suggestions, unlike a draft.
+        assert_eq!(
+            session.metering,
+            agent_session::domain::model::SessionMetering::RoutineSuggestions
+        );
         assert_eq!(session.selection.owner, user());
         assert_eq!(session.selection.model.as_deref(), Some("test-model"));
     }
